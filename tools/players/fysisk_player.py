@@ -36,7 +36,10 @@ def get_extended_player_data(player_name, player_opta_uuid, target_team_ssiid):
           AND s.MATCH_DATE >= '{SEASON_START}'
         ORDER BY s.MATCH_DATE DESC
     """
-    return conn.query(sql)
+    df = conn.query(sql)
+    if not df.empty:
+        df['MATCH_DATE'] = pd.to_datetime(df['MATCH_DATE'])
+    return df
 
 def draw_phase_pitch(val, title, color):
     pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
@@ -73,7 +76,9 @@ def vis_side():
 
     if not df.empty:
         latest = df.iloc[0]
-        st.caption(f"Seneste Kamp: {latest['MATCH_TEAMS']} ({latest['MATCH_DATE'].strftime('%d/%m/%Y')})")
+        # Sikker formatering af dato
+        match_date_str = latest['MATCH_DATE'].strftime('%d/%m/%Y') if hasattr(latest['MATCH_DATE'], 'strftime') else str(latest['MATCH_DATE'])
+        st.caption(f"Seneste Kamp: {latest['MATCH_TEAMS']} ({match_date_str})")
         
         # Top Metrics
         m1, m2, m3, m4 = st.columns(4)
@@ -101,8 +106,6 @@ def vis_side():
 
         with tabs[2]:
             st.markdown("### Minut-for-minut intensitet")
-            
-            # 1. Hent data
             df_splits = conn.query(f"""
                 SELECT MINUTE_SPLIT, UPPER(PHYSICAL_METRIC_TYPE) as METRIC, SUM(PHYSICAL_METRIC_VALUE) as VAL 
                 FROM {DB}.SECONDSPECTRUM_PHYSICAL_SPLITS_PLAYERS 
@@ -112,79 +115,41 @@ def vis_side():
             """)
             
             if not df_splits.empty:
-                # 2. Opsætning af metrik-vælger (de grå bokse)
                 metrics_options = sorted(df_splits['METRIC'].unique().tolist())
                 readable_options = [m.replace(' DISTANCE', '').title() for m in metrics_options]
                 map_back = dict(zip(readable_options, metrics_options))
                 
-                selected_readable = st.segmented_control(
-                    "Vælg metrik", 
-                    options=readable_options, 
-                    default=readable_options[0] if readable_options else None,
-                    key=f"split_selector_{p_uuid}"
-                )
+                selected_readable = st.segmented_control("Vælg metrik", options=readable_options, default=readable_options[0] if readable_options else None, key=f"split_selector_{p_uuid}")
                 
                 if selected_readable:
                     m_type = map_back[selected_readable]
                     d_m = df_splits[df_splits['METRIC'] == m_type]
-                    
-                    # 3. Beskrivelse og Metrics i kompakt format
                     st.markdown(f"<p style='text-align: right; margin-bottom: -10px;'><b>Fysisk output: {selected_readable}</b></p>", unsafe_allow_html=True)
                     st.markdown("---")
                     
-                    # CSS til at styre tekststørrelse i metrics
-                    st.markdown("""
-                        <style>
-                        [data-testid="stMetricLabel"] { font-size: 0.85rem !important; color: #666 !important; }
-                        [data-testid="stMetricValue"] { font-size: 1.5rem !important; font-weight: 700 !important; }
-                        </style>
-                    """, unsafe_allow_html=True)
+                    st.markdown("<style>[data-testid='stMetricLabel'] { font-size: 0.85rem !important; } [data-testid='stMetricValue'] { font-size: 1.5rem !important; font-weight: 700 !important; }</style>", unsafe_allow_html=True)
 
                     c1, c2, c3, c4 = st.columns(4)
-                    
-                    total_val = d_m['VAL'].sum()
-                    max_val = d_m['VAL'].max()
-                    avg_val = d_m['VAL'].mean()
-                    
-                    # Enhedshåndtering
-                    u = "km" if "DISTANCE" in m_type and total_val > 1000 else "m"
-                    disp_total = total_val / 1000 if u == "km" else total_val
-                    
-                    c1.metric("Total", f"{disp_total:.2f} {u}")
-                    c2.metric("Max/min", f"{max_val:.1f} m")
-                    c3.metric("Gns/min", f"{avg_val:.1f} m")
+                    total_v = d_m['VAL'].sum()
+                    u = "km" if "DISTANCE" in m_type and total_v > 1000 else "m"
+                    c1.metric("Total", f"{total_v/1000 if u=='km' else total_v:.2f} {u}")
+                    c2.metric("Max/min", f"{d_m['VAL'].max():.1f} m")
+                    c3.metric("Gns/min", f"{d_m['VAL'].mean():.1f} m")
                     c4.metric("Splits", f"{len(d_m)}")
 
-                    # 4. Graf (Rød fill som i dit screenshot)
-                    fig_s = go.Figure(go.Scatter(
-                        x=d_m['MINUTE_SPLIT'], 
-                        y=d_m['VAL'], 
-                        fill='tozeroy', 
-                        line=dict(color='#cc0000', width=2),
-                        mode='lines+markers',
-                        marker=dict(size=6, color='#cc0000')
-                    ))
-                    
-                    fig_s.update_layout(
-                        plot_bgcolor="white", 
-                        height=350,
-                        margin=dict(t=10, b=10, l=0, r=0),
-                        xaxis=dict(showgrid=False, linecolor='#eee', tickfont=dict(size=10)),
-                        yaxis=dict(showgrid=True, gridcolor='#f0f0f0', tickfont=dict(size=10))
-                    )
-                    st.plotly_chart(fig_s, use_container_width=True, config={'displayModeBar': False}, key=f"p_split_{m_type}")
+                    fig_s = go.Figure(go.Scatter(x=d_m['MINUTE_SPLIT'], y=d_m['VAL'], fill='tozeroy', line=dict(color='#cc0000', width=2), mode='lines+markers'))
+                    fig_s.update_layout(plot_bgcolor="white", height=350, margin=dict(t=10, b=10, l=0, r=0), xaxis=dict(showgrid=False), yaxis=dict(showgrid=True, gridcolor='#f0f0f0'))
+                    st.plotly_chart(fig_s, use_container_width=True, key=f"p_split_{m_type}")
 
-        # --- FIX TIL SÆSON TREND (DIN FEJLMELDING) ---
         with tabs[3]:
-            # Sørg for at MATCH_DATE er datetime objekt før .dt bruges
-            df_trend = df.copy()
-            df_trend['MATCH_DATE'] = pd.to_datetime(df_trend['MATCH_DATE'])
+            # HER LØSES FEJLEN: Tving MATCH_DATE til datetime før brug af .dt
+            df_chart = df.copy()
+            df_chart['MATCH_DATE'] = pd.to_datetime(df_chart['MATCH_DATE'])
             
             cat_choice = st.segmented_control("Vælg metrik", options=["HSR (m)", "Sprint (m)", "Distance (km)", "Topfart (km/t)"], default="HSR (m)", key="phys_graph_control")
             mapping = {"HSR (m)": ("HSR", 1, "m"), "Sprint (m)": ("SPRINTING", 1, "m"), "Distance (km)": ("DISTANCE", 1000, "km"), "Topfart (km/t)": ("TOP_SPEED", 1, "km/t")}
             col_name, div, suffix = mapping[cat_choice]
 
-            df_chart = df.copy()
             df_chart = df_chart.drop_duplicates(subset=['MATCH_DATE', 'MATCH_TEAMS'])
             df_chart = df_chart.sort_values('MATCH_DATE', ascending=True)
 
@@ -196,35 +161,15 @@ def vis_side():
                     return parts[1] if parts[0].lower() in my_team.lower() else parts[0]
 
                 df_chart['Opponent'] = df_chart['MATCH_TEAMS'].apply(lambda x: get_opponent(x, valgt_hold))
+                # Nu virker .dt fordi vi har konverteret kolonnen ovenfor
                 df_chart['Label'] = df_chart['Opponent'] + "<br>" + df_chart['MATCH_DATE'].dt.strftime('%d/%m')
                 y_vals = df_chart[col_name] / div
-                season_avg = y_vals.mean()
-
+                
                 fig = go.Figure()
-                fig.add_trace(go.Bar(
-                    x=df_chart['Label'], 
-                    y=y_vals,
-                    text=y_vals.apply(lambda x: f"{x:.0f}" if x > 100 else f"{x:.1f}"),
-                    textposition='outside', 
-                    marker_color='#cc0000', 
-                    textfont=dict(size=10, color="black"),
-                    cliponaxis=False
-                ))
-
-                fig.add_shape(type="line", x0=-0.5, x1=len(df_chart)-0.5, y0=season_avg, y1=season_avg, 
-                             line=dict(color="#D3D3D3", width=2, dash="dash"))
-
-                fig.update_layout(
-                    plot_bgcolor="white", 
-                    height=400, 
-                    margin=dict(t=50, b=80, l=10, r=10),
-                    xaxis=dict(showgrid=False, tickangle=-45, tickfont=dict(size=10), type='category'),
-                    yaxis=dict(showgrid=True, gridcolor='#f0f0f0', showticklabels=False, zeroline=False, range=[0, y_vals.max() * 1.3]),
-                    showlegend=False
-                )
-                st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False}, key=f"trend_bar_{p_uuid}")
-            else:
-                st.info("Ingen fysiske data fundet for denne sæson.")
+                fig.add_trace(go.Bar(x=df_chart['Label'], y=y_vals, text=y_vals.apply(lambda x: f"{x:.0f}" if x > 100 else f"{x:.1f}"), textposition='outside', marker_color='#cc0000'))
+                fig.add_shape(type="line", x0=-0.5, x1=len(df_chart)-0.5, y0=y_vals.mean(), y1=y_vals.mean(), line=dict(color="#D3D3D3", width=2, dash="dash"))
+                fig.update_layout(plot_bgcolor="white", height=400, margin=dict(t=50, b=80, l=10, r=10), xaxis=dict(showgrid=False, type='category'), yaxis=dict(showgrid=True, showticklabels=False, range=[0, y_vals.max() * 1.3]))
+                st.plotly_chart(fig, use_container_width=True, key=f"trend_bar_{p_uuid}")
 
     else:
         st.warning("Ingen fysisk data fundet for denne spiller.")
