@@ -70,6 +70,7 @@ def get_f53a_percentages(match_ssiid, player_name, _conn):
 
 @st.cache_data(ttl=600)
 def get_minute_splits(match_ssiid, player_name, _conn):
+    """Henter ALLE tilgængelige minut-splits for spilleren"""
     navne_dele = player_name.split(' ')
     f_name = navne_dele[0]
     l_name = navne_dele[-1].replace('å', '_').replace('ø', '_').replace('æ', '_')
@@ -82,7 +83,6 @@ def get_minute_splits(match_ssiid, player_name, _conn):
         FROM {DB}.SECONDSPECTRUM_PHYSICAL_SPLITS_PLAYERS
         WHERE MATCH_SSIID = '{match_ssiid}' 
           AND (PLAYER_NAME ILIKE '%{f_name}%' AND PLAYER_NAME ILIKE '%{l_name}%')
-          AND UPPER(PHYSICAL_METRIC_TYPE) IN ('TOTAL DISTANCE', 'HIGH SPEED RUNNING DISTANCE')
         GROUP BY MINUTE_SPLIT, PHYSICAL_METRIC_TYPE
         ORDER BY MINUTE_SPLIT ASC
     """
@@ -181,29 +181,36 @@ def vis_side():
                 st.info(f"Ingen hastighedszone-data fundet for {valgt_spiller} i denne kamp.")
 
         with tabs[2]:
-            st.caption("Intensitet minut-for-minut (HSR)")
+            st.caption("Minut-for-minut intensitet")
             df_splits = get_minute_splits(latest['MATCH_SSIID'], valgt_spiller, conn)
             
             if not df_splits.empty:
-                df_hsr = df_splits[df_splits['METRIC_TYPE'] == 'HIGH SPEED RUNNING DISTANCE']
-                if not df_hsr.empty:
+                # Find alle unikke kategorier i dataen
+                tilgaengelige_metrics = df_splits['METRIC_TYPE'].unique().tolist()
+                
+                # Lad brugeren vælge kategorien (standardiseret til HSR hvis muligt)
+                default_index = tilgaengelige_metrics.index('HIGH SPEED RUNNING DISTANCE') if 'HIGH SPEED RUNNING DISTANCE' in tilgaengelige_metrics else 0
+                valgt_metric = st.selectbox("Vælg kategori", tilgaengelige_metrics, index=default_index)
+                
+                # Filtrér data baseret på valget
+                df_plot = df_splits[df_splits['METRIC_TYPE'] == valgt_metric]
+                
+                if not df_plot.empty:
                     fig_s = go.Figure(go.Scatter(
-                        x=df_hsr['MINUTE_SPLIT'], 
-                        y=df_hsr['VALUE'], 
+                        x=df_plot['MINUTE_SPLIT'], 
+                        y=df_plot['VALUE'], 
                         fill='tozeroy', 
                         line_color='#cc0000',
                         mode='lines+markers',
-                        name="HSR Meter"
+                        name=valgt_metric
                     ))
                     fig_s.update_layout(
-                        xaxis=dict(tickmode='linear', tick0=0, dtick=5),
-                        xaxis_title="Minut",
-                        yaxis_title="Meter pr. split",
-                        hovermode="x unified"
+                        xaxis=dict(tickmode='linear', tick0=0, dtick=5, title="Minut"),
+                        yaxis_title=f"Værdi ({valgt_metric})",
+                        hovermode="x unified",
+                        height=450
                     )
                     st.plotly_chart(fig_s, use_container_width=True)
-                else:
-                    st.info("Ingen HSR-data fundet i splits.")
             else:
                 st.info(f"Ingen minut-splits fundet for {valgt_spiller}.")
 
