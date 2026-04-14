@@ -181,38 +181,57 @@ def vis_side():
                 st.info(f"Ingen hastighedszone-data fundet for {valgt_spiller} i denne kamp.")
 
         with tabs[2]:
-            st.caption("Minut-for-minut intensitet")
-            df_splits = get_minute_splits(latest['MATCH_SSIID'], valgt_spiller, conn)
-            
-            if not df_splits.empty:
-                # Find alle unikke kategorier i dataen
-                tilgaengelige_metrics = df_splits['METRIC_TYPE'].unique().tolist()
-                
-                # Lad brugeren vælge kategorien (standardiseret til HSR hvis muligt)
-                default_index = tilgaengelige_metrics.index('HIGH SPEED RUNNING DISTANCE') if 'HIGH SPEED RUNNING DISTANCE' in tilgaengelige_metrics else 0
-                valgt_metric = st.selectbox("Vælg kategori", tilgaengelige_metrics, index=default_index)
-                
-                # Filtrér data baseret på valget
-                df_plot = df_splits[df_splits['METRIC_TYPE'] == valgt_metric]
+    st.caption("Minut-for-minut intensitet")
+    df_splits = get_minute_splits(latest['MATCH_SSIID'], valgt_spiller, conn)
+    
+    if not df_splits.empty:
+        # Hent alle tilgængelige metrikker (f.eks. 'TOTAL DISTANCE', 'HIGH SPEED RUNNING DISTANCE')
+        metrics = df_splits['METRIC_TYPE'].unique().tolist()
+        
+        # Opret dynamiske sub-tabs baseret på hvad der findes i data
+        # Vi rydder navnene lidt op (f.eks. "HIGH SPEED RUNNING DISTANCE" -> "HSR Distance")
+        tab_titles = [m.replace(' DISTANCE', '').title() for m in metrics]
+        sub_tabs = st.tabs(tab_titles)
+        
+        for i, metric in enumerate(metrics):
+            with sub_tabs[i]:
+                df_plot = df_splits[df_splits['METRIC_TYPE'] == metric]
                 
                 if not df_plot.empty:
-                    fig_s = go.Figure(go.Scatter(
+                    fig_s = go.Figure()
+                    
+                    # Tilføj arealgraf
+                    fig_s.add_trace(go.Scatter(
                         x=df_plot['MINUTE_SPLIT'], 
                         y=df_plot['VALUE'], 
                         fill='tozeroy', 
-                        line_color='#cc0000',
+                        line=dict(color='#cc0000', width=3),
                         mode='lines+markers',
-                        name=valgt_metric
+                        name=metric
                     ))
+                    
                     fig_s.update_layout(
-                        xaxis=dict(tickmode='linear', tick0=0, dtick=5, title="Minut"),
-                        yaxis_title=f"Værdi ({valgt_metric})",
-                        hovermode="x unified",
-                        height=450
+                        plot_bgcolor="white",
+                        height=400,
+                        margin=dict(t=20, b=40, l=10, r=10),
+                        xaxis=dict(
+                            title="Minut",
+                            tickmode='linear', 
+                            tick0=0, 
+                            dtick=5,
+                            showgrid=False
+                        ),
+                        yaxis=dict(
+                            title="Meter pr. split",
+                            showgrid=True,
+                            gridcolor='#f0f0f0'
+                        ),
+                        hovermode="x unified"
                     )
-                    st.plotly_chart(fig_s, use_container_width=True)
-            else:
-                st.info(f"Ingen minut-splits fundet for {valgt_spiller}.")
+                    
+                    st.plotly_chart(fig_s, use_container_width=True, config={'displayModeBar': False})
+    else:
+        st.info(f"Ingen minut-splits fundet for {valgt_spiller}.")
 
         with tabs[3]:
             df_trend = df.sort_values('MATCH_DATE')
