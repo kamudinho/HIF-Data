@@ -10,14 +10,11 @@ LIGA_IDS = "('dyjr458hcmrcy87fsabfsy87o', 'e5p78j2r7v8h3u9s5k0l2m4n6', 'f6q89k3s
 
 @st.cache_data(ttl=600)
 def get_physical_splits(player_opta_id, match_ssiid, _conn):
-    """Henter minut-splits baseret på de præcise kolonnenavne fra din liste"""
+    """Henter minut-splits"""
     clean_id = str(player_opta_id).lower().replace('p', '').strip()
     sql = f"""
         SELECT 
-            MINUTE_SPLIT, 
-            PHYSICAL_METRIC_TYPE, 
-            PHYSICAL_METRIC_VALUE,
-            PERIOD
+            MINUTE_SPLIT, PHYSICAL_METRIC_TYPE, PHYSICAL_METRIC_VALUE, PERIOD
         FROM {DB}.SECONDSPECTRUM_PHYSICAL_SPLITS_PLAYERS
         WHERE PLAYER_OPTAID = '{clean_id}'
           AND MATCH_SSIID = '{match_ssiid}'
@@ -27,27 +24,15 @@ def get_physical_splits(player_opta_id, match_ssiid, _conn):
 
 @st.cache_data(ttl=600)
 def get_physical_summary(player_name, player_opta_uuid, _conn):
-    """Henter overordnet profil med de præcise kolonnenavne (bemærk 'optaId' vs 'PLAYER_OPTAID')"""
+    """Henter sæson-historik"""
     clean_id = str(player_opta_uuid).lower().replace('p', '').strip()
     sql = f"""
         SELECT 
-            MATCH_DATE, 
-            MATCH_TEAMS, 
-            MATCH_SSIID,
-            MINUTES, 
-            DISTANCE,
-            "HIGH SPEED RUNNING" as HSR, 
-            SPRINTING, 
-            TOP_SPEED,
+            MATCH_DATE, MATCH_TEAMS, MATCH_SSIID, MINUTES, DISTANCE,
+            "HIGH SPEED RUNNING" as HSR, SPRINTING, TOP_SPEED,
             NO_OF_HIGH_INTENSITY_RUNS as HI_RUNS,
-            DISTANCE_TIP, 
-            HSR_DISTANCE_TIP as HSR_TIP, 
-            NO_OF_HIGH_INTENSITY_RUNS_TIP as HI_RUNS_TIP,
-            DISTANCE_OTIP, 
-            HSR_DISTANCE_OTIP as HSR_OTIP, 
-            NO_OF_HIGH_INTENSITY_RUNS_OTIP as HI_RUNS_OTIP,
-            DISTANCE_BOP,
-            AVERAGE_SPEED
+            DISTANCE_TIP, HSR_DISTANCE_TIP as HSR_TIP, NO_OF_HIGH_INTENSITY_RUNS_TIP as HI_RUNS_TIP,
+            DISTANCE_OTIP, HSR_DISTANCE_OTIP as HSR_OTIP, NO_OF_HIGH_INTENSITY_RUNS_OTIP as HI_RUNS_OTIP
         FROM {DB}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
         WHERE (PLAYER_NAME ILIKE '%{player_name}%' OR "optaId" = '{clean_id}')
           AND MATCH_DATE >= '2025-07-01'
@@ -64,97 +49,78 @@ def draw_static_pitch(val, title, color):
     return fig
 
 def vis_side():
-    st.markdown("""
-        <style>
-        [data-testid="stMetricValue"] { font-size: 26px !important; font-weight: bold !important; color: #cc0000; }
-        .stTabs [aria-selected="true"] { background-color: #cc0000 !important; color: white !important; }
-        </style>
-    """, unsafe_allow_html=True)
-
+    st.markdown("<style>[data-testid='stMetricValue'] { color: #cc0000; font-weight: bold; }</style>", unsafe_allow_html=True)
     conn = _get_snowflake_conn()
     if not conn: return
 
-    # --- 1. FIND HOLD VIA LIGA_IDS ---
+    # --- 1. FIND HOLD ---
+    # Vi bruger MATCHINFO til at finde holdnavne i de rigtige ligaer
     sql_teams = f"""
-        SELECT DISTINCT CONTESTANTHOME_NAME, CONTESTANTHOME_OPTAUUID 
+        SELECT DISTINCT CONTESTANTHOME_NAME 
         FROM {DB}.OPTA_MATCHINFO 
         WHERE TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS}
     """
-    df_teams_raw = conn.query(sql_teams)
-    if df_teams_raw is None or df_teams_raw.empty:
-        st.error("Kunne ikke finde hold.")
+    df_teams = conn.query(sql_teams)
+    if df_teams is None or df_teams.empty:
+        st.error("Ingen hold fundet.")
         return
 
-    hold_dict = {row['CONTESTANTHOME_NAME']: row['CONTESTANTHOME_OPTAUUID'] for _, row in df_teams_raw.iterrows()}
-    
     c1, c2 = st.columns(2)
-    valgt_hold = c1.selectbox("Hold", sorted(list(hold_dict.keys())))
+    valgt_hold = c1.selectbox("Hold", sorted(df_teams['CONTESTANTHOME_NAME'].tolist()))
     
-    # --- 2. FIND SPILLERE ---
+    # --- 2. FIND SPILLERE VIA SUMMARY TABELLEN (Mere robust) ---
+    # Vi henter spillere der rent faktisk har fysiske data for det valgte hold
     sql_spillere = f"""
-        SELECT DISTINCT TRIM(FIRST_NAME) || ' ' || TRIM(LAST_NAME) as NAVN, PLAYER_OPTAUUID 
-        FROM {DB}.OPTA_PLAYERS 
-        WHERE TEAM_OPTAUUID = '{hold_dict[valgt_hold]}'
+        SELECT DISTINCT PLAYER_NAME, "optaId" as PLAYER_OPTAUUID
+        FROM {DB}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
+        WHERE MATCH_TEAMS LIKE '%{valgt_hold}%'
     """
     df_pl = conn.query(sql_spillere)
-    valgt_spiller = c2.selectbox("Spiller", sorted(df_pl['NAVN'].tolist()))
-    valgt_id = df_pl[df_pl['NAVN'] == valgt_spiller]['PLAYER_OPTAUUID'].iloc[0]
+    
+    if df_pl is None or df_pl.empty:
+        st.warning(f"Ingen fysiske data fundet for spillere på {valgt_hold}")
+        return
 
-    # --- 3. DATA LOAD & VISNING ---
+    valgt_spiller = c2.selectbox("Spiller", sorted(df_pl['PLAYER_NAME'].tolist()))
+    valgt_id = df_pl[df_pl['PLAYER_NAME'] == valgt_spiller]['PLAYER_OPTAUUID'].iloc[0]
+
+    # --- 3. VIS DATA ---
     df_sum = get_physical_summary(valgt_spiller, valgt_id, conn)
 
     if df_sum is not None and not df_sum.empty:
         latest = df_sum.iloc[0]
-        st.markdown(f"### Fysisk Profil: {valgt_spiller}")
-        st.caption(f"Seneste data: {latest['MATCH_TEAMS']} | SSIID: {latest['MATCH_SSIID']}")
+        st.subheader(f"Analyse: {valgt_spiller}")
         
         m = st.columns(4)
-        m[0].metric("Total Distance", f"{round(latest['DISTANCE']/1000, 2)} km")
+        m[0].metric("Distance", f"{round(latest['DISTANCE']/1000, 2)} km")
         m[1].metric("HSR", f"{int(latest['HSR'])} m")
         m[2].metric("Sprint", f"{int(latest['SPRINTING'])} m")
         m[3].metric("Topfart", f"{latest['TOP_SPEED']} km/h")
 
-        tab_min, tab_pitch, tab_trend = st.tabs(["Minut-for-minut", "Baneoversigt", "Saeson-trend"])
+        t1, t2, t3 = st.tabs(["Minut-for-minut", "Bane", "Trend"])
 
-        with tab_min:
-            # Vi kobler nu direkte på MATCH_SSIID for 100% præcision
+        with t1:
             df_splits = get_physical_splits(valgt_id, latest['MATCH_SSIID'], conn)
             if not df_splits.empty:
                 metrikker = sorted(df_splits['PHYSICAL_METRIC_TYPE'].unique())
-                valgt_m = st.selectbox("Vælg metrik", metrikker, index=metrikker.index('Total Distance') if 'Total Distance' in metrikker else 0)
-                
+                valgt_m = st.selectbox("Metrik", metrikker, index=0)
                 df_plot = df_splits[df_splits['PHYSICAL_METRIC_TYPE'] == valgt_m]
                 
-                fig = go.Figure()
-                fig.add_trace(go.Bar(x=df_plot['MINUTE_SPLIT'], y=df_plot['PHYSICAL_METRIC_VALUE'], marker_color='#cc0000'))
-                fig.update_layout(title=f"{valgt_m} pr. interval", xaxis_title="Minut", yaxis_title="Værdi", plot_bgcolor="white")
+                fig = go.Figure(go.Bar(x=df_plot['MINUTE_SPLIT'], y=df_plot['PHYSICAL_METRIC_VALUE'], marker_color='#cc0000'))
+                fig.update_layout(title=f"{valgt_m} pr. minut", plot_bgcolor="white")
                 st.plotly_chart(fig, use_container_width=True)
-            else:
-                st.info("Ingen minut-splits fundet for denne kamp (SSIID match mangler).")
 
-        with tab_pitch:
-            st.markdown("#### HI Runs fordelt på boldbesiddelse")
-            col_a, col_b = st.columns(2)
-            # Vi bruger de præcise kolonnenavne fra din liste (TIP/OTIP)
-            with col_a: st.pyplot(draw_static_pitch(latest['HI_RUNS_TIP'] or 0, "Med bold (TIP)", "#2ecc71"))
-            with col_b: st.pyplot(draw_static_pitch(latest['HI_RUNS_OTIP'] or 0, "Uden bold (OTIP)", "#e74c3c"))
-            st.caption("TIP = Team In Possession | OTIP = Opponent Team In Possession")
+        with t2:
+            st.write("Højintensive aktioner (HI Runs)")
+            ca, cb = st.columns(2)
+            with ca: st.pyplot(draw_static_pitch(latest['HI_RUNS_TIP'] or 0, "Med bold (TIP)", "#2ecc71"))
+            with cb: st.pyplot(draw_static_pitch(latest['HI_RUNS_OTIP'] or 0, "Uden bold (OTIP)", "#e74c3c"))
 
-        with tab_trend:
+        with t3:
             df_trend = df_sum.sort_values('MATCH_DATE')
-            fig_t = go.Figure()
-            fig_t.add_trace(go.Scatter(x=df_trend['MATCH_DATE'], y=df_trend['HSR'], name="HSR (m)", line=dict(color='#cc0000', width=3)))
-            fig_t.add_trace(go.Scatter(x=df_trend['MATCH_DATE'], y=df_trend['SPRINTING'], name="Sprint (m)", line=dict(color='#333333', dash='dot')))
-            fig_trend_layout = {
-                "title": "Fysisk udvikling over sæsonen",
-                "plot_bgcolor": "white",
-                "xaxis_title": "Dato",
-                "yaxis_title": "Meter"
-            }
-            fig_t.update_layout(**fig_trend_layout)
+            fig_t = go.Figure(go.Scatter(x=df_trend['MATCH_DATE'], y=df_trend['HSR'], line=dict(color='#cc0000', width=3)))
+            fig_t.update_layout(title="HSR udvikling", plot_bgcolor="white")
             st.plotly_chart(fig_t, use_container_width=True)
-    else:
-        st.warning("Ingen fysiske data fundet for denne spiller.")
 
 if __name__ == "__main__":
     vis_side()
