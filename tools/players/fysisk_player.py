@@ -39,8 +39,11 @@ def draw_phase_pitch(val, title, color):
     pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD', line_zorder=2)
     fig, ax = pitch.draw(figsize=(8, 6))
     fig.patch.set_alpha(0)
-    # Sikrer at val er et tal før visning
-    display_val = int(val) if pd.notnull(val) else 0
+    # Sikker håndtering af værdier til banen
+    try:
+        display_val = int(float(val)) if pd.notnull(val) else 0
+    except:
+        display_val = 0
     ax.text(50, 50, f"{display_val}", color=color, fontsize=60, 
             fontweight='bold', ha='center', va='center', alpha=0.15)
     ax.set_title(title, fontsize=14, pad=10, fontweight='bold', color='#333333')
@@ -57,7 +60,7 @@ def vis_side():
     conn = _get_snowflake_conn()
     if not conn: return
 
-    # --- HOLD OG SPILLERVALG (Samme logik som før) ---
+    # --- SQL TIL HOLD OG SPILLERE ---
     sql_teams = f"SELECT DISTINCT CONTESTANTHOME_NAME, CONTESTANTHOME_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS}"
     df_teams_raw = conn.query(sql_teams)
     mapping_lookup = {str(info['opta_uuid']).lower().replace('t', ''): name for name, info in TEAMS.items() if 'opta_uuid' in info}
@@ -88,28 +91,30 @@ def vis_side():
     df = get_physical_summary(valgt_spiller, valgt_player_uuid, valgt_hold, conn)
 
     if df is not None and not df.empty:
-        # FIX: Fyld alle NaN med 0 med det samme
-        df = df.fillna(0)
+        # 1. TVING DATA TIL TAL (Løser 'str' vs 'int' og NaN fejl)
+        for col in df.columns:
+            if col not in ['MATCH_DATE', 'MATCH_TEAMS']:
+                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+
         latest = df.iloc[0]
         
-        # Sikker konvertering til floats for beregninger
+        # 2. BEREGNINGER (Nu med sikre tal)
         m_mins = float(latest['MINUTES']) if latest['MINUTES'] > 0 else 1.0
         m_dist = float(latest['DISTANCE'])
         m_hsr = float(latest['HSR'])
         m_sprint = float(latest['SPRINTING'])
         
-        # Individuelle p90 beregninger
         dist_90 = round((m_dist / m_mins) * 90 / 1000, 2)
         hsr_90 = int((m_hsr / m_mins) * 90)
         sprint_90 = int((m_sprint / m_mins) * 90)
-        hi_index = round(((m_hsr + m_sprint) / m_dist) * 100, 1) if m_dist > 0 else 0
+        hi_index = round(((m_hsr + m_sprint) / m_dist) * 100, 1) if m_dist > 0 else 0.0
 
-        # Metrics
+        # 3. VISNING
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("Distance", f"{round(m_dist/1000, 2)} km", f"{dist_90} p90", delta_color="off")
         m2.metric("HSR", f"{int(m_hsr)} m", f"{hsr_90} p90", delta_color="off")
         m3.metric("Sprint", f"{int(m_sprint)} m", f"{sprint_90} p90", delta_color="off")
-        m4.metric("Intensitets-index", f"{hi_index}%", "HSR+Sprint load", delta_color="normal" if hi_index > 7 else "off")
+        m4.metric("Intensitets-index", f"{hi_index}%", "HSR+Sprint load", delta_color="normal" if hi_index > 7.0 else "off")
 
         tabs = st.tabs(["📍 Individuel Profil", "📈 Sæson-trend", "📋 Kamp-historik"])
 
@@ -140,7 +145,7 @@ def vis_side():
         with tabs[2]:
             st.dataframe(df, use_container_width=True, hide_index=True)
     else:
-        st.info("Ingen data fundet.")
+        st.info("Ingen fysiske data fundet for denne spiller.")
 
 if __name__ == "__main__":
     vis_side()
