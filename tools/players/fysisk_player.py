@@ -113,21 +113,26 @@ def vis_side():
         with tabs[2]:
             st.markdown("### Minut-for-minut intensitet")
             
-            # Brug efternavnet, men rens det for specialtegn hvis nødvendigt
-            efternavn = valgt_spiller.strip().split(' ')[-1]
-            
+            # --- NY NAVNE-LOGIK START ---
+            # Vi splitter "Louka Prip" op og søger efter både 'Louka' OG 'Prip'
+            navne_dele = valgt_spiller.strip().split(' ')
+            f_navn = navne_dele[0]
+            l_navn = navne_dele[-1]
+            # --- NY NAVNE-LOGIK SLUT ---
+
             df_splits = conn.query(f"""
                 SELECT MINUTE_SPLIT, UPPER(PHYSICAL_METRIC_TYPE) as METRIC, SUM(PHYSICAL_METRIC_VALUE) as VAL 
                 FROM {DB}.SECONDSPECTRUM_PHYSICAL_SPLITS_PLAYERS 
                 WHERE MATCH_SSIID = '{latest['MATCH_SSIID']}' 
-                  AND PLAYER_NAME ILIKE '%{efternavn}%' 
+                  -- Søger efter rækker der indeholder både første og sidste del af det valgte navn
+                  AND PLAYER_NAME ILIKE '%{f_navn}%' 
+                  AND PLAYER_NAME ILIKE '%{l_navn}%' 
                 GROUP BY 1, 2 ORDER BY 1 ASC
             """)
             
             if not df_splits.empty:
-                # Ryd op i metrik-navne (fjern 'DISTANCE' og gør pænt)
                 metrics_options = sorted(df_splits['METRIC'].unique().tolist())
-                readable_options = [m.replace(' DISTANCE', '').replace('_', ' ').title() for m in metrics_options]
+                readable_options = [m.replace(' DISTANCE', '').title() for m in metrics_options]
                 map_back = dict(zip(readable_options, metrics_options))
                 
                 selected_readable = st.segmented_control(
@@ -166,12 +171,12 @@ def vis_side():
                         plot_bgcolor="white", 
                         height=350, 
                         margin=dict(t=10, b=10, l=0, r=0), 
-                        xaxis=dict(showgrid=False, title="Minut"), 
+                        xaxis=dict(showgrid=False), 
                         yaxis=dict(showgrid=True, gridcolor='#f0f0f0')
                     )
                     st.plotly_chart(fig_s, use_container_width=True, key=f"p_split_{m_type}_{p_uuid}")
             else:
-                st.info(f"Ingen minut-splits fundet for {valgt_spiller} i denne kamp.")
+                st.info(f"Ingen minut-splits fundet for {valgt_spiller}. Prøver at matche på: {f_navn} + {l_navn}")
 
         with tabs[3]:
             # HER LØSES FEJLEN: Tving MATCH_DATE til datetime før brug af .dt
