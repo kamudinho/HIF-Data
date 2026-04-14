@@ -18,7 +18,7 @@ HIF_BLA = "#0057b7"
 GRON_NY = "#ccffcc"
 GUL_ADVARSEL = "#ffff99"
 ROD_ADVARSEL = "#ffcccc"
-AKADEMI_FARVE = "#d1d1ff" # Lys lilla
+AKADEMI_FARVE = "#d1d1ff" 
 
 VINDUE_DATOER = {
     "Nuværende trup": datetime.now(),
@@ -46,7 +46,6 @@ def get_github_file(path):
 
 def save_to_github(df):
     try:
-        # Tilføjet ER_AKADEMI til de gemte kolonner
         original_cols = [
             'PLAYER_WYID','DATO','NAVN','KLUB','POSITION','RATING_AVG','STATUS',
             'POTENTIALE','STYRKER','UDVIKLING','VURDERING','BESLUTSOMHED','FART',
@@ -106,14 +105,17 @@ def prepare_df(content):
     if not content: return pd.DataFrame()
     df = pd.read_csv(StringIO(content))
     df.columns = [str(c).upper().strip() for c in df.columns]
-    # Tilføjet ER_AKADEMI her
-    needed = ['POS_343', 'POS_433', 'POS_352', 'START_11_26_27', 'SKYGGEHOLD', 'ER_EMNE', 'ER_AKADEMI', 'PLAYER_WYID', 'DATO']
+    needed = ['POS_343', 'POS_433', 'POS_352', 'START_11_26_27', 'SKYGGEHOLD', 'ER_EMNE', 'ER_AKADEMI', 'PLAYER_WYID', 'DATO', 'POS_PRIORITET']
     for col in needed:
         if col not in df.columns: df[col] = ""
     df['DATO_DT'] = pd.to_datetime(df['DATO'], errors='coerce')
     df = df.sort_values(by='DATO_DT', ascending=False)
     st.session_state['full_db'] = df.copy()
     df_display = df.drop_duplicates(subset=['PLAYER_WYID'], keep='first').copy()
+    
+    # Sørg for at POS_PRIORITET er streng-baseret så vi kan sortere A, B, C
+    df_display['POS_PRIORITET'] = df_display['POS_PRIORITET'].astype(str).replace('nan', 'Z')
+
     for c in ['POS', 'POS_343', 'POS_433', 'POS_352']:
         df_display[c] = df_display[c].apply(clean_pos_val)
         if c != 'POS':
@@ -121,7 +123,6 @@ def prepare_df(content):
     if 'KONTRAKT' in df_display.columns:
         df_display['KONTRAKT_DT'] = pd.to_datetime(df_display['KONTRAKT'], dayfirst=True, errors='coerce')
     
-    # Tilføjet ER_AKADEMI til mapping logik
     for c in ['ER_EMNE', 'SKYGGEHOLD', 'START_11_26_27', 'ER_AKADEMI']:
         df_display[c] = df_display[c].map({True:True, False:False, 'True':True, 'False':False, 1:True, 0:False, '1':True, '0':False}).fillna(False)
     
@@ -145,10 +146,6 @@ def vis_side():
     if "emnedatabase" not in res: tabs_to_show.append("Emneliste")
     if "truppen" not in res: tabs_to_show.extend(["Hvidovre IF", "Skyggeliste", "Skyggehold"])
 
-    if not tabs_to_show:
-        st.error("Ingen rettigheder.")
-        return
-
     tabs_obj = st.tabs(tabs_to_show)
     tab_map = {name: i for i, name in enumerate(tabs_to_show)}
 
@@ -160,6 +157,7 @@ def vis_side():
         "ER_AKADEMI": st.column_config.CheckboxColumn("Akademi"),
         "SKYGGEHOLD": st.column_config.CheckboxColumn("Skygge"),
         "START_11_26_27": st.column_config.CheckboxColumn("Start 11 (26/27)"),
+        "POS_PRIORITET": st.column_config.SelectboxColumn("Prioritet", options=["A - Start-11", "B - Trupspiller", "C - Udviklingsspiller"]),
         "POS_343": st.column_config.SelectboxColumn("3-4-3", options=POS_OPTS),
         "POS_433": st.column_config.SelectboxColumn("4-3-3", options=POS_OPTS),
         "POS_352": st.column_config.SelectboxColumn("3-5-2", options=POS_OPTS)
@@ -174,13 +172,13 @@ def vis_side():
     if "Hvidovre IF" in tab_map:
         with tabs_obj[tab_map["Hvidovre IF"]]:
             source_t2 = df_display[df_display['IS_HIF']].reset_index(drop=True)
-            st.data_editor(source_t2[['NAVN', 'KLUB', 'POS', 'KONTRAKT_DT', 'ER_EMNE', 'SKYGGEHOLD', 'ER_AKADEMI', 'PLAYER_WYID']],
+            st.data_editor(source_t2[['NAVN', 'KLUB', 'POS', 'KONTRAKT_DT', 'ER_AKADEMI', 'ER_EMNE', 'SKYGGEHOLD', 'PLAYER_WYID']],
                             column_config=cfg, use_container_width=True, height=600, key="editable_t2", on_change=handle_auto_save, args=("t2", df_display, source_t2))
 
     if "Skyggeliste" in tab_map:
         with tabs_obj[tab_map["Skyggeliste"]]:
             source_t3 = df_display[df_display['SKYGGEHOLD'] == True].reset_index(drop=True)
-            st.data_editor(source_t3[['NAVN', 'KLUB', 'POS', 'POS_343', 'POS_433', 'POS_352', 'START_11_26_27', 'PLAYER_WYID']],
+            st.data_editor(source_t3[['NAVN', 'KLUB', 'POS', 'POS_343', 'POS_433', 'POS_352', 'POS_PRIORITET', 'START_11_26_27', 'PLAYER_WYID']],
                             column_config=cfg, use_container_width=True, height=600, key="editable_t3", on_change=handle_auto_save, args=("t3", df_display, source_t3))
 
     if "Skyggehold" in tab_map:
@@ -219,7 +217,6 @@ def vis_side():
                 ax.text(12, 3, " 6-12 mdr ", size=6, weight='bold', bbox=dict(facecolor=GUL_ADVARSEL, boxstyle='round,pad=0.5'))
                 ax.text(22, 3, " Transferfri ", size=6, weight='bold', bbox=dict(facecolor=GRON_NY, boxstyle='round,pad=0.5'))
                 ax.text(33, 3, " Transferkøb ", size=6, weight='bold', color='white', bbox=dict(facecolor=HIF_BLA, boxstyle='round,pad=0.5'))
-                # NY LEGEND: Akademi
                 ax.text(45, 3, " Akademi ", size=6, weight='bold', color='black', bbox=dict(facecolor=AKADEMI_FARVE, boxstyle='round,pad=0.5'))
                 
                 ax.text(118, 3, f"Vindue: {sel_v}", size=8, weight='bold', ha='right', bbox=dict(facecolor='white', edgecolor=HIF_ROD, boxstyle='round,pad=0.5'))
@@ -235,25 +232,24 @@ def vis_side():
                     ax.text(px, py-4.5, lbl, size=8, color="white", weight='bold', ha='center', 
                             bbox=dict(facecolor=HIF_ROD, edgecolor='white'))
                     
-                    plist = df_f[(df_f[p_col].astype(str) == str(pid)) & (~df_f['PLAYER_WYID'].isin(drawn_players))]
+                    # FILTRER & SORTÉR EFTER POS_PRIORITET (A før B før C)
+                    plist = df_f[(df_f[p_col].astype(str) == str(pid)) & (~df_f['PLAYER_WYID'].isin(drawn_players))].copy()
+                    plist = plist.sort_values(by='POS_PRIORITET', ascending=True)
+
                     if is_startopstilling: 
                         plist = plist.head(1)
                 
                     for i, (_, r) in enumerate(plist.iterrows()):
                         drawn_players.append(r['PLAYER_WYID'])
                         
-                        # FARVE-LOGIK MED PRIORITET
                         if r['ER_AKADEMI']:
-                            # Akademi (Lilla)
                             txt_c, bg = "black", AKADEMI_FARVE
                         elif not r['IS_HIF']:
-                            # Emner (Grøn/Blå)
                             if r['KONTRAKT_DT'] <= ref_dt:
                                 txt_c, bg = "black", GRON_NY
                             else:
                                 txt_c, bg = "white", HIF_BLA
                         else:
-                            # HIF (Kontraktstatus)
                             k_c = get_status_color(r['KONTRAKT_DT'], ref_date=ref_dt)
                             txt_c = "black"
                             bg = k_c if k_c else "white"
