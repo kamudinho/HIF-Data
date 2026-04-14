@@ -9,7 +9,6 @@ from data.utils.team_mapping import TEAMS
 
 # --- KONFIGURATION ---
 DB = "KLUB_HVIDOVREIF.AXIS"
-# Superliga (335) er fjernet fra listen
 LIGA_IDS = "('dyjr458hcmrcy87fsabfsy87o', 'e5p78j2r7v8h3u9s5k0l2m4n6', 'f6q89k3s8w9i4v0t6l1m3n5o7', '328', '329', '43319', '331')"
 
 @st.cache_data(ttl=600)
@@ -39,32 +38,28 @@ def get_physical_summary(player_name, player_opta_uuid, valgt_hold_navn, _conn):
     return _conn.query(sql)
 
 def draw_phase_pitch(val, title, color):
-    """Tegner banen uden brug af ikoner eller ekstern grafik"""
     pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD', line_zorder=2)
     fig, ax = pitch.draw(figsize=(8, 6))
-    fig.patch.set_alpha(0) # Gennemsigtig baggrund
-    
-    # Da vi arbejder med aggregeret data, visualiserer vi volumen centralt
+    fig.patch.set_alpha(0)
     ax.text(50, 50, f"{int(val)}", color=color, fontsize=60, 
             fontweight='bold', ha='center', va='center', alpha=0.15)
-    
     ax.set_title(title, fontsize=14, pad=10, fontweight='bold', color='#333333')
     return fig
 
 def vis_side():
-    # Ingen st.image eller ikoner herover
     st.markdown("""
         <style>
-        [data-testid="stMetricValue"] { font-size: 24px !important; font-weight: bold !important; color: #cc0000; }
+        [data-testid="stMetricValue"] { font-size: 22px !important; font-weight: bold !important; color: #cc0000; }
         .stTabs [aria-selected="true"] { background-color: #cc0000 !important; color: white !important; }
         div.block-container { padding-top: 2rem; }
+        .p90-label { font-size: 12px; color: #666; font-weight: normal; }
         </style>
     """, unsafe_allow_html=True)
 
     conn = _get_snowflake_conn()
     if not conn: return
 
-    # --- HOLDVALG (Filtreret for Superliga) ---
+    # --- HOLDVALG ---
     sql_teams = f"SELECT DISTINCT CONTESTANTHOME_NAME, CONTESTANTHOME_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS}"
     df_teams_raw = conn.query(sql_teams)
     mapping_lookup = {str(info['opta_uuid']).lower().replace('t', ''): name for name, info in TEAMS.items() if 'opta_uuid' in info}
@@ -94,42 +89,72 @@ def vis_side():
 
     st.markdown("---")
 
-    # --- DATA ---
+    # --- DATA PROCESSERING ---
     df = get_physical_summary(valgt_spiller, valgt_player_uuid, valgt_hold, conn)
 
     if df is not None and not df.empty:
         latest = df.iloc[0]
         
-        # Metrics uden ikoner
-        m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Distance", f"{round(latest['DISTANCE']/1000, 2)} km")
-        m2.metric("HSR", f"{int(latest['HSR'])} m")
-        m3.metric("Sprint", f"{int(latest['SPRINTING'])} m")
-        m4.metric("HI Runs", int(latest['HI_RUNS']))
+        # Individuelle beregninger (Normalisering)
+        mins = latest['MINUTES'] if latest['MINUTES'] > 0 else 1
+        hsr_90 = int((latest['HSR'] / mins) * 90)
+        sprint_90 = int((latest['SPRINTING'] / mins) * 90)
+        dist_90 = round((latest['DISTANCE'] / mins) * 90 / 1000, 2)
+        
+        # Eksplosivitets-index (% af total distance der er højintens)
+        hi_dist = latest['HSR'] + latest['SPRINTING']
+        hi_index = round((hi_dist / latest['DISTANCE']) * 100, 1) if latest['DISTANCE'] > 0 else 0
 
-        tabs = st.tabs(["📍 Bane-overblik", "📈 Sæson-trend", "📋 Kamp-data"])
+        # Metrics række
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Distance", f"{round(latest['DISTANCE']/1000, 2)} km", f"{dist_90} p90", delta_color="off")
+        m2.metric("HSR", f"{int(latest['HSR'])} m", f"{hsr_90} p90", delta_color="off")
+        m3.metric("Sprint", f"{int(latest['SPRINTING'])} m", f"{sprint_90} p90", delta_color="off")
+        m4.metric("Intensitets-index", f"{hi_index}%", "HSR+Sprint load", delta_color="normal" if hi_index > 7 else "off")
+
+        tabs = st.tabs(["📍 Individuel Profil", "📈 Sæson-trend", "📋 Kamp-historik"])
 
         with tabs[0]:
-            st.write("### Fordeling af Højintensive løb (HI Runs)")
-            c_a, c_b = st.columns(2)
-            with c_a:
-                st.pyplot(draw_phase_pitch(latest['HI_RUNS_TIP'], "TIP (Offensiv fase)", "#2ecc71"))
-            with c_b:
-                st.pyplot(draw_phase_pitch(latest['HI_RUNS_OTIP'], "OTIP (Defensiv fase)", "#e74c3c"))
+            col_left, col_right = st.columns([1, 2])
+            
+            with col_left:
+                st.write("### Arbejdsrate")
+                total_hi_runs = (latest['HI_RUNS_TIP'] or 0) + (latest['HI_RUNS_OTIP'] or 0)
+                if total_hi_runs > 0:
+                    off_pct = round((latest['HI_RUNS_TIP'] / total_hi_runs) * 100)
+                    st.write(f"Offensiv (TIP): **{off_pct}%**")
+                    st.progress(off_pct / 100)
+                    st.write(f"Defensiv (OTIP): **{100-off_pct}%**")
+                    st.progress((100-off_pct) / 100)
+                
+                st.write(f"**Topfart:** {latest['TOP_SPEED']} km/h")
+                st.write(f"**Spilleminutter:** {int(latest['MINUTES'])} min")
+
+            with col_right:
+                st.write("### Fase-fordeling (HI Runs)")
+                c_a, c_b = st.columns(2)
+                with c_a: st.pyplot(draw_phase_pitch(latest['HI_RUNS_TIP'], "Offensiv (TIP)", "#2ecc71"))
+                with c_b: st.pyplot(draw_phase_pitch(latest['HI_RUNS_OTIP'], "Defensiv (OTIP)", "#e74c3c"))
 
         with tabs[1]:
             df_trend = df.sort_values('MATCH_DATE')
+            # Vi viser HSR pr. 90 i trenden for at gøre det sammenligneligt over tid
+            df_trend['HSR_P90'] = (df_trend['HSR'] / df_trend['MINUTES'].replace(0,1)) * 90
+            
             fig = go.Figure()
-            fig.add_trace(go.Scatter(x=df_trend['MATCH_DATE'], y=df_trend['HSR'], name="Total HSR", line=dict(color='#cc0000', width=3)))
-            fig.add_trace(go.Scatter(x=df_trend['MATCH_DATE'], y=df_trend['HSR_TIP'], name="TIP HSR", line=dict(color='#2ecc71', dash='dot')))
-            fig.add_trace(go.Scatter(x=df_trend['MATCH_DATE'], y=df_trend['HSR_OTIP'], name="OTIP HSR", line=dict(color='#e74c3c', dash='dot')))
-            fig.update_layout(plot_bgcolor="white", height=400, margin=dict(t=20, b=20, l=10, r=10))
+            fig.add_trace(go.Scatter(x=df_trend['MATCH_DATE'], y=df_trend['HSR_P90'], name="HSR (p90)", 
+                                     line=dict(color='#cc0000', width=3), mode='lines+markers'))
+            fig.update_layout(title="HSR intensitet over sæsonen (p90)", plot_bgcolor="white", height=400)
             st.plotly_chart(fig, use_container_width=True)
 
         with tabs[2]:
-            st.dataframe(df, use_container_width=True, hide_index=True)
+            # Tilføj p90 kolonner til oversigten for hurtig sammenligning
+            display_df = df.copy()
+            display_df['HSR_P90'] = ((display_df['HSR'] / display_df['MINUTES'].replace(0,1)) * 90).astype(int)
+            st.dataframe(display_df[['MATCH_DATE', 'MATCH_TEAMS', 'MINUTES', 'DISTANCE', 'HSR', 'HSR_P90', 'TOP_SPEED']], 
+                         use_container_width=True, hide_index=True)
     else:
-        st.info("Ingen data fundet for denne spiller.")
+        st.info("Ingen fysiske data fundet for denne spiller i den valgte periode.")
 
 if __name__ == "__main__":
     vis_side()
