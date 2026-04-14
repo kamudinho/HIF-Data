@@ -79,9 +79,11 @@ def vis_side():
     df = get_extended_player_data(valgt_spiller, p_uuid, target_ssiid)
 
     if not df.empty:
+        # Sørg for at vi har fat i en datetime
         latest = df.iloc[0]
-        # Sikker formatering af dato
-        match_date_str = latest['MATCH_DATE'].strftime('%d/%m/%Y') if hasattr(latest['MATCH_DATE'], 'strftime') else str(latest['MATCH_DATE'])
+        curr_date = pd.to_datetime(latest['MATCH_DATE']) 
+        match_date_str = curr_date.strftime('%d/%m/%Y')
+        
         st.caption(f"Seneste Kamp: {latest['MATCH_TEAMS']} ({match_date_str})")
         
         # Top Metrics
