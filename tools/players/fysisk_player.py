@@ -14,9 +14,8 @@ LIGA_IDS = "('dyjr458hcmrcy87fsabfsy87o', 'e5p78j2r7v8h3u9s5k0l2m4n6', 'f6q89k3s
 
 @st.cache_data(ttl=600)
 def get_extended_player_data(player_name, player_opta_uuid, target_team_ssiid, _conn):
-    """Henter fysisk data med bred navne-match for at undgå NaN og tomme resultater"""
+    """Henter fysisk overblik for spilleren"""
     clean_id = str(player_opta_uuid).lower().replace('p', '').strip()
-    # Vi bruger efternavnet som joker-søgning
     last_name = player_name.split(' ')[-1]
 
     sql = f"""
@@ -29,7 +28,6 @@ def get_extended_player_data(player_name, player_opta_uuid, target_team_ssiid, _
             END AS MINUTES_DECIMAL,
             s.DISTANCE, s."HIGH SPEED RUNNING" as HSR, s.SPRINTING, s.TOP_SPEED,
             s.HSR_DISTANCE_TIP as HSR_TIP, s.HSR_DISTANCE_OTIP as HSR_OTIP,
-            -- Tvinger NULL til 0 for at dræbe 'NaN'
             COALESCE(f.PERCENTDISTANCESTANDING, 0) as STANDING_PCT, 
             COALESCE(f.PERCENTDISTANCEWALKING, 0) as WALKING_PCT,
             COALESCE(f.PERCENTDISTANCEJOGGING, 0) as JOGGING_PCT, 
@@ -51,14 +49,20 @@ def get_extended_player_data(player_name, player_opta_uuid, target_team_ssiid, _
 
 @st.cache_data(ttl=600)
 def get_minute_splits(match_ssiid, player_name, _conn):
-    """Søger bredt i splits-tabellen for at fange navne-mismatch (f.eks. Andreas Smed)"""
+    """Henter minut-splits og lægger perioder (1. og 2. halvleg) sammen hvis de overlapper"""
     last_name = player_name.split(' ')[-1]
+    
+    # Vi bruger UPPER og SUM for at sikre at data vises korrekt selvom der er flere perioder pr. minut
     sql = f"""
-        SELECT MINUTE_SPLIT, PHYSICAL_METRIC_TYPE, PHYSICAL_METRIC_VALUE
+        SELECT 
+            MINUTE_SPLIT, 
+            UPPER(PHYSICAL_METRIC_TYPE) as METRIC_TYPE, 
+            SUM(PHYSICAL_METRIC_VALUE) as VALUE
         FROM {DB}.SECONDSPECTRUM_PHYSICAL_SPLITS_PLAYERS
         WHERE MATCH_SSIID = '{match_ssiid}' 
           AND PLAYER_NAME ILIKE '%{last_name}%'
-          AND PHYSICAL_METRIC_TYPE IN ('distance', 'high_speed_running_distance')
+          AND UPPER(PHYSICAL_METRIC_TYPE) IN ('TOTAL DISTANCE', 'HIGH SPEED RUNNING DISTANCE')
+        GROUP BY MINUTE_SPLIT, PHYSICAL_METRIC_TYPE
         ORDER BY MINUTE_SPLIT ASC
     """
     return _conn.query(sql)
@@ -67,10 +71,7 @@ def draw_phase_pitch(val, title, color):
     pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD', line_zorder=2)
     fig, ax = pitch.draw(figsize=(8, 6))
     fig.patch.set_alpha(0)
-    
-    # Sikring mod NaN i visningen
     display_val = int(val) if pd.notnull(val) else 0
-    
     ax.scatter(50, 50, s=3000, color=color, alpha=0.1, zorder=1)
     txt = ax.text(50, 50, f"{display_val}m", color=color, fontsize=45, fontweight='bold', ha='center', va='center', zorder=3)
     txt.set_path_effects([patheffects.withStroke(linewidth=3, foreground='white')])
@@ -128,22 +129,44 @@ def vis_side():
             z_labels = ['Stående', 'Gående', 'Jogging', 'LSR', 'HSR', 'Sprint']
             z_vals = [latest['STANDING_PCT'], latest['WALKING_PCT'], latest['JOGGING_PCT'], latest['LSR_PCT'], latest['HSR_PCT'], latest['SPRINT_PCT']]
             fig = go.Figure(go.Bar(x=z_vals, y=z_labels, orientation='h', marker_color='#cc0000', text=[f"{v}%" for v in z_vals], textposition='outside'))
-            fig.update_layout(xaxis=dict(range=[0, 70]), height=400)
+            fig.update_layout(xaxis=dict(range=[0, 75]), height=400)
             st.plotly_chart(fig, use_container_width=True)
 
         with tabs[2]:
-            st.write("### Intensitet minut-for-minut")
+            st.write("### Intensitet minut-for-minut (HSR)")
             df_splits = get_minute_splits(latest['MATCH_SSIID'], valgt_spiller, conn)
+            
             if not df_splits.empty:
-                df_hsr = df_splits[df_splits['PHYSICAL_METRIC_TYPE'] == 'high_speed_running_distance']
-                fig_s = go.Figure(go.Scatter(x=df_hsr['MINUTE_SPLIT'], y=df_hsr['PHYSICAL_METRIC_VALUE'], fill='tozeroy', line_color='#cc0000'))
-                st.plotly_chart(fig_s, use_container_width=True)
+                # Vi bruger de præcise navne fra dit tabel-udtræk
+                df_hsr = df_splits[df_splits['METRIC_TYPE'] == 'HIGH SPEED RUNNING DISTANCE']
+                
+                if not df_hsr.empty:
+                    fig_s = go.Figure(go.Scatter(
+                        x=df_hsr['MINUTE_SPLIT'], 
+                        y=df_hsr['VALUE'], 
+                        fill='tozeroy', 
+                        line_color='#cc0000',
+                        mode='lines+markers',
+                        name="Meter"
+                    ))
+                    fig_s.update_layout(
+                        xaxis=dict(tickmode='linear', tick0=0, dtick=5),
+                        xaxis_title="Minut",
+                        yaxis_title="HSR Meter",
+                        hovermode="x unified"
+                    )
+                    st.plotly_chart(fig_s, use_container_width=True)
+                else:
+                    st.info("Ingen HSR-data i splits. Viser Total Distance.")
+                    df_dist = df_splits[df_splits['METRIC_TYPE'] == 'TOTAL DISTANCE']
+                    st.line_chart(df_dist.set_index('MINUTE_SPLIT')['VALUE'])
             else:
-                st.info(f"Ingen minut-splits fundet i databasen for {valgt_spiller} i denne kamp.")
+                st.info(f"Ingen minut-splits fundet for {valgt_spiller}.")
 
         with tabs[3]:
             df_trend = df.sort_values('MATCH_DATE')
-            fig_t = go.Figure(go.Scatter(x=df_trend['MATCH_DATE'], y=df_trend['HSR'], line=dict(color='#cc0000', width=3)))
+            fig_t = go.Figure(go.Scatter(x=df_trend['MATCH_DATE'], y=df_trend['HSR'], line=dict(color='#cc0000', width=3), mode='lines+markers'))
+            fig_t.update_layout(xaxis_title="Dato", yaxis_title="HSR Distance (m)")
             st.plotly_chart(fig_t, use_container_width=True)
     else:
         st.warning(f"Ingen overordnede kampdata fundet for {valgt_spiller} hos {valgt_hold}.")
