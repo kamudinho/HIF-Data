@@ -100,7 +100,7 @@ def vis_side():
                 st.plotly_chart(fig, use_container_width=True, key=f"int_{p_uuid}")
 
         with tabs[2]:
-            st.markdown("### Minut-for-minut intensitet")
+            st.caption("Minut-for-minut intensitet")
             
             # 1. Hent data specifikt for splits
             df_splits = conn.query(f"""
