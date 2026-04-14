@@ -108,17 +108,20 @@ def vis_side():
             col_b.pyplot(draw_phase_pitch(latest['HSR_OTIP'], "Forsvar (OTIP)", "#e74c3c"))
 
         with tabs[1]:
-            # Robust navne-håndtering
+            # Robust navne-håndtering til søgning
             navne_dele = valgt_spiller.strip().split(' ')
             f_name = navne_dele[0].replace("'", "''")
             l_name = navne_dele[-1].replace("'", "''")
             
-            # Vi søger bredere i denne specifikke tabel for at sikre match
+            # Hent de procentvise fordelinger for den specifikke kamp
             df_pct = conn.query(f"""
                 SELECT 
-                    PERCENTDISTANCESTANDING, PERCENTDISTANCEWALKING, PERCENTDISTANCEJOGGING, 
-                    PERCENTDISTANCELOWSPEEDRUNNING, PERCENTDISTANCEHIGHSPEEDRUNNING, PERCENTDISTANCEHIGHSPEEDSPRINTING,
-                    PLAYER_NAME
+                    PERCENTDISTANCESTANDING, 
+                    PERCENTDISTANCEWALKING, 
+                    PERCENTDISTANCEJOGGING, 
+                    PERCENTDISTANCELOWSPEEDRUNNING, 
+                    PERCENTDISTANCEHIGHSPEEDRUNNING, 
+                    PERCENTDISTANCEHIGHSPEEDSPRINTING
                 FROM {DB}.SECONDSPECTRUM_F53A_GAME_PLAYER 
                 WHERE MATCH_SSIID = '{latest['MATCH_SSIID']}' 
                   AND (PLAYER_NAME ILIKE '%{l_name}%' OR PLAYER_NAME ILIKE '%{f_name}%')
@@ -126,37 +129,40 @@ def vis_side():
             """)
 
             if df_pct is not None and not df_pct.empty:
+                # Data findes - vi trækker værdierne ud
                 r = df_pct.iloc[0]
-                # Sørg for at rækkefølgen passer med SELECT-feltet
-                z_labels = ['Stående', 'Gående', 'Jogging', 'LSR', 'HSR', 'Sprint']
+                
+                # Definer labels og de tilhørende værdier fra SQL resultatet
+                # Sørg for at rækkefølgen matcher SELECT-rækkefølgen ovenfor
+                z_labels = ['Stående', 'Gående', 'Jogging', 'LSR (Low Speed)', 'HSR (High Speed)', 'Sprint']
                 z_vals = [r[0], r[1], r[2], r[3], r[4], r[5]]
                 
+                # Lav den liggende bar-graf
                 fig = go.Figure(go.Bar(
                     x=z_vals, 
                     y=z_labels, 
                     orientation='h', 
                     marker_color='#cc0000', 
-                    text=[f"{v:.1f}%" for v in z_vals], 
+                    text=[f"{v:.1f}%" for v in z_vals], # Viser procent på baren
                     textposition='outside',
                     hovertemplate="%{y}: %{x:.1f}%<extra></extra>"
                 ))
                 
                 fig.update_layout(
                     plot_bgcolor="white", 
-                    height=350, 
+                    height=400, 
                     margin=dict(l=0, r=50, t=20, b=0), 
                     xaxis=dict(
-                        showticklabels=False, 
-                        range=[0, max(z_vals)*1.3 if any(z_vals) else 100],
-                        showgrid=False
+                        title="Procent af total distance",
+                        showticklabels=True, 
+                        range=[0, max(z_vals)*1.25 if any(z_vals) else 100],
+                        gridcolor='#f0f0f0'
                     ),
-                    yaxis=dict(autorange="reversed") # Så 'Stående' er øverst
+                    yaxis=dict(autorange="reversed") # Viser de mest intense zoner nederst eller øverst alt efter ønske
                 )
-                st.plotly_chart(fig, use_container_width=True, key=f"pct_chart_{p_uuid}")
+                st.plotly_chart(fig, use_container_width=True, key=f"pct_profile_{p_uuid}")
             else:
-                st.info(f"Ingen intensitets-profil fundet for {valgt_spiller} i kampen.")
-                # Debug linje - fjern denne når det virker:
-                # st.write(f"Søgte efter: {f_name} eller {l_name} på SSIID: {latest['MATCH_SSIID']}")
+                st.info(f"Ingen intensitetsprofil fundet for {valgt_spiller} i denne kamp.")
 
         with tabs[2]:
             st.caption("Minut-for-minut intensitet vs. Sæson gns. pr. minut")
