@@ -142,44 +142,47 @@ def vis_side():
             """)
             
             if df_splits is not None and not df_splits.empty:
+                # --- FILTERERING AF METRIKKER START ---
+                # Vi fjerner alle metrikker der indeholder 'COUNT'
+                all_m = [m for m in df_splits['METRIC'].unique().tolist() if 'COUNT' not in m]
+                
+                # Prioritering af de mest relevante distancer
                 prio = ["HSR DISTANCE", "SPRINT DISTANCE", "TOTAL DISTANCE"]
-                all_m = df_splits['METRIC'].unique().tolist()
                 metrics_options = [m for m in prio if m in all_m] + [m for m in all_m if m not in prio]
+                
+                # Lav læsbare navne (f.eks. 'Hsr Distance' -> 'HSR')
                 readable_options = [m.replace(' DISTANCE', '').title() for m in metrics_options]
                 map_back = dict(zip(readable_options, metrics_options))
+                # --- FILTERERING AF METRIKKER SLUT ---
                 
-                selected_readable = st.segmented_control("Vælg metrik", options=readable_options, default=readable_options[0], key=f"split_sel_{p_uuid}")
+                selected_readable = st.segmented_control(
+                    "Vælg metrik", 
+                    options=readable_options, 
+                    default=readable_options[0] if readable_options else None, 
+                    key=f"split_sel_{p_uuid}"
+                )
                 
                 if selected_readable:
                     m_type = map_back[selected_readable]
                     d_m = df_splits[df_splits['METRIC'] == m_type].copy()
                     
-                    # RETTELSE: Ændret fra 4 til 3 kolonner og fjernet c4
                     c1, c2, c3 = st.columns(3)
                     total_v = d_m['VAL'].sum()
-                    u = "km" if "DISTANCE" in m_type and total_v > 1000 else "m"
+                    u = "km" if total_v > 1000 else "m"
                     
                     c1.metric("Total", f"{total_v/1000 if u=='km' else total_v:.2f} {u}")
                     c2.metric("Max/min", f"{d_m['VAL'].max():.1f} m")
                     c3.metric("Gns/min", f"{d_m['VAL'].mean():.1f} m")
 
                     fig_s = go.Figure(go.Scatter(
-                        x=d_m['MINUTE_SPLIT'], 
-                        y=d_m['VAL'], 
-                        fill='tozeroy', 
-                        line=dict(color='#cc0000', width=2), 
-                        mode='lines+markers'
+                        x=d_m['MINUTE_SPLIT'], y=d_m['VAL'], 
+                        fill='tozeroy', line=dict(color='#cc0000', width=2), mode='lines+markers'
                     ))
                     fig_s.update_layout(
-                        plot_bgcolor="white", 
-                        height=350, 
-                        margin=dict(t=10, b=10, l=0, r=0),
-                        xaxis=dict(title="Minut"),
-                        yaxis=dict(gridcolor='#f0f0f0')
+                        plot_bgcolor="white", height=350, margin=dict(t=10, b=10, l=0, r=0),
+                        xaxis=dict(title="Minut"), yaxis=dict(gridcolor='#f0f0f0')
                     )
                     st.plotly_chart(fig_s, use_container_width=True)
-            else:
-                st.info("Ingen minut-splits fundet.")
 
         with tabs[3]:
             # Trend-graf baseret på de kampe vi har i 'df'
