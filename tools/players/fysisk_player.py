@@ -112,7 +112,7 @@ def vis_side():
             l_name = navne_dele[-1].replace("'", "''")
             f_initial = navne_dele[0][0]
 
-            # Vi bruger de præcise kolonnenavne fra dit datasæt
+            # Vi bruger de præcise navne fra din SELECT-output
             df_pct = conn.query(f"""
                 SELECT 
                     PERCENTDISTANCESTANDING, 
@@ -131,17 +131,10 @@ def vis_side():
             if df_pct is not None and not df_pct.empty:
                 r = df_pct.iloc[0]
                 
-                # Danske labels til de tekniske navne
-                z_labels = [
-                    'Stående', 
-                    'Gående', 
-                    'Jogging', 
-                    'Lavt løb (LSR)', 
-                    'Højt løb (HSR)', 
-                    'Sprint'
-                ]
+                # Labels der giver mening for brugeren
+                z_labels = ['Stående', 'Gående', 'Jogging', 'LSR (Lavt løb)', 'HSR (Højt løb)', 'Sprint']
                 
-                # Vi henter værdierne i samme rækkefølge som SELECT
+                # Mapping til de rå kolonnenavne
                 z_vals = [
                     float(r['PERCENTDISTANCESTANDING']),
                     float(r['PERCENTDISTANCEWALKING']),
@@ -170,11 +163,11 @@ def vis_side():
                         range=[0, max(z_vals)*1.4 if any(z_vals) else 100],
                         showgrid=False
                     ),
-                    yaxis=dict(autorange="reversed") # Viser de hurtige zoner nederst
+                    yaxis=dict(autorange="reversed") 
                 )
-                st.plotly_chart(fig, use_container_width=True, key=f"pct_fixed_v2_{p_uuid}")
+                st.plotly_chart(fig, use_container_width=True, key=f"pct_fixed_v3_{p_uuid}")
             else:
-                st.info(f"Fandt ikke noget for {valgt_spiller}.")
+                st.info(f"Ingen intensitetsprofil fundet for {valgt_spiller} i denne kamp.")
 
         with tabs[2]:
             st.caption("Minut-for-minut intensitet vs. Sæson gns. pr. minut")
