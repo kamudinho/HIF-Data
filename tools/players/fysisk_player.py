@@ -114,9 +114,9 @@ def vis_side():
         with tabs[1]:
             st.caption("Intensitetsprofil (Beregnet ud fra kampens splits)")
             
-            # Vi henter alle fysiske metrics for spilleren i denne kamp
+            # Vi henter de rå værdier baseret på din liste over PHYSICAL_METRIC_TYPE
             df_calc = conn.query(f"""
-                SELECT UPPER(TRIM(PHYSICAL_METRIC_TYPE)) as METRIC, SUM(PHYSICAL_METRIC_VALUE) as TOTAL_VAL
+                SELECT PHYSICAL_METRIC_TYPE as METRIC, SUM(PHYSICAL_METRIC_VALUE) as TOTAL_VAL
                 FROM {DB}.SECONDSPECTRUM_PHYSICAL_SPLITS_PLAYERS
                 WHERE MATCH_SSIID = '{latest['MATCH_SSIID']}'
                   AND (PLAYER_NAME ILIKE '%{f_clean}%' AND PLAYER_NAME ILIKE '%{l_clean}%')
@@ -124,31 +124,27 @@ def vis_side():
             """)
 
             if df_calc is not None and not df_calc.empty:
-                # Lav ordbog: {'TOTAL DISTANCE': 10500, 'HSR DISTANCE': 600, ...}
+                # Vi laver en dictionary for nem opslag
                 m_dict = df_calc.set_index('METRIC')['TOTAL_VAL'].to_dict()
                 
-                # Vi finder den samlede distance
-                total_dist = m_dict.get('TOTAL DISTANCE', 1)
+                # Vi henter totalen
+                total_dist = m_dict.get('Total Distance', 1)
                 
-                # Vi prøver at finde HSR og Sprint (nogle gange uden 'DISTANCE' i navnet)
-                hsr = m_dict.get('HSR DISTANCE', m_dict.get('HSR', 0))
-                sprint = m_dict.get('SPRINT DISTANCE', m_dict.get('SPRINTING', 0))
-                lsr = m_dict.get('LOW SPEED RUNNING DISTANCE', m_dict.get('LOW SPEED RUNNING', 0))
-                jog = m_dict.get('JOGGING DISTANCE', m_dict.get('JOGGING', 0))
-
-                # Beregn "Gående/Stående" som det overskydende op til total distance
-                walking_standing = total_dist - (hsr + sprint + lsr + jog)
-                
+                # Her mapper vi dine eksakte navne fra listen
+                # Vi bruger .get(nøgle, 0) for at undgå fejl hvis en zone er 0
                 z_map = {
-                    'Sprint': sprint,
-                    'HSR': hsr,
-                    'LSR': lsr,
-                    'Jogging': jog,
-                    'Gående/Stående': max(0, walking_standing)
+                    'Sprint': m_dict.get('Sprinting Distance', 0),
+                    'HSR': m_dict.get('High Speed Running Distance', 0),
+                    'LSR': m_dict.get('Low Speed Running Distance', 0),
+                    'Jogging': m_dict.get('Jogging Distance', 0),
+                    'Gående': m_dict.get('Walking Distance', 0)
                 }
 
-                # Lav lister til grafen
+                # Tjek om der er en rest (hvis f.eks. 'Standing' mangler i listen)
+                # Men ud fra din liste bør disse 5 zoner dække det meste.
+                
                 z_labels = list(z_map.keys())
+                # Beregn % af total distance
                 z_vals = [(v / total_dist) * 100 for v in z_map.values()]
 
                 fig = go.Figure(go.Bar(
@@ -156,23 +152,25 @@ def vis_side():
                     y=z_labels,
                     orientation='h',
                     marker_color='#cc0000',
-                    text=[f"{v:.1f}%" if v > 0 else "" for v in z_vals],
-                    textposition='outside'
+                    text=[f"{v:.1f}%" if v > 0.05 else "" for v in z_vals], # Skjul tekst hvis v < 0.1%
+                    textposition='outside',
+                    hovertemplate="%{y}: %{x:.1f}%<extra></extra>"
                 ))
 
                 fig.update_layout(
                     plot_bgcolor="white",
                     height=350,
                     margin=dict(l=0, r=60, t=10, b=0),
-                    xaxis=dict(showticklabels=False, range=[0, max(z_vals)*1.4 if any(z_vals) else 100], showgrid=False),
-                    yaxis=dict(autorange="reversed")
+                    xaxis=dict(
+                        showticklabels=False, 
+                        range=[0, max(z_vals)*1.4 if any(z_vals) else 100], 
+                        showgrid=False
+                    ),
+                    yaxis=dict(autorange="reversed") # Sprint øverst
                 )
-                st.plotly_chart(fig, use_container_width=True, key=f"calc_profile_fixed_{p_uuid}")
-                
-                # DEBUG: Hvis du stadig ikke ser noget, kan du fjerne kommentaren herunder:
-                # st.write("Fundne metrics:", m_dict)
+                st.plotly_chart(fig, use_container_width=True, key=f"calc_profile_final_{p_uuid}")
             else:
-                st.info("Ingen split-data fundet til profil-beregning.")
+                st.info("Ingen split-data fundet for denne spiller.")
                 
         with tabs[2]:
             st.caption("Minut-for-minut intensitet vs. Sæson gns. pr. minut")
