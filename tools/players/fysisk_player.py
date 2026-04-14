@@ -159,11 +159,26 @@ def vis_side():
                 # st.write(f"Søgte efter: {f_name} eller {l_name} på SSIID: {latest['MATCH_SSIID']}")
 
         with tabs[2]:
-            st.caption("Minut-for-minut intensitet")
+            st.caption("Minut-for-minut intensitet (vs. Sæson Benchmark)")
             f_clean = valgt_spiller.strip().split(' ')[0].replace("'", "''")
             l_clean = valgt_spiller.strip().split(' ')[-1].replace("'", "''")
 
-            # Hent data for ALLE spillere i kampen for at lave hold-benchmark
+            # 1. HENT BENCHMARKS (Sæson-gennemsnit pr. minut)
+            # Vi beregner dette én gang for den valgte metrik-type
+            df_bench = conn.query(f"""
+                SELECT 
+                    UPPER(PHYSICAL_METRIC_TYPE) as METRIC,
+                    AVG(PHYSICAL_METRIC_VALUE) as AVG_VAL,
+                    CASE 
+                        WHEN (PLAYER_NAME ILIKE '%{f_clean}%' AND PLAYER_NAME ILIKE '%{l_clean}%') THEN 'PLAYER' 
+                        ELSE 'TEAM' 
+                    END as SCOPE
+                FROM {DB}.SECONDSPECTRUM_PHYSICAL_SPLITS_PLAYERS
+                WHERE MATCH_DATE >= '{SEASON_START}'
+                GROUP BY 1, 3
+            """)
+
+            # 2. HENT KAMP-DATA (Minut splits for den aktuelle kamp)
             df_all_splits = conn.query(f"""
                 SELECT PLAYER_NAME, MINUTE_SPLIT, UPPER(PHYSICAL_METRIC_TYPE) as METRIC, SUM(PHYSICAL_METRIC_VALUE) as VAL 
                 FROM {DB}.SECONDSPECTRUM_PHYSICAL_SPLITS_PLAYERS 
@@ -172,95 +187,64 @@ def vis_side():
             """)
             
             if df_all_splits is not None and not df_all_splits.empty:
-                # Filtrér metrikker (ingen COUNT)
                 all_metrics = [m for m in df_all_splits['METRIC'].unique() if 'COUNT' not in m]
                 prio = ["HSR DISTANCE", "SPRINT DISTANCE", "TOTAL DISTANCE"]
                 sorted_metrics = [m for m in prio if m in all_metrics] + [m for m in all_metrics if m not in prio]
                 
                 readable_options = [m.replace(' DISTANCE', '').title() for m in sorted_metrics]
                 map_back = dict(zip(readable_options, sorted_metrics))
-                
                 selected_readable = st.segmented_control("Vælg metrik", options=readable_options, default=readable_options[0], key=f"split_sel_{p_uuid}")
                 
                 if selected_readable:
                     m_type = map_back[selected_readable]
-                    
-                    # 1. Data for den valgte spiller
+                    is_total_dist = "TOTAL" in m_type
+                    suffix = "km" if is_total_dist else "m"
+                    div = 1000 if is_total_dist else 1
+
+                    # Filtrér kamp-data
                     d_player = df_all_splits[
                         (df_all_splits['METRIC'] == m_type) & 
                         (df_all_splits['PLAYER_NAME'].str.contains(f_clean, case=False, na=False)) & 
                         (df_all_splits['PLAYER_NAME'].str.contains(l_clean, case=False, na=False))
                     ].copy()
                     
-                    # 2. Data for holdet (gennemsnit pr. minut-split)
-                    d_team = df_all_splits[df_all_splits['METRIC'] == m_type].groupby('MINUTE_SPLIT')['VAL'].mean().reset_index()
-
-                    # Definer suffix og enheder
-                    is_total_dist = "TOTAL" in m_type
-                    suffix = "km" if is_total_dist else "m"
+                    # Hent sæson-benchmarks fra df_bench
+                    s_player_avg = df_bench[(df_bench['METRIC'] == m_type) & (df_bench['SCOPE'] == 'PLAYER')]['AVG_VAL'].mean()
+                    s_team_avg = df_bench[(df_bench['METRIC'] == m_type) & (df_bench['SCOPE'] == 'TEAM')]['AVG_VAL'].mean()
                     
-                    # Konverter værdier til plot-enheder
-                    if is_total_dist:
-                        d_player['VAL_PLOT'] = d_player['VAL'] / 1000
-                        d_team['VAL_PLOT'] = d_team['VAL'] / 1000
-                    else:
-                        d_player['VAL_PLOT'] = d_player['VAL']
-                        d_team['VAL_PLOT'] = d_team['VAL']
-                    
-                    # Metrics række
-                    c1, c2, c3 = st.columns(3)
-                    total_v = d_player['VAL'].sum()
-                    display_total = total_v/1000 if is_total_dist else total_v
-                    
-                    c1.metric("Total", f"{display_total:.2f} {suffix}")
-                    c2.metric("Max/min", f"{d_player['VAL_PLOT'].max():.1f} {suffix}")
-                    c3.metric("Gns/min", f"{d_player['VAL_PLOT'].mean():.1f} {suffix}")
+                    # Skalér til km/m
+                    p_avg_plot = (s_player_avg / div) if not np.isnan(s_player_avg) else 0
+                    t_avg_plot = (s_team_avg / div) if not np.isnan(s_team_avg) else 0
 
                     # Graf
                     fig_s = go.Figure()
 
-                    # 1. HOLDETS gennemsnit minut-for-minut (Grå solid linje)
-                    # Denne følger splits ligesom du ønsker
+                    # Areal: Spillerens aktuelle kamp
                     fig_s.add_trace(go.Scatter(
-                        x=d_team['MINUTE_SPLIT'], 
-                        y=d_team['VAL_PLOT'],
-                        line=dict(color="#D3D3D3", width=2),
-                        mode='lines',
-                        name="Hold Gns. pr. min",
-                        hovertemplate=f"Hold Gns: %{{y:.1f}} {suffix}<extra></extra>"
+                        x=d_player['MINUTE_SPLIT'], y=d_player['VAL'] / div, 
+                        fill='tozeroy', line=dict(color='#cc0000', width=2.5), 
+                        mode='lines+markers', name="Denne kamp",
+                        hovertemplate=f"Min: %{{x}}<br>Aktuel: %{{y:.1f}} {suffix}<extra></extra>"
                     ))
 
-                    # 2. SPILLERENS faktiske værdier (Rødt areal)
-                    # Denne følger også splits
-                    fig_s.add_trace(go.Scatter(
-                        x=d_player['MINUTE_SPLIT'], 
-                        y=d_player['VAL_PLOT'], 
-                        fill='tozeroy', 
-                        line=dict(color='#cc0000', width=2.5), 
-                        mode='lines+markers',
-                        name=valgt_spiller,
-                        hovertemplate=f"Min: %{{x}}<br>{valgt_spiller}: %{{y:.1f}} {suffix}<extra></extra>"
-                    ))
-
-                    # 3. BENCHMARK: Holdets totale gennemsnit (Sort stiplet - flad linje)
-                    # Den viser bare "ligger han over/under normalen for holdet"
-                    team_avg_total = d_team['VAL_PLOT'].mean()
-                    fig_s.add_shape(
-                        type="line", 
-                        x0=d_team['MINUTE_SPLIT'].min(), 
-                        x1=d_team['MINUTE_SPLIT'].max(),
-                        y0=team_avg_total, y1=team_avg_total,
-                        line=dict(color="black", width=1, dash="dash")
-                    )
+                    # Linje 1: Spillerens SÆSON-gennemsnit (Mørkerød stiplet)
+                    fig_s.add_shape(type="line", x0=0, x1=d_player['MINUTE_SPLIT'].max(),
+                                    y0=p_avg_plot, y1=p_avg_plot,
+                                    line=dict(color="#8B0000", width=2, dash="dot"))
+                    
+                    # Linje 2: Holdets SÆSON-gennemsnit (Sort stiplet)
+                    fig_s.add_shape(type="line", x0=0, x1=d_player['MINUTE_SPLIT'].max(),
+                                    y0=t_avg_plot, y1=t_avg_plot,
+                                    line=dict(color="black", width=1.5, dash="dash"))
 
                     fig_s.update_layout(
-                        plot_bgcolor="white", height=400, 
-                        margin=dict(t=20, b=20, l=0, r=0),
-                        showlegend=False,
-                        xaxis=dict(title="Kampminut", showgrid=False),
+                        plot_bgcolor="white", height=400, margin=dict(t=20, b=20, l=0, r=0),
+                        showlegend=False, xaxis=dict(title="Kampminut", showgrid=False),
                         yaxis=dict(title=suffix, gridcolor='#f0f0f0')
                     )
                     st.plotly_chart(fig_s, use_container_width=True)
+                    
+                    st.caption(f"--- Sort linje: Holdets sæson-snit ({t_avg_plot:.1f}{suffix}) | Rød prikket: Spillerens sæson-snit ({p_avg_plot:.1f}{suffix})")
             else:
                 st.info("Ingen minut-data tilgængelig for denne kamp.")
 
