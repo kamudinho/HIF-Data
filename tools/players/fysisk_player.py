@@ -19,9 +19,11 @@ def get_cached_conn():
 @st.cache_data(ttl=600)
 def get_extended_player_data(player_name, player_opta_uuid, target_team_ssiid):
     conn = get_cached_conn()
+    # Rens ID og navne for SQL-sikkerhed
     clean_id = str(player_opta_uuid).lower().replace('p', '').strip()
     navne_dele = player_name.strip().split(' ')
-    f_name, l_name = navne_dele[0], navne_dele[-1].replace('å', '_').replace('ø', '_').replace('æ', '_')
+    f_name = navne_dele[0].replace("'", "''")
+    l_name = navne_dele[-1].replace("'", "''")
 
     sql = f"""
         SELECT 
@@ -36,7 +38,6 @@ def get_extended_player_data(player_name, player_opta_uuid, target_team_ssiid):
           AND s.MATCH_DATE >= '{SEASON_START}'
         ORDER BY s.MATCH_DATE DESC
     """
-    # Tving data til en rigtig Pandas DataFrame med .copy()
     raw_df = conn.query(sql)
     if raw_df is None or raw_df.empty:
         return pd.DataFrame()
@@ -79,10 +80,8 @@ def vis_side():
     df = get_extended_player_data(valgt_spiller, p_uuid, target_ssiid)
 
     if not df.empty:
-        # Sørg for at vi har fat i en datetime
         latest = df.iloc[0]
-        curr_date = pd.to_datetime(latest['MATCH_DATE']) 
-        match_date_str = curr_date.strftime('%d/%m/%Y')
+        match_date_str = latest['MATCH_DATE'].strftime('%d/%m/%Y')
         
         st.caption(f"Seneste Kamp: {latest['MATCH_TEAMS']} ({match_date_str})")
         
@@ -101,46 +100,38 @@ def vis_side():
             col_b.pyplot(draw_phase_pitch(latest['HSR_OTIP'], "Forsvar (OTIP)", "#e74c3c"))
 
         with tabs[1]:
-            df_pct = conn.query(f"SELECT PERCENTDISTANCESTANDING, PERCENTDISTANCEWALKING, PERCENTDISTANCEJOGGING, PERCENTDISTANCELOWSPEEDRUNNING, PERCENTDISTANCEHIGHSPEEDRUNNING, PERCENTDISTANCEHIGHSPEEDSPRINTING FROM {DB}.SECONDSPECTRUM_F53A_GAME_PLAYER WHERE MATCH_SSIID = '{latest['MATCH_SSIID']}' AND PLAYER_NAME ILIKE '%{valgt_spiller.split(' ')[-1]}%' LIMIT 1")
+            df_pct = conn.query(f"SELECT PERCENTDISTANCESTANDING, PERCENTDISTANCEWALKING, PERCENTDISTANCEJOGGING, PERCENTDISTANCELOWSPEEDRUNNING, PERCENTDISTANCEHIGHSPEEDRUNNING, PERCENTDISTANCEHIGHSPEEDSPRINTING FROM {DB}.SECONDSPECTRUM_F53A_GAME_PLAYER WHERE MATCH_SSIID = '{latest['MATCH_SSIID']}' AND (PLAYER_NAME ILIKE '%{valgt_spiller.split(' ')[-1]}%' OR \"optaId\" = '{str(p_uuid).replace('p','')}') LIMIT 1")
             if not df_pct.empty:
                 r = df_pct.iloc[0]
                 z_labels = ['Stående', 'Gående', 'Jogging', 'LSR', 'HSR', 'Sprint']
                 z_vals = [r[0], r[1], r[2], r[3], r[4], r[5]]
                 fig = go.Figure(go.Bar(x=z_vals, y=z_labels, orientation='h', marker_color='#cc0000', text=[f"{round(v,1)}%" for v in z_vals], textposition='outside'))
-                fig.update_layout(plot_bgcolor="white", height=350, margin=dict(l=0, r=20, t=20, b=0))
+                fig.update_layout(plot_bgcolor="white", height=350, margin=dict(l=0, r=40, t=20, b=0), xaxis=dict(range=[0, max(z_vals)*1.2]))
                 st.plotly_chart(fig, use_container_width=True, key=f"int_{p_uuid}")
 
         with tabs[2]:
             st.markdown("### Minut-for-minut intensitet")
-            
-            # --- NY NAVNE-LOGIK START ---
-            # Vi splitter "Louka Prip" op og søger efter både 'Louka' OG 'Prip'
-            navne_dele = valgt_spiller.strip().split(' ')
-            f_navn = navne_dele[0]
-            l_navn = navne_dele[-1]
-            # --- NY NAVNE-LOGIK SLUT ---
+            f_navn_clean = valgt_spiller.strip().split(' ')[0].replace("'", "''")
+            l_navn_clean = valgt_spiller.strip().split(' ')[-1].replace("'", "''")
 
             df_splits = conn.query(f"""
                 SELECT MINUTE_SPLIT, UPPER(PHYSICAL_METRIC_TYPE) as METRIC, SUM(PHYSICAL_METRIC_VALUE) as VAL 
                 FROM {DB}.SECONDSPECTRUM_PHYSICAL_SPLITS_PLAYERS 
                 WHERE MATCH_SSIID = '{latest['MATCH_SSIID']}' 
-                  -- Søger efter rækker der indeholder både første og sidste del af det valgte navn
-                  AND PLAYER_NAME ILIKE '%{f_navn}%' 
-                  AND PLAYER_NAME ILIKE '%{l_navn}%' 
+                  AND (PLAYER_NAME ILIKE '%{f_navn_clean}%' AND PLAYER_NAME ILIKE '%{l_navn_clean}%') 
                 GROUP BY 1, 2 ORDER BY 1 ASC
             """)
             
             if not df_splits.empty:
-                metrics_options = sorted(df_splits['METRIC'].unique().tolist())
+                # Prioritering af metrikker
+                prio = ["HSR DISTANCE", "SPRINT DISTANCE", "TOTAL DISTANCE"]
+                all_m = df_splits['METRIC'].unique().tolist()
+                metrics_options = [m for m in prio if m in all_m] + [m for m in all_m if m not in prio]
+                
                 readable_options = [m.replace(' DISTANCE', '').title() for m in metrics_options]
                 map_back = dict(zip(readable_options, metrics_options))
                 
-                selected_readable = st.segmented_control(
-                    "Vælg metrik", 
-                    options=readable_options, 
-                    default=readable_options[0] if readable_options else None, 
-                    key=f"split_selector_{p_uuid}"
-                )
+                selected_readable = st.segmented_control("Vælg metrik", options=readable_options, default=readable_options[0], key=f"split_sel_{p_uuid}")
                 
                 if selected_readable:
                     m_type = map_back[selected_readable]
@@ -149,46 +140,29 @@ def vis_side():
                     st.markdown(f"<p style='text-align: right; margin-bottom: -10px;'><b>Fysisk output: {selected_readable}</b></p>", unsafe_allow_html=True)
                     st.markdown("---")
                     
-                    # Metrics række
                     c1, c2, c3, c4 = st.columns(4)
                     total_v = d_m['VAL'].sum()
                     u = "km" if "DISTANCE" in m_type and total_v > 1000 else "m"
-                    
                     c1.metric("Total", f"{total_v/1000 if u=='km' else total_v:.2f} {u}")
                     c2.metric("Max/min", f"{d_m['VAL'].max():.1f} m")
                     c3.metric("Gns/min", f"{d_m['VAL'].mean():.1f} m")
                     c4.metric("Splits", f"{len(d_m)}")
 
-                    # Graf
-                    fig_s = go.Figure(go.Scatter(
-                        x=d_m['MINUTE_SPLIT'], 
-                        y=d_m['VAL'], 
-                        fill='tozeroy', 
-                        line=dict(color='#cc0000', width=2), 
-                        mode='lines+markers'
-                    ))
-                    fig_s.update_layout(
-                        plot_bgcolor="white", 
-                        height=350, 
-                        margin=dict(t=10, b=10, l=0, r=0), 
-                        xaxis=dict(showgrid=False), 
-                        yaxis=dict(showgrid=True, gridcolor='#f0f0f0')
-                    )
+                    fig_s = go.Figure(go.Scatter(x=d_m['MINUTE_SPLIT'], y=d_m['VAL'], fill='tozeroy', line=dict(color='#cc0000', width=2), mode='lines+markers'))
+                    fig_s.update_layout(plot_bgcolor="white", height=350, margin=dict(t=10, b=10, l=0, r=0), xaxis=dict(showgrid=False, title="Minut"), yaxis=dict(showgrid=True, gridcolor='#f0f0f0'))
                     st.plotly_chart(fig_s, use_container_width=True, key=f"p_split_{m_type}_{p_uuid}")
             else:
-                st.info(f"Ingen minut-splits fundet for {valgt_spiller}. Prøver at matche på: {f_navn} + {l_navn}")
+                st.info("Ingen minut-splits fundet for denne kamp.")
 
         with tabs[3]:
-            # HER LØSES FEJLEN: Tving MATCH_DATE til datetime før brug af .dt
             df_chart = df.copy()
-            df_chart['MATCH_DATE'] = pd.to_datetime(df_chart['MATCH_DATE'])
+            # Allerede konverteret til datetime i get_extended_player_data
             
             cat_choice = st.segmented_control("Vælg metrik", options=["HSR (m)", "Sprint (m)", "Distance (km)", "Topfart (km/t)"], default="HSR (m)", key="phys_graph_control")
             mapping = {"HSR (m)": ("HSR", 1, "m"), "Sprint (m)": ("SPRINTING", 1, "m"), "Distance (km)": ("DISTANCE", 1000, "km"), "Topfart (km/t)": ("TOP_SPEED", 1, "km/t")}
             col_name, div, suffix = mapping[cat_choice]
 
-            df_chart = df_chart.drop_duplicates(subset=['MATCH_DATE', 'MATCH_TEAMS'])
-            df_chart = df_chart.sort_values('MATCH_DATE', ascending=True)
+            df_chart = df_chart.drop_duplicates(subset=['MATCH_DATE', 'MATCH_TEAMS']).sort_values('MATCH_DATE')
 
             if not df_chart.empty:
                 def get_opponent(teams_str, my_team):
@@ -198,7 +172,6 @@ def vis_side():
                     return parts[1] if parts[0].lower() in my_team.lower() else parts[0]
 
                 df_chart['Opponent'] = df_chart['MATCH_TEAMS'].apply(lambda x: get_opponent(x, valgt_hold))
-                # Nu virker .dt fordi vi har konverteret kolonnen ovenfor
                 df_chart['Label'] = df_chart['Opponent'] + "<br>" + df_chart['MATCH_DATE'].dt.strftime('%d/%m')
                 y_vals = df_chart[col_name] / div
                 
@@ -209,7 +182,7 @@ def vis_side():
                 st.plotly_chart(fig, use_container_width=True, key=f"trend_bar_{p_uuid}")
 
     else:
-        st.warning("Ingen fysisk data fundet for denne spiller.")
+        st.warning("Ingen fysisk data fundet for denne spiller i den valgte periode.")
 
 if __name__ == "__main__":
     vis_side()
