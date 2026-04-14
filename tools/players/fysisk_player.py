@@ -4,18 +4,21 @@ import numpy as np
 import plotly.graph_objects as go
 from mplsoccer import Pitch
 import matplotlib.pyplot as plt
+from matplotlib import patheffects
 from data.data_load import _get_snowflake_conn
-from data.utils.team_mapping import TEAMS, TEAM_COLORS
+from data.utils.team_mapping import TEAMS
 
 # --- KONFIGURATION ---
 DB = "KLUB_HVIDOVREIF.AXIS"
 LIGA_IDS = "('dyjr458hcmrcy87fsabfsy87o', 'e5p78j2r7v8h3u9s5k0l2m4n6', 'f6q89k3s8w9i4v0t6l1m3n5o7', '328', '329', '43319', '331', '1305')"
 
 @st.cache_data(ttl=600)
-def get_extended_player_data(player_name, player_opta_uuid, _conn):
-    """Henter udvidet fysisk data inkl. faser, procenter og metadata"""
+def get_extended_player_data(player_name, player_opta_uuid, target_team_ssiid, _conn):
+    """Henter udvidet fysisk data filtreret på det valgte hold"""
     clean_id = str(player_opta_uuid).lower().replace('p', '').strip()
     navne_dele = [n.strip() for n in player_name.split(' ') if len(n.strip()) > 2]
+    # Hvis navnet er kort, bruger vi hele navnet
+    if not navne_dele: navne_dele = [player_name]
     name_conditions = " OR ".join([f"s.PLAYER_NAME ILIKE '%{n}%'" for n in navne_dele])
 
     sql = f"""
@@ -40,7 +43,10 @@ def get_extended_player_data(player_name, player_opta_uuid, _conn):
             ON s.MATCH_SSIID = f.MATCH_SSIID AND s.PLAYER_NAME = f.PLAYER_NAME
         LEFT JOIN {DB}.SECONDSPECTRUM_SEASON_METADATA sea
             ON s.MATCH_SSIID = sea.MATCH_SSIID
+        JOIN {DB}.SECONDSPECTRUM_GAME_METADATA m
+            ON s.MATCH_SSIID = m.MATCH_SSIID
         WHERE (({name_conditions}) OR (s."optaId" = '{clean_id}'))
+          AND (m.HOME_SSIID = '{target_team_ssiid}' OR m.AWAY_SSIID = '{target_team_ssiid}')
           AND s.MATCH_DATE >= '2025-07-01'
         ORDER BY s.MATCH_DATE DESC
     """
@@ -48,7 +54,6 @@ def get_extended_player_data(player_name, player_opta_uuid, _conn):
 
 @st.cache_data(ttl=600)
 def get_minute_splits(match_ssiid, player_name, _conn):
-    """Henter minut-for-minut data for en specifik kamp og spiller"""
     sql = f"""
         SELECT MINUTE_SPLIT, PHYSICAL_METRIC_TYPE, PHYSICAL_METRIC_VALUE
         FROM {DB}.SECONDSPECTRUM_PHYSICAL_SPLITS_PLAYERS
@@ -63,8 +68,16 @@ def draw_phase_pitch(val, title, color):
     pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD', line_zorder=2)
     fig, ax = pitch.draw(figsize=(8, 6))
     fig.patch.set_alpha(0)
-    ax.text(50, 50, f"{int(val)}m", color=color, fontsize=50, fontweight='bold', ha='center', va='center', alpha=0.2)
-    ax.set_title(title, fontsize=14, pad=10, fontweight='bold', color='#333333')
+    
+    # Cirkel bag tallene for bedre visuel indikation
+    ax.scatter(50, 50, s=3000, color=color, alpha=0.1, zorder=1)
+    
+    # Tekst med hvid kant (Path effects)
+    txt = ax.text(50, 50, f"{int(val)}m", color=color, fontsize=45, 
+                  fontweight='bold', ha='center', va='center', zorder=3)
+    txt.set_path_effects([patheffects.withStroke(linewidth=3, foreground='white')])
+    
+    ax.set_title(title, fontsize=16, pad=15, fontweight='bold', color='#333333')
     return fig
 
 def vis_side():
@@ -79,29 +92,45 @@ def vis_side():
     conn = _get_snowflake_conn()
     if not conn: return
 
-    # --- VALG AF HOLD OG SPILLER ---
+    # --- 1. HOLDVALG ---
     sql_teams = f"SELECT DISTINCT CONTESTANTHOME_NAME as TEAM_NAME, CONTESTANTHOME_OPTAUUID as TEAM_UUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS} ORDER BY TEAM_NAME"
-    df_teams = conn.query(sql_teams)
+    df_teams_raw = conn.query(sql_teams)
     
     col_h1, col_h2 = st.columns(2)
-    valgt_hold = col_h1.selectbox("Vælg Hold", df_teams['TEAM_NAME'].unique())
-    valgt_uuid_hold = df_teams[df_teams['TEAM_NAME'] == valgt_hold]['TEAM_UUID'].iloc[0]
+    valgt_hold = col_h1.selectbox("Vælg Hold", df_teams_raw['TEAM_NAME'].unique())
+    
+    # Hent holdets UUID og SSID
+    valgt_uuid_hold = df_teams_raw[df_teams_raw['TEAM_NAME'] == valgt_hold]['TEAM_UUID'].iloc[0]
+    # Her henter vi SSID fra din mapping fil
+    target_ssiid = TEAMS.get(valgt_hold, {}).get('ssid')
 
-    sql_spillere = f"SELECT DISTINCT TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME) as NAVN, e.PLAYER_OPTAUUID FROM {DB}.OPTA_EVENTS e JOIN {DB}.OPTA_PLAYERS p ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID WHERE e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid_hold}' AND e.EVENT_TIMESTAMP >= '2025-07-01' ORDER BY NAVN"
+    # --- 2. SPILLERVALG ---
+    sql_spillere = f"""
+        SELECT DISTINCT TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME) as NAVN, e.PLAYER_OPTAUUID 
+        FROM {DB}.OPTA_EVENTS e 
+        JOIN {DB}.OPTA_PLAYERS p ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID 
+        WHERE e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid_hold}' 
+          AND e.EVENT_TIMESTAMP >= '2025-07-01' 
+        ORDER BY NAVN
+    """
     df_pl = conn.query(sql_spillere)
     
-    valgt_spiller = col_h2.selectbox("Vælg Spiller", df_pl['NAVN'].tolist())
-    valgt_player_uuid = df_pl[df_pl['NAVN'] == valgt_spiller]['PLAYER_OPTAUUID'].iloc[0]
+    if df_pl is not None and not df_pl.empty:
+        valgt_spiller = col_h2.selectbox("Vælg Spiller", df_pl['NAVN'].tolist())
+        valgt_player_uuid = df_pl[df_pl['NAVN'] == valgt_spiller]['PLAYER_OPTAUUID'].iloc[0]
+    else:
+        st.error("Ingen spillere fundet for dette hold.")
+        return
 
     st.markdown("---")
 
-    # --- DATA HENTNING ---
-    df = get_extended_player_data(valgt_spiller, valgt_player_uuid, conn)
+    # --- 3. DATA HENTNING ---
+    df = get_extended_player_data(valgt_spiller, valgt_player_uuid, target_ssiid, conn)
 
     if df is not None and not df.empty:
         latest = df.iloc[0]
         
-        # Hoved-metrics
+        # KPI række
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("Total Distance", f"{round(latest['DISTANCE']/1000, 2)} km")
         m2.metric("HSR (>19.8 km/h)", f"{int(latest['HSR'])} m")
@@ -127,9 +156,10 @@ def vis_side():
             }
             fig_bar = go.Figure(go.Bar(
                 x=list(splits_data.values()), y=list(splits_data.keys()),
-                orientation='h', marker_color='#cc0000', text=[f"{v}%" for v in splits_data.values()], textposition='outside'
+                orientation='h', marker_color='#cc0000', 
+                text=[f"{v}%" for v in splits_data.values()], textposition='outside'
             ))
-            fig_bar.update_layout(xaxis=dict(range=[0, max(splits_data.values()) + 10]), height=350, margin=dict(t=20, b=20))
+            fig_bar.update_layout(xaxis=dict(range=[0, 70]), height=350, margin=dict(t=20, b=20))
             st.plotly_chart(fig_bar, use_container_width=True)
 
         with tabs[2]:
@@ -153,11 +183,11 @@ def vis_side():
             fig_trend.add_trace(go.Scatter(x=df_trend['MATCH_DATE'], y=df_trend['HSR'], name="Total HSR", line=dict(color='#cc0000', width=3)))
             fig_trend.add_trace(go.Scatter(x=df_trend['MATCH_DATE'], y=df_trend['HSR_TIP'], name="TIP HSR", line=dict(color='#2ecc71', dash='dot')))
             fig_trend.add_trace(go.Scatter(x=df_trend['MATCH_DATE'], y=df_trend['HSR_OTIP'], name="OTIP HSR", line=dict(color='#e74c3c', dash='dot')))
-            fig_trend.update_layout(plot_bgcolor="white", height=400)
+            fig_trend.update_layout(plot_bgcolor="white", height=400, title="HSR udvikling over sæsonen")
             st.plotly_chart(fig_trend, use_container_width=True)
             
     else:
-        st.info("Ingen udvidede data fundet.")
+        st.warning(f"Ingen kampdata fundet for {valgt_spiller} hos {valgt_hold} i denne sæson.")
 
 if __name__ == "__main__":
     vis_side()
