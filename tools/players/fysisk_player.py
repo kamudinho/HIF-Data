@@ -58,6 +58,24 @@ def get_extended_player_data(player_name, player_opta_uuid, target_team_ssiid, _
     return _conn.query(sql)
 
 @st.cache_data(ttl=600)
+def get_f53a_percentages(match_ssiid, player_name, _conn):
+    """Henter KUN procenterne fra F53A tabellen separat for at sikre visning i Tab 2"""
+    navne_dele = player_name.strip().split(' ')
+    f_name = navne_dele[0]
+    l_name = navne_dele[-1].replace('å', '_').replace('ø', '_').replace('æ', '_')
+    
+    sql = f"""
+        SELECT 
+            PERCENTDISTANCESTANDING as STANDING_PCT, PERCENTDISTANCEWALKING as WALKING_PCT,
+            PERCENTDISTANCEJOGGING as JOGGING_PCT, PERCENTDISTANCELOWSPEEDRUNNING as LSR_PCT,
+            PERCENTDISTANCEHIGHSPEEDRUNNING as HSR_PCT, PERCENTDISTANCEHIGHSPEEDSPRINTING as SPRINT_PCT
+        FROM {DB}.SECONDSPECTRUM_F53A_GAME_PLAYER
+        WHERE MATCH_SSIID = '{match_ssiid}' 
+          AND (PLAYER_NAME ILIKE '%{f_name}%' AND PLAYER_NAME ILIKE '%{l_name}%')
+    """
+    return _conn.query(sql)
+
+@st.cache_data(ttl=600)
 def get_minute_splits(match_ssiid, player_name, _conn):
     """Henter minut-splits med robust matching og summering af perioder"""
     navne_dele = player_name.split(' ')
@@ -137,19 +155,28 @@ def vis_side():
 
         with tabs[1]:
             st.caption("Distancefordeling pr. hastighedszone (%)")
-            z_labels = ['Stående', 'Gående', 'Jogging', 'LSR', 'HSR', 'Sprint']
-            z_vals = [latest['STANDING_PCT'], latest['WALKING_PCT'], latest['JOGGING_PCT'], latest['LSR_PCT'], latest['HSR_PCT'], latest['SPRINT_PCT']]
             
-            fig = go.Figure(go.Bar(
-                x=z_vals, 
-                y=z_labels, 
-                orientation='h', 
-                marker_color='#cc0000', 
-                text=[f"{round(v,1)}%" for v in z_vals], 
-                textposition='outside'
-            ))
-            fig.update_layout(xaxis=dict(range=[0, max(z_vals) + 10] if any(z_vals) else [0, 100]), height=400)
-            st.plotly_chart(fig, use_container_width=True)
+            # Henter procenter separat for at sikre de ikke er 0 pga. join-fejl
+            df_pct = get_f53a_percentages(latest['MATCH_SSIID'], valgt_spiller, conn)
+            
+            if not df_pct.empty:
+                pcts = df_pct.iloc[0]
+                z_labels = ['Stående', 'Gående', 'Jogging', 'LSR', 'HSR', 'Sprint']
+                z_vals = [pcts['STANDING_PCT'], pcts['WALKING_PCT'], pcts['JOGGING_PCT'], 
+                          pcts['LSR_PCT'], pcts['HSR_PCT'], pcts['SPRINT_PCT']]
+                
+                fig = go.Figure(go.Bar(
+                    x=z_vals, 
+                    y=z_labels, 
+                    orientation='h', 
+                    marker_color='#cc0000', 
+                    text=[f"{round(v,1)}%" for v in z_vals], 
+                    textposition='outside'
+                ))
+                fig.update_layout(xaxis=dict(range=[0, max(z_vals) + 10] if any(z_vals) else [0, 100]), height=400)
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.info("Ingen hastighedszone-data fundet for denne kamp.")
 
         with tabs[2]:
             st.caption("Intensitet minut-for-minut (HSR)")
