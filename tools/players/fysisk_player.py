@@ -154,16 +154,29 @@ def vis_side():
                     m_type = map_back[selected_readable]
                     d_m = df_splits[df_splits['METRIC'] == m_type].copy()
                     
-                    c1, c2, c3, c4 = st.columns(4)
+                    # RETTELSE: Ændret fra 4 til 3 kolonner og fjernet c4
+                    c1, c2, c3 = st.columns(3)
                     total_v = d_m['VAL'].sum()
                     u = "km" if "DISTANCE" in m_type and total_v > 1000 else "m"
+                    
                     c1.metric("Total", f"{total_v/1000 if u=='km' else total_v:.2f} {u}")
                     c2.metric("Max/min", f"{d_m['VAL'].max():.1f} m")
                     c3.metric("Gns/min", f"{d_m['VAL'].mean():.1f} m")
-                    c4.metric("Splits", f"{len(d_m)}")
 
-                    fig_s = go.Figure(go.Scatter(x=d_m['MINUTE_SPLIT'], y=d_m['VAL'], fill='tozeroy', line=dict(color='#cc0000', width=2), mode='lines+markers'))
-                    fig_s.update_layout(plot_bgcolor="white", height=350, margin=dict(t=10, b=10, l=0, r=0))
+                    fig_s = go.Figure(go.Scatter(
+                        x=d_m['MINUTE_SPLIT'], 
+                        y=d_m['VAL'], 
+                        fill='tozeroy', 
+                        line=dict(color='#cc0000', width=2), 
+                        mode='lines+markers'
+                    ))
+                    fig_s.update_layout(
+                        plot_bgcolor="white", 
+                        height=350, 
+                        margin=dict(t=10, b=10, l=0, r=0),
+                        xaxis=dict(title="Minut"),
+                        yaxis=dict(gridcolor='#f0f0f0')
+                    )
                     st.plotly_chart(fig_s, use_container_width=True)
             else:
                 st.info("Ingen minut-splits fundet.")
