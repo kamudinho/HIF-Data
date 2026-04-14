@@ -13,9 +13,9 @@ HIF_SSIID = '56fa29c7-3a48-4186-9d14-dbf45fbc78d9'
 
 @st.cache_data(ttl=600)
 def get_physical_summary(player_opta_uuid, _conn):
+    # Vi renser ID'et for 'p', så det matcher "optaId" i Second Spectrum tabellen
     clean_id = str(player_opta_uuid).lower().replace('p', '').strip()
     
-    # Din specifikke SQL indsat som logikken for spiller-data
     sql_player = f"""
     WITH hvidovre_ids AS (
         SELECT DISTINCT
@@ -37,9 +37,6 @@ def get_physical_summary(player_opta_uuid, _conn):
         p.DISTANCE,
         p.AVERAGE_SPEED,
         p.TOP_SPEED,
-        p.WALKING,
-        p.JOGGING,
-        p.RUNNING,
         p."HIGH SPEED RUNNING" AS HSR,
         p.SPRINTING AS SPRINTING,
         p.NO_OF_HIGH_INTENSITY_RUNS AS HI_RUNS,
@@ -49,7 +46,6 @@ def get_physical_summary(player_opta_uuid, _conn):
         p.DISTANCE_OTIP,
         p.HSR_DISTANCE_OTIP AS HSR_OTIP,
         p.NO_OF_HIGH_INTENSITY_RUNS_OTIP AS HI_RUNS_OTIP,
-        p.DISTANCE_BOP,
         p.MATCH_SSIID
     FROM {DB}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS p
     INNER JOIN hvidovre_ids h 
@@ -86,6 +82,7 @@ def vis_side():
     if not conn: return
 
     # --- SQL TIL HOLD OG SPILLERE ---
+    # Vi henter holdene fra Opta tabellen
     sql_teams = f"SELECT DISTINCT CONTESTANTHOME_NAME, CONTESTANTHOME_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS}"
     df_teams_raw = conn.query(sql_teams)
     mapping_lookup = {str(info['opta_uuid']).lower().replace('t', ''): name for name, info in TEAMS.items() if 'opta_uuid' in info}
@@ -101,6 +98,7 @@ def vis_side():
     valgt_hold = col_h1.selectbox("Vælg Hold", sorted(list(valid_teams.keys())))
     valgt_uuid_hold = valid_teams[valgt_hold]
 
+    # Hent spillere for det valgte hold
     sql_spillere = f"""
         SELECT DISTINCT TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME) as NAVN, e.PLAYER_OPTAUUID
         FROM {DB}.OPTA_EVENTS e
@@ -108,21 +106,25 @@ def vis_side():
         WHERE e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid_hold}' AND e.EVENT_TIMESTAMP >= '2025-07-01'
     """
     df_pl = conn.query(sql_spillere)
-    if df_pl is None or df_pl.empty: return
+    if df_pl is None or df_pl.empty: 
+        st.warning("Ingen spillere fundet for dette hold.")
+        return
+
     valgt_spiller = col_h2.selectbox("Vælg Spiller", sorted(df_pl['NAVN'].tolist()))
     valgt_player_uuid = df_pl[df_pl['NAVN'] == valgt_spiller]['PLAYER_OPTAUUID'].iloc[0]
 
     # --- DATA HANDLING ---
-    # Vi sender nu kun UUID da din nye SQL er mere robust omkring spiller-matching
     df = get_physical_summary(valgt_player_uuid, conn)
 
     if df is not None and not df.empty:
+        # Konverter kolonner til tal
         for col in df.columns:
             if col not in ['MATCH_DATE', 'MATCH_TEAMS', 'PLAYER_NAME', 'MATCH_SSIID']:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
 
         latest = df.iloc[0]
         
+        # Beregninger
         m_mins = float(latest['MINUTES']) if latest['MINUTES'] > 0 else 1.0
         m_dist = float(latest['DISTANCE'])
         m_hsr = float(latest['HSR'])
@@ -133,11 +135,12 @@ def vis_side():
         sprint_90 = int((m_sprint / m_mins) * 90)
         hi_index = round(((m_hsr + m_sprint) / m_dist) * 100, 1) if m_dist > 0 else 0.0
 
+        # Metrics
         m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Distance", f"{round(m_dist/1000, 2)} km", f"{dist_90} p90", delta_color="off")
-        m2.metric("HSR", f"{int(m_hsr)} m", f"{hsr_90} p90", delta_color="off")
-        m3.metric("Sprint", f"{int(m_sprint)} m", f"{sprint_90} p90", delta_color="off")
-        m4.metric("Intensitets-index", f"{hi_index}%", "HSR+Sprint load", delta_color="normal" if hi_index > 7.0 else "off")
+        m1.metric("Distance", f"{round(m_dist/1000, 2)} km", f"{dist_90} p90")
+        m2.metric("HSR", f"{int(m_hsr)} m", f"{hsr_90} p90")
+        m3.metric("Sprint", f"{int(m_sprint)} m", f"{sprint_90} p90")
+        m4.metric("Intensitets-index", f"{hi_index}%", "HSR+Sprint load")
 
         tabs = st.tabs(["📍 Individuel Profil", "📈 Sæson-trend", "📋 Kamp-historik"])
 
@@ -153,7 +156,6 @@ def vis_side():
                     st.write(f"Defensiv (OTIP): **{100-off_pct}%**")
                     st.progress((100-off_pct) / 100)
                 st.write(f"**Topfart:** {latest['TOP_SPEED']} km/h")
-                # Tilføjet fra din SQL:
                 st.write(f"**Gns. Fart:** {latest['AVERAGE_SPEED']} km/h")
             with c_right:
                 ca, cb = st.columns(2)
@@ -168,7 +170,6 @@ def vis_side():
             st.plotly_chart(fig, use_container_width=True)
 
         with tabs[2]:
-            # Viser minutter pr. kamp tydeligt i tabellen
             display_df = df.copy()
             display_df['MINUTES'] = display_df['MINUTES'].astype(int)
             st.dataframe(
@@ -177,12 +178,11 @@ def vis_side():
                 hide_index=True,
                 column_config={
                     "MINUTES": st.column_config.NumberColumn("Min.", format="%d'"),
-                    "MATCH_DATE": "Dato",
-                    "MATCH_TEAMS": "Kamp"
+                    "MATCH_DATE": "Dato"
                 }
             )
     else:
-        st.info("Ingen fysiske data fundet for denne spiller.")
+        st.info(f"Ingen fysiske data fundet for {valgt_spiller}. Tjek om spilleren har optrådt i kampe efter 01-07-2025.")
 
 if __name__ == "__main__":
     vis_side()
