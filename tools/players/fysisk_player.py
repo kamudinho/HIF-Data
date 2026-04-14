@@ -223,7 +223,7 @@ def vis_side():
                     fig_s.add_trace(go.Scatter(
                         x=d_team['MINUTE_SPLIT'], 
                         y=d_team['VAL_PLOT'],
-                        line=dict(color="#D3D3D3", width=2),
+                        line=dict(color="#D3D3D3", width=1.5),
                         mode='lines',
                         name="Hold Gns. pr. min",
                         hoverinfo="skip"
@@ -240,16 +240,24 @@ def vis_side():
                         hovertemplate=f"Min: %{{x}}<br>Værdi: %{{y:.1f}} {suffix}<extra></extra>"
                     ))
 
-                    # 3. RETTELSE: Hele holdets gennemsnit over hele kampen (Sort stiplet linje)
+                    # 3. Holdets totale gennemsnit (Sort stiplet linje)
                     team_avg_total = d_team['VAL_PLOT'].mean()
-                    
                     fig_s.add_shape(
                         type="line", 
                         x0=d_team['MINUTE_SPLIT'].min(), 
                         x1=d_team['MINUTE_SPLIT'].max(),
-                        y0=team_avg_total, 
-                        y1=team_avg_total,
-                        line=dict(color="black", width=1.5, dash="dash")
+                        y0=team_avg_total, y1=team_avg_total,
+                        line=dict(color="black", width=1, dash="dash")
+                    )
+
+                    # 4. Spillerens eget gennemsnit (Mørkerød stiplet linje)
+                    player_avg_total = d_player['VAL_PLOT'].mean()
+                    fig_s.add_shape(
+                        type="line", 
+                        x0=d_player['MINUTE_SPLIT'].min(), 
+                        x1=d_player['MINUTE_SPLIT'].max(),
+                        y0=player_avg_total, y1=player_avg_total,
+                        line=dict(color="#8B0000", width=1.5, dash="dot")
                     )
 
                     fig_s.update_layout(
@@ -260,7 +268,7 @@ def vis_side():
                         yaxis=dict(title=suffix, gridcolor='#f0f0f0')
                     )
                     st.plotly_chart(fig_s, use_container_width=True)
-            else:
+                else:
                 st.info("Ingen minut-data tilgængelig for denne kamp.")
 
         with tabs[3]:
