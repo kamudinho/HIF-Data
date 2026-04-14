@@ -14,42 +14,46 @@ LIGA_IDS = "('dyjr458hcmrcy87fsabfsy87o', 'e5p78j2r7v8h3u9s5k0l2m4n6', 'f6q89k3s
 
 @st.cache_data(ttl=600)
 def get_extended_player_data(player_name, player_opta_uuid, target_team_ssiid, _conn):
-    """Henter fysisk data og sikrer kobling til F53A procenterne"""
+    """Henter fysisk data og tvinger kobling til F53A procenterne via fornavn+efternavn"""
     clean_id = str(player_opta_uuid).lower().replace('p', '').strip()
     
     # Split navn for at fjerne mellemnavne (Kiel, Lien osv.)
-    navne_dele = player_name.split(' ')
+    navne_dele = player_name.strip().split(' ')
     f_name = navne_dele[0]
     l_name = navne_dele[-1].replace('å', '_').replace('ø', '_').replace('æ', '_')
 
     sql = f"""
+        WITH physical_base AS (
+            SELECT 
+                s.MATCH_DATE, s.MATCH_TEAMS, s.PLAYER_NAME,
+                CASE 
+                    WHEN s.MINUTES LIKE '%:%' THEN 
+                        TRY_TO_NUMBER(SPLIT_PART(s.MINUTES, ':', 1)) + (TRY_TO_NUMBER(SPLIT_PART(s.MINUTES, ':', 2)) / 60)
+                    ELSE TRY_TO_NUMBER(s.MINUTES) 
+                END AS MINUTES_DECIMAL,
+                s.DISTANCE, s."HIGH SPEED RUNNING" as HSR, s.SPRINTING, s.TOP_SPEED,
+                s.HSR_DISTANCE_TIP as HSR_TIP, s.HSR_DISTANCE_OTIP as HSR_OTIP,
+                s.MATCH_SSIID,
+                s."optaId"
+            FROM {DB}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS s
+            JOIN {DB}.SECONDSPECTRUM_GAME_METADATA m ON s.MATCH_SSIID = m.MATCH_SSIID
+            WHERE (s."optaId" = '{clean_id}' OR (s.PLAYER_NAME ILIKE '%{f_name}%' AND s.PLAYER_NAME ILIKE '%{l_name}%'))
+              AND (m.HOME_SSIID = '{target_team_ssiid}' OR m.AWAY_SSIID = '{target_team_ssiid}')
+              AND s.MATCH_DATE >= '2025-07-01'
+        )
         SELECT 
-            s.MATCH_DATE, s.MATCH_TEAMS, s.PLAYER_NAME,
-            CASE 
-                WHEN s.MINUTES LIKE '%:%' THEN 
-                    TRY_TO_NUMBER(SPLIT_PART(s.MINUTES, ':', 1)) + (TRY_TO_NUMBER(SPLIT_PART(s.MINUTES, ':', 2)) / 60)
-                ELSE TRY_TO_NUMBER(s.MINUTES) 
-            END AS MINUTES_DECIMAL,
-            s.DISTANCE, s."HIGH SPEED RUNNING" as HSR, s.SPRINTING, s.TOP_SPEED,
-            s.HSR_DISTANCE_TIP as HSR_TIP, s.HSR_DISTANCE_OTIP as HSR_OTIP,
-            -- Vi sikrer os at vi henter procenterne fra F53A korrekt
+            b.*,
             COALESCE(f.PERCENTDISTANCESTANDING, 0) as STANDING_PCT, 
             COALESCE(f.PERCENTDISTANCEWALKING, 0) as WALKING_PCT,
             COALESCE(f.PERCENTDISTANCEJOGGING, 0) as JOGGING_PCT, 
             COALESCE(f.PERCENTDISTANCELOWSPEEDRUNNING, 0) as LSR_PCT,
             COALESCE(f.PERCENTDISTANCEHIGHSPEEDRUNNING, 0) as HSR_PCT, 
-            COALESCE(f.PERCENTDISTANCEHIGHSPEEDSPRINTING, 0) as SPRINT_PCT,
-            s.MATCH_SSIID
-        FROM {DB}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS s
-        JOIN {DB}.SECONDSPECTRUM_GAME_METADATA m ON s.MATCH_SSIID = m.MATCH_SSIID
-        -- Her er 'broen' til distancefordelingen:
+            COALESCE(f.PERCENTDISTANCEHIGHSPEEDSPRINTING, 0) as SPRINT_PCT
+        FROM physical_base b
         LEFT JOIN {DB}.SECONDSPECTRUM_F53A_GAME_PLAYER f 
-            ON s.MATCH_SSIID = f.MATCH_SSIID 
+            ON b.MATCH_SSIID = f.MATCH_SSIID 
             AND (f.PLAYER_NAME ILIKE '%{f_name}%' AND f.PLAYER_NAME ILIKE '%{l_name}%')
-        WHERE (s."optaId" = '{clean_id}' OR (s.PLAYER_NAME ILIKE '%{f_name}%' AND s.PLAYER_NAME ILIKE '%{l_name}%'))
-          AND (m.HOME_SSIID = '{target_team_ssiid}' OR m.AWAY_SSIID = '{target_team_ssiid}')
-          AND s.MATCH_DATE >= '2025-07-01'
-        ORDER BY s.MATCH_DATE DESC
+        ORDER BY b.MATCH_DATE DESC
     """
     return _conn.query(sql)
 
