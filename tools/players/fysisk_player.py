@@ -143,9 +143,34 @@ def vis_side():
             st.plotly_chart(fig, use_container_width=True)
 
         with tabs[2]:
-            st.dataframe(df, use_container_width=True, hide_index=True)
-    else:
-        st.info("Ingen fysiske data fundet for denne spiller.")
-
+            st.write("### Detaljeret Kamp-historik")
+            
+            # Vi laver en kopi til visning så vi ikke ødelægger de rå data
+            display_df = df.copy()
+            
+            # Formater kolonner for læsbarhed
+            display_df['Dato'] = pd.to_datetime(display_df['MATCH_DATE']).dt.strftime('%d-%m-%Y')
+            display_df['Minutter'] = display_df['MINUTES'].astype(int)
+            display_df['Total Dist (km)'] = (display_df['DISTANCE'] / 1000).round(2)
+            display_df['HSR (m)'] = display_df['HSR'].astype(int)
+            display_df['Sprints'] = display_df['SPRINTING'].astype(int)
+            
+            # Beregn HSR pr. 90 for hver kamp i tabellen
+            display_df['HSR p90'] = ((display_df['HSR'] / display_df['MINUTES'].replace(0,1)) * 90).astype(int)
+        
+            # Vælg kun de relevante kolonner til træneren
+            cols_to_show = ['Dato', 'MATCH_TEAMS', 'Minutter', 'Total Dist (km)', 'HSR (m)', 'HSR p90', 'Sprints', 'TOP_SPEED']
+            
+            st.dataframe(
+                display_df[cols_to_show], 
+                use_container_width=True, 
+                hide_index=True,
+                column_config={
+                    "MATCH_TEAMS": "Kamp",
+                    "TOP_SPEED": st.column_config.NumberColumn("Topfart", format="%.1f km/h"),
+                    "Minutter": st.column_config.NumberColumn("Min.", format="%d'"),
+                }
+            )
+            
 if __name__ == "__main__":
     vis_side()
