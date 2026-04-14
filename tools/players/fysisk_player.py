@@ -129,7 +129,7 @@ def vis_side():
                 st.info("Ingen intensitets-profil fundet for denne kamp.")
 
         with tabs[2]:
-            st.markdown("### Minut-for-minut intensitet")
+            st.caption("Minut-for-minut intensitet")
             f_clean = valgt_spiller.strip().split(' ')[0].replace("'", "''")
             l_clean = valgt_spiller.strip().split(' ')[-1].replace("'", "''")
 
@@ -191,7 +191,7 @@ def vis_side():
                     # Hold benchmark (Grå solid linje) - tilføjes først så den ligger bagerst
                     fig_s.add_trace(go.Scatter(
                         x=d_team['MINUTE_SPLIT'], y=d_team['VAL'],
-                        line=dict(color="#D3D3D3", width=1.5),
+                        line=dict(color="#D3D3D3", width=2.5),
                         mode='lines',
                         name="Hold Gns.",
                         hoverinfo="skip"
