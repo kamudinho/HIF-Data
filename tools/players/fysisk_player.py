@@ -102,20 +102,7 @@ def vis_side():
         with tabs[2]:
             st.markdown("### Minut-for-minut intensitet")
             
-            # 1. CSS til at gøre metrics mindre og mere kompakte
-            st.markdown("""
-                <style>
-                /* Gør metric-titler mindre så de kan være på én linje */
-                [data-testid="stMetricLabel"] {
-                    font-size: 0.8rem !important;
-                    white-space: nowrap !important;
-                }
-                [data-testid="stMetricValue"] {
-                    font-size: 1.4rem !important;
-                }
-                </style>
-            """, unsafe_allow_html=True)
-
+            # 1. Hent data
             df_splits = conn.query(f"""
                 SELECT MINUTE_SPLIT, UPPER(PHYSICAL_METRIC_TYPE) as METRIC, SUM(PHYSICAL_METRIC_VALUE) as VAL 
                 FROM {DB}.SECONDSPECTRUM_PHYSICAL_SPLITS_PLAYERS 
@@ -125,6 +112,7 @@ def vis_side():
             """)
             
             if not df_splits.empty:
+                # 2. Opsætning af metrik-vælger (de grå bokse)
                 metrics_options = sorted(df_splits['METRIC'].unique().tolist())
                 readable_options = [m.replace(' DISTANCE', '').title() for m in metrics_options]
                 map_back = dict(zip(readable_options, metrics_options))
@@ -133,18 +121,25 @@ def vis_side():
                     "Vælg metrik", 
                     options=readable_options, 
                     default=readable_options[0] if readable_options else None,
-                    key=f"split_box_selector_{p_uuid}"
+                    key=f"split_selector_{p_uuid}"
                 )
                 
                 if selected_readable:
                     m_type = map_back[selected_readable]
                     d_m = df_splits[df_splits['METRIC'] == m_type]
                     
-                    # 2. Beskrivelse til højre over boksene
-                    desc_col1, desc_col2 = st.columns([2, 1])
-                    desc_col2.markdown(f"<p style='text-align: right;'><b>Fysisk output: {selected_readable}</b></p>", unsafe_allow_html=True)
+                    # 3. Beskrivelse og Metrics i kompakt format
+                    st.markdown(f"<p style='text-align: right; margin-bottom: -10px;'><b>Fysisk output: {selected_readable}</b></p>", unsafe_allow_html=True)
+                    st.markdown("---")
                     
-                    # 3. Kompakte Metrics Bokse på én række
+                    # CSS til at styre tekststørrelse i metrics
+                    st.markdown("""
+                        <style>
+                        [data-testid="stMetricLabel"] { font-size: 0.85rem !important; color: #666 !important; }
+                        [data-testid="stMetricValue"] { font-size: 1.5rem !important; font-weight: 700 !important; }
+                        </style>
+                    """, unsafe_allow_html=True)
+
                     c1, c2, c3, c4 = st.columns(4)
                     
                     total_val = d_m['VAL'].sum()
@@ -155,32 +150,36 @@ def vis_side():
                     u = "km" if "DISTANCE" in m_type and total_val > 1000 else "m"
                     disp_total = total_val / 1000 if u == "km" else total_val
                     
-                    # Forkortede navne for at spare plads
                     c1.metric("Total", f"{disp_total:.2f} {u}")
                     c2.metric("Max/min", f"{max_val:.1f} m")
                     c3.metric("Gns/min", f"{avg_val:.1f} m")
                     c4.metric("Splits", f"{len(d_m)}")
 
-                    # 4. Grafen
+                    # 4. Graf (Rød fill som i dit screenshot)
                     fig_s = go.Figure(go.Scatter(
                         x=d_m['MINUTE_SPLIT'], 
                         y=d_m['VAL'], 
                         fill='tozeroy', 
-                        line=dict(color='#cc0000', width=3),
-                        mode='lines+markers'
+                        line=dict(color='#cc0000', width=2),
+                        mode='lines+markers',
+                        marker=dict(size=6, color='#cc0000')
                     ))
                     
                     fig_s.update_layout(
                         plot_bgcolor="white", 
                         height=350,
-                        margin=dict(t=10, b=10, l=10, r=10),
-                        xaxis=dict(showgrid=False, linecolor='#ccc'),
-                        yaxis=dict(showgrid=True, gridcolor='#eee')
+                        margin=dict(t=10, b=10, l=0, r=0),
+                        xaxis=dict(showgrid=False, linecolor='#eee', tickfont=dict(size=10)),
+                        yaxis=dict(showgrid=True, gridcolor='#f0f0f0', tickfont=dict(size=10))
                     )
-                    st.plotly_chart(fig_s, use_container_width=True, key=f"plt_split_{m_type}")
-                    
+                    st.plotly_chart(fig_s, use_container_width=True, config={'displayModeBar': False}, key=f"p_split_{m_type}")
+
+        # --- FIX TIL SÆSON TREND (DIN FEJLMELDING) ---
         with tabs[3]:
-            # HER ER DIN INDSENDTE LOGIK
+            # Sørg for at MATCH_DATE er datetime objekt før .dt bruges
+            df_trend = df.copy()
+            df_trend['MATCH_DATE'] = pd.to_datetime(df_trend['MATCH_DATE'])
+            
             cat_choice = st.segmented_control("Vælg metrik", options=["HSR (m)", "Sprint (m)", "Distance (km)", "Topfart (km/t)"], default="HSR (m)", key="phys_graph_control")
             mapping = {"HSR (m)": ("HSR", 1, "m"), "Sprint (m)": ("SPRINTING", 1, "m"), "Distance (km)": ("DISTANCE", 1000, "km"), "Topfart (km/t)": ("TOP_SPEED", 1, "km/t")}
             col_name, div, suffix = mapping[cat_choice]
