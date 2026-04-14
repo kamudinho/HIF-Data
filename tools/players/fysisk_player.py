@@ -108,66 +108,61 @@ def vis_side():
             col_b.pyplot(draw_phase_pitch(latest['HSR_OTIP'], "Forsvar (OTIP)", "#e74c3c"))
 
         with tabs[1]:
-            navne_dele = valgt_spiller.strip().split(' ')
-            l_name = navne_dele[-1].replace("'", "''")
-            f_initial = navne_dele[0][0]
-
-            # Vi bruger de præcise navne fra din SELECT-output
-            df_pct = conn.query(f"""
-                SELECT 
-                    PERCENTDISTANCESTANDING, 
-                    PERCENTDISTANCEWALKING, 
-                    PERCENTDISTANCEJOGGING, 
-                    PERCENTDISTANCELOWSPEEDRUNNING, 
-                    PERCENTDISTANCEHIGHSPEEDRUNNING, 
-                    PERCENTDISTANCEHIGHSPEEDSPRINTING
-                FROM {DB}.SECONDSPECTRUM_F53A_GAME_PLAYER 
-                WHERE MATCH_SSIID = '{latest['MATCH_SSIID']}' 
-                  AND (PLAYER_NAME ILIKE '%{l_name}%')
-                  AND (PLAYER_NAME ILIKE '{f_initial}%' OR PLAYER_NAME ILIKE '% {f_initial}%')
-                LIMIT 1
+            st.caption("Intensitetsprofil (Beregnet ud fra kampens splits)")
+            
+            # 1. Vi genbruger df_all_splits fra Tab 2, men filtrerer for den valgte spiller
+            # Hvis vi ikke har den i hukommelsen her, henter vi den hurtigt:
+            df_calc = conn.query(f"""
+                SELECT UPPER(PHYSICAL_METRIC_TYPE) as METRIC, SUM(PHYSICAL_METRIC_VALUE) as TOTAL_VAL
+                FROM {DB}.SECONDSPECTRUM_PHYSICAL_SPLITS_PLAYERS
+                WHERE MATCH_SSIID = '{latest['MATCH_SSIID']}'
+                  AND PLAYER_NAME ILIKE '%{l_clean}%' AND PLAYER_NAME ILIKE '%{f_clean}%'
+                GROUP BY 1
             """)
 
-            if df_pct is not None and not df_pct.empty:
-                r = df_pct.iloc[0]
+            if not df_calc.empty:
+                # Vi udtrækker de specifikke værdier
+                metrics = df_calc.set_index('METRIC')['TOTAL_VAL'].to_dict()
                 
-                # Labels der giver mening for brugeren
-                z_labels = ['Stående', 'Gående', 'Jogging', 'LSR (Lavt løb)', 'HSR (Højt løb)', 'Sprint']
+                total_dist = metrics.get('TOTAL DISTANCE', 1) # Undgå division med 0
                 
-                # Mapping til de rå kolonnenavne
-                z_vals = [
-                    float(r['PERCENTDISTANCESTANDING']),
-                    float(r['PERCENTDISTANCEWALKING']),
-                    float(r['PERCENTDISTANCEJOGGING']),
-                    float(r['PERCENTDISTANCELOWSPEEDRUNNING']),
-                    float(r['PERCENTDISTANCEHIGHSPEEDRUNNING']),
-                    float(r['PERCENTDISTANCEHIGHSPEEDSPRINTING'])
-                ]
-                
+                # Beregn procenter for de zoner vi har
+                # Bemærk: Vi antager at 'JOGGING DISTANCE' etc findes i dine splits
+                z_map = {
+                    'Sprint': metrics.get('SPRINT DISTANCE', 0),
+                    'HSR': metrics.get('HSR DISTANCE', 0),
+                    'LSR': metrics.get('LOW SPEED RUNNING DISTANCE', 0),
+                    'Jogging': metrics.get('JOGGING DISTANCE', 0),
+                    'Gående/Stående': total_dist - (metrics.get('SPRINT DISTANCE', 0) + 
+                                                   metrics.get('HSR DISTANCE', 0) + 
+                                                   metrics.get('LOW SPEED RUNNING DISTANCE', 0) + 
+                                                   metrics.get('JOGGING DISTANCE', 0))
+                }
+
+                z_labels = list(z_map.keys())
+                # Beregn % af total distance
+                z_vals = [(v / total_dist) * 100 for v in z_map.values()]
+
                 fig = go.Figure(go.Bar(
-                    x=z_vals, 
-                    y=z_labels, 
-                    orientation='h', 
-                    marker_color='#cc0000', 
+                    x=z_vals,
+                    y=z_labels,
+                    orientation='h',
+                    marker_color='#cc0000',
                     text=[f"{v:.1f}%" for v in z_vals],
                     textposition='outside',
                     hovertemplate="%{y}: %{x:.1f}%<extra></extra>"
                 ))
-                
+
                 fig.update_layout(
-                    plot_bgcolor="white", 
-                    height=380, 
-                    margin=dict(l=0, r=60, t=10, b=0), 
-                    xaxis=dict(
-                        showticklabels=False, 
-                        range=[0, max(z_vals)*1.4 if any(z_vals) else 100],
-                        showgrid=False
-                    ),
-                    yaxis=dict(autorange="reversed") 
+                    plot_bgcolor="white",
+                    height=350,
+                    margin=dict(l=0, r=60, t=10, b=0),
+                    xaxis=dict(showticklabels=False, range=[0, max(z_vals)*1.4 if any(z_vals) else 100], showgrid=False),
+                    yaxis=dict(autorange="reversed")
                 )
-                st.plotly_chart(fig, use_container_width=True, key=f"pct_fixed_v3_{p_uuid}")
+                st.plotly_chart(fig, use_container_width=True, key=f"calc_pct_{p_uuid}")
             else:
-                st.info(f"Ingen intensitetsprofil fundet for {valgt_spiller} i denne kamp.")
+                st.info("Kunne ikke beregne profil (ingen split-data fundet).")
 
         with tabs[2]:
             st.caption("Minut-for-minut intensitet vs. Sæson gns. pr. minut")
