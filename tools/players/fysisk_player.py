@@ -79,7 +79,7 @@ def vis_side():
     df_matches = conn.query(f"""
         SELECT DISTINCT 
             m.MATCH_SSIID, 
-            o.MATCHDATE as MATCH_DATE,
+            o.MATCH_DATE as MATCH_DATE,
             o.CONTESTANTHOME_NAME || ' - ' || o.CONTESTANTAWAY_NAME as MATCH_NAME
         FROM {DB}.SECONDSPECTRUM_GAME_METADATA m
         JOIN {DB}.OPTA_MATCHINFO o ON m.MATCH_SSIID = o.MATCH_SSIID
