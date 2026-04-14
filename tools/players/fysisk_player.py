@@ -1,9 +1,14 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
 import plotly.graph_objects as go
 from mplsoccer import Pitch
-from matplotlib import patheffects
+from data.data_load import _get_snowflake_conn
 from data.utils.team_mapping import TEAMS
+import requests
+from PIL import Image
+from io import BytesIO
 
 # --- KONFIGURATION ---
 DB = "KLUB_HVIDOVREIF.AXIS"
