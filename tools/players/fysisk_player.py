@@ -133,56 +133,85 @@ def vis_side():
             f_clean = valgt_spiller.strip().split(' ')[0].replace("'", "''")
             l_clean = valgt_spiller.strip().split(' ')[-1].replace("'", "''")
 
-            df_splits = conn.query(f"""
-                SELECT MINUTE_SPLIT, UPPER(PHYSICAL_METRIC_TYPE) as METRIC, SUM(PHYSICAL_METRIC_VALUE) as VAL 
+            # Hent data for ALLE spillere i kampen for at lave hold-benchmark
+            df_all_splits = conn.query(f"""
+                SELECT PLAYER_NAME, MINUTE_SPLIT, UPPER(PHYSICAL_METRIC_TYPE) as METRIC, SUM(PHYSICAL_METRIC_VALUE) as VAL 
                 FROM {DB}.SECONDSPECTRUM_PHYSICAL_SPLITS_PLAYERS 
                 WHERE MATCH_SSIID = '{latest['MATCH_SSIID']}' 
-                  AND PLAYER_NAME ILIKE '%{f_clean}%' AND PLAYER_NAME ILIKE '%{l_clean}%' 
-                GROUP BY 1, 2 ORDER BY 1 ASC
+                GROUP BY 1, 2, 3 ORDER BY 2 ASC
             """)
             
-            if df_splits is not None and not df_splits.empty:
-                # --- FILTERERING AF METRIKKER START ---
-                # Vi fjerner alle metrikker der indeholder 'COUNT'
-                all_m = [m for m in df_splits['METRIC'].unique().tolist() if 'COUNT' not in m]
-                
-                # Prioritering af de mest relevante distancer
+            if df_all_splits is not None and not df_all_splits.empty:
+                # Filtrér metrikker (ingen COUNT)
+                all_metrics = [m for m in df_all_splits['METRIC'].unique() if 'COUNT' not in m]
                 prio = ["HSR DISTANCE", "SPRINT DISTANCE", "TOTAL DISTANCE"]
-                metrics_options = [m for m in prio if m in all_m] + [m for m in all_m if m not in prio]
+                sorted_metrics = [m for m in prio if m in all_metrics] + [m for m in all_metrics if m not in prio]
                 
-                # Lav læsbare navne (f.eks. 'Hsr Distance' -> 'HSR')
-                readable_options = [m.replace(' DISTANCE', '').title() for m in metrics_options]
-                map_back = dict(zip(readable_options, metrics_options))
-                # --- FILTERERING AF METRIKKER SLUT ---
+                readable_options = [m.replace(' DISTANCE', '').title() for m in sorted_metrics]
+                map_back = dict(zip(readable_options, sorted_metrics))
                 
-                selected_readable = st.segmented_control(
-                    "Vælg metrik", 
-                    options=readable_options, 
-                    default=readable_options[0] if readable_options else None, 
-                    key=f"split_sel_{p_uuid}"
-                )
+                selected_readable = st.segmented_control("Vælg metrik", options=readable_options, default=readable_options[0], key=f"split_sel_{p_uuid}")
                 
                 if selected_readable:
                     m_type = map_back[selected_readable]
-                    d_m = df_splits[df_splits['METRIC'] == m_type].copy()
                     
-                    c1, c2, c3 = st.columns(3)
-                    total_v = d_m['VAL'].sum()
-                    u = "km" if total_v > 1000 else "m"
+                    # 1. Data for den valgte spiller
+                    d_player = df_all_splits[(df_all_splits['METRIC'] == m_type) & 
+                                             (df_all_splits['PLAYER_NAME'].get_extended_player_dataILIKE(f'%{f_clean}%')) & 
+                                             (df_all_splits['PLAYER_NAME'].str.contains(l_clean, case=False))].copy()
                     
-                    c1.metric("Total", f"{total_v/1000 if u=='km' else total_v:.2f} {u}")
-                    c2.metric("Max/min", f"{d_m['VAL'].max():.1f} m")
-                    c3.metric("Gns/min", f"{d_m['VAL'].mean():.1f} m")
+                    # 2. Data for holdet (gennemsnit pr. minut-split)
+                    d_team = df_all_splits[df_all_splits['METRIC'] == m_type].groupby('MINUTE_SPLIT')['VAL'].mean().reset_index()
 
-                    fig_s = go.Figure(go.Scatter(
-                        x=d_m['MINUTE_SPLIT'], y=d_m['VAL'], 
-                        fill='tozeroy', line=dict(color='#cc0000', width=2), mode='lines+markers'
+                    # Metrics række
+                    c1, c2, c3 = st.columns(3)
+                    total_v = d_player['VAL'].sum()
+                    suffix = "km" if "TOTAL" in m_type else "m"
+                    display_total = total_v/1000 if suffix == "km" else total_v
+                    
+                    c1.metric("Total", f"{display_total:.2f} {suffix}")
+                    c2.metric("Max/min", f"{d_player['VAL'].max():.1f} m")
+                    c3.metric("Gns/min", f"{d_player['VAL'].mean():.1f} m")
+
+                    # Graf
+                    fig_s = go.Figure()
+
+                    # Hoved-trace (Spilleren)
+                    fig_s.add_trace(go.Scatter(
+                        x=d_player['MINUTE_SPLIT'], 
+                        y=d_player['VAL'], 
+                        fill='tozeroy', 
+                        line=dict(color='#cc0000', width=2.5), 
+                        mode='lines+markers',
+                        name=valgt_spiller,
+                        hovertemplate=f"Min: %{{x}}<br>Værdi: %{{y:.1f}} {suffix}<extra></extra>"
                     ))
+
+                    # Spillerens gennemsnit (Sort stiplet)
+                    player_avg = d_player['VAL'].mean()
+                    fig_s.add_shape(type="line", x0=d_player['MINUTE_SPLIT'].min(), x1=d_player['MINUTE_SPLIT'].max(),
+                                    y0=player_avg, y1=player_avg,
+                                    line=dict(color="black", width=1.5, dash="dash"))
+                    
+                    # Hold benchmark (Grå linje)
+                    fig_s.add_trace(go.Scatter(
+                        x=d_team['MINUTE_SPLIT'], y=d_team['VAL'],
+                        line=dict(color="#D3D3D3", width=2),
+                        mode='lines',
+                        name="Hold Gns.",
+                        hoverinfo="skip"
+                    ))
+
                     fig_s.update_layout(
-                        plot_bgcolor="white", height=350, margin=dict(t=10, b=10, l=0, r=0),
-                        xaxis=dict(title="Minut"), yaxis=dict(gridcolor='#f0f0f0')
+                        plot_bgcolor="white", height=400, 
+                        margin=dict(t=20, b=20, l=0, r=0),
+                        showlegend=False,
+                        xaxis=dict(title="Kampminut", showgrid=False),
+                        yaxis=dict(title=f"{suffix}", gridcolor='#f0f0f0')
                     )
                     st.plotly_chart(fig_s, use_container_width=True)
+            else:
+                st.info("Ingen minut-data tilgængelig for denne kamp.")
 
         with tabs[3]:
             # Trend-graf baseret på de kampe vi har i 'df'
