@@ -23,13 +23,15 @@ def convert_time_to_minutes(time_val):
 
 @st.cache_data(ttl=600)
 def get_physical_summary(player_opta_uuid, _conn):
+    # Vi sikrer, at input ID er renset for 'p' og er en streng
     clean_id = str(player_opta_uuid).lower().replace('p', '').strip()
     
     sql_player = f"""
     WITH hvidovre_ids AS (
         SELECT DISTINCT
             m.MATCH_SSIID, 
-            f.value:"optaId"::string AS opta_id
+            -- Rens metadata-ID her
+            REPLACE(LOWER(f.value:"optaId"::string), 'p', '') AS clean_opta_id
         FROM {DB}.SECONDSPECTRUM_GAME_METADATA m,
         LATERAL FLATTEN(input => CASE 
             WHEN m.HOME_SSIID = '{HIF_SSIID}' THEN m.HOME_PLAYERS 
@@ -59,13 +61,14 @@ def get_physical_summary(player_opta_uuid, _conn):
     FROM {DB}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS p
     INNER JOIN hvidovre_ids h 
         ON p.MATCH_SSIID = h.MATCH_SSIID 
-        AND p."optaId" = h.opta_id
-    WHERE p."optaId" = '{clean_id}'
+        -- Her tvinger vi matchet ved at rense ID fra den fysiske tabel også
+        AND REPLACE(LOWER(p."optaId"), 'p', '') = h.clean_opta_id
+    WHERE h.clean_opta_id = '{clean_id}'
       AND p.MATCH_DATE >= '2025-07-01'
     ORDER BY p.MATCH_DATE DESC
     """
     return _conn.query(sql_player)
-
+    
 def draw_phase_pitch(val, title, color):
     pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD', line_zorder=2)
     fig, ax = pitch.draw(figsize=(8, 6))
