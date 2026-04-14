@@ -11,9 +11,18 @@ DB = "KLUB_HVIDOVREIF.AXIS"
 LIGA_IDS = "('dyjr458hcmrcy87fsabfsy87o', 'e5p78j2r7v8h3u9s5k0l2m4n6', 'f6q89k3s8w9i4v0t6l1m3n5o7', '328', '329', '43319', '331')"
 HIF_SSIID = '56fa29c7-3a48-4186-9d14-dbf45fbc78d9'
 
+def convert_time_to_minutes(time_val):
+    """Konverterer '97:58' til 97.96 eller returnerer tallet hvis det allerede er float/int"""
+    if isinstance(time_val, str) and ":" in time_val:
+        try:
+            m, s = map(float, time_val.split(':'))
+            return m + (s / 60.0)
+        except:
+            return 0.0
+    return pd.to_numeric(time_val, errors='coerce')
+
 @st.cache_data(ttl=600)
 def get_physical_summary(player_opta_uuid, _conn):
-    # Vi renser ID'et for 'p', så det matcher "optaId" i Second Spectrum tabellen
     clean_id = str(player_opta_uuid).lower().replace('p', '').strip()
     
     sql_player = f"""
@@ -82,7 +91,6 @@ def vis_side():
     if not conn: return
 
     # --- SQL TIL HOLD OG SPILLERE ---
-    # Vi henter holdene fra Opta tabellen
     sql_teams = f"SELECT DISTINCT CONTESTANTHOME_NAME, CONTESTANTHOME_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS}"
     df_teams_raw = conn.query(sql_teams)
     mapping_lookup = {str(info['opta_uuid']).lower().replace('t', ''): name for name, info in TEAMS.items() if 'opta_uuid' in info}
@@ -98,7 +106,6 @@ def vis_side():
     valgt_hold = col_h1.selectbox("Vælg Hold", sorted(list(valid_teams.keys())))
     valgt_uuid_hold = valid_teams[valgt_hold]
 
-    # Hent spillere for det valgte hold
     sql_spillere = f"""
         SELECT DISTINCT TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME) as NAVN, e.PLAYER_OPTAUUID
         FROM {DB}.OPTA_EVENTS e
@@ -117,15 +124,18 @@ def vis_side():
     df = get_physical_summary(valgt_player_uuid, conn)
 
     if df is not None and not df.empty:
-        # Konverter kolonner til tal
+        # 1. KONVERTER MINUTES (MM:SS) TIL TAL FØR BEREGNINGER
+        df['MINUTES_CALC'] = df['MINUTES'].apply(convert_time_to_minutes)
+
+        # Konverter de øvrige kolonner til tal
         for col in df.columns:
-            if col not in ['MATCH_DATE', 'MATCH_TEAMS', 'PLAYER_NAME', 'MATCH_SSIID']:
+            if col not in ['MATCH_DATE', 'MATCH_TEAMS', 'PLAYER_NAME', 'MATCH_SSIID', 'MINUTES']:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
 
         latest = df.iloc[0]
         
-        # Beregninger
-        m_mins = float(latest['MINUTES']) if latest['MINUTES'] > 0 else 1.0
+        # 2. BEREGNINGER (Bruger nu MINUTES_CALC)
+        m_mins = float(latest['MINUTES_CALC']) if latest['MINUTES_CALC'] > 0 else 1.0
         m_dist = float(latest['DISTANCE'])
         m_hsr = float(latest['HSR'])
         m_sprint = float(latest['SPRINTING'])
@@ -164,25 +174,24 @@ def vis_side():
 
         with tabs[1]:
             df_trend = df.sort_values('MATCH_DATE')
-            df_trend['HSR_P90'] = (df_trend['HSR'] / df_trend['MINUTES'].replace(0,1)) * 90
+            df_trend['HSR_P90'] = (df_trend['HSR'] / df_trend['MINUTES_CALC'].replace(0,1)) * 90
             fig = go.Figure(go.Scatter(x=df_trend['MATCH_DATE'], y=df_trend['HSR_P90'], line=dict(color='#cc0000', width=3), mode='lines+markers'))
             fig.update_layout(title="HSR intensitet (p90) over tid", plot_bgcolor="white", height=400)
             st.plotly_chart(fig, use_container_width=True)
 
         with tabs[2]:
-            display_df = df.copy()
-            display_df['MINUTES'] = display_df['MINUTES'].astype(int)
+            # Viser den originale 'MINUTES' (f.eks. 97:58) i tabellen for træneren
             st.dataframe(
-                display_df[['MATCH_DATE', 'MATCH_TEAMS', 'MINUTES', 'DISTANCE', 'HSR', 'SPRINTING', 'TOP_SPEED']], 
+                df[['MATCH_DATE', 'MATCH_TEAMS', 'MINUTES', 'DISTANCE', 'HSR', 'SPRINTING', 'TOP_SPEED']], 
                 use_container_width=True, 
                 hide_index=True,
                 column_config={
-                    "MINUTES": st.column_config.NumberColumn("Min.", format="%d'"),
+                    "MINUTES": "Min.",
                     "MATCH_DATE": "Dato"
                 }
             )
     else:
-        st.info(f"Ingen fysiske data fundet for {valgt_spiller}. Tjek om spilleren har optrådt i kampe efter 01-07-2025.")
+        st.info(f"Ingen fysiske data fundet for {valgt_spiller}.")
 
 if __name__ == "__main__":
     vis_side()
