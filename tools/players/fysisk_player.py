@@ -108,12 +108,11 @@ def vis_side():
             col_b.pyplot(draw_phase_pitch(latest['HSR_OTIP'], "Forsvar (OTIP)", "#e74c3c"))
 
         with tabs[1]:
-            # Robust navne-håndtering til søgning
             navne_dele = valgt_spiller.strip().split(' ')
-            f_name = navne_dele[0].replace("'", "''")
             l_name = navne_dele[-1].replace("'", "''")
-            
-            # Hent de procentvise fordelinger for den specifikke kamp
+            f_initial = navne_dele[0][0]
+
+            # Vi bruger de præcise kolonnenavne fra dit datasæt
             df_pct = conn.query(f"""
                 SELECT 
                     PERCENTDISTANCESTANDING, 
@@ -124,45 +123,58 @@ def vis_side():
                     PERCENTDISTANCEHIGHSPEEDSPRINTING
                 FROM {DB}.SECONDSPECTRUM_F53A_GAME_PLAYER 
                 WHERE MATCH_SSIID = '{latest['MATCH_SSIID']}' 
-                  AND (PLAYER_NAME ILIKE '%{l_name}%' OR PLAYER_NAME ILIKE '%{f_name}%')
+                  AND (PLAYER_NAME ILIKE '%{l_name}%')
+                  AND (PLAYER_NAME ILIKE '{f_initial}%' OR PLAYER_NAME ILIKE '% {f_initial}%')
                 LIMIT 1
             """)
 
             if df_pct is not None and not df_pct.empty:
-                # Data findes - vi trækker værdierne ud
                 r = df_pct.iloc[0]
                 
-                # Definer labels og de tilhørende værdier fra SQL resultatet
-                # Sørg for at rækkefølgen matcher SELECT-rækkefølgen ovenfor
-                z_labels = ['Stående', 'Gående', 'Jogging', 'LSR (Low Speed)', 'HSR (High Speed)', 'Sprint']
-                z_vals = [r[0], r[1], r[2], r[3], r[4], r[5]]
+                # Danske labels til de tekniske navne
+                z_labels = [
+                    'Stående', 
+                    'Gående', 
+                    'Jogging', 
+                    'Lavt løb (LSR)', 
+                    'Højt løb (HSR)', 
+                    'Sprint'
+                ]
                 
-                # Lav den liggende bar-graf
+                # Vi henter værdierne i samme rækkefølge som SELECT
+                z_vals = [
+                    float(r['PERCENTDISTANCESTANDING']),
+                    float(r['PERCENTDISTANCEWALKING']),
+                    float(r['PERCENTDISTANCEJOGGING']),
+                    float(r['PERCENTDISTANCELOWSPEEDRUNNING']),
+                    float(r['PERCENTDISTANCEHIGHSPEEDRUNNING']),
+                    float(r['PERCENTDISTANCEHIGHSPEEDSPRINTING'])
+                ]
+                
                 fig = go.Figure(go.Bar(
                     x=z_vals, 
                     y=z_labels, 
                     orientation='h', 
                     marker_color='#cc0000', 
-                    text=[f"{v:.1f}%" for v in z_vals], # Viser procent på baren
+                    text=[f"{v:.1f}%" for v in z_vals],
                     textposition='outside',
                     hovertemplate="%{y}: %{x:.1f}%<extra></extra>"
                 ))
                 
                 fig.update_layout(
                     plot_bgcolor="white", 
-                    height=400, 
-                    margin=dict(l=0, r=50, t=20, b=0), 
+                    height=380, 
+                    margin=dict(l=0, r=60, t=10, b=0), 
                     xaxis=dict(
-                        title="Procent af total distance",
-                        showticklabels=True, 
-                        range=[0, max(z_vals)*1.25 if any(z_vals) else 100],
-                        gridcolor='#f0f0f0'
+                        showticklabels=False, 
+                        range=[0, max(z_vals)*1.4 if any(z_vals) else 100],
+                        showgrid=False
                     ),
-                    yaxis=dict(autorange="reversed") # Viser de mest intense zoner nederst eller øverst alt efter ønske
+                    yaxis=dict(autorange="reversed") # Viser de hurtige zoner nederst
                 )
-                st.plotly_chart(fig, use_container_width=True, key=f"pct_profile_{p_uuid}")
+                st.plotly_chart(fig, use_container_width=True, key=f"pct_fixed_v2_{p_uuid}")
             else:
-                st.info(f"Ingen intensitetsprofil fundet for {valgt_spiller} i denne kamp.")
+                st.info(f"Ingen intensitetsprofil fundet for {valgt_spiller}.")
 
         with tabs[2]:
             st.caption("Minut-for-minut intensitet vs. Sæson gns. pr. minut")
