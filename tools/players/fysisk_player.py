@@ -112,40 +112,66 @@ def vis_side():
 
         with tabs[2]:
             st.markdown("### Minut-for-minut intensitet")
+            
+            # Brug efternavnet, men rens det for specialtegn hvis nødvendigt
+            efternavn = valgt_spiller.strip().split(' ')[-1]
+            
             df_splits = conn.query(f"""
                 SELECT MINUTE_SPLIT, UPPER(PHYSICAL_METRIC_TYPE) as METRIC, SUM(PHYSICAL_METRIC_VALUE) as VAL 
                 FROM {DB}.SECONDSPECTRUM_PHYSICAL_SPLITS_PLAYERS 
                 WHERE MATCH_SSIID = '{latest['MATCH_SSIID']}' 
-                  AND PLAYER_NAME ILIKE '%{valgt_spiller.split(' ')[-1]}%' 
+                  AND PLAYER_NAME ILIKE '%{efternavn}%' 
                 GROUP BY 1, 2 ORDER BY 1 ASC
             """)
             
             if not df_splits.empty:
+                # Ryd op i metrik-navne (fjern 'DISTANCE' og gør pænt)
                 metrics_options = sorted(df_splits['METRIC'].unique().tolist())
-                readable_options = [m.replace(' DISTANCE', '').title() for m in metrics_options]
+                readable_options = [m.replace(' DISTANCE', '').replace('_', ' ').title() for m in metrics_options]
                 map_back = dict(zip(readable_options, metrics_options))
                 
-                selected_readable = st.segmented_control("Vælg metrik", options=readable_options, default=readable_options[0] if readable_options else None, key=f"split_selector_{p_uuid}")
+                selected_readable = st.segmented_control(
+                    "Vælg metrik", 
+                    options=readable_options, 
+                    default=readable_options[0] if readable_options else None, 
+                    key=f"split_selector_{p_uuid}"
+                )
                 
                 if selected_readable:
                     m_type = map_back[selected_readable]
-                    d_m = df_splits[df_splits['METRIC'] == m_type]
+                    d_m = df_splits[df_splits['METRIC'] == m_type].copy()
+                    
                     st.markdown(f"<p style='text-align: right; margin-bottom: -10px;'><b>Fysisk output: {selected_readable}</b></p>", unsafe_allow_html=True)
                     st.markdown("---")
                     
-                    st.markdown("<style>[data-testid='stMetricLabel'] { font-size: 0.85rem !important; } [data-testid='stMetricValue'] { font-size: 1.5rem !important; font-weight: 700 !important; }</style>", unsafe_allow_html=True)
-
+                    # Metrics række
                     c1, c2, c3, c4 = st.columns(4)
                     total_v = d_m['VAL'].sum()
                     u = "km" if "DISTANCE" in m_type and total_v > 1000 else "m"
+                    
                     c1.metric("Total", f"{total_v/1000 if u=='km' else total_v:.2f} {u}")
                     c2.metric("Max/min", f"{d_m['VAL'].max():.1f} m")
                     c3.metric("Gns/min", f"{d_m['VAL'].mean():.1f} m")
                     c4.metric("Splits", f"{len(d_m)}")
 
-                    fig_s = go.Figure(go.Scatter(x=d_m['MINUTE_SPLIT'], y=d_m['VAL'], fill='tozeroy', line=dict(color='#cc0000', width=2), mode='lines+markers'))
-                    fig_s.update_layout(plot_bgcolor="white", height=350, margin=dict(t=10, b=10, l=0, r=0), xaxis=dict(showgrid=False), yaxis=dict(showgrid=True, gridcolor='#f0f0f0'))
-                    st.plotly_chart(fig_s, use_container_width=True, key=f"p_split_{m_type}")
+                    # Graf
+                    fig_s = go.Figure(go.Scatter(
+                        x=d_m['MINUTE_SPLIT'], 
+                        y=d_m['VAL'], 
+                        fill='tozeroy', 
+                        line=dict(color='#cc0000', width=2), 
+                        mode='lines+markers'
+                    ))
+                    fig_s.update_layout(
+                        plot_bgcolor="white", 
+                        height=350, 
+                        margin=dict(t=10, b=10, l=0, r=0), 
+                        xaxis=dict(showgrid=False, title="Minut"), 
+                        yaxis=dict(showgrid=True, gridcolor='#f0f0f0')
+                    )
+                    st.plotly_chart(fig_s, use_container_width=True, key=f"p_split_{m_type}_{p_uuid}")
+            else:
+                st.info(f"Ingen minut-splits fundet for {valgt_spiller} i denne kamp.")
 
         with tabs[3]:
             # HER LØSES FEJLEN: Tving MATCH_DATE til datetime før brug af .dt
