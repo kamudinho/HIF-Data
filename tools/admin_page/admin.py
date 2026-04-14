@@ -57,7 +57,6 @@ def save_action_log(bruger, handling, mal):
         return False
 
 def vis_log():
-    st.title("🛡️ Admin Panel")
     st.markdown("### System Action Log")
     
     # Cache-busting sikrer, at vi ser de nyeste ændringer med det samme
