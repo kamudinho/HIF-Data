@@ -185,7 +185,7 @@ def vis_side():
                 if selected_readable:
                     m_type = map_back[selected_readable]
                     
-                    # 1. Data for den valgte spiller (Rettet filtrering her)
+                    # 1. Data for den valgte spiller
                     d_player = df_all_splits[
                         (df_all_splits['METRIC'] == m_type) & 
                         (df_all_splits['PLAYER_NAME'].str.contains(f_clean, case=False, na=False)) & 
@@ -199,12 +199,13 @@ def vis_side():
                     is_total_dist = "TOTAL" in m_type
                     suffix = "km" if is_total_dist else "m"
                     
-                    # Konverter værdier hvis det er Total Distance (km)
+                    # Konverter værdier til plot-enheder
                     if is_total_dist:
                         d_player['VAL_PLOT'] = d_player['VAL'] / 1000
-                        d_team['VAL'] = d_team['VAL'] / 1000
+                        d_team['VAL_PLOT'] = d_team['VAL'] / 1000
                     else:
                         d_player['VAL_PLOT'] = d_player['VAL']
+                        d_team['VAL_PLOT'] = d_team['VAL']
                     
                     # Metrics række
                     c1, c2, c3 = st.columns(3)
@@ -218,16 +219,17 @@ def vis_side():
                     # Graf
                     fig_s = go.Figure()
 
-                    # Hold benchmark (Grå solid linje) - tilføjes først så den ligger bagerst
+                    # 1. Hold-benchmark minut-for-minut (Grå solid linje)
                     fig_s.add_trace(go.Scatter(
-                        x=d_team['MINUTE_SPLIT'], y=d_team['VAL'],
-                        line=dict(color="#D3D3D3", width=2.5),
+                        x=d_team['MINUTE_SPLIT'], 
+                        y=d_team['VAL_PLOT'],
+                        line=dict(color="#D3D3D3", width=2),
                         mode='lines',
-                        name="Hold Gns.",
+                        name="Hold Gns. pr. min",
                         hoverinfo="skip"
                     ))
 
-                    # Hoved-trace (Spilleren)
+                    # 2. Spillerens graf (Rødt areal)
                     fig_s.add_trace(go.Scatter(
                         x=d_player['MINUTE_SPLIT'], 
                         y=d_player['VAL_PLOT'], 
@@ -238,13 +240,15 @@ def vis_side():
                         hovertemplate=f"Min: %{{x}}<br>Værdi: %{{y:.1f}} {suffix}<extra></extra>"
                     ))
 
-                    # Spillerens gennemsnit (Sort stiplet linje)
-                    p_avg = d_player['VAL_PLOT'].mean()
+                    # 3. RETTELSE: Hele holdets gennemsnit over hele kampen (Sort stiplet linje)
+                    team_avg_total = d_team['VAL_PLOT'].mean()
+                    
                     fig_s.add_shape(
                         type="line", 
-                        x0=d_player['MINUTE_SPLIT'].min(), 
-                        x1=d_player['MINUTE_SPLIT'].max(),
-                        y0=p_avg, y1=p_avg,
+                        x0=d_team['MINUTE_SPLIT'].min(), 
+                        x1=d_team['MINUTE_SPLIT'].max(),
+                        y0=team_avg_total, 
+                        y1=team_avg_total,
                         line=dict(color="black", width=1.5, dash="dash")
                     )
 
