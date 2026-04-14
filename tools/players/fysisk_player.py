@@ -14,74 +14,62 @@ LIGA_IDS = "('dyjr458hcmrcy87fsabfsy87o', 'e5p78j2r7v8h3u9s5k0l2m4n6', 'f6q89k3s
 
 @st.cache_data(ttl=600)
 def get_extended_player_data(player_name, player_opta_uuid, target_team_ssiid, _conn):
-    """Henter fysisk data og tvinger kobling til F53A procenterne via fornavn+efternavn"""
+    """Henter fysisk data med forbedret navne-matching"""
     clean_id = str(player_opta_uuid).lower().replace('p', '').strip()
     
-    # Split navn for at fjerne mellemnavne (Kiel, Lien osv.)
     navne_dele = player_name.strip().split(' ')
     f_name = navne_dele[0]
     l_name = navne_dele[-1].replace('å', '_').replace('ø', '_').replace('æ', '_')
 
     sql = f"""
-        WITH physical_base AS (
-            SELECT 
-                s.MATCH_DATE, s.MATCH_TEAMS, s.PLAYER_NAME,
-                CASE 
-                    WHEN s.MINUTES LIKE '%:%' THEN 
-                        TRY_TO_NUMBER(SPLIT_PART(s.MINUTES, ':', 1)) + (TRY_TO_NUMBER(SPLIT_PART(s.MINUTES, ':', 2)) / 60)
-                    ELSE TRY_TO_NUMBER(s.MINUTES) 
-                END AS MINUTES_DECIMAL,
-                s.DISTANCE, s."HIGH SPEED RUNNING" as HSR, s.SPRINTING, s.TOP_SPEED,
-                s.HSR_DISTANCE_TIP as HSR_TIP, s.HSR_DISTANCE_OTIP as HSR_OTIP,
-                s.MATCH_SSIID,
-                s."optaId"
-            FROM {DB}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS s
-            JOIN {DB}.SECONDSPECTRUM_GAME_METADATA m ON s.MATCH_SSIID = m.MATCH_SSIID
-            WHERE (s."optaId" = '{clean_id}' OR (s.PLAYER_NAME ILIKE '%{f_name}%' AND s.PLAYER_NAME ILIKE '%{l_name}%'))
-              AND (m.HOME_SSIID = '{target_team_ssiid}' OR m.AWAY_SSIID = '{target_team_ssiid}')
-              AND s.MATCH_DATE >= '2025-07-01'
-        )
         SELECT 
-            b.*,
-            COALESCE(f.PERCENTDISTANCESTANDING, 0) as STANDING_PCT, 
-            COALESCE(f.PERCENTDISTANCEWALKING, 0) as WALKING_PCT,
-            COALESCE(f.PERCENTDISTANCEJOGGING, 0) as JOGGING_PCT, 
-            COALESCE(f.PERCENTDISTANCELOWSPEEDRUNNING, 0) as LSR_PCT,
-            COALESCE(f.PERCENTDISTANCEHIGHSPEEDRUNNING, 0) as HSR_PCT, 
-            COALESCE(f.PERCENTDISTANCEHIGHSPEEDSPRINTING, 0) as SPRINT_PCT
-        FROM physical_base b
-        LEFT JOIN {DB}.SECONDSPECTRUM_F53A_GAME_PLAYER f 
-            ON b.MATCH_SSIID = f.MATCH_SSIID 
-            AND (f.PLAYER_NAME ILIKE '%{f_name}%' AND f.PLAYER_NAME ILIKE '%{l_name}%')
-        ORDER BY b.MATCH_DATE DESC
+            s.MATCH_DATE, s.MATCH_TEAMS, s.PLAYER_NAME,
+            CASE 
+                WHEN s.MINUTES LIKE '%:%' THEN 
+                    TRY_TO_NUMBER(SPLIT_PART(s.MINUTES, ':', 1)) + (TRY_TO_NUMBER(SPLIT_PART(s.MINUTES, ':', 2)) / 60)
+                ELSE TRY_TO_NUMBER(s.MINUTES) 
+            END AS MINUTES_DECIMAL,
+            s.DISTANCE, s."HIGH SPEED RUNNING" as HSR, s.SPRINTING, s.TOP_SPEED,
+            s.HSR_DISTANCE_TIP as HSR_TIP, s.HSR_DISTANCE_OTIP as HSR_OTIP,
+            s.MATCH_SSIID,
+            s."optaId"
+        FROM {DB}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS s
+        JOIN {DB}.SECONDSPECTRUM_GAME_METADATA m ON s.MATCH_SSIID = m.MATCH_SSIID
+        WHERE (s."optaId" = '{clean_id}' OR (s.PLAYER_NAME ILIKE '%{f_name}%' AND s.PLAYER_NAME ILIKE '%{l_name}%'))
+          AND (m.HOME_SSIID = '{target_team_ssiid}' OR m.AWAY_SSIID = '{target_team_ssiid}')
+          AND s.MATCH_DATE >= '2025-07-01'
+        ORDER BY s.MATCH_DATE DESC
     """
     return _conn.query(sql)
 
 @st.cache_data(ttl=600)
 def get_f53a_percentages(match_ssiid, player_name, _conn):
-    """Henter procenter med de korrekte kolonnenavne fra dit datasæt"""
+    """Henter procenter med de præcise kolonnenavne fra din tabel"""
     navne_dele = player_name.strip().split(' ')
     f_name = navne_dele[0]
     l_name = navne_dele[-1].replace('å', '_').replace('ø', '_').replace('æ', '_')
     
+    # Her bruger vi de kolonnenavne, du sendte i dit rå-data dump
     sql = f"""
         SELECT 
             PERCENTDISTANCESTANDING as STANDING_PCT, 
             PERCENTDISTANCEWALKING as WALKING_PCT,
             PERCENTDISTANCEJOGGING as JOGGING_PCT, 
-            PERCENTDISTANCELOWSPEEDRUNNING as LSR_PCT, -- Tjek om denne findes, ellers brug PERCENTDISTANCELOWSPEEDSPRINTING
+            PERCENTDISTANCELOWSPEEDRUNNING as LSR_PCT,
             PERCENTDISTANCEHIGHSPEEDRUNNING as HSR_PCT, 
             PERCENTDISTANCEHIGHSPEEDSPRINTING as SPRINT_PCT
         FROM {DB}.SECONDSPECTRUM_F53A_GAME_PLAYER
         WHERE MATCH_SSIID = '{match_ssiid}' 
-          AND (PLAYER_NAME ILIKE '%{f_name}%' AND PLAYER_NAME ILIKE '%{l_name}%')
+          AND (
+            (PLAYER_NAME ILIKE '%{f_name}%' AND PLAYER_NAME ILIKE '%{l_name}%')
+            OR PLAYER_NAME ILIKE '%{l_name}%'
+          )
         LIMIT 1
     """
     return _conn.query(sql)
 
 @st.cache_data(ttl=600)
 def get_minute_splits(match_ssiid, player_name, _conn):
-    """Henter minut-splits med robust matching og summering af perioder"""
     navne_dele = player_name.split(' ')
     f_name = navne_dele[0]
     l_name = navne_dele[-1].replace('å', '_').replace('ø', '_').replace('æ', '_')
@@ -160,14 +148,18 @@ def vis_side():
         with tabs[1]:
             st.caption("Distancefordeling pr. hastighedszone (%)")
             
-            # Henter procenter separat for at sikre de ikke er 0 pga. join-fejl
+            # Kalder den dedikerede funktion med robust navne-match
             df_pct = get_f53a_percentages(latest['MATCH_SSIID'], valgt_spiller, conn)
             
-            if not df_pct.empty:
+            if df_pct is not None and not df_pct.empty:
                 pcts = df_pct.iloc[0]
                 z_labels = ['Stående', 'Gående', 'Jogging', 'LSR', 'HSR', 'Sprint']
-                z_vals = [pcts['STANDING_PCT'], pcts['WALKING_PCT'], pcts['JOGGING_PCT'], 
-                          pcts['LSR_PCT'], pcts['HSR_PCT'], pcts['SPRINT_PCT']]
+                # Konverterer til float for at sikre Plotly kan læse det
+                z_vals = [
+                    float(pcts['STANDING_PCT']), float(pcts['WALKING_PCT']), 
+                    float(pcts['JOGGING_PCT']), float(pcts['LSR_PCT']), 
+                    float(pcts['HSR_PCT']), float(pcts['SPRINT_PCT'])
+                ]
                 
                 fig = go.Figure(go.Bar(
                     x=z_vals, 
@@ -177,10 +169,16 @@ def vis_side():
                     text=[f"{round(v,1)}%" for v in z_vals], 
                     textposition='outside'
                 ))
-                fig.update_layout(xaxis=dict(range=[0, max(z_vals) + 10] if any(z_vals) else [0, 100]), height=400)
+                
+                max_v = max(z_vals) if any(z_vals) else 100
+                fig.update_layout(
+                    xaxis=dict(range=[0, max_v + 15]), 
+                    height=400,
+                    margin=dict(l=20, r=20, t=20, b=20)
+                )
                 st.plotly_chart(fig, use_container_width=True)
             else:
-                st.info("Ingen hastighedszone-data fundet for denne kamp.")
+                st.info(f"Ingen hastighedszone-data fundet for {valgt_spiller} i denne kamp.")
 
         with tabs[2]:
             st.caption("Intensitet minut-for-minut (HSR)")
@@ -188,7 +186,6 @@ def vis_side():
             
             if not df_splits.empty:
                 df_hsr = df_splits[df_splits['METRIC_TYPE'] == 'HIGH SPEED RUNNING DISTANCE']
-                
                 if not df_hsr.empty:
                     fig_s = go.Figure(go.Scatter(
                         x=df_hsr['MINUTE_SPLIT'], 
