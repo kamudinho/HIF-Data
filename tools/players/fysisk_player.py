@@ -12,13 +12,10 @@ DB = "KLUB_HVIDOVREIF.AXIS"
 SEASON_START = "2025-07-01"
 LIGA_IDS = "('dyjr458hcmrcy87fsabfsy87o', 'e5p78j2r7v8h3u9s5k0l2m4n6', 'f6q89k3s8w9i4v0t6l1m3n5o7', '328', '329', '43319', '331', '1305')"
 
-# --- OPTIMERET FORBINDELSE ---
 @st.cache_resource
 def get_cached_conn():
-    """Genbruger forbindelsen for at øge hastigheden markant"""
     return _get_snowflake_conn()
 
-# --- DATA FUNKTIONER ---
 @st.cache_data(ttl=600)
 def get_extended_player_data(player_name, player_opta_uuid, target_team_ssiid):
     conn = get_cached_conn()
@@ -52,7 +49,6 @@ def draw_phase_pitch(val, title, color):
     return fig
 
 def vis_side():
-    # CSS til de rigtige tabs (Screenshot-stil)
     st.markdown("""<style>
         .stTabs [data-baseweb="tab-list"] { gap: 8px; border-bottom: 1px solid #eee; }
         .stTabs [data-baseweb="tab"] { height: 45px; background-color: white !important; color: #666 !important; }
@@ -66,7 +62,6 @@ def vis_side():
     c1, c2 = st.columns(2)
     df_teams = conn.query(f"SELECT DISTINCT CONTESTANTHOME_NAME as NAME, CONTESTANTHOME_OPTAUUID as UUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS} ORDER BY 1")
     valgt_hold = c1.selectbox("Vælg Hold", df_teams['NAME'].unique(), label_visibility="collapsed")
-    
     h_uuid = df_teams[df_teams['NAME'] == valgt_hold]['UUID'].iloc[0]
     target_ssiid = TEAMS.get(valgt_hold, {}).get('ssid')
 
@@ -78,9 +73,9 @@ def vis_side():
 
     if not df.empty:
         latest = df.iloc[0]
-        st.caption(f"Seneste Kamp: {latest['MATCH_TEAMS']} ({latest['MATCH_DATE']})")
+        st.caption(f"Seneste Kamp: {latest['MATCH_TEAMS']} ({latest['MATCH_DATE'].strftime('%d/%m/%Y')})")
         
-        # Metrics
+        # Top Metrics
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("Distance", f"{round(latest['DISTANCE']/1000, 2)} km")
         m2.metric("HSR", f"{int(latest['HSR'])} m")
@@ -95,14 +90,13 @@ def vis_side():
             col_b.pyplot(draw_phase_pitch(latest['HSR_OTIP'], "Forsvar (OTIP)", "#e74c3c"))
 
         with tabs[1]:
-            # Hent F53A kun når fanen åbnes
             df_pct = conn.query(f"SELECT PERCENTDISTANCESTANDING, PERCENTDISTANCEWALKING, PERCENTDISTANCEJOGGING, PERCENTDISTANCELOWSPEEDRUNNING, PERCENTDISTANCEHIGHSPEEDRUNNING, PERCENTDISTANCEHIGHSPEEDSPRINTING FROM {DB}.SECONDSPECTRUM_F53A_GAME_PLAYER WHERE MATCH_SSIID = '{latest['MATCH_SSIID']}' AND PLAYER_NAME ILIKE '%{valgt_spiller.split(' ')[-1]}%' LIMIT 1")
             if not df_pct.empty:
                 r = df_pct.iloc[0]
                 z_labels = ['Stående', 'Gående', 'Jogging', 'LSR', 'HSR', 'Sprint']
                 z_vals = [r[0], r[1], r[2], r[3], r[4], r[5]]
                 fig = go.Figure(go.Bar(x=z_vals, y=z_labels, orientation='h', marker_color='#cc0000', text=[f"{round(v,1)}%" for v in z_vals], textposition='outside'))
-                fig.update_layout(plot_bgcolor="white", height=350, margin=dict(l=0, r=20, t=0, b=0))
+                fig.update_layout(plot_bgcolor="white", height=350, margin=dict(l=0, r=20, t=20, b=0))
                 st.plotly_chart(fig, use_container_width=True, key=f"int_{p_uuid}")
 
         with tabs[2]:
@@ -114,16 +108,59 @@ def vis_side():
                     with sub_tabs[i]:
                         d_m = df_splits[df_splits['METRIC'] == m]
                         fig_s = go.Figure(go.Scatter(x=d_m['MINUTE_SPLIT'], y=d_m['VAL'], fill='tozeroy', line=dict(color='#cc0000', width=3)))
-                        fig_s.update_layout(plot_bgcolor="white", height=350, xaxis=dict(dtick=10))
+                        fig_s.update_layout(plot_bgcolor="white", height=350)
                         st.plotly_chart(fig_s, use_container_width=True, key=f"split_{m}_{p_uuid}")
 
         with tabs[3]:
-            df_trend = df.sort_values('MATCH_DATE')
-            fig_t = go.Figure(go.Scatter(x=df_trend['MATCH_DATE'], y=df_trend['HSR'], mode='lines+markers', line=dict(color='#cc0000')))
-            fig_t.update_layout(plot_bgcolor="white", height=350)
-            st.plotly_chart(fig_t, use_container_width=True, key=f"trend_{p_uuid}")
+            # HER ER DIN INDSENDTE LOGIK
+            cat_choice = st.segmented_control("Vælg metrik", options=["HSR (m)", "Sprint (m)", "Distance (km)", "Topfart (km/t)"], default="HSR (m)", key="phys_graph_control")
+            mapping = {"HSR (m)": ("HSR", 1, "m"), "Sprint (m)": ("SPRINTING", 1, "m"), "Distance (km)": ("DISTANCE", 1000, "km"), "Topfart (km/t)": ("TOP_SPEED", 1, "km/t")}
+            col_name, div, suffix = mapping[cat_choice]
+
+            df_chart = df.copy()
+            df_chart = df_chart.drop_duplicates(subset=['MATCH_DATE', 'MATCH_TEAMS'])
+            df_chart = df_chart.sort_values('MATCH_DATE', ascending=True)
+
+            if not df_chart.empty:
+                def get_opponent(teams_str, my_team):
+                    if not teams_str: return "?"
+                    parts = [p.strip() for p in teams_str.split('-')]
+                    if len(parts) < 2: return teams_str
+                    return parts[1] if parts[0].lower() in my_team.lower() else parts[0]
+
+                df_chart['Opponent'] = df_chart['MATCH_TEAMS'].apply(lambda x: get_opponent(x, valgt_hold))
+                df_chart['Label'] = df_chart['Opponent'] + "<br>" + df_chart['MATCH_DATE'].dt.strftime('%d/%m')
+                y_vals = df_chart[col_name] / div
+                season_avg = y_vals.mean()
+
+                fig = go.Figure()
+                fig.add_trace(go.Bar(
+                    x=df_chart['Label'], 
+                    y=y_vals,
+                    text=y_vals.apply(lambda x: f"{x:.0f}" if x > 100 else f"{x:.1f}"),
+                    textposition='outside', 
+                    marker_color='#cc0000', 
+                    textfont=dict(size=10, color="black"),
+                    cliponaxis=False
+                ))
+
+                fig.add_shape(type="line", x0=-0.5, x1=len(df_chart)-0.5, y0=season_avg, y1=season_avg, 
+                             line=dict(color="#D3D3D3", width=2, dash="dash"))
+
+                fig.update_layout(
+                    plot_bgcolor="white", 
+                    height=400, 
+                    margin=dict(t=50, b=80, l=10, r=10),
+                    xaxis=dict(showgrid=False, tickangle=-45, tickfont=dict(size=10), type='category'),
+                    yaxis=dict(showgrid=True, gridcolor='#f0f0f0', showticklabels=False, zeroline=False, range=[0, y_vals.max() * 1.3]),
+                    showlegend=False
+                )
+                st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False}, key=f"trend_bar_{p_uuid}")
+            else:
+                st.info("Ingen fysiske data fundet for denne sæson.")
+
     else:
-        st.warning("Ingen fysisk data fundet.")
+        st.warning("Ingen fysisk data fundet for denne spiller.")
 
 if __name__ == "__main__":
     vis_side()
