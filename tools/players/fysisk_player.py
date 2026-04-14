@@ -84,8 +84,8 @@ def vis_side():
         FROM {DB}.SECONDSPECTRUM_GAME_METADATA m
         JOIN {DB}.OPTA_MATCHINFO o ON m.MATCH_SSIID = o.MATCH_SSIID
         WHERE (m.HOME_SSIID = '{target_ssiid}' OR m.AWAY_SSIID = '{target_ssiid}')
-          AND o.MATCHDATE >= '{SEASON_START}'
-        ORDER BY o.MATCHDATE DESC
+          AND o.MATCH_DATE >= '{SEASON_START}'
+        ORDER BY o.MATCH_DATE DESC
     """)
 
     if df_matches is None or df_matches.empty:
