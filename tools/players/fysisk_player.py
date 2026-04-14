@@ -14,10 +14,10 @@ LIGA_IDS = "('dyjr458hcmrcy87fsabfsy87o', 'e5p78j2r7v8h3u9s5k0l2m4n6', 'f6q89k3s
 
 @st.cache_data(ttl=600)
 def get_extended_player_data(player_name, player_opta_uuid, target_team_ssiid, _conn):
-    """Henter fysisk overblik med robust navne-matching for at håndtere 'Kiel', 'Lien' og 'å/a'"""
+    """Henter fysisk data og sikrer kobling til F53A procenterne"""
     clean_id = str(player_opta_uuid).lower().replace('p', '').strip()
     
-    # Split navn for at finde fornavn og efternavn (ignorerer mellemnavne)
+    # Split navn for at fjerne mellemnavne (Kiel, Lien osv.)
     navne_dele = player_name.split(' ')
     f_name = navne_dele[0]
     l_name = navne_dele[-1].replace('å', '_').replace('ø', '_').replace('æ', '_')
@@ -32,6 +32,7 @@ def get_extended_player_data(player_name, player_opta_uuid, target_team_ssiid, _
             END AS MINUTES_DECIMAL,
             s.DISTANCE, s."HIGH SPEED RUNNING" as HSR, s.SPRINTING, s.TOP_SPEED,
             s.HSR_DISTANCE_TIP as HSR_TIP, s.HSR_DISTANCE_OTIP as HSR_OTIP,
+            -- Vi sikrer os at vi henter procenterne fra F53A korrekt
             COALESCE(f.PERCENTDISTANCESTANDING, 0) as STANDING_PCT, 
             COALESCE(f.PERCENTDISTANCEWALKING, 0) as WALKING_PCT,
             COALESCE(f.PERCENTDISTANCEJOGGING, 0) as JOGGING_PCT, 
@@ -41,6 +42,7 @@ def get_extended_player_data(player_name, player_opta_uuid, target_team_ssiid, _
             s.MATCH_SSIID
         FROM {DB}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS s
         JOIN {DB}.SECONDSPECTRUM_GAME_METADATA m ON s.MATCH_SSIID = m.MATCH_SSIID
+        -- Her er 'broen' til distancefordelingen:
         LEFT JOIN {DB}.SECONDSPECTRUM_F53A_GAME_PLAYER f 
             ON s.MATCH_SSIID = f.MATCH_SSIID 
             AND (f.PLAYER_NAME ILIKE '%{f_name}%' AND f.PLAYER_NAME ILIKE '%{l_name}%')
@@ -130,7 +132,7 @@ def vis_side():
             col_b.pyplot(draw_phase_pitch(latest['HSR_OTIP'], "Forsvar (OTIP)", "#e74c3c"))
 
         with tabs[1]:
-            st.write("### Distancefordeling pr. hastighedszone (%)")
+            st.caption("### Distancefordeling pr. hastighedszone (%)")
             z_labels = ['Stående', 'Gående', 'Jogging', 'LSR', 'HSR', 'Sprint']
             z_vals = [latest['STANDING_PCT'], latest['WALKING_PCT'], latest['JOGGING_PCT'], latest['LSR_PCT'], latest['HSR_PCT'], latest['SPRINT_PCT']]
             
@@ -146,7 +148,7 @@ def vis_side():
             st.plotly_chart(fig, use_container_width=True)
 
         with tabs[2]:
-            st.write("### Intensitet minut-for-minut (HSR)")
+            st.caption("### Intensitet minut-for-minut (HSR)")
             df_splits = get_minute_splits(latest['MATCH_SSIID'], valgt_spiller, conn)
             
             if not df_splits.empty:
