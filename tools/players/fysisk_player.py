@@ -9,37 +9,62 @@ from data.utils.team_mapping import TEAMS
 # --- KONFIGURATION ---
 DB = "KLUB_HVIDOVREIF.AXIS"
 LIGA_IDS = "('dyjr458hcmrcy87fsabfsy87o', 'e5p78j2r7v8h3u9s5k0l2m4n6', 'f6q89k3s8w9i4v0t6l1m3n5o7', '328', '329', '43319', '331')"
+HIF_SSIID = '56fa29c7-3a48-4186-9d14-dbf45fbc78d9'
 
 @st.cache_data(ttl=600)
-def get_physical_summary(player_name, player_opta_uuid, valgt_hold_navn, _conn):
-    target_ssiid = TEAMS.get(valgt_hold_navn, {}).get('ssid')
+def get_physical_summary(player_opta_uuid, _conn):
     clean_id = str(player_opta_uuid).lower().replace('p', '').strip()
-    navne_dele = [n.strip() for n in player_name.split(' ') if len(n.strip()) > 2]
-    name_conditions = " OR ".join([f"PLAYER_NAME ILIKE '%{n}%'" for n in navne_dele])
-
-    sql = f"""
-        SELECT 
-            MATCH_DATE, MATCH_TEAMS, MINUTES, DISTANCE,
-            "HIGH SPEED RUNNING" as HSR, SPRINTING, TOP_SPEED,
-            NO_OF_HIGH_INTENSITY_RUNS as HI_RUNS,
-            DISTANCE_TIP, HSR_DISTANCE_TIP as HSR_TIP, NO_OF_HIGH_INTENSITY_RUNS_TIP as HI_RUNS_TIP,
-            DISTANCE_OTIP, HSR_DISTANCE_OTIP as HSR_OTIP, NO_OF_HIGH_INTENSITY_RUNS_OTIP as HI_RUNS_OTIP
-        FROM {DB}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
-        WHERE (({name_conditions}) OR ("optaId" = '{clean_id}'))
-          AND MATCH_DATE >= '2025-07-01'
-          AND MATCH_SSIID IN (
-              SELECT MATCH_SSIID FROM {DB}.SECONDSPECTRUM_GAME_METADATA
-              WHERE HOME_SSIID = '{target_ssiid}' OR AWAY_SSIID = '{target_ssiid}'
-          )
-        ORDER BY MATCH_DATE DESC
+    
+    # Din specifikke SQL indsat som logikken for spiller-data
+    sql_player = f"""
+    WITH hvidovre_ids AS (
+        SELECT DISTINCT
+            m.MATCH_SSIID, 
+            f.value:"optaId"::string AS opta_id
+        FROM {DB}.SECONDSPECTRUM_GAME_METADATA m,
+        LATERAL FLATTEN(input => CASE 
+            WHEN m.HOME_SSIID = '{HIF_SSIID}' THEN m.HOME_PLAYERS 
+            ELSE m.AWAY_PLAYERS 
+        END) f
+        WHERE m.HOME_SSIID = '{HIF_SSIID}' 
+           OR m.AWAY_SSIID = '{HIF_SSIID}'
+    )
+    SELECT 
+        p.MATCH_DATE,
+        p.MATCH_TEAMS,
+        p.PLAYER_NAME,
+        p.MINUTES,
+        p.DISTANCE,
+        p.AVERAGE_SPEED,
+        p.TOP_SPEED,
+        p.WALKING,
+        p.JOGGING,
+        p.RUNNING,
+        p."HIGH SPEED RUNNING" AS HSR,
+        p.SPRINTING AS SPRINTING,
+        p.NO_OF_HIGH_INTENSITY_RUNS AS HI_RUNS,
+        p.DISTANCE_TIP,
+        p.HSR_DISTANCE_TIP AS HSR_TIP,
+        p.NO_OF_HIGH_INTENSITY_RUNS_TIP AS HI_RUNS_TIP,
+        p.DISTANCE_OTIP,
+        p.HSR_DISTANCE_OTIP AS HSR_OTIP,
+        p.NO_OF_HIGH_INTENSITY_RUNS_OTIP AS HI_RUNS_OTIP,
+        p.DISTANCE_BOP,
+        p.MATCH_SSIID
+    FROM {DB}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS p
+    INNER JOIN hvidovre_ids h 
+        ON p.MATCH_SSIID = h.MATCH_SSIID 
+        AND p."optaId" = h.opta_id
+    WHERE p."optaId" = '{clean_id}'
+      AND p.MATCH_DATE >= '2025-07-01'
+    ORDER BY p.MATCH_DATE DESC
     """
-    return _conn.query(sql)
+    return _conn.query(sql_player)
 
 def draw_phase_pitch(val, title, color):
     pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD', line_zorder=2)
     fig, ax = pitch.draw(figsize=(8, 6))
     fig.patch.set_alpha(0)
-    # Sikker håndtering af værdier til banen
     try:
         display_val = int(float(val)) if pd.notnull(val) else 0
     except:
@@ -88,17 +113,16 @@ def vis_side():
     valgt_player_uuid = df_pl[df_pl['NAVN'] == valgt_spiller]['PLAYER_OPTAUUID'].iloc[0]
 
     # --- DATA HANDLING ---
-    df = get_physical_summary(valgt_spiller, valgt_player_uuid, valgt_hold, conn)
+    # Vi sender nu kun UUID da din nye SQL er mere robust omkring spiller-matching
+    df = get_physical_summary(valgt_player_uuid, conn)
 
     if df is not None and not df.empty:
-        # 1. TVING DATA TIL TAL (Løser 'str' vs 'int' og NaN fejl)
         for col in df.columns:
-            if col not in ['MATCH_DATE', 'MATCH_TEAMS']:
+            if col not in ['MATCH_DATE', 'MATCH_TEAMS', 'PLAYER_NAME', 'MATCH_SSIID']:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
 
         latest = df.iloc[0]
         
-        # 2. BEREGNINGER (Nu med sikre tal)
         m_mins = float(latest['MINUTES']) if latest['MINUTES'] > 0 else 1.0
         m_dist = float(latest['DISTANCE'])
         m_hsr = float(latest['HSR'])
@@ -109,7 +133,6 @@ def vis_side():
         sprint_90 = int((m_sprint / m_mins) * 90)
         hi_index = round(((m_hsr + m_sprint) / m_dist) * 100, 1) if m_dist > 0 else 0.0
 
-        # 3. VISNING
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("Distance", f"{round(m_dist/1000, 2)} km", f"{dist_90} p90", delta_color="off")
         m2.metric("HSR", f"{int(m_hsr)} m", f"{hsr_90} p90", delta_color="off")
@@ -130,6 +153,8 @@ def vis_side():
                     st.write(f"Defensiv (OTIP): **{100-off_pct}%**")
                     st.progress((100-off_pct) / 100)
                 st.write(f"**Topfart:** {latest['TOP_SPEED']} km/h")
+                # Tilføjet fra din SQL:
+                st.write(f"**Gns. Fart:** {latest['AVERAGE_SPEED']} km/h")
             with c_right:
                 ca, cb = st.columns(2)
                 with ca: st.pyplot(draw_phase_pitch(latest['HI_RUNS_TIP'], "Offensiv (TIP)", "#2ecc71"))
@@ -143,34 +168,21 @@ def vis_side():
             st.plotly_chart(fig, use_container_width=True)
 
         with tabs[2]:
-            st.write("### Detaljeret Kamp-historik")
-            
-            # Vi laver en kopi til visning så vi ikke ødelægger de rå data
+            # Viser minutter pr. kamp tydeligt i tabellen
             display_df = df.copy()
-            
-            # Formater kolonner for læsbarhed
-            display_df['Dato'] = pd.to_datetime(display_df['MATCH_DATE']).dt.strftime('%d-%m-%Y')
-            display_df['Minutter'] = display_df['MINUTES'].astype(int)
-            display_df['Total Dist (km)'] = (display_df['DISTANCE'] / 1000).round(2)
-            display_df['HSR (m)'] = display_df['HSR'].astype(int)
-            display_df['Sprints'] = display_df['SPRINTING'].astype(int)
-            
-            # Beregn HSR pr. 90 for hver kamp i tabellen
-            display_df['HSR p90'] = ((display_df['HSR'] / display_df['MINUTES'].replace(0,1)) * 90).astype(int)
-        
-            # Vælg kun de relevante kolonner til træneren
-            cols_to_show = ['Dato', 'MATCH_TEAMS', 'Minutter', 'Total Dist (km)', 'HSR (m)', 'HSR p90', 'Sprints', 'TOP_SPEED']
-            
+            display_df['MINUTES'] = display_df['MINUTES'].astype(int)
             st.dataframe(
-                display_df[cols_to_show], 
+                display_df[['MATCH_DATE', 'MATCH_TEAMS', 'MINUTES', 'DISTANCE', 'HSR', 'SPRINTING', 'TOP_SPEED']], 
                 use_container_width=True, 
                 hide_index=True,
                 column_config={
-                    "MATCH_TEAMS": "Kamp",
-                    "TOP_SPEED": st.column_config.NumberColumn("Topfart", format="%.1f km/h"),
-                    "Minutter": st.column_config.NumberColumn("Min.", format="%d'"),
+                    "MINUTES": st.column_config.NumberColumn("Min.", format="%d'"),
+                    "MATCH_DATE": "Dato",
+                    "MATCH_TEAMS": "Kamp"
                 }
             )
-            
+    else:
+        st.info("Ingen fysiske data fundet for denne spiller.")
+
 if __name__ == "__main__":
     vis_side()
