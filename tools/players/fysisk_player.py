@@ -268,7 +268,7 @@ def vis_side():
                         yaxis=dict(title=suffix, gridcolor='#f0f0f0')
                     )
                     st.plotly_chart(fig_s, use_container_width=True)
-                else:
+            else:
                 st.info("Ingen minut-data tilgængelig for denne kamp.")
 
         with tabs[3]:
