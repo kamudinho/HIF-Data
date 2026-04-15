@@ -69,23 +69,37 @@ def vis_side():
     valgt_kamp_label = c2.selectbox("Vælg Kamp", df_matches['SELECT_LABEL'].tolist(), label_visibility="collapsed")
     valgt_match_ssiid = df_matches[df_matches['SELECT_LABEL'] == valgt_kamp_label]['MATCH_SSIID'].iloc[0]
 
-    # --- 3. VÆLG SPILLER (FILTRERET PÅ DIT HOLD) ---
-    # Vi bruger nu den bekræftede TEAM_SSIID fra F53A tabellen
+    # --- 3. VÆLG SPILLER (OPDATERET FILTRERING) ---
+    # Vi henter spillere der matcher kampen. 
+    # Vi prøver først med target_ssiid, og hvis det fejler, bruger vi navnet.
     df_pl = conn.query(f"""
         SELECT DISTINCT PLAYER_NAME 
         FROM {DB}.SECONDSPECTRUM_F53A_GAME_PLAYER 
         WHERE MATCH_SSIID = '{valgt_match_ssiid}'
-          AND TEAM_SSIID = '{target_ssiid}'
+          AND (TEAM_SSIID = '{target_ssiid}' OR TEAM_NAME ILIKE '%{valgt_hold}%')
         ORDER BY 1
     """)
     
+    # Hvis den stadig er tom, så lad os hente ALLE spillere fra kampen 
+    # så appen ikke går i stå, og vi kan fejlfinde.
     if df_pl is None or df_pl.empty:
-        st.warning(f"Ingen spillere fundet for {valgt_hold} i denne kamp.")
+        df_pl = conn.query(f"""
+            SELECT DISTINCT PLAYER_NAME 
+            FROM {DB}.SECONDSPECTRUM_F53A_GAME_PLAYER 
+            WHERE MATCH_SSIID = '{valgt_match_ssiid}'
+            ORDER BY 1
+        """)
+        if not df_pl.empty:
+            st.info(f"Viser alle spillere for kampen (Hold-ID match fejlede for {valgt_hold})")
+
+    if df_pl is None or df_pl.empty:
+        st.warning(f"Ingen spillere fundet i F53A tabellen for kamp-ID: {valgt_match_ssiid}")
         return
 
     valgt_spiller = c3.selectbox("Vælg Spiller", df_pl['PLAYER_NAME'].tolist(), label_visibility="collapsed")
 
     # --- 4. DATA VISUALISERING ---
+    # Vi henter data for den valgte spiller
     df_latest = conn.query(f"""
         SELECT *
         FROM {DB}.SECONDSPECTRUM_F53A_GAME_PLAYER 
