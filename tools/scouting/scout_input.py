@@ -142,12 +142,15 @@ def vis_side(dp):
     df_wyscout = dp.get("wyscout_players", pd.DataFrame()).copy()
     career_df = dp.get("career_data", None)
     
-    # BYG BILLED_MAP (Bruger IMAGEDATAURL fra spillerlisten)
+    # Erstat blokken i vis_side med denne mere sikre version:
     billed_map = {}
     if not df_wyscout.empty:
-        img_col = 'IMAGEDATAURL' if 'IMAGEDATAURL' in df_wyscout.columns else 'PLAYER_IMAGE_URL'
-        if img_col in df_wyscout.columns:
-            billed_map = dict(zip(df_wyscout['PLAYER_WYID'].apply(rens_id), df_wyscout[img_col]))
+        # Vi leder efter alle tænkelige navne for billed-kolonnen
+        mulige_kolonner = ['IMAGEDATAURL', 'PLAYER_IMAGE_URL', 'IMAGE_URL']
+        fundet_kolonne = next((c for c in mulige_kolonner if c in df_wyscout.columns), None)
+        
+        if fundet_kolonne:
+            billed_map = dict(zip(df_wyscout['PLAYER_WYID'].apply(rens_id), df_wyscout[fundet_kolonne]))
 
     unique_players = {}
     def get_safe_val(row, col_name, default=""):
