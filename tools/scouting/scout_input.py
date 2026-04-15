@@ -120,7 +120,7 @@ def show_report_popup(valgt_navn, alle_rapporter, billed_map):
     with t2:
         for idx, row in spiller_historik.iterrows():
             # Overskuelig header til historik
-            caption = f"{row['DATO']} | {row.get('RATING_AVG', '-')} | {row.get('STATUS', '-')} ({row.get('SCOUT', 'Scout')})"
+            header = f"{row['DATO']} | {row.get('RATING_AVG', '-')} | {row.get('STATUS', '-')} ({row.get('SCOUT', 'Scout')})"
             with st.expander(header):
                 # Hurtig-info i toppen af expander
                 m1, m2, m3, m4 = st.columns(4)
