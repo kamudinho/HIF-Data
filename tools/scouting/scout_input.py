@@ -118,11 +118,27 @@ def show_report_popup(valgt_navn, alle_rapporter, billed_map):
         render_rapport_indhold(nyeste, keys, unique_suffix="latest")
 
     with t2:
+        # CSS til at gøre expander-overskriften mindre specifikt i dette vindue
+        st.markdown("""
+            <style>
+            .st-emotion-cache-p5m613 p, .st-emotion-cache-1pxmth6 p {
+                font-size: 13px !important;
+                font-weight: 500 !important;
+            }
+            /* Styling af selve expander-titlen */
+            div[data-testid="stExpander"] details summary p {
+                font-size: 13px !important;
+                color: #333 !important;
+            }
+            </style>
+            """, unsafe_allow_html=True)
+
         for idx, row in spiller_historik.iterrows():
-            # Overskuelig header til historik
+            # Overskuelig header - nu påvirket af CSS ovenfor
             header = f"{row['DATO']} | {row.get('RATING_AVG', '-')} | {row.get('STATUS', '-')} ({row.get('SCOUT', 'Scout')})"
+            
             with st.expander(header):
-                # Hurtig-info i toppen af expander
+                # Hurtig-info række
                 m1, m2, m3, m4 = st.columns(4)
                 m1.metric("Rating", row.get('RATING_AVG', '-'))
                 m2.metric("Potentiale", row.get('POTENTIALE', '-'))
@@ -130,7 +146,8 @@ def show_report_popup(valgt_navn, alle_rapporter, billed_map):
                 m4.metric("Scout", row.get('SCOUT', '-'))
                 
                 st.divider()
-                # Den fulde rapport-visning inkl. radar
+                
+                # Den fulde rapport-visning inkl. radar (bruger unikt suffix fra din tidligere fejl-rettelse)
                 render_rapport_indhold(row, keys, unique_suffix=f"hist_{idx}")
 
 # --- HOVEDSIDE ---
