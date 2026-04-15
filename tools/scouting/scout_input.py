@@ -51,9 +51,8 @@ def rens_id(val):
     return str(val).split('.')[0].strip()
 
 # --- MODAL: SPILLERPROFIL (AVANCERET) ---
-# --- MODAL: SPILLERPROFIL (AVANCERET) ---
 @st.dialog("Seneste Scout Rapport", width="large")
-def vis_spiller_modal(valgt_navn, alle_rapporter, career_df=None):
+def vis_spiller_modal(valgt_navn, alle_rapporter, billed_map, career_df=None):
     spiller_historik = alle_rapporter[alle_rapporter['NAVN'] == valgt_navn].sort_values('DATO', ascending=True)
     
     if spiller_historik.empty:
@@ -63,14 +62,12 @@ def vis_spiller_modal(valgt_navn, alle_rapporter, career_df=None):
     nyeste = spiller_historik.iloc[-1]
     pid = rens_id(nyeste.get('PLAYER_WYID'))
     
-    # Lav URL'en
-    img_url = f"https://cdn5.wyscout.com/photos/players/public/{pid}.png"
-    # Definer en sikker fallback URL
+    # Billed-logik: Prioritér IMAGEDATAURL fra mappet, ellers brug standard fallback
     fallback_url = "https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_1280.png"
+    img_url = billed_map.get(pid) or f"https://cdn5.wyscout.com/photos/players/public/{pid}.png"
     
     c1, c2 = st.columns([1, 3])
     with c1:
-        # Vi prøver at vise billedet - hvis URL'en er helt gal, viser vi fallback
         try:
             st.image(img_url, width=120)
         except:
@@ -107,20 +104,12 @@ def vis_spiller_modal(valgt_navn, alle_rapporter, career_df=None):
             ))
             
             fig.update_layout(
-                polar=dict(
-                    radialaxis=dict(
-                        visible=True, 
-                        range=[1, 6],
-                        tickfont=dict(size=10) # Mindre tal på aksen for at spare plads
-                    )
-                ), 
+                polar=dict(radialaxis=dict(visible=True, range=[1, 6], tickfont=dict(size=10))), 
                 showlegend=False,
-                # Her gør vi forskellen:
-                height=400, # Øget fra 250 til 400
-                margin=dict(l=50, r=50, t=20, b=20), # Minimale margener
+                height=400, 
+                margin=dict(l=50, r=50, t=20, b=20),
                 autosize=True
             )
-            
             st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
             
         with col_text:
@@ -153,6 +142,13 @@ def vis_side(dp):
     df_wyscout = dp.get("wyscout_players", pd.DataFrame()).copy()
     career_df = dp.get("career_data", None)
     
+    # BYG BILLED_MAP (Bruger IMAGEDATAURL fra spillerlisten)
+    billed_map = {}
+    if not df_wyscout.empty:
+        img_col = 'IMAGEDATAURL' if 'IMAGEDATAURL' in df_wyscout.columns else 'PLAYER_IMAGE_URL'
+        if img_col in df_wyscout.columns:
+            billed_map = dict(zip(df_wyscout['PLAYER_WYID'].apply(rens_id), df_wyscout[img_col]))
+
     unique_players = {}
     def get_safe_val(row, col_name, default=""):
         val = row.get(col_name, default)
@@ -175,12 +171,13 @@ def vis_side(dp):
             if p_id not in unique_players:
                 unique_players[p_id] = {"label": f"{fuldt_navn} ({klub})", "data": {"n": fuldt_navn, "id": p_id, "pos": get_safe_val(r, 'ROLECODE3') or get_safe_val(r, 'POSITION'), "klub": klub, "birth": birth_val}}
 
-    add_to_options(df_local); add_to_options(df_wyscout)
+    add_to_options(df_local)
+    add_to_options(df_wyscout)
     options_list = sorted(list(unique_players.keys()), key=lambda x: unique_players[x]["label"])
 
     data = {"n": "", "id": "", "pos": "", "klub": "", "birth": ""}
     
-    # LINJE 1
+    # LINJE 1: Vælg spiller
     row1_c1, row1_c2, row1_c3 = st.columns([3, 1.5, 1])
     with row1_c1:
         sel_id = st.selectbox("Vælg spiller", [""] + options_list, format_func=lambda x: unique_players[x]["label"] if x else "Vælg spiller...", key="player_selector")
@@ -197,17 +194,18 @@ def vis_side(dp):
     with row1_c3:
         st.markdown("<p style='margin-bottom: 28px;'></p>", unsafe_allow_html=True)
         if existing_report is not None:
-            if st.button("Åbn rapport", use_container_width=True): vis_spiller_modal(data["n"], df_local, career_df)
+            if st.button("Åbn rapport", use_container_width=True): 
+                vis_spiller_modal(data["n"], df_local, billed_map, career_df)
         else: st.button("Ingen data", disabled=True, use_container_width=True)
 
-    # LINJE 2
+    # LINJE 2: Info-felter
     row2_c1, row2_c2, row2_c3, row2_c4 = st.columns([1, 2, 1.5, 1.5])
     row2_c1.text_input("POS", value=data['pos'], disabled=True)
     row2_c2.text_input("KLUB", value=data['klub'], disabled=True)
     row2_c3.text_input("FØDSELSDAG", value=data['birth'], disabled=True)
     scout_navn = row2_c4.text_input("SCOUT", value=st.session_state.get("user", "HIF Scout"), disabled=True)
 
-    # --- FORM ---
+    # --- FORM TIL RAPPORT ---
     with st.form("rapport_form", clear_on_submit=True):
         with st.container(border=True):
             st.markdown("**Stamdata & Status**")
@@ -248,7 +246,39 @@ def vis_side(dp):
             if not data["n"]: st.error("Vælg en spiller!")
             else:
                 avg = round(sum([beslut, fart, agg, att, udh, led, tek, intel])/8, 2)
-                ny = {"PLAYER_WYID": data["id"], "DATO": datetime.now().strftime("%Y-%m-%d"), "NAVN": data["n"], "KLUB": data["klub"], "POSITION": data["pos"], "BIRTHDATE": data["birth"], "RATING_AVG": avg, "STATUS": status_label, "POTENTIALE": pot, "STYRKER": styrker, "UDVIKLING": udv, "VURDERING": vurder, "BESLUTSOMHED": float(beslut), "FART": float(fart), "AGGRESIVITET": float(agg), "ATTITUDE": float(att), "UDHOLDENHED": float(udh), "LEDEREGENSKABER": float(led), "TEKNIK": float(tek), "SPILINTELLIGENS": float(intel), "SCOUT": scout_navn, "KONTRAKT": str(k_udloeb) if k_udloeb else "", "FORVENTNING": forv, "POS_PRIORITET": pos_prio, "POS": pos_nr, "LON": f"{lon:,}".replace(",", "."), "SKYGGEHOLD": False, "KOMMENTAR": kommentar, "ER_EMNE": er_emne, "TRANSFER_VINDUE": vindue, "POS_343": 0.0, "POS_433": 0.0, "POS_352": 0.0}
+                ny = {
+                    "PLAYER_WYID": data["id"], 
+                    "DATO": datetime.now().strftime("%Y-%m-%d"), 
+                    "NAVN": data["n"], 
+                    "KLUB": data["klub"], 
+                    "POSITION": data["pos"], 
+                    "BIRTHDATE": data["birth"], 
+                    "RATING_AVG": avg, 
+                    "STATUS": status_label, 
+                    "POTENTIALE": pot, 
+                    "STYRKER": styrker, 
+                    "UDVIKLING": udv, 
+                    "VURDERING": vurder, 
+                    "BESLUTSOMHED": float(beslut), 
+                    "FART": float(fart), 
+                    "AGGRESIVITET": float(agg), 
+                    "ATTITUDE": float(att), 
+                    "UDHOLDENHED": float(udh), 
+                    "LEDEREGENSKABER": float(led), 
+                    "TEKNIK": float(tek), 
+                    "SPILINTELLIGENS": float(intel), 
+                    "SCOUT": scout_navn, 
+                    "KONTRAKT": str(k_udloeb) if k_udloeb else "", 
+                    "FORVENTNING": forv, 
+                    "POS_PRIORITET": pos_prio, 
+                    "POS": pos_nr, 
+                    "LON": f"{lon:,}".replace(",", "."), 
+                    "SKYGGEHOLD": False, 
+                    "KOMMENTAR": kommentar, 
+                    "ER_EMNE": er_emne, 
+                    "TRANSFER_VINDUE": vindue, 
+                    "POS_343": 0.0, "POS_433": 0.0, "POS_352": 0.0
+                }
                 c, sha = get_github_file(FILE_PATH)
                 df_f = pd.concat([pd.read_csv(StringIO(c), low_memory=False) if c else pd.DataFrame(), pd.DataFrame([ny])], ignore_index=True)
                 if push_to_github(FILE_PATH, f"Rapport: {data['n']}", df_f[COL_ORDER].to_csv(index=False), sha) in [200, 201]:
