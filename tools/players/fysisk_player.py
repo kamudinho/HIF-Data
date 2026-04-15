@@ -145,7 +145,7 @@ def vis_side():
                 }
                 z_vals = [(v / total_dist) * 100 for v in z_map.values() if total_dist > 0]
                 fig = go.Figure(go.Bar(x=z_vals, y=list(z_map.keys()), orientation='h', marker_color='#cc0000'))
-                fig.update_layout(height=300, margin=dict(t=0, b=0), yaxis=dict(autorange="reversed"), xaxis_suffix="%")
+                fig.update_layout(height=300, margin=dict(t=0, b=0), yaxis=dict(autorange="reversed"), ticksuffix="%")
                 st.plotly_chart(fig, use_container_width=True)
 
         with tabs[2]:
