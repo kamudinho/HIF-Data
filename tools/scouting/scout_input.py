@@ -151,22 +151,6 @@ def show_report_popup(valgt_navn, alle_rapporter, billed_map):
                 
                 # Den fulde rapport-visning (Egenskaber, Radar, Styrker osv.)
                 render_rapport_indhold(row, keys, unique_suffix=f"hist_{idx}")
-        for idx, row in spiller_historik.iterrows():
-            # Overskuelig header - nu påvirket af CSS ovenfor
-            header = f"{row['DATO']} | {row.get('RATING_AVG', '-')} | {row.get('STATUS', '-')} ({row.get('SCOUT', 'Scout')})"
-            
-            with st.expander(header):
-                # Hurtig-info række
-                m1, m2, m3, m4 = st.columns(4)
-                m1.metric("Rating", row.get('RATING_AVG', '-'))
-                m2.metric("Potentiale", row.get('POTENTIALE', '-'))
-                m3.metric("Status", row.get('STATUS', '-'))
-                m4.metric("Scout", row.get('SCOUT', '-'))
-                
-                st.divider()
-                
-                # Den fulde rapport-visning inkl. radar (bruger unikt suffix fra din tidligere fejl-rettelse)
-                render_rapport_indhold(row, keys, unique_suffix=f"hist_{idx}")
 
 # --- HOVEDSIDE ---
 def vis_side(dp):    
