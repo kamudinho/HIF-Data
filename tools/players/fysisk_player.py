@@ -46,7 +46,7 @@ def vis_side():
     valgt_hold = c1.selectbox("Vælg Hold", df_teams['NAME'].unique(), label_visibility="collapsed")
     target_ssiid = TEAMS.get(valgt_hold, {}).get('ssid')
 
-    # --- 2. VÆLG KAMP (KUN SPILLEDE KAMPE FRA SEASON_METADATA) ---
+    # --- 2. VÆLG KAMP ---
     df_matches = conn.query(f"""
         SELECT DISTINCT 
             MATCH_SSIID, 
@@ -69,27 +69,15 @@ def vis_side():
     valgt_kamp_label = c2.selectbox("Vælg Kamp", df_matches['SELECT_LABEL'].tolist(), label_visibility="collapsed")
     valgt_match_ssiid = df_matches[df_matches['SELECT_LABEL'] == valgt_kamp_label]['MATCH_SSIID'].iloc[0]
 
-    # --- 3. VÆLG SPILLER (DYNAMISK HOLD-FILTRERING) ---
-    # Vi tjekker hvilken kolonne der findes i SUMMARY tabellen for at undgå 'invalid identifier'
-    df_sample = conn.query(f"SELECT TOP 1 * FROM {DB}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS")
-    summary_cols = df_sample.columns.tolist() if df_sample is not None else []
-    
-    # Prioriteret liste af mulige kolonnenavne for hold-ID
-    team_id_col = next((c for c in ['TEAM_SSIID', 'TEAM_ID', 'TEAMID', 'TEAM_SSIID_LOADED'] if c in summary_cols), None)
-
-    if team_id_col:
-        sql_pl = f"""
-            SELECT DISTINCT PLAYER_NAME 
-            FROM {DB}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS 
-            WHERE MATCH_SSIID = '{valgt_match_ssiid}'
-              AND {team_id_col} = '{target_ssiid}'
-            ORDER BY 1
-        """
-    else:
-        # Fallback: Vis alle spillere hvis vi ikke kan finde hold-kolonnen
-        sql_pl = f"SELECT DISTINCT PLAYER_NAME FROM {DB}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS WHERE MATCH_SSIID = '{valgt_match_ssiid}' ORDER BY 1"
-
-    df_pl = conn.query(sql_pl)
+    # --- 3. VÆLG SPILLER (FILTRERET PÅ DIT HOLD) ---
+    # Vi bruger nu den bekræftede TEAM_SSIID fra F53A tabellen
+    df_pl = conn.query(f"""
+        SELECT DISTINCT PLAYER_NAME 
+        FROM {DB}.SECONDSPECTRUM_F53A_GAME_PLAYER 
+        WHERE MATCH_SSIID = '{valgt_match_ssiid}'
+          AND TEAM_SSIID = '{target_ssiid}'
+        ORDER BY 1
+    """)
     
     if df_pl is None or df_pl.empty:
         st.warning(f"Ingen spillere fundet for {valgt_hold} i denne kamp.")
@@ -98,11 +86,9 @@ def vis_side():
     valgt_spiller = c3.selectbox("Vælg Spiller", df_pl['PLAYER_NAME'].tolist(), label_visibility="collapsed")
 
     # --- 4. DATA VISUALISERING ---
-    # Summary data for de 4 øverste metrics
     df_latest = conn.query(f"""
-        SELECT *, 
-        CASE WHEN MINUTES LIKE '%:%' THEN TRY_TO_NUMBER(SPLIT_PART(MINUTES, ':', 1)) ELSE TRY_TO_NUMBER(MINUTES) END AS MINS
-        FROM {DB}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS 
+        SELECT *
+        FROM {DB}.SECONDSPECTRUM_F53A_GAME_PLAYER 
         WHERE MATCH_SSIID = '{valgt_match_ssiid}' 
           AND PLAYER_NAME = '{valgt_spiller.replace("'", "''")}'
     """)
@@ -112,49 +98,40 @@ def vis_side():
         
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("Distance", f"{round(latest['DISTANCE']/1000, 2)} km")
-        m2.metric("HSR", f"{int(latest['HIGH SPEED RUNNING'])} m")
+        # Beregner HSR meter ud fra procent hvis nødvendigt, her bruger vi speedruns
+        m2.metric("Speed Runs", int(latest['SPEEDRUNS']))
         m3.metric("Top Speed", f"{round(latest['TOP_SPEED'], 1)} km/h")
-        m4.metric("Spilletid", f"{int(latest['MINS'])} min")
+        m4.metric("Avg Speed", f"{round(latest['AVERAGE_SPEED'], 1)} km/h")
         
-        tabs = st.tabs(["Fase-overblik", "Intensitets Profil", "Minut Splits", "Sæson Trend"])
+        tabs = st.tabs(["Intensitets Profil", "Minut Splits", "Sæson Trend"])
 
         with tabs[0]:
-            col_a, col_b = st.columns(2)
-            # Vi bruger .get() for at undgå fejl hvis kolonnerne mangler i rækken
-            col_a.pyplot(draw_phase_pitch(latest.get('HSR_DISTANCE_TIP', 0), "Angreb (TIP)", "#2ecc71"))
-            col_b.pyplot(draw_phase_pitch(latest.get('HSR_DISTANCE_OTIP', 0), "Forsvar (OTIP)", "#e74c3c"))
+            # Zone-fordeling baseret på procenterne fra F53A tabellen
+            z_map = {
+                'Sprint': latest.get('PERCENTDISTANCEHIGHSPEEDSPRINTING', 0),
+                'HSR': latest.get('PERCENTDISTANCEHIGHSPEEDRUNNING', 0),
+                'LSR': latest.get('PERCENTDISTANCELOWSPEEDRUNNING', 0),
+                'Jogging': latest.get('PERCENTDISTANCEJOGGING', 0),
+                'Gående': latest.get('PERCENTDISTANCEWALKING', 0),
+                'Stående': latest.get('PERCENTDISTANCESTANDING', 0)
+            }
+            
+            fig = go.Figure(go.Bar(
+                x=list(z_map.values()), 
+                y=list(z_map.keys()), 
+                orientation='h', 
+                marker_color='#cc0000'
+            ))
+            fig.update_layout(
+                height=350, 
+                margin=dict(t=20, b=20), 
+                yaxis=dict(autorange="reversed"),
+                xaxis=dict(ticksuffix="%")
+            )
+            st.plotly_chart(fig, use_container_width=True)
 
         with tabs[1]:
-            # Zone-fordeling baseret på SPLITS tabellen
-            df_zones = conn.query(f"""
-                SELECT PHYSICAL_METRIC_TYPE as METRIC, SUM(PHYSICAL_METRIC_VALUE) as TOTAL_VAL
-                FROM {DB}.SECONDSPECTRUM_PHYSICAL_SPLITS_PLAYERS
-                WHERE MATCH_SSIID = '{valgt_match_ssiid}'
-                  AND PLAYER_NAME = '{valgt_spiller.replace("'", "''")}'
-                GROUP BY 1
-            """)
-            if df_zones is not None and not df_zones.empty:
-                m_dict = df_zones.set_index('METRIC')['TOTAL_VAL'].to_dict()
-                total_dist = m_dict.get('Total Distance', 1)
-                z_map = {
-                    'Sprint': m_dict.get('Sprinting Distance', 0), 
-                    'HSR': m_dict.get('High Speed Running Distance', 0), 
-                    'LSR': m_dict.get('Low Speed Running Distance', 0), 
-                    'Jogging': m_dict.get('Jogging Distance', 0), 
-                    'Gående': m_dict.get('Walking Distance', 0)
-                }
-                z_vals = [(v / total_dist) * 100 for v in z_map.values() if total_dist > 0]
-                fig = go.Figure(go.Bar(x=z_vals, y=list(z_map.keys()), orientation='h', marker_color='#cc0000'))
-                fig.update_layout(
-                    height=300, 
-                    margin=dict(t=0, b=0), 
-                    yaxis=dict(autorange="reversed"), 
-                    xaxis=dict(ticksuffix="%")  # RETTET FRA xaxis_suffix="%"
-                )
-                st.plotly_chart(fig, use_container_width=True)
-
-        with tabs[2]:
-            # Minut splits baseret på de bekræftede kolonner: MINUTE_SPLIT, PHYSICAL_METRIC_VALUE
+            # Minut splits fra SPLITS tabellen
             df_ms = conn.query(f"""
                 SELECT MINUTE_SPLIT, UPPER(PHYSICAL_METRIC_TYPE) as METRIC, SUM(PHYSICAL_METRIC_VALUE) as VAL 
                 FROM {DB}.SECONDSPECTRUM_PHYSICAL_SPLITS_PLAYERS 
@@ -167,23 +144,22 @@ def vis_side():
                 m_list = df_ms['METRIC'].unique().tolist()
                 sel_m = st.selectbox("Vælg metrik", m_list, key="ms_select_box")
                 d_curr = df_ms[df_ms['METRIC'] == sel_m]
-                fig_s = go.Figure()
-                fig_s.add_trace(go.Scatter(x=d_curr['MINUTE_SPLIT'], y=d_curr['VAL'], mode='lines+markers', line=dict(color='#cc0000')))
-                fig_s.update_layout(xaxis_title="Minut split", yaxis_title="Værdi", height=350)
+                fig_s = go.Figure(go.Scatter(x=d_curr['MINUTE_SPLIT'], y=d_curr['VAL'], mode='lines+markers', line=dict(color='#cc0000')))
+                fig_s.update_layout(xaxis_title="Minut", yaxis_title="Meter", height=350)
                 st.plotly_chart(fig_s, use_container_width=True)
 
-        with tabs[3]:
-            # Sæson Trend (HSR over tid)
+        with tabs[2]:
+            # Sæson Trend fra F53A tabellen
             df_trend = conn.query(f"""
-                SELECT MATCH_DATE, "HIGH SPEED RUNNING" as HSR
-                FROM {DB}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
+                SELECT MATCH_DATE, DISTANCE, TOP_SPEED
+                FROM {DB}.SECONDSPECTRUM_F53A_GAME_PLAYER
                 WHERE PLAYER_NAME = '{valgt_spiller.replace("'", "''")}'
-                  AND MATCH_DATE >= '{SEASON_START}'
+                  AND SEASONLABEL = '2025/2026'
                 ORDER BY MATCH_DATE ASC
             """)
             if not df_trend.empty:
                 df_trend['MATCH_DATE'] = pd.to_datetime(df_trend['MATCH_DATE'])
-                st.line_chart(df_trend.set_index('MATCH_DATE')['HSR'])
+                st.line_chart(df_trend.set_index('MATCH_DATE')['DISTANCE'])
     else:
         st.warning("Ingen fysisk data fundet for denne spiller.")
 
