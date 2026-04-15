@@ -45,4 +45,7 @@ PLAYER_WYID,DATO,NAVN,KLUB,POSITION,BIRTHDATE,RATING_AVG,STATUS,POTENTIALE,STYRK
 462085,2026-03-31,Frederik Høgh,Hvidovre IF,FWD,05.05.1995,3.0,Hold øje,Højt,Næse for mål,Arbejdsrate uden bold,Skal have mere spilletid,3.0,4.0,3.0,3.0,3.0,3.0,4.0,4.0,CEO,2026-12-31,,,9.0,,True,,False,,9.0,9.0,9.0
 881041,2026-03-31,Magnus Quisgaard Gaunsbæk,Fremad Amager,DEF,02.06.2005,3.0,Interessant,Middel,test,test,,3.0,3.0,3.0,3.0,3.0,3.0,3.0,3.0,ceo,2026-06-30,Realistisk,,4.0,0,False,,True,Sommer 26,4.0,4.0,4.0
 347368,2026-04-15,Gustav Ølsted Marcussen,Fredericia,FWD,1998-06-12,3.38,Hold øje,Lavt,"God spiller i mellemrum
-Kan vende/dreje og drive bolden",,Har superliga niveau,3.0,3.0,3.0,4.0,3.0,3.0,4.0,4.0,ceo,2026-06-30,Svær,A - Start-11,11,0,False,,False,Sommer 26,0.0,0.0,0.0
+Kan vende/dreje og drive bolden",,Har superliga niveau,3.0,3.0,3.0,4.0,3.0,3.0,4.0,4.0,ceo,2026-06-30,Svær,A - Start-11,11.0,0,False,,False,Sommer 26,0.0,0.0,0.0
+619440,2026-04-15,Lukas Wagner,Skive,DEF,2004-11-19,3.25,Hold øje,Middel,"God defensiv spiller
+God på hovedet
+",Spillet på bolden,Vil ikke være start 11 hos os.,4.0,3.0,4.0,4.0,3.0,3.0,2.0,3.0,ceo,2026-06-30,Realistisk,C - Udviklingsspiller,3,0,False,,False,Sommer 26,0.0,0.0,0.0
