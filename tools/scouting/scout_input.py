@@ -50,9 +50,9 @@ def rens_id(val):
     if pd.isna(val) or str(val).strip() == "": return ""
     return str(val).split('.')[0].strip()
 
-# --- AVANCERET POPUP DIALOG ---
-@st.dialog("Seneste Scout Rapport", width="large")
-def show_report_popup(valgt_navn, alle_rapporter, billed_map, career_df=None):
+# --- TRIMMET POPUP DIALOG ---
+@st.dialog("Spillerrapport", width="large")
+def show_report_popup(valgt_navn, alle_rapporter, billed_map):
     spiller_historik = alle_rapporter[alle_rapporter['NAVN'] == valgt_navn].sort_values('DATO', ascending=True)
     if spiller_historik.empty:
         st.error(f"Ingen data fundet for {valgt_navn}")
@@ -62,16 +62,17 @@ def show_report_popup(valgt_navn, alle_rapporter, billed_map, career_df=None):
     pid = rens_id(nyeste.get('PLAYER_WYID'))
     
     img_url = billed_map.get(pid) or f"https://cdn5.wyscout.com/photos/players/public/{pid}.png"
-    fallback_url = "https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_1280.png"
     
     c1, c2 = st.columns([1, 3])
     with c1:
         st.image(img_url, width=150)
     with c2:
         st.subheader(valgt_navn)
-        st.write(f"Klub: {nyeste.get('KLUB', '-')} | Pos: {nyeste.get('POSITION', '-')} | ID: {pid}")
+        st.write(f"**Klub:** {nyeste.get('KLUB', '-')} | **Pos:** {nyeste.get('POSITION', '-')} | **ID:** {pid}")
 
-    t1, t2, t3, t4 = st.tabs(["Seneste Rapport", "Historik", "Udvikling", "Sæsonstats"])
+    # KUN TO FANER SOM ØNSKET
+    t1, t2 = st.tabs(["Seneste Rapport", "Historik"])
+    
     keys = ['BESLUTSOMHED', 'FART', 'AGGRESIVITET', 'ATTITUDE', 'UDHOLDENHED', 'LEDEREGENSKABER', 'TEKNIK', 'SPILINTELLIGENS']
 
     with t1:
@@ -82,33 +83,35 @@ def show_report_popup(valgt_navn, alle_rapporter, billed_map, career_df=None):
                 st.write(f"{k.capitalize()}: **{nyeste.get(k, '-')}**")
         
         with col_radar:
-            r_vals = [float(str(nyeste.get(k, 1)).replace(',', '.')) for k in keys]
-            fig = go.Figure(data=go.Scatterpolar(r=r_vals + [r_vals[0]], theta=[k.capitalize() for k in keys] + [keys[0].capitalize()], fill='toself', line_color='#df003b'))
+            r_vals = []
+            for k in keys:
+                try: 
+                    v = float(str(nyeste.get(k, 1)).replace(',', '.'))
+                    r_vals.append(v)
+                except: r_vals.append(1.0)
+            
+            fig = go.Figure(data=go.Scatterpolar(
+                r=r_vals + [r_vals[0]], 
+                theta=[k.capitalize() for k in keys] + [keys[0].capitalize()], 
+                fill='toself', line_color='#df003b'
+            ))
             fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[1, 6])), showlegend=False, height=350)
             st.plotly_chart(fig, use_container_width=True)
             
         with col_text:
             st.write("**Styrker**"); st.info(nyeste.get('STYRKER', '-'))
+            st.write("**Udvikling**"); st.info(nyeste.get('UDVIKLING', '-'))
             st.write("**Vurdering**"); st.success(nyeste.get('VURDERING', '-'))
+            if nyeste.get('KOMMENTAR'):
+                st.write("**Kommentar**"); st.write(nyeste.get('KOMMENTAR'))
 
     with t2:
         st.dataframe(spiller_historik.sort_values('DATO', ascending=False), use_container_width=True, hide_index=True)
-
-    with t3:
-        fig_evol = go.Figure(go.Scatter(x=spiller_historik['DATO'], y=spiller_historik['RATING_AVG'], mode='lines+markers', line_color='#df003b'))
-        st.plotly_chart(fig_evol, use_container_width=True)
-
-    with t4:
-        if career_df is not None:
-            stats = career_df[career_df['PLAYER_WYID'].apply(rens_id) == pid].copy()
-            if not stats.empty:
-                st.dataframe(stats.drop_duplicates(subset=['SEASONNAME', 'TEAMNAME', 'COMPETITIONNAME']).sort_values('SEASONNAME', ascending=False), use_container_width=True, hide_index=True)
 
 # --- HOVEDSIDE ---
 def vis_side(dp):    
     df_local = dp.get("scout_reports", pd.DataFrame()).copy()
     df_wyscout = dp.get("wyscout_players", pd.DataFrame()).copy()
-    career_df = dp.get("career_data", None)
 
     billed_map = {}
     if not df_wyscout.empty and 'IMAGEDATAURL' in df_wyscout.columns:
@@ -149,7 +152,7 @@ def vis_side(dp):
     with r1c3:
         st.markdown("<p style='margin-bottom: 28px;'></p>", unsafe_allow_html=True)
         if existing_report is not None:
-            if st.button("Åbn rapport", use_container_width=True): show_report_popup(data["n"], df_local, billed_map, career_df)
+            if st.button("Åbn rapport", use_container_width=True): show_report_popup(data["n"], df_local, billed_map)
 
     r2c1, r2c2, r2c3, r2c4 = st.columns([1, 2, 1.5, 1.5])
     r2c1.text_input("POS", value=data['pos'], disabled=True)
@@ -157,12 +160,12 @@ def vis_side(dp):
     r2c3.text_input("FØDSELSDAG", value=data['birth'], disabled=True)
     scout_navn = r2c4.text_input("SCOUT", value=st.session_state.get("user", "HIF Scout"), disabled=True)
 
-    # FORM BASERET PÅ DIT BILLEDE
+    # FORM (FRA DIT SKÆRMBILLEDE)
     with st.form("rapport_form", clear_on_submit=True):
         with st.container(border=True):
             st.markdown("**Stamdata & Status**")
             l2c1, l2c2, l2c3 = st.columns(3)
-            status_label = l2c1.selectbox("Status", ["Interessant", "Hold øje", "Køb", "Prioritet"])
+            status_label = l2c1.selectbox("Status", ["Interessant", "Hold øje", "Kig nærmere", "Køb", "Prioritet"])
             pos_nr = l2c2.selectbox("POS (1-11)", options=[str(i) for i in range(1, 12)])
             pos_prio = l2c3.selectbox("Prioritet", options=["A - Start-11", "B - Trupspiller", "C - Udviklingsspiller"])
 
