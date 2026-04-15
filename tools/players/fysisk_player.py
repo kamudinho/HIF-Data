@@ -70,16 +70,18 @@ def vis_side():
     valgt_kamp_label = c2.selectbox("Vælg Kamp", df_matches['SELECT_LABEL'].tolist(), label_visibility="collapsed")
     valgt_match_ssiid = df_matches[df_matches['SELECT_LABEL'] == valgt_kamp_label]['MATCH_SSIID'].iloc[0]
 
-    # --- 3. VÆLG SPILLER ---
+    # --- 3. VÆLG SPILLER (RETTET TIL KUN AT VISE SPILLERE FRA VALGTE HOLD) ---
+    # Vi tilføjer en betingelse, så vi kun henter spillere, hvor TEAM_SSIID matcher det valgte hold
     df_pl = conn.query(f"""
         SELECT DISTINCT PLAYER_NAME 
         FROM {DB}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS 
         WHERE MATCH_SSIID = '{valgt_match_ssiid}'
+          AND TEAM_SSIID = '{target_ssiid}'
         ORDER BY 1
     """)
     
     if df_pl is None or df_pl.empty:
-        st.warning("Ingen spillere fundet for denne kamp.")
+        st.warning(f"Ingen spillere fundet for {valgt_hold} i denne kamp.")
         return
 
     valgt_spiller = c3.selectbox("Vælg Spiller", df_pl['PLAYER_NAME'].tolist(), label_visibility="collapsed")
