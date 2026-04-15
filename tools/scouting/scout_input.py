@@ -11,7 +11,6 @@ REPO = "Kamudinho/HIF-data"
 FILE_PATH = "data/scouting_db.csv"
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 
-# Kolonne-rækkefølge til CSV-filen
 COL_ORDER = [
     "PLAYER_WYID", "DATO", "NAVN", "KLUB", "POSITION", "BIRTHDATE", "RATING_AVG", "STATUS",
     "POTENTIALE", "STYRKER", "UDVIKLING", "VURDERING", "BESLUTSOMHED", "FART",
@@ -21,6 +20,7 @@ COL_ORDER = [
     "ER_EMNE", "TRANSFER_VINDUE", "POS_343", "POS_433", "POS_352"
 ]
 
+# --- HJÆLPEFUNKTIONER ---
 def get_github_file(path):
     try:
         url = f"https://api.github.com/repos/{REPO}/contents/{path}?t={int(time.time())}"
@@ -45,57 +45,68 @@ def push_to_github(path, message, content, sha=None):
     r = requests.put(url, headers=headers, json=payload)
     return r.status_code
 
+# --- NY POPUP FUNKTION ---
+@st.dialog("Seneste Scout Rapport")
+def show_report_popup(report):
+    st.markdown(f"### {report['NAVN']}")
+    st.caption(f"Dato: {report['DATO']} | Scout: {report['SCOUT']}")
+    
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Rating", report['RATING_AVG'])
+    c2.metric("Status", report['STATUS'])
+    c3.metric("Potentiale", report['POTENTIALE'])
+    
+    st.markdown("---")
+    col_a, col_b = st.columns(2)
+    with col_a:
+        st.markdown("**Styrker:**")
+        st.write(report['STYRKER'] if report['STYRKER'] else "Ingen data")
+    with col_b:
+        st.markdown("**Udvikling:**")
+        st.write(report['UDVIKLING'] if report['UDVIKLING'] else "Ingen data")
+        
+    st.markdown("**Samlet Vurdering:**")
+    st.info(report['VURDERING'] if report['VURDERING'] else "Ingen tekst indtastet")
+    
+    if "KOMMENTAR" in report and pd.notna(report['KOMMENTAR']) and report['KOMMENTAR'] != "":
+        st.markdown("**Uddybende Kommentar:**")
+        st.write(report['KOMMENTAR'])
+
+# --- HOVEDSIDE ---
 def vis_side(dp):    
-    # --- 1. DATA FORBEREDELSE (RENSNING MOD SERIES FEJL) ---
+    # --- 1. DATA FORBEREDELSE ---
     df_local = dp.get("scout_reports", pd.DataFrame()).copy()
     df_wyscout = dp.get("wyscout_players", pd.DataFrame()).copy()
     
-    # Fjern dubletter med det samme for at undgå Series-objekter i loops
     if not df_local.empty and 'PLAYER_WYID' in df_local.columns:
-        df_local = df_local.drop_duplicates(subset=['PLAYER_WYID'])
-    if not df_wyscout.empty and 'PLAYER_WYID' in df_wyscout.columns:
-        df_wyscout = df_wyscout.drop_duplicates(subset=['PLAYER_WYID'])
-
+        df_local = df_local.drop_duplicates(subset=['PLAYER_WYID'], keep='last')
+    
     unique_players = {}
 
     def get_safe_val(row, col_name, default=""):
-        """Sikrer at vi får en enkelt streng og ikke en Pandas Series."""
         val = row.get(col_name, default)
         if isinstance(val, pd.Series):
             val = val.iloc[0] if not val.empty else default
         return str(val) if pd.notna(val) else default
 
     def add_to_options(df):
-        if df is None or (isinstance(df, pd.DataFrame) and df.empty):
-            return
-        
+        if df is None or (isinstance(df, pd.DataFrame) and df.empty): return
         df_temp = df.copy()
         df_temp.columns = [str(c).upper().strip() for c in df_temp.columns]
-        
         for _, r in df_temp.iterrows():
             p_id_raw = get_safe_val(r, 'PLAYER_WYID')
             if not p_id_raw or p_id_raw.lower() in ['nan', 'none', '']: continue
-            
             p_id = p_id_raw.split('.')[0].strip()
-            
             f_name = get_safe_val(r, 'FIRSTNAME').replace('None', '').strip()
             l_name = get_safe_val(r, 'LASTNAME').replace('None', '').strip()
-            
-            # Navne-logik
             fuldt_navn = f"{f_name} {l_name}" if f_name and l_name else (get_safe_val(r, 'PLAYER_NAME') or get_safe_val(r, 'NAVN') or "Ukendt")
             klub = get_safe_val(r, 'TEAMNAME') or get_safe_val(r, 'KLUB') or "Ukendt klub"
             pos_code = get_safe_val(r, 'ROLECODE3') or get_safe_val(r, 'POSITION') or ""
-            
-            # Fødselsdato-håndtering (Sikker konvertering)
             b_date = r.get('BIRTHDATE') or r.get('BIRTH_DATE') or r.get('BIRTH_DAY') or r.get('DOB') or ""
-            if isinstance(b_date, pd.Series): b_date = b_date.iloc[0]
-            
             birth_val = ""
             if pd.notna(b_date) and str(b_date).strip() != "":
-                try:
-                    birth_val = pd.to_datetime(b_date).strftime("%Y-%m-%d")
-                except:
-                    birth_val = str(b_date)
+                try: birth_val = pd.to_datetime(b_date).strftime("%Y-%m-%d")
+                except: birth_val = str(b_date)
             
             label = f"{fuldt_navn} ({klub})"
             if p_id not in unique_players:
@@ -108,15 +119,30 @@ def vis_side(dp):
     add_to_options(df_wyscout)
     options_list = sorted(list(unique_players.keys()), key=lambda x: unique_players[x]["label"])
 
-    # --- 2. UI LAYOUT ---
+    # --- 2. UI LAYOUT MED RAPPORT-KNAP ---
     data = {"n": "", "id": "", "pos": "", "klub": "", "birth": ""}
     
-    t1, t2, t3, t4, t5 = st.columns([2, 1, 1, 1, 1])
+    t1, t_btn, t2, t3, t4, t5 = st.columns([2, 1, 1, 1, 1, 1])
+    
     with t1:
         sel_id = st.selectbox("Vælg spiller", [""] + options_list, 
                             format_func=lambda x: unique_players[x]["label"] if x else "Vælg spiller...")
         if sel_id: 
             data = unique_players[sel_id]["data"]
+
+    with t_btn:
+        st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
+        existing_report = None
+        if sel_id and not df_local.empty:
+            match = df_local[df_local['PLAYER_WYID'].astype(str) == str(sel_id)]
+            if not match.empty:
+                existing_report = match.iloc[-1]
+
+        if existing_report is not None:
+            if st.button(f"📄 Seneste: {existing_report['DATO']}", use_container_width=True):
+                show_report_popup(existing_report)
+        else:
+            st.button("Seneste rapport: -", disabled=True, use_container_width=True)
     
     t2.text_input("Position", value=data['pos'], disabled=True)
     t3.text_input("Klub", value=data['klub'], disabled=True)
@@ -171,7 +197,6 @@ def vis_side(dp):
                 st.error("Vælg en spiller!")
             else:
                 avg_rating = round(sum([beslut, fart, agg, att, udh, led, tek, intel])/8, 2)
-                
                 ny_rapport = {
                     "PLAYER_WYID": data["id"], "DATO": datetime.now().strftime("%Y-%m-%d"),
                     "NAVN": data["n"], "KLUB": data["klub"], "POSITION": data["pos"], "BIRTHDATE": data["birth"],
@@ -188,27 +213,20 @@ def vis_side(dp):
                 }
 
                 content, sha = get_github_file(FILE_PATH)
-                
                 if content is not None and content.strip() != "":
                     try:
                         df_old = pd.read_csv(StringIO(content), low_memory=False)
                         df_new = pd.DataFrame([ny_rapport])
-                        
-                        # Sikr rækkefølge og manglende kolonner
                         for col in COL_ORDER:
                             if col not in df_new.columns: df_new[col] = None
-                        
                         df_final = pd.concat([df_old, df_new], ignore_index=True)
                     except Exception as e:
-                        st.warning(f"Kunne ikke læse fil, opretter ny: {e}")
                         df_final = pd.DataFrame([ny_rapport])
                 else:
                     df_final = pd.DataFrame([ny_rapport])
 
-                # Endelig sortering af kolonner før upload
                 existing_cols = [c for c in COL_ORDER if c in df_final.columns]
                 df_final = df_final[existing_cols]
-
                 status_code = push_to_github(FILE_PATH, f"Rapport: {data['n']}", df_final.to_csv(index=False), sha)
                 
                 if status_code in [200, 201]:
