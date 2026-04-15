@@ -51,6 +51,7 @@ def rens_id(val):
     return str(val).split('.')[0].strip()
 
 # --- MODAL: SPILLERPROFIL (AVANCERET) ---
+# --- MODAL: SPILLERPROFIL (AVANCERET) ---
 @st.dialog("Seneste Scout Rapport", width="large")
 def vis_spiller_modal(valgt_navn, alle_rapporter, career_df=None):
     spiller_historik = alle_rapporter[alle_rapporter['NAVN'] == valgt_navn].sort_values('DATO', ascending=True)
@@ -61,11 +62,20 @@ def vis_spiller_modal(valgt_navn, alle_rapporter, career_df=None):
         
     nyeste = spiller_historik.iloc[-1]
     pid = rens_id(nyeste.get('PLAYER_WYID'))
+    
+    # Lav URL'en
     img_url = f"https://cdn5.wyscout.com/photos/players/public/{pid}.png"
+    # Definer en sikker fallback URL
+    fallback_url = "https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_1280.png"
     
     c1, c2 = st.columns([1, 3])
     with c1:
-        st.image(img_url, width=120, fallback="https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_1280.png")
+        # Vi prøver at vise billedet - hvis URL'en er helt gal, viser vi fallback
+        try:
+            st.image(img_url, width=120)
+        except:
+            st.image(fallback_url, width=120)
+            
     with c2:
         st.subheader(valgt_navn)
         st.write(f"Klub: {nyeste.get('KLUB', '-')} | Pos: {nyeste.get('POSITION', '-')} | ID: {pid}")
