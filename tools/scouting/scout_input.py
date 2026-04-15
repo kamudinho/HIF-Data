@@ -118,21 +118,39 @@ def show_report_popup(valgt_navn, alle_rapporter, billed_map):
         render_rapport_indhold(nyeste, keys, unique_suffix="latest")
 
     with t2:
-        # CSS til at gøre expander-overskriften mindre specifikt i dette vindue
+        # CSS til mindre expander-tekst og mindre metrics-afstand
         st.markdown("""
             <style>
-            .st-emotion-cache-p5m613 p, .st-emotion-cache-1pxmth6 p {
-                font-size: 13px !important;
-                font-weight: 500 !important;
-            }
-            /* Styling af selve expander-titlen */
+            /* Mindre expander-overskrift */
             div[data-testid="stExpander"] details summary p {
                 font-size: 13px !important;
-                color: #333 !important;
+            }
+            /* Reducer afstand i metrics-sektionen */
+            [data-testid="stMetricValue"] {
+                font-size: 1.2rem !important;
+            }
+            [data-testid="stMetricLabel"] {
+                font-size: 0.8rem !important;
             }
             </style>
             """, unsafe_allow_html=True)
 
+        for idx, row in spiller_historik.iterrows():
+            header = f"{row['DATO']} | {row.get('RATING_AVG', '-')} | {row.get('STATUS', '-')} ({row.get('SCOUT', 'Scout')})"
+            
+            with st.expander(header):
+                # De fire metrics i en mere kompakt række
+                m1, m2, m3, m4 = st.columns(4)
+                m1.metric("Rating", row.get('RATING_AVG', '-'))
+                m2.metric("Potentiale", row.get('POTENTIALE', '-'))
+                m3.metric("Status", row.get('STATUS', '-'))
+                m4.metric("Scout", row.get('SCOUT', '-'))
+                
+                # En tynd skillelinje for at adskille metrics fra detaljerne
+                st.markdown("<hr style='margin: 10px 0; opacity: 0.2;'>", unsafe_allow_html=True)
+                
+                # Den fulde rapport-visning (Egenskaber, Radar, Styrker osv.)
+                render_rapport_indhold(row, keys, unique_suffix=f"hist_{idx}")
         for idx, row in spiller_historik.iterrows():
             # Overskuelig header - nu påvirket af CSS ovenfor
             header = f"{row['DATO']} | {row.get('RATING_AVG', '-')} | {row.get('STATUS', '-')} ({row.get('SCOUT', 'Scout')})"
