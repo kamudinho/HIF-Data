@@ -50,9 +50,9 @@ def rens_id(val):
     if pd.isna(val) or str(val).strip() == "": return ""
     return str(val).split('.')[0].strip()
 
-def render_rapport_indhold(report, keys, big_radar=False):
-    """Hjælpefunktion til at tegne selve rapportens indhold (bruges i begge faner)"""
-    col_stats, col_radar, col_text = st.columns([0.8, 2.0, 1.5]) # Øget radar kolonne-bredde
+def render_rapport_indhold(report, keys, unique_suffix=""):
+    """Tegner rapportens indhold med unikt ID for at undgå DuplicateElementId"""
+    col_stats, col_radar, col_text = st.columns([0.8, 2.0, 1.5])
     
     with col_stats:
         st.markdown("**Egenskaber**")
@@ -72,14 +72,13 @@ def render_rapport_indhold(report, keys, big_radar=False):
             theta=[k.capitalize() for k in keys] + [keys[0].capitalize()], 
             fill='toself', line_color='#df003b'
         ))
-        # Gør radarchart større her
         fig.update_layout(
             polar=dict(radialaxis=dict(visible=True, range=[1, 6])), 
-            showlegend=False, 
-            height=500, # Større højde
-            margin=dict(l=50, r=50, t=50, b=50)
+            showlegend=False, height=450,
+            margin=dict(l=40, r=40, t=40, b=40)
         )
-        st.plotly_chart(fig, use_container_width=True)
+        # UNIQUE KEY tilføjet her for at løse fejlen:
+        st.plotly_chart(fig, use_container_width=True, key=f"radar_{report.get('DATO')}_{unique_suffix}")
         
     with col_text:
         st.write("**Styrker**")
@@ -89,15 +88,16 @@ def render_rapport_indhold(report, keys, big_radar=False):
         st.write("**Vurdering**")
         st.success(report.get('VURDERING', '-'))
         if report.get('KOMMENTAR'):
-            st.write("**Kommentar**")
+            st.write("**Uddybende Kommentar**")
             st.write(report.get('KOMMENTAR'))
 
 # --- POPUP DIALOG ---
 @st.dialog("Spillerrapport", width="large")
 def show_report_popup(valgt_navn, alle_rapporter, billed_map):
+    # Sorter historik (nyeste først)
     spiller_historik = alle_rapporter[alle_rapporter['NAVN'] == valgt_navn].sort_values('DATO', ascending=False)
     if spiller_historik.empty:
-        st.error(f"Ingen data fundet for {valgt_navn}")
+        st.error("Ingen data fundet")
         return
         
     nyeste = spiller_historik.iloc[0]
@@ -109,19 +109,29 @@ def show_report_popup(valgt_navn, alle_rapporter, billed_map):
         st.image(img_url, width=150)
     with c2:
         st.subheader(valgt_navn)
-        st.write(f"**Klub:** {nyeste.get('KLUB', '-')} | **Pos:** {nyeste.get('POSITION', '-')} | **ID:** {pid}")
+        st.write(f"**Klub:** {nyeste.get('KLUB', '-')} | **ID:** {pid}")
 
     t1, t2 = st.tabs(["Seneste Rapport", "Historik"])
     keys = ['BESLUTSOMHED', 'FART', 'AGGRESIVITET', 'ATTITUDE', 'UDHOLDENHED', 'LEDEREGENSKABER', 'TEKNIK', 'SPILINTELLIGENS']
 
     with t1:
-        render_rapport_indhold(nyeste, keys, big_radar=True)
+        render_rapport_indhold(nyeste, keys, unique_suffix="latest")
 
     with t2:
-        # Vis alle rapporter undtagen den nyeste (eller alle) i expanders
         for idx, row in spiller_historik.iterrows():
-            with st.expander(f"Rapport d. {row['DATO']} - Scout: {row.get('SCOUT', 'Ukendt')}"):
-                render_rapport_indhold(row, keys)
+            # Overskuelig header til historik
+            header = f"{row['DATO']} | {row.get('RATING_AVG', '-')} | {row.get('STATUS', '-')} ({row.get('SCOUT', 'Scout')})"
+            with st.expander(header):
+                # Hurtig-info i toppen af expander
+                m1, m2, m3, m4 = st.columns(4)
+                m1.metric("Rating", row.get('RATING_AVG', '-'))
+                m2.metric("Potentiale", row.get('POTENTIALE', '-'))
+                m3.metric("Status", row.get('STATUS', '-'))
+                m4.metric("Scout", row.get('SCOUT', '-'))
+                
+                st.divider()
+                # Den fulde rapport-visning inkl. radar
+                render_rapport_indhold(row, keys, unique_suffix=f"hist_{idx}")
 
 # --- HOVEDSIDE ---
 def vis_side(dp):    
@@ -133,25 +143,25 @@ def vis_side(dp):
         billed_map = dict(zip(df_wyscout['PLAYER_WYID'].apply(rens_id), df_wyscout['IMAGEDATAURL']))
 
     unique_players = {}
-    def get_safe_val(row, col_name, default=""):
-        val = row.get(col_name, default)
-        return str(val) if pd.notna(val) else default
+    def get_safe_val(row, col_name):
+        val = row.get(col_name, "")
+        return str(val) if pd.notna(val) else ""
 
     def add_to_options(df):
         if df is None or (isinstance(df, pd.DataFrame) and df.empty): return
         for _, r in df.iterrows():
             p_id = rens_id(r.get('PLAYER_WYID'))
             if not p_id: continue
-            f_name, l_name = get_safe_val(r, 'FIRSTNAME'), get_safe_val(r, 'LASTNAME')
-            fuldt_navn = f"{f_name} {l_name}".strip() if f_name or l_name else (get_safe_val(r, 'PLAYER_NAME') or get_safe_val(r, 'NAVN') or "Ukendt")
+            f, l = get_safe_val(r, 'FIRSTNAME'), get_safe_val(r, 'LASTNAME')
+            navn = f"{f} {l}".strip() if f or l else (get_safe_val(r, 'PLAYER_NAME') or get_safe_val(r, 'NAVN') or "Ukendt")
             klub = get_safe_val(r, 'TEAMNAME') or get_safe_val(r, 'KLUB') or "Ukendt"
             if p_id not in unique_players:
-                unique_players[p_id] = {"label": f"{fuldt_navn} ({klub})", "data": {"n": fuldt_navn, "id": p_id, "pos": get_safe_val(r, 'POSITION'), "klub": klub, "birth": get_safe_val(r, 'BIRTHDATE')}}
+                unique_players[p_id] = {"label": f"{navn} ({klub})", "data": {"n": navn, "id": p_id, "pos": get_safe_val(r, 'POSITION'), "klub": klub, "birth": get_safe_val(r, 'BIRTHDATE')}}
 
     add_to_options(df_local); add_to_options(df_wyscout)
     options_list = sorted(list(unique_players.keys()), key=lambda x: unique_players[x]["label"])
 
-    # UI LAYOUT
+    # HEADER & VALG
     data = {"n": "", "id": "", "pos": "", "klub": "", "birth": ""}
     r1c1, r1c2, r1c3 = st.columns([3, 1.5, 1])
     with r1c1:
@@ -160,8 +170,8 @@ def vis_side(dp):
 
     existing_report = None
     if sel_id and not df_local.empty:
-        matches = df_local[df_local['PLAYER_WYID'].apply(rens_id) == str(sel_id)]
-        if not matches.empty: existing_report = matches.sort_values('DATO', ascending=False).iloc[0]
+        m = df_local[df_local['PLAYER_WYID'].apply(rens_id) == str(sel_id)]
+        if not m.empty: existing_report = m.sort_values('DATO', ascending=False).iloc[0]
 
     with r1c2: st.text_input("Seneste rapport", value=existing_report['DATO'] if existing_report is not None else "-", disabled=True)
     with r1c3:
@@ -169,24 +179,25 @@ def vis_side(dp):
         if existing_report is not None:
             if st.button("Åbn rapport", use_container_width=True): show_report_popup(data["n"], df_local, billed_map)
 
+    # STAMDATA RÆKKE
     r2c1, r2c2, r2c3, r2c4 = st.columns([1, 2, 1.5, 1.5])
     r2c1.text_input("POS", value=data['pos'], disabled=True)
     r2c2.text_input("KLUB", value=data['klub'], disabled=True)
-    r2c3.text_input("FØDSELSDAG", value=data['birth'], disabled=True)
+    r2c3.text_input("FØDSEL", value=data['birth'], disabled=True)
     scout_navn = r2c4.text_input("SCOUT", value=st.session_state.get("user", "HIF Scout"), disabled=True)
 
-    # FORM (BASERET PÅ DIT BILLEDE)
+    # RAPPORT FORM
     with st.form("rapport_form", clear_on_submit=True):
         with st.container(border=True):
             st.markdown("**Stamdata & Status**")
             l2c1, l2c2, l2c3 = st.columns(3)
-            status_label = l2c1.selectbox("Status", ["Interessant", "Hold øje", "Kig nærmere", "Køb", "Prioritet"])
+            status = l2c1.selectbox("Status", ["Interessant", "Hold øje", "Kig nærmere", "Køb", "Prioritet"])
             pos_nr = l2c2.selectbox("POS (1-11)", options=[str(i) for i in range(1, 12)])
-            pos_prio = l2c3.selectbox("Prioritet", options=["A - Start-11", "B - Trupspiller", "C - Udviklingsspiller"])
+            prio = l2c3.selectbox("Prioritet", options=["A - Start-11", "B - Trupspiller", "C - Udviklingsspiller"])
 
             l3c1, l3c2, l3c3 = st.columns(3)
             pot = l3c1.selectbox("Potentiale", ["Lavt", "Middel", "Højt", "Top"])
-            forventning = l3c2.selectbox("Forventning", ["Realistisk", "Kræver overtalelse", "Svær"])
+            forvent = l3c2.selectbox("Forventning", ["Realistisk", "Kræver overtalelse", "Svær"])
             kontrakt = l3c3.date_input("Kontraktudløb", value=None)
 
             l4c1, l4c2, l4c3 = st.columns(3)
@@ -197,16 +208,16 @@ def vis_side(dp):
         with st.container(border=True):
             st.markdown("**Vurdering & Egenskaber**")
             m1, m2, m3, m4 = st.columns(4)
-            beslut = m1.select_slider("Beslutsomhed", options=range(1, 7), value=3)
-            fart = m2.select_slider("Fart", options=range(1, 7), value=3)
-            agg = m3.select_slider("Aggresivitet", options=range(1, 7), value=3)
-            att = m4.select_slider("Attitude", options=range(1, 7), value=3)
+            b_des = m1.select_slider("Beslutsomhed", options=range(1, 7), value=3)
+            b_fart = m2.select_slider("Fart", options=range(1, 7), value=3)
+            b_agg = m3.select_slider("Aggresivitet", options=range(1, 7), value=3)
+            b_att = m4.select_slider("Attitude", options=range(1, 7), value=3)
             
             m5, m6, m7, m8 = st.columns(4)
-            udh = m5.select_slider("Udholdenhed", options=range(1, 7), value=3)
-            led = m6.select_slider("Lederegenskaber", options=range(1, 7), value=3)
-            tek = m7.select_slider("Teknik", options=range(1, 7), value=3)
-            intel = m8.select_slider("Spilintelligens", options=range(1, 7), value=3)
+            b_udh = m5.select_slider("Udholdenhed", options=range(1, 7), value=3)
+            b_led = m6.select_slider("Lederegenskaber", options=range(1, 7), value=3)
+            b_tek = m7.select_slider("Teknik", options=range(1, 7), value=3)
+            b_int = m8.select_slider("Spilintelligens", options=range(1, 7), value=3)
 
             st.markdown("---")
             v1, v2, v3 = st.columns(3)
@@ -217,14 +228,14 @@ def vis_side(dp):
 
         if st.form_submit_button("Gem Rapport", use_container_width=True):
             if data["n"]:
-                avg = round(sum([beslut, fart, agg, att, udh, led, tek, intel])/8, 2)
+                avg = round(sum([b_des, b_fart, b_agg, b_att, b_udh, b_led, b_tek, b_int])/8, 2)
                 ny_rapport = {
                     "PLAYER_WYID": data["id"], "DATO": datetime.now().strftime("%Y-%m-%d"),
                     "NAVN": data["n"], "KLUB": data["klub"], "POSITION": data["pos"], "BIRTHDATE": data["birth"],
-                    "RATING_AVG": avg, "STATUS": status_label, "POTENTIALE": pot, "STYRKER": styrker, "UDVIKLING": udv, "VURDERING": vurder,
-                    "BESLUTSOMHED": float(beslut), "FART": float(fart), "AGGRESIVITET": float(agg), "ATTITUDE": float(att),
-                    "UDHOLDENHED": float(udh), "LEDEREGENSKABER": float(led), "TEKNIK": float(tek), "SPILINTELLIGENS": float(intel),
-                    "SCOUT": scout_navn, "KONTRAKT": str(kontrakt), "FORVENTNING": forventning, "POS_PRIORITET": pos_prio,
+                    "RATING_AVG": avg, "STATUS": status, "POTENTIALE": pot, "STYRKER": styrker, "UDVIKLING": udv, "VURDERING": vurder,
+                    "BESLUTSOMHED": float(b_des), "FART": float(b_fart), "AGGRESIVITET": float(b_agg), "ATTITUDE": float(b_att),
+                    "UDHOLDENHED": float(b_udh), "LEDEREGENSKABER": float(b_led), "TEKNIK": float(b_tek), "SPILINTELLIGENS": float(b_int),
+                    "SCOUT": scout_navn, "KONTRAKT": str(kontrakt), "FORVENTNING": forvent, "POS_PRIORITET": prio,
                     "POS": pos_nr, "LON": f"{lon:,}".replace(",", "."), "SKYGGEHOLD": False, "KOMMENTAR": kommentar,
                     "ER_EMNE": er_emne, "TRANSFER_VINDUE": vindue, "POS_343": 0.0, "POS_433": 0.0, "POS_352": 0.0
                 }
