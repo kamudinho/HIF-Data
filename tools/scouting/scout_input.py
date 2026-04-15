@@ -45,7 +45,7 @@ def push_to_github(path, message, content, sha=None):
     r = requests.put(url, headers=headers, json=payload)
     return r.status_code
 
-# --- NY POPUP FUNKTION ---
+# --- POPUP FUNKTION ---
 @st.dialog("Seneste Scout Rapport")
 def show_report_popup(report):
     st.markdown(f"### {report['NAVN']}")
@@ -77,9 +77,6 @@ def vis_side(dp):
     # --- 1. DATA FORBEREDELSE ---
     df_local = dp.get("scout_reports", pd.DataFrame()).copy()
     df_wyscout = dp.get("wyscout_players", pd.DataFrame()).copy()
-    
-    if not df_local.empty and 'PLAYER_WYID' in df_local.columns:
-        df_local = df_local.drop_duplicates(subset=['PLAYER_WYID'], keep='last')
     
     unique_players = {}
 
@@ -119,37 +116,42 @@ def vis_side(dp):
     add_to_options(df_wyscout)
     options_list = sorted(list(unique_players.keys()), key=lambda x: unique_players[x]["label"])
 
-    # --- 2. UI LAYOUT MED RAPPORT-KNAP ---
+    # --- 2. UI LAYOUT ---
     data = {"n": "", "id": "", "pos": "", "klub": "", "birth": ""}
     
-    t1, t_btn, t2, t3, t4, t5 = st.columns([2, 1, 1, 1, 1, 1])
+    # Justeret bredde [2, 1.5, 1, 1, 1, 1] for at give knappen plads
+    t1, t_btn, t2, t3, t4, t5 = st.columns([2, 1.5, 1, 1, 1, 1])
     
     with t1:
         sel_id = st.selectbox("Vælg spiller", [""] + options_list, 
-                            format_func=lambda x: unique_players[x]["label"] if x else "Vælg spiller...")
+                            format_func=lambda x: unique_players[x]["label"] if x else "Vælg spiller...",
+                            key="main_player_select")
         if sel_id: 
             data = unique_players[sel_id]["data"]
 
     with t_btn:
-        st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
+        st.markdown("<p style='margin-bottom: 28px;'></p>", unsafe_allow_html=True) # Mere præcis spacing
+        
         existing_report = None
         if sel_id and not df_local.empty:
-            match = df_local[df_local['PLAYER_WYID'].astype(str) == str(sel_id)]
+            # Sørg for at PLAYER_WYID i df_local renses for .0 decimaler
+            df_local['PLAYER_WYID_STR'] = df_local['PLAYER_WYID'].astype(str).str.split('.').str[0]
+            match = df_local[df_local['PLAYER_WYID_STR'] == str(sel_id)]
             if not match.empty:
                 existing_report = match.iloc[-1]
 
         if existing_report is not None:
-            if st.button(f"📄 Seneste: {existing_report['DATO']}", use_container_width=True):
+            if st.button(f"📄 Seneste: {existing_report['DATO']}", use_container_width=True, key="view_old_report"):
                 show_report_popup(existing_report)
         else:
-            st.button("Seneste rapport: -", disabled=True, use_container_width=True)
+            st.button("Seneste: -", disabled=True, use_container_width=True, key="no_report_btn")
     
     t2.text_input("Position", value=data['pos'], disabled=True)
     t3.text_input("Klub", value=data['klub'], disabled=True)
     t4.text_input("Fødselsdato", value=data['birth'], disabled=True)
     scout_navn = t5.text_input("Oprettet af", value=st.session_state.get("user", "HIF Scout"), disabled=True)
 
-    # --- 3. FORM OMRÅDE ---
+    # --- 3. FORM OMRÅDE (Resten af din kode forbliver uændret) ---
     with st.form("rapport_form", clear_on_submit=True):
         with st.container(border=True):
             st.markdown("**Stamdata & Status**")
