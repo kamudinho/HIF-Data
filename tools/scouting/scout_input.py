@@ -122,42 +122,44 @@ def vis_side(dp):
     # --- 2. UI LAYOUT ---
     data = {"n": "", "id": "", "pos": "", "klub": "", "birth": ""}
     
-    # Vi bruger en bredere kolonne til knappen for at sikre synlighed
-    t1, t_btn, t2, t3, t4, t5 = st.columns([2.5, 1.5, 1, 1, 1, 1])
+    # LINJE 1: Navnevalg, Dato-visning og Popup-knap
+    row1_c1, row1_c2, row1_c3 = st.columns([3, 1.5, 1])
     
-    with t1:
+    with row1_c1:
         sel_id = st.selectbox("Vælg spiller", [""] + options_list, 
                             format_func=lambda x: unique_players[x]["label"] if x else "Vælg spiller...",
                             key="player_selector")
         if sel_id: 
             data = unique_players[sel_id]["data"]
 
-    with t_btn:
-        st.markdown("<p style='margin-bottom: 25px;'></p>", unsafe_allow_html=True) 
-        
-        # Robust tjek for eksisterende rapporter
-        existing_report = None
-        if sel_id and not df_local.empty:
-            # Rens ID i databasen for at sikre match (fjerner .0)
-            df_local['MATCH_ID'] = df_local['PLAYER_WYID'].astype(str).str.split('.').str[0]
-            matches = df_local[df_local['MATCH_ID'] == str(sel_id)]
-            if not matches.empty:
-                # Sorter efter dato (hvis kolonnen findes) og tag den nyeste
-                if 'DATO' in matches.columns:
-                    matches = matches.sort_values('DATO', ascending=False)
-                existing_report = matches.iloc[0]
+    # Tjek for eksisterende rapport
+    existing_report = None
+    if sel_id and not df_local.empty:
+        df_local['MATCH_ID'] = df_local['PLAYER_WYID'].astype(str).str.split('.').str[0]
+        matches = df_local[df_local['MATCH_ID'] == str(sel_id)]
+        if not matches.empty:
+            if 'DATO' in matches.columns:
+                matches = matches.sort_values('DATO', ascending=False)
+            existing_report = matches.iloc[0]
 
+    with row1_c2:
+        report_date = existing_report['DATO'] if existing_report is not None else "-"
+        st.text_input("Seneste rapport", value=report_date, disabled=True)
+
+    with row1_c3:
+        st.markdown("<p style='margin-bottom: 28px;'></p>", unsafe_allow_html=True)
         if existing_report is not None:
-            btn_label = f"📄 Seneste: {existing_report.get('DATO', 'Se her')}"
-            if st.button(btn_label, use_container_width=True, key="active_report_btn"):
+            if st.button("Åbn rapport", use_container_width=True, key="view_report"):
                 show_report_popup(existing_report)
         else:
-            st.button("Seneste: -", disabled=True, use_container_width=True, key="disabled_report_btn")
-    
-    t2.text_input("Position", value=data['pos'], disabled=True)
-    t3.text_input("Klub", value=data['klub'], disabled=True)
-    t4.text_input("Fødselsdato", value=data['birth'], disabled=True)
-    scout_navn = t5.text_input("Oprettet af", value=st.session_state.get("user", "HIF Scout"), disabled=True)
+            st.button("Ingen data", disabled=True, use_container_width=True)
+
+    # LINJE 2: POS, KLUB, FØDSELSDAG, SCOUT
+    row2_c1, row2_c2, row2_c3, row2_c4 = st.columns([1, 2, 1.5, 1.5])
+    row2_c1.text_input("POS", value=data['pos'], disabled=True)
+    row2_c2.text_input("KLUB", value=data['klub'], disabled=True)
+    row2_c3.text_input("FØDSELSDAG", value=data['birth'], disabled=True)
+    scout_navn = row2_c4.text_input("SCOUT", value=st.session_state.get("user", "HIF Scout"), disabled=True)
 
     # --- 3. FORM OMRÅDE ---
     with st.form("rapport_form", clear_on_submit=True):
