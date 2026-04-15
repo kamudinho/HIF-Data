@@ -50,17 +50,58 @@ def rens_id(val):
     if pd.isna(val) or str(val).strip() == "": return ""
     return str(val).split('.')[0].strip()
 
-# --- TRIMMET POPUP DIALOG ---
+def render_rapport_indhold(report, keys, big_radar=False):
+    """Hjælpefunktion til at tegne selve rapportens indhold (bruges i begge faner)"""
+    col_stats, col_radar, col_text = st.columns([0.8, 2.0, 1.5]) # Øget radar kolonne-bredde
+    
+    with col_stats:
+        st.markdown("**Egenskaber**")
+        for k in keys:
+            st.write(f"{k.capitalize()}: **{report.get(k, '-')}**")
+    
+    with col_radar:
+        r_vals = []
+        for k in keys:
+            try: 
+                v = float(str(report.get(k, 1)).replace(',', '.'))
+                r_vals.append(v)
+            except: r_vals.append(1.0)
+        
+        fig = go.Figure(data=go.Scatterpolar(
+            r=r_vals + [r_vals[0]], 
+            theta=[k.capitalize() for k in keys] + [keys[0].capitalize()], 
+            fill='toself', line_color='#df003b'
+        ))
+        # Gør radarchart større her
+        fig.update_layout(
+            polar=dict(radialaxis=dict(visible=True, range=[1, 6])), 
+            showlegend=False, 
+            height=500, # Større højde
+            margin=dict(l=50, r=50, t=50, b=50)
+        )
+        st.plotly_chart(fig, use_container_width=True)
+        
+    with col_text:
+        st.write("**Styrker**")
+        st.info(report.get('STYRKER', '-'))
+        st.write("**Udvikling**")
+        st.info(report.get('UDVIKLING', '-'))
+        st.write("**Vurdering**")
+        st.success(report.get('VURDERING', '-'))
+        if report.get('KOMMENTAR'):
+            st.write("**Kommentar**")
+            st.write(report.get('KOMMENTAR'))
+
+# --- POPUP DIALOG ---
 @st.dialog("Spillerrapport", width="large")
 def show_report_popup(valgt_navn, alle_rapporter, billed_map):
-    spiller_historik = alle_rapporter[alle_rapporter['NAVN'] == valgt_navn].sort_values('DATO', ascending=True)
+    spiller_historik = alle_rapporter[alle_rapporter['NAVN'] == valgt_navn].sort_values('DATO', ascending=False)
     if spiller_historik.empty:
         st.error(f"Ingen data fundet for {valgt_navn}")
         return
         
-    nyeste = spiller_historik.iloc[-1]
+    nyeste = spiller_historik.iloc[0]
     pid = rens_id(nyeste.get('PLAYER_WYID'))
-    
     img_url = billed_map.get(pid) or f"https://cdn5.wyscout.com/photos/players/public/{pid}.png"
     
     c1, c2 = st.columns([1, 3])
@@ -70,43 +111,17 @@ def show_report_popup(valgt_navn, alle_rapporter, billed_map):
         st.subheader(valgt_navn)
         st.write(f"**Klub:** {nyeste.get('KLUB', '-')} | **Pos:** {nyeste.get('POSITION', '-')} | **ID:** {pid}")
 
-    # KUN TO FANER SOM ØNSKET
     t1, t2 = st.tabs(["Seneste Rapport", "Historik"])
-    
     keys = ['BESLUTSOMHED', 'FART', 'AGGRESIVITET', 'ATTITUDE', 'UDHOLDENHED', 'LEDEREGENSKABER', 'TEKNIK', 'SPILINTELLIGENS']
 
     with t1:
-        col_stats, col_radar, col_text = st.columns([0.8, 1.5, 1.5])
-        with col_stats:
-            st.markdown("**Vurderinger**")
-            for k in keys:
-                st.write(f"{k.capitalize()}: **{nyeste.get(k, '-')}**")
-        
-        with col_radar:
-            r_vals = []
-            for k in keys:
-                try: 
-                    v = float(str(nyeste.get(k, 1)).replace(',', '.'))
-                    r_vals.append(v)
-                except: r_vals.append(1.0)
-            
-            fig = go.Figure(data=go.Scatterpolar(
-                r=r_vals + [r_vals[0]], 
-                theta=[k.capitalize() for k in keys] + [keys[0].capitalize()], 
-                fill='toself', line_color='#df003b'
-            ))
-            fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[1, 6])), showlegend=False, height=350)
-            st.plotly_chart(fig, use_container_width=True)
-            
-        with col_text:
-            st.write("**Styrker**"); st.info(nyeste.get('STYRKER', '-'))
-            st.write("**Udvikling**"); st.info(nyeste.get('UDVIKLING', '-'))
-            st.write("**Vurdering**"); st.success(nyeste.get('VURDERING', '-'))
-            if nyeste.get('KOMMENTAR'):
-                st.write("**Kommentar**"); st.write(nyeste.get('KOMMENTAR'))
+        render_rapport_indhold(nyeste, keys, big_radar=True)
 
     with t2:
-        st.dataframe(spiller_historik.sort_values('DATO', ascending=False), use_container_width=True, hide_index=True)
+        # Vis alle rapporter undtagen den nyeste (eller alle) i expanders
+        for idx, row in spiller_historik.iterrows():
+            with st.expander(f"Rapport d. {row['DATO']} - Scout: {row.get('SCOUT', 'Ukendt')}"):
+                render_rapport_indhold(row, keys)
 
 # --- HOVEDSIDE ---
 def vis_side(dp):    
@@ -160,7 +175,7 @@ def vis_side(dp):
     r2c3.text_input("FØDSELSDAG", value=data['birth'], disabled=True)
     scout_navn = r2c4.text_input("SCOUT", value=st.session_state.get("user", "HIF Scout"), disabled=True)
 
-    # FORM (FRA DIT SKÆRMBILLEDE)
+    # FORM (BASERET PÅ DIT BILLEDE)
     with st.form("rapport_form", clear_on_submit=True):
         with st.container(border=True):
             st.markdown("**Stamdata & Status**")
