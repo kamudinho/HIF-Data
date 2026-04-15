@@ -251,8 +251,8 @@ def vis_side():
                                 txt_c, bg = "white", HIF_BLA
                         else:
                             k_c = get_status_color(r['KONTRAKT_DT'], ref_date=ref_dt)
-                            txt_c = "white"
-                            bg = k_c if k_c else "black"
+                            txt_c = "black"
+                            bg = k_c if k_c else "white"
                 
                         y_offset = (i * 3.2) if not is_startopstilling else 0
                         ax.text(px, py + y_offset, r['NAVN'], size=7.5, ha='center', weight='bold', 
