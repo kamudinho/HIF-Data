@@ -37,7 +37,6 @@ def vis_side():
     conn = get_cached_conn()
     
     # --- 1. VÆLG HOLD ---
-    # Vi henter holdnavne fra OPTA_MATCHINFO til dropdown
     df_teams = conn.query(f"SELECT DISTINCT CONTESTANTHOME_NAME as NAME FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS} ORDER BY 1")
     if df_teams is None or df_teams.empty:
         st.error("Kunne ikke hente hold-data.")
@@ -47,8 +46,8 @@ def vis_side():
     valgt_hold = c1.selectbox("Vælg Hold", df_teams['NAME'].unique(), label_visibility="collapsed")
     target_ssiid = TEAMS.get(valgt_hold, {}).get('ssid')
 
-    # --- 2. VÆLG KAMP (RETTET TIL SEASON_METADATA) ---
-    # Vi bruger de kolonner du sendte: MATCH_SSIID, DATE, DESCRIPTION
+    # --- 2. VÆLG KAMP (KUN AFSLUTTEDE KAMPE) ---
+    # Vi tilføjer AND DATE <= CURRENT_DATE() for at sikre, at kampen er spillet
     df_matches = conn.query(f"""
         SELECT DISTINCT 
             MATCH_SSIID, 
@@ -57,11 +56,12 @@ def vis_side():
         FROM {DB}.SECONDSPECTRUM_SEASON_METADATA
         WHERE (HOME_SSIID = '{target_ssiid}' OR AWAY_SSIID = '{target_ssiid}')
           AND DATE >= '{SEASON_START}'
+          AND DATE <= CURRENT_DATE()
         ORDER BY DATE DESC
     """)
 
     if df_matches is None or df_matches.empty:
-        st.warning("Ingen kampe fundet for dette hold.")
+        st.warning("Ingen spillede kampe fundet for dette hold i denne sæson.")
         return
 
     df_matches['DATO_STR'] = pd.to_datetime(df_matches['CALC_DATE']).dt.strftime('%d/%m')
