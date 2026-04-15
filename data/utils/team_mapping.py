@@ -60,7 +60,7 @@ TEAM_COLORS = {
     "Horsens": {"primary": "#E3C91A", "secondary": "#000000"},
     "Middelfart": {"primary": "#0099ff", "secondary": "#ffffff"},
     "AaB": {"primary": "#cc0000", "secondary": "#ffffff"},
-    "Kolding": {"primary": "#ffffff", "secondary": "#0000ff"},
+    "Kolding": {"primary": "#0000ff", "secondary": "#0000ff"},
     "Hobro": {"primary": "#ffff00", "secondary": "#0000ff"},
     "HB Køge": {"primary": "#000000", "secondary": "#0000ff"},
     "Aarhus Fremad": {"primary": "#000000", "secondary": "#ffff00"}
