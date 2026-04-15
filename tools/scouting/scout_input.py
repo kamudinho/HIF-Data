@@ -45,32 +45,33 @@ def push_to_github(path, message, content, sha=None):
     r = requests.put(url, headers=headers, json=payload)
     return r.status_code
 
-# --- POPUP FUNKTION ---
+# --- POPUP DIALOG ---
 @st.dialog("Seneste Scout Rapport")
 def show_report_popup(report):
     st.markdown(f"### {report['NAVN']}")
     st.caption(f"Dato: {report['DATO']} | Scout: {report['SCOUT']}")
     
     c1, c2, c3 = st.columns(3)
-    c1.metric("Rating", report['RATING_AVG'])
-    c2.metric("Status", report['STATUS'])
-    c3.metric("Potentiale", report['POTENTIALE'])
+    c1.metric("Rating", report.get('RATING_AVG', '-'))
+    c2.metric("Status", report.get('STATUS', '-'))
+    c3.metric("Potentiale", report.get('POTENTIALE', '-'))
     
     st.markdown("---")
     col_a, col_b = st.columns(2)
     with col_a:
         st.markdown("**Styrker:**")
-        st.write(report['STYRKER'] if report['STYRKER'] else "Ingen data")
+        st.write(report.get('STYRKER', 'Ingen data'))
     with col_b:
         st.markdown("**Udvikling:**")
-        st.write(report['UDVIKLING'] if report['UDVIKLING'] else "Ingen data")
+        st.write(report.get('UDVIKLING', 'Ingen data'))
         
     st.markdown("**Samlet Vurdering:**")
-    st.info(report['VURDERING'] if report['VURDERING'] else "Ingen tekst indtastet")
+    st.info(report.get('VURDERING', 'Ingen tekst indtastet'))
     
-    if "KOMMENTAR" in report and pd.notna(report['KOMMENTAR']) and report['KOMMENTAR'] != "":
+    kommentar = report.get('KOMMENTAR')
+    if pd.notna(kommentar) and str(kommentar).strip() != "":
         st.markdown("**Uddybende Kommentar:**")
-        st.write(report['KOMMENTAR'])
+        st.write(kommentar)
 
 # --- HOVEDSIDE ---
 def vis_side(dp):    
@@ -94,11 +95,13 @@ def vis_side(dp):
             p_id_raw = get_safe_val(r, 'PLAYER_WYID')
             if not p_id_raw or p_id_raw.lower() in ['nan', 'none', '']: continue
             p_id = p_id_raw.split('.')[0].strip()
+            
             f_name = get_safe_val(r, 'FIRSTNAME').replace('None', '').strip()
             l_name = get_safe_val(r, 'LASTNAME').replace('None', '').strip()
             fuldt_navn = f"{f_name} {l_name}" if f_name and l_name else (get_safe_val(r, 'PLAYER_NAME') or get_safe_val(r, 'NAVN') or "Ukendt")
             klub = get_safe_val(r, 'TEAMNAME') or get_safe_val(r, 'KLUB') or "Ukendt klub"
             pos_code = get_safe_val(r, 'ROLECODE3') or get_safe_val(r, 'POSITION') or ""
+            
             b_date = r.get('BIRTHDATE') or r.get('BIRTH_DATE') or r.get('BIRTH_DAY') or r.get('DOB') or ""
             birth_val = ""
             if pd.notna(b_date) and str(b_date).strip() != "":
@@ -119,39 +122,44 @@ def vis_side(dp):
     # --- 2. UI LAYOUT ---
     data = {"n": "", "id": "", "pos": "", "klub": "", "birth": ""}
     
-    # Justeret bredde [2, 1.5, 1, 1, 1, 1] for at give knappen plads
-    t1, t_btn, t2, t3, t4, t5 = st.columns([2, 1.5, 1, 1, 1, 1])
+    # Vi bruger en bredere kolonne til knappen for at sikre synlighed
+    t1, t_btn, t2, t3, t4, t5 = st.columns([2.5, 1.5, 1, 1, 1, 1])
     
     with t1:
         sel_id = st.selectbox("Vælg spiller", [""] + options_list, 
                             format_func=lambda x: unique_players[x]["label"] if x else "Vælg spiller...",
-                            key="main_player_select")
+                            key="player_selector")
         if sel_id: 
             data = unique_players[sel_id]["data"]
 
     with t_btn:
-        st.markdown("<p style='margin-bottom: 28px;'></p>", unsafe_allow_html=True) # Mere præcis spacing
+        st.markdown("<p style='margin-bottom: 25px;'></p>", unsafe_allow_html=True) 
         
+        # Robust tjek for eksisterende rapporter
         existing_report = None
         if sel_id and not df_local.empty:
-            # Sørg for at PLAYER_WYID i df_local renses for .0 decimaler
-            df_local['PLAYER_WYID_STR'] = df_local['PLAYER_WYID'].astype(str).str.split('.').str[0]
-            match = df_local[df_local['PLAYER_WYID_STR'] == str(sel_id)]
-            if not match.empty:
-                existing_report = match.iloc[-1]
+            # Rens ID i databasen for at sikre match (fjerner .0)
+            df_local['MATCH_ID'] = df_local['PLAYER_WYID'].astype(str).str.split('.').str[0]
+            matches = df_local[df_local['MATCH_ID'] == str(sel_id)]
+            if not matches.empty:
+                # Sorter efter dato (hvis kolonnen findes) og tag den nyeste
+                if 'DATO' in matches.columns:
+                    matches = matches.sort_values('DATO', ascending=False)
+                existing_report = matches.iloc[0]
 
         if existing_report is not None:
-            if st.button(f"📄 Seneste: {existing_report['DATO']}", use_container_width=True, key="view_old_report"):
+            btn_label = f"📄 Seneste: {existing_report.get('DATO', 'Se her')}"
+            if st.button(btn_label, use_container_width=True, key="active_report_btn"):
                 show_report_popup(existing_report)
         else:
-            st.button("Seneste: -", disabled=True, use_container_width=True, key="no_report_btn")
+            st.button("Seneste: -", disabled=True, use_container_width=True, key="disabled_report_btn")
     
     t2.text_input("Position", value=data['pos'], disabled=True)
     t3.text_input("Klub", value=data['klub'], disabled=True)
     t4.text_input("Fødselsdato", value=data['birth'], disabled=True)
     scout_navn = t5.text_input("Oprettet af", value=st.session_state.get("user", "HIF Scout"), disabled=True)
 
-    # --- 3. FORM OMRÅDE (Resten af din kode forbliver uændret) ---
+    # --- 3. FORM OMRÅDE ---
     with st.form("rapport_form", clear_on_submit=True):
         with st.container(border=True):
             st.markdown("**Stamdata & Status**")
@@ -199,6 +207,7 @@ def vis_side(dp):
                 st.error("Vælg en spiller!")
             else:
                 avg_rating = round(sum([beslut, fart, agg, att, udh, led, tek, intel])/8, 2)
+                
                 ny_rapport = {
                     "PLAYER_WYID": data["id"], "DATO": datetime.now().strftime("%Y-%m-%d"),
                     "NAVN": data["n"], "KLUB": data["klub"], "POSITION": data["pos"], "BIRTHDATE": data["birth"],
