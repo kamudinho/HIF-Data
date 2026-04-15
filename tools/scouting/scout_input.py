@@ -1,9 +1,10 @@
 import streamlit as st
 import pandas as pd
+import plotly.graph_objects as go
 import requests
 import base64
-from datetime import datetime
 from io import StringIO
+from datetime import datetime
 import time
 
 # --- KONFIGURATION ---
@@ -45,46 +46,96 @@ def push_to_github(path, message, content, sha=None):
     r = requests.put(url, headers=headers, json=payload)
     return r.status_code
 
-# --- POPUP DIALOG ---
-@st.dialog("Seneste Scout Rapport")
-def show_report_popup(report):
-    st.markdown(f"### {report['NAVN']}")
-    st.caption(f"Dato: {report['DATO']} | Scout: {report['SCOUT']}")
-    
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Rating", report.get('RATING_AVG', '-'))
-    c2.metric("Status", report.get('STATUS', '-'))
-    c3.metric("Potentiale", report.get('POTENTIALE', '-'))
-    
-    st.markdown("---")
-    col_a, col_b = st.columns(2)
-    with col_a:
-        st.markdown("**Styrker:**")
-        st.write(report.get('STYRKER', 'Ingen data'))
-    with col_b:
-        st.markdown("**Udvikling:**")
-        st.write(report.get('UDVIKLING', 'Ingen data'))
+def rens_id(val):
+    if pd.isna(val) or str(val).strip() == "": return ""
+    return str(val).split('.')[0].strip()
+
+# --- AVANCERET POPUP DIALOG ---
+@st.dialog("Seneste Scout Rapport", width="large")
+def show_report_popup(valgt_navn, alle_rapporter, billed_map, career_df=None):
+    spiller_historik = alle_rapporter[alle_rapporter['NAVN'] == valgt_navn].sort_values('DATO', ascending=True)
+    if spiller_historik.empty:
+        st.error(f"Ingen data fundet for {valgt_navn}")
+        return
         
-    st.markdown("**Samlet Vurdering:**")
-    st.info(report.get('VURDERING', 'Ingen tekst indtastet'))
+    nyeste = spiller_historik.iloc[-1]
+    pid = rens_id(nyeste.get('PLAYER_WYID'))
     
-    kommentar = report.get('KOMMENTAR')
-    if pd.notna(kommentar) and str(kommentar).strip() != "":
-        st.markdown("**Uddybende Kommentar:**")
-        st.write(kommentar)
+    # Henter billedet specifikt via PLAYER_WYID fra vores map
+    img_url = billed_map.get(pid) or f"https://cdn5.wyscout.com/photos/players/public/{pid}.png"
+    fallback_url = "https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_1280.png"
+    
+    c1, c2 = st.columns([1, 3])
+    with c1:
+        try:
+            st.image(img_url, width=150)
+        except:
+            st.image(fallback_url, width=150)
+    with c2:
+        st.subheader(valgt_navn)
+        st.write(f"Klub: {nyeste.get('KLUB', '-')} | Pos: {nyeste.get('POSITION', '-')} | ID: {pid}")
+
+    t1, t2, t3, t4 = st.tabs(["Seneste Rapport", "Historik", "Udvikling", "Sæsonstats"])
+    keys = ['BESLUTSOMHED', 'FART', 'AGGRESIVITET', 'ATTITUDE', 'UDHOLDENHED', 'LEDEREGENSKABER', 'TEKNIK', 'SPILINTELLIGENS']
+
+    with t1:
+        col_stats, col_radar, col_text = st.columns([0.8, 1.5, 1.5])
+        with col_stats:
+            st.markdown("**Vurderinger**")
+            for k in keys:
+                val = nyeste.get(k, '-')
+                st.write(f"{k.capitalize()}: **{val}**")
+        
+        with col_radar:
+            r_vals = []
+            for k in keys:
+                try: 
+                    v = float(str(nyeste.get(k, 1)).replace(',', '.'))
+                    r_vals.append(v)
+                except: r_vals.append(1.0)
+            
+            fig = go.Figure(data=go.Scatterpolar(
+                r=r_vals + [r_vals[0]], 
+                theta=[k.capitalize() for k in keys] + [keys[0].capitalize()], 
+                fill='toself', line_color='#df003b'
+            ))
+            fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[1, 6])), showlegend=False, height=350)
+            st.plotly_chart(fig, use_container_width=True)
+            
+        with col_text:
+            st.write("**Styrker**"); st.info(nyeste.get('STYRKER', '-'))
+            st.write("**Vurdering**"); st.success(nyeste.get('VURDERING', '-'))
+
+    with t2:
+        st.dataframe(spiller_historik.sort_values('DATO', ascending=False), use_container_width=True, hide_index=True)
+
+    with t3:
+        fig_evol = go.Figure(go.Scatter(x=spiller_historik['DATO'], y=spiller_historik['RATING_AVG'], mode='lines+markers', line_color='#df003b'))
+        st.plotly_chart(fig_evol, use_container_width=True)
+
+    with t4:
+        if career_df is not None:
+            stats = career_df[career_df['PLAYER_WYID'].apply(rens_id) == pid].copy()
+            if not stats.empty:
+                st.dataframe(stats.drop_duplicates(subset=['SEASONNAME', 'TEAMNAME', 'COMPETITIONNAME']).sort_values('SEASONNAME', ascending=False), use_container_width=True, hide_index=True)
 
 # --- HOVEDSIDE ---
 def vis_side(dp):    
     # --- 1. DATA FORBEREDELSE ---
     df_local = dp.get("scout_reports", pd.DataFrame()).copy()
     df_wyscout = dp.get("wyscout_players", pd.DataFrame()).copy()
-    
+    career_df = dp.get("career_data", None)
+
+    # BYG BILLEDE-MAP (PLAYER_WYID -> IMAGEDATAURL)
+    billed_map = {}
+    if not df_wyscout.empty and 'IMAGEDATAURL' in df_wyscout.columns:
+        billed_map = dict(zip(df_wyscout['PLAYER_WYID'].apply(rens_id), df_wyscout['IMAGEDATAURL']))
+
     unique_players = {}
 
     def get_safe_val(row, col_name, default=""):
         val = row.get(col_name, default)
-        if isinstance(val, pd.Series):
-            val = val.iloc[0] if not val.empty else default
+        if isinstance(val, pd.Series): val = val.iloc[0] if not val.empty else default
         return str(val) if pd.notna(val) else default
 
     def add_to_options(df):
@@ -94,7 +145,7 @@ def vis_side(dp):
         for _, r in df_temp.iterrows():
             p_id_raw = get_safe_val(r, 'PLAYER_WYID')
             if not p_id_raw or p_id_raw.lower() in ['nan', 'none', '']: continue
-            p_id = p_id_raw.split('.')[0].strip()
+            p_id = rens_id(p_id_raw)
             
             f_name = get_safe_val(r, 'FIRSTNAME').replace('None', '').strip()
             l_name = get_safe_val(r, 'LASTNAME').replace('None', '').strip()
@@ -122,46 +173,40 @@ def vis_side(dp):
     # --- 2. UI LAYOUT ---
     data = {"n": "", "id": "", "pos": "", "klub": "", "birth": ""}
     
-    # LINJE 1: Navnevalg, Dato-visning og Popup-knap
     row1_c1, row1_c2, row1_c3 = st.columns([3, 1.5, 1])
-    
     with row1_c1:
         sel_id = st.selectbox("Vælg spiller", [""] + options_list, 
                             format_func=lambda x: unique_players[x]["label"] if x else "Vælg spiller...",
                             key="player_selector")
-        if sel_id: 
-            data = unique_players[sel_id]["data"]
+        if sel_id: data = unique_players[sel_id]["data"]
 
-    # Tjek for eksisterende rapport
     existing_report = None
     if sel_id and not df_local.empty:
         df_local['MATCH_ID'] = df_local['PLAYER_WYID'].astype(str).str.split('.').str[0]
         matches = df_local[df_local['MATCH_ID'] == str(sel_id)]
         if not matches.empty:
-            if 'DATO' in matches.columns:
-                matches = matches.sort_values('DATO', ascending=False)
+            matches = matches.sort_values('DATO', ascending=False)
             existing_report = matches.iloc[0]
 
     with row1_c2:
-        report_date = existing_report['DATO'] if existing_report is not None else "-"
-        st.text_input("Seneste rapport", value=report_date, disabled=True)
+        st.text_input("Seneste rapport", value=existing_report['DATO'] if existing_report is not None else "-", disabled=True)
 
     with row1_c3:
         st.markdown("<p style='margin-bottom: 28px;'></p>", unsafe_allow_html=True)
         if existing_report is not None:
-            if st.button("Åbn rapport", use_container_width=True, key="view_report"):
-                show_report_popup(existing_report)
+            if st.button("Åbn rapport", use_container_width=True):
+                show_report_popup(data["n"], df_local, billed_map, career_df)
         else:
             st.button("Ingen data", disabled=True, use_container_width=True)
 
-    # LINJE 2: POS, KLUB, FØDSELSDAG, SCOUT
+    # LINJE 2: STAMDATA
     row2_c1, row2_c2, row2_c3, row2_c4 = st.columns([1, 2, 1.5, 1.5])
     row2_c1.text_input("POS", value=data['pos'], disabled=True)
     row2_c2.text_input("KLUB", value=data['klub'], disabled=True)
     row2_c3.text_input("FØDSELSDAG", value=data['birth'], disabled=True)
     scout_navn = row2_c4.text_input("SCOUT", value=st.session_state.get("user", "HIF Scout"), disabled=True)
 
-    # --- 3. FORM OMRÅDE ---
+    # --- 3. FORM ---
     with st.form("rapport_form", clear_on_submit=True):
         with st.container(border=True):
             st.markdown("**Stamdata & Status**")
@@ -202,9 +247,7 @@ def vis_side(dp):
             vurder_kort = v3.text_area("Vurdering")
             kommentar_full = st.text_area("Kommentar (uddybende)", height=100)
 
-        submitted = st.form_submit_button("Gem Rapport", use_container_width=True)
-        
-        if submitted:
+        if st.form_submit_button("Gem Rapport", use_container_width=True):
             if not data["n"]:
                 st.error("Vælg en spiller!")
             else:
@@ -226,25 +269,10 @@ def vis_side(dp):
                 }
 
                 content, sha = get_github_file(FILE_PATH)
-                if content is not None and content.strip() != "":
-                    try:
-                        df_old = pd.read_csv(StringIO(content), low_memory=False)
-                        df_new = pd.DataFrame([ny_rapport])
-                        for col in COL_ORDER:
-                            if col not in df_new.columns: df_new[col] = None
-                        df_final = pd.concat([df_old, df_new], ignore_index=True)
-                    except Exception as e:
-                        df_final = pd.DataFrame([ny_rapport])
-                else:
-                    df_final = pd.DataFrame([ny_rapport])
-
-                existing_cols = [c for c in COL_ORDER if c in df_final.columns]
-                df_final = df_final[existing_cols]
-                status_code = push_to_github(FILE_PATH, f"Rapport: {data['n']}", df_final.to_csv(index=False), sha)
+                df_old = pd.read_csv(StringIO(content), low_memory=False) if content else pd.DataFrame(columns=COL_ORDER)
+                df_new = pd.DataFrame([ny_rapport])
+                df_final = pd.concat([df_old, df_new], ignore_index=True)[COL_ORDER]
                 
+                status_code = push_to_github(FILE_PATH, f"Rapport: {data['n']}", df_final.to_csv(index=False), sha)
                 if status_code in [200, 201]:
-                    st.success(f"Rapport for {data['n']} er gemt!")
-                    time.sleep(1)
-                    st.rerun()
-                else:
-                    st.error(f"GitHub fejl (Status: {status_code})")
+                    st.success(f"Rapport gemt!"); time.sleep(1); st.rerun()
