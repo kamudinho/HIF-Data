@@ -102,10 +102,26 @@ def vis_spiller_modal(valgt_navn, alle_rapporter, career_df=None):
             fig = go.Figure(data=go.Scatterpolar(
                 r=r_vals + [r_vals[0]], 
                 theta=[k.capitalize() for k in keys] + [keys[0].capitalize()], 
-                fill='toself', line_color='#df003b'
+                fill='toself', 
+                line_color='#df003b'
             ))
-            fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[1, 6])), showlegend=False, height=250)
-            st.plotly_chart(fig, use_container_width=True)
+            
+            fig.update_layout(
+                polar=dict(
+                    radialaxis=dict(
+                        visible=True, 
+                        range=[1, 6],
+                        tickfont=dict(size=10) # Mindre tal på aksen for at spare plads
+                    )
+                ), 
+                showlegend=False,
+                # Her gør vi forskellen:
+                height=400, # Øget fra 250 til 400
+                margin=dict(l=50, r=50, t=20, b=20), # Minimale margener
+                autosize=True
+            )
+            
+            st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
             
         with col_text:
             st.write("**Styrker**")
