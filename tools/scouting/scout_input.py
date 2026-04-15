@@ -50,7 +50,7 @@ def rens_id(val):
     if pd.isna(val) or str(val).strip() == "": return ""
     return str(val).split('.')[0].strip()
 
-# --- MODAL: SPILLERPROFIL (AVANCERET) ---
+# --- MODAL: SPILLERPROFIL ---
 @st.dialog("Seneste Scout Rapport", width="large")
 def vis_spiller_modal(valgt_navn, alle_rapporter, billed_map, career_df=None):
     spiller_historik = alle_rapporter[alle_rapporter['NAVN'] == valgt_navn].sort_values('DATO', ascending=True)
@@ -62,7 +62,7 @@ def vis_spiller_modal(valgt_navn, alle_rapporter, billed_map, career_df=None):
     nyeste = spiller_historik.iloc[-1]
     pid = rens_id(nyeste.get('PLAYER_WYID'))
     
-    # Billed-logik: Prioritér IMAGEDATAURL fra mappet, ellers brug standard fallback
+    # Billed-logik
     fallback_url = "https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_1280.png"
     img_url = billed_map.get(pid) or f"https://cdn5.wyscout.com/photos/players/public/{pid}.png"
     
@@ -99,24 +99,17 @@ def vis_spiller_modal(valgt_navn, alle_rapporter, billed_map, career_df=None):
             fig = go.Figure(data=go.Scatterpolar(
                 r=r_vals + [r_vals[0]], 
                 theta=[k.capitalize() for k in keys] + [keys[0].capitalize()], 
-                fill='toself', 
-                line_color='#df003b'
+                fill='toself', line_color='#df003b'
             ))
-            
             fig.update_layout(
-                polar=dict(radialaxis=dict(visible=True, range=[1, 6], tickfont=dict(size=10))), 
-                showlegend=False,
-                height=400, 
-                margin=dict(l=50, r=50, t=20, b=20),
-                autosize=True
+                polar=dict(radialaxis=dict(visible=True, range=[1, 6], tickfont=dict(size=10))),
+                showlegend=False, height=350, margin=dict(l=40, r=40, t=20, b=20)
             )
             st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
             
         with col_text:
             st.write("**Styrker**")
             st.info(nyeste.get('STYRKER', '-'))
-            st.write("**Udvikling**")
-            st.success(nyeste.get('UDVIKLING', '-'))
             st.write("**Vurdering**")
             st.success(nyeste.get('VURDERING', '-'))
 
@@ -134,155 +127,124 @@ def vis_spiller_modal(valgt_navn, alle_rapporter, billed_map, career_df=None):
         if career_df is not None:
             stats = career_df[career_df['PLAYER_WYID'].apply(rens_id) == pid].copy()
             if not stats.empty:
-                st.dataframe(stats.drop_duplicates(subset=['SEASONNAME', 'TEAMNAME', 'COMPETITIONNAME']).sort_values('SEASONNAME', ascending=False), use_container_width=True, hide_index=True)
+                stats_clean = stats.drop_duplicates(subset=['SEASONNAME', 'TEAMNAME', 'COMPETITIONNAME']).sort_values('SEASONNAME', ascending=False)
+                st.dataframe(stats_clean, use_container_width=True, hide_index=True)
 
 # --- HOVEDSIDE ---
 def vis_side(dp):    
+    # Hent data fra data-pack (dp)
     df_local = dp.get("scout_reports", pd.DataFrame()).copy()
     df_wyscout = dp.get("wyscout_players", pd.DataFrame()).copy()
     career_df = dp.get("career_data", None)
     
-    # Erstat blokken i vis_side med denne mere sikre version:
+    # 1. Byg billed_map fra Wyscout listen
     billed_map = {}
     if not df_wyscout.empty:
-        # Vi leder efter alle tænkelige navne for billed-kolonnen
-        mulige_kolonner = ['IMAGEDATAURL', 'PLAYER_IMAGE_URL', 'IMAGE_URL']
-        fundet_kolonne = next((c for c in mulige_kolonner if c in df_wyscout.columns), None)
-        
-        if fundet_kolonne:
-            billed_map = dict(zip(df_wyscout['PLAYER_WYID'].apply(rens_id), df_wyscout[fundet_kolonne]))
+        # Tjekker for mulige kolonnenavne (IMAGEDATAURL er standard i din app)
+        img_col = next((c for c in ['IMAGEDATAURL', 'PLAYER_IMAGE_URL'] if c in df_wyscout.columns), None)
+        if img_col:
+            billed_map = dict(zip(df_wyscout['PLAYER_WYID'].apply(rens_id), df_wyscout[img_col]))
 
+    # 2. Saml unikke spillere til dropdown
     unique_players = {}
-    def get_safe_val(row, col_name, default=""):
-        val = row.get(col_name, default)
-        return str(val) if pd.notna(val) else default
+    def get_safe_val(row, col_name):
+        val = row.get(col_name, "")
+        return str(val) if pd.notna(val) else ""
 
     def add_to_options(df):
-        if df is None or (isinstance(df, pd.DataFrame) and df.empty): return
-        df_temp = df.copy()
-        df_temp.columns = [str(c).upper().strip() for c in df_temp.columns]
-        for _, r in df_temp.iterrows():
-            p_id = rens_id(r.get('PLAYER_WYID'))
+        if df is None or df.empty: return
+        for _, r in df.iterrows():
+            p_id = rens_id(r.get('PLAYER_WYID') or r.get('player_wyid'))
             if not p_id: continue
-            f_name, l_name = get_safe_val(r, 'FIRSTNAME'), get_safe_val(r, 'LASTNAME')
-            fuldt_navn = f"{f_name} {l_name}".strip() if f_name or l_name else (get_safe_val(r, 'PLAYER_NAME') or get_safe_val(r, 'NAVN') or "Ukendt")
-            klub = get_safe_val(r, 'TEAMNAME') or get_safe_val(r, 'KLUB') or "Ukendt klub"
-            b_date = r.get('BIRTHDATE') or r.get('DOB') or ""
-            try: birth_val = pd.to_datetime(b_date).strftime("%Y-%m-%d") if pd.notna(b_date) else ""
-            except: birth_val = str(b_date)
+            
+            # Navne-logik
+            navn = get_safe_val(r, 'NAVN') or get_safe_val(r, 'PLAYER_NAME')
+            if not navn:
+                f, l = get_safe_val(r, 'FIRSTNAME'), get_safe_val(r, 'LASTNAME')
+                navn = f"{f} {l}".strip() or "Ukendt"
+            
+            klub = get_safe_val(r, 'KLUB') or get_safe_val(r, 'TEAMNAME') or "Ukendt"
             
             if p_id not in unique_players:
-                unique_players[p_id] = {"label": f"{fuldt_navn} ({klub})", "data": {"n": fuldt_navn, "id": p_id, "pos": get_safe_val(r, 'ROLECODE3') or get_safe_val(r, 'POSITION'), "klub": klub, "birth": birth_val}}
+                unique_players[p_id] = {
+                    "label": f"{navn} ({klub})",
+                    "data": {"n": navn, "id": p_id, "pos": get_safe_val(r, 'POSITION') or get_safe_val(r, 'ROLECODE3'), "klub": klub}
+                }
 
     add_to_options(df_local)
     add_to_options(df_wyscout)
+    
     options_list = sorted(list(unique_players.keys()), key=lambda x: unique_players[x]["label"])
 
-    data = {"n": "", "id": "", "pos": "", "klub": "", "birth": ""}
-    
-    # LINJE 1: Vælg spiller
+    # --- UI LAYOUT ---
     row1_c1, row1_c2, row1_c3 = st.columns([3, 1.5, 1])
+    
     with row1_c1:
         sel_id = st.selectbox("Vælg spiller", [""] + options_list, format_func=lambda x: unique_players[x]["label"] if x else "Vælg spiller...", key="player_selector")
-        if sel_id: data = unique_players[sel_id]["data"]
+        data = unique_players[sel_id]["data"] if sel_id else {"n": "", "id": "", "pos": "", "klub": ""}
 
     existing_report = None
     if sel_id and not df_local.empty:
-        df_local['MATCH_ID'] = df_local['PLAYER_WYID'].apply(rens_id)
-        matches = df_local[df_local['MATCH_ID'] == str(sel_id)]
-        if not matches.empty: existing_report = matches.sort_values('DATO', ascending=False).iloc[0]
+        matches = df_local[df_local['PLAYER_WYID'].apply(rens_id) == str(sel_id)]
+        if not matches.empty:
+            existing_report = matches.sort_values('DATO', ascending=False).iloc[0]
 
     with row1_c2:
         st.text_input("Seneste rapport", value=existing_report['DATO'] if existing_report is not None else "-", disabled=True)
+    
     with row1_c3:
         st.markdown("<p style='margin-bottom: 28px;'></p>", unsafe_allow_html=True)
         if existing_report is not None:
-            if st.button("Åbn rapport", use_container_width=True): 
+            if st.button("Åbn rapport", use_container_width=True):
                 vis_spiller_modal(data["n"], df_local, billed_map, career_df)
-        else: st.button("Ingen data", disabled=True, use_container_width=True)
+        else:
+            st.button("Ingen data", disabled=True, use_container_width=True)
 
-    # LINJE 2: Info-felter
-    row2_c1, row2_c2, row2_c3, row2_c4 = st.columns([1, 2, 1.5, 1.5])
-    row2_c1.text_input("POS", value=data['pos'], disabled=True)
-    row2_c2.text_input("KLUB", value=data['klub'], disabled=True)
-    row2_c3.text_input("FØDSELSDAG", value=data['birth'], disabled=True)
-    scout_navn = row2_c4.text_input("SCOUT", value=st.session_state.get("user", "HIF Scout"), disabled=True)
-
-    # --- FORM TIL RAPPORT ---
+    # --- FORM ---
     with st.form("rapport_form", clear_on_submit=True):
-        with st.container(border=True):
-            st.markdown("**Stamdata & Status**")
-            l2_c1, l2_c2, l2_c3 = st.columns(3)
-            status_label = l2_c1.selectbox("Status", ["Interessant", "Hold øje", "Kig nærmere", "Køb", "Prioritet"])
-            pos_nr = l2_c2.selectbox("POS (1-11)", options=[str(i) for i in range(1, 12)])
-            pos_prio = l2_c3.selectbox("Prioritet", options=["A - Start-11", "B - Trupspiller", "C - Udviklingsspiller"])
+        st.markdown("### Ny Scout Rapport")
+        c1, c2, c3 = st.columns(3)
+        status = c1.selectbox("Status", ["Interessant", "Hold øje", "Køb", "Prioritet"])
+        pot = c2.selectbox("Potentiale", ["Lavt", "Middel", "Højt", "Top"])
+        prio = c3.selectbox("Prioritet", ["A - Start-11", "B - Trup", "C - Udvikling"])
 
-            l3_c1, l3_c2, l3_c3 = st.columns(3)
-            pot = l3_c1.selectbox("Potentiale", ["Lavt", "Middel", "Højt", "Top"])
-            forv = l3_c2.selectbox("Forventning", ["Realistisk", "Kræver overtalelse", "Forhandling", "Svær"])
-            k_udloeb = l3_c3.date_input("Kontraktudløb", value=None)
+        st.markdown("#### Egenskaber (1-6)")
+        m1, m2, m3, m4 = st.columns(4)
+        beslut = m1.select_slider("Beslutsomhed", options=range(1, 7), value=3)
+        fart = m2.select_slider("Fart", options=range(1, 7), value=3)
+        tek = m3.select_slider("Teknik", options=range(1, 7), value=3)
+        intel = m4.select_slider("Intelligens", options=range(1, 7), value=3)
 
-            l4_c1, l4_c2, l4_c3 = st.columns(3)
-            lon = l4_c1.number_input("Lønniveau", min_value=0, step=1000, value=0)
-            vindue = l4_c2.selectbox("Transfervindue", ["Sommer 26", "Vinter 26/27", "Sommer 27", "Nuværende trup"])
-            er_emne = l4_c3.checkbox("Transferemne?", value=False)
-
-        with st.container(border=True):
-            st.markdown("**Vurdering & Egenskaber**")
-            m1, m2, m3, m4 = st.columns(4)
-            beslut = m1.select_slider("Beslutsomhed", options=list(range(1, 7)), value=3)
-            fart = m2.select_slider("Fart", options=list(range(1, 7)), value=3)
-            agg = m3.select_slider("Aggresivitet", options=list(range(1, 7)), value=3)
-            att = m4.select_slider("Attitude", options=list(range(1, 7)), value=3)
-            m5, m6, m7, m8 = st.columns(4)
-            udh = m5.select_slider("Udholdenhed", options=list(range(1, 7)), value=3)
-            led = m6.select_slider("Lederegenskaber", options=list(range(1, 7)), value=3)
-            tek = m7.select_slider("Teknik", options=list(range(1, 7)), value=3)
-            intel = m8.select_slider("Intelligens", options=list(range(1, 7)), value=3)
-
-            st.markdown("---")
-            v1, v2, v3 = st.columns(3)
-            styrker, udv, vurder = v1.text_area("Styrker"), v2.text_area("Udvikling"), v3.text_area("Vurdering")
-            kommentar = st.text_area("Kommentar (uddybende)", height=100)
+        styrker = st.text_area("Styrker")
+        vurdering = st.text_area("Vurdering")
 
         if st.form_submit_button("Gem Rapport", use_container_width=True):
-            if not data["n"]: st.error("Vælg en spiller!")
+            if not sel_id:
+                st.error("Vælg en spiller først!")
             else:
-                avg = round(sum([beslut, fart, agg, att, udh, led, tek, intel])/8, 2)
-                ny = {
-                    "PLAYER_WYID": data["id"], 
-                    "DATO": datetime.now().strftime("%Y-%m-%d"), 
-                    "NAVN": data["n"], 
-                    "KLUB": data["klub"], 
-                    "POSITION": data["pos"], 
-                    "BIRTHDATE": data["birth"], 
-                    "RATING_AVG": avg, 
-                    "STATUS": status_label, 
-                    "POTENTIALE": pot, 
-                    "STYRKER": styrker, 
-                    "UDVIKLING": udv, 
-                    "VURDERING": vurder, 
-                    "BESLUTSOMHED": float(beslut), 
-                    "FART": float(fart), 
-                    "AGGRESIVITET": float(agg), 
-                    "ATTITUDE": float(att), 
-                    "UDHOLDENHED": float(udh), 
-                    "LEDEREGENSKABER": float(led), 
-                    "TEKNIK": float(tek), 
-                    "SPILINTELLIGENS": float(intel), 
-                    "SCOUT": scout_navn, 
-                    "KONTRAKT": str(k_udloeb) if k_udloeb else "", 
-                    "FORVENTNING": forv, 
-                    "POS_PRIORITET": pos_prio, 
-                    "POS": pos_nr, 
-                    "LON": f"{lon:,}".replace(",", "."), 
-                    "SKYGGEHOLD": False, 
-                    "KOMMENTAR": kommentar, 
-                    "ER_EMNE": er_emne, 
-                    "TRANSFER_VINDUE": vindue, 
-                    "POS_343": 0.0, "POS_433": 0.0, "POS_352": 0.0
+                avg = round((beslut + fart + tek + intel) / 4, 2)
+                ny_rapport = {
+                    "PLAYER_WYID": data["id"],
+                    "DATO": datetime.now().strftime("%Y-%m-%d"),
+                    "NAVN": data["n"],
+                    "KLUB": data["klub"],
+                    "POSITION": data["pos"],
+                    "RATING_AVG": avg,
+                    "STATUS": status,
+                    "POTENTIALE": pot,
+                    "POS_PRIORITET": prio,
+                    "STYRKER": styrker,
+                    "VURDERING": vurdering,
+                    "BESLUTSOMHED": float(beslut),
+                    "FART": float(fart),
+                    "TEKNIK": float(tek),
+                    "SPILINTELLIGENS": float(intel)
                 }
-                c, sha = get_github_file(FILE_PATH)
-                df_f = pd.concat([pd.read_csv(StringIO(c), low_memory=False) if c else pd.DataFrame(), pd.DataFrame([ny])], ignore_index=True)
-                if push_to_github(FILE_PATH, f"Rapport: {data['n']}", df_f[COL_ORDER].to_csv(index=False), sha) in [200, 201]:
+                # Hent nyeste fil for at undgå overwrite-fejl
+                content, sha = get_github_file(FILE_PATH)
+                df_current = pd.read_csv(StringIO(content)) if content else pd.DataFrame()
+                df_updated = pd.concat([df_current, pd.DataFrame([ny_rapport])], ignore_index=True)
+                
+                res = push_to_github(FILE_PATH, f"Rapport: {data['n']}", df_updated.to_csv(index=False), sha)
+                if res in [200, 201]:
                     st.success("Gemt!"); time.sleep(1); st.rerun()
