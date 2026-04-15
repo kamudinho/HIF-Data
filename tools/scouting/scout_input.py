@@ -54,6 +54,7 @@ def rens_id(val):
 @st.dialog("Seneste Scout Rapport", width="large")
 def vis_spiller_modal(valgt_navn, alle_rapporter, billed_map, career_df=None):
     spiller_historik = alle_rapporter[alle_rapporter['NAVN'] == valgt_navn].sort_values('DATO', ascending=True)
+    
     if spiller_historik.empty:
         st.error(f"Ingen data fundet for {valgt_navn}")
         return
@@ -61,13 +62,17 @@ def vis_spiller_modal(valgt_navn, alle_rapporter, billed_map, career_df=None):
     nyeste = spiller_historik.iloc[-1]
     pid = rens_id(nyeste.get('PLAYER_WYID'))
     
-    # Her henter vi URL fra mappet baseret på PLAYER_WYID
-    img_url = billed_map.get(pid) or f"https://cdn5.wyscout.com/photos/players/public/{pid}.png"
+    # HER HENTES BILLEDET: Vi kigger i vores billed_map efter PLAYER_WYID
     fallback_url = "https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_1280.png"
+    img_url = billed_map.get(pid) or f"https://cdn5.wyscout.com/photos/players/public/{pid}.png"
     
     c1, c2 = st.columns([1, 3])
     with c1:
-        st.image(img_url if img_url else fallback_url, width=150)
+        try:
+            st.image(img_url, width=120)
+        except:
+            st.image(fallback_url, width=120)
+            
     with c2:
         st.subheader(valgt_navn)
         st.write(f"Klub: {nyeste.get('KLUB', '-')} | Pos: {nyeste.get('POSITION', '-')} | ID: {pid}")
@@ -85,25 +90,38 @@ def vis_spiller_modal(valgt_navn, alle_rapporter, billed_map, career_df=None):
         with col_radar:
             r_vals = []
             for k in keys:
-                try: v = float(str(nyeste.get(k, 1)).replace(',', '.')); r_vals.append(v)
+                try:
+                    v = float(str(nyeste.get(k, 1)).replace(',', '.'))
+                    r_vals.append(v)
                 except: r_vals.append(1.0)
             
-            fig = go.Figure(data=go.Scatterpolar(r=r_vals + [r_vals[0]], theta=[k.capitalize() for k in keys] + [keys[0].capitalize()], fill='toself', line_color='#df003b'))
-            fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[1, 6])), showlegend=False, height=300)
+            fig = go.Figure(data=go.Scatterpolar(
+                r=r_vals + [r_vals[0]], 
+                theta=[k.capitalize() for k in keys] + [keys[0].capitalize()], 
+                fill='toself', 
+                line_color='#df003b'
+            ))
+            fig.update_layout(
+                polar=dict(radialaxis=dict(visible=True, range=[1, 6])), 
+                showlegend=False, height=400, margin=dict(l=50, r=50, t=20, b=20)
+            )
             st.plotly_chart(fig, use_container_width=True)
             
         with col_text:
             st.write("**Styrker**"); st.info(nyeste.get('STYRKER', '-'))
+            st.write("**Udvikling**"); st.success(nyeste.get('UDVIKLING', '-'))
             st.write("**Vurdering**"); st.success(nyeste.get('VURDERING', '-'))
 
     with t2:
         st.dataframe(spiller_historik.sort_values('DATO', ascending=False), use_container_width=True, hide_index=True)
 
     with t3:
+        st.markdown("### Rating over tid")
         fig_evol = go.Figure(go.Scatter(x=spiller_historik['DATO'], y=spiller_historik['RATING_AVG'], mode='lines+markers', line_color='#df003b'))
         st.plotly_chart(fig_evol, use_container_width=True)
 
     with t4:
+        st.markdown("### Karriereoversigt")
         if career_df is not None:
             stats = career_df[career_df['PLAYER_WYID'].apply(rens_id) == pid].copy()
             if not stats.empty:
@@ -111,76 +129,61 @@ def vis_spiller_modal(valgt_navn, alle_rapporter, billed_map, career_df=None):
 
 # --- HOVEDSIDE ---
 def vis_side(dp):    
-    if "editor_key" not in st.session_state: st.session_state.editor_key = 0
-    
-    df_local_raw = dp.get("scout_reports", pd.DataFrame()).copy()
+    # 1. Hent data
+    df_local = dp.get("scout_reports", pd.DataFrame()).copy()
     df_wyscout = dp.get("wyscout_players", pd.DataFrame()).copy()
     career_df = dp.get("career_data", None)
-
-    # --- 1. BYG BILLEDE-MAP (VIGTIGT!) ---
-    # Her sikrer vi at vi bruger PLAYER_WYID som nøgle og IMAGEDATAURL som værdi
+    
+    # 2. BYG BILLEDE-MAP FRA WYSCOUT TABELLEN (PLAYER_WYID -> IMAGEDATAURL)
     billed_map = {}
     if not df_wyscout.empty and 'IMAGEDATAURL' in df_wyscout.columns:
         billed_map = dict(zip(df_wyscout['PLAYER_WYID'].apply(rens_id), df_wyscout['IMAGEDATAURL']))
 
-    # --- 2. EDITOR SEKTION (Skyggehold / Emner) ---
-    st.markdown("### Database Overblik")
-    if not df_local_raw.empty:
-        df_unique = df_local_raw.sort_values('DATO', ascending=False).drop_duplicates(subset=['PLAYER_WYID']).copy()
-        display_cols = ['NAVN', 'KLUB', 'RATING_AVG', 'KONTRAKT', 'ER_EMNE', 'SKYGGEHOLD']
-        df_display = df_unique[display_cols].copy()
-        df_display.insert(0, "SE", False)
-        
-        ed_result = st.data_editor(df_display, hide_index=True, use_container_width=True, key=f"ed_{st.session_state.editor_key}")
-        
-        # Hvis der trykkes på "SE" i editoren
-        valgte_navn = ed_result[ed_result["SE"] == True]
-        if not valgte_navn.empty:
-            vis_spiller_modal(valgte_navn.iloc[-1]['NAVN'], df_local_raw, billed_map, career_df)
-
-    st.divider()
-
-    # --- 3. INPUT FORM (Din oprindelige logik) ---
+    # 3. UNIK LISTE TIL DROPDOWN (Din logik)
     unique_players = {}
+    def get_safe_val(row, col_name, default=""):
+        val = row.get(col_name, default)
+        return str(val) if pd.notna(val) else default
+
     def add_to_options(df):
         if df is None or df.empty: return
         for _, r in df.iterrows():
             p_id = rens_id(r.get('PLAYER_WYID'))
             if not p_id: continue
-            navn = r.get('NAVN') or r.get('PLAYER_NAME') or f"{r.get('FIRSTNAME','')} {r.get('LASTNAME','')}".strip()
-            klub = r.get('KLUB') or r.get('TEAMNAME') or "Ukendt"
+            f_name, l_name = get_safe_val(r, 'FIRSTNAME'), get_safe_val(r, 'LASTNAME')
+            fuldt_navn = f"{f_name} {l_name}".strip() if f_name or l_name else (get_safe_val(r, 'PLAYER_NAME') or get_safe_val(r, 'NAVN') or "Ukendt")
+            klub = get_safe_val(r, 'TEAMNAME') or get_safe_val(r, 'KLUB') or "Ukendt klub"
             if p_id not in unique_players:
-                unique_players[p_id] = {"label": f"{navn} ({klub})", "data": {"n": navn, "id": p_id, "klub": klub, "pos": r.get('POSITION')}}
+                unique_players[p_id] = {"label": f"{fuldt_navn} ({klub})", "data": {"n": fuldt_navn, "id": p_id, "pos": get_safe_val(r, 'POSITION'), "klub": klub}}
 
-    add_to_options(df_local_raw)
+    add_to_options(df_local)
     add_to_options(df_wyscout)
     options_list = sorted(list(unique_players.keys()), key=lambda x: unique_players[x]["label"])
 
+    # UI: DROPDOWN OG KNAP
     row1_c1, row1_c2, row1_c3 = st.columns([3, 1.5, 1])
     with row1_c1:
-        sel_id = st.selectbox("Vælg spiller for ny rapport", [""] + options_list, format_func=lambda x: unique_players[x]["label"] if x else "Vælg spiller...")
-    
-    if sel_id:
-        data = unique_players[sel_id]["data"]
-        # Find seneste rapport for valgte spiller i dropdown
-        existing = df_local_raw[df_local_raw['PLAYER_WYID'].apply(rens_id) == sel_id].sort_values('DATO', ascending=False)
-        with row1_c2: st.text_input("Seneste dato", value=existing.iloc[0]['DATO'] if not existing.empty else "-", disabled=True)
-        with row1_c3: 
-            st.markdown("<br>", unsafe_allow_html=True)
-            if not existing.empty:
-                if st.button("Se Profil", use_container_width=True):
-                    vis_spiller_modal(data["n"], df_local_raw, billed_map, career_df)
+        sel_id = st.selectbox("Vælg spiller", [""] + options_list, format_func=lambda x: unique_players[x]["label"] if x else "Vælg spiller...")
+        data = unique_players[sel_id]["data"] if sel_id else {"n": "", "id": "", "pos": "", "klub": ""}
 
-        with st.form("rapport_form", clear_on_submit=True):
-            st.markdown("#### Ny Vurdering")
-            l2_c1, l2_c2 = st.columns(2)
-            status = l2_c1.selectbox("Status", ["Interessant", "Hold øje", "Køb", "Prioritet"])
-            er_emne = l2_c2.checkbox("Transferemne?")
-            
-            m1, m2, m3, m4 = st.columns(4)
-            beslut = m1.select_slider("Fart", options=range(1,7), value=3)
-            # ... (tilføj de andre slidere her)
+    existing_report = None
+    if sel_id and not df_local.empty:
+        matches = df_local[df_local['PLAYER_WYID'].apply(rens_id) == str(sel_id)]
+        if not matches.empty: existing_report = matches.sort_values('DATO', ascending=False).iloc[0]
 
-            if st.form_submit_button("Gem Rapport", use_container_width=True):
-                # Din gemme-logik her med COL_ORDER
-                st.success("Rapport gemt!")
+    with row1_c2:
+        st.text_input("Seneste rapport", value=existing_report['DATO'] if existing_report is not None else "-", disabled=True)
+    with row1_c3:
+        st.markdown("<p style='margin-bottom: 28px;'></p>", unsafe_allow_html=True)
+        if existing_report is not None:
+            if st.button("Åbn rapport", use_container_width=True): 
+                vis_spiller_modal(data["n"], df_local, billed_map, career_df)
+        else: st.button("Ingen data", disabled=True, use_container_width=True)
+
+    # --- RESTEN AF DIN OPRINDELIGE FORM (Skaf plads til sliders osv.) ---
+    with st.form("rapport_form", clear_on_submit=True):
+        # ... Din store form med alle sliders og COL_ORDER logik her ...
+        # (Jeg har udeladt selve form-indholdet for overskuelighed, men du indsætter bare din form-kode her)
+        st.write("Indsæt din eksisterende form her")
+        if st.form_submit_button("Gem Rapport"):
+            pass
