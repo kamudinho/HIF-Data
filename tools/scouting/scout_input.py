@@ -1,10 +1,9 @@
 import streamlit as st
 import pandas as pd
-import plotly.graph_objects as go
 import requests
 import base64
-from io import StringIO
 from datetime import datetime
+from io import StringIO
 import time
 
 # --- KONFIGURATION ---
@@ -12,226 +11,240 @@ REPO = "Kamudinho/HIF-data"
 FILE_PATH = "data/scouting_db.csv"
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 
-# --- GITHUB FUNKTIONER ---
+COL_ORDER = [
+    "PLAYER_WYID", "DATO", "NAVN", "KLUB", "POSITION", "BIRTHDATE", "RATING_AVG", "STATUS",
+    "POTENTIALE", "STYRKER", "UDVIKLING", "VURDERING", "BESLUTSOMHED", "FART",
+    "AGGRESIVITET", "ATTITUDE", "UDHOLDENHED", "LEDEREGENSKABER", "TEKNIK",
+    "SPILINTELLIGENS", "SCOUT", "KONTRAKT", "FORVENTNING",
+    "POS_PRIORITET", "POS", "LON", "SKYGGEHOLD", "KOMMENTAR", 
+    "ER_EMNE", "TRANSFER_VINDUE", "POS_343", "POS_433", "POS_352"
+]
+
+# --- HJÆLPEFUNKTIONER ---
 def get_github_file(path):
-    try:
-        # Tilføj tidsstempel for at undgå GitHub cache-problemer
-        url = f"https://api.github.com/repos/{REPO}/contents/{path}?t={int(time.time())}"
-        headers = {"Authorization": f"token {GITHUB_TOKEN}"}
-        r = requests.get(url, headers=headers)
-        if r.status_code == 200:
-            data = r.json()
-            content = base64.b64decode(data['content']).decode('utf-8', errors='replace')
-            return content, data['sha']
-    except Exception as e:
-        st.error(f"Fejl ved hentning fra GitHub: {e}")
-    return None, None
+    try:
+        url = f"https://api.github.com/repos/{REPO}/contents/{path}?t={int(time.time())}"
+        headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+        r = requests.get(url, headers=headers)
+        if r.status_code == 200:
+            data = r.json()
+            content = base64.b64decode(data['content']).decode('utf-8', errors='replace')
+            return content, data['sha']
+    except Exception as e:
+        st.error(f"GitHub Hent Fejl: {e}")
+    return None, None
 
 def push_to_github(path, message, content, sha=None):
-    url = f"https://api.github.com/repos/{REPO}/contents/{path}"
-    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
-    payload = {
-        "message": message,
-        "content": base64.b64encode(content.encode('utf-8')).decode('utf-8')
-    }
-    if sha:
-        payload["sha"] = sha
-    r = requests.put(url, headers=headers, json=payload)
-    return r.status_code
+    url = f"https://api.github.com/repos/{REPO}/contents/{path}"
+    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+    payload = {
+        "message": message,
+        "content": base64.b64encode(content.encode('utf-8')).decode('utf-8')
+    }
+    if sha: payload["sha"] = sha
+    r = requests.put(url, headers=headers, json=payload)
+    return r.status_code
 
-def rens_id(val):
-    if pd.isna(val) or str(val).strip() == "": return ""
-    # Fjerner .0 hvis ID'et er indlæst som float
-    return str(val).split('.')[0].strip()
-
-# --- MODAL: SPILLERPROFIL ---
-@st.dialog("Spillerprofil", width="large")
-def vis_spiller_modal(valgt_navn, billed_map, career_df, alle_rapporter):
-    df_modal = alle_rapporter.copy()
-    
-    # Standardisering af navne for filtrering
-    spiller_historik = df_modal[df_modal['NAVN'] == valgt_navn].sort_values('DATO', ascending=True)
-    
-    if spiller_historik.empty:
-        st.error(f"Ingen data fundet for {valgt_navn}")
-        return
-        
-    nyeste = spiller_historik.iloc[-1]
-    pid = rens_id(nyeste.get('PLAYER_WYID'))
-    img_url = billed_map.get(pid) or f"https://cdn5.wyscout.com/photos/players/public/{pid}.png"
-    
-    # Header
-    c1, c2 = st.columns([1, 3])
-    with c1:
-        st.image(img_url, width=150)
-    with c2:
-        st.subheader(valgt_navn)
-        st.write(f"Klub: {nyeste.get('KLUB', '-')} | Pos: {nyeste.get('POSITION', '-')} | ID: {pid}")
-
-    t1, t2, t3, t4 = st.tabs(["Seneste Rapport", "Historik", "Udvikling", "Sæsonstats"])
-    
-    keys = ['BESLUTSOMHED', 'FART', 'AGGRESIVITET', 'ATTITUDE', 'UDHOLDENHED', 'LEDEREGENSKABER', 'TEKNIK', 'SPILINTELLIGENS']
-
-    with t1:
-        col_stats, col_radar, col_text = st.columns([0.8, 1.5, 1.5])
-        with col_stats:
-            st.markdown("**Vurderinger**")
-            for k in keys:
-                val = nyeste.get(k, "-")
-                st.write(f"{k.capitalize()}: {val}")
-        
-        with col_radar:
-            r_vals = []
-            for k in keys:
-                try:
-                    v = float(str(nyeste.get(k, 1)).replace(',', '.'))
-                    r_vals.append(v)
-                except: r_vals.append(1.0)
-            
-            fig = go.Figure(data=go.Scatterpolar(
-                r=r_vals + [r_vals[0]], 
-                theta=[k.capitalize() for k in keys] + [keys[0].capitalize()], 
-                fill='toself', 
-                line_color='#df003b'
-            ))
-            fig.update_layout(
-                polar=dict(radialaxis=dict(visible=True, range=[1, 6])), 
-                showlegend=False, height=300, margin=dict(l=40,r=40,t=30,b=30)
-            )
-            st.plotly_chart(fig, use_container_width=True)
-            
-        with col_text:
-            st.write("**Styrker**")
-            st.info(nyeste.get('STYRKER', '-'))
-            st.write("**Udvikling**")
-            st.success(nyeste.get('UDVIKLING', '-'))
-            st.write("**Vurdering**")
-            st.success(nyeste.get('VURDERING', '-'))
-
-    with t2:
-        st.dataframe(spiller_historik.sort_values('DATO', ascending=False), use_container_width=True, hide_index=True)
-
-    with t3:
-        st.markdown("### Rating over tid")
-        fig_evol = go.Figure(go.Scatter(
-            x=spiller_historik['DATO'], 
-            y=spiller_historik['RATING_AVG'], 
-            mode='lines+markers', 
-            line_color='#df003b'
-        ))
-        fig_evol.update_layout(yaxis=dict(range=[1, 6]))
-        st.plotly_chart(fig_evol, use_container_width=True)
-
-    with t4:
-        st.markdown("### Karriereoversigt")
-        if career_df is not None:
-            # 1. Filtrér på spillerens ID
-            stats = career_df[career_df['PLAYER_WYID'].apply(rens_id) == pid].copy()
-            
-            if not stats.empty:
-                # 2. FJERN DUPLIKATER: Vi viser kun én række per sæson, klub og turnering
-                # Vi sorterer først (f.eks. efter flest minutter), så vi beholder den mest relevante række
-                if 'MINUTES' in stats.columns:
-                    stats = stats.sort_values('MINUTES', ascending=False)
-                
-                stats_clean = stats.drop_duplicates(subset=['SEASONNAME', 'TEAMNAME', 'COMPETITIONNAME'])
-                
-                # Sorter kronologisk efter sæson (nyeste øverst)
-                stats_clean = stats_clean.sort_values('SEASONNAME', ascending=False)
-                
-                # 3. Vis den rensede dataframe
-                st.dataframe(stats_clean, use_container_width=True, hide_index=True)
-            else:
-                st.warning("Ingen karrieredata fundet i Wyscout-filen.")
+# --- POPUP DIALOG ---
+@st.dialog("Seneste Scout Rapport")
+def show_report_popup(report):
+    st.markdown(f"### {report['NAVN']}")
+    st.caption(f"Dato: {report['DATO']} | Scout: {report['SCOUT']}")
+    
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Rating", report.get('RATING_AVG', '-'))
+    c2.metric("Status", report.get('STATUS', '-'))
+    c3.metric("Potentiale", report.get('POTENTIALE', '-'))
+    
+    st.markdown("---")
+    col_a, col_b = st.columns(2)
+    with col_a:
+        st.markdown("**Styrker:**")
+        st.write(report.get('STYRKER', 'Ingen data'))
+    with col_b:
+        st.markdown("**Udvikling:**")
+        st.write(report.get('UDVIKLING', 'Ingen data'))
+        
+    st.markdown("**Samlet Vurdering:**")
+    st.info(report.get('VURDERING', 'Ingen tekst indtastet'))
+    
+    kommentar = report.get('KOMMENTAR')
+    if pd.notna(kommentar) and str(kommentar).strip() != "":
+        st.markdown("**Uddybende Kommentar:**")
+        st.write(kommentar)
 
 # --- HOVEDSIDE ---
-def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
-    if "active_player" not in st.session_state:
-        st.session_state.active_player = None
-    if "editor_key" not in st.session_state:
-        st.session_state.editor_key = 0
+def vis_side(dp):    
+    # --- 1. DATA FORBEREDELSE ---
+    df_local = dp.get("scout_reports", pd.DataFrame()).copy()
+    df_wyscout = dp.get("wyscout_players", pd.DataFrame()).copy()
+    
+    unique_players = {}
 
-    content, sha = get_github_file(FILE_PATH)
-    if not content:
-        st.error("Kunne ikke hente database fra GitHub.")
-        return
-    
-    df_raw = pd.read_csv(StringIO(content), low_memory=False)
-    
-    # 1. Standardisering: Gør alle kolonnenavne STORE
-    df_raw.columns = [c.upper().strip() for c in df_raw.columns]
-    
-    # 2. Sikr at de kritiske kolonner findes
-    for col in ['ER_EMNE', 'SKYGGEHOLD', 'KONTRAKT', 'PLAYER_WYID', 'NAVN', 'DATO', 'RATING_AVG']:
-        if col not in df_raw.columns:
-            df_raw[col] = False if col in ['ER_EMNE', 'SKYGGEHOLD'] else ""
+    def get_safe_val(row, col_name, default=""):
+        val = row.get(col_name, default)
+        if isinstance(val, pd.Series):
+            val = val.iloc[0] if not val.empty else default
+        return str(val) if pd.notna(val) else default
 
-    # 3. Rens data-typer
-    for col in ['ER_EMNE', 'SKYGGEHOLD']:
-        df_raw[col] = df_raw[col].astype(str).str.lower().map(
-            {'true': True, 'false': False, '1': True, '0': False, 'nan': False}
-        ).fillna(False)
+    def add_to_options(df):
+        if df is None or (isinstance(df, pd.DataFrame) and df.empty): return
+        df_temp = df.copy()
+        df_temp.columns = [str(c).upper().strip() for c in df_temp.columns]
+        for _, r in df_temp.iterrows():
+            p_id_raw = get_safe_val(r, 'PLAYER_WYID')
+            if not p_id_raw or p_id_raw.lower() in ['nan', 'none', '']: continue
+            p_id = p_id_raw.split('.')[0].strip()
+            
+            f_name = get_safe_val(r, 'FIRSTNAME').replace('None', '').strip()
+            l_name = get_safe_val(r, 'LASTNAME').replace('None', '').strip()
+            fuldt_navn = f"{f_name} {l_name}" if f_name and l_name else (get_safe_val(r, 'PLAYER_NAME') or get_safe_val(r, 'NAVN') or "Ukendt")
+            klub = get_safe_val(r, 'TEAMNAME') or get_safe_val(r, 'KLUB') or "Ukendt klub"
+            pos_code = get_safe_val(r, 'ROLECODE3') or get_safe_val(r, 'POSITION') or ""
+            
+            b_date = r.get('BIRTHDATE') or r.get('BIRTH_DATE') or r.get('BIRTH_DAY') or r.get('DOB') or ""
+            birth_val = ""
+            if pd.notna(b_date) and str(b_date).strip() != "":
+                try: birth_val = pd.to_datetime(b_date).strftime("%Y-%m-%d")
+                except: birth_val = str(b_date)
+            
+            label = f"{fuldt_navn} ({klub})"
+            if p_id not in unique_players:
+                unique_players[p_id] = {
+                    "label": label, 
+                    "data": {"n": fuldt_navn, "id": p_id, "pos": pos_code, "klub": klub, "birth": birth_val}
+                }
 
-    # 4. UNIK LISTE (Vigtigt: Vi bruger PLAYER_WYID for at undgå at slette spillere med samme navn)
-    df_raw = df_raw.sort_values('DATO', ascending=False)
-    
-    # Vi dropper dubletter, men gemmer de nyeste rapporter
-    df_unique = df_raw.drop_duplicates(subset=['PLAYER_WYID']).copy()
-    
-    # Sorter efter kontraktudløb
-    df_unique = df_unique.sort_values('KONTRAKT', ascending=True, na_position='last')
+    add_to_options(df_local)
+    add_to_options(df_wyscout)
+    options_list = sorted(list(unique_players.keys()), key=lambda x: unique_players[x]["label"])
 
-    # --- FORBERED VISNING I EDITOR ---
-    # Vi vælger de kolonner vi vil vise (brug de STORE navne her)
-    display_cols = ['NAVN', 'KLUB', 'RATING_AVG', 'KONTRAKT', 'ER_EMNE', 'SKYGGEHOLD']
-    df_display = df_unique[display_cols].copy()
-    df_display.insert(0, "SE", False)
-        
-    ed_result = st.data_editor(
-        df_display,
-        column_config={
-            "SE": st.column_config.CheckboxColumn("Profil", width="small"), 
-            "ER_EMNE": st.column_config.CheckboxColumn("Emne", width="small"),
-            "SKYGGEHOLD": st.column_config.CheckboxColumn("Skygge", width="small"),
-            "RATING_AVG": st.column_config.NumberColumn("Rating", format="%.1f"),
-            "KONTRAKT": st.column_config.TextColumn("Kontrakt", width="medium"),
-            "NAVN": st.column_config.TextColumn("Navn", width="large"),
-            "KLUB": st.column_config.TextColumn("Klub", width="medium")
-        },
-        disabled=['NAVN', 'KLUB', 'RATING_AVG', 'KONTRAKT'],
-        hide_index=True, 
-        use_container_width=True, 
-        height=700,
-        key=f"scout_editor_{st.session_state.editor_key}"
-    )
+    # --- 2. UI LAYOUT ---
+    data = {"n": "", "id": "", "pos": "", "klub": "", "birth": ""}
+    
+    # LINJE 1: Navnevalg, Dato-visning og Popup-knap
+    row1_c1, row1_c2, row1_c3 = st.columns([3, 1.5, 1])
+    
+    with row1_c1:
+        sel_id = st.selectbox("Vælg spiller", [""] + options_list, 
+                            format_func=lambda x: unique_players[x]["label"] if x else "Vælg spiller...",
+                            key="player_selector")
+        if sel_id: 
+            data = unique_players[sel_id]["data"]
 
-    # --- GEM ÆNDRINGER ---
-    # Hvis brugeren har klikket på Emne eller Skygge
-    if not ed_result[['ER_EMNE', 'SKYGGEHOLD']].equals(df_display[['ER_EMNE', 'SKYGGEHOLD']]):
-        with st.spinner("Gemmer ændringer..."):
-            # Opdater hoved-dataframe baseret på ændringer i editoren
-            for i, row in ed_result.iterrows():
-                p_name = row['NAVN']
-                df_raw.loc[df_raw['NAVN'] == p_name, ['ER_EMNE', 'SKYGGEHOLD']] = [row['ER_EMNE'], row['SKYGGEHOLD']]
-            
-            # Gem tilbage til GitHub
-            status_code = push_to_github(FILE_PATH, "Update Emne/Skygge status", df_raw.to_csv(index=False), sha)
-            if status_code in [200, 201]:
-                st.success("Status opdateret!")
-                time.sleep(0.5)
-                st.rerun()
+    # Tjek for eksisterende rapport
+    existing_report = None
+    if sel_id and not df_local.empty:
+        df_local['MATCH_ID'] = df_local['PLAYER_WYID'].astype(str).str.split('.').str[0]
+        matches = df_local[df_local['MATCH_ID'] == str(sel_id)]
+        if not matches.empty:
+            if 'DATO' in matches.columns:
+                matches = matches.sort_values('DATO', ascending=False)
+            existing_report = matches.iloc[0]
 
-    # --- MODAL HÅNDTERING ---
-    valgte = ed_result[ed_result["SE"] == True]
-    if not valgte.empty:
-        st.session_state.active_player = valgte.iloc[-1]['NAVN']
-        st.session_state.editor_key += 1 # Reset editor så "SE" tjekboksen nulstilles
-        st.rerun()
+    with row1_c2:
+        report_date = existing_report['DATO'] if existing_report is not None else "-"
+        st.text_input("Seneste rapport", value=report_date, disabled=True)
 
-    if st.session_state.active_player:
-        billed_map = {}
-        if sql_players is not None:
-            billed_map = dict(zip(sql_players['PLAYER_WYID'].apply(rens_id), sql_players['IMAGEDATAURL']))
-        
-        vis_spiller_modal(st.session_state.active_player, billed_map, career_df, df_raw)
-        st.session_state.active_player = None
+    with row1_c3:
+        st.markdown("<p style='margin-bottom: 28px;'></p>", unsafe_allow_html=True)
+        if existing_report is not None:
+            if st.button("Åbn rapport", use_container_width=True, key="view_report"):
+                show_report_popup(existing_report)
+        else:
+            st.button("Ingen data", disabled=True, use_container_width=True)
+
+    # LINJE 2: POS, KLUB, FØDSELSDAG, SCOUT
+    row2_c1, row2_c2, row2_c3, row2_c4 = st.columns([1, 2, 1.5, 1.5])
+    row2_c1.text_input("POS", value=data['pos'], disabled=True)
+    row2_c2.text_input("KLUB", value=data['klub'], disabled=True)
+    row2_c3.text_input("FØDSELSDAG", value=data['birth'], disabled=True)
+    scout_navn = row2_c4.text_input("SCOUT", value=st.session_state.get("user", "HIF Scout"), disabled=True)
+
+    # --- 3. FORM OMRÅDE ---
+    with st.form("rapport_form", clear_on_submit=True):
+        with st.container(border=True):
+            st.markdown("**Stamdata & Status**")
+            l2_c1, l2_c2, l2_c3 = st.columns(3)
+            status_label = l2_c1.selectbox("Status", ["Interessant", "Hold øje", "Kig nærmere", "Køb", "Prioritet"])
+            pos_nr = l2_c2.selectbox("POS (1-11)", options=[str(i) for i in range(1, 12)])
+            pos_prio = l2_c3.selectbox("Prioritet", options=["A - Start-11", "B - Trupspiller", "C - Udviklingsspiller"])
+
+            l3_c1, l3_c2, l3_c3 = st.columns(3)
+            pot = l3_c1.selectbox("Potentiale", ["Lavt", "Middel", "Højt", "Top"])
+            forventning = l3_c2.selectbox("Forventning", ["Realistisk", "Kræver overtalelse", "Forhandling", "Svær"])
+            kontrakt_udloeb = l3_c3.date_input("Kontraktudløb", value=None)
+
+            l4_c1, l4_c2, l4_c3 = st.columns(3)
+            lon_val = l4_c1.number_input("Lønniveau", min_value=0, step=1000, value=0)
+            lon_display = f"{lon_val:,}".replace(",", ".")
+            er_emne = l4_c3.checkbox("Transferemne?", value=False)
+            vindue = l4_c2.selectbox("Transfervindue", ["Sommer 26", "Vinter 26/27", "Sommer 27", "Nuværende trup"])
+
+        with st.container(border=True):
+            st.markdown("**Vurdering & Egenskaber**")
+            m1, m2, m3, m4 = st.columns(4)
+            beslut = m1.select_slider("Beslutsomhed", options=list(range(1, 7)), value=3)
+            fart = m2.select_slider("Fart", options=list(range(1, 7)), value=3)
+            agg = m3.select_slider("Aggresivitet", options=list(range(1, 7)), value=3)
+            att = m4.select_slider("Attitude", options=list(range(1, 7)), value=3)
+            
+            m5, m6, m7, m8 = st.columns(4)
+            udh = m5.select_slider("Udholdenhed", options=list(range(1, 7)), value=3)
+            led = m6.select_slider("Lederegenskaber", options=list(range(1, 7)), value=3)
+            tek = m7.select_slider("Teknik", options=list(range(1, 7)), value=3)
+            intel = m8.select_slider("Intelligens", options=list(range(1, 7)), value=3)
+
+            st.markdown("---")
+            v1, v2, v3 = st.columns(3)
+            styrker = v1.text_area("Styrker")
+            udv = v2.text_area("Udvikling")
+            vurder_kort = v3.text_area("Vurdering")
+            kommentar_full = st.text_area("Kommentar (uddybende)", height=100)
+
+        submitted = st.form_submit_button("Gem Rapport", use_container_width=True)
+        
+        if submitted:
+            if not data["n"]:
+                st.error("Vælg en spiller!")
+            else:
+                avg_rating = round(sum([beslut, fart, agg, att, udh, led, tek, intel])/8, 2)
+                
+                ny_rapport = {
+                    "PLAYER_WYID": data["id"], "DATO": datetime.now().strftime("%Y-%m-%d"),
+                    "NAVN": data["n"], "KLUB": data["klub"], "POSITION": data["pos"], "BIRTHDATE": data["birth"],
+                    "RATING_AVG": avg_rating, "STATUS": status_label, "POTENTIALE": pot, 
+                    "STYRKER": styrker, "UDVIKLING": udv, "VURDERING": vurder_kort, 
+                    "BESLUTSOMHED": float(beslut), "FART": float(fart), "AGGRESIVITET": float(agg), 
+                    "ATTITUDE": float(att), "UDHOLDENHED": float(udh), "LEDEREGENSKABER": float(led), 
+                    "TEKNIK": float(tek), "SPILINTELLIGENS": float(intel), "SCOUT": scout_navn, 
+                    "KONTRAKT": str(kontrakt_udloeb) if kontrakt_udloeb else "", "FORVENTNING": forventning, 
+                    "POS_PRIORITET": pos_prio, "POS": pos_nr, "LON": lon_display, 
+                    "SKYGGEHOLD": False, "KOMMENTAR": kommentar_full,
+                    "ER_EMNE": er_emne, "TRANSFER_VINDUE": vindue,
+                    "POS_343": 0.0, "POS_433": 0.0, "POS_352": 0.0
+                }
+
+                content, sha = get_github_file(FILE_PATH)
+                if content is not None and content.strip() != "":
+                    try:
+                        df_old = pd.read_csv(StringIO(content), low_memory=False)
+                        df_new = pd.DataFrame([ny_rapport])
+                        for col in COL_ORDER:
+                            if col not in df_new.columns: df_new[col] = None
+                        df_final = pd.concat([df_old, df_new], ignore_index=True)
+                    except Exception as e:
+                        df_final = pd.DataFrame([ny_rapport])
+                else:
+                    df_final = pd.DataFrame([ny_rapport])
+
+                existing_cols = [c for c in COL_ORDER if c in df_final.columns]
+                df_final = df_final[existing_cols]
+                status_code = push_to_github(FILE_PATH, f"Rapport: {data['n']}", df_final.to_csv(index=False), sha)
+                
+                if status_code in [200, 201]:
+                    st.success(f"Rapport for {data['n']} er gemt!")
+                    time.sleep(1)
+                    st.rerun()
+                else:
+                    st.error(f"GitHub fejl (Status: {status_code})")
