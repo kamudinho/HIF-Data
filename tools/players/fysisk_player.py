@@ -37,7 +37,8 @@ def vis_side():
     conn = get_cached_conn()
     
     # --- 1. VÆLG HOLD ---
-    df_teams = conn.query(f"SELECT DISTINCT CONTESTANTHOME_NAME as NAME, CONTESTANTHOME_OPTAUUID as UUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS} ORDER BY 1")
+    # Vi henter holdnavne fra OPTA_MATCHINFO til dropdown
+    df_teams = conn.query(f"SELECT DISTINCT CONTESTANTHOME_NAME as NAME FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS} ORDER BY 1")
     if df_teams is None or df_teams.empty:
         st.error("Kunne ikke hente hold-data.")
         return
@@ -46,18 +47,17 @@ def vis_side():
     valgt_hold = c1.selectbox("Vælg Hold", df_teams['NAME'].unique(), label_visibility="collapsed")
     target_ssiid = TEAMS.get(valgt_hold, {}).get('ssid')
 
-    # --- 2. VÆLG KAMP ---
-    # Vi joiner nu på OPTA_ID i stedet for SSIID, da SSIID ofte mangler i Opta-tabellen
+    # --- 2. VÆLG KAMP (RETTET TIL SEASON_METADATA) ---
+    # Vi bruger de kolonner du sendte: MATCH_SSIID, DATE, DESCRIPTION
     df_matches = conn.query(f"""
         SELECT DISTINCT 
-            m.MATCH_SSIID, 
-            TO_DATE(CAST(m.YEAR AS STRING) || '-' || CAST(m.MONTH AS STRING) || '-' || CAST(m.DAY AS STRING), 'YYYY-MM-DD') as CALC_DATE,
-            o.CONTESTANTHOME_NAME || ' - ' || o.CONTESTANTAWAY_NAME as MATCH_NAME
-        FROM {DB}.SECONDSPECTRUM_GAME_METADATA m
-        JOIN {DB}.OPTA_MATCHINFO o ON m.MATCH_OPTAID = o.MATCH_ID
-        WHERE (m.HOME_SSIID = '{target_ssiid}' OR m.AWAY_SSIID = '{target_ssiid}')
-          AND CALC_DATE >= '{SEASON_START}'
-        ORDER BY CALC_DATE DESC
+            MATCH_SSIID, 
+            DATE as CALC_DATE,
+            DESCRIPTION as MATCH_NAME
+        FROM {DB}.SECONDSPECTRUM_SEASON_METADATA
+        WHERE (HOME_SSIID = '{target_ssiid}' OR AWAY_SSIID = '{target_ssiid}')
+          AND DATE >= '{SEASON_START}'
+        ORDER BY DATE DESC
     """)
 
     if df_matches is None or df_matches.empty:
@@ -84,12 +84,12 @@ def vis_side():
 
     valgt_spiller = c3.selectbox("Vælg Spiller", df_pl['PLAYER_NAME'].tolist(), label_visibility="collapsed")
 
-    # --- 4. DATA VISUALISERING ---
-    # Rens navne til senere brug i SQL-strenge
+    # Rens navne til Minut-Splits queries
     navne_dele = valgt_spiller.strip().split(' ')
     f_clean = navne_dele[0].replace("'", "''")
     l_clean = navne_dele[-1].replace("'", "''")
 
+    # --- 4. DATA VISUALISERING ---
     df_latest = conn.query(f"""
         SELECT *, 
         CASE WHEN MINUTES LIKE '%:%' THEN TRY_TO_NUMBER(SPLIT_PART(MINUTES, ':', 1)) ELSE TRY_TO_NUMBER(MINUTES) END AS MINS
@@ -101,7 +101,6 @@ def vis_side():
     if not df_latest.empty:
         latest = df_latest.iloc[0]
         
-        # Hoved-metrics
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("Distance", f"{round(latest['DISTANCE']/1000, 2)} km")
         m2.metric("HSR", f"{int(latest['HIGH SPEED RUNNING'])} m")
@@ -140,14 +139,6 @@ def vis_side():
 
         with tabs[2]:
             st.caption("Minut-for-minut intensitet")
-            df_season_splits = conn.query(f"""
-                SELECT MINUTE_SPLIT, UPPER(PHYSICAL_METRIC_TYPE) as METRIC, AVG(PHYSICAL_METRIC_VALUE) as AVG_VAL,
-                    CASE WHEN (PLAYER_NAME ILIKE '%{f_clean}%' AND PLAYER_NAME ILIKE '%{l_clean}%') THEN 'PLAYER' ELSE 'TEAM' END as SCOPE
-                FROM {DB}.SECONDSPECTRUM_PHYSICAL_SPLITS_PLAYERS
-                WHERE MATCH_DATE >= '{SEASON_START}'
-                GROUP BY 1, 2, 4
-            """)
-
             df_current_match = conn.query(f"""
                 SELECT MINUTE_SPLIT, UPPER(PHYSICAL_METRIC_TYPE) as METRIC, SUM(PHYSICAL_METRIC_VALUE) as VAL 
                 FROM {DB}.SECONDSPECTRUM_PHYSICAL_SPLITS_PLAYERS 
@@ -166,14 +157,13 @@ def vis_side():
 
         with tabs[3]:
             df_trend = conn.query(f"""
-                SELECT MATCH_DATE, MATCH_TEAMS, DISTANCE, "HIGH SPEED RUNNING" as HSR, SPRINTING, TOP_SPEED
+                SELECT MATCH_DATE, DISTANCE, "HIGH SPEED RUNNING" as HSR, TOP_SPEED
                 FROM {DB}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
                 WHERE PLAYER_NAME = '{valgt_spiller.replace("'", "''")}'
                   AND MATCH_DATE >= '{SEASON_START}'
                 ORDER BY MATCH_DATE ASC
             """)
             if not df_trend.empty:
-                df_trend['MATCH_DATE'] = pd.to_datetime(df_trend['MATCH_DATE'])
                 st.line_chart(df_trend.set_index('MATCH_DATE')['HSR'])
     else:
         st.warning("Ingen fysisk data fundet for denne spiller.")
