@@ -74,25 +74,25 @@ def vis_side():
     valgt_hold = c1.selectbox("Vælg Hold", df_teams['NAME'].unique(), label_visibility="collapsed")
     target_ssiid = TEAMS.get(valgt_hold, {}).get('ssid')
 
-    # --- 2. VÆLG KAMP ---
-    # Rettet: Vi bruger o.MATCHDATE fra OPTA_MATCHINFO, da det er en valid identifier
+    # --- 2. VÆLG KAMP (RETTET MED DINE NYE KOLONNER) ---
+    # Vi bruger YEAR, MONTH, DAY til at skabe en dato og joiner for at få navne
     df_matches = conn.query(f"""
         SELECT DISTINCT 
             m.MATCH_SSIID, 
-            o.MATCH_DATE as MATCH_DATE,
+            TO_DATE(CAST(m.YEAR AS STRING) || '-' || CAST(m.MONTH AS STRING) || '-' || CAST(m.DAY AS STRING), 'YYYY-MM-DD') as CALC_DATE,
             o.CONTESTANTHOME_NAME || ' - ' || o.CONTESTANTAWAY_NAME as MATCH_NAME
         FROM {DB}.SECONDSPECTRUM_GAME_METADATA m
         JOIN {DB}.OPTA_MATCHINFO o ON m.MATCH_SSIID = o.MATCH_SSIID
         WHERE (m.HOME_SSIID = '{target_ssiid}' OR m.AWAY_SSIID = '{target_ssiid}')
-          AND o.MATCH_DATE >= '{SEASON_START}'
-        ORDER BY o.MATCH_DATE DESC
+          AND CALC_DATE >= '{SEASON_START}'
+        ORDER BY CALC_DATE DESC
     """)
 
     if df_matches is None or df_matches.empty:
         st.warning("Ingen kampe fundet for dette hold.")
         return
 
-    df_matches['DATO_STR'] = pd.to_datetime(df_matches['MATCH_DATE']).dt.strftime('%d/%m')
+    df_matches['DATO_STR'] = pd.to_datetime(df_matches['CALC_DATE']).dt.strftime('%d/%m')
     df_matches['SELECT_LABEL'] = df_matches['DATO_STR'] + " - " + df_matches['MATCH_NAME']
     
     valgt_kamp_label = c2.selectbox("Vælg Kamp", df_matches['SELECT_LABEL'].tolist(), label_visibility="collapsed")
@@ -111,13 +111,8 @@ def vis_side():
         return
 
     valgt_spiller = c3.selectbox("Vælg Spiller", df_pl['PLAYER_NAME'].tolist(), label_visibility="collapsed")
-    
-    # Klargør navne til SQL-filtrering i fanerne
-    navne_dele = valgt_spiller.strip().split(' ')
-    f_clean = navne_dele[0].replace("'", "''")
-    l_clean = navne_dele[-1].replace("'", "''")
 
-    # --- 4. DATA VISUALISERING ---
+    # --- 4. DATA VISUALISERING (Summary) ---
     df_latest = conn.query(f"""
         SELECT *, 
         CASE WHEN MINUTES LIKE '%:%' THEN TRY_TO_NUMBER(SPLIT_PART(MINUTES, ':', 1)) ELSE TRY_TO_NUMBER(MINUTES) END AS MINS
@@ -133,6 +128,11 @@ def vis_side():
         m2.metric("HSR", f"{int(latest['HIGH SPEED RUNNING'])} m")
         m3.metric("Top Speed", f"{round(latest['TOP_SPEED'], 1)} km/h")
         m4.metric("Spilletid", f"{int(latest['MINS'])} min")
+        
+        # Herfra kan du fortsætte med dine tabs...
+        st.info(f"Viser data for {valgt_spiller} i kampen {valgt_kamp_label}")
+    else:
+        st.warning("Ingen fysisk data fundet for denne spiller.")
 
         tabs = st.tabs(["Fase-overblik", "Intensitets Profil", "Minut Splits", "Sæson Trend"])
 
