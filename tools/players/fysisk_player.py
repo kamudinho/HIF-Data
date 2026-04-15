@@ -47,14 +47,14 @@ def vis_side():
     target_ssiid = TEAMS.get(valgt_hold, {}).get('ssid')
 
     # --- 2. VÆLG KAMP ---
-    # Bruger YEAR, MONTH, DAY fra GAME_METADATA til at bygge CALC_DATE
+    # Vi joiner nu på OPTA_ID i stedet for SSIID, da SSIID ofte mangler i Opta-tabellen
     df_matches = conn.query(f"""
         SELECT DISTINCT 
             m.MATCH_SSIID, 
             TO_DATE(CAST(m.YEAR AS STRING) || '-' || CAST(m.MONTH AS STRING) || '-' || CAST(m.DAY AS STRING), 'YYYY-MM-DD') as CALC_DATE,
             o.CONTESTANTHOME_NAME || ' - ' || o.CONTESTANTAWAY_NAME as MATCH_NAME
         FROM {DB}.SECONDSPECTRUM_GAME_METADATA m
-        JOIN {DB}.OPTA_MATCHINFO o ON m.MATCH_SSIID = o.MATCH_SSIID
+        JOIN {DB}.OPTA_MATCHINFO o ON m.MATCH_OPTAID = o.MATCH_ID
         WHERE (m.HOME_SSIID = '{target_ssiid}' OR m.AWAY_SSIID = '{target_ssiid}')
           AND CALC_DATE >= '{SEASON_START}'
         ORDER BY CALC_DATE DESC
