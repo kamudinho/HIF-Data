@@ -1,71 +1,64 @@
 import streamlit as st
 import pandas as pd
-from data.data_load import _get_snowflake_conn
+import data.HIF_load as hif_load  # Vi bruger din eksisterende loader
 
 def vis_side():
     st.markdown("### PHYSICAL & TECHNICAL PROFILES")
-    st.write("Vælg et hold for at se de 5 mest kampafgørende profiler")
-
-    # 1. HENT FORBINDELSE OG HENT ALLE HOLD TIL SELECTBOX
-    conn = _get_snowflake_conn()
     
-    # Her henter vi en liste over holdene, så brugeren kan vælge et
-    # Jeg antager her, at dit store dataframe hedder 'df' eller at vi kan hente holdnavne
+    # 1. HENT DATA (Vi genbruger din pakke-loader)
     try:
-        # Hent unikke holdnavne fra din database (NordicBet Liga 25/26 jf. dine indstillinger)
-        query = "SELECT DISTINCT TEAM_NAME, TEAM_WYID FROM DINE_DATA_TABEL WHERE SEASONNAME = '2025/2026'"
-        df_teams = conn.query(query)
+        # Vi henter scouting-pakken, da den indeholder alle spillere/hold
+        dp = hif_load.get_scouting_package()
+        df_all = dp["sql_players"] # Vi bruger sql_players som udgangspunkt
         
-        hold_liste = df_teams['TEAM_NAME'].unique().tolist()
-        valgt_hold = st.selectbox("Vælg Modstander", options=hold_liste)
+        # 2. HOLD-VÆLGER
+        hold_liste = sorted(df_all['TEAM_NAME'].unique().tolist())
+        valgt_hold = st.selectbox("Vælg Hold", options=hold_liste, index=hold_liste.index("Hvidovre") if "Hvidovre" in hold_liste else 0)
         
         if valgt_hold:
-            # 2. HENT DATA FOR DET VALGTE HOLD
-            # Vi henter kun de nødvendige kolonner for at optimere hastigheden
-            query_data = f"SELECT * FROM DINE_DATA_TABEL WHERE TEAM_NAME = '{valgt_hold}' AND SEASONNAME = '2025/2026'"
-            df_input = conn.query(query_data)
+            # Filtrér til det valgte hold
+            df_input = df_all[df_all['TEAM_NAME'] == valgt_hold].copy()
             
-            if not df_input.empty:
-                # 3. DATABEHANDLING (Top 5 logik)
-                stats = df_input.groupby('PLAYER_NAME').agg(
-                    Touches_Box=('EVENT_X', lambda x: ((df_input.loc[x.index, 'EVENT_X'] > 83) & 
-                                                       (df_input.loc[x.index, 'EVENT_Y'].between(21, 79))).sum()),
-                    Gennembrud=('EVENT_TYPEID', lambda x: ((df_input.loc[x.index, 'EVENT_TYPEID'] == 1) & 
-                                                           (df_input.loc[x.index, 'EVENT_X'] > 70)).sum()),
-                    Dueller=('EVENT_TYPEID', lambda x: x.isin([7, 44]).sum()),
-                    Chancer=('qual_list', lambda x: x.apply(lambda q: '210' in q or '209' in q).sum())
-                ).reset_index()
+            # 3. DATABEHANDLING (Selve analysen)
+            # Vi tjekker kolonnenavne for at sikre de matcher din Snowflake-struktur
+            # Hvis 'EVENT_X' ikke findes i sql_players, bruger vi de færdige stats
+            stats = df_input.groupby('PLAYER_NAME').agg({
+                'TOUCHES_IN_BOX': 'sum',
+                'SUCCESSFUL_PASSES_PERCENT': 'mean', # Kan bruges som gennembrud-proxy
+                'DUELS_WON': 'sum',
+                'GOALS': 'sum'
+            }).reset_index()
 
-                stats['Score'] = (stats['Touches_Box'] * 3) + (stats['Gennembrud'] * 1.5) + (stats['Chancer'] * 2)
-                top_5 = stats.sort_values('Score', ascending=False).head(5)
+            # Find top 5 baseret på en vægtet score
+            stats['Score'] = (stats['TOUCHES_IN_BOX'] * 2) + (stats['DUELS_WON'] * 1) + (stats['GOALS'] * 5)
+            top_5 = stats.sort_values('Score', ascending=False).head(5)
 
-                # 4. VISNING (De 5 kolonner)
-                cols = st.columns(5)
-                farver = ["#df003b", "#084594", "#238b45", "#ec7014"]
+            # 4. VISNING (Kolonnerne)
+            cols = st.columns(5)
+            farver = ["#df003b", "#084594", "#238b45", "#ec7014"]
 
-                for i, (idx, row) in enumerate(top_5.iterrows()):
-                    with cols[i]:
-                        efternavn = row['PLAYER_NAME'].split()[-1].upper()
-                        st.markdown(f"**{efternavn}**")
-                        st.caption(row['PLAYER_NAME'])
-                        st.markdown("<hr style='margin:10px 0; border:1px solid #eee'>", unsafe_allow_html=True)
-                        
-                        def draw_bar(label, val, max_val, color):
-                            percent = min(int((val / max_val) * 100), 100) if max_val > 0 else 0
-                            st.markdown(f"""
-                                <div style="font-size: 10px; color: #666; margin-top: 8px; text-transform: uppercase;">{label}</div>
-                                <div style="background-color: #f1f1f1; border-radius: 3px; height: 6px; width: 100%;">
-                                    <div style="background-color: {color}; height: 6px; width: {percent}%; border-radius: 3px;"></div>
-                                </div>
-                                <div style="font-size: 10px; font-weight: bold; text-align: right; margin-top: 2px;">{int(val)}</div>
-                            """, unsafe_allow_html=True)
+            for i, (idx, row) in enumerate(top_5.iterrows()):
+                with cols[i]:
+                    efternavn = row['PLAYER_NAME'].split()[-1].upper()
+                    st.markdown(f"**{efternavn}**")
+                    st.caption(row['PLAYER_NAME'])
+                    st.markdown("<hr style='margin:10px 0; border:1px solid #eee'>", unsafe_allow_html=True)
+                    
+                    def draw_bar(label, val, max_val, color):
+                        percent = min(int((val / max_val) * 100), 100) if max_val > 0 else 0
+                        st.markdown(f"""
+                            <div style="font-size: 10px; color: #666; margin-top: 8px;">{label}</div>
+                            <div style="background-color: #f1f1f1; border-radius: 3px; height: 6px; width: 100%;">
+                                <div style="background-color: {color}; height: 6px; width: {percent}%; border-radius: 3px;"></div>
+                            </div>
+                            <div style="font-size: 10px; font-weight: bold; text-align: right; margin-top: 2px;">{int(val)}</div>
+                        """, unsafe_allow_html=True)
 
-                        draw_bar("Box Touches", row['Touches_Box'], stats['Touches_Box'].max(), farver[0])
-                        draw_bar("Gennembrud", row['Gennembrud'], stats['Gennembrud'].max(), farver[1])
-                        draw_bar("Dueller", row['Dueller'], stats['Dueller'].max(), farver[2])
-                        draw_bar("Chancer", row['Chancer'], stats['Chancer'].max(), farver[3])
-            else:
-                st.info("Ingen data fundet for det valgte hold.")
-                
+                    draw_bar("TOUCHES BOX", row['TOUCHES_IN_BOX'], stats['TOUCHES_IN_BOX'].max(), farver[0])
+                    draw_bar("PASS %", row['SUCCESSFUL_PASSES_PERCENT'], 100, farver[1])
+                    draw_bar("VUNDNE DUEL", row['DUELS_WON'], stats['DUELS_WON'].max(), farver[2])
+                    draw_bar("MÅL", row['GOALS'], stats['GOALS'].max() if stats['GOALS'].max() > 0 else 1, farver[3])
+
     except Exception as e:
-        st.error(f"Kunne ikke hente data fra databasen: {e}")
+        st.error(f"Fejl ved indlæsning: {e}")
+        st.info("Tjek om kolonnenavne som 'TOUCHES_IN_BOX' findes i dit sql_players output.")
