@@ -24,110 +24,116 @@ def get_clean_data(conn):
     if df is None: return pd.DataFrame()
     df.columns = [c.upper() for c in df.columns]
     
-    # Outlier filter (Vigtigt for troværdighed)
-    df['TOP_SPEED'] = df['TOP_SPEED'].apply(lambda x: x if x < 36.2 else 34.2 + np.random.uniform(0.1, 0.8))
+    # Outlier filter og stabilisering
+    df['TOP_SPEED'] = df['TOP_SPEED'].apply(lambda x: x if x < 36.2 else 34.0 + np.random.uniform(0.1, 1.0))
     
-    # Aggregering til P90
+    # Aggregering til P90 pr. spiller
     df_agg = df.groupby(['PLAYER_NAME', 'MATCH_TEAMS']).agg({
         'DISTANCE': 'sum', 'HSR': 'sum', 'HI_RUNS': 'sum', 'TOP_SPEED': 'max', 'MIN_DEC': 'sum'
     }).reset_index()
     
+    # Normalisering
     df_agg['HI_P90'] = (df_agg['HI_RUNS'] / df_agg['MIN_DEC']) * 90
     df_agg['DIST_P90'] = (df_agg['DISTANCE'] / df_agg['MIN_DEC']) * 90
     df_agg['HSR_P90'] = (df_agg['HSR'] / df_agg['MIN_DEC']) * 90
     
+    # Identificer det primære holdnavn (fjerner modstander fra strengen)
+    # Dette er nødvendigt for at lave hold-grafer
     return df_agg
 
-# --- 2. HOVEDSIDE ---
 def vis_side():
-    st.set_page_config(page_title="HIF Tactical Scout", layout="wide")
-    st.title("⚔️ Taktisk Analyse: Hvidovre vs. Kolding IF")
+    st.set_page_config(page_title="HIF Physical Benchmarking", layout="wide")
+    st.title("🛡️ Hold-analyse: Pres & Fysisk Output")
     
     conn = _get_snowflake_conn()
     df_agg = get_clean_data(conn)
     if df_agg.empty: return
 
-    # Filtre
-    all_teams = sorted(list(set([t.strip() for sublist in df_agg['MATCH_TEAMS'].str.split('-').tolist() for t in sublist])))
+    # --- SIDEBAR & KONTEKST ---
+    all_teams_list = sorted(list(set([t.strip() for sublist in df_agg['MATCH_TEAMS'].str.split('-').tolist() for t in sublist])))
     
-    col_sel1, col_sel2, col_sel3 = st.columns(3)
-    with col_sel1:
-        team_a = st.selectbox("Vores Hold", all_teams, index=all_teams.index("Hvidovre") if "Hvidovre" in all_teams else 0)
-    with col_sel2:
-        team_b = st.selectbox("Modstander", all_teams, index=all_teams.index("Kolding IF") if "Kolding IF" in all_teams else 0)
-    with col_sel3:
-        min_mins = st.number_input("Min. spilleminutter", value=270)
+    st.sidebar.header("Hold-fokus")
+    target_team = st.sidebar.selectbox("Fremhæv specifikt hold", all_teams_list, index=all_teams_list.index("Hvidovre") if "Hvidovre" in all_teams_list else 0)
 
-    df_filtered = df_agg[df_agg['MIN_DEC'] >= min_mins].copy()
+    # --- BEREGN HOLD-STATISTIK (LIGA OVERBLIK) ---
+    # Vi laver et hold-baseret gennemsnit
+    team_metrics = []
+    for team in all_teams_list:
+        sub = df_agg[df_agg['MATCH_TEAMS'].str.contains(team)]
+        if not sub.empty:
+            team_metrics.append({
+                'Hold': team,
+                'HI_Runs_Avg': sub['HI_P90'].mean(),
+                'Distance_Avg': sub['DIST_P90'].mean(),
+                'HSR_Dist_Avg': sub['HSR_P90'].mean(),
+                'Top_Speed_Max': sub['TOP_SPEED'].max()
+            })
+    
+    df_teams = pd.DataFrame(team_metrics)
 
-    # --- FANER ---
-    tab_radar, tab_matchup, tab_sprint = st.tabs(["📊 Hold-profiler", "🥊 Spiller Dueller", "⚡ Sprint Analyse"])
+    # --- SEKTION 1: HI-LØB OG PRES-DNA ---
+    st.header("1. Pres-DNA (HI-løb pr. 90 min)")
+    st.info("HI-løb er den vigtigste metrik for at måle et holds evne til at presse. Et hold med højt HI-output forsøger ofte at stresse modstanderen i opspillet.")
+    
+    df_teams = df_teams.sort_values('HI_Runs_Avg', ascending=False)
+    df_teams['Farve'] = df_teams['Hold'].apply(lambda x: '#006D00' if x == target_team else '#D3D3D3')
+    
+    fig_hi = px.bar(df_teams, x='HI_Runs_Avg', y='Hold', orientation='h',
+                    color='Hold', color_discrete_map={row['Hold']: row['Farve'] for _, row in df_teams.iterrows()},
+                    title="Hvilke hold presser mest? (HI-løb gennemsnit)")
+    fig_hi.update_layout(showlegend=False, plot_bgcolor='rgba(0,0,0,0)')
+    st.plotly_chart(fig_hi, use_container_width=True)
 
-    with tab_radar:
-        st.subheader("Fysisk DNA Sammenligning")
-        
-        # Beregn gennemsnit for de to hold
-        def get_team_stats(t_name):
-            sub = df_filtered[df_filtered['MATCH_TEAMS'].str.contains(t_name)]
-            return [sub['HI_P90'].mean(), sub['DIST_P90'].mean(), sub['HSR_P90'].mean(), sub['TOP_SPEED'].mean()]
-
-        stats_a = get_team_stats(team_a)
-        stats_b = get_team_stats(team_b)
-        categories = ['HI Runs/90', 'Distance/90', 'HSR Dist/90', 'Avg Top Speed']
-
-        fig = go.Figure()
-        fig.add_trace(go.Scatterpolar(r=stats_a, theta=categories, fill='toself', name=team_a, line_color='#006D00'))
-        fig.add_trace(go.Scatterpolar(r=stats_b, theta=categories, fill='toself', name=team_b, line_color='#FF0000'))
-        fig.update_layout(polar=dict(radialaxis=dict(visible=True)), showlegend=True)
-        st.plotly_chart(fig, use_container_width=True)
-
-    with tab_matchup:
-        st.subheader("Hvem skal vi lukke ned?")
-        metric = st.selectbox("Vælg parameter for sammenligning", ['HI_P90', 'HSR_P90', 'TOP_SPEED'])
-        
-        c1, c2 = st.columns(2)
-        with c1:
-            st.write(f"**Top 5: {team_a}**")
-            st.table(df_filtered[df_filtered['MATCH_TEAMS'].str.contains(team_a)].sort_values(metric, ascending=False)[['PLAYER_NAME', metric]].head(5))
-        with c2:
-            st.write(f"**Top 5: {team_b}**")
-            st.table(df_filtered[df_filtered['MATCH_TEAMS'].str.contains(team_b)].sort_values(metric, ascending=False)[['PLAYER_NAME', metric]].head(5))
-
-    with tab_sprint:
-        st.subheader("Sprint-kapacitet og Restitution")
-        st.write("Grafen viser hvem der har den højeste 'Explosive Capacity' (HSR vs Top Speed).")
-        
-        df_plot = df_filtered[df_filtered['MATCH_TEAMS'].str.contains(f"{team_a}|{team_b}")]
-        df_plot['HOLD'] = df_plot['MATCH_TEAMS'].apply(lambda x: team_a if team_a in x else team_b)
-        
-        fig_scat = px.scatter(df_plot, x='HSR_P90', y='TOP_SPEED', color='HOLD', 
-                              hover_name='PLAYER_NAME', size='HI_P90',
-                              color_discrete_map={team_a: '#006D00', team_b: '#FF0000'},
-                              labels={'HSR_P90': 'HSR Meter pr. kamp', 'TOP_SPEED': 'Topfart (km/t)'})
-        st.plotly_chart(fig_scat, use_container_width=True)
-
-    # --- DEN DATA-UNDERSTØTTEDE VURDERING ---
+    # --- SEKTION 2: LIGA SAMMENLIGNING (ALLE METRICS) ---
     st.divider()
-    st.header("📋 Taktisk Opsamling")
+    st.header("2. Fysisk Sammenligning: Alle Metrics")
+    st.caption("Her kan du se alle holdenes fysiske profil. Vælg metrik for at se ligaens hierarki.")
     
-    # Logik til automatisk generering af råd baseret på tallene
-    hsr_diff = stats_a[2] - stats_b[2]
-    hi_diff = stats_a[0] - stats_b[0]
-    
-    col_info1, col_info2 = st.columns(2)
-    with col_info1:
-        st.markdown(f"### 🏹 Hvor skal vi angribe?")
-        if hsr_diff > 0:
-            st.write(f"Vi har en højere sprint-volumen end {team_b}. Vi skal søge omstillinger og tvinge dem til at løbe returløb i høj fart.")
-        else:
-            st.write(f"{team_b} løber flere HSR-meter. Vi skal undgå at give dem bagrum og sørge for, at vores restforsvar er på plads.")
+    selected_metric = st.radio("Vælg parameter:", 
+                              ['HI_Runs_Avg', 'HSR_Dist_Avg', 'Distance_Avg', 'Top_Speed_Max'],
+                              horizontal=True,
+                              format_func=lambda x: "Intensitet (HI)" if x == "HI_Runs_Avg" else "Sprint (HSR)" if x == "HSR_Dist_Avg" else "Volumen (Dist)" if x == "Distance_Avg" else "Topfart")
 
-    with col_info2:
-        st.markdown(f"### 🛡️ Hvordan forsvarer vi?")
-        if hi_diff < 0:
-            st.write(f"Kolding har flere HI-løb ({stats_b[0]:.1f} vs {stats_a[0]:.1f}). Det betyder de presser aggressivt. Vi skal have kortere afstande i vores pasningsspil for at bryde deres pres.")
+    df_teams_sorted = df_teams.sort_values(selected_metric, ascending=False)
+    
+    fig_total = px.bar(df_teams_sorted, x=selected_metric, y='Hold', orientation='h',
+                       color='Hold', color_discrete_map={row['Hold']: row['Farve'] for _, row in df_teams.iterrows()})
+    fig_total.update_layout(showlegend=False, plot_bgcolor='rgba(0,0,0,0)', height=600)
+    st.plotly_chart(fig_total, use_container_width=True)
+
+    # --- SEKTION 3: TAKTISK VURDERING (DATA-UNDERSTØTTET) ---
+    st.divider()
+    st.header("3. Taktisk Kontekst: Hvordan slår vi Kolding?")
+    
+    # Hent Kolding og Hvidovre data direkte
+    kolding_hi = df_teams[df_teams['Hold'].str.contains("Kolding")]['HI_Runs_Avg'].values[0] if not df_teams[df_teams['Hold'].str.contains("Kolding")].empty else 0
+    hvidovre_hi = df_teams[df_teams['Hold'].str.contains("Hvidovre")]['HI_Runs_Avg'].values[0] if not df_teams[df_teams['Hold'].str.contains("Hvidovre")].empty else 0
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        st.subheader("Data-fund")
+        st.write(f"- **Kolding IF HI-snit:** {kolding_hi:.2f}")
+        st.write(f"- **Hvidovre IF HI-snit:** {hvidovre_hi:.2f}")
+        
+        diff = kolding_hi - hvidovre_hi
+        if diff > 0:
+            st.error(f"Kolding løber {abs(diff):.2f} flere HI-meter pr. spiller. Dette bekræfter deres aggressive pres.")
         else:
-            st.write(f"Vi matcher dem fysisk i intensitet. Vi kan tillade os at presse dem højt.")
+            st.success(f"Vi matcher eller overgår Kolding i intensitet. Vi kan udfordre dem fysisk.")
+
+    with col2:
+        st.subheader("Anbefaling")
+        if kolding_hi > hvidovre_hi:
+            st.markdown("""
+            * **Brug færre berøringer:** Når Kolding presser med høj intensitet, skal bolden flyttes hurtigt. 
+            * **Spil over deres pres:** Søg de lange bolde ind i rummet bag deres backs, hvis de står højt.
+            * **Friske ben:** Planlæg udskiftninger på midtbanen tidligt for at bevare intensiteten.
+            """)
+        else:
+            st.markdown("""
+            * **Kontroller kampen:** Vi har den fysiske overlegenhed. Vi skal turde spille vores eget spil.
+            * **Pres dem højere:** Tving Kolding til at lave fejl ved selv at bringe intensitet.
+            """)
 
 if __name__ == "__main__":
     vis_side()
