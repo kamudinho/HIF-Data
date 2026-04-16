@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 from data.data_load import _get_snowflake_conn
@@ -20,26 +19,28 @@ def vis_side():
 
     conn = get_cached_conn()
     
-    # SQL: Aggregerer først pr. kamp, derefter pr. hold for at få det samlede gennemsnit
+    # SQL: Aggregering i to trin for at få et rent gennemsnit pr. hold
+    # 1. Indre query (T): Beregner totaler for hver enkelt KAMP pr. hold.
+    # 2. Ydre query: Beregner GENNEMSNITTET af disse kamptotaler pr. hold.
     sql_liga = f"""
         SELECT 
-            MATCH_TEAMS,
-            AVG(TOTAL_HI) as AVG_HI,
-            AVG(PEAK_SPEED) as AVG_PEAK_SPEED,
-            AVG(TOTAL_DIST) as AVG_DIST,
-            AVG(TOTAL_HSR) as AVG_HSR
+            MATCH_TEAMS AS HOLDNAVN,
+            AVG(KAMP_HI) AS AVG_HI,
+            AVG(KAMP_PEAK_SPEED) AS AVG_PEAK_SPEED,
+            AVG(KAMP_DIST) AS AVG_DIST,
+            AVG(KAMP_HSR) AS AVG_HSR
         FROM (
             SELECT 
                 MATCH_SSIID,
                 MATCH_TEAMS,
-                SUM(NO_OF_HIGH_INTENSITY_RUNS) as TOTAL_HI,
-                MAX(TOP_SPEED) as PEAK_SPEED,
-                SUM(DISTANCE) as TOTAL_DIST,
-                SUM("HIGH SPEED RUNNING") as TOTAL_HSR
+                SUM(NO_OF_HIGH_INTENSITY_RUNS) as KAMP_HI,
+                MAX(TOP_SPEED) as KAMP_PEAK_SPEED,
+                SUM(DISTANCE) as KAMP_DIST,
+                SUM("HIGH SPEED RUNNING") as KAMP_HSR
             FROM {DB}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
             WHERE MATCH_DATE >= '{SEASON_START}'
             GROUP BY 1, 2
-        )
+        ) AS T
         GROUP BY 1
     """
     
@@ -49,48 +50,49 @@ def vis_side():
         st.error("Kunne ikke hente data fra Snowflake.")
         return
 
-    # SIKRING: Tving alle kolonnenavne til store bogstaver for at undgå 'AVG_HI' fejl
+    # Tving kolonnenavne til store bogstaver for at undgå KeyError
     df_liga.columns = [c.upper() for c in df_liga.columns]
-    df_liga['MATCH_TEAMS'] = df_liga['MATCH_TEAMS'].str.strip()
+    df_liga['HOLDNAVN'] = df_liga['HOLDNAVN'].str.strip()
 
     # 1. VALG AF HOLD
-    alle_hold = sorted(df_liga['MATCH_TEAMS'].unique())
+    alle_hold = sorted(df_liga['HOLDNAVN'].unique())
     valgt_hold = st.selectbox("Vælg Hold", alle_hold)
     
-    hold_stats = df_liga[df_liga['MATCH_TEAMS'] == valgt_hold].iloc[0]
+    # Find data for valgt hold og liga-gennemsnit
+    hold_stats = df_liga[df_liga['HOLDNAVN'] == valgt_hold].iloc[0]
     liga_snit = df_liga.mean(numeric_only=True)
 
-    # 2. TOP METRIKKER
+    # 2. METRIKKER (Sæson-gennemsnit pr. kamp)
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Gns. Distance", f"{round(hold_stats['AVG_DIST']/1000, 1)} km")
     m2.metric("Gns. HSR", f"{int(hold_stats['AVG_HSR'])} m")
-    m3.metric("Gns. HI Aktiviteter", f"{int(hold_stats['AVG_HI'])}")
+    m3.metric("Gns. HI løb", f"{int(hold_stats['AVG_HI'])}")
     m4.metric("Gns. Topfart", f"{round(hold_stats['AVG_PEAK_SPEED'], 1)} km/t")
 
     st.divider()
 
-    # 3. SCATTER PLOT (Kun ét punkt pr. hold)
+    # 3. SCATTER PLOT (Nu med kun én prik pr. hold)
     st.subheader("Holdets placering i ligaen (Sæson-gennemsnit)")
     
-    # Plot alle hold som grå prikker
     fig = px.scatter(
         df_liga, 
         x='AVG_HI', 
         y='AVG_PEAK_SPEED',
-        text='MATCH_TEAMS',
+        text='HOLDNAVN',
         labels={
-            'AVG_HI': 'HI Aktiviteter (Gns. per kamp)',
-            'AVG_PEAK_SPEED': 'Peak Sprint Velocity (km/t)'
+            'AVG_HI': 'High Intensity Aktiviteter (Gns. pr. kamp)',
+            'AVG_PEAK_SPEED': 'Topfart (Gns. pr. kamp - km/t)'
         }
     )
 
+    # Style grå prikker for ligaen
     fig.update_traces(
-        marker=dict(size=12, opacity=0.3, color='grey'),
+        marker=dict(size=14, opacity=0.3, color='grey'),
         textposition='top center'
     )
 
-    # Fremhæv det valgte hold med en tydelig rød markør
-    highlight = df_liga[df_liga['MATCH_TEAMS'] == valgt_hold]
+    # Highlight det valgte hold (Rød prik)
+    highlight = df_liga[df_liga['HOLDNAVN'] == valgt_hold]
     fig.add_trace(go.Scatter(
         x=highlight['AVG_HI'],
         y=highlight['AVG_PEAK_SPEED'],
@@ -101,15 +103,15 @@ def vis_side():
         showlegend=False
     ))
 
-    # Tilføj liga-gennemsnitslinjer
+    # Gennemsnitslinjer (Benchmarking)
     fig.add_vline(x=liga_snit['AVG_HI'], line_dash="dash", line_color="grey", opacity=0.5)
     fig.add_hline(y=liga_snit['AVG_PEAK_SPEED'], line_dash="dash", line_color="grey", opacity=0.5)
 
     fig.update_layout(
         height=600, 
         template="plotly_white",
-        xaxis=dict(showgrid=True, gridcolor='#f0f0f0'),
-        yaxis=dict(showgrid=True, gridcolor='#f0f0f0')
+        xaxis=dict(showgrid=True, gridcolor='#f0f0f0', zeroline=False),
+        yaxis=dict(showgrid=True, gridcolor='#f0f0f0', zeroline=False)
     )
     
     st.plotly_chart(fig, use_container_width=True)
