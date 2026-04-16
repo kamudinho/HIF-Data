@@ -20,7 +20,7 @@ def vis_side():
 
     conn = get_cached_conn()
     
-    # SQL: Vi henter data. Snowflake vil typisk returnere disse som store bogstaver.
+    # SQL: Aggregerer først pr. kamp, derefter pr. hold for at få det samlede gennemsnit
     sql_liga = f"""
         SELECT 
             MATCH_TEAMS,
@@ -46,26 +46,22 @@ def vis_side():
     df_liga = conn.query(sql_liga)
 
     if df_liga is None or df_liga.empty:
-        st.error("Kunne ikke hente data fra databasen.")
+        st.error("Kunne ikke hente data fra Snowflake.")
         return
 
-    # --- VIGTIGT: Tving alle kolonnenavne til STORE bogstaver for at undgå 'unhashable' eller 'KeyError' ---
+    # SIKRING: Tving alle kolonnenavne til store bogstaver for at undgå 'AVG_HI' fejl
     df_liga.columns = [c.upper() for c in df_liga.columns]
-    
-    # Rens holdnavne
     df_liga['MATCH_TEAMS'] = df_liga['MATCH_TEAMS'].str.strip()
 
-    # 1. VALG AF HOLD (Nu bruger vi store bogstaver i referencerne)
+    # 1. VALG AF HOLD
     alle_hold = sorted(df_liga['MATCH_TEAMS'].unique())
     valgt_hold = st.selectbox("Vælg Hold", alle_hold)
     
-    # Filtrer data for det valgte hold
     hold_stats = df_liga[df_liga['MATCH_TEAMS'] == valgt_hold].iloc[0]
     liga_snit = df_liga.mean(numeric_only=True)
 
-    # 2. METRIKKER (Sæson-gennemsnit)
+    # 2. TOP METRIKKER
     m1, m2, m3, m4 = st.columns(4)
-    # Vi bruger de store bogstaver her:
     m1.metric("Gns. Distance", f"{round(hold_stats['AVG_DIST']/1000, 1)} km")
     m2.metric("Gns. HSR", f"{int(hold_stats['AVG_HSR'])} m")
     m3.metric("Gns. HI Aktiviteter", f"{int(hold_stats['AVG_HI'])}")
@@ -73,9 +69,10 @@ def vis_side():
 
     st.divider()
 
-    # 3. SCATTER PLOT (Kun én prik pr. hold)
+    # 3. SCATTER PLOT (Kun ét punkt pr. hold)
     st.subheader("Holdets placering i ligaen (Sæson-gennemsnit)")
     
+    # Plot alle hold som grå prikker
     fig = px.scatter(
         df_liga, 
         x='AVG_HI', 
@@ -87,13 +84,12 @@ def vis_side():
         }
     )
 
-    # Styling for alle prikker
     fig.update_traces(
-        marker=dict(size=12, opacity=0.4, color='grey'),
+        marker=dict(size=12, opacity=0.3, color='grey'),
         textposition='top center'
     )
 
-    # Fremhæv det valgte hold med en rød prik
+    # Fremhæv det valgte hold med en tydelig rød markør
     highlight = df_liga[df_liga['MATCH_TEAMS'] == valgt_hold]
     fig.add_trace(go.Scatter(
         x=highlight['AVG_HI'],
@@ -105,15 +101,15 @@ def vis_side():
         showlegend=False
     ))
 
-    # Gennemsnitslinjer for ligaen
-    fig.add_vline(x=liga_snit['AVG_HI'], line_dash="dash", line_color="grey")
-    fig.add_hline(y=liga_snit['AVG_PEAK_SPEED'], line_dash="dash", line_color="grey")
+    # Tilføj liga-gennemsnitslinjer
+    fig.add_vline(x=liga_snit['AVG_HI'], line_dash="dash", line_color="grey", opacity=0.5)
+    fig.add_hline(y=liga_snit['AVG_PEAK_SPEED'], line_dash="dash", line_color="grey", opacity=0.5)
 
     fig.update_layout(
         height=600, 
         template="plotly_white",
-        xaxis=dict(showgrid=True, gridcolor='f0f0f0'),
-        yaxis=dict(showgrid=True, gridcolor='f0f0f0')
+        xaxis=dict(showgrid=True, gridcolor='#f0f0f0'),
+        yaxis=dict(showgrid=True, gridcolor='#f0f0f0')
     )
     
     st.plotly_chart(fig, use_container_width=True)
