@@ -56,7 +56,7 @@ def display_profile_grid(df_scored, target_team):
 # --- 3. HOVEDSIDE ---
 def vis_side():
     st.set_page_config(page_title="Hvidovre IF - Physical Analytics", layout="wide")
-    st.cpation("SkillCorner Open Data #2: Physical Profiler")
+    st.caption("SkillCorner Open Data #2: Physical Profiler")
     
     with st.expander("INFO: Hvordan skal graferne forstås?", expanded=False):
         st.info("""
