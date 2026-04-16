@@ -134,7 +134,7 @@ def vis_side():
         c_map = {target_team: '#006D00', 'Andre': '#D3D3D3'}
 
     # --- FIGUR 1: LIGA RANKING (INTEGRERET) ---
-    st.write("### 🏆 Liga Ranking: Intensity Composite")
+    st.caption("### Liga Ranking: Intensity Composite")
     st.caption("Viser dit holds spillere (grøn) i deres faktiske rækkefølge i forhold til hele ligaen.")
     
     full_rank = df_scored.sort_values('Intensity_Composite', ascending=False).reset_index(drop=True)
@@ -146,7 +146,7 @@ def vis_side():
         plot_limit = min(max(15, max_idx + 1), 35)
         plot_df = full_rank.head(plot_limit).copy()
     else:
-        plot_df = full_rank.head(20).copy()
+        plot_df = full_rank.head(12).copy()
 
     fig_rank = px.bar(
         plot_df, x='Intensity_Composite', y='PLAYER_NAME', orientation='h',
@@ -172,7 +172,7 @@ def vis_side():
     display_profile_grid(df_scored, target_team)
 
     st.divider()
-    st.write("### 🗺️ Det Fysiske Landskab")
+    st.caption("### Det Fysiske Landskab")
     fig_scat = px.scatter(
         df_scored, x='Volume_Composite', y='Intensity_Composite',
         size=df_scored['TOP_SPEED'].clip(lower=25), color='HIGHLIGHT',
