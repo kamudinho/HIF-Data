@@ -66,8 +66,6 @@ def vis_side():
               delta=f"{round((hold_data['AVG_DIST'] - liga_avg['AVG_DIST'])/1000, 1)} km")
     m2.metric("Gns. HSR", f"{int(hold_data['AVG_HSR'])} m", 
               delta=f"{int(hold_data['AVG_HSR'] - liga_avg['AVG_HSR'])} m")
-    m3.metric("Gns. HI løb", f"{int(hold_data['AVG_HI'])}", 
-              delta=f"{int(hold_data['AVG_HI'] - liga_avg['AVG_HI'])}")
     m4.metric("Peak Speed", f"{round(hold_data['PEAK_SPEED'], 1)} km/t")
 
     st.divider()
@@ -77,11 +75,11 @@ def vis_side():
     
     fig_scatter = px.scatter(
         df_all_teams, 
-        x='AVG_HI', 
+        x='AVG_DIST', 
         y='PEAK_SPEED',
         text='MATCH_TEAMS',
         labels={
-            'AVG_HI': 'HI Aktiviteter (Sæson-gennemsnit)',
+            'AVG_DIST': 'HI Aktiviteter (Sæson-gennemsnit)',
             'PEAK_SPEED': 'Topfart registreret (km/t)'
         }
     )
@@ -90,7 +88,7 @@ def vis_side():
 
     # Fremhæv det valgte hold
     fig_scatter.add_trace(go.Scatter(
-        x=[hold_data['AVG_HI']],
+        x=[hold_data['AVG_DIST']],
         y=[hold_data['PEAK_SPEED']],
         mode='markers+text',
         marker=dict(size=20, color='#cc0000', line=dict(width=2, color='white')),
@@ -100,7 +98,7 @@ def vis_side():
     ))
 
     # Gennemsnitslinjer for ligaen
-    fig_scatter.add_vline(x=liga_avg['AVG_HI'], line_dash="dash", line_color="grey")
+    fig_scatter.add_vline(x=liga_avg['AVG_DIST'], line_dash="dash", line_color="grey")
     fig_scatter.add_hline(y=liga_avg['PEAK_SPEED'], line_dash="dash", line_color="grey")
 
     fig_scatter.update_layout(height=550, template="plotly_white")
