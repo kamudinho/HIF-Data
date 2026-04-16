@@ -2,51 +2,28 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
+import plotly.graph_objects as go
 from data.data_load import _get_snowflake_conn
 
-# --- 1. LOGIK & BEREGNINGER ---
-def calculate_composite_zscores(df, g1_metrics, g2_metrics, g3_metrics):
-    df_res = df.copy()
-    def z(x): 
-        return (x - x.mean()) / x.std() if x.std() != 0 else x - x.mean()
-    
-    df_res['Intensity_Composite'] = z(df[g1_metrics].apply(z).mean(axis=1))
-    df_res['Volume_Composite'] = z(df[g2_metrics].apply(z).mean(axis=1))
-    df_res['Explosivity_Composite'] = z(df[g3_metrics].apply(z).mean(axis=1))
-    return df_res
+# --- 1. TAKTISK BEREGNING ---
+def calculate_team_metrics(df, team_name):
+    team_data = df[df['MATCH_TEAMS'].str.contains(team_name, na=False)]
+    return {
+        'Intensity': team_data['HI_P90'].mean(),
+        'Volume': team_data['DIST_P90'].mean(),
+        'Sprint_Power': team_data['HSR_P90'].mean(),
+        'Max_Speed': team_data['TOP_SPEED'].max()
+    }
 
-# --- 2. GRID VISNING ---
-def display_profile_grid(df_scored, target_team, metrics_to_show):
-    st.write(f"### 📊 Physical Profiler Grid: {target_team}")
-    
-    grid_df = df_scored[df_scored['HIGHLIGHT'] == target_team].copy()
-    if grid_df.empty:
-        st.warning("Vælg et hold for at se overblikket.")
-        return
-
-    # Dynamisk kolonne-mapping
-    cols = ['PLAYER_NAME'] + metrics_to_show
-    display_df = grid_df[cols].copy()
-    
-    st.dataframe(
-        display_df.sort_values(metrics_to_show[0], ascending=False),
-        hide_index=True, use_container_width=True
-    )
-
-# --- 3. HOVEDSIDE ---
 def vis_side():
-    st.set_page_config(page_title="HIF Physical Analytics", layout="wide")
+    st.set_page_config(page_title="HIF Tactical Scout", layout="wide")
     
-    # --- HEADER & SELECTION ---
-    col_a, col_b = st.columns([2, 1])
-    with col_a:
-        st.title("🏃 SkillCorner Physical Hub")
-    with col_b:
-        min_mins = st.number_input("Min. minutter totalt", value=270, step=90)
+    st.title("⚔️ Taktisk Matchup: Vejen til sejr")
+    st.caption("Sammenligning af fysiske profiler for at identificere taktiske overtag.")
 
     conn = _get_snowflake_conn()
     
-    # SQL (Samme som før)
+    # SQL (Henter alt nødvendigt data)
     sql = """
         SELECT 
             P.PLAYER_NAME, P.MATCH_TEAMS, P.DISTANCE, 
@@ -60,80 +37,77 @@ def vis_side():
         WHERE (M.COMPETITION_OPTAID = '148' OR M.SECOND_SPECTRUM_COMPETITION_ID = '328')
           AND M.DATE >= '2025-07-01'
     """
-
     df_raw = conn.query(sql)
     if df_raw is None or df_raw.empty: return
     df_raw.columns = [c.upper() for c in df_raw.columns]
 
-    # Aggregering & Outlier filter
-    df_agg = df_raw.groupby('PLAYER_NAME').agg({
-        'DISTANCE': 'sum', 'HSR': 'sum', 'HI_RUNS': 'sum', 
-        'TOP_SPEED': 'max', 'MIN_DEC': 'sum', 'MATCH_TEAMS': lambda x: x.mode()[0]
+    # Data rensning (Outlier protection på 36.5 km/t)
+    df_raw['TOP_SPEED'] = df_raw['TOP_SPEED'].apply(lambda x: x if x < 36.5 else 34.0 + np.random.uniform(0.5, 1.5))
+    
+    # Aggregering til P90
+    df_agg = df_raw.groupby(['PLAYER_NAME', 'MATCH_TEAMS']).agg({
+        'DISTANCE': 'sum', 'HSR': 'sum', 'HI_RUNS': 'sum', 'TOP_SPEED': 'max', 'MIN_DEC': 'sum'
     }).reset_index()
     
-    df_agg['TOP_SPEED'] = df_agg['TOP_SPEED'].apply(lambda x: x if x < 36.5 else 34.5 + np.random.uniform(0.1, 1.0))
-    df_agg = df_agg[df_agg['MIN_DEC'] >= min_mins].copy()
-
-    # P90 & Z-Scores
     df_agg['HI_P90'] = (df_agg['HI_RUNS'] / df_agg['MIN_DEC']) * 90
     df_agg['DIST_P90'] = (df_agg['DISTANCE'] / df_agg['MIN_DEC']) * 90
     df_agg['HSR_P90'] = (df_agg['HSR'] / df_agg['MIN_DEC']) * 90
-    df_scored = calculate_composite_zscores(df_agg, ['HI_P90', 'HSR_P90'], ['DIST_P90'], ['TOP_SPEED'])
+    
+    # --- HOLDVALG (Default: Hvidovre vs Kolding) ---
+    all_teams = sorted(list(set([t.strip() for sublist in df_raw['MATCH_TEAMS'].str.split('-').tolist() for t in sublist])))
+    
+    st.sidebar.header("Taktisk Valg")
+    team_a = st.sidebar.selectbox("Vores Hold", all_teams, index=all_teams.index("Hvidovre") if "Hvidovre" in all_teams else 0)
+    team_b = st.sidebar.selectbox("Modstander", all_teams, index=all_teams.index("Kolding IF") if "Kolding IF" in all_teams else 0)
+    
+    # --- RADAR SAMMENLIGNING ---
+    metrics_a = calculate_team_metrics(df_agg, team_a)
+    metrics_b = calculate_team_metrics(df_agg, team_b)
 
-    # --- INTERAKTIVE KONTROLLER PÅ SIDEN ---
+    col1, col2 = st.columns([1, 1])
+
+    with col1:
+        st.write(f"### Fysisk Power-Ranking")
+        categories = ['Intensitet (HI)', 'Volumen (Dist)', 'Sprint Dist (HSR)', 'Topfart']
+        
+        fig = go.Figure()
+        fig.add_trace(go.Scatterpolar(
+            r=[metrics_a['Intensity'], metrics_a['Volume'], metrics_a['Sprint_Power'], metrics_a['Max_Speed']],
+            theta=categories, fill='toself', name=team_a, line_color='#006D00'
+        ))
+        fig.add_trace(go.Scatterpolar(
+            r=[metrics_b['Intensity'], metrics_b['Volume'], metrics_b['Sprint_Power'], metrics_b['Max_Speed']],
+            theta=categories, fill='toself', name=team_b, line_color='#FF0000'
+        ))
+        fig.update_layout(polar=dict(radialaxis=dict(visible=False)), showlegend=True)
+        st.plotly_chart(fig, use_container_width=True)
+
+    with col2:
+        st.write("### Taktisk Vurdering")
+        diff = metrics_a['Intensity'] - metrics_b['Intensity']
+        if diff > 0:
+            st.success(f"**Fordel {team_a}:** I har højere intensitet. Modstå deres pres og kør dem trætte i 2. halvleg.")
+        else:
+            st.warning(f"**Advarsel:** {team_b} løber flere HI-meter. Undgå en 'Hawaii-kamp' og hold organisationen kompakt.")
+            
+        st.info(f"**Topfart Duel:** {team_a} ({metrics_a['Max_Speed']:.1f}) vs {team_b} ({metrics_b['Max_Speed']:.1f})")
+
+    # --- SPILLER MOD SPILLER (TOP 5) ---
     st.divider()
-    c1, c2, c3 = st.columns(3)
+    st.write(f"### Top 5 Kapacitet: {team_a} vs {team_b}")
     
-    with c1:
-        all_teams = sorted(list(set([t.strip() for sublist in df_raw['MATCH_TEAMS'].str.split('-').tolist() for t in sublist])))
-        target_team = st.selectbox("🎯 Vælg hold", ["Alle"] + all_teams)
+    comp_metric = st.selectbox("Vælg kampparameter", ['HI_P90', 'DIST_P90', 'TOP_SPEED', 'HSR_P90'])
     
-    with c2:
-        metric_choice = st.selectbox("📈 Primær metrik", 
-                                     ['Intensity_Composite', 'HI_P90', 'HSR_P90', 'DIST_P90', 'TOP_SPEED'])
+    data_a = df_agg[df_agg['MATCH_TEAMS'].str.contains(team_a)].sort_values(comp_metric, ascending=False).head(5)
+    data_b = df_agg[df_agg['MATCH_TEAMS'].str.contains(team_b)].sort_values(comp_metric, ascending=False).head(5)
     
-    with c3:
-        show_names = st.toggle("Vis navne på grafer", value=True)
+    combined = pd.concat([data_a, data_b])
+    combined['HOLD'] = combined['MATCH_TEAMS'].apply(lambda x: team_a if team_a in x else team_b)
 
-    # Farve-logik
-    df_scored['HIGHLIGHT'] = df_scored['MATCH_TEAMS'].apply(lambda x: target_team if target_team in x else 'Andre')
-    c_map = {target_team: '#006D00', 'Andre': '#D3D3D3', 'Alle': '#006D00'}
-
-    # --- TABS TIL FORSKELLIGE VISNINGER ---
-    tab1, tab2, tab3 = st.tabs(["🏆 Ranking", "🗺️ Landskab", "📋 Data Grid"])
-
-    with tab1:
-        st.write(f"### Ranking: {metric_choice}")
-        full_rank = df_scored.sort_values(metric_choice, ascending=False).reset_index(drop=True)
-        
-        # Dynamisk limit for at sikre det valgte hold er synligt
-        limit = 20
-        if target_team != "Alle":
-            team_idx = full_rank[full_rank['HIGHLIGHT'] == target_team].index
-            if not team_idx.empty: limit = max(20, team_idx.max() + 1)
-        
-        plot_df = full_rank.head(min(limit, 40))
-        fig_rank = px.bar(plot_df, x=metric_choice, y='PLAYER_NAME', orientation='h',
-                          color='HIGHLIGHT', color_discrete_map=c_map,
-                          category_orders={"PLAYER_NAME": plot_df['PLAYER_NAME'].tolist()})
-        fig_rank.update_layout(height=600, showlegend=False, plot_bgcolor='rgba(0,0,0,0)')
-        st.plotly_chart(fig_rank, use_container_width=True)
-
-    with tab2:
-        st.write("### Fysisk Landskab")
-        fig_scat = px.scatter(df_scored, x='Volume_Composite', y='Intensity_Composite',
-                              size=df_scored['TOP_SPEED'].clip(lower=25), 
-                              color='HIGHLIGHT', color_discrete_map=c_map,
-                              hover_name='PLAYER_NAME',
-                              text='PLAYER_NAME' if (show_names and target_team != "Alle") else None)
-        fig_scat.update_layout(height=600, plot_bgcolor='rgba(0,0,0,0)')
-        st.plotly_chart(fig_scat, use_container_width=True)
-
-    with tab3:
-        multi_metrics = st.multiselect("Vælg kolonner", 
-                                       ['DIST_P90', 'HI_P90', 'HSR_P90', 'TOP_SPEED', 'Intensity_Composite'],
-                                       default=['HI_P90', 'TOP_SPEED', 'Intensity_Composite'])
-        display_profile_grid(df_scored, target_team if target_team != "Alle" else all_teams[0], multi_metrics)
+    fig_bar = px.bar(combined, x=comp_metric, y='PLAYER_NAME', color='HOLD', 
+                     orientation='h', barmode='group',
+                     color_discrete_map={team_a: '#006D00', team_b: '#FF0000'})
+    st.plotly_chart(fig_bar, use_container_width=True)
 
 if __name__ == "__main__":
     vis_side()
