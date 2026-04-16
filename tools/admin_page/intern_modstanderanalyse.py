@@ -4,24 +4,22 @@ import numpy as np
 import plotly.express as px
 from data.data_load import _get_snowflake_conn
 
-# --- Streamlit konfiguration ---
-st.set_page_config(page_title="Hvidovre IF Taktisk Analyse", layout="wide", initial_sidebar_state="collapsed")
+# --- Konfiguration ---
+st.set_page_config(page_title="Hvidovre IF Dynamisk Modstander-Analyse", layout="wide", initial_sidebar_state="collapsed")
 
-# Styling til mørkt tema og gennemsigtighed til PPT
 st.markdown("""
 <style>
     .stApp { background-color: #1E1E1E; color: white; }
     .stSelectbox div[data-baseweb="select"] > div { background-color: #2D2D2D; color: white; }
-    .stRadio div[role="radiogroup"] > label { color: white; }
     hr { border-color: #444444; }
 </style>
 """, unsafe_allow_html=True)
 
-# --- 1. DATA-PROCESSERING (Korrigeret SQL) ---
+# --- 1. DATA-PROCESSERING ---
 def get_league_data(conn):
     sql = """
         SELECT 
-            P.PLAYER_NAME, P.MATCH_TEAMS, P.DISTANCE, 
+            P.MATCH_TEAMS, P.DISTANCE, 
             P."HIGH SPEED RUNNING" as HSR, P.NO_OF_HIGH_INTENSITY_RUNS as HI_RUNS, P.TOP_SPEED,
             CASE 
               WHEN P.MINUTES LIKE '%:%' THEN TRY_CAST(SPLIT_PART(P.MINUTES, ':', 1) AS FLOAT) + (TRY_CAST(SPLIT_PART(P.MINUTES, ':', 2) AS FLOAT)/60)
@@ -36,16 +34,45 @@ def get_league_data(conn):
     if df is None: return pd.DataFrame()
     df.columns = [c.upper() for c in df.columns]
     
-    df['TOP_SPEED'] = df['TOP_SPEED'].apply(lambda x: x if x < 36.5 else 34.0 + np.random.uniform(0.1, 1.2))
+    # Aggregering til hold-niveau
     df['HI_P90'] = (df['HI_RUNS'] / df['MIN_DEC']) * 90
     df['HSR_P90'] = (df['HSR'] / df['MIN_DEC']) * 90
     df['DIST_P90'] = (df['DISTANCE'] / df['MIN_DEC']) * 90
     
     return df
 
-# --- 2. HOVEDSIDE ---
+# --- 2. DEN DYNAMISKE ANALYSE-MOTOR (Ingen hardcoding) ---
+def analyze_opponent_dna(target_stats, league_avg):
+    dna = {"stil": "", "mønster": "", "modtræk": []}
+    
+    # Vurdering af Pres-intensitet
+    hi_ratio = target_stats['HI_P90'] / league_avg['HI_P90']
+    if hi_ratio > 1.10:
+        dna["stil"] = "Ekstremt aggressivt pres-hold"
+        dna["mønster"] = "Søger konsekvent 1-mod-1 dueller og forsøger at fremprovokere fejl i jeres opspil."
+        dna["modtræk"].append("Brug færre berøringer centralt - bolden skal flyttes hurtigere end deres pres.")
+        dna["modtræk"].append("Søg de direkte bolde i bagrummet tidligt, da de står meget højt.")
+    elif hi_ratio < 0.90:
+        dna["stil"] = "Passivt / Kompakt defensiv"
+        dna["mønster"] = "Falder dybt og lader jer have bolden. Satser på at lukke rummene centralt."
+        dna["modtræk"].append("Tålmodighed i opbygningen - flyt dem fra side til side for at åbne mellemrum.")
+        dna["modtræk"].append("Gå efter indlæg eller langskud, når de pakker sig i feltet.")
+    else:
+        dna["stil"] = "Balanceret organisation"
+        dna["mønster"] = "Varierer deres pres alt efter kampens fase."
+        dna["modtræk"].append("Fokusér på restforsvar og vind de løse bolde på midten.")
+
+    # Vurdering af Omstillings-farlighed (HSR)
+    hsr_ratio = target_stats['HSR_P90'] / league_avg['HSR_P90']
+    if hsr_ratio > 1.15:
+        dna["mønster"] += " Ekstremt farlige i vertikale omstillinger."
+        dna["modtræk"].append("Prioritér et stærkt restforsvar (3+2 struktur) for at dæmme op for deres kontraløb.")
+
+    return dna
+
+# --- 3. UI OG VISNING ---
 def vis_side():
-    st.title("Taktisk Beslutningsstøtte")
+    st.title("Dynamisk Taktisk Modstander-Analyse")
     
     conn = _get_snowflake_conn()
     df = get_league_data(conn)
@@ -53,68 +80,50 @@ def vis_side():
 
     unique_teams = sorted(list(set([t.strip() for sublist in df['MATCH_TEAMS'].str.split('-').tolist() for t in sublist])))
     
-    c_sel1, c_sel2 = st.columns(2)
-    with c_sel1:
+    col_a, col_b = st.columns(2)
+    with col_a:
         t1 = st.selectbox("Vores Hold", unique_teams, index=unique_teams.index("Hvidovre") if "Hvidovre" in unique_teams else 0)
-    with c_sel2:
+    with col_b:
         t2 = st.selectbox("Modstander", unique_teams, index=unique_teams.index("Kolding IF") if "Kolding IF" in unique_teams else 0)
 
-    def agg_team(name):
+    # Beregn stats
+    def get_team_avg(name):
         mask = df['MATCH_TEAMS'].str.contains(name)
         return df[mask][['HI_P90', 'HSR_P90', 'TOP_SPEED', 'DIST_P90']].mean()
 
-    stats_a = agg_team(t1)
-    stats_b = agg_team(t2)
+    stats_hvi = get_team_avg(t1)
+    stats_opp = get_team_avg(t2)
+    league_avg = df[['HI_P90', 'HSR_P90', 'TOP_SPEED', 'DIST_P90']].mean()
 
-    # Liga-oversigt
+    # Analyse
+    dna = analyze_opponent_dna(stats_opp, league_avg)
+
+    # Graf
     st.divider()
-    st.subheader("Fysisk Hierarki: Hele Ligaen")
+    metrics = pd.DataFrame({
+        'Parameter': ['HI Løb', 'Sprint (HSR)', 'Total Distance'],
+        t1: [stats_hvi['HI_P90'], stats_hvi['HSR_P90'], stats_hvi['DIST_P90']],
+        t2: [stats_opp['HI_P90'], stats_opp['HSR_P90'], stats_opp['DIST_P90']],
+        'Liga Snit': [league_avg['HI_P90'], league_avg['HSR_P90'], league_avg['DIST_P90']]
+    })
     
-    league_metrics = []
-    for team in unique_teams:
-        m = agg_team(team)
-        league_metrics.append({'Hold': team, 'HI': m['HI_P90'], 'HSR': m['HSR_P90'], 'Speed': m['TOP_SPEED']})
-    df_l = pd.DataFrame(league_metrics)
-
-    m_choice = st.radio("Vælg metrik", ['HI', 'HSR', 'Speed'], horizontal=True)
-    df_l = df_l.sort_values(m_choice, ascending=False)
-    
-    color_map = {team: '#4A4A4A' for team in unique_teams}
-    color_map[t1] = '#006D00'
-    color_map[t2] = '#FF0000'
-
-    fig = px.bar(df_l, x='Hold', y=m_choice, color='Hold', color_discrete_map=color_map, text_auto='.1f')
-    fig.update_layout(showlegend=False, plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font=dict(color="white"), height=400, margin=dict(l=20, r=20, t=30, b=100), xaxis=dict(tickangle=45, title=""), yaxis=dict(gridcolor='#444444', title=""))
+    fig = px.bar(metrics, x='Parameter', y=[t1, t2, 'Liga Snit'], barmode='group',
+                 color_discrete_map={t1: '#006D00', t2: '#FF0000', 'Liga Snit': '#4A4A4A'})
+    fig.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font=dict(color="white"), barmode='group')
     st.plotly_chart(fig, use_container_width=True)
 
-    # TAKTISK ANALYSE SEKTION
+    # Dynamisk Tekst-felt
     st.divider()
-    st.header(f"Analyse: Hvordan slår vi {t2}?")
+    c1, c2 = st.columns(2)
+    with c1:
+        st.subheader(f"Profil af {t2}")
+        st.write(f"**Stil:** {dna['stil']}")
+        st.write(f"**Mønster:** {dna['mønster']}")
     
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.subheader("Observationer")
-        hi_diff = ((stats_b['HI_P90'] / stats_a['HI_P90']) - 1) * 100
-        
-        if "Kolding" in t2:
-            st.write("Kolding IF opererer med ligaens mest aggressive pres. De søger at skabe kaos og vinde bolden i jeres opspil.")
-            st.write(f"De leverer {abs(hi_diff):.1f}% flere HI-løb end os. Deres spillere søger ofte 1-mod-1 dueller over hele banen.")
-            st.write("Deres kanter og angribere lukker jeres backs ned med det samme ved boldmodtagelse.")
-        else:
-            st.write(f"Modstanderen har en HI-intensitet på {stats_b['HI_P90']:.1f}. De er fysisk velorganiserede.")
-
-    with col2:
-        st.subheader("Taktiske Modtræk")
-        if "Kolding" in t2:
-            st.markdown("""
-            * **Escape the Press:** Brug færre berøringer centralt. Bolden skal flyttes hurtigere end de kan nå at lukke rummet.
-            * **Bagrummet er åbent:** Da de presser så højt, står deres bagkæde ofte 1-mod-1. Søg de direkte bolde bag deres backs tidligt i omstillingen.
-            * **Vind 2. bolden:** Kampen mod Kolding vindes på midtbanen. Vi skal have 'ekstra' folk omkring de løse bolde for at bryde deres rytme.
-            * **Lok dem frem:** Turde spille kort i egen 16-meter for at trække deres midtbane helt frem, og så slå den lange bold diagonalt.
-            """)
-        else:
-            st.write("Fokusér på struktur og udnyt deres lavere intensitet i 2. halvleg.")
+    with c2:
+        st.subheader("Plan: Hvordan vi slår dem")
+        for m in dna["modtræk"]:
+            st.write(f"- {m}")
 
 if __name__ == "__main__":
     vis_side()
