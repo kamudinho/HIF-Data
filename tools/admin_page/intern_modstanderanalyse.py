@@ -80,6 +80,55 @@ def draw_player_info_box(ax, team_logo, player_name, season_str, category_str):
     ax.text(0.10, 0.89, info_text, transform=ax.transAxes, 
             fontsize=8, color='#666666', va='center')
 
+def hent_nuanceret_analyse(df_fjende):
+    # --- LIGA GENNEMSNIT (NordicBet Liga estimater) ---
+    LIGA_PAS_GNS = 78.0
+    LIGA_DUEL_GNS = 50.0
+    LIGA_FELT_GNS = 1.2
+
+    # --- BEREGN MODSTANDER STATS ---
+    # Pasninger på egen halvdel
+    egen_pas = df_fjende[(df_fjende['EVENT_TYPEID'] == 1) & (df_fjende['EVENT_X'] < 40)]
+    pas_acc = (egen_pas['OUTCOME'].sum() / len(egen_pas)) * 100 if not egen_pas.empty else LIGA_PAS_GNS
+    
+    # Dueller
+    dueller = df_fjende[df_fjende['EVENT_TYPEID'].isin([7, 44])]
+    duel_acc = (dueller['OUTCOME'].sum() / len(dueller)) * 100 if not dueller.empty else LIGA_DUEL_GNS
+    
+    # Felt-aktioner pr. kamp (baseret på 10 kampe)
+    felt_aktioner = len(df_fjende[(df_fjende['EVENT_X'] < 20) & (df_fjende['EVENT_Y'].between(20, 80))])
+    felt_snit = felt_aktioner / 10
+
+    # --- NUANCERET LOGIK ---
+    
+    # 1. Analyse af Pres (Opbygning)
+    if pas_acc < (LIGA_PAS_GNS - 5):
+        pres_tekst = f"KRITISK SVAGHED: Modstanderen er markant under liga-snittet i opbygningen ({int(pas_acc)}%). Hvidovre skal tvinge dem til korte løsninger via et aggressivt, koordineret højt pres."
+    elif pas_acc > (LIGA_PAS_GNS + 5):
+        pres_tekst = f"STYRKE: Modstanderen er elite i deres omgang med bolden ({int(pas_acc)}%). Et højt pres vil være risikabelt. Hvidovre bør ligge i en kompakt midterblok og lukke de centrale rum."
+    else:
+        pres_tekst = f"GENNEMSNITLIG: Modstanderen følger liga-tendensen ({int(pas_acc)}%). Variér presset alt efter deres position på banen og søg at stresse deres svageste boldspiller."
+
+    # 2. Analyse af Duelspil
+    if duel_acc < (LIGA_DUEL_GNS - 3):
+        duel_tekst = f"FYSISK OVERTAG: Modstanderen taber unormalt mange dueller ({int(duel_acc)}%). Gør kampen fysisk, søg duellerne på deres halvdel og lev af de opsamlede andenbolde."
+    elif duel_acc > (LIGA_DUEL_GNS + 3):
+        duel_tekst = f"ADVARSEL: Modstanderen er fysisk dominerende ({int(duel_acc)}%). Undgå stationære dueller. Flyt bolden hurtigt med få berøringer for at trætte deres defensiv fremfor at gå i nærkamp."
+    else:
+        duel_tekst = f"DUEL-BALANCE: Begge hold står lige i det fysiske spil ({int(duel_acc)}%). Timing i genpresset bliver afgørende for hvem der tager kontrollen."
+
+    # 3. Analyse af Gennembrud
+    if felt_snit > (LIGA_FELT_GNS + 0.5):
+        felt_tekst = f"DEFENSIV ÅBNING: De tillader {felt_snit} aktioner i boksen, hvilket er højt for ligaen. Fokus på overlaps og flade indlæg i 'the corridor of uncertainty' bag deres stoppere."
+    else:
+        felt_tekst = f"ORGANISERET FELT: De er dygtige til at beskytte 'Zone 14' og eget felt. Hvidovre skal angribe via hurtige vendinger og søge cut-backs eller skud fra distancen."
+
+    return {
+        'pres': pres_tekst,
+        'dueller': duel_tekst,
+        'felt': felt_tekst
+    }
+
 def generer_anbefaling(df_fjende):
     anbefalinger = []
     
@@ -264,22 +313,20 @@ def vis_side(dp=None):
     # Hent analyse-data til brug i alle tabs
     stats = hent_detaljeret_analyse(df_all_h)
     
+    # Øverst i din tabs-sektion:
+    nuanceret_gameplan = hent_nuanceret_analyse(df_all_h)
+    
     with t1:
-        # --- SEKTION: STRATEGISK ANALYSE MOD MODSTANDER ---
-        st.markdown(f"**STRATEGISK ANALYSE: HVIDOVRE IF MOD {valgt_hold.upper()}**")
-        
-        # Visning i en simpel boks uden ikoner
+        st.markdown(f"**STRATEGISK GAMEPLAN MOD {valgt_hold.upper()}**")
         with st.container(border=True):
-            st.markdown(f"PRESSPIL: Modstanderen har en pasningssucces på egen halvdel på {stats['pas_acc']}%. " + 
-                        ("Hvidovre bør lægge et aggressivt pres fra start." if stats['pas_acc'] < 80 else "Afvent pres og fald ned i en kompakt organisation."))
-            
-            st.markdown(f"DUELSTYRKE: Modstanderen vinder {stats['duel_acc']}% af deres dueller. " + 
-                        ("Hvidovre skal søge de fysiske konfrontationer og vinde andenboldene." if stats['duel_acc'] < 50 else "Modstanderen er fysisk stærk. Undgå unødvendige dueller og flyt bolden hurtigt."))
-            
-            st.markdown(f"GENNEMBRUD: Modstanderen tillader {stats['felt_snit']} aktioner i egen boks pr. kamp. " + 
-                        ("Fokus på dybe løb og indlæg bag deres bagkæde." if stats['felt_snit'] > 1.5 else "Modstanderen lukker rummet i feltet godt ned. Søg afslutninger fra distancen."))
-        
-        st.markdown("---") 
+            st.markdown(f"**OPBYGNING & PRES**")
+            st.markdown(nuanceret_gameplan['pres'])
+            st.markdown("---")
+            st.markdown(f"**FYSISK TILGANG**")
+            st.markdown(nuanceret_gameplan['dueller'])
+            st.markdown("---")
+            st.markdown(f"**GENNEMBRUD**")
+            st.markdown(nuanceret_gameplan['felt'])
 
         # Resultat logik
         df_res['RES'] = df_res.apply(lambda r: "D" if r['TOTAL_HOME_SCORE'] == r['TOTAL_AWAY_SCORE'] else ("W" if ((r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid and r['TOTAL_HOME_SCORE'] > r['TOTAL_AWAY_SCORE']) or (r['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid and r['TOTAL_AWAY_SCORE'] > r['TOTAL_HOME_SCORE'])) else "L"), axis=1)        
