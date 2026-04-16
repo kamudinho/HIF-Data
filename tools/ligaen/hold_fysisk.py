@@ -1,113 +1,132 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
+import numpy as np
 import plotly.graph_objects as go
 from data.data_load import _get_snowflake_conn
+from data.utils.team_mapping import TEAMS
+
+# --- KONFIGURATION ---
+DB = "KLUB_HVIDOVREIF.AXIS"
+SEASON_START = "2025-07-01"
+LIGA_IDS = "('dyjr458hcmrcy87fsabfsy87o', 'e5p78j2r7v8h3u9s5k0l2m4n6', 'f6q89k3s8w9i4v0t6l1m3n5o7', '328', '329', '43319', '331', '1305')"
+
+@st.cache_resource
+def get_cached_conn():
+    return _get_snowflake_conn()
 
 def vis_side():
-    """Hovedfunktion der kaldes fra hif_dash.py"""
-    
-    # Hent forbindelse (bruger din eksisterende funktion)
-    conn = _get_snowflake_conn()
-    
-    # 1. DATA FETCHING
-    # Vi henter både summary (totaler) og splits (interval-data)
-    @st.cache_data(ttl=3600)
-    def load_physical_team_data():
-        query_summary = """
-        SELECT MATCH_SSIID, MATCH_DATE, MATCH_TEAMS, PLAYER_NAME, 
-               DISTANCE, RUNNING, "HIGH SPEED RUNNING", SPRINTING, 
-               NO_OF_HIGH_INTENSITY_RUNS, TOP_SPEED,
-               HSR_DISTANCE_TIP, HSR_DISTANCE_OTIP
-        FROM SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
-        """
-        query_splits = """
-        SELECT MATCH_SSIID, MINUTE_SPLIT, PHYSICAL_METRIC_TYPE, PHYSICAL_METRIC_VALUE
-        FROM SECONDSPECTRUM_PHYSICAL_SPLITS_PLAYERS
-        WHERE PHYSICAL_METRIC_TYPE = 'DISTANCE'
-        """
-        df_sum = conn.query(query_summary)
-        df_spl = conn.query(query_splits)
-        return df_sum, df_spl
+    st.markdown("""<style>
+        [data-testid="stMetricValue"] { font-size: 26px !important; font-weight: bold !important; color: #333; }
+    </style>""", unsafe_allow_html=True)
 
-    df_summary, df_splits = load_physical_team_data()
-
-    if df_summary.empty:
-        st.warning("Ingen fysiske data fundet i databasen.")
+    conn = get_cached_conn()
+    
+    # 1. HENT HOLDLISTE (Bruger DB prefix)
+    df_teams = conn.query(f"""
+        SELECT DISTINCT CONTESTANTHOME_NAME as NAME 
+        FROM {DB}.OPTA_MATCHINFO 
+        WHERE TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS} 
+        ORDER BY 1
+    """)
+    
+    if df_teams is None or df_teams.empty:
+        st.error("Kunne ikke hente hold-data.")
         return
 
-    # 2. FILTRERING (Vælg kamp)
-    alle_kampe = df_summary['MATCH_TEAMS'].unique().tolist()
-    valgt_kamp = st.selectbox("Vælg Kamp", alle_kampe, index=len(alle_kampe)-1)
-    
-    # Filtrer data for den valgte kamp
-    match_df = df_summary[df_summary['MATCH_TEAMS'] == valgt_kamp]
-    match_id = match_df['MATCH_SSIID'].iloc[0]
-    
-    # Aggreger til hold-totaler for den valgte kamp
-    team_total = match_df.agg({
-        'DISTANCE': 'sum',
-        'HIGH SPEED RUNNING': 'sum',
-        'SPRINTING': 'sum',
-        'NO_OF_HIGH_INTENSITY_RUNS': 'sum'
-    })
+    c1, c2 = st.columns(2)
+    valgt_hold = c1.selectbox("Vælg Hold", df_teams['NAME'].unique())
+    target_ssiid = TEAMS.get(valgt_hold, {}).get('ssid')
 
-    # 3. KPI OVERBLIK
-    # Beregn liga-gennemsnit for at give kontekst (delta)
-    liga_avg = df_summary.groupby('MATCH_SSIID').agg({'DISTANCE': 'sum'}).mean()['DISTANCE']
-    
-    c1, c2, c3, c4 = st.columns(4)
-    with st.container(border=True):
-        c1.metric("Total Distance", f"{team_total['DISTANCE']/1000:.1f} km", 
-                  delta=f"{(team_total['DISTANCE'] - liga_avg)/1000:.1f} km vs liga-snit")
-        c2.metric("HSR (20-25 km/t)", f"{team_total['HIGH SPEED RUNNING']:.0f} m")
-        c3.metric("Sprint (>25 km/t)", f"{team_total['SPRINTING']:.0f} m")
-        c4.metric("HI Aktiviteter", f"{team_total['NO_OF_HIGH_INTENSITY_RUNS']:.0f}")
+    # 2. HENT KAMPE FOR HOLDET (Bruger DB prefix)
+    df_matches = conn.query(f"""
+        SELECT DISTINCT 
+            MATCH_SSIID, 
+            DATE as CALC_DATE,
+            DESCRIPTION as MATCH_NAME
+        FROM {DB}.SECONDSPECTRUM_SEASON_METADATA
+        WHERE (HOME_SSIID = '{target_ssiid}' OR AWAY_SSIID = '{target_ssiid}')
+          AND DATE >= '{SEASON_START}'
+          AND DATE <= CURRENT_DATE()
+        ORDER BY DATE DESC
+    """)
 
-    st.divider()
+    if df_matches is None or df_matches.empty:
+        st.warning("Ingen spillede kampe fundet.")
+        return
 
-    col_left, col_right = st.columns(2)
+    df_matches['DATO_STR'] = pd.to_datetime(df_matches['CALC_DATE']).dt.strftime('%d/%m')
+    df_matches['SELECT_LABEL'] = df_matches['DATO_STR'] + " - " + df_matches['MATCH_NAME']
+    valgt_kamp_label = c2.selectbox("Vælg Kamp", df_matches['SELECT_LABEL'].tolist())
+    valgt_match_ssiid = df_matches[df_matches['SELECT_LABEL'] == valgt_kamp_label]['MATCH_SSIID'].iloc[0]
 
-    with col_left:
-        # 4. PERIODE ANALYSE (Hvor i kampen løber vi mest?)
-        st.subheader("⏱️ Intensitet per 15 min.")
-        kamp_splits = df_splits[df_splits['MATCH_SSIID'] == match_id].copy()
-        kamp_splits['INTERVAL'] = (kamp_splits['MINUTE_SPLIT'] // 15) * 15
-        period_data = kamp_splits.groupby('INTERVAL')['PHYSICAL_METRIC_VALUE'].sum().reset_index()
+    # 3. HOLD-DATA AGGREGERING (Totaler for hele holdet i kampen)
+    # Her bruger vi DB prefix på alle tabeller
+    df_hold_summary = conn.query(f"""
+        SELECT 
+            SUM(DISTANCE) as TOTAL_DIST,
+            SUM("HIGH SPEED RUNNING") as TOTAL_HSR,
+            SUM(SPRINTING) as TOTAL_SPRINT,
+            SUM(NO_OF_HIGH_INTENSITY_RUNS) as TOTAL_HI,
+            SUM(HSR_DISTANCE_TIP) as HSR_TIP,
+            SUM(HSR_DISTANCE_OTIP) as HSR_OTIP
+        FROM {DB}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
+        WHERE MATCH_SSIID = '{valgt_match_ssiid}'
+    """)
+
+    if df_hold_summary is not None and not df_hold_summary.empty:
+        hold = df_hold_summary.iloc[0]
         
-        # Omdøb interval til læsbare navne
-        interval_map = {0: "0-15'", 15: "15-30'", 30: "30-45'", 45: "45-60'", 60: "60-75'", 75: "75-90'", 90: "90+'"}
-        period_data['Minutter'] = period_data['INTERVAL'].map(interval_map)
+        # Metrics række
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Total Distance", f"{round(hold['TOTAL_DIST']/1000, 1)} km")
+        m2.metric("HSR Distance", f"{int(hold['TOTAL_HSR'])} m")
+        m3.metric("Sprint Distance", f"{int(hold['TOTAL_SPRINT'])} m")
+        m4.metric("HI Aktiviteter", f"{int(hold['TOTAL_HI'])}")
 
-        fig_period = px.bar(period_data, x='Minutter', y='PHYSICAL_METRIC_VALUE',
-                            title="Total distance fordelt på tid",
-                            color_discrete_sequence=['#df003b'])
-        st.plotly_chart(fig_period, use_container_width=True)
+        st.divider()
 
-    with col_right:
-        # 5. TIP vs OTIP (Med bold vs Uden bold)
-        st.subheader("⚽ Boldbesiddelse & Løb")
-        tip_hsr = match_df['HSR_DISTANCE_TIP'].sum()
-        otip_hsr = match_df['HSR_DISTANCE_OTIP'].sum()
+        # 4. GRAFER: TIP vs OTIP (Holdets intensitet med/uden bold)
+        col_left, col_right = st.columns(2)
         
-        fig_pos = go.Figure(data=[go.Pie(labels=['Med bold (TIP)', 'Uden bold (OTIP)'], 
-                                         values=[tip_hsr, otip_hsr], 
-                                         hole=.3,
-                                         marker_colors=['#df003b', '#333'])])
-        fig_pos.update_layout(title="HSR Distance fordelt på boldbesiddelse")
-        st.plotly_chart(fig_pos, use_container_width=True)
+        with col_left:
+            st.subheader("Fysisk Fase-fordeling")
+            fig_pie = go.Figure(data=[go.Pie(
+                labels=['Med bold (TIP)', 'Uden bold (OTIP)'],
+                values=[hold['HSR_TIP'], hold['HSR_OTIP']],
+                hole=.4,
+                marker_colors=['#cc0000', '#333333']
+            )])
+            fig_pie.update_layout(height=350, margin=dict(l=20, r=20, t=30, b=20))
+            st.plotly_chart(fig_pie, use_container_width=True)
 
-    # 6. SPILLER TOPLISTE
-    st.subheader("🔝 Top 5 Performere (Distance)")
-    top_players = match_df.sort_values('DISTANCE', ascending=False).head(5)
-    
-    # Vi viser spillerne i en tabel med en lille bar-chart ved siden af
-    st.dataframe(
-        top_players[['PLAYER_NAME', 'DISTANCE', 'HIGH SPEED RUNNING', 'SPRINTING', 'TOP_SPEED']],
-        column_config={
-            "DISTANCE": st.column_config.NumberColumn("Distance (m)", format="%d m"),
-            "TOP_SPEED": st.column_config.NumberColumn("Topfart (km/t)", format="%.1f km/t")
-        },
-        use_container_width=True,
-        hide_index=True
-    )
+        with col_right:
+            # 5. PERIODE ANALYSE (Interval-data)
+            df_splits = conn.query(f"""
+                SELECT MINUTE_SPLIT, SUM(PHYSICAL_METRIC_VALUE) as VAL
+                FROM {DB}.SECONDSPECTRUM_PHYSICAL_SPLITS_PLAYERS
+                WHERE MATCH_SSIID = '{valgt_match_ssiid}'
+                  AND PHYSICAL_METRIC_TYPE = 'Distance'
+                GROUP BY 1 ORDER BY 1 ASC
+            """)
+            
+            if df_splits is not None and not df_splits.empty:
+                st.subheader("Intensitet over tid (Distance)")
+                fig_line = go.Figure()
+                fig_line.add_trace(go.Bar(
+                    x=df_splits['MINUTE_SPLIT'], 
+                    y=df_splits['VAL'], 
+                    marker_color='#cc0000'
+                ))
+                fig_line.update_layout(height=350, xaxis_title="Minutter", yaxis_title="Meter")
+                st.plotly_chart(fig_line, use_container_width=True)
+
+    # 6. SPILLER LISTE (Top 10 i kampen)
+    st.subheader("Spiller-performance i kampen")
+    df_players = conn.query(f"""
+        SELECT PLAYER_NAME, DISTANCE, "HIGH SPEED RUNNING", SPRINTING, TOP_SPEED
+        FROM {DB}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
+        WHERE MATCH_SSIID = '{valgt_match_ssiid}'
+        ORDER BY DISTANCE DESC
+    """)
+    if df_players is not None:
+        st.dataframe(df_players, use_container_width=True, hide_index=True)
