@@ -1,115 +1,92 @@
 import streamlit as st
 import pandas as pd
-import data.HIF_load as hif_load
+from data.data_load import _get_snowflake_conn
 
 def vis_side():
-    st.markdown("<h2 style='text-align: center; color: #1DB954;'>EXPLOSIVE PHYSICAL PROFILES</h2>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align: center; margin-top: -15px;'>NordicBet Liga 2025/2026</p>", unsafe_allow_html=True)
+    st.markdown("<h2 style='text-align: center; color: #df003b;'>EXPLOSIVE PHYSICAL PROFILES</h2>", unsafe_allow_html=True)
     
     try:
-        # 1. DATA INDLÆSNING
-        dp = hif_load.get_scouting_package()
+        # 1. DIREKTE FORBINDELSE TIL SNOWFLAKE
+        conn = _get_snowflake_conn()
         
-        # Prøv alle mulige kilder til fysisk data
-        df_stats = dp.get("physical", dp.get("players", dp.get("advanced_stats", pd.DataFrame())))
-        df_meta = dp.get("sql_players", pd.DataFrame())
+        # Vi henter alle nødvendige data i ét hug
+        # RET 'DIN_TABEL_NAVN' til navnet på din tabel i Snowflake (f.eks. WY_DATA eller lign.)
+        query = """
+            SELECT * FROM DIN_TABEL_NAVN 
+            WHERE SEASONNAME = '2025/2026' 
+            AND COMPETITION_WYID = 328
+        """
+        df_all = conn.query(query)
 
-        if df_stats.empty:
-            st.error("Kunne ikke finde statistik-data i systemet.")
+        if df_all.empty:
+            st.warning("Ingen data fundet i Snowflake for den valgte sæson/liga.")
             return
 
-        # Rens kolonnenavne (STORE bogstaver)
-        df_stats.columns = [c.upper() for c in df_stats.columns]
-        if not df_meta.empty:
-            df_meta.columns = [c.upper() for c in df_meta.columns]
+        # Sørg for ensartede kolonnenavne
+        df_all.columns = [c.upper() for c in df_all.columns]
 
-        # 2. FIND HOLD-KOLONNE
-        team_col = next((c for c in df_stats.columns if 'TEAM' in c or 'HOLD' in c), None)
-        if not team_col:
-            st.warning("Hold-kolonne ikke fundet.")
-            return
+        # 2. HOLD-VÆLGER
+        team_col = 'TEAM_NAME' if 'TEAM_NAME' in df_all.columns else 'HOLD_NAVN'
+        hold_liste = sorted(df_all[team_col].unique().tolist())
+        valgt_hold = st.selectbox("Vælg Hold", options=hold_liste)
 
-        hold_liste = sorted([str(x) for x in df_stats[team_col].unique() if pd.notnull(x)])
-        valgt_hold = st.selectbox("Vælg Hold til analyse", options=hold_liste)
-        
         if valgt_hold:
-            df_hold = df_stats[df_stats[team_col] == valgt_hold].copy()
+            df_hold = df_all[df_all[team_col] == valgt_hold].copy()
 
-            # 3. RENS DATA & FIND SPILLERE
-            # Tving PLAYER_NAME til string og rens for tal-fejl
-            name_col = 'PLAYER_NAME' if 'PLAYER_NAME' in df_hold.columns else next((c for c in df_hold.columns if 'PLAYER' in c or 'NAVN' in c), None)
-            
-            if name_col:
-                df_hold[name_col] = df_hold[name_col].astype(str)
-                # Vi finder de 5 mest 'aktive' baseret på hvad vi har af tal
-                num_cols = df_hold.select_dtypes(include=['number']).columns
-                df_hold['TOTAL_SCORE'] = df_hold[num_cols].sum(axis=1)
-                top_5 = df_hold.sort_values(by='TOTAL_SCORE', ascending=False).head(5)
-            else:
-                st.error("Kunne ikke finde kolonnen med spillernavne.")
-                return
+            # Rens tal-data (vigtigt mod str/float fejlen)
+            for col in df_hold.columns:
+                if col not in ['PLAYER_NAME', team_col, 'IMAGEDATAURL']:
+                    df_hold[col] = pd.to_numeric(df_hold[col], errors='coerce').fillna(0.0)
 
-            # 4. DEFINER METRICS (Matcher dit billede)
-            # Vi tilføjer flere mulige navne for hver stat
-            metrics_sections = {
-                "Volume Metrics": {
-                    "Distance P90": ["DISTANCE", "TOT_DIST", "DISTANCE_P90"],
-                    "Avg Meters/Min": ["METERS_PER_MIN", "M_MIN", "INTENSITY_AVG"],
-                },
-                "High Intensity Metrics": {
-                    "Hi Distance P90": ["HI_DISTANCE", "HSR_DIST", "HIGH_INTENSITY_DISTANCE"],
-                    "Sprint Distance": ["SPRINT_DISTANCE", "SPRINT_DIST"],
-                    "Sprints P90": ["SPRINT_COUNT", "SPRINTS", "SPRINT_NUM"],
-                },
-                "Explosive Metrics": {
-                    "Accels/Decels": ["ACCELERATIONS", "ACC_DEC", "ACCELS"],
-                    "Avg Max Speed": ["MAX_SPEED", "TOP_SPEED", "V_MAX"],
-                }
-            }
+            # Find top 5 mest aktive (brug en kolonne du ved har høje værdier, f.eks. 'TOUCHES' eller summen)
+            num_cols = df_hold.select_dtypes(include=['number']).columns
+            df_hold['SCORE'] = df_hold[num_cols].sum(axis=1)
+            top_5 = df_hold.sort_values('SCORE', ascending=False).head(5)
 
-            # 5. GRID VISNING
+            # 3. GRID VISNING
             cols = st.columns(5)
             
+            # Definer de metrics du vil vise i barerne
+            # Disse skal matche dine kolonnenavne i Snowflake nøjagtigt
+            metrics = {
+                "Volume": "DISTANCE_P90",
+                "Intensity": "HI_DISTANCE_P90",
+                "Sprints": "SPRINTS_P90",
+                "Speed": "MAX_SPEED"
+            }
+
             for i, (idx, row) in enumerate(top_5.iterrows()):
                 with cols[i]:
-                    p_name = row[name_col]
-                    efternavn = p_name.split()[-1].upper() if " " in p_name else p_name.upper()
+                    # Spiller Information
+                    name = row.get('PLAYER_NAME', 'Ukendt')
+                    st.markdown(f"<div style='text-align: center; font-weight: bold;'>{name.split()[-1].upper()}</div>", unsafe_allow_html=True)
                     
-                    # Billede
-                    img_url = None
-                    if not df_meta.empty and 'PLAYER_NAME' in df_meta.columns:
-                        m = df_meta[df_meta['PLAYER_NAME'] == p_name]
-                        if not m.empty:
-                            img_url = m.iloc[0].get('IMAGEDATAURL')
+                    # Billede (vi tjekker om URL findes i tabellen)
+                    img = row.get('IMAGEDATAURL')
+                    if img and str(img).startswith('http'):
+                        st.image(img, use_container_width=True)
+                    else:
+                        st.image("https://via.placeholder.com/150/f1f1f1/888888?text=NO+IMAGE", use_container_width=True)
                     
-                    st.image(img_url if img_url else "https://via.placeholder.com/150", use_container_width=True)
-                    st.markdown(f"<div style='text-align: center; font-weight: bold; font-size: 14px;'>{efternavn}</div>", unsafe_allow_html=True)
-                    st.markdown(f"<div style='text-align: center; font-size: 10px; color: gray;'>{p_name}</div>", unsafe_allow_html=True)
-                    st.markdown("<hr style='margin:10px 0;'>", unsafe_allow_html=True)
+                    st.markdown("<hr style='margin:5px 0;'>", unsafe_allow_html=True)
 
-                    for section, metrics in metrics_sections.items():
-                        st.markdown(f"<p style='font-size: 10px; font-weight: bold; color: #1DB954; margin-bottom: 2px;'>{section}</p>", unsafe_allow_html=True)
+                    # Bar-visning
+                    for label, col_name in metrics.items():
+                        val = 0.0
+                        percent = 0
                         
-                        for label, col_names in metrics.items():
-                            # Find den første kolonne der matcher
-                            found_col = next((c for c in col_names if c in df_hold.columns), None)
-                            
-                            val_display, percent = "-", 0
-                            if found_col:
-                                val = pd.to_numeric(row[found_col], errors='coerce')
-                                if pd.notnull(val) and val > 0:
-                                    max_v = df_hold[found_col].max()
-                                    percent = min(int((val / max_v) * 100), 100) if max_v > 0 else 0
-                                    val_display = f"{val:.1f}"
+                        if col_name in df_hold.columns:
+                            val = float(row[col_name])
+                            max_val = float(df_hold[col_name].max())
+                            percent = min(int((val / max_val) * 100), 100) if max_val > 0 else 0
 
-                            st.markdown(f"""
-                                <div style='display: flex; align-items: center; margin-bottom: 4px;'>
-                                    <div style='background-color: #f1f1f1; height: 6px; flex-grow: 1; border-radius: 2px;'>
-                                        <div style='background-color: #ff4b4b; width: {percent}%; height: 6px; border-radius: 2px;'></div>
-                                    </div>
-                                    <span style='font-size: 10px; margin-left: 5px; font-weight: bold;'>{val_display}</span>
-                                </div>
-                            """, unsafe_allow_html=True)
+                        st.markdown(f"""
+                            <div style='font-size: 10px; color: #666;'>{label}</div>
+                            <div style='background-color: #eee; height: 6px; width: 100%; border-radius: 3px;'>
+                                <div style='background-color: #df003b; width: {percent}%; height: 6px; border-radius: 3px;'></div>
+                            </div>
+                            <div style='font-size: 10px; text-align: right; font-weight: bold;'>{val:.1f}</div>
+                        """, unsafe_allow_html=True)
 
     except Exception as e:
-        st.error(f"Fejl: {e}")
+        st.error(f"Snowflake Fejl: {e}")
