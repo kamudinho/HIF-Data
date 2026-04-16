@@ -34,6 +34,7 @@ def vis_side():
     conn = _get_snowflake_conn()
     
     # SQL: Tilføjet datobegrænsning og sikret filtrering på 1. division (328/148)
+    # Vi tilføjer en HAVING-klausul for at sikre, at spilleren har en vis volumen
     sql = """
         SELECT 
             P.PLAYER_NAME, 
@@ -52,8 +53,22 @@ def vis_side():
             ON P.MATCH_SSIID = M.MATCH_SSIID
         WHERE (M.COMPETITION_OPTAID = '148' OR M.SECOND_SPECTRUM_COMPETITION_ID = '328')
           AND M.DATE >= '2025-07-01'
-          AND MIN_DEC >= 45
+          AND MIN_DEC >= 30 -- Vi fjerner helt korte indhop fra beregningen
     """
+
+    # Efter conn.query(sql) og df.columns = ... 
+    # Tilføj denne filtrering på de aggregerede data:
+    
+    df_agg = df.groupby('PLAYER_NAME').agg({
+        'DISTANCE': 'mean',
+        'HSR': 'mean',
+        'HI_RUNS': 'mean',
+        'TOP_SPEED': 'max',
+        'MIN_DEC': 'sum' # Vi summerer minutter for at se totalen
+    }).reset_index()
+
+    # FILTER: Spilleren skal have spillet mindst 270 minutter (3 kampe) totalt for at være med
+    df_agg = df_agg[df_agg['MIN_DEC'] >= 270]
     
     df = conn.query(sql)
     
