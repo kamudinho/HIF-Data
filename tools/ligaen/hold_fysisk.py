@@ -5,10 +5,10 @@ import plotly.graph_objects as go
 import matplotlib.pyplot as plt
 from data.data_load import _get_snowflake_conn
 
-# --- FORSØG PÅ IMPORT ---
+# --- ROBUST IMPORT AF SKILLCORNER ---
 try:
-    from skillcornerviz.standard_plots import bar_plot as bar
-    from skillcornerviz.standard_plots import radar_plot as rad
+    import skillcornerviz.standard_plots.bar_plot as sc_bar
+    import skillcornerviz.standard_plots.radar_plot as sc_rad
     SKILLCORNER_ERR = None
 except Exception as e:
     SKILLCORNER_ERR = str(e)
@@ -26,7 +26,8 @@ def vis_side():
     st.set_page_config(page_title="Hvidovre IF - Physical Analytics", layout="wide")
     
     if SKILLCORNER_ERR:
-        st.error(f"SkillCorner bibliotek ikke fundet eller fejler: {SKILLCORNER_ERR}")
+        st.error(f"SkillCorner bibliotek fejler: {SKILLCORNER_ERR}")
+        st.info("Prøv at genstarte appen eller tjek din requirements.txt")
 
     conn = get_cached_conn()
     
@@ -40,7 +41,7 @@ def vis_side():
     """
     df_raw = conn.query(sql)
     if df_raw is None or df_raw.empty:
-        st.error("Ingen data fra databasen.")
+        st.error("Ingen data fundet.")
         return
 
     df_raw.columns = [c.upper() for c in df_raw.columns]
@@ -55,66 +56,67 @@ def vis_side():
         'DISTANCE': 'mean', 'HSR': 'mean', 'HI_RUNS': 'mean', 'TOP_SPEED': 'mean'
     }).reset_index()
 
-    # --- UI KONTROL ---
+    # --- UI ---
     valgt_hold = st.selectbox("Vælg dit hold", sorted(df_liga['HOLDNAVN'].unique()))
     
-    # --- 1. INTERAKTIV SCATTER (DIN BASIS) ---
-    st.subheader("Interaktiv Oversigt")
-    fig = px.scatter(df_liga[df_liga['HOLDNAVN'] != valgt_hold], x='DISTANCE', y='HI_RUNS', text='HOLDNAVN')
+    # 1. INTERAKTIV SCATTER
+    st.subheader("Interaktiv Oversigt (Plotly)")
+    fig = px.scatter(df_liga[df_liga['HOLDNAVN'] != valgt_hold], x='DISTANCE', y='HI_RUNS', text='HOLDNAVN',
+                     labels={'DISTANCE': 'Total Distance (m)', 'HI_RUNS': 'HI Aktioner'})
     fig.add_trace(go.Scatter(x=df_liga[df_liga['HOLDNAVN'] == valgt_hold]['DISTANCE'], 
                              y=df_liga[df_liga['HOLDNAVN'] == valgt_hold]['HI_RUNS'],
-                             mode='markers+text', marker=dict(size=20, color='red'), text=valgt_hold))
+                             mode='markers+text', marker=dict(size=18, color='red'), text=valgt_hold))
     st.plotly_chart(fig, use_container_width=True)
 
     # --- 2. SKILLCORNER BAR CHART ---
     st.divider()
-    st.subheader("SkillCorner Rankings")
+    st.subheader("SkillCorner Rankings (Bar Chart)")
     
-    # Klargør data: Sorter og lav numeriske ID'er
     df_bar = df_liga.sort_values('HI_RUNS', ascending=False).copy()
-    df_bar['SC_ID'] = range(len(df_bar)) # Biblioteket skal bruge et numerisk ID
-    
-    # Find ID'et på det valgte hold til highlight
+    df_bar['SC_ID'] = range(len(df_bar))
     highlight_idx = df_bar[df_bar['HOLDNAVN'] == valgt_hold]['SC_ID'].tolist()
 
-    try:
-        fig_bar, ax_bar = bar.plot_bar_chart(
-            df=df_bar,
-            metric='HI_RUNS',
-            label='HI Løb pr. kamp',
-            unit='',
-            primary_highlight_group=highlight_idx,
-            primary_highlight_color='#cc0000',
-            data_point_id='SC_ID',
-            data_point_label='HOLDNAVN',
-            plot_title="Top HI Præstationer"
-        )
-        st.pyplot(fig_bar)
-    except Exception as e:
-        st.warning(f"Kunne ikke tegne Bar Chart: {e}")
+    if 'sc_bar' in globals() or 'sc_bar' in locals():
+        try:
+            # Vi kalder funktionen direkte fra det importede modul
+            fig_bar, ax_bar = sc_bar.plot_bar_chart(
+                df=df_bar,
+                metric='HI_RUNS',
+                label='HI Aktioner pr. kamp',
+                unit='',
+                primary_highlight_group=highlight_idx,
+                primary_highlight_color='#cc0000',
+                data_point_id='SC_ID',
+                data_point_label='HOLDNAVN',
+                plot_title="Liga Ranking: High Intensity"
+            )
+            st.pyplot(fig_bar)
+        except Exception as e:
+            st.warning(f"Kunne ikke tegne Bar Chart: {e}")
 
     # --- 3. SKILLCORNER RADAR ---
     st.divider()
-    st.subheader("SkillCorner Profil")
+    st.subheader("SkillCorner Profil (Radar)")
     
-    radar_metrics = {'HI_RUNS': 'HI Runs', 'TOP_SPEED': 'Top Speed', 'HSR': 'HSR', 'DISTANCE': 'Volume'}
-    radar_df = df_liga.copy()
-    for m in radar_metrics.keys():
-        radar_df[m] = radar_df[m].rank(pct=True) * 100
+    if 'sc_rad' in globals() or 'sc_rad' in locals():
+        radar_metrics = {'HI_RUNS': 'HI Runs', 'TOP_SPEED': 'Top Speed', 'HSR': 'HSR', 'DISTANCE': 'Volume'}
+        radar_df = df_liga.copy()
+        for m in radar_metrics.keys():
+            radar_df[m] = radar_df[m].rank(pct=True) * 100
 
-    try:
-        fig_rad, ax_rad = rad.plot_radar(
-            radar_df,
-            data_point_id='HOLDNAVN',
-            label=valgt_hold,
-            metrics=list(radar_metrics.keys()),
-            metric_labels=radar_metrics,
-            plot_title=f"Power Profil: {valgt_hold}",
-            add_sample_info=False
-        )
-        st.pyplot(fig_rad)
-    except Exception as e:
-        st.warning(f"Kunne ikke tegne Radar: {e}")
+        try:
+            fig_rad, ax_rad = sc_rad.plot_radar(
+                radar_df,
+                data_point_id='HOLDNAVN',
+                label=valgt_hold,
+                metrics=list(radar_metrics.keys()),
+                metric_labels=radar_metrics,
+                plot_title=f"Power Profil: {valgt_hold}",
+                add_sample_info=False
+            )
+            st.pyplot(fig_rad)
+        except Exception as e:
+            st.warning(f"Kunne ikke tegne Radar: {e}")
 
 if __name__ == "__main__":
     vis_side()
