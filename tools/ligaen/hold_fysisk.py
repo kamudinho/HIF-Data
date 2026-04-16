@@ -29,12 +29,11 @@ def vis_side():
     st.set_page_config(page_title="Hvidovre IF - 1. Division Analytics", layout="wide")
     st.title("SkillCorner Open Data #2: Z-Score Profiler")
     st.subheader("NordicBet Liga: Sæson 2025/2026")
-    st.caption("Data fra 01.07.2025 til dags dato")
+    st.caption("Data fra 01.07.2025 (Min. 270 spillede minutter)")
 
     conn = _get_snowflake_conn()
     
-    # SQL: Tilføjet datobegrænsning og sikret filtrering på 1. division (328/148)
-    # Vi tilføjer en HAVING-klausul for at sikre, at spilleren har en vis volumen
+    # 1. DEFINER SQL
     sql = """
         SELECT 
             P.PLAYER_NAME, 
@@ -53,46 +52,44 @@ def vis_side():
             ON P.MATCH_SSIID = M.MATCH_SSIID
         WHERE (M.COMPETITION_OPTAID = '148' OR M.SECOND_SPECTRUM_COMPETITION_ID = '328')
           AND M.DATE >= '2025-07-01'
-          AND MIN_DEC >= 30 -- Vi fjerner helt korte indhop fra beregningen
+          AND MIN_DEC >= 30 
     """
 
-    # Efter conn.query(sql) og df.columns = ... 
-    # Tilføj denne filtrering på de aggregerede data:
+    # 2. HENT DATA (Dette definerer 'df')
+    df = conn.query(sql)
     
+    if df is None or df.empty:
+        st.warning("Ingen data fundet for den valgte periode.")
+        return
+
+    # 3. KOLONNE NAVNE
+    df.columns = [c.upper() for c in df.columns]
+    
+    # 4. AGGREGERING OG MINUT-FILTER (Fjerner spillere som Lukas Eg med få minutter)
     df_agg = df.groupby('PLAYER_NAME').agg({
         'DISTANCE': 'mean',
         'HSR': 'mean',
         'HI_RUNS': 'mean',
         'TOP_SPEED': 'max',
-        'MIN_DEC': 'sum' # Vi summerer minutter for at se totalen
+        'MIN_DEC': 'sum' # Vi bruger SUM her for at tjekke total spilletid
     }).reset_index()
 
-    # FILTER: Spilleren skal have spillet mindst 270 minutter (3 kampe) totalt for at være med
+    # Krav: Mindst 270 minutter totalt (3 kampe) for at undgå skæve P90 tal
     df_agg = df_agg[df_agg['MIN_DEC'] >= 270]
     
-    df = conn.query(sql)
-    
-    if df is None or df.empty:
-        st.warning("Ingen data fundet for den valgte periode (fra 01.07.2025).")
+    if df_agg.empty:
+        st.warning("Ingen spillere har mødt kravet om 270 spillede minutter.")
         return
 
-    df.columns = [c.upper() for c in df.columns]
+    # 5. BEREGN P90 (Baseret på deres gennemsnitlige kamp-minutter)
+    # Vi henter 'mean' minutter for at lave en fair P90-beregning pr. kamp
+    df_agg['AVG_MIN'] = df.groupby('PLAYER_NAME')['MIN_DEC'].mean().values[df_agg.index.isin(df.groupby('PLAYER_NAME').indices.keys())]
     
-    # Gruppér pr. spiller for at få deres gennemsnitlige kamp-impact i perioden
-    df_agg = df.groupby('PLAYER_NAME').agg({
-        'DISTANCE': 'mean',
-        'HSR': 'mean',
-        'HI_RUNS': 'mean',
-        'TOP_SPEED': 'max', # Vi vil have deres absolutte topfart i perioden
-        'MIN_DEC': 'mean'
-    }).reset_index()
+    df_agg['HI_P90'] = (df_agg['HI_RUNS'] / (df_agg['MIN_DEC']/ (df_agg['MIN_DEC']/90))) # Simpel P90
+    df_agg['DIST_P90'] = (df_agg['DISTANCE'] / (df_agg['MIN_DEC']/ (df_agg['MIN_DEC']/90)))
+    df_agg['HSR_P90'] = (df_agg['HSR'] / (df_agg['MIN_DEC']/ (df_agg['MIN_DEC']/90)))
 
-    # Beregn p90 værdier
-    df_agg['HI_P90'] = (df_agg['HI_RUNS'] / df_agg['MIN_DEC']) * 90
-    df_agg['DIST_P90'] = (df_agg['DISTANCE'] / df_agg['MIN_DEC']) * 90
-    df_agg['HSR_P90'] = (df_agg['HSR'] / df_agg['MIN_DEC']) * 90
-
-    # Kør Z-score model på de filtrerede data
+    # 6. KØR Z-SCORE MODEL
     df_scored = calculate_composite_zscores(
         df_agg, 
         g1_metrics=['HI_P90', 'HSR_P90'], 
@@ -120,7 +117,7 @@ def vis_side():
         df_scored, x='Volume_Composite', y='Intensity_Composite',
         size=df_scored['Explosivity_Composite'].clip(lower=0.1),
         hover_name='PLAYER_NAME',
-        text='PLAYER_NAME',
+        text='PLAYER_NAME' if len(df_scored) < 40 else None,
         labels={'Volume_Composite': 'Volume Z-Score', 'Intensity_Composite': 'Intensity Z-Score'}
     )
     fig_scat.add_hline(y=0, line_dash="dash", line_color="black", opacity=0.2)
