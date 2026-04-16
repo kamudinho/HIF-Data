@@ -11,30 +11,28 @@ def calculate_composite_zscores(df, g1_metrics, g2_metrics, g3_metrics):
         if x.std() == 0: return x - x.mean()
         return (x - x.mean()) / x.std()
     
-    # Intensity Score (HI + HSR)
+    # Komposit-beregninger
     z_g1 = df[g1_metrics].apply(z).mean(axis=1)
     df_res['Intensity_Composite'] = z(z_g1)
     
-    # Volume Score (Total distance)
     z_g2 = df[g2_metrics].apply(z).mean(axis=1)
     df_res['Volume_Composite'] = z(z_g2)
     
-    # Explosivity Score (Top Speed)
     z_g3 = df[g3_metrics].apply(z).mean(axis=1)
     df_res['Explosivity_Composite'] = z(z_g3)
     
     return df_res
 
 def vis_side():
-    st.title("SkillCorner Open Data #2: Z-Score Profiler")
-    st.subheader("NordicBet Liga: Sæson 2025/2026")
-    st.caption("Data fra 01.07.2025 | Minimum 270 minutter totalt")
-
+    st.title("SkillCorner Open Data #2: Hold-specifik Analyse")
+    
     conn = _get_snowflake_conn()
     
+    # SQL: Henter holdnavn (MATCH_TEAMS) med ind
     sql = """
         SELECT 
             P.PLAYER_NAME, 
+            P.MATCH_TEAMS,
             P.DISTANCE, 
             P."HIGH SPEED RUNNING" as HSR, 
             P.NO_OF_HIGH_INTENSITY_RUNS as HI_RUNS, 
@@ -48,7 +46,6 @@ def vis_side():
             ON P.MATCH_SSIID = M.MATCH_SSIID
         WHERE (M.COMPETITION_OPTAID = '148' OR M.SECOND_SPECTRUM_COMPETITION_ID = '328')
           AND M.DATE >= '2025-07-01'
-          AND MIN_DEC >= 15
     """
 
     df_raw = conn.query(sql)
@@ -57,30 +54,35 @@ def vis_side():
         return
 
     df_raw.columns = [c.upper() for c in df_raw.columns]
+
+    # --- SIDEBAR FILTER ---
+    # Finder alle unikke hold fra MATCH_TEAMS (vi splitter strengen 'Hold A - Hold B')
+    all_teams = sorted(list(set([t.strip() for sublist in df_raw['MATCH_TEAMS'].str.split('-').tolist() for t in sublist])))
     
-    # 1. Aggreger data pr. spiller (Summer alt først)
+    st.sidebar.header("Indstillinger")
+    target_team = st.sidebar.selectbox("Vælg hold der skal fremhæves", ["Alle"] + all_teams)
+    min_minutes = st.sidebar.slider("Minimum minutter totalt", 90, 900, 270)
+
+    # 1. Aggregering
+    # Vi gemmer holdnavnet ved at tage den mest hyppige forekomst (hvilket hold spilleren optræder for)
     df_agg = df_raw.groupby('PLAYER_NAME').agg({
         'DISTANCE': 'sum',
         'HSR': 'sum',
         'HI_RUNS': 'sum',
         'TOP_SPEED': 'max',
-        'MIN_DEC': 'sum'
+        'MIN_DEC': 'sum',
+        'MATCH_TEAMS': lambda x: x.mode()[0] # Simplificeret hold-tilknytning
     }).reset_index()
 
-    # 2. FILTER: Kun spillere med over 270 minutter totalt
-    df_agg = df_agg[df_agg['MIN_DEC'] >= 270].copy()
+    # 2. Filter på minutter
+    df_agg = df_agg[df_agg['MIN_DEC'] >= min_minutes].copy()
 
-    if df_agg.empty:
-        st.warning("Ingen spillere opfylder minut-kravet.")
-        return
-
-    # 3. Beregn P90 værdier (Total / Minutter * 90)
-    # Dette er den mest præcise måde at gøre det på tværs af mange kampe
+    # 3. P90 Beregning
     df_agg['HI_P90'] = (df_agg['HI_RUNS'] / df_agg['MIN_DEC']) * 90
     df_agg['DIST_P90'] = (df_agg['DISTANCE'] / df_agg['MIN_DEC']) * 90
     df_agg['HSR_P90'] = (df_agg['HSR'] / df_agg['MIN_DEC']) * 90
 
-    # 4. Kør Z-score model
+    # 4. Z-Score (Hele ligaen er med i beregningen her)
     df_scored = calculate_composite_zscores(
         df_agg, 
         g1_metrics=['HI_P90', 'HSR_P90'], 
@@ -88,32 +90,52 @@ def vis_side():
         g3_metrics=['TOP_SPEED']
     )
 
+    # 5. Farvelogik til fremhævning
+    if target_team == "Alle":
+        df_scored['HIGHLIGHT'] = 'Liga-gennemsnit'
+        color_map = {'Liga-gennemsnit': '#D3D3D3'}
+    else:
+        # Vi tjekker om holdnavnet indgår i MATCH_TEAMS strengen for spilleren
+        df_scored['HIGHLIGHT'] = df_scored['MATCH_TEAMS'].apply(lambda x: target_team if target_team in x else 'Andre hold')
+        color_map = {target_team: '#006D00', 'Andre hold': '#D3D3D3'}
+
     # --- BAR CHART ---
-    st.write("### Top 10: Intensity Composite")
-    top_10 = df_scored.sort_values('Intensity_Composite', ascending=False).head(10).copy()
-    top_10['COLOR'] = ['#006D00' if i < 5 else '#D3D3D3' for i in range(len(top_10))]
+    st.subheader(f"Intensitet: {target_team}")
+    
+    # Hvis et hold er valgt, viser vi deres top 10. Ellers ligaens top 10.
+    if target_team != "Alle":
+        plot_df = df_scored[df_scored['HIGHLIGHT'] == target_team].sort_values('Intensity_Composite', ascending=False).head(15)
+    else:
+        plot_df = df_scored.sort_values('Intensity_Composite', ascending=False).head(15)
 
     fig_bar = px.bar(
-        top_10, x='Intensity_Composite', y='PLAYER_NAME', orientation='h',
-        text_auto='.2f', color='COLOR', color_discrete_map="identity"
+        plot_df, x='Intensity_Composite', y='PLAYER_NAME', orientation='h',
+        color='HIGHLIGHT', color_discrete_map=color_map,
+        text_auto='.2f'
     )
-    fig_bar.update_layout(xaxis_title="Z-Score (σ)", yaxis_title="", plot_bgcolor='rgba(0,0,0,0)', showlegend=False)
+    fig_bar.update_layout(xaxis_title="Z-Score (σ)", yaxis_title="", showlegend=False, plot_bgcolor='rgba(0,0,0,0)')
     st.plotly_chart(fig_bar, use_container_width=True)
 
-    # --- BUBBLE SCATTER ---
+    # --- SCATTER PLOT ---
     st.divider()
-    st.write("### Fysisk Landskab (Min. 270 min)")
+    st.subheader(f"Fysisk Landskab: {target_team} vs. Ligaen")
     
     fig_scat = px.scatter(
         df_scored, x='Volume_Composite', y='Intensity_Composite',
         size=df_scored['Explosivity_Composite'].clip(lower=0.1),
+        color='HIGHLIGHT',
+        color_discrete_map=color_map,
         hover_name='PLAYER_NAME',
-        text='PLAYER_NAME' if len(df_scored) < 30 else None,
+        text='PLAYER_NAME' if target_team != "Alle" else None,
         labels={'Volume_Composite': 'Volume Z-Score', 'Intensity_Composite': 'Intensity Z-Score'}
     )
+    
+    # Hvis et hold er valgt, viser vi kun navne på det holds spillere for at undgå rod
+    if target_team != "Alle":
+        fig_scat.update_traces(textposition='top center', selector=dict(name=target_team))
+    
     fig_scat.add_hline(y=0, line_dash="dash", line_color="black", opacity=0.2)
     fig_scat.add_vline(x=0, line_dash="dash", line_color="black", opacity=0.2)
-    fig_scat.update_traces(marker=dict(color='#006D00'), textposition='top center')
     fig_scat.update_layout(plot_bgcolor='rgba(0,0,0,0)', height=700)
     st.plotly_chart(fig_scat, use_container_width=True)
 
