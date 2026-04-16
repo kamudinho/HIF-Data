@@ -15,68 +15,6 @@ LIGA_IDS = "('dyjr458hcmrcy87fsabfsy87o', 'e5p78j2r7v8h3u9s5k0l2m4n6', 'f6q89k3s
 def get_cached_conn():
     return _get_snowflake_conn()
 
-def vis_liga_benchmark(conn, valgt_hold_navn):
-    # Hent gennemsnit for alle hold i ligaen for at lave scatter-plottet
-    sql_liga = f"""
-        SELECT 
-            MATCH_TEAMS,
-            AVG(HOLD_HI) as AVG_HI,
-            MAX(MAX_SPEED) as PEAK_SPEED
-        FROM (
-            SELECT 
-                MATCH_SSIID,
-                MATCH_TEAMS,
-                SUM(NO_OF_HIGH_INTENSITY_RUNS) as HOLD_HI,
-                MAX(TOP_SPEED) as MAX_SPEED
-            FROM {DB}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
-            WHERE MATCH_DATE >= '{SEASON_START}'
-            GROUP BY 1, 2
-        )
-        GROUP BY 1
-    """
-    df_liga = conn.query(sql_liga)
-
-    if df_liga is not None and not df_liga.empty:
-        st.subheader("Liga-benchmark: Intensitet vs. Topfart")
-        
-        fig = px.scatter(
-            df_liga, 
-            x='AVG_HI', 
-            y='PEAK_SPEED',
-            text='MATCH_TEAMS',
-            labels={
-                'AVG_HI': 'HI Aktiviteter (Gns. per kamp)',
-                'PEAK_SPEED': 'Peak Sprint Velocity (km/t)'
-            }
-        )
-
-        fig.update_traces(
-            marker=dict(size=12, opacity=0.4, color='grey'),
-            textposition='top center'
-        )
-
-        # Fremhæv det valgte hold
-        highlight = df_liga[df_liga['MATCH_TEAMS'].str.contains(valgt_hold_navn, case=False, na=False)]
-        if not highlight.empty:
-            fig.add_trace(go.Scatter(
-                x=highlight['AVG_HI'],
-                y=highlight['PEAK_SPEED'],
-                mode='markers+text',
-                marker=dict(size=18, color='#cc0000', line=dict(width=2, color='white')),
-                text=[valgt_hold_navn],
-                textposition="top center",
-                showlegend=False
-            ))
-
-        # Gennemsnitslinjer
-        avg_hi = df_liga['AVG_HI'].mean()
-        avg_speed = df_liga['PEAK_SPEED'].mean()
-        fig.add_vline(x=avg_hi, line_dash="dash", line_color="grey")
-        fig.add_hline(y=avg_speed, line_dash="dash", line_color="grey")
-
-        fig.update_layout(height=500, template="plotly_white")
-        st.plotly_chart(fig, use_container_width=True)
-
 def vis_side():
     st.markdown("""<style>
         [data-testid="stMetricValue"] { font-size: 26px !important; font-weight: bold !important; color: #333; }
@@ -84,98 +22,123 @@ def vis_side():
 
     conn = get_cached_conn()
     
-    # 1. VALG AF HOLD
-    df_teams = conn.query(f"SELECT DISTINCT CONTESTANTHOME_NAME as NAME FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS} ORDER BY 1")
-    
-    if df_teams is None or df_teams.empty:
-        st.error("Kunne ikke hente hold-data.")
-        return
-
-    c1, c2 = st.columns(2)
-    valgt_hold = c1.selectbox("Vælg Hold", df_teams['NAME'].unique())
-    hold_info = TEAMS.get(valgt_hold, {})
-    target_ssiid = hold_info.get('ssid')
-
-    # 2. VALG AF KAMP
-    df_matches = conn.query(f"""
-        SELECT DISTINCT 
-            MATCH_SSIID, 
-            DATE as CALC_DATE,
-            DESCRIPTION as MATCH_NAME
-        FROM {DB}.SECONDSPECTRUM_SEASON_METADATA
-        WHERE (HOME_SSIID = '{target_ssiid}' OR AWAY_SSIID = '{target_ssiid}')
-          AND DATE >= '{SEASON_START}'
-          AND DATE <= CURRENT_DATE()
-        ORDER BY DATE DESC
-    """)
-
-    if df_matches is None or df_matches.empty:
-        st.warning("Ingen spillede kampe fundet.")
-        vis_liga_benchmark(conn, valgt_hold)
-        return
-
-    df_matches['DATO_STR'] = pd.to_datetime(df_matches['CALC_DATE']).dt.strftime('%d/%m')
-    df_matches['SELECT_LABEL'] = df_matches['DATO_STR'] + " - " + df_matches['MATCH_NAME']
-    valgt_kamp_label = c2.selectbox("Vælg Kamp", df_matches['SELECT_LABEL'].tolist())
-    valgt_match_ssiid = df_matches[df_matches['SELECT_LABEL'] == valgt_kamp_label]['MATCH_SSIID'].iloc[0]
-
-    # 3. HOLD-DATA OPSUMMERING FOR DEN VALGTE KAMP
-    df_hold_summary = conn.query(f"""
+    # 1. HENT ALLE HOLD-STATS FOR SÆSONEN (Aggregeret på holdniveau)
+    sql_all_teams = f"""
         SELECT 
-            SUM(DISTANCE) as TOTAL_DIST,
-            SUM("HIGH SPEED RUNNING") as TOTAL_HSR,
-            SUM(SPRINTING) as TOTAL_SPRINT,
-            SUM(NO_OF_HIGH_INTENSITY_RUNS) as TOTAL_HI,
-            SUM(HSR_DISTANCE_TIP) as HSR_TIP,
-            SUM(HSR_DISTANCE_OTIP) as HSR_OTIP
-        FROM {DB}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
-        WHERE MATCH_SSIID = '{valgt_match_ssiid}'
-    """)
+            MATCH_TEAMS,
+            AVG(HOLD_DIST) as AVG_DIST,
+            AVG(HOLD_HSR) as AVG_HSR,
+            AVG(HOLD_SPRINT) as AVG_SPRINT,
+            AVG(HOLD_HI) as AVG_HI,
+            MAX(TOP_SPEED_KAMP) as PEAK_SPEED,
+            AVG(HOLD_HSR_TIP) as AVG_HSR_TIP,
+            AVG(HOLD_HSR_OTIP) as AVG_HSR_OTIP
+        FROM (
+            SELECT 
+                MATCH_SSIID,
+                MATCH_TEAMS,
+                SUM(DISTANCE) as HOLD_DIST,
+                SUM("HIGH SPEED RUNNING") as HOLD_HSR,
+                SUM(SPRINTING) as HOLD_SPRINT,
+                SUM(NO_OF_HIGH_INTENSITY_RUNS) as HOLD_HI,
+                MAX(TOP_SPEED) as TOP_SPEED_KAMP,
+                SUM(HSR_DISTANCE_TIP) as HOLD_HSR_TIP,
+                SUM(HSR_DISTANCE_OTIP) as HOLD_HSR_OTIP
+            FROM {DB}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
+            WHERE MATCH_DATE >= '{SEASON_START}'
+            GROUP BY 1, 2
+        )
+        GROUP BY 1
+    """
+    df_all_teams = conn.query(sql_all_teams)
 
-    if df_hold_summary is not None and not df_hold_summary.empty:
-        hold = df_hold_summary.iloc[0]
-        
-        m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Total Distance", f"{round(hold['TOTAL_DIST']/1000, 1)} km")
-        m2.metric("HSR Distance", f"{int(hold['TOTAL_HSR'])} m")
-        m3.metric("Sprint Distance", f"{int(hold['TOTAL_SPRINT'])} m")
-        m4.metric("HI Aktiviteter", f"{int(hold['TOTAL_HI'])}")
+    if df_all_teams is None or df_all_teams.empty:
+        st.error("Kunne ikke hente hold-data fra Snowflake.")
+        return
 
-        st.divider()
-        
-        # 4. LIGA SAMMENLIGNING (SCATTER PLOT)
-        vis_liga_benchmark(conn, valgt_hold)
-        
-        st.divider()
+    # 2. VALG AF HOLD
+    valgt_hold = st.selectbox("Vælg Hold", df_all_teams['MATCH_TEAMS'].unique())
+    hold_data = df_all_teams[df_all_teams['MATCH_TEAMS'] == valgt_hold].iloc[0]
+    liga_avg = df_all_teams.mean(numeric_only=True)
 
-        # 5. KAMP-ANALYSE (FASE OG TID)
-        col_left, col_right = st.columns(2)
-        
-        with col_left:
-            st.subheader("Holdets fasefordeling (HSR)")
-            fig_pie = go.Figure(data=[go.Pie(
-                labels=['Angreb (TIP)', 'Forsvar (OTIP)'],
-                values=[hold['HSR_TIP'], hold['HSR_OTIP']],
-                hole=.4,
-                marker_colors=['#cc0000', '#333333']
-            )])
-            fig_pie.update_layout(height=400, margin=dict(l=20, r=20, t=20, b=20))
-            st.plotly_chart(fig_pie, use_container_width=True)
+    # 3. OVERORDNEDE METRIKKER (Sæson-gennemsnit vs. Liga-snit)
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Gns. Distance", f"{round(hold_data['AVG_DIST']/1000, 1)} km", 
+              delta=f"{round((hold_data['AVG_DIST'] - liga_avg['AVG_DIST'])/1000, 1)} km")
+    m2.metric("Gns. HSR", f"{int(hold_data['AVG_HSR'])} m", 
+              delta=f"{int(hold_data['AVG_HSR'] - liga_avg['AVG_HSR'])} m")
+    m3.metric("Gns. HI løb", f"{int(hold_data['AVG_HI'])}", 
+              delta=f"{int(hold_data['AVG_HI'] - liga_avg['AVG_HI'])}")
+    m4.metric("Peak Speed", f"{round(hold_data['PEAK_SPEED'], 1)} km/t")
 
-        with col_right:
-            df_splits = conn.query(f"""
-                SELECT MINUTE_SPLIT, SUM(PHYSICAL_METRIC_VALUE) as VAL
-                FROM {DB}.SECONDSPECTRUM_PHYSICAL_SPLITS_PLAYERS
-                WHERE MATCH_SSIID = '{valgt_match_ssiid}'
-                  AND PHYSICAL_METRIC_TYPE = 'Distance'
-                GROUP BY 1 ORDER BY 1 ASC
-            """)
-            
-            if df_splits is not None and not df_splits.empty:
-                st.subheader("Holdets intensitet over tid")
-                fig_bar = px.bar(df_splits, x='MINUTE_SPLIT', y='VAL', color_discrete_sequence=['#cc0000'])
-                fig_bar.update_layout(height=400, xaxis_title="Minutter", yaxis_title="Meter (Hold total)")
-                st.plotly_chart(fig_bar, use_container_width=True)
+    st.divider()
+
+    # 4. LIGA BENCHMARK (SCATTER PLOT)
+    st.subheader("Sæson-benchmark: Intensitet vs. Topfart")
+    
+    fig_scatter = px.scatter(
+        df_all_teams, 
+        x='AVG_HI', 
+        y='PEAK_SPEED',
+        text='MATCH_TEAMS',
+        labels={
+            'AVG_HI': 'HI Aktiviteter (Sæson-gennemsnit)',
+            'PEAK_SPEED': 'Topfart registreret (km/t)'
+        }
+    )
+
+    fig_scatter.update_traces(marker=dict(size=12, opacity=0.4, color='grey'), textposition='top center')
+
+    # Fremhæv det valgte hold
+    fig_scatter.add_trace(go.Scatter(
+        x=[hold_data['AVG_HI']],
+        y=[hold_data['PEAK_SPEED']],
+        mode='markers+text',
+        marker=dict(size=20, color='#cc0000', line=dict(width=2, color='white')),
+        text=[valgt_hold],
+        textposition="top center",
+        showlegend=False
+    ))
+
+    # Gennemsnitslinjer for ligaen
+    fig_scatter.add_vline(x=liga_avg['AVG_HI'], line_dash="dash", line_color="grey")
+    fig_scatter.add_hline(y=liga_avg['PEAK_SPEED'], line_dash="dash", line_color="grey")
+
+    fig_scatter.update_layout(height=550, template="plotly_white")
+    st.plotly_chart(fig_scatter, use_container_width=True)
+
+    st.divider()
+
+    # 5. HOLDETS PROFIL (Fasefordeling og Udvikling)
+    col_left, col_right = st.columns(2)
+
+    with col_left:
+        st.subheader("Holdets profil: Med vs. Uden bold")
+        fig_pie = go.Figure(data=[go.Pie(
+            labels=['Angreb (TIP)', 'Forsvar (OTIP)'],
+            values=[hold_data['AVG_HSR_TIP'], hold_data['AVG_HSR_OTIP']],
+            hole=.4,
+            marker_colors=['#cc0000', '#333333']
+        )])
+        fig_pie.update_layout(height=400, margin=dict(t=20, b=20, l=20, r=20))
+        st.plotly_chart(fig_pie, use_container_width=True)
+
+    with col_right:
+        # Sæson-udvikling for det valgte hold
+        df_trend = conn.query(f"""
+            SELECT MATCH_DATE, SUM("HIGH SPEED RUNNING") as HSR
+            FROM {DB}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
+            WHERE MATCH_TEAMS = '{valgt_hold}'
+              AND MATCH_DATE >= '{SEASON_START}'
+            GROUP BY 1 ORDER BY 1 ASC
+        """)
+        
+        if df_trend is not None and not df_trend.empty:
+            st.subheader("Udvikling i intensitet over sæsonen")
+            fig_trend = px.line(df_trend, x='MATCH_DATE', y='HSR', markers=True)
+            fig_trend.update_traces(line_color='#cc0000')
+            fig_trend.update_layout(height=400, xaxis_title="Dato", yaxis_title="Hold-HSR (meter)")
+            st.plotly_chart(fig_trend, use_container_width=True)
 
 if __name__ == "__main__":
     vis_side()
