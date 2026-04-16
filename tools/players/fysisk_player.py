@@ -14,16 +14,16 @@ LIGA_IDS = "('dyjr458hcmrcy87fsabfsy87o', 'e5p78j2r7v8h3u9s5k0l2m4n6', 'f6q89k3s
 
 @st.cache_resource
 def get_cached_conn():
-return _get_snowflake_conn()
+       return _get_snowflake_conn()
 
 def draw_phase_pitch(val, title, color):
-pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
-fig, ax = pitch.draw(figsize=(8, 6))
-fig.patch.set_alpha(0)
-ax.scatter(50, 50, s=3000, color=color, alpha=0.1)
-txt = ax.text(50, 50, f"{int(val)}m", color=color, fontsize=45, fontweight='bold', ha='center', va='center')
-txt.set_path_effects([patheffects.withStroke(linewidth=3, foreground='white')])
-ax.set_title(title, fontsize=16, fontweight='bold')
+       pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
+       fig, ax = pitch.draw(figsize=(8, 6))
+       fig.patch.set_alpha(0)
+       ax.scatter(50, 50, s=3000, color=color, alpha=0.1)
+       txt = ax.text(50, 50, f"{int(val)}m", color=color, fontsize=45, fontweight='bold', ha='center', va='center')
+       txt.set_path_effects([patheffects.withStroke(linewidth=3, foreground='white')])
+       ax.set_title(title, fontsize=16, fontweight='bold')
 return fig
 
 def vis_side():
