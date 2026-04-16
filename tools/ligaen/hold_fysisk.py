@@ -1,110 +1,104 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import plotly.express as px
-import plotly.graph_objects as go
-import matplotlib.pyplot as plt
-import sys
-from types import ModuleType
-
-# --- TRICK: Vi opretter et "falsk" pkg_resources modul for at undgå crash ---
-if 'pkg_resources' not in sys.modules:
-    mock_pkg = ModuleType('pkg_resources')
-    mock_pkg.get_distribution = lambda x: ModuleType('dist')
-    sys.modules['pkg_resources'] = mock_pkg
-
-# Nu kan vi importere dine data og SkillCorner uden problemer
 from data.data_load import _get_snowflake_conn
 
-try:
-    from skillcornerviz.standard_plots.bar_plot import plot_bar_chart
-    from skillcornerviz.standard_plots.radar_plot import plot_radar
-    SKILLCORNER_READY = True
-except Exception as e:
-    SKILLCORNER_READY = False
-    SC_ERROR = str(e)
-
-# --- KONFIGURATION ---
-DB = "KLUB_HVIDOVREIF.AXIS"
-SEASON_START = "2025-07-01"
-LIGA_OPTA_ID = "148"
-
-@st.cache_resource
-def get_cached_conn():
-    return _get_snowflake_conn()
-
-def vis_side():
-    st.set_page_config(page_title="Hvidovre IF - Physical Performance", layout="wide")
-    st.title("Hvidovre IF - Physical Performance")
-
-    conn = get_cached_conn()
+# --- 1. Z-SCORE LOGIK (SkillCorner Protokol) ---
+def calculate_composite_zscores(df, metrics_groups):
+    """
+    Beregner standardiserede Z-scores for grupper af metrics.
+    Normaliserer resultatet så Mean=0 og Std=1 for hele ligaen.
+    """
+    df_res = df.copy()
     
-    # SQL: Henter rådata
-    sql = f"""
-        SELECT P.MATCH_SSIID, P.MATCH_TEAMS, P.DISTANCE, P."HIGH SPEED RUNNING" as HSR,
-               P.NO_OF_HIGH_INTENSITY_RUNS as HI_RUNS, P.TOP_SPEED
-        FROM {DB}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS P
-        JOIN {DB}.SECONDSPECTRUM_SEASON_METADATA M ON P.MATCH_SSIID = M.MATCH_SSIID
-        WHERE M.COMPETITION_OPTAID = '{LIGA_OPTA_ID}' AND M.DATE >= '{SEASON_START}'
+    for group_name, metrics in metrics_groups.items():
+        # Beregn Z-score for hver enkelt metric i gruppen
+        z_cols = []
+        for m in metrics:
+            col_name = f"z_{m}"
+            # Standardformel: (x - mean) / std
+            df_res[col_name] = (df_res[m] - df_res[m].mean()) / df_res[m].std()
+            z_cols.append(col_name)
+        
+        # Gennemsnit af Z-scores i gruppen og re-normalisering
+        raw_avg = df_res[z_cols].mean(axis=1)
+        df_res[group_name] = (raw_avg - raw_avg.mean()) / raw_avg.std()
+        
+    return df_res
+
+# --- 2. HOVEDFUNKTION ---
+def vis_side():
+    st.title("Hvidovre IF - Avanceret Spilleranalyse (Z-Scores)")
+    st.caption("Baseret på SkillCorner Open Data metodologi: Sammenligning på tværs af volumener.")
+
+    conn = _get_snowflake_conn()
+    
+    # SQL: Henter spillerdata (ikke hold-totaler her, da Z-scores er bedst på spillerniveau)
+    sql = """
+        SELECT 
+            P.PLAYER_NAME, P.MATCH_TEAMS, P.DISTANCE, 
+            P."HIGH SPEED RUNNING" as HSR, 
+            P.NO_OF_HIGH_INTENSITY_RUNS as HI_RUNS, 
+            P.TOP_SPEED, P.MINUTES
+        FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS P
+        WHERE P.MINUTES >= 45 -- Vi filtrerer for spillere med reel spilletid
     """
     df_raw = conn.query(sql)
-    
-    if df_raw is None or df_raw.empty:
-        st.warning("Henter data fra Snowflake...")
-        return
-
     df_raw.columns = [c.upper() for c in df_raw.columns]
-    df_raw['HOLDNAVN'] = df_raw['MATCH_TEAMS'].apply(lambda x: str(x).split('-')[0].split(':')[0].strip())
 
-    # Aggregering: Kamp-totaler og Sæson-gennemsnit
-    df_kampe = df_raw.groupby(['MATCH_SSIID', 'HOLDNAVN']).agg({
-        'DISTANCE': 'sum', 'HSR': 'sum', 'HI_RUNS': 'sum', 'TOP_SPEED': 'max'
-    }).reset_index()
+    # --- 3. NORMALISERING (p90) ---
+    df_raw['DIST_P90'] = (df_raw['DISTANCE'] / df_raw['MINUTES']) * 90
+    df_raw['HSR_P90'] = (df_raw['HSR'] / df_raw['MINUTES']) * 90
+    df_raw['HI_P90'] = (df_raw['HI_RUNS'] / df_raw['MINUTES']) * 90
 
-    df_liga = df_kampe.groupby('HOLDNAVN').agg({
-        'DISTANCE': 'mean', 'HSR': 'mean', 'HI_RUNS': 'mean', 'TOP_SPEED': 'mean'
-    }).reset_index()
+    # --- 4. BEREGN Z-SCORES ---
+    # Vi definerer grupperne jf. artiklen
+    metrics_groups = {
+        'INTENSITY_SCORE': ['HI_P90', 'HSR_P90'],
+        'VOLUME_SCORE': ['DIST_P90'],
+        'EXPLOSIVE_SCORE': ['TOP_SPEED']
+    }
+    
+    df_scored = calculate_composite_zscores(df_raw, metrics_groups)
 
-    valgt_hold = st.selectbox("Vælg dit hold", sorted(df_liga['HOLDNAVN'].unique()))
+    # --- 5. UI: RANKING & SCATTER ---
+    col_left, col_right = st.columns([1, 2])
+    
+    with col_left:
+        st.subheader("Top 10: Intensitet")
+        top_int = df_scored[['PLAYER_NAME', 'INTENSITY_SCORE']].sort_values('INTENSITY_SCORE', ascending=False).head(10)
+        st.table(top_int)
 
-    # --- VISNING AF GRAFER ---
-    col1, col2 = st.columns(2)
+    with col_right:
+        st.subheader("Intensitet vs. Volumen (Z-Scores)")
+        # Scatter plot med Z-scores
+        fig = px.scatter(
+            df_scored, 
+            x='VOLUME_SCORE', 
+            y='INTENSITY_SCORE', 
+            hover_name='PLAYER_NAME',
+            labels={'VOLUME_SCORE': 'Volumen (Z-Score)', 'INTENSITY_SCORE': 'Intensitet (Z-Score)'},
+            template="plotly_white"
+        )
+        # Tilføj gennemsnitslinjer (som altid er 0 i Z-scores)
+        fig.add_hline(y=0, line_dash="dash", line_color="grey")
+        fig.add_vline(x=0, line_dash="dash", line_color="grey")
+        
+        st.plotly_chart(fig, use_container_width=True)
 
-    with col1:
-        st.subheader("High Intensity Ranking")
-        if SKILLCORNER_READY:
-            df_bar = df_liga.sort_values('HI_RUNS', ascending=False).copy()
-            df_bar['idx'] = range(len(df_bar))
-            h_idx = df_bar[df_bar['HOLDNAVN'] == valgt_hold]['idx'].tolist()
-            
-            fig1, ax1 = plot_bar_chart(
-                df=df_bar, metric='HI_RUNS', label='HI Aktioner pr. kamp',
-                primary_highlight_group=h_idx, primary_highlight_color='#cc0000',
-                data_point_id='idx', data_point_label='HOLDNAVN'
-            )
-            st.pyplot(fig1)
-
-    with col2:
-        st.subheader("Fysisk Power-Profil")
-        if SKILLCORNER_READY:
-            radar_metrics = {'HI_RUNS': 'HI Runs', 'TOP_SPEED': 'Top Speed', 'HSR': 'HSR', 'DISTANCE': 'Volume'}
-            radar_df = df_liga.copy()
-            for m in radar_metrics.keys():
-                radar_df[m] = radar_df[m].rank(pct=True) * 100
-            
-            fig2, ax2 = plot_radar(
-                radar_df, data_point_id='HOLDNAVN', label=valgt_hold,
-                metrics=list(radar_metrics.keys()), metric_labels=radar_metrics,
-                add_sample_info=False
-            )
-            st.pyplot(fig2)
-
+    # --- 6. SPILLERPROFIL ---
     st.divider()
-    st.subheader("Sammenligning: Distance vs. Intensitet")
-    fig3 = px.scatter(df_liga, x='DISTANCE', y='HI_RUNS', text='HOLDNAVN', color_discrete_sequence=['#d3d3d3'])
-    df_h = df_liga[df_liga['HOLDNAVN'] == valgt_hold]
-    fig3.add_trace(go.Scatter(x=df_h['DISTANCE'], y=df_h['HI_RUNS'], mode='markers+text', 
-                             marker=dict(size=15, color='#cc0000'), text=valgt_hold, textposition="top center"))
-    st.plotly_chart(fig3, use_container_width=True)
+    valgt_spiller = st.selectbox("Vælg spiller for dybdeanalyse", sorted(df_scored['PLAYER_NAME'].unique()))
+    
+    p_data = df_scored[df_scored['PLAYER_NAME'] == valgt_spiller].iloc[0]
+    
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Intensitet Score", f"{round(p_data['INTENSITY_SCORE'], 2)} σ")
+    m2.metric("Volumen Score", f"{round(p_data['VOLUME_SCORE'], 2)} σ")
+    m3.metric("Eksplosivitet Score", f"{round(p_data['EXPLOSIVE_SCORE'], 2)} σ")
+
+    st.info("💡 En score på 0 er ligasnittet. En score på +2.0 betyder, at spilleren er blandt de bedste 2.5% i ligaen.")
 
 if __name__ == "__main__":
     vis_side()
