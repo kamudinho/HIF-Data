@@ -14,7 +14,7 @@ def get_cached_conn():
     return _get_snowflake_conn()
 
 def vis_side():
-    st.set_page_config(page_title="Hvidovre IF - Liga Benchmark", layout="wide")
+    st.set_page_config(page_title="Hvidovre IF - Fysisk Analyse", layout="wide")
     
     st.markdown("""
         <style>
@@ -24,7 +24,7 @@ def vis_side():
 
     conn = get_cached_conn()
     
-    # 1. SQL: Henter fysiske data og joiner på 1. division via OptaID 148
+    # 1. SQL: Henter data
     sql = f"""
         SELECT 
             P.MATCH_TEAMS,
@@ -41,13 +41,12 @@ def vis_side():
     df_raw = conn.query(sql)
 
     if df_raw is None or df_raw.empty:
-        st.error(f"Ingen data fundet for turnering ID {LIGA_OPTA_ID} (1. Division).")
+        st.error(f"Ingen data fundet for 1. Division (ID {LIGA_OPTA_ID}).")
         return
 
-    # Sørg for ensartede kolonnenavne
     df_raw.columns = [c.upper() for c in df_raw.columns]
 
-    # RENSNING: Samler holdnavne (f.eks. "HVI-KIF" -> "HVI")
+    # RENSNING: Samler holdnavne
     df_raw['HOLDNAVN'] = df_raw['MATCH_TEAMS'].apply(
         lambda x: str(x).split('-')[0].split(':')[0].strip()
     )
@@ -60,8 +59,8 @@ def vis_side():
         'TOP_SPEED': 'mean'
     }).reset_index()
 
-    # --- DROPDOWNS PLACERET PÅ SIDEN ---
-    st.title("Fysisk Ligabenchmark: 1. Division")
+    # --- DROPDOWNS ØVERST PÅ SIDEN ---
+    st.title("Fysisk Analyse: Distance vs. Intensitet")
     
     c1, c2 = st.columns(2)
     with c1:
@@ -71,10 +70,10 @@ def vis_side():
         metric_map = {
             "HI Løb (Antal)": "HI_RUNS",
             "High Speed Running (m)": "HSR",
-            "Total Distance (m)": "DISTANCE"
+            "Topfart (km/t)": "TOP_SPEED"
         }
-        valgt_metric_label = st.selectbox("Vælg parameter på X-aksen", list(metric_map.keys()))
-        valgt_x_col = metric_map[valgt_metric_label]
+        valgt_metric_label = st.selectbox("Vælg intensitet (Y-akse)", list(metric_map.keys()))
+        valgt_y_col = metric_map[valgt_metric_label]
 
     st.divider()
 
@@ -82,29 +81,29 @@ def vis_side():
     hold_data = df_liga[df_liga['HOLDNAVN'] == valgt_hold].iloc[0]
     
     m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Gns. Distance", f"{round(hold_data['DISTANCE']/1000, 1)} km")
-    m2.metric("Gns. HSR", f"{int(hold_data['HSR'])} m")
-    m3.metric("Gns. HI løb", f"{int(hold_data['HI_RUNS'])}")
+    m1.metric("Gns. Distance", f"{round(hold_data['DISTANCE']/1000, 2)} km")
+    m2.metric("Gns. HI løb", f"{int(hold_data['HI_RUNS'])}")
+    m3.metric("Gns. HSR", f"{int(hold_data['HSR'])} m")
     m4.metric("Gns. Topfart", f"{round(hold_data['TOP_SPEED'], 1)} km/t")
 
     st.divider()
 
-    # --- SCATTER PLOT LOGIK (INGEN DOBBELT-PRIK) ---
-    st.subheader(f"Analyse: {valgt_metric_label} vs. Topfart")
+    # --- SCATTER PLOT: DISTANCE PÅ X, VALGT METRIC PÅ Y ---
+    st.subheader(f"Analyse: Total Distance vs. {valgt_metric_label}")
 
-    # Split i to grupper for at undgå overlap
+    # Split i to grupper for at undgå overlap (KIF vises kun én gang som rød)
     df_others = df_liga[df_liga['HOLDNAVN'] != valgt_hold]
     df_highlight = df_liga[df_liga['HOLDNAVN'] == valgt_hold]
 
-    # 1. Placer de "grå" hold
+    # 1. Tegn ligaen (grå prikker)
     fig = px.scatter(
         df_others, 
-        x=valgt_x_col, 
-        y='TOP_SPEED',
+        x='DISTANCE', 
+        y=valgt_y_col,
         text='HOLDNAVN',
         labels={
-            valgt_x_col: valgt_metric_label,
-            'TOP_SPEED': 'Topfart (km/t)'
+            'DISTANCE': 'Total Distance (Meter)',
+            valgt_y_col: valgt_metric_label
         }
     )
 
@@ -113,10 +112,10 @@ def vis_side():
         textposition='top center'
     )
 
-    # 2. Placer det valgte hold som et rødt lag ovenpå
+    # 2. Tegn det valgte hold (rød prik)
     fig.add_trace(go.Scatter(
-        x=df_highlight[valgt_x_col],
-        y=df_highlight['TOP_SPEED'],
+        x=df_highlight['DISTANCE'],
+        y=df_highlight[valgt_y_col],
         mode='markers+text',
         marker=dict(size=22, color='#cc0000', line=dict(width=2, color='white')),
         text=df_highlight['HOLDNAVN'],
@@ -124,17 +123,17 @@ def vis_side():
         showlegend=False
     ))
 
-    # 3. Liga gennemsnit (linjer)
-    liga_avg_x = df_liga[valgt_x_col].mean()
-    liga_avg_y = df_liga['TOP_SPEED'].mean()
+    # 3. Liga gennemsnitslinjer
+    avg_dist = df_liga['DISTANCE'].mean()
+    avg_y = df_liga[valgt_y_col].mean()
 
-    fig.add_vline(x=liga_avg_x, line_dash="dash", line_color="grey", opacity=0.6)
-    fig.add_hline(y=liga_avg_y, line_dash="dash", line_color="grey", opacity=0.6)
+    fig.add_vline(x=avg_dist, line_dash="dash", line_color="grey", opacity=0.6)
+    fig.add_hline(y=avg_y, line_dash="dash", line_color="grey", opacity=0.6)
 
     fig.update_layout(
         height=650,
         template="plotly_white",
-        xaxis=dict(showgrid=True, gridcolor='#f0f0f0'),
+        xaxis=dict(showgrid=True, gridcolor='#f0f0f0', title="Total Distance (Meter)"),
         yaxis=dict(showgrid=True, gridcolor='#f0f0f0')
     )
 
