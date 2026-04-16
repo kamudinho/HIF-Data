@@ -197,7 +197,7 @@ try:
             im.vis_side()
         elif sel == "Top 5: Spillere":
             import tools.players.top_players as tp
-            tp.vis_side(df_modstandere)
+            tp.vis_side(df_input)
 
 
 except Exception as e:
