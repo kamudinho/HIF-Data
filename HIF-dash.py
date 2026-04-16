@@ -195,6 +195,9 @@ try:
         elif sel == "Intern analyse":
             import tools.admin_page.intern_modstanderanalyse as im
             im.vis_side()
+        elif sel == "Top 5: Spillere":
+            import tools.players.top_players as tp
+            tp.vis_side()
 
 
 except Exception as e:
