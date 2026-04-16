@@ -6,88 +6,99 @@ def vis_side():
     st.markdown("### PHYSICAL & TECHNICAL PROFILES")
     
     try:
-        # 1. HENT DATA
+        # 1. DATA INDLÆSNING (Prøv alle pakker)
         dp = hif_load.get_scouting_package()
-        df_all = dp["sql_players"]
-
-        # --- DEBUG: Sørg for at vi rammer de rigtige kolonnenavne ---
-        # Vi tvinger alle kolonnenavne til store bogstaver for at gøre det nemmere
-        df_all.columns = [c.upper() for c in df_all.columns]
         
-        # Tjek hvilken kolonne der indeholder holdnavnet
-        team_col = 'TEAM_NAME' if 'TEAM_NAME' in df_all.columns else None
-        if not team_col:
-            # Hvis 'TEAM_NAME' ikke findes, leder vi efter noget der ligner
-            potential_cols = [c for c in df_all.columns if 'TEAM' in c or 'HOLD' in c]
-            if potential_cols:
-                team_col = potential_cols[0]
+        # Vi samler alt data vi kan finde for at få både stats og billeder
+        df_stats = dp.get("players", pd.DataFrame())
+        if df_stats.empty:
+            df_stats = dp.get("advanced_stats", pd.DataFrame())
+        
+        df_meta = dp.get("sql_players", pd.DataFrame())
 
-        if not team_col:
-            st.error(f"Kunne ikke finde en kolonne med holdnavne. Tilgængelige kolonner: {list(df_all.columns[:10])}...")
+        if df_stats.empty:
+            st.error("Kunne ikke finde statistik-data.")
             return
 
-        # 2. HOLD-VÆLGER
-        hold_liste = sorted(df_all[team_col].unique().tolist())
+        # Normaliser kolonnenavne til STORE (for konsistens)
+        df_stats.columns = [c.upper() for c in df_stats.columns]
+        if not df_meta.empty:
+            df_meta.columns = [c.upper() for c in df_meta.columns]
+
+        # 2. FIND HOLD-KOLONNE OG VÆLG HOLD
+        team_col = next((c for c in df_stats.columns if 'TEAM' in c or 'HOLD' in c), None)
+        if not team_col:
+            st.warning("Hold-data ikke fundet.")
+            return
+
+        hold_liste = sorted(df_stats[team_col].unique().tolist())
         valgt_hold = st.selectbox("Vælg Hold", options=hold_liste)
         
         if valgt_hold:
-            df_input = df_all[df_all[team_col] == valgt_hold].copy()
-            
-            # 3. DYNAMISK AGGREGERING
-            # Vi definerer de metrics vi leder efter og tjekker om de findes
-            metrics = {
-                'TOUCHES_IN_BOX': 'TOUCHES IN BOX',
-                'SUCCESSFUL_PASSES_PERCENT': 'PASS %',
-                'DUELS_WON': 'VUNDNE DUEL',
-                'GOALS': 'MÅL'
+            df_hold = df_stats[df_stats[team_col] == valgt_hold].copy()
+
+            # 3. DYNAMISK DATA-UDTRÆK (Hvad leder vi efter?)
+            # Vi definerer de ønskede metrics og deres mulige navne i dit data
+            target_metrics = {
+                "TOUCHES": ["TOUCHES_IN_BOX", "TOUCHES_BOX", "ATT_PEN_TOUCHES"],
+                "GENNEMBRUD": ["SUCCESSFUL_PASSES_PERCENT", "PASS_ACC", "ACCURATE_PASSES_PCT"],
+                "DUELLER": ["WON_DUELS", "DUELS_WON", "DEF_DUELS_WON"],
+                "MÅL/CHANCER": ["GOALS", "EXPECTED_GOALS", "XG", "CHANCES_CREATED"]
             }
-            
-            # Vi opbygger en agg_dict kun med de kolonner der faktisk findes
-            agg_dict = {}
-            found_metrics = []
-            
-            for col, label in metrics.items():
-                if col in df_input.columns:
-                    agg_dict[col] = 'sum' if col != 'SUCCESSFUL_PASSES_PERCENT' else 'mean'
-                    found_metrics.append((col, label))
-            
-            if not agg_dict:
-                st.warning(f"Ingen af de forventede statistikker blev fundet. Kolonner i dit data: {list(df_input.columns)}")
-                return
 
-            stats = df_input.groupby('PLAYER_NAME').agg(agg_dict).reset_index()
+            # Find de 5 mest aktive spillere (baseret på hvad der nu findes af tal)
+            numeric_cols = df_hold.select_dtypes(include=['number']).columns
+            df_hold['TOTAL_SCORE'] = df_hold[numeric_cols].sum(axis=1)
+            top_5 = df_hold.sort_values('TOTAL_SCORE', ascending=False).head(5)
 
-            # Beregn en score baseret på hvad vi har fundet
-            stats['Score'] = 0
-            for col in agg_dict.keys():
-                stats['Score'] += stats[col]
-
-            top_5 = stats.sort_values('Score', ascending=False).head(5)
-
-            # 4. VISNING
+            # 4. GRID VISNING (5 Kolonner)
             cols = st.columns(5)
-            farver = ["#df003b", "#084594", "#238b45", "#ec7014"]
-
+            
             for i, (idx, row) in enumerate(top_5.iterrows()):
                 with cols[i]:
-                    navn_dele = row['PLAYER_NAME'].split()
-                    st.markdown(f"**{navn_dele[-1].upper() if navn_dele else 'SPILLER'}**")
-                    st.caption(row['PLAYER_NAME'])
-                    st.markdown("<hr style='margin:10px 0; border:1px solid #eee'>", unsafe_allow_html=True)
+                    player_name = row.get('PLAYER_NAME', 'Ukendt Spiller')
+                    efternavn = str(player_name).split()[-1].upper()
                     
-                    def draw_bar(label, val, max_val, color):
-                        percent = min(int((val / max_val) * 100), 100) if max_val > 0 else 0
+                    # Vis Billede (hvis findes i df_meta)
+                    img_url = None
+                    if not df_meta.empty and 'PLAYER_NAME' in df_meta.columns:
+                        match = df_meta[df_meta['PLAYER_NAME'] == player_name]
+                        if not match.empty:
+                            img_url = match.iloc[0].get('IMAGEDATAURL')
+                    
+                    if img_url:
+                        st.image(img_url, use_container_width=True)
+                    else:
+                        st.image("https://via.placeholder.com/150?text=INGEN+FOTO", use_container_width=True)
+
+                    st.markdown(f"**{efternavn}**")
+                    st.caption(player_name)
+                    st.markdown("<hr style='margin:5px 0; border:1px solid #eee'>", unsafe_allow_html=True)
+
+                    # DYNAMISKE BARS (Tjekker hver kategori)
+                    for label, potential_names in target_metrics.items():
+                        # Find den første kolonne der matcher vores liste
+                        found_col = next((c for c in potential_names if c in df_hold.columns), None)
+                        
+                        val_display = "-"
+                        percent = 0
+                        
+                        if found_col:
+                            val = row[found_col]
+                            if pd.notnull(val):
+                                val_display = f"{val:.1f}" if isinstance(val, (float, int)) else val
+                                # Beregn procent ift. holdets max i den kolonne
+                                max_val = df_hold[found_col].max()
+                                percent = min(int((val / max_val) * 100), 100) if max_val > 0 else 0
+
+                        # HTML Tegning
                         st.markdown(f"""
-                            <div style="font-size: 10px; color: #666; margin-top: 8px;">{label}</div>
-                            <div style="background-color: #f1f1f1; border-radius: 3px; height: 6px; width: 100%;">
-                                <div style="background-color: {color}; height: 6px; width: {percent}%; border-radius: 3px;"></div>
+                            <div style="font-size: 9px; color: #666; margin-top: 5px; text-transform: uppercase;">{label}</div>
+                            <div style="background-color: #eee; height: 5px; width: 100%; border-radius: 2px;">
+                                <div style="background-color: #df003b; height: 5px; width: {percent}%; border-radius: 2px;"></div>
                             </div>
-                            <div style="font-size: 10px; font-weight: bold; text-align: right; margin-top: 2px;">{val:.1f}</div>
+                            <div style="font-size: 10px; text-align: right; font-weight: bold;">{val_display}</div>
                         """, unsafe_allow_html=True)
 
-                    # Tegn de metrics vi har fundet
-                    for j, (col, label) in enumerate(found_metrics):
-                        draw_bar(label, row[col], stats[col].max() if stats[col].max() > 0 else 1, farver[j % len(farver)])
-
     except Exception as e:
-        st.error(f"Kritisk fejl: {e}")
+        st.error(f"Fejl: {e}")
