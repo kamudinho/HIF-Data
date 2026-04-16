@@ -21,7 +21,7 @@ def calculate_composite_zscores(df, g1_metrics, g2_metrics, g3_metrics):
 # --- 2. PROFILER GRID FUNKTION ---
 def display_profile_grid(df_scored, target_team):
     st.divider()
-    st.write(f"### 📊 Physical Profiler Grid: {target_team}")
+    st.caption(f" Physical Profiler Grid: {target_team}")
     st.caption("Tabellen viser spillernes faktiske gennemsnit pr. kamp. Farve-skalaen er relativ til hele ligaen.")
 
     if target_team == "Alle":
@@ -56,9 +56,9 @@ def display_profile_grid(df_scored, target_team):
 # --- 3. HOVEDSIDE ---
 def vis_side():
     st.set_page_config(page_title="Hvidovre IF - Physical Analytics", layout="wide")
-    st.title("SkillCorner Open Data #2: Physical Profiler")
+    st.cpation("SkillCorner Open Data #2: Physical Profiler")
     
-    with st.expander("ℹ️ INFO: Hvordan skal graferne forstås?", expanded=False):
+    with st.expander("INFO: Hvordan skal graferne forstås?", expanded=False):
         st.info("""
         **Z-Score (σ):** Viser afvigelsen fra ligaens gennemsnit. 0.0 er gennemsnittet. +2.0 er absolut topniveau.
         **PSV-99:** Peak Speed Velocity. Den hastighed spilleren kan ramme stabilt. Vi har filtreret urealistiske 'spikes' over 36 km/t fra.
