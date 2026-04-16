@@ -27,12 +27,12 @@ def draw_phase_pitch(val, title, color):
 return fig
 
 def vis_side():
-st.markdown("""<style>
-       .stTabs [data-baseweb="tab-list"] { gap: 8px; border-bottom: 1px solid #eee; }
-       .stTabs [data-baseweb="tab"] { height: 45px; background-color: white !important; color: #666 !important; }
-       .stTabs [aria-selected="true"] { color: #cc0000 !important; border-bottom: 3px solid #cc0000 !important; font-weight: bold !important; }
-       [data-testid="stMetricValue"] { font-size: 26px !important; font-weight: bold !important; color: #333; }
-   </style>""", unsafe_allow_html=True)
+       st.markdown("""<style>
+              .stTabs [data-baseweb="tab-list"] { gap: 8px; border-bottom: 1px solid #eee; }
+              .stTabs [data-baseweb="tab"] { height: 45px; background-color: white !important; color: #666 !important; }
+              .stTabs [aria-selected="true"] { color: #cc0000 !important; border-bottom: 3px solid #cc0000 !important; font-weight: bold !important; }
+              [data-testid="stMetricValue"] { font-size: 26px !important; font-weight: bold !important; color: #333; }
+          </style>""", unsafe_allow_html=True)
 
 conn = get_cached_conn()
 
