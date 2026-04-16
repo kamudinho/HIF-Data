@@ -189,6 +189,9 @@ try:
         elif sel == "Fysisk profil":
             import tools.players.fysisk_player as fp
             fp.vis_side()
+        elif sel == "Hold: Fysisk profil":
+            import tools.ligaen.hold_fysisk as hf
+            hf.vis_side()
 
 
 except Exception as e:
