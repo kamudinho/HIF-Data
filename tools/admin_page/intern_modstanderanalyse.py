@@ -80,53 +80,43 @@ def draw_player_info_box(ax, team_logo, player_name, season_str, category_str):
     ax.text(0.10, 0.89, info_text, transform=ax.transAxes, 
             fontsize=8, color='#666666', va='center')
 
-def hent_nuanceret_analyse(df_fjende):
-    # --- LIGA GENNEMSNIT (NordicBet Liga estimater) ---
+def hent_komparativ_analyse(df_fjende, df_hvi):
+    # --- LIGA GENNEMSNIT (Reference) ---
     LIGA_PAS_GNS = 78.0
     LIGA_DUEL_GNS = 50.0
-    LIGA_FELT_GNS = 1.2
 
-    # --- BEREGN MODSTANDER STATS ---
-    # Pasninger på egen halvdel
-    egen_pas = df_fjende[(df_fjende['EVENT_TYPEID'] == 1) & (df_fjende['EVENT_X'] < 40)]
-    pas_acc = (egen_pas['OUTCOME'].sum() / len(egen_pas)) * 100 if not egen_pas.empty else LIGA_PAS_GNS
+    # --- BEREGN STATS FOR BEGGE HOLD ---
+    # Pasning (Egen halvdel)
+    pas_fjende = (df_fjende[(df_fjende['EVENT_TYPEID'] == 1) & (df_fjende['EVENT_X'] < 40)]['OUTCOME'].mean() * 100)
+    pas_hvi = (df_hvi[(df_hvi['EVENT_TYPEID'] == 1) & (df_hvi['EVENT_X'] < 40)]['OUTCOME'].mean() * 100)
     
     # Dueller
-    dueller = df_fjende[df_fjende['EVENT_TYPEID'].isin([7, 44])]
-    duel_acc = (dueller['OUTCOME'].sum() / len(dueller)) * 100 if not dueller.empty else LIGA_DUEL_GNS
+    duel_fjende = (df_fjende[df_fjende['EVENT_TYPEID'].isin([7, 44])]['OUTCOME'].mean() * 100)
+    duel_hvi = (df_hvi[df_hvi['EVENT_TYPEID'].isin([7, 44])]['OUTCOME'].mean() * 100)
+
+    # --- MATCH-LOGIK (Hvor er vores overtag?) ---
     
-    # Felt-aktioner pr. kamp (baseret på 10 kampe)
-    felt_aktioner = len(df_fjende[(df_fjende['EVENT_X'] < 20) & (df_fjende['EVENT_Y'].between(20, 80))])
-    felt_snit = felt_aktioner / 10
-
-    # --- NUANCERET LOGIK ---
-    
-    # 1. Analyse af Pres (Opbygning)
-    if pas_acc < (LIGA_PAS_GNS - 5):
-        pres_tekst = f"KRITISK SVAGHED: Modstanderen er markant under liga-snittet i opbygningen ({int(pas_acc)}%). Hvidovre skal tvinge dem til korte løsninger via et aggressivt, koordineret højt pres."
-    elif pas_acc > (LIGA_PAS_GNS + 5):
-        pres_tekst = f"STYRKE: Modstanderen er elite i deres omgang med bolden ({int(pas_acc)}%). Et højt pres vil være risikabelt. Hvidovre bør ligge i en kompakt midterblok og lukke de centrale rum."
+    # 1. Analyse af Pres-matchet
+    # Vi presser kun, hvis modstanderen er dårligere til at bygge op, end vi er til at stresse dem
+    if pas_fjende < LIGA_PAS_GNS and pas_hvi > pas_fjende:
+        pres_tekst = f"UDNYT OVERTAG: Modstanderen kæmper med opbygningen ({int(pas_fjende)}%). Da Hvidovre er mere boldfaste ({int(pas_hvi)}%), kan vi tillade os at presse højt og stole på, at vi kan kontrollere kampen, hvis vi vinder den hurtigt tilbage."
+    elif pas_fjende > pas_hvi:
+        pres_tekst = f"TAKTIK: Modstanderen er mere boldsikker i deres base ({int(pas_fjende)}%) end Hvidovre ({int(pas_hvi)}%). Undgå at blive fanget i et overmodigt pres; træk jer 10-15 meter længere ned og sats på omstillinger."
     else:
-        pres_tekst = f"GENNEMSNITLIG: Modstanderen følger liga-tendensen ({int(pas_acc)}%). Variér presset alt efter deres position på banen og søg at stresse deres svageste boldspiller."
+        pres_tekst = "BALANCERET: Begge hold har lignende teknisk niveau i opbygningen. Afvent deres første to pasninger, før presset sættes ind."
 
-    # 2. Analyse af Duelspil
-    if duel_acc < (LIGA_DUEL_GNS - 3):
-        duel_tekst = f"FYSISK OVERTAG: Modstanderen taber unormalt mange dueller ({int(duel_acc)}%). Gør kampen fysisk, søg duellerne på deres halvdel og lev af de opsamlede andenbolde."
-    elif duel_acc > (LIGA_DUEL_GNS + 3):
-        duel_tekst = f"ADVARSEL: Modstanderen er fysisk dominerende ({int(duel_acc)}%). Undgå stationære dueller. Flyt bolden hurtigt med få berøringer for at trætte deres defensiv fremfor at gå i nærkamp."
+    # 2. Analyse af Duel-matchet
+    diff_duel = duel_hvi - duel_fjende
+    if diff_duel > 5:
+        duel_tekst = f"FYSISK DOMINANS: Hvidovre vinder markant flere dueller ({int(duel_hvi)}%) end modstanderen ({int(duel_fjende)}%). Søg de direkte dueller og dødbolde – her har vi en statistisk fordel."
+    elif diff_duel < -5:
+        duel_tekst = f"FYSISK ADVARSEL: Modstanderen er stærkere i duellerne ({int(duel_fjende)}%) end os ({int(duel_hvi)}%). Vi skal undgå en 'slugfest' og i stedet flytte bolden hurtigt langs jorden."
     else:
-        duel_tekst = f"DUEL-BALANCE: Begge hold står lige i det fysiske spil ({int(duel_acc)}%). Timing i genpresset bliver afgørende for hvem der tager kontrollen."
-
-    # 3. Analyse af Gennembrud
-    if felt_snit > (LIGA_FELT_GNS + 0.5):
-        felt_tekst = f"DEFENSIV ÅBNING: De tillader {felt_snit} aktioner i boksen, hvilket er højt for ligaen. Fokus på overlaps og flade indlæg i 'the corridor of uncertainty' bag deres stoppere."
-    else:
-        felt_tekst = f"ORGANISERET FELT: De er dygtige til at beskytte 'Zone 14' og eget felt. Hvidovre skal angribe via hurtige vendinger og søge cut-backs eller skud fra distancen."
+        duel_tekst = f"DUELLER: Den fysiske balance er jævn ({int(duel_hvi)}% vs {int(duel_fjende)}%). Viljen på andenboldene bliver afgørende."
 
     return {
         'pres': pres_tekst,
-        'dueller': duel_tekst,
-        'felt': felt_tekst
+        'dueller': duel_tekst
     }
 
 def generer_anbefaling(df_fjende):
@@ -307,26 +297,21 @@ def vis_side(dp=None):
     n_matches = df_all_h['MATCH_OPTAUUID'].nunique()
     total_minutes = n_matches * 90
     
-    # Herfra starter dine tabs
+    # Her genereres den komparative analyse
+    match_analyse = hent_komparativ_analyse(df_all_h, df_hvi_season)
+
     t1, t2, t3, t4, t5 = st.tabs(["OVERSIGT", "MED BOLDEN", "UDEN BOLDEN", "MÅL-SEKVENSER", "SPILLEROVERSIGT"])
-    
-    # Hent analyse-data til brug i alle tabs
-    stats = hent_detaljeret_analyse(df_all_h)
-    
-    # Øverst i din tabs-sektion:
-    nuanceret_gameplan = hent_nuanceret_analyse(df_all_h)
-    
+
     with t1:
-        st.markdown(f"**STRATEGISK GAMEPLAN MOD {valgt_hold.upper()}**")
+        st.markdown(f"**MATCH-ANALYSE: HVIDOVRE IF vs {valgt_hold.upper()}**")
         with st.container(border=True):
-            st.markdown(f"**OPBYGNING & PRES**")
-            st.markdown(nuanceret_gameplan['pres'])
+            st.markdown("**STRATEGISK OVERTAG**")
+            st.markdown(match_analyse['pres'])
             st.markdown("---")
-            st.markdown(f"**FYSISK TILGANG**")
-            st.markdown(nuanceret_gameplan['dueller'])
-            st.markdown("---")
-            st.markdown(f"**GENNEMBRUD**")
-            st.markdown(nuanceret_gameplan['felt'])
+            st.markdown("**DET FYSISKE MATCHUP**")
+            st.markdown(match_analyse['dueller'])
+            
+        st.markdown("---")
 
         # Resultat logik
         df_res['RES'] = df_res.apply(lambda r: "D" if r['TOTAL_HOME_SCORE'] == r['TOTAL_AWAY_SCORE'] else ("W" if ((r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid and r['TOTAL_HOME_SCORE'] > r['TOTAL_AWAY_SCORE']) or (r['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid and r['TOTAL_AWAY_SCORE'] > r['TOTAL_HOME_SCORE'])) else "L"), axis=1)        
