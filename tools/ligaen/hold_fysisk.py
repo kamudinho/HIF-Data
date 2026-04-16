@@ -89,7 +89,7 @@ def vis_side():
     st.divider()
 
     # --- SCATTER PLOT: DISTANCE PÅ X, VALGT METRIC PÅ Y ---
-    st.subheader(f"Analyse: Total Distance vs. {valgt_metric_label}")
+    st.caption(f"Analyse: Total Distance vs. {valgt_metric_label}")
 
     # Split i to grupper for at undgå overlap (KIF vises kun én gang som rød)
     df_others = df_liga[df_liga['HOLDNAVN'] != valgt_hold]
