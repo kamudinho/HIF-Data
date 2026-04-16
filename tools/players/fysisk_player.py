@@ -29,7 +29,6 @@ def vis_side():
             AVG(HOLD_DIST) as AVG_DIST,
             AVG(HOLD_HSR) as AVG_HSR,
             AVG(HOLD_SPRINT) as AVG_SPRINT,
-            AVG(HOLD_HI) as AVG_HI,
             MAX(TOP_SPEED_KAMP) as PEAK_SPEED,
             AVG(HOLD_HSR_TIP) as AVG_HSR_TIP,
             AVG(HOLD_HSR_OTIP) as AVG_HSR_OTIP
