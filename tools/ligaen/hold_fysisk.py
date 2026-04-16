@@ -16,8 +16,6 @@ def get_cached_conn():
     return _get_snowflake_conn()
 
 def vis_liga_benchmark(conn, valgt_hold_navn):
-    """Genererer scatter plot over hele ligaens fysiske profil"""
-    
     # Hent gennemsnit for alle hold i sæsonen
     sql_liga = f"""
         SELECT 
@@ -41,25 +39,22 @@ def vis_liga_benchmark(conn, valgt_hold_navn):
     if df_liga is not None and not df_liga.empty:
         st.subheader("Liga-benchmark: Intensitet vs. Topfart")
         
-        # Opret scatter plot
         fig = px.scatter(
             df_liga, 
             x='AVG_HI', 
             y='PEAK_SPEED',
             text='MATCH_TEAMS',
-            labels={{
+            labels={
                 'AVG_HI': 'HI Aktiviteter (Gns. per kamp)',
                 'PEAK_SPEED': 'Peak Sprint Velocity (km/t)'
-            }}
+            }
         )
 
-        # Grundlæggende styling
         fig.update_traces(
             marker=dict(size=12, opacity=0.4, color='grey'),
             textposition='top center'
         )
 
-        # Fremhæv det valgte hold
         highlight = df_liga[df_liga['MATCH_TEAMS'].str.contains(valgt_hold_navn, case=False, na=False)]
         if not highlight.empty:
             fig.add_trace(go.Scatter(
@@ -72,7 +67,6 @@ def vis_liga_benchmark(conn, valgt_hold_navn):
                 showlegend=False
             ))
 
-        # Gennemsnitslinjer
         avg_hi = df_liga['AVG_HI'].mean()
         avg_speed = df_liga['PEAK_SPEED'].mean()
         fig.add_vline(x=avg_hi, line_dash="dash", line_color="grey")
@@ -97,7 +91,10 @@ def vis_side():
 
     c1, c2 = st.columns(2)
     valgt_hold = c1.selectbox("Vælg Hold", df_teams['NAME'].unique())
-    target_ssiid = TEAMS.get(valgt_hold, {{}}).get('ssid')
+    
+    # Her var fejlen - rettet til almindelige parenteser
+    hold_info = TEAMS.get(valgt_hold, {})
+    target_ssiid = hold_info.get('ssid')
 
     # 2. VALG AF KAMP
     df_matches = conn.query(f"""
@@ -114,7 +111,6 @@ def vis_side():
 
     if df_matches is None or df_matches.empty:
         st.warning("Ingen spillede kampe fundet.")
-        # Vi viser stadig liga-benchmarket selvom der ikke er valgt en specifik kamp
         vis_liga_benchmark(conn, valgt_hold)
         return
 
@@ -123,7 +119,7 @@ def vis_side():
     valgt_kamp_label = c2.selectbox("Vælg Kamp", df_matches['SELECT_LABEL'].tolist())
     valgt_match_ssiid = df_matches[df_matches['SELECT_LABEL'] == valgt_kamp_label]['MATCH_SSIID'].iloc[0]
 
-    # 3. KAMP-OPSUMMERING (HOLDNIVEAU)
+    # 3. KAMP-OPSUMMERING
     df_hold_summary = conn.query(f"""
         SELECT 
             SUM(DISTANCE) as TOTAL_DIST,
@@ -140,19 +136,15 @@ def vis_side():
         hold = df_hold_summary.iloc[0]
         
         m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Total Distance", f"{{round(hold['TOTAL_DIST']/1000, 1)}} km")
-        m2.metric("HSR Distance", f"{{int(hold['TOTAL_HSR'])}} m")
-        m3.metric("Sprint Distance", f"{{int(hold['TOTAL_SPRINT'])}} m")
-        m4.metric("HI Aktiviteter", f"{{int(hold['TOTAL_HI'])}}")
+        m1.metric("Total Distance", f"{round(hold['TOTAL_DIST']/1000, 1)} km")
+        m2.metric("HSR Distance", f"{int(hold['TOTAL_HSR'])} m")
+        m3.metric("Sprint Distance", f"{int(hold['TOTAL_SPRINT'])} m")
+        m4.metric("HI Aktiviteter", f"{int(hold['TOTAL_HI'])}")
 
         st.divider()
-
-        # 4. LIGA BENCHMARK (SCATTER PLOT)
         vis_liga_benchmark(conn, valgt_hold)
-
         st.divider()
 
-        # 5. FASEFORDELING OG SPLITS
         col_left, col_right = st.columns(2)
         
         with col_left:
@@ -181,7 +173,6 @@ def vis_side():
                 fig_bar.update_layout(height=400, xaxis_title="Minutter", yaxis_title="Meter")
                 st.plotly_chart(fig_bar, use_container_width=True)
 
-    # 6. SPILLER TABEL
     st.subheader("Individuelle præstationer i kampen")
     df_players = conn.query(f"""
         SELECT PLAYER_NAME, DISTANCE, "HIGH SPEED RUNNING", SPRINTING, TOP_SPEED
