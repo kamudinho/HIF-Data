@@ -18,7 +18,7 @@ def vis_side():
     
     st.markdown("""
         <style>
-        [data-testid="stMetricValue"] { font-size: 24px !important; font-weight: bold !important; }
+        [data-testid="stMetricValue"] { font-size: 16px !important; font-weight: bold !important; }
         </style>
     """, unsafe_allow_html=True)
 
@@ -60,7 +60,7 @@ def vis_side():
     }).reset_index()
 
     # --- DROPDOWNS ØVERST PÅ SIDEN ---
-    st.title("Fysisk Analyse: Distance vs. Intensitet")
+    st.caption("Fysisk Analyse: Distance vs. Intensitet")
     
     c1, c2 = st.columns(2)
     with c1:
