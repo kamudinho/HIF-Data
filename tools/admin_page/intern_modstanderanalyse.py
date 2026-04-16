@@ -78,7 +78,7 @@ def vis_side():
     team_map = {mapping_lookup.get(str(u).lower().replace('t','')): u for u in ids if mapping_lookup.get(str(u).lower().replace('t','')) is not None}
 
     col_hold = st.columns([3.5, 1])[1]
-    valgt_hold = col_hold.selectbox("Vælg hold", sorted(list(team_map.keys())), label_visibility="collapsed")
+    valgt_hold = col_hold.selectbox("Vaely hold", sorted(list(team_map.keys())), label_visibility="collapsed")
     valgt_uuid = team_map[valgt_hold]
     hold_logo = get_logo_img(valgt_uuid)
 
@@ -90,11 +90,10 @@ def vis_side():
             m_ids = tuple(df_res['MATCH_OPTAUUID'].tolist())
             m_str = f"('{m_ids[0]}')" if len(m_ids) == 1 else str(m_ids)
             
-            # 1. Alle Events (uden qualifiers for hurtigere load)
+            # Opdateret SQL med dine feltnavne: EVENT_TIMEMIN, EVENT_TIMESEC
             sql_all_h = f"SELECT e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME) as PLAYER_NAME, e.MATCH_OPTAUUID, e.EVENT_TIMESTAMP, e.EVENT_OUTCOME as OUTCOME FROM {DB}.OPTA_EVENTS e JOIN {DB}.OPTA_PLAYERS p ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID WHERE e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' AND e.MATCH_OPTAUUID IN {m_str}"
             df_all_h = conn.query(sql_all_h)
             
-            # 2. Mål-sekvenser (HER ER RETTELSEN TIL QUALIFIER_ID)
             sql_seq = f"""
                 WITH TargetGoals AS (
                     SELECT MATCH_OPTAUUID, EVENT_TIMESTAMP as G_TIME, EVENT_TIMEMIN as G_MIN, EVENT_OPTAUUID as GOAL_ID 
@@ -118,9 +117,7 @@ def vis_side():
             """
             df_all_events = conn.query(sql_seq)
 
-    # Resten af koden (Tabs 1-5) fortsætter som før...
-    # [Tjek Tab 4 & 5 logikken for at sikre den bruger 'qual_list']
-    t1, t2, t3, t4, t5 = st.tabs(["OVERSIGT", "MED BOLDEN", "UDEN BOLDEN", "MÅL-SEKVENSER", "SPILLEROVERSIGT"])
+    t1, t2, t3, t4, t5 = st.tabs(["OVERSIGT", "MED BOLDEN", "UDEN BOLDEN", "MAALSEKVENSER", "SPILLEROVERSIGT"])
 
     with t1:
         if df_res is not None:
@@ -130,7 +127,6 @@ def vis_side():
 
     with t4:
         if df_all_events is not None and not df_all_events.empty:
-            # Visualisering af målsekvenser (samme som du sendte sidst)
             gl = df_all_events.drop_duplicates(['MATCH_OPTAUUID', 'GOAL_TIME']).sort_values(['MATCH_LOCALDATE', 'GOAL_MIN'], ascending=[False, True])
             opts = {f"{r['MATCH_OPTAUUID']}_{r['GOAL_TIME']}": {
                 'label': f"{pd.to_datetime(r['MATCH_LOCALDATE']).strftime('%d/%m')} vs {r['CONTESTANTAWAY_NAME'] if r['CONTESTANTHOME_OPTAUUID']==valgt_uuid else r['CONTESTANTHOME_NAME']} ({int(r['TOTAL_HOME_SCORE'])}-{int(r['TOTAL_AWAY_SCORE'])})", 
@@ -138,7 +134,7 @@ def vis_side():
                 'opp_uuid': r['CONTESTANTAWAY_OPTAUUID'] if r['CONTESTANTHOME_OPTAUUID']==valgt_uuid else r['CONTESTANTHOME_OPTAUUID'], 
                 'min': int(r['GOAL_MIN']), 'date': pd.to_datetime(r['MATCH_LOCALDATE']).strftime('%d/%m/%Y'), 'score_str': f"{int(r['TOTAL_HOME_SCORE'])}-{int(r['TOTAL_AWAY_SCORE'])}"
             } for _, r in gl.iterrows()}
-            sk = st.selectbox("Vælg mål", list(opts.keys()), format_func=lambda x: opts[x]['label'])
+            sk = st.selectbox("Vaely maal", list(opts.keys()), format_func=lambda x: opts[x]['label'])
             sd = opts[sk]
             tge = df_all_events[(df_all_events['MATCH_OPTAUUID'] == sd['match_id']) & (df_all_events['GOAL_TIME'] == sd['goal_ts'])].sort_values('EVENT_TIMESTAMP').copy()
             
@@ -150,15 +146,25 @@ def vis_side():
             for i in range(len(tge)-1):
                 p.arrows(tge.iloc[i]['EVENT_X'], tge.iloc[i]['EVENT_Y'], tge.iloc[i+1]['EVENT_X'], tge.iloc[i+1]['EVENT_Y'], width=1, color='black', alpha=0.15, ax=ax)
             
+            # Rensede labels (ingen ikoner)
+            def get_clean_label(row):
+                eid = str(row['EVENT_TYPEID'])
+                q_list = str(row['qual_list'])
+                if eid == "16": return "STRAFFESPARK" if "9" in q_list else "MAAL"
+                if "210" in q_list or "209" in q_list: return "Assist / Key Pass"
+                l = get_action_label(row)
+                return l if l else "Opbygning"
+
+            tge['Aktion'] = tge.apply(get_clean_label, axis=1)
             p_c.pyplot(f)
-            l_c.write("**Målsekvens:**")
-            l_c.dataframe(tge[['PLAYER_NAME', 'EVENT_TYPEID']].iloc[::-1], hide_index=True)
+            l_c.write("**Maalsekvens:**")
+            l_c.dataframe(tge[['PLAYER_NAME', 'Aktion']].iloc[::-1].rename(columns={'PLAYER_NAME': 'Spiller'}), hide_index=True)
 
     with t5:
         if df_all_events is not None and not df_all_events.empty:
-            # Spillerstatistik baseret på målsekvenserne
-            ps = df_all_events.groupby('PLAYER_NAME').agg(Inv=('GOAL_ID', 'nunique')).reset_index()
-            st.dataframe(ps.sort_values('Inv', ascending=False), use_container_width=True)
+            ps = df_all_events.groupby('PLAYER_NAME').agg(Involveringer=('GOAL_ID', 'nunique')).reset_index()
+            st.write("**Statistik i maalsekvenser**")
+            st.dataframe(ps.sort_values('Involveringer', ascending=False), use_container_width=True, hide_index=True)
 
 if __name__ == "__main__":
     vis_side()
