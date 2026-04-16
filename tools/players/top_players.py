@@ -59,4 +59,4 @@ def vis_side(df_input):
             draw_bar("CHANCE SKABT", row['Chancer'], stats['Chancer'].max(), farver[3])
 
 # KALD FUNKTIONEN MED DIT RIGTIGE DATAFRAME
-vis_spiller_profiler(df_all_h)
+vis_side(df_all_h)
