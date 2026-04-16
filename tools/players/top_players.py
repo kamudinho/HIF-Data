@@ -1,55 +1,62 @@
 import streamlit as st
 import pandas as pd
 
-def vis_side(df_modstander):
-    st.header("PHYSICAL & TECHNICAL PROFILES")
-    st.subheader(f"Top 5 profiler hos {valgt_hold}")
+# Brug df_all_h som input, da det er det navn, du bruger til modstander-data
+def vis_side(df_input):
+    # Tjek om dataframe er tomt eller ikke eksisterer
+    if df_input is None or df_input.empty:
+        st.warning("Ingen spillerdata tilgængelig for den valgte modstander.")
+        return
 
-    # 1. FIND DE 5 MEST ORIGINALE/FARLIGE SPILLERE
-    # Vi kigger på en kombination af volumen og effektivitet
-    player_impact = df_modstander.groupby('PLAYER_NAME').agg(
-        Touches_i_felt=('EVENT_X', lambda x: ((df_modstander.loc[x.index, 'EVENT_X'] > 83) & 
-                                              (df_modstander.loc[x.index, 'EVENT_Y'].between(21, 79))).sum()),
-        Gennembrud=('EVENT_TYPEID', lambda x: (x == 1).sum()), # Her kan du tilføje filter for X > 70
-        Dueller_Vundne=('OUTCOME', lambda x: ((df_modstander.loc[x.index, 'EVENT_TYPEID'].isin([7, 44])) & (x == 1)).sum()),
-        Skud=('EVENT_TYPEID', lambda x: x.isin([13, 14, 15, 16]).sum())
+    st.markdown("### PHYSICAL & TECHNICAL PROFILES")
+    st.write(f"De 5 mest kampafgørende profiler baseret på seneste aktioner")
+
+    # 1. BEREGN IMPACT (Vi bruger de kolonner, vi ved findes i dine Opta-data)
+    # Vi grupperer på PLAYER_NAME
+    stats = df_input.groupby('PLAYER_NAME').agg(
+        Touches_Box=('EVENT_X', lambda x: ((df_input.loc[x.index, 'EVENT_X'] > 83) & 
+                                           (df_input.loc[x.index, 'EVENT_Y'].between(21, 79))).sum()),
+        Gennembrud=('EVENT_TYPEID', lambda x: ((df_input.loc[x.index, 'EVENT_TYPEID'] == 1) & 
+                                               (df_input.loc[x.index, 'EVENT_X'] > 70)).sum()),
+        Dueller=('EVENT_TYPEID', lambda x: x.isin([7, 44]).sum()),
+        Chancer=('qual_list', lambda x: x.apply(lambda q: '210' in q or '209' in q).sum())
     ).reset_index()
 
-    # Vi rater dem efter en simpel score for at finde profilerne
-    player_impact['Score'] = player_impact['Touches_i_felt'] * 2 + player_impact['Gennembrud'] + player_impact['Dueller_Vundne']
-    top_5_spillere = player_impact.sort_values('Score', ascending=False).head(5)
+    # Lav en simpel vægtet score for at finde de 5 "vigtigste"
+    stats['Score'] = (stats['Touches_Box'] * 3) + (stats['Gennembrud'] * 1.5) + (stats['Chancer'] * 2)
+    top_5 = stats.sort_values('Score', ascending=False).head(5)
 
-    # 2. VISNING I KOLONNER (Ligesom dit billede)
+    # 2. VISNING (5 Kolonner)
     cols = st.columns(5)
     
-    for i, (idx, row) in enumerate(top_5_spillere.iterrows()):
+    # Farver til de forskellige bars
+    farver = ["#df003b", "#084594", "#238b45", "#ec7014"]
+
+    for i, (idx, row) in enumerate(top_5.iterrows()):
         with cols[i]:
-            # Placeholder for billede - du kan linke til spillernes rigtige billeder hvis du har URL'er
-            st.image("https://via.placeholder.com/150/df003b/ffffff?text=" + row['PLAYER_NAME'].split()[-1], use_container_width=True)
-            st.markdown(f"**{row['PLAYER_NAME']}**", help="Baseret på seneste 10 kampe")
+            # Navn med stor skrift
+            st.markdown(f"**{row['PLAYER_NAME'].split()[-1].upper()}**")
+            st.caption(row['PLAYER_NAME'])
             
-            # Lav de vandrette barer (Volume Metrics)
-            st.write("---")
+            # En placeholder linje
+            st.markdown("<hr style='margin:10px 0; border:1px solid #eee'>", unsafe_allow_html=True)
             
-            # Funktion til at lave en lille bar
-            def metric_bar(label, value, max_val, color="#ff4b4b"):
-                percent = min(int((value / max_val) * 100), 100) if max_val > 0 else 0
+            # Funktion til de visuelle bjælker
+            def draw_bar(label, val, max_val, color):
+                percent = min(int((val / max_val) * 100), 100) if max_val > 0 else 0
                 st.markdown(f"""
-                    <div style="font-size: 10px; margin-bottom: -5px;">{label}</div>
-                    <div style="background-color: #f0f2f6; border-radius: 2px; height: 8px; width: 100%;">
-                        <div style="background-color: {color}; height: 8px; width: {percent}%; border-radius: 2px;"></div>
+                    <div style="font-size: 10px; color: #666; margin-top: 8px;">{label}</div>
+                    <div style="background-color: #f1f1f1; border-radius: 3px; height: 6px; width: 100%;">
+                        <div style="background-color: {color}; height: 6px; width: {percent}%; border-radius: 3px;"></div>
                     </div>
-                    <div style="font-size: 10px; text-align: right; margin-top: 2px;">{int(value)}</div>
+                    <div style="font-size: 10px; font-weight: bold; text-align: right;">{int(val)}</div>
                 """, unsafe_allow_html=True)
 
-            # Eksempler på metrics pr. spiller
-            metric_bar("Touches in Box", row['Touches_i_felt'], player_impact['Touches_i_felt'].max())
-            metric_bar("Gennembrud", row['Gennembrud'], player_impact['Gennembrud'].max(), color="#084594")
-            metric_bar("Vundne Dueller", row['Dueller_Vundne'], player_impact['Dueller_Vundne'].max(), color="#238b45")
-            metric_bar("Skud", row['Skud'], player_impact['Skud'].max(), color="#ec7014")
+            # Tegn metrics
+            draw_bar("TOUCHES IN BOX", row['Touches_Box'], stats['Touches_Box'].max(), farver[0])
+            draw_bar("GENNEMBRUD", row['Gennembrud'], stats['Gennembrud'].max(), farver[1])
+            draw_bar("DUELLER", row['Dueller'], stats['Dueller'].max(), farver[2])
+            draw_bar("CHANCE SKABT", row['Chancer'], stats['Chancer'].max(), farver[3])
 
-    st.markdown("---")
-    st.info("Denne oversigt viser de 5 spillere, der statistisk set har den største indflydelse på modstanderens spil i den sidste tredjedel.")
-
-# Kald funktionen på din nye side:
-# vis_spiller_profiler(df_all_h)
+# KALD FUNKTIONEN MED DIT RIGTIGE DATAFRAME
+vis_spiller_profiler(df_all_h)
