@@ -3,7 +3,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 
-def vis_hold_fysisk(df_summary, df_splits, team_id):
+def vis_side(df_summary, df_splits, team_id):
     st.title("🏃 Holdets Fysiske Præstation")
 
     # 1. Aggregering på holdniveau (fra SUMMARY_PLAYERS)
