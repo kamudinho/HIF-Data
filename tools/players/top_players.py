@@ -9,7 +9,6 @@ def vis_side():
         # 1. DATA INDLÆSNING
         dp = hif_load.get_scouting_package()
         
-        # Forsøg at hente fra de mest sandsynlige kilder i din datapakke
         df_stats = dp.get("players", pd.DataFrame())
         if df_stats.empty:
             df_stats = dp.get("advanced_stats", pd.DataFrame())
@@ -20,7 +19,7 @@ def vis_side():
             st.error("Kunne ikke finde statistik-data i systemet.")
             return
 
-        # Normaliser kolonnenavne til STORE for at undgå case-fejl
+        # Normaliser kolonnenavne til STORE
         df_stats.columns = [c.upper() for c in df_stats.columns]
         if not df_meta.empty:
             df_meta.columns = [c.upper() for c in df_meta.columns]
@@ -38,8 +37,7 @@ def vis_side():
             # Filtrér til det valgte hold
             df_hold = df_stats[df_stats[team_col] == valgt_hold].copy()
 
-            # 3. DATABLIKKEN (RENSNING AF TAL)
-            # Her definerer vi de kategorier, vi leder efter (aliasing)
+            # 3. DATABLIKKEN (AGGRESSIV RENSNING)
             target_metrics = {
                 "TOUCHES": ["TOUCHES_IN_BOX", "TOUCHES_BOX", "ATT_PEN_TOUCHES", "TOUCHES"],
                 "GENNEMBRUD": ["SUCCESSFUL_PASSES_PERCENT", "PASS_ACC", "ACCURATE_PASSES_PCT", "PASS_PCT"],
@@ -47,24 +45,27 @@ def vis_side():
                 "MÅL/CHANCER": ["GOALS", "EXPECTED_GOALS", "XG", "CHANCES_CREATED", "ASSISTS"]
             }
 
-            # VIGTIGT: Rens alle potentielle tal-kolonner for tekst (fjerner float/str fejl)
-            potential_cols = df_hold.columns.drop(['PLAYER_NAME', team_col]) if 'PLAYER_NAME' in df_hold.columns else df_hold.columns
-            for col in potential_cols:
-                # Konverter til tal, gør fejl til NaN, og NaN til 0
-                df_hold[col] = pd.to_numeric(df_hold[col], errors='coerce').fillna(0)
+            # Rens alle kolonner undtagen navne-kolonnen
+            for col in df_hold.columns:
+                if col != 'PLAYER_NAME' and col != team_col:
+                    # Tving alt til tal. Hvis det er tekst, bliver det til NaN, og derefter 0.
+                    df_hold[col] = pd.to_numeric(df_hold[col], errors='coerce').fillna(0)
 
-            # Find de 5 mest aktive spillere baseret på summen af deres stats
+            # Beregn score baseret på fundne metrics (hvis de findes) eller alle tal
+            # Dette sikrer at vi ikke sammenligner str og float ved sortering
             numeric_cols = df_hold.select_dtypes(include=['number']).columns
             df_hold['TOTAL_SCORE'] = df_hold[numeric_cols].sum(axis=1)
-            top_5 = df_hold.sort_values('TOTAL_SCORE', ascending=False).head(5)
+            
+            # Sortering - nu er alle værdier i TOTAL_SCORE garanteret tal
+            top_5 = df_hold.sort_values(by='TOTAL_SCORE', ascending=False).head(5)
 
-            # 4. GRID VISNING (5 Kolonner)
+            # 4. GRID VISNING
             cols = st.columns(5)
             
             for i, (idx, row) in enumerate(top_5.iterrows()):
                 with cols[i]:
-                    player_name = row.get('PLAYER_NAME', 'Ukendt')
-                    efternavn = str(player_name).split()[-1].upper()
+                    player_name = str(row.get('PLAYER_NAME', 'Ukendt'))
+                    efternavn = player_name.split()[-1].upper()
                     
                     # Billede-logik
                     img_url = None
@@ -73,10 +74,9 @@ def vis_side():
                         if not match.empty:
                             img_url = match.iloc[0].get('IMAGEDATAURL')
                     
-                    if img_url:
+                    if img_url and str(img_url).startswith('http'):
                         st.image(img_url, use_container_width=True)
                     else:
-                        # Placeholder hvis billede mangler
                         st.image("https://via.placeholder.com/150/f1f1f1/888888?text=NO+PHOTO", use_container_width=True)
 
                     st.markdown(f"**{efternavn}**")
@@ -85,28 +85,28 @@ def vis_side():
 
                     # DYNAMISKE BARS
                     for label, potential_names in target_metrics.items():
-                        # Find den første kolonne der matcher vores liste
                         found_col = next((c for c in potential_names if c in df_hold.columns), None)
                         
                         val_display = "-"
                         percent = 0
                         
                         if found_col:
-                            val = row[found_col]
-                            # Tjek om vi har et brugbart tal
-                            if pd.notnull(val) and val != 0:
-                                val_display = f"{val:.1f}"
-                                # Beregn procent ift. holdets max i netop denne kolonne
-                                max_val = df_hold[found_col].max()
-                                percent = min(int((val / max_val) * 100), 100) if max_val > 0 else 0
+                            # Vi tvinger værdien til float her for en sikkerheds skyld
+                            try:
+                                val = float(row[found_col])
+                                if val > 0:
+                                    val_display = f"{val:.1f}"
+                                    max_val = float(df_hold[found_col].max())
+                                    percent = min(int((val / max_val) * 100), 100) if max_val > 0 else 0
+                            except:
+                                val_display = "-"
 
-                        # HTML Styling af barerne
                         st.markdown(f"""
-                            <div style="font-size: 9px; color: #666; margin-top: 6px; text-transform: uppercase; letter-spacing: 0.5px;">{label}</div>
-                            <div style="background-color: #f0f2f6; height: 6px; width: 100%; border-radius: 3px; margin-top: 2px;">
+                            <div style="font-size: 9px; color: #666; margin-top: 6px; text-transform: uppercase;">{label}</div>
+                            <div style="background-color: #f0f2f6; height: 6px; width: 100%; border-radius: 3px;">
                                 <div style="background-color: #df003b; height: 6px; width: {percent}%; border-radius: 3px;"></div>
                             </div>
-                            <div style="font-size: 10px; text-align: right; font-weight: 700; color: #1f1f1f; margin-top: 2px;">{val_display}</div>
+                            <div style="font-size: 10px; text-align: right; font-weight: 700; margin-top: 2px;">{val_display}</div>
                         """, unsafe_allow_html=True)
 
     except Exception as e:
