@@ -32,8 +32,7 @@ def vis_side():
 
     conn = _get_snowflake_conn()
     
-    # SQL: Bruger de specifikke tabeller du har sendt
-    # Vi henter spiller-niveau data (Summary_Players) og filtrerer via Metadata tabellen
+    # SQL: Tilpasset din fungerende query med ekstra filtrering for at fjerne Superliga
     sql = """
         SELECT 
             P.PLAYER_NAME, 
@@ -49,24 +48,25 @@ def vis_side():
         FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS P
         INNER JOIN KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_SEASON_METADATA M 
             ON P.MATCH_SSIID = M.MATCH_SSIID
-        WHERE M.COMPETITION_OPTAID = '148' 
+        WHERE (M.COMPETITION_OPTAID = '148' OR M.SECOND_SPECTRUM_COMPETITION_ID = '328')
+          AND M.SEASONLABEL = '2025/2026'
           AND MIN_DEC >= 45
     """
     
     df = conn.query(sql)
     
     if df is None or df.empty:
-        st.error("Kunne ikke finde data for Competition ID 148 i databasen.")
+        st.error("Kunne ikke finde data for NordicBet Liga (148/328) i sæsonen 2025/2026.")
         return
 
     df.columns = [c.upper() for c in df.columns]
     
-    # Beregn p90 værdier for fair sammenligning
+    # Beregn p90 værdier
     df['HI_P90'] = (df['HI_RUNS'] / df['MIN_DEC']) * 90
     df['DIST_P90'] = (df['DISTANCE'] / df['MIN_DEC']) * 90
     df['HSR_P90'] = (df['HSR'] / df['MIN_DEC']) * 90
 
-    # Beregn Kompositter
+    # Kør Z-score beregningerne
     df_scored = calculate_composite_zscores(
         df, 
         g1_metrics=['HI_P90', 'HSR_P90'], 
@@ -85,16 +85,16 @@ def vis_side():
     )
     fig_bar.update_layout(
         xaxis_title="Z-Score (Standardafvigelser)", yaxis_title="",
-        yaxis={'categoryorder':'total ascending'}, plot_bgcolor='rgba(0,0,0,0)'
+        yaxis={'categoryorder':'total ascending'}, plot_bgcolor='rgba(0,0,0,0)',
+        showlegend=False
     )
     st.plotly_chart(fig_bar, use_container_width=True)
 
     # --- VISUALISERING 2: BUBBLE SCATTER ---
     st.divider()
     st.write("### Fysisk Landskab: 1. Division")
-    st.caption("X: Volume (Mængde) | Y: Intensity (Kraft) | Størrelse: Explosivity (Topfart)")
+    st.caption("X: Volume | Y: Intensity | Størrelse: Explosivity")
     
-    # Highlight de bedste 5 i intensitet for overblik
     df_scored['LABEL'] = 'Øvrige'
     top_names = df_scored.sort_values('Intensity_Composite', ascending=False).head(5)['PLAYER_NAME'].tolist()
     df_scored.loc[df_scored['PLAYER_NAME'].isin(top_names), 'LABEL'] = 'Top Performers'
@@ -104,15 +104,12 @@ def vis_side():
         size=df_scored['Explosivity_Composite'].clip(lower=0.1),
         color='LABEL',
         hover_name='PLAYER_NAME',
-        text='PLAYER_NAME' if len(df_scored) < 50 else None, # Tilføj navne hvis der ikke er for mange
         color_discrete_map={'Top Performers': '#006D00', 'Øvrige': '#D3D3D3'},
         labels={'Volume_Composite': 'Volume Z-Score', 'Intensity_Composite': 'Intensity Z-Score'}
     )
     
-    # Nul-linjer for gennemsnit
     fig_scat.add_hline(y=0, line_dash="dash", line_color="black", opacity=0.2)
     fig_scat.add_vline(x=0, line_dash="dash", line_color="black", opacity=0.2)
-    
     fig_scat.update_layout(plot_bgcolor='rgba(0,0,0,0)', height=700)
     st.plotly_chart(fig_scat, use_container_width=True)
 
