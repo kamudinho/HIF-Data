@@ -146,6 +146,18 @@ def generer_anbefaling(df_fjende):
         
     return anbefalinger
 
+# Eksempel på nuanceret logik i din funktion
+def vurder_gennembrud(volumen, succes_rate):
+    # Baseline: 60 aktioner pr. 10 kampe / 50% succes
+    if volumen > 90 and succes_rate > 60:
+        return "ELITE: Modstanderen har både ekstrem volumen og præcision. Hvidovre skal parkere bussen og satse på counters."
+    elif volumen > 90 and succes_rate < 45:
+        return "VOLUMEN UDEN KVALITET: De forsøger meget, men fejler ofte. Gå efter opspilsfejl og hurtige omstillinger."
+    elif volumen < 50 and succes_rate > 65:
+        return "KIRURGISK: De angriber sjældent, men når de gør, er det farligt. Mist aldrig koncentrationen."
+    else:
+        return "STANDARD: De følger ligaens gennemsnit."
+
 def hent_detaljeret_analyse(df_fjende):
     # Beregn værdier
     egen_pas = df_fjende[(df_fjende['EVENT_TYPEID'] == 1) & (df_fjende['EVENT_X'] < 40)]
