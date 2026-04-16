@@ -107,6 +107,23 @@ def generer_anbefaling(df_fjende):
         
     return anbefalinger
 
+def hent_detaljeret_analyse(df_fjende):
+    # Beregn værdier
+    egen_pas = df_fjende[(df_fjende['EVENT_TYPEID'] == 1) & (df_fjende['EVENT_X'] < 40)]
+    pas_acc = (egen_pas['OUTCOME'].sum() / len(egen_pas)) * 100 if not egen_pas.empty else 0
+    
+    dueller = df_fjende[df_fjende['EVENT_TYPEID'].isin([7, 44])]
+    duel_acc = (dueller['OUTCOME'].sum() / len(dueller)) * 100 if not dueller.empty else 0
+    
+    felt_aktioner = len(df_fjende[(df_fjende['EVENT_X'] < 20) & (df_fjende['EVENT_Y'].between(20, 80))])
+    felt_snit = felt_aktioner / 10
+
+    return {
+        'pas_acc': int(pas_acc),
+        'duel_acc': int(duel_acc),
+        'felt_snit': round(felt_snit, 1)
+    }
+
 def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None):
     """Genererer banerplot (KDE/Heatmap)"""
     plot_data = df[df['EVENT_TYPEID'].astype(str).isin([str(i) for i in event_ids])].copy()
@@ -241,26 +258,33 @@ def vis_side(dp=None):
     n_matches = df_all_h['MATCH_OPTAUUID'].nunique()
     total_minutes = n_matches * 90
     
-    # Herefter kommer dine tabs
+    # Herfra starter dine tabs
     t1, t2, t3, t4, t5 = st.tabs(["OVERSIGT", "MED BOLDEN", "UDEN BOLDEN", "MÅL-SEKVENSER", "SPILLEROVERSIGT"])
+    
+    # Hent analyse-data til brug i alle tabs
+    stats = hent_detaljeret_analyse(df_all_h)
     
     with t1:
         # --- SEKTION: STRATEGISK ANALYSE MOD MODSTANDER ---
         st.markdown(f"**STRATEGISK ANALYSE: HVIDOVRE IF MOD {valgt_hold.upper()}**")
         
-        # Generer tekst-anbefalinger baseret på modstanderens data
-        anbefalinger_liste = generer_anbefaling(df_all_h)
-        
         # Visning i en simpel boks uden ikoner
         with st.container(border=True):
-            for tekst in anbefalinger_liste:
-                st.markdown(tekst)
+            st.markdown(f"PRESSPIL: Modstanderen har en pasningssucces på egen halvdel på {stats['pas_acc']}%. " + 
+                        ("Hvidovre bør lægge et aggressivt pres fra start." if stats['pas_acc'] < 80 else "Afvent pres og fald ned i en kompakt organisation."))
+            
+            st.markdown(f"DUELSTYRKE: Modstanderen vinder {stats['duel_acc']}% af deres dueller. " + 
+                        ("Hvidovre skal søge de fysiske konfrontationer og vinde andenboldene." if stats['duel_acc'] < 50 else "Modstanderen er fysisk stærk. Undgå unødvendige dueller og flyt bolden hurtigt."))
+            
+            st.markdown(f"GENNEMBRUD: Modstanderen tillader {stats['felt_snit']} aktioner i egen boks pr. kamp. " + 
+                        ("Fokus på dybe løb og indlæg bag deres bagkæde." if stats['felt_snit'] > 1.5 else "Modstanderen lukker rummet i feltet godt ned. Søg afslutninger fra distancen."))
         
-        st.markdown("---") # Visuel adskillelse til kampoversigten
-        
-        # Her fortsætter din eksisterende kode med resultatlogik...
+        st.markdown("---") 
+
+        # Resultat logik
         df_res['RES'] = df_res.apply(lambda r: "D" if r['TOTAL_HOME_SCORE'] == r['TOTAL_AWAY_SCORE'] else ("W" if ((r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid and r['TOTAL_HOME_SCORE'] > r['TOTAL_AWAY_SCORE']) or (r['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid and r['TOTAL_AWAY_SCORE'] > r['TOTAL_HOME_SCORE'])) else "L"), axis=1)        
-        # 2. Volumen beregninger baseret på din mapping
+        
+        # Volumen beregninger
         df_vol = df_all_h.groupby('MATCH_OPTAUUID').agg(
             P_tot=('EVENT_TYPEID', lambda x: (x == 1).sum()),
             P_suc=('EVENT_TYPEID', lambda x: ((df_all_h.loc[x.index, 'EVENT_TYPEID'] == 1) & (df_all_h.loc[x.index, 'OUTCOME'] == 1)).sum()),
@@ -338,6 +362,7 @@ def vis_side(dp=None):
             st.plotly_chart(fig2, use_container_width=True, config={'displayModeBar': False})
             
     with t2:
+        st.markdown(f"**INDSIGT: Modstanderen tillader {stats['felt_snit']} felt-aktioner pr. kamp.**")
         st.markdown("""
             <style>
             [data-testid="stHorizontalBlock"] [data-testid="stMetric"] { text-align: center; align-items: center; justify-content: center; width: 100%; }
@@ -426,6 +451,7 @@ def vis_side(dp=None):
                         """, unsafe_allow_html=True)
 
     with t3:
+        st.markdown(f"**INDSIGT: Pasningssucces på egen halvdel: {stats['pas_acc']}% | Duel-succes: {stats['duel_acc']}%**")
         uden_options = ["Egen halvdel: Erobringer", "Off. halvdel: Pres", "Egen halvdel: Dueller", "Off. halvdel: Dueller"]
         c_left, c_right = st.columns([2, 1])
         v_uden = c_right.selectbox("Vælg Fokusområde", uden_options, key="ms_t3", label_visibility="collapsed")
@@ -433,7 +459,6 @@ def vis_side(dp=None):
         erobring_ids = [7, 8, 12, 127] 
         duel_ids = [7, 44] 
 
-        # Filtrering af data baseret på valg
         if "Erobringer" in v_uden:
             ids, tit, cm, zn = erobring_ids, "Egen halvdel: EROBRINGER", "Oranges", "up"
             df_f = df_all_h[(df_all_h['EVENT_X'] <= 50) & (df_all_h['EVENT_TYPEID'].isin(ids))].copy()
@@ -450,12 +475,10 @@ def vis_side(dp=None):
         total_act = len(df_f)
 
         with c_left:
-            # Tegn banen
             fig = plot_custom_pitch(df_f, ids, tit, zone=zn, cmap=cm, logo=hold_logo)
             st.pyplot(fig)
 
         with c_right:
-            # Beregn metrics
             acc_pct = (df_f['OUTCOME'].sum() / total_act * 100) if total_act > 0 else 0
             avg_p90 = (total_act / total_minutes * 90) if total_minutes > 0 else 0
             
@@ -468,13 +491,8 @@ def vis_side(dp=None):
             st.write(f"**Top 8: {v_uden}**")
             
             if not df_f.empty:
-                df_top = df_f.groupby('PLAYER_NAME').agg(
-                    TOTAL=('EVENT_TYPEID', 'count'), 
-                    SUCCESS=('OUTCOME', 'sum')
-                ).reset_index()
+                df_top = df_f.groupby('PLAYER_NAME').agg(TOTAL=('EVENT_TYPEID', 'count'), SUCCESS=('OUTCOME', 'sum')).reset_index()
                 df_top['RATE'] = (df_top['SUCCESS'] / df_top['TOTAL'] * 100).fillna(0)
-                
-                # Sortering: Succesrate først, derefter volumen
                 df_top = df_top[df_top['TOTAL'] >= 1]
                 df_top = df_top.sort_values(['RATE', 'TOTAL'], ascending=[False, False]).head(8)
     
@@ -496,9 +514,7 @@ def vis_side(dp=None):
                 
     with t4:
         if not df_all_events.empty:
-            gl = df_all_events.drop_duplicates(['MATCH_OPTAUUID', 'GOAL_TIME']).sort_values(
-                ['MATCH_LOCALDATE', 'GOAL_MIN'], ascending=[False, True]
-            )
+            gl = df_all_events.drop_duplicates(['MATCH_OPTAUUID', 'GOAL_TIME']).sort_values(['MATCH_LOCALDATE', 'GOAL_MIN'], ascending=[False, True])
             
             opts = {f"{r['MATCH_OPTAUUID']}_{r['GOAL_TIME']}": {
                 'label': f"{pd.to_datetime(r['MATCH_LOCALDATE']).strftime('%d/%m')} vs {r['CONTESTANTAWAY_NAME'] if r['CONTESTANTHOME_OPTAUUID']==valgt_uuid else r['CONTESTANTHOME_NAME']} ({int(r['TOTAL_HOME_SCORE'])}-{int(r['TOTAL_AWAY_SCORE'])})", 
@@ -513,22 +529,16 @@ def vis_side(dp=None):
             sk = st.selectbox("Vælg mål", list(opts.keys()), format_func=lambda x: opts[x]['label'])
             sd = opts[sk]
     
-            # 2. Filtrér sekvensen
-            tge = df_all_events[(df_all_events['MATCH_OPTAUUID'] == sd['match_id']) & 
-                                (df_all_events['GOAL_TIME'] == sd['goal_ts'])].sort_values('EVENT_TIMESTAMP').copy()
+            tge = df_all_events[(df_all_events['MATCH_OPTAUUID'] == sd['match_id']) & (df_all_events['GOAL_TIME'] == sd['goal_ts'])].sort_values('EVENT_TIMESTAMP').copy()
     
-            # 3. Tegn Pitch
             p_c, l_c = st.columns([2.5, 1])
             p = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='grey')
             f, ax = p.draw(figsize=(10, 7))
             
             draw_match_info_box(ax, hold_logo, get_logo_img(sd['opp_uuid']), sd['date'], sd['score_str'], sd['min'])
     
-            # Pile og spillernavne
             for i in range(len(tge)-1):
-                p.arrows(tge.iloc[i]['EVENT_X'], tge.iloc[i]['EVENT_Y'], 
-                         tge.iloc[i+1]['EVENT_X'], tge.iloc[i+1]['EVENT_Y'], 
-                         width=1, color='black', alpha=0.15, ax=ax)
+                p.arrows(tge.iloc[i]['EVENT_X'], tge.iloc[i]['EVENT_Y'], tge.iloc[i+1]['EVENT_X'], tge.iloc[i+1]['EVENT_Y'], width=1, color='black', alpha=0.15, ax=ax)
             
             for _, r in tge.iterrows():
                 is_goal = str(r['EVENT_TYPEID']) == "16"
@@ -537,7 +547,6 @@ def vis_side(dp=None):
             
             p_c.pyplot(f)
     
-            # 4. Tabel med omdøbning og Penalty-tjek
             def get_final_label_t4(row):
                 if str(row['EVENT_TYPEID']) == "16" and "9" in row['qual_list']:
                     return "STRAFFESPARK"
@@ -547,20 +556,13 @@ def vis_side(dp=None):
             tge['Aktion'] = tge.apply(get_final_label_t4, axis=1)
             
             l_c.write("**Målsekvens:**")
-            l_c.dataframe(
-                tge[['PLAYER_NAME', 'Aktion']].iloc[::-1].rename(columns={'PLAYER_NAME': 'Spiller'}), 
-                hide_index=True,
-                use_container_width=True
-            )
+            l_c.dataframe(tge[['PLAYER_NAME', 'Aktion']].iloc[::-1].rename(columns={'PLAYER_NAME': 'Spiller'}), hide_index=True, use_container_width=True)
         else:
             st.info("Ingen mål fundet for denne sæson.")
             
     with t5:
         if not df_all_events.empty:
-            # 1. Databehandling
             df_mål_stats = df_all_events.copy()
-            
-            # Definitioner
             df_mål_stats['is_cross'] = df_mål_stats['qual_list'].apply(lambda x: '2' in x)
             df_mål_stats['is_shot_assist'] = df_mål_stats['qual_list'].apply(lambda x: '210' in x or '209' in x)
             df_mål_stats['is_shot'] = df_mål_stats['EVENT_TYPEID'].isin([13, 14, 15])
@@ -568,7 +570,6 @@ def vis_side(dp=None):
 
             total_goals_count = df_mål_stats['GOAL_TIME'].nunique()
 
-            # Aggregér
             player_stats = df_mål_stats.groupby('PLAYER_NAME').agg(
                 Involveringer=('GOAL_TIME', 'nunique'),
                 Aktioner=('EVENT_TYPEID', 'count'),
@@ -583,19 +584,12 @@ def vis_side(dp=None):
             player_stats['Involvering_Pct'] = (player_stats['Involveringer'] / total_goals_count * 100).round(1)
             player_stats = player_stats.sort_values('Involveringer', ascending=False)
 
-            # 2. Layout
             col_tabel, col_graf = st.columns([3.5, 1])
 
             with col_tabel:
                 st.write("**Statistik i målsekvenser**")
-                
-                # Omdøb for visning
-                df_display = player_stats.rename(columns={
-                    'PLAYER_NAME': 'Spiller',
-                    'Skud_Ass': 'Skud Ass.'
-                })[['Spiller', 'Involveringer', 'Aktioner', 'Mål', 'Pasninger', 'Indlæg', 'Skud', 'Skud Ass.', 'Erobringer']]
+                df_display = player_stats.rename(columns={'PLAYER_NAME': 'Spiller', 'Skud_Ass': 'Skud Ass.'})[['Spiller', 'Involveringer', 'Aktioner', 'Mål', 'Pasninger', 'Indlæg', 'Skud', 'Skud Ass.', 'Erobringer']]
 
-                # Dataframe med tvungen centrering via NumberColumn
                 st.dataframe(
                     df_display,
                     use_container_width=True,
@@ -608,24 +602,20 @@ def vis_side(dp=None):
                         "Pasninger": st.column_config.NumberColumn(width="small", alignment="center", format="%d"),
                         "Indlæg": st.column_config.NumberColumn(width="small", alignment="center", format="%d"),
                         "Skud": st.column_config.NumberColumn(width="small", alignment="center", format="%d"),
-                        "Skud Ass.": st.column_config.NumberColumn(width="small", alignment="center", format="%d"),
+                        "Skud_Ass.": st.column_config.NumberColumn(width="small", alignment="center", format="%d"),
                         "Erobringer": st.column_config.NumberColumn(width="small", alignment="center", format="%d"),
                     }
                 )
 
             with col_graf:
-                # Viser holdets samlede mål i overskriften
                 st.write(f"**Målinvolveringer (Samlet mål: {total_goals_count})**")
-                
-                # Vi tager de 12 mest involverede spillere
                 for _, r in player_stats.head(12).iterrows():
                     rel_width = r['Involvering_Pct']
-                    
                     st.markdown(f"""
                         <div style="margin-bottom: 12px;">
                             <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; margin-bottom: 2px;">
                                 <span>{r['PLAYER_NAME']}</span>
-                                <span>{int(r['Involveringer'])} målinvolveringer ({int(r['Involvering_Pct'])}%)</span>
+                                <span>{int(r['Involveringer'])} ({int(r['Involvering_Pct'])}%)</span>
                             </div>
                             <div style="background-color: #f0f2f6; border-radius: 4px; height: 5px; width: 100%;">
                                 <div style="background-color: #df003b; height: 5px; width: {rel_width}%; border-radius: 4px;"></div>
