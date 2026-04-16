@@ -4,7 +4,6 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 from data.data_load import _get_snowflake_conn
-from data.utils.team_mapping import TEAMS
 
 # --- KONFIGURATION ---
 DB = "KLUB_HVIDOVREIF.AXIS"
@@ -21,15 +20,15 @@ def vis_side():
 
     conn = get_cached_conn()
     
-    # 1. SQL: AGGREGERING TIL HOLDNIVEAU (Fjerner kamp-niveauet)
-    # Her beregner vi gennemsnittet for alle kampe i sæsonen pr. hold
+    # SQL: Aggregering til ét punkt per hold
+    # Vi bruger alias med dobbelte anførselstegn for at styre case-sensitivity i Snowflake
     sql_liga = f"""
         SELECT 
-            MATCH_TEAMS as HOLDNAVN,
-            AVG(TOTAL_HI) as AVG_HI,
-            AVG(PEAK_SPEED) as AVG_PEAK_SPEED,
-            AVG(TOTAL_DIST) as AVG_DIST,
-            AVG(TOTAL_HSR) as AVG_HSR
+            MATCH_TEAMS AS "HOLDNAVN",
+            AVG(TOTAL_HI) AS "AVG_HI",
+            AVG(PEAK_SPEED) AS "AVG_PEAK_SPEED",
+            AVG(TOTAL_DIST) AS "AVG_DIST",
+            AVG(TOTAL_HSR) AS "AVG_HSR"
         FROM (
             SELECT 
                 MATCH_SSIID,
@@ -44,18 +43,24 @@ def vis_side():
         )
         GROUP BY 1
     """
+    
     df_liga = conn.query(sql_liga)
 
     if df_liga is None or df_liga.empty:
-        st.error("Kunne ikke hente data.")
+        st.error("Kunne ikke hente data fra databasen.")
         return
 
-    # 2. VALG AF HOLD
-    valgt_hold = st.selectbox("Vælg Hold", df_liga['HOLDNAVN'].unique())
+    # Sørg for at fjerne eventuelle ekstra mellemrum fra holdnavne
+    df_liga['HOLDNAVN'] = df_liga['HOLDNAVN'].str.strip()
+
+    # 1. VALG AF HOLD
+    alle_hold = sorted(df_liga['HOLDNAVN'].unique())
+    valgt_hold = st.selectbox("Vælg Hold", alle_hold)
+    
     hold_stats = df_liga[df_liga['HOLDNAVN'] == valgt_hold].iloc[0]
     liga_snit = df_liga.mean(numeric_only=True)
 
-    # 3. METRIKKER (Sæson-gennemsnit)
+    # 2. METRIKKER
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Gns. Distance", f"{round(hold_stats['AVG_DIST']/1000, 1)} km")
     m2.metric("Gns. HSR", f"{int(hold_stats['AVG_HSR'])} m")
@@ -64,7 +69,7 @@ def vis_side():
 
     st.divider()
 
-    # 4. SCATTER PLOT (Kun én prik per hold)
+    # 3. SCATTER PLOT
     st.subheader("Holdets placering i ligaen (Sæson-gennemsnit)")
     
     fig = px.scatter(
@@ -78,7 +83,7 @@ def vis_side():
         }
     )
 
-    # Farv alle hold grå og det valgte hold rødt
+    # Style alle hold
     fig.update_traces(
         marker=dict(size=12, opacity=0.4, color='grey'),
         textposition='top center'
@@ -90,17 +95,23 @@ def vis_side():
         x=highlight['AVG_HI'],
         y=highlight['AVG_PEAK_SPEED'],
         mode='markers+text',
-        marker=dict(size=20, color='#cc0000', line=dict(width=2, color='white')),
+        marker=dict(size=22, color='#df003b', line=dict(width=2, color='white')),
         text=[valgt_hold],
         textposition="top center",
         showlegend=False
     ))
 
-    # Liga gennemsnitslinjer
+    # Gennemsnitslinjer
     fig.add_vline(x=liga_snit['AVG_HI'], line_dash="dash", line_color="grey")
     fig.add_hline(y=liga_snit['AVG_PEAK_SPEED'], line_dash="dash", line_color="grey")
 
-    fig.update_layout(height=600, template="plotly_white")
+    fig.update_layout(
+        height=600, 
+        template="plotly_white",
+        xaxis=dict(showgrid=True, gridcolor='f0f0f0'),
+        yaxis=dict(showgrid=True, gridcolor='f0f0f0')
+    )
+    
     st.plotly_chart(fig, use_container_width=True)
 
 if __name__ == "__main__":
