@@ -124,7 +124,7 @@ with st.sidebar:
     elif hoved_omraade == "SCOUTING":
         sel = option_menu(None, options=filtrer_menu(["Scoutrapport", "Database", "Emnedatabase", "Sammenligning"]))
     elif hoved_omraade == "ADMIN":
-        sel = option_menu(None, options=filtrer_menu(["System Log", "Profil", "Fysisk profil", "Hold: Fysisk profil"]))
+        sel = option_menu(None, options=filtrer_menu(["System Log", "Profil", "Fysisk profil", "Hold: Fysisk profil", "Intern analyse"]))
 
 # --- 4. DATA LOADING & RENDERING ---
 render_hif_header(f"{hoved_omraade}  |  {sel.upper()}")
@@ -192,6 +192,9 @@ try:
         elif sel == "Hold: Fysisk profil":
             import tools.ligaen.hold_fysisk as hf
             hf.vis_side()
+        elif sel == "Intern analyse":
+            import tools.admin_page.intern_modstanderanalyse as im
+            im.vis_side()
 
 
 except Exception as e:
