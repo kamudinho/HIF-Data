@@ -24,8 +24,7 @@ def vis_side():
 
     conn = get_cached_conn()
     
-    # 1. SQL: Henter data og joiner på 1. division via OptaID 148
-    # Vi udelader AVG_HI kolonnen i SQL og beregner den i Pandas for at undgå fejl
+    # 1. SQL: Henter fysiske data og joiner på 1. division via OptaID 148
     sql = f"""
         SELECT 
             P.MATCH_TEAMS,
@@ -42,18 +41,18 @@ def vis_side():
     df_raw = conn.query(sql)
 
     if df_raw is None or df_raw.empty:
-        st.error(f"Ingen data fundet for turnering ID {LIGA_OPTA_ID}.")
+        st.error(f"Ingen data fundet for turnering ID {LIGA_OPTA_ID} (1. Division).")
         return
 
-    # Sørg for ensartede kolonnenavne (UPPERCASE)
+    # Sørg for ensartede kolonnenavne
     df_raw.columns = [c.upper() for c in df_raw.columns]
 
-    # RENSNING: Splitter "HVI-KIF" eller "HEL - FRA" til rent holdnavn
+    # RENSNING: Samler holdnavne (f.eks. "HVI-KIF" -> "HVI")
     df_raw['HOLDNAVN'] = df_raw['MATCH_TEAMS'].apply(
         lambda x: str(x).split('-')[0].split(':')[0].strip()
     )
     
-    # AGGREGERING: Ét punkt pr. hold (sæson-gennemsnit)
+    # AGGREGERING: Sæson-gennemsnit pr. hold
     df_liga = df_raw.groupby('HOLDNAVN').agg({
         'DISTANCE': 'mean',
         'HSR': 'mean',
@@ -61,23 +60,26 @@ def vis_side():
         'TOP_SPEED': 'mean'
     }).reset_index()
 
-    # Navngivning til selector
-    metric_map = {
-        "HI Løb (Antal)": "HI_RUNS",
-        "High Speed Running (m)": "HSR",
-        "Total Distance (m)": "DISTANCE"
-    }
+    # --- DROPDOWNS PLACERET PÅ SIDEN ---
+    st.title("Fysisk Ligabenchmark: 1. Division")
+    
+    c1, c2 = st.columns(2)
+    with c1:
+        valgt_hold = st.selectbox("Vælg dit hold", sorted(df_liga['HOLDNAVN'].unique()))
+    
+    with c2:
+        metric_map = {
+            "HI Løb (Antal)": "HI_RUNS",
+            "High Speed Running (m)": "HSR",
+            "Total Distance (m)": "DISTANCE"
+        }
+        valgt_metric_label = st.selectbox("Vælg parameter på X-aksen", list(metric_map.keys()))
+        valgt_x_col = metric_map[valgt_metric_label]
 
-    # --- SIDEBAR / KONTROL ---
-    st.sidebar.header("Indstillinger")
-    valgt_hold = st.sidebar.selectbox("Vælg dit hold", sorted(df_liga['HOLDNAVN'].unique()))
-    valgt_metric_label = st.sidebar.selectbox("Vælg X-akse metric", list(metric_map.keys()))
-    valgt_x_col = metric_map[valgt_metric_label]
+    st.divider()
 
     # --- DISPLAY METRICS ---
     hold_data = df_liga[df_liga['HOLDNAVN'] == valgt_hold].iloc[0]
-    
-    st.title(f"Fysisk Profil: {valgt_hold}")
     
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Gns. Distance", f"{round(hold_data['DISTANCE']/1000, 1)} km")
@@ -87,14 +89,14 @@ def vis_side():
 
     st.divider()
 
-    # --- SCATTER PLOT LOGIK (Undgå dobbeltvisning) ---
-    st.subheader(f"Benchmark: {valgt_metric_label} vs. Topfart")
+    # --- SCATTER PLOT LOGIK (INGEN DOBBELT-PRIK) ---
+    st.subheader(f"Analyse: {valgt_metric_label} vs. Topfart")
 
-    # Split datasæt: Andre hold vs. Valgt hold
+    # Split i to grupper for at undgå overlap
     df_others = df_liga[df_liga['HOLDNAVN'] != valgt_hold]
     df_highlight = df_liga[df_liga['HOLDNAVN'] == valgt_hold]
 
-    # 1. Tegn de andre hold (grå)
+    # 1. Placer de "grå" hold
     fig = px.scatter(
         df_others, 
         x=valgt_x_col, 
@@ -107,30 +109,30 @@ def vis_side():
     )
 
     fig.update_traces(
-        marker=dict(size=12, opacity=0.4, color='grey'),
+        marker=dict(size=14, opacity=0.4, color='grey'),
         textposition='top center'
     )
 
-    # 2. Tilføj det valgte hold som et rødt lag (ingen dobbelt-prik)
+    # 2. Placer det valgte hold som et rødt lag ovenpå
     fig.add_trace(go.Scatter(
         x=df_highlight[valgt_x_col],
         y=df_highlight['TOP_SPEED'],
         mode='markers+text',
-        marker=dict(size=20, color='#cc0000', line=dict(width=2, color='white')),
+        marker=dict(size=22, color='#cc0000', line=dict(width=2, color='white')),
         text=df_highlight['HOLDNAVN'],
         textposition="top center",
         showlegend=False
     ))
 
-    # 3. Gennemsnitslinjer for hele ligaen
+    # 3. Liga gennemsnit (linjer)
     liga_avg_x = df_liga[valgt_x_col].mean()
     liga_avg_y = df_liga['TOP_SPEED'].mean()
 
-    fig.add_vline(x=liga_avg_x, line_dash="dash", line_color="grey", opacity=0.5)
-    fig.add_hline(y=liga_avg_y, line_dash="dash", line_color="grey", opacity=0.5)
+    fig.add_vline(x=liga_avg_x, line_dash="dash", line_color="grey", opacity=0.6)
+    fig.add_hline(y=liga_avg_y, line_dash="dash", line_color="grey", opacity=0.6)
 
     fig.update_layout(
-        height=600,
+        height=650,
         template="plotly_white",
         xaxis=dict(showgrid=True, gridcolor='#f0f0f0'),
         yaxis=dict(showgrid=True, gridcolor='#f0f0f0')
