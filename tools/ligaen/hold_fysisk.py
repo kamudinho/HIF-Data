@@ -16,7 +16,7 @@ def get_cached_conn():
     return _get_snowflake_conn()
 
 def vis_liga_benchmark(conn, valgt_hold_navn):
-    # Hent gennemsnit for alle hold i sæsonen
+    # Hent gennemsnit for alle hold i ligaen for at lave scatter-plottet
     sql_liga = f"""
         SELECT 
             MATCH_TEAMS,
@@ -55,6 +55,7 @@ def vis_liga_benchmark(conn, valgt_hold_navn):
             textposition='top center'
         )
 
+        # Fremhæv det valgte hold
         highlight = df_liga[df_liga['MATCH_TEAMS'].str.contains(valgt_hold_navn, case=False, na=False)]
         if not highlight.empty:
             fig.add_trace(go.Scatter(
@@ -67,6 +68,7 @@ def vis_liga_benchmark(conn, valgt_hold_navn):
                 showlegend=False
             ))
 
+        # Gennemsnitslinjer
         avg_hi = df_liga['AVG_HI'].mean()
         avg_speed = df_liga['PEAK_SPEED'].mean()
         fig.add_vline(x=avg_hi, line_dash="dash", line_color="grey")
@@ -91,8 +93,6 @@ def vis_side():
 
     c1, c2 = st.columns(2)
     valgt_hold = c1.selectbox("Vælg Hold", df_teams['NAME'].unique())
-    
-    # Her var fejlen - rettet til almindelige parenteser
     hold_info = TEAMS.get(valgt_hold, {})
     target_ssiid = hold_info.get('ssid')
 
@@ -119,7 +119,7 @@ def vis_side():
     valgt_kamp_label = c2.selectbox("Vælg Kamp", df_matches['SELECT_LABEL'].tolist())
     valgt_match_ssiid = df_matches[df_matches['SELECT_LABEL'] == valgt_kamp_label]['MATCH_SSIID'].iloc[0]
 
-    # 3. KAMP-OPSUMMERING
+    # 3. HOLD-DATA OPSUMMERING FOR DEN VALGTE KAMP
     df_hold_summary = conn.query(f"""
         SELECT 
             SUM(DISTANCE) as TOTAL_DIST,
@@ -142,20 +142,24 @@ def vis_side():
         m4.metric("HI Aktiviteter", f"{int(hold['TOTAL_HI'])}")
 
         st.divider()
+        
+        # 4. LIGA SAMMENLIGNING (SCATTER PLOT)
         vis_liga_benchmark(conn, valgt_hold)
+        
         st.divider()
 
+        # 5. KAMP-ANALYSE (FASE OG TID)
         col_left, col_right = st.columns(2)
         
         with col_left:
-            st.subheader("Fysisk Fase-fordeling")
+            st.subheader("Holdets fasefordeling (HSR)")
             fig_pie = go.Figure(data=[go.Pie(
-                labels=['Med bold (TIP)', 'Uden bold (OTIP)'],
+                labels=['Angreb (TIP)', 'Forsvar (OTIP)'],
                 values=[hold['HSR_TIP'], hold['HSR_OTIP']],
                 hole=.4,
                 marker_colors=['#cc0000', '#333333']
             )])
-            fig_pie.update_layout(height=400)
+            fig_pie.update_layout(height=400, margin=dict(l=20, r=20, t=20, b=20))
             st.plotly_chart(fig_pie, use_container_width=True)
 
         with col_right:
@@ -168,20 +172,10 @@ def vis_side():
             """)
             
             if df_splits is not None and not df_splits.empty:
-                st.subheader("Intensitet over tid")
+                st.subheader("Holdets intensitet over tid")
                 fig_bar = px.bar(df_splits, x='MINUTE_SPLIT', y='VAL', color_discrete_sequence=['#cc0000'])
-                fig_bar.update_layout(height=400, xaxis_title="Minutter", yaxis_title="Meter")
+                fig_bar.update_layout(height=400, xaxis_title="Minutter", yaxis_title="Meter (Hold total)")
                 st.plotly_chart(fig_bar, use_container_width=True)
-
-    st.subheader("Individuelle præstationer i kampen")
-    df_players = conn.query(f"""
-        SELECT PLAYER_NAME, DISTANCE, "HIGH SPEED RUNNING", SPRINTING, TOP_SPEED
-        FROM {DB}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
-        WHERE MATCH_SSIID = '{valgt_match_ssiid}'
-        ORDER BY DISTANCE DESC
-    """)
-    if df_players is not None:
-        st.dataframe(df_players, use_container_width=True, hide_index=True)
 
 if __name__ == "__main__":
     vis_side()
