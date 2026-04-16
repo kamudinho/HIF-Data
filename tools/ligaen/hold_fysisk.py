@@ -7,8 +7,8 @@ from data.data_load import _get_snowflake_conn
 # --- KONFIGURATION ---
 DB = "KLUB_HVIDOVREIF.AXIS"
 SEASON_START = "2025-07-01"
-# Vi bruger Opta UUID'erne fra din konfiguration til at filtrere i SecondSpectrum metadata
-LIGA_UUIDS = "('dyjr458hcmrcy87fsabfsy87o', 'e5p78j2r7v8h3u9s5k0l2m4n6', 'f6q89k3s8w9i4v0t6l1m3n5o7')"
+# Vi fokuserer udelukkende på NordicBet Liga (WyScout ID: 328)
+TARGET_COMP_ID = "328"
 
 @st.cache_resource
 def get_cached_conn():
@@ -21,7 +21,7 @@ def vis_side():
 
     conn = get_cached_conn()
     
-    # SQL: Joiner på SEASON_METADATA og filtrerer på COMPETITION_OPTAUUID
+    # SQL: Vi joiner fysisk data med metadata for at filtrere på turnering 328
     sql = f"""
         SELECT 
             P.MATCH_TEAMS,
@@ -30,7 +30,7 @@ def vis_side():
             AVG(P.TOP_SPEED) as AVG_PEAK_SPEED
         FROM {DB}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS P
         JOIN {DB}.SECONDSPECTRUM_SEASON_METADATA M ON P.MATCH_SSIID = M.MATCH_SSIID
-        WHERE M.COMPETITION_OPTAUUID IN {LIGA_UUIDS}
+        WHERE M.SECOND_SPECTRUM_COMPETITION_ID = '{TARGET_COMP_ID}'
           AND M.DATE >= '{SEASON_START}'
         GROUP BY P.MATCH_TEAMS
     """
@@ -38,17 +38,17 @@ def vis_side():
     df_raw = conn.query(sql)
 
     if df_raw is None or df_raw.empty:
-        st.warning("Ingen data fundet med de angivne UUID'er. Prøver uden turneringsfilter for at tjekke data...")
-        # Fallback til fejlfinding hvis UUID'erne ikke matcher
+        st.error(f"Ingen data fundet for NordicBet Liga (ID: {TARGET_COMP_ID}).")
         return
 
-    # Tving store bogstaver
+    # SIKRING: Tving store bogstaver
     df_raw.columns = [c.upper() for c in df_raw.columns]
 
-    # RENSNING: Samler holdnavne (f.eks. "HVI-ACH" -> "HVI")
-    df_raw['HOLDNAVN'] = df_raw['MATCH_TEAMS'].apply(lambda x: str(x).split('-')[0].strip() if '-' in str(x) else str(x))
+    # RENSNING: Dine data viser ofte "Hold-Modstander". Vi splitter for at få det rene holdnavn.
+    # Dette sikrer, at alle kampe for f.eks. "HVI" samles under ét navn.
+    df_raw['HOLDNAVN'] = df_raw['MATCH_TEAMS'].apply(lambda x: str(x).split('-')[0].strip())
     
-    # Aggregering: Ét punkt pr. hold (gennemsnit af alle deres kampe)
+    # Aggregering i Pandas for at få ét punkt pr. hold
     df_liga = df_raw.groupby('HOLDNAVN').agg({
         'AVG_DIST': 'mean',
         'AVG_HSR': 'mean',
@@ -56,7 +56,7 @@ def vis_side():
     }).reset_index()
 
     # 1. VALG AF HOLD
-    valgt_hold = st.selectbox("Vælg Hold (NordicBet Liga)", sorted(df_liga['HOLDNAVN'].unique()))
+    valgt_hold = st.selectbox("Vælg Hold (1. Division)", sorted(df_liga['HOLDNAVN'].unique()))
     
     hold_stats = df_liga[df_liga['HOLDNAVN'] == valgt_hold].iloc[0]
     liga_snit = df_liga.mean(numeric_only=True)
@@ -69,33 +69,48 @@ def vis_side():
 
     st.divider()
 
-    # 3. SCATTER PLOT
-    st.subheader("Hold-benchmark: Fysisk intensitet (Sæson-gennemsnit)")
+    # 3. SCATTER PLOT (Nu med kun én rød prik pr. hold)
+    st.subheader(f"Ligabenchmark: 1. Division (Sæson 25/26)")
     
     fig = px.scatter(
         df_liga, 
         x='AVG_HSR', 
         y='AVG_PEAK_SPEED',
         text='HOLDNAVN',
-        labels={'AVG_HSR': 'HSR (Meter pr. kamp)', 'AVG_PEAK_SPEED': 'Topfart (km/t)'}
+        labels={
+            'AVG_HSR': 'High Speed Running (Gns. meter pr. kamp)',
+            'AVG_PEAK_SPEED': 'Topfart (Gns. km/t)'
+        }
     )
 
-    fig.update_traces(marker=dict(size=15, opacity=0.4, color='grey'), textposition='top center')
+    fig.update_traces(
+        marker=dict(size=14, opacity=0.4, color='grey'),
+        textposition='top center'
+    )
 
-    # Highlight valgt hold
+    # Fremhæv det valgte hold
     highlight = df_liga[df_liga['HOLDNAVN'] == valgt_hold]
     fig.add_trace(go.Scatter(
-        x=highlight['AVG_HSR'], y=highlight['AVG_PEAK_SPEED'],
+        x=highlight['AVG_HSR'],
+        y=highlight['AVG_PEAK_SPEED'],
         mode='markers+text',
-        marker=dict(size=25, color='#cc0000', line=dict(width=2, color='white')),
-        text=[valgt_hold], textposition="top center", showlegend=False
+        marker=dict(size=22, color='#cc0000', line=dict(width=2, color='white')),
+        text=[valgt_hold],
+        textposition="top center",
+        showlegend=False
     ))
 
-    # Gennemsnitslinjer
-    fig.add_vline(x=liga_snit['AVG_HSR'], line_dash="dash", line_color="grey")
-    fig.add_hline(y=liga_snit['AVG_PEAK_SPEED'], line_dash="dash", line_color="grey")
+    # Gennemsnitslinjer for ligaen
+    fig.add_vline(x=liga_snit['AVG_HSR'], line_dash="dash", line_color="grey", opacity=0.5)
+    fig.add_hline(y=liga_snit['AVG_PEAK_SPEED'], line_dash="dash", line_color="grey", opacity=0.5)
 
-    fig.update_layout(height=600, template="plotly_white")
+    fig.update_layout(
+        height=600, 
+        template="plotly_white",
+        xaxis=dict(showgrid=True, gridcolor='#f0f0f0'),
+        yaxis=dict(showgrid=True, gridcolor='#f0f0f0')
+    )
+    
     st.plotly_chart(fig, use_container_width=True)
 
 if __name__ == "__main__":
