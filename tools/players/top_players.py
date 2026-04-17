@@ -26,37 +26,38 @@ def vis_side():
 
     player_overrides = load_player_overrides()
 
-    # --- CSS for professionelt scouting-look ---
+    # --- Professionelt Scouting Look ---
     st.markdown("""
         <style>
         .category-header { font-weight: bold; font-size: 1rem; padding: 15px 0 5px 0; color: #111; border-bottom: 2px solid #eee; margin-top: 10px; }
         .metric-label { font-size: 0.8rem; color: #444; display: flex; align-items: center; height: 35px; line-height: 1.1; }
         .rank-container { position: relative; background-color: #f0f0f0; height: 32px; width: 100%; border-radius: 4px; overflow: hidden; display: flex; align-items: center; margin-bottom: 2px; }
         .rank-fill { height: 100%; display: flex; align-items: center; padding-left: 8px; font-weight: bold; color: black; font-size: 0.72rem; white-space: nowrap; min-width: fit-content; }
-        .player-card { text-align: center; min-height: 130px; vertical-align: top; }
-        .player-img-round { border-radius: 50%; object-fit: cover; border: 2px solid #f0f2f6; background-color: white; margin-bottom: 8px; }
-        .player-name-text { font-size: 0.75rem; line-height: 1.1; font-weight: bold; color: #111; display: block; }
+        .player-card { text-align: center; min-height: 140px; vertical-align: top; }
+        .player-img-round { border-radius: 50%; object-fit: cover; border: 2px solid #f0f2f6; background-color: white; margin-bottom: 5px; }
+        .player-name-text { font-size: 0.72rem; line-height: 1.1; font-weight: bold; color: #111; display: block; height: 30px; }
         </style>
     """, unsafe_allow_html=True)
 
     # --- Kontrolpanel ---
     col1, col2 = st.columns([2, 2])
     with col1:
-        valgt_navn = st.selectbox("Vælg hold:", list(TEAMS.keys()), key="hvidovre_report_2026")
+        valgt_navn = st.selectbox("Vælg hold:", list(TEAMS.keys()), key="hvidovre_master_report")
         target_id = TEAMS[valgt_navn]["team_wyid"]
     with col2:
         mode = st.radio("Vælg data-visning:", ["Fysiske Data (SS)", "Tekniske Data (Opta)"], horizontal=True)
 
-    # --- Periode-filter (1. Jan 2026 til dags dato) ---
-    start_dato_2026 = "2026-03-01"
+    # --- Periode-filter (Din bagkant: 1. Jan 2026 til dags dato) ---
+    start_dato_2026 = "2026-01-01"
 
-    # --- SQL Logik Konfiguration ---
+    # --- SQL Logik baseret på dine verificerede kolonner ---
     if mode == "Fysiske Data (SS)":
         table = "KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS"
         sql_metrics = """
             AVG(DISTANCE) as M1, AVG(RUNNING) as M2, AVG("HIGH SPEED RUNNING") as M3,
             AVG(SPRINTING) as M4, MAX(TOP_SPEED) as M5, AVG(NO_OF_HIGH_INTENSITY_RUNS) as M6
         """
+        # Antager SS tabellen også bruger MATCH_DATE eller lignende, ellers brug DATE
         date_filter = f"WHERE MATCH_DATE >= '{start_dato_2026}'"
         metrics_labels = {
             "Volume (2026)": [("Total Distance", "M1_RANK"), ("Running Distance", "M2_RANK")],
@@ -64,24 +65,25 @@ def vis_side():
             "Explosive (2026)": [("Top Speed", "M5_RANK"), ("Accelerations", "M6_RANK")]
         }
     else:
+        # Opta logik med rettet kolonnenavn: DATE
         table = "KLUB_HVIDOVREIF.AXIS.OPTA_EVENTS"
         sql_metrics = """
-            COUNT(CASE WHEN EVENT_TYPEID = 16 THEN 1 END) as M1,
-            COUNT(CASE WHEN EVENT_TYPEID = 1 AND EVENT_OUTCOME = 1 THEN 1 END) as M2,
-            COUNT(CASE WHEN EVENT_TYPEID = 15 THEN 1 END) as M3,
-            COUNT(CASE WHEN EVENT_TYPEID = 12 THEN 1 END) as M4,
-            COUNT(CASE WHEN EVENT_TYPEID = 2 THEN 1 END) as M5,
-            COUNT(CASE WHEN EVENT_TYPEID = 3 AND EVENT_OUTCOME = 1 THEN 1 END) as M6
+            COUNT(CASE WHEN EVENT_TYPEID = 16 THEN 1 END) as M1, -- Mål
+            COUNT(CASE WHEN EVENT_TYPEID = 1 AND EVENT_OUTCOME = 1 THEN 1 END) as M2, -- Succesfulde afleveringer
+            COUNT(CASE WHEN EVENT_TYPEID = 15 THEN 1 END) as M3, -- Tacklinger
+            COUNT(CASE WHEN EVENT_TYPEID = 12 THEN 1 END) as M4, -- Clearance
+            COUNT(CASE WHEN EVENT_TYPEID = 2 THEN 1 END) as M5, -- Offsides
+            COUNT(CASE WHEN EVENT_TYPEID = 3 AND EVENT_OUTCOME = 1 THEN 1 END) as M6 -- Driblinger vundet
         """
-        # Opta Events filteres her på den dato de er indtruffet
-        date_filter = f"WHERE MATCH_DATE >= '{start_dato_2026}'" 
+        date_filter = f"WHERE DATE >= '{start_dato_2026}'" 
         metrics_labels = {
-            "Offensivt (2026)": [("Mål", "M1_RANK"), ("Vundne Driblinger", "M6_RANK")],
-            "Distribution (2026)": [("Succesfulde Afleveringer", "M2_RANK"), ("Offsides", "M5_RANK")],
+            "Offensivt (2026)": [("Mål", "M1_RANK"), ("Driblinger", "M6_RANK")],
+            "Passes (2026)": [("Succesfulde", "M2_RANK"), ("Offsides", "M5_RANK")],
             "Defensivt (2026)": [("Tacklinger", "M3_RANK"), ("Clearances", "M4_RANK")]
         }
 
     # --- Query Generering ---
+    # Vi bruger QUALIFY ROW_NUMBER() til at sikre, at én person kun optræder én gang
     if mode == "Fysiske Data (SS)":
         query = f"""
         WITH LIGA_STATS AS (
@@ -122,9 +124,8 @@ def vis_side():
         )
         SELECT t.IMG, t.FULL_NAME as WYS_NAME, r.* FROM VALGT_TRUP t
         INNER JOIN LIGA_RANKED r ON (
-            r.PLAYER_NAME LIKE LEFT(t.F_NAME, 1) || '. ' || t.L_NAME
+            r.PLAYER_NAME LIKE '%' || t.L_NAME || '%' 
             OR r.PLAYER_NAME = t.FULL_NAME
-            OR (r.PLAYER_NAME LIKE '%' || t.L_NAME || '%' AND r.M2 > 0)
         )
         QUALIFY ROW_NUMBER() OVER (PARTITION BY t.FULL_NAME ORDER BY r.M2 DESC) = 1
         """
@@ -136,7 +137,6 @@ def vis_side():
             if player_overrides:
                 df = df[df.apply(lambda row: player_overrides.get(row['WYS_NAME'], target_id) == target_id, axis=1)]
             
-            # Sortering: Top 5 spillere baseret på aktivitet (M2_RANK)
             df = df.sort_values("M2_RANK").head(5)
             st.write("---")
             
@@ -145,11 +145,10 @@ def vis_side():
             for i, (_, row) in enumerate(df.iterrows()):
                 with cols[i+1]:
                     img = row['IMG'] if row['IMG'] and str(row['IMG']) != 'None' else "https://via.placeholder.com/150"
-                    fuldt_navn = row['WYS_NAME']
                     st.markdown(f"""
                         <div class="player-card">
                             <img src="{img}" class="player-img-round" width="60" height="60"><br>
-                            <span class="player-name-text">{fuldt_navn}</span>
+                            <span class="player-name-text">{row['WYS_NAME']}</span>
                         </div>
                     """, unsafe_allow_html=True)
 
@@ -175,10 +174,10 @@ def vis_side():
                                 </div>
                             """, unsafe_allow_html=True)
         else:
-            st.info(f"Ingen data fundet for {valgt_navn} i perioden fra 1. januar 2026.")
+            st.info(f"Ingen data fundet for {valgt_navn} i 2026.")
 
     except Exception as e:
-        st.error(f"Fejl i data-processering: {e}")
+        st.error(f"Fejl: {e}")
 
 if __name__ == "__main__":
     vis_side()
