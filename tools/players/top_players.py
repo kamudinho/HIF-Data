@@ -1,53 +1,67 @@
 import streamlit as st
 import pandas as pd
 from data.data_load import _get_snowflake_conn
-from data.utils.team_mapping import TEAMS
+from data.utils.team_mapping import TEAMS  # Din mapping fil
 
 def vis_side():
-    try:
-        conn = _get_snowflake_conn()
-    except Exception as e:
-        st.error(f"Forbindelsesfejl: {e}")
-        return
+    conn = _get_snowflake_conn()
 
-    # 1. HOLDVALG
-    liga_hold = [name for name, info in TEAMS.items() if info.get("league") == "1. Division"]
+    # --- 1. DROPDOWN BASERET PÅ DINE DATA ---
+    # Vi henter alle holdnavne fra din TEAMS ordbog
+    alle_hold = list(TEAMS.keys())
     
     col_sel, _ = st.columns([2, 2])
     with col_sel:
-        default_idx = liga_hold.index("Hvidovre") if "Hvidovre" in liga_hold else 0
-        valgt_navn = st.selectbox("Vælg hold:", liga_hold, index=default_idx)
-    
-    team_info = TEAMS[valgt_navn]
-    target_wyid = team_info["team_wyid"]
-    logo_url = team_info["logo"]
+        # Hvidovre som default
+        default_idx = alle_hold.index("Hvidovre") if "Hvidovre" in alle_hold else 0
+        valgt_navn = st.selectbox("Vælg hold:", alle_hold, index=default_idx)
 
-    # 2. SQL: Vi fjerner IMAGEDATAURL fra Opta-delen og henter det fra Wyscout i stedet
+    # --- 2. HENT INFO FRA MAPPING ---
+    # Nu har vi de præcise IDs og links uden at skulle spørge databasen
+    team_data = TEAMS[valgt_navn]
+    target_wyid = team_data["team_wyid"]
+    logo_url = team_data["logo"]
+
+    # --- 3. DYNAMISK SQL QUERY ---
+    # Vi indsætter target_wyid direkte i din velfungerende query
     query = f"""
-    WITH TRUP AS (
-        -- Vi henter MATCH_NAME fra Opta for at ramme Second Spectrum rigtigt
-        -- Vi joiner med Wyscout herinde for at få fat i billedet (PLAYER_IMG)
+    WITH SELECTED_TRUP AS (
         SELECT 
-            o.MATCH_NAME, 
-            w.IMAGEDATAURL AS PLAYER_IMG
-        FROM KLUB_HVIDOVREIF.AXIS.OPTA_PLAYERS o
-        LEFT JOIN KLUB_HVIDOVREIF.AXIS.WYSCOUT_PLAYERS w ON o.PLAYER_OPTAUUID = w.PLAYER_OPTAUUID
-        WHERE o.CURRENTTEAM_WYID = {target_wyid}
+            (TRIM(FIRSTNAME) || ' ' || TRIM(LASTNAME)) as FULL_NAME,
+            SHORTNAME,
+            MAX(IMAGEDATAURL) as IMG_URL
+        FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_PLAYERS 
+        WHERE CURRENTTEAM_WYID = {target_wyid}
+        GROUP BY 1, 2
+    ),
+    SS_PHYSICAL AS (
+        SELECT 
+            PLAYER_NAME,
+            AVG(DISTANCE) as DIST, 
+            AVG("HIGH SPEED RUNNING") as HSR, 
+            MAX(TOP_SPEED) as SPEED
+        FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
+        WHERE MATCH_DATE BETWEEN '2025-07-01' AND '2026-06-30'
+        GROUP BY PLAYER_NAME
     )
     SELECT 
-        s.PLAYER_NAME,
-        AVG(s.DISTANCE) AS DIST, 
-        AVG(s."HIGH SPEED RUNNING") AS HSR, 
-        MAX(s.TOP_SPEED) AS SPEED,
-        MAX(t.PLAYER_IMG) AS IMG
-    FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS s
-    JOIN TRUP t ON s.PLAYER_NAME = t.MATCH_NAME
-    WHERE s.MATCH_DATE BETWEEN '2025-07-01' AND '2026-06-30'
-    GROUP BY s.PLAYER_NAME
-    ORDER BY DIST DESC
+        w.FULL_NAME,
+        s.DIST,
+        s.HSR,
+        s.SPEED,
+        COALESCE(w.IMG_URL, 'https://via.placeholder.com/150') as FINAL_IMAGE_URL
+    FROM SELECTED_TRUP w
+    INNER JOIN SS_PHYSICAL s ON (
+        s.PLAYER_NAME = w.FULL_NAME 
+        OR s.PLAYER_NAME = w.SHORTNAME
+        OR w.FULL_NAME LIKE '%' || s.PLAYER_NAME || '%'
+        OR s.PLAYER_NAME LIKE '%' || w.SHORTNAME || '%'
+    )
+    ORDER BY s.DIST DESC 
     LIMIT 5
     """
 
+    # --- 4. VISUALISERING ---
     try:
         df = pd.read_sql(query, conn)
         df.columns = [x.upper() for x in df.columns]
@@ -65,24 +79,18 @@ def vis_side():
             for _, row in df.iterrows():
                 p1, p2 = st.columns([1, 5])
                 with p1:
-                    # Billed-fallback hvis URL'en er tom eller forkert
-                    p_img = row['IMG']
-                    if not p_img or str(p_img) == 'None' or "ndplayer" in str(p_img):
-                        p_img = "https://via.placeholder.com/150"
-                    st.image(p_img, width=70)
+                    st.image(row['FINAL_IMAGE_URL'], width=70)
                 with p2:
-                    st.markdown(f"**{row['PLAYER_NAME']}**")
+                    st.markdown(f"**{row['FULL_NAME']}**")
                     procent = (row['DIST'] / max_dist) * 100
                     st.markdown(f"""
                         <div style="background:#333; width:100%; height:12px; border-radius:6px;">
                             <div style="background:#df003b; width:{procent}%; height:12px; border-radius:6px;"></div>
                         </div>
                     """, unsafe_allow_html=True)
-                    km = row['DIST'] / 1000
-                    st.caption(f"{km:.2f} km gns. | {int(row['HSR'])}m HSR | {row['SPEED']} km/t max")
-                    st.write("")
+                    st.caption(f"{row['DIST']/1000:.2f} km | {int(row['HSR'])}m HSR | {row['SPEED']} km/t")
         else:
-            st.warning(f"Ingen kampdata fundet for spillere på {valgt_navn}.")
+            st.info(f"Ingen kampdata fundet for {valgt_navn} (ID: {target_wyid}).")
 
     except Exception as e:
-        st.error(f"Fejl ved datahentning: {e}")
+        st.error(f"Fejl: {e}")
