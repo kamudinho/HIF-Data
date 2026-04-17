@@ -10,7 +10,7 @@ def vis_side():
         st.error(f"Forbindelsesfejl: {e}")
         return
 
-    # --- CSS: Genskaber det professionelle scouting-look ---
+    # --- CSS: Scouting Layout ---
     st.markdown("""
         <style>
         .category-header { font-weight: bold; font-size: 1.1rem; padding: 20px 0 10px 0; color: #111; border-bottom: 2px solid #eee; }
@@ -18,27 +18,28 @@ def vis_side():
         .rank-container { position: relative; background-color: #f0f0f0; height: 32px; width: 100%; border-radius: 4px; overflow: hidden; display: flex; align-items: center; margin-bottom: 2px; }
         .rank-fill { height: 100%; display: flex; align-items: center; padding-left: 8px; font-weight: bold; color: black; font-size: 0.8rem; }
         .player-card { text-align: center; min-height: 120px; }
-        .player-img-round { border-radius: 50%; object-fit: cover; border: 2px solid #f0f2f6; }
+        .player-img-round { border-radius: 50%; object-fit: cover; border: 2px solid #f0f2f6; background-color: white; }
         </style>
     """, unsafe_allow_html=True)
 
-    # 1. HOLDVALG
+    # 1. HOLDVALG med dynamisk key
     alle_hold = list(TEAMS.keys())
     col_sel, _ = st.columns([2, 2])
     with col_sel:
+        # Vi tilføjer valgt_navn til key'en for at gøre den unik
+        initial_hold = "Hvidovre" if "Hvidovre" in alle_hold else alle_hold[0]
         valgt_navn = st.selectbox(
             "Vælg hold:", 
             alle_hold, 
-            index=alle_hold.index("Hvidovre") if "Hvidovre" in alle_hold else 0,
-            key="phys_top5_selector"
+            index=alle_hold.index(initial_hold),
+            key=f"phys_top5_selector_{initial_hold.lower()}" 
         )
     
     target_wyid = TEAMS[valgt_navn]["team_wyid"]
 
-    # 2. SQL: Beregner rank mod HELE ligaen
+    # 2. SQL: Percent_Rank på tværs af HELE ligaen
     query = f"""
     WITH LIGA_STATS AS (
-        -- Her henter vi data for ALLE spillere i databasen for at kunne ranke dem korrekt
         SELECT 
             PLAYER_NAME,
             AVG(DISTANCE) as DIST,
@@ -50,7 +51,6 @@ def vis_side():
         GROUP BY PLAYER_NAME
     ),
     LIGA_RANKED AS (
-        -- Vi bruger PERCENT_RANK over HELE ligaen
         SELECT *,
             PERCENT_RANK() OVER (ORDER BY DIST ASC) as DIST_PR,
             PERCENT_RANK() OVER (ORDER BY HSR ASC) as HSR_PR,
@@ -59,7 +59,6 @@ def vis_side():
         FROM LIGA_STATS
     ),
     VALGT_TRUP AS (
-        -- Vi isolerer de unikke spillere fra dit valgte hold
         SELECT 
             (TRIM(FIRSTNAME) || ' ' || TRIM(LASTNAME)) as FULL_NAME,
             MAX(IMAGEDATAURL) as IMG
@@ -67,7 +66,6 @@ def vis_side():
         WHERE CURRENTTEAM_WYID = {target_wyid}
         GROUP BY 1
     )
-    -- Joiner truppen med liga-ranks
     SELECT t.IMG, r.*
     FROM VALGT_TRUP t
     INNER JOIN LIGA_RANKED r ON (
@@ -85,7 +83,7 @@ def vis_side():
         if not df.empty:
             st.write("---")
             
-            # --- HEADER: SPILLER BILLEDER ---
+            # --- HEADER: SPILLER PROFILER ---
             cols = st.columns([2.5, 1, 1, 1, 1, 1])
             with cols[0]: st.write("")
             
@@ -100,7 +98,7 @@ def vis_side():
                         </div>
                     """, unsafe_allow_html=True)
 
-            # --- DEFINER KATEGORIER FRA BILLEDE ---
+            # --- KATEGORIER FRA DIT REFERENCEBILLEDE ---
             kategorier = {
                 "Volume Metrics": [
                     ("Distance Per 90", "DIST_PR")
@@ -124,10 +122,9 @@ def vis_side():
                         st.markdown(f'<div class="metric-label">{label}</div>', unsafe_allow_html=True)
                     
                     for i, (_, row) in enumerate(df.iterrows()):
-                        # Procent-rank på tværs af ligaen (0-100%)
                         val_pct = int(row[pr_col] * 100)
                         
-                        # Farve-logik: Grøn for top, gul for midt, rød for bund
+                        # Farver: Grøn (>80), Gul (>40), Rød (<40)
                         if val_pct >= 80: color = "#22c55e"
                         elif val_pct >= 40: color = "#facc15"
                         else: color = "#fca5a5"
@@ -141,9 +138,7 @@ def vis_side():
                                 </div>
                             """, unsafe_allow_html=True)
         else:
-            st.info(f"Ingen match fundet mellem {valgt_navn} og fysiske data.")
+            st.info(f"Ingen match fundet for {valgt_navn}.")
 
     except Exception as e:
         st.error(f"Fejl ved datahentning: {e}")
-
-vis_side()
