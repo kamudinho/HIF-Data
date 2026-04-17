@@ -25,7 +25,7 @@ def vis_side():
 
     player_overrides = load_player_overrides()
 
-    # --- CSS: Samme skarpe layout ---
+    # --- CSS ---
     st.markdown("""
         <style>
         .category-header { font-weight: bold; font-size: 1rem; padding: 15px 0 5px 0; color: #111; border-bottom: 2px solid #eee; margin-top: 10px; }
@@ -37,35 +37,33 @@ def vis_side():
         </style>
     """, unsafe_allow_html=True)
 
-    # --- TOP BAR: Vælg Hold og Data Type ---
+    # --- TOP BAR ---
     col1, col2 = st.columns([2, 2])
     with col1:
-        valgt_navn = st.selectbox("Vælg hold:", list(TEAMS.keys()), key="team_sel_v6")
+        valgt_navn = st.selectbox("Vælg hold:", list(TEAMS.keys()), key="team_sel_final_v7")
         target_id = TEAMS[valgt_navn]["team_wyid"]
     with col2:
         mode = st.radio("Vælg data-visning:", ["Fysiske Data", "Tekniske Data"], horizontal=True)
 
-    # --- SQL LOGIK BASERET PÅ MODE ---
+    # --- DYNAMISKE METRICS OG TABELNAVNE ---
     if mode == "Fysiske Data":
-        # Din eksisterende fysiske query
+        table = "KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS"
         sql_metrics = """
             AVG(DISTANCE) as M1, AVG(RUNNING) as M2, AVG("HIGH SPEED RUNNING") as M3,
             AVG(SPRINTING) as M4, MAX(TOP_SPEED) as M5, AVG(NO_OF_HIGH_INTENSITY_RUNS) as M6
         """
-        table = "KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS"
         metrics_labels = {
             "Volume": [("Total Distance", "M1_RANK"), ("Running Distance", "M2_RANK")],
             "Intensity": [("Hi Distance", "M3_RANK"), ("Sprint Distance", "M4_RANK")],
             "Explosive": [("Top Speed", "M5_RANK"), ("Accelerations", "M6_RANK")]
         }
     else:
-        # Tekniske data (Her bruger vi eksempler på Wyscout kolonner - ret dem til dine faktiske navne)
+        # RETTET: Bruger nu den korrekte Wyscout tabel og typiske kolonnenavne
+        table = "KLUB_HVIDOVREIF.AXIS.WYSCOUT_PLAYERS_STATS" 
         sql_metrics = """
-            AVG(GOALS) as M1, AVG(ASSISTS) as M2, AVG(DRIBbles) as M3,
-            AVG(SUCCESSFUL_PASSES_PERCENTAGE) as M4, AVG(RECOVERIES) as M5, AVG(DUELS_WON_PERCENTAGE) as M6
+            AVG(GOALS_TOTAL) as M1, AVG(ASSISTS_TOTAL) as M2, AVG(DRIBbles_TOTAL) as M3,
+            AVG(PASSES_ACCURATE_PERCENT) as M4, AVG(RECOVERIES_TOTAL) as M5, AVG(DUELS_WON_PERCENT) as M6
         """
-        # Her skal du indsætte din tekniske tabel (f.eks. WYSCOUT_PLAYER_STATS)
-        table = "KLUB_HVIDOVREIF.AXIS.WYSCOUT_PLAYER_MATCH_STATS" 
         metrics_labels = {
             "Attacking": [("Goals Per 90", "M1_RANK"), ("Assists Per 90", "M2_RANK")],
             "On the Ball": [("Dribbles", "M3_RANK"), ("Passing %", "M4_RANK")],
@@ -75,7 +73,8 @@ def vis_side():
     query = f"""
     WITH LIGA_STATS AS (
         SELECT PLAYER_NAME, {sql_metrics} FROM {table}
-        WHERE MATCH_DATE BETWEEN '2025-07-01' AND '2026-06-30' GROUP BY PLAYER_NAME
+        WHERE SEASONNAME = '2025/2026'
+        GROUP BY PLAYER_NAME
     ),
     LIGA_RANKED AS (
         SELECT *,
@@ -96,23 +95,18 @@ def vis_side():
         df = pd.read_sql(query, conn)
         
         if not df.empty:
-            # Override filtrering
             if player_overrides:
                 df = df[df.apply(lambda row: player_overrides.get(row['WYS_NAME'], target_id) == target_id, axis=1)]
             
-            # Sorter efter første metric (f.eks. Distance eller Mål)
             df = df.sort_values("M1_RANK").head(5)
-
             st.write("---")
             
-            # --- RENDER HEADER ---
             cols = st.columns([2.5, 1, 1, 1, 1, 1])
             for i, (_, row) in enumerate(df.iterrows()):
                 with cols[i+1]:
                     img = row['IMG'] if row['IMG'] and str(row['IMG']) != 'None' else "https://via.placeholder.com/150"
                     st.markdown(f'<div class="player-card"><img src="{img}" class="player-img-round" width="60" height="60"><br><small><b>{row["PLAYER_NAME"].split()[-1]}</b></small></div>', unsafe_allow_html=True)
 
-            # --- RENDER KATEGORIER ---
             for kat_navn, metrics in metrics_labels.items():
                 st.markdown(f'<div class="category-header">{kat_navn}</div>', unsafe_allow_html=True)
                 for label, col_name in metrics:
@@ -125,8 +119,8 @@ def vis_side():
                         with m_cols[i+1]:
                             st.markdown(f'<div class="rank-container"><div class="rank-fill" style="width: {fill_width}%; background-color: {color};">Rank {rank_val}</div></div>', unsafe_allow_html=True)
         else:
-            st.info("Ingen data fundet for det valgte hold.")
+            st.info("Ingen data fundet. Tjek om tabel- eller kolonnenavne er korrekte.")
     except Exception as e:
-        st.error(f"Fejl: {e}")
+        st.error(f"SQL fejl: {e}")
 
 vis_side()
