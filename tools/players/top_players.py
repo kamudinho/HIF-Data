@@ -3,31 +3,46 @@ import pandas as pd
 import data.HIF_load as hif_load
 
 def vis_side():
+    # Opdateret CSS for at give plads til længere navne i bjælken
+    st.markdown("""
+        <style>
+        .player-header { 
+            background-color: black; 
+            color: white; 
+            text-align: center; 
+            font-weight: bold; 
+            padding: 8px 4px; 
+            margin-bottom: 15px; 
+            border-radius: 2px; 
+            font-size: 12px; /* Lidt mindre skrift så fulde navne kan være der */
+            text-transform: uppercase;
+            min-height: 40px; /* Sikrer at bjælkerne er lige høje selvom navnet fylder 2 linjer */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .stat-label { font-size: 10px; color: #666; text-transform: uppercase; }
+        .bar-bg { background-color: #f0f0f0; height: 6px; width: 100%; border-radius: 3px; }
+        .bar-fill { background-color: #df003b; height: 6px; border-radius: 3px; }
+        .val-text { font-size: 11px; font-weight: bold; text-align: right; color: #1f1f1f; margin-bottom: 10px; }
+        </style>
+    """, unsafe_allow_html=True)
+
     st.markdown("<h2 style='text-align: center;'>PHYSICAL PERFORMANCE PROFILES</h2>", unsafe_allow_html=True)
     
     try:
         dp = hif_load.get_scouting_package()
-        df = dp.get("players", dp.get("advanced_stats", pd.DataFrame()))
+        df = dp.get("physical", dp.get("advanced_stats", dp.get("players", pd.DataFrame())))
         df_meta = dp.get("sql_players", pd.DataFrame())
 
         if df.empty:
-            st.error("Ingen data fundet.")
+            st.error("Kunne ikke finde data.")
             return
 
         df.columns = [c.upper() for c in df.columns]
 
-        # DEBUG: Se hvad vi har at arbejde med (fjern denne linje når det virker)
-        # st.write("Tilgængelige kolonner:", df.columns.tolist())
-
-        # 1. FIND NAVNE-KOLONNE (Vi undgår 'WY_ID', 'PLAYER_ID' etc.)
-        name_col = next((c for c in df.columns if 'NAME' in c and 'ID' not in c), 
-                        next((c for c in df.columns if 'PLAYER' in c and 'ID' not in c), None))
-        
+        id_col = next((c for c in df.columns if 'ID' in c), df.columns[0])
         team_col = next((c for c in df.columns if 'TEAM' in c or 'HOLD' in c), None)
-
-        if not name_col:
-            st.warning("Kunne ikke finde en kolonne med navne. Bruger ID i stedet.")
-            name_col = df.columns[0]
 
         hold_liste = sorted([str(x) for x in df[team_col].unique() if pd.notnull(x)])
         valgt_hold = st.selectbox("VÆLG HOLD", options=hold_liste)
@@ -35,66 +50,56 @@ def vis_side():
         if valgt_hold:
             df_hold = df[df[team_col] == valgt_hold].copy()
 
-            # 2. AUTOMATISK DETECTION AF PHYSICAL STATS
-            # Vi leder efter alt der minder om de fire kategorier
-            search_map = {
-                "Distance": ["DIST", "METER", "KM", "COVERED"],
-                "Sprints": ["SPRINT", "HI_RUN", "HSR", "HIGH_INT"],
-                "Speed": ["SPEED", "MAX", "VMAX", "FAST"],
-                "Accels": ["ACC", "EXPLOSIVE", "DECEL"]
+            # Mapping af metrics
+            metrics_map = {
+                "Distance": next((c for c in df_hold.columns if 'DIST' in c), None),
+                "Sprints": next((c for c in df_hold.columns if 'SPRINT' in c), None),
+                "Speed": next((c for c in df_hold.columns if 'SPEED' in c or 'VMAX' in c), None),
+                "Accels": next((c for c in df_hold.columns if 'ACC' in c), None)
             }
-            
-            found_metrics = {}
-            for label, keys in search_map.items():
-                found_metrics[label] = next((c for c in df_hold.columns if any(k in c for k in keys) and c != name_col), None)
 
-            # Tving numerisk og find Top 5
-            for col in df_hold.columns:
-                if col != name_col:
-                    df_hold[col] = pd.to_numeric(df_hold[col], errors='coerce').fillna(0.0)
+            for m_col in filter(None, metrics_map.values()):
+                df_hold[m_col] = pd.to_numeric(df_hold[m_col], errors='coerce').fillna(0.0)
 
-            # Sorter efter den bedste fundne metric (Distance)
-            sort_col = found_metrics["Distance"] if found_metrics["Distance"] else df_hold.select_dtypes(include='number').columns[0]
-            top_5 = df_hold.sort_values(sort_col, ascending=False).head(5)
+            sort_key = metrics_map["Distance"] if metrics_map["Distance"] else df_hold.columns[-1]
+            top_5 = df_hold.sort_values(sort_key, ascending=False).head(5)
 
-            # 3. VISNING
             cols = st.columns(5)
             for i, (idx, row) in enumerate(top_5.iterrows()):
                 with cols[i]:
-                    raw_name = str(row[name_col])
+                    player_id = str(row[id_col])
                     
-                    # Forsøg at matche med meta for rigtigt navn og billede
-                    display_name = raw_name
+                    # Hent fulde navn og billede fra meta
+                    full_name = "UKENDT SPILLER"
                     img_url = None
                     if not df_meta.empty:
-                        # Matcher på tværs af meta-data
-                        meta_match = df_meta[df_meta.astype(str).eq(raw_name).any(axis=1)]
+                        # Vi tjekker alle kolonner i meta for at finde ID'et
+                        meta_match = df_meta[df_meta.astype(str).eq(player_id).any(axis=1)]
                         if not meta_match.empty:
-                            display_name = meta_match.iloc[0].get('PLAYER_NAME', raw_name)
+                            full_name = meta_match.iloc[0].get('PLAYER_NAME', "UKENDT")
                             img_url = meta_match.iloc[0].get('IMAGEDATAURL')
 
+                    # 1. Billede
                     st.image(img_url if img_url else "https://via.placeholder.com/150", use_container_width=True)
                     
-                    # Sort header-bar med efternavn
-                    clean_name = display_name.split()[-1].upper() if " " in display_name else display_name.upper()
-                    st.markdown(f"<div style='background:black;color:white;text-align:center;font-weight:bold;padding:5px;font-size:12px;'>{clean_name}</div>", unsafe_allow_html=True)
-                    st.caption(f"Ref: {display_name}")
+                    # 2. Sort bjælke med FULD NAVN
+                    st.markdown(f"<div class='player-header'>{full_name}</div>", unsafe_allow_html=True)
 
-                    for label, c_name in found_metrics.items():
-                        if c_name:
-                            val = float(row[c_name])
-                            max_v = df_hold[c_name].max()
-                            pct = min(int((val/max_v)*100), 100) if max_v > 0 else 0
+                    # 3. Stats
+                    for label, col_name in metrics_map.items():
+                        val, pct = 0.0, 0
+                        if col_name:
+                            val = float(row[col_name])
+                            max_val = df_hold[col_name].max()
+                            pct = min(int((val / max_val) * 100), 100) if max_val > 0 else 0
                             val_str = f"{val:.1f}"
                         else:
-                            pct, val_str = 0, "N/A"
+                            val_str = "N/A"
 
                         st.markdown(f"""
-                            <div style='margin-bottom:8px;'>
-                                <div style='font-size:9px;color:gray;'>{label}</div>
-                                <div style='background:#eee;height:4px;'><div style='background:#df003b;width:{pct}%;height:4px;'></div></div>
-                                <div style='font-size:10px;text-align:right;font-weight:bold;'>{val_str}</div>
-                            </div>
+                            <div class="stat-label">{label}</div>
+                            <div class="bar-bg"><div class="bar-fill" style="width:{pct}%;"></div></div>
+                            <div class="val-text">{val_str}</div>
                         """, unsafe_allow_html=True)
 
     except Exception as e:
