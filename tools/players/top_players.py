@@ -4,37 +4,38 @@ from data.data_load import _get_snowflake_conn
 
 def vis_side():
     """
-    Finder holdet i WYSCOUT_TEAMS, derefter spillerne i WYSCOUT_PLAYERS,
-    og kobler til sidst på Second Spectrum data via optaId.
+    Henter Top 5 fysiske profiler. 
+    Bruger pd.read_sql da forbindelsen er en standard SnowflakeConnection.
     """
     
     # 1. Opret forbindelse
     try:
-        session = _get_snowflake_conn()
+        conn = _get_snowflake_conn()
     except Exception as e:
         st.error(f"Forbindelsesfejl: {e}")
         return
 
     # 2. Hent det valgte hold fra din session_state
-    # Hvis din variabel hedder noget andet end "valgt_hold", så ret navnet her.
     valgt_hold = st.session_state.get("valgt_hold", "Hvidovre")
+    # Håndtér apostroffer (fx B.93's)
+    safe_hold = valgt_hold.replace("'", "''")
 
-    # 3. SQL: Den "rene" rækkefølge
+    # 3. SQL: Din rene rækkefølge (Teams -> Players -> Physical)
     query = f"""
     WITH HOLD AS (
         -- Find holdet i WYSCOUT_TEAMS
         SELECT TEAM_WYID, IMAGEDATAURL as TEAM_LOGO
         FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_TEAMS
-        WHERE TEAMNAME = '{valgt_hold}'
+        WHERE TEAMNAME = '{safe_hold}'
         LIMIT 1
     ),
     SPILLERE AS (
         -- Find alle spillere for det hold i WYSCOUT_PLAYERS
-        SELECT p.SHORTNAME, p.FULLNAME, p.OPTAID, p.IMAGEDATAURL as PLAYER_IMG
+        SELECT p.OPTAID, p.IMAGEDATAURL as PLAYER_IMG
         FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_PLAYERS p
-        JOIN HOLD h ON p.CURRENTTEAM_WYID = h.TEAM_WYID
+        WHERE p.CURRENTTEAM_WYID = (SELECT TEAM_WYID FROM HOLD)
     )
-    -- Kobbel på Second Spectrum Physical Summary
+    -- Kobbel på Second Spectrum Physical Summary via optaId
     SELECT 
         s.PLAYER_NAME,
         AVG(s.DISTANCE) as DIST, 
@@ -43,7 +44,7 @@ def vis_side():
         MAX(sp.PLAYER_IMG) as IMG,
         (SELECT TEAM_LOGO FROM HOLD) as LOGO
     FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS s
-    JOIN SPILLERE sp ON s.optaId = sp.OPTAID
+    JOIN SPILLERE sp ON s."optaId" = sp.OPTAID
     WHERE s.MATCH_DATE BETWEEN '2025-07-01' AND '2026-06-30'
     GROUP BY s.PLAYER_NAME
     ORDER BY DIST DESC
@@ -51,9 +52,13 @@ def vis_side():
     """
 
     try:
-        df = session.sql(query).to_pandas()
+        # LØSNINGEN: Brug pandas til at læse fra 'conn' objektet
+        df = pd.read_sql(query, conn)
 
         if not df.empty:
+            # Snowflake returnerer ofte kolonnenavne i UPPERCASE i Pandas
+            df.columns = [x.upper() for x in df.columns]
+
             # Layout: Logo og Overskrift
             col_l, col_t = st.columns([1, 6])
             with col_l:
@@ -63,11 +68,10 @@ def vis_side():
 
             max_dist = df['DIST'].max()
 
-            # Vis de 5 spillere
             for _, row in df.iterrows():
                 c1, c2 = st.columns([1, 5])
                 with c1:
-                    img = row['IMG'] if row['IMG'] else "https://via.placeholder.com/150"
+                    img = row['IMG'] if row['IMG'] and str(row['IMG']) != 'None' else "https://via.placeholder.com/150"
                     st.image(img, width=70)
                 with c2:
                     st.markdown(f"**{row['PLAYER_NAME']}**")
@@ -84,7 +88,7 @@ def vis_side():
                     st.caption(f"{dist_km:.2f} km | {int(row['HSR'])}m HSR | {row['SPEED']} km/t")
                     st.write("")
         else:
-            st.info(f"Ingen fysiske data fundet for {valgt_hold} i denne periode.")
+            st.info(f"Ingen fysiske data fundet for {valgt_hold}.")
 
     except Exception as e:
         st.error(f"Fejl ved datahentning: {e}")
