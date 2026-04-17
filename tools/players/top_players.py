@@ -23,7 +23,9 @@ def vis_side():
         </style>
     """, unsafe_allow_html=True)
 
-    # --- Kontrolpanel ---    
+    # --- Kontrolpanel ---
+    st.title("Performance Hub 2026")
+    
     col_ctrl1, col_ctrl2 = st.columns([2, 2])
     with col_ctrl1:
         valgt_hold_navn = st.selectbox("Vælg hold:", list(TEAMS.keys()), index=0)
@@ -39,7 +41,7 @@ def vis_side():
             "Distribution": [("Succesf. Afleveringer", "M2_RANK")],
             "Defensivt": [("Tacklinger", "M3_RANK")]
         }
-        query_base = f"""
+        query = f"""
         WITH SELECTED_TEAM AS (
             SELECT CONTESTANT_OPTAUUID FROM KLUB_HVIDOVREIF.AXIS.OPTA_TEAMS 
             WHERE NAME = '{valgt_hold_navn}' OR OFFICIALNAME = '{valgt_hold_navn}' LIMIT 1
@@ -61,16 +63,35 @@ def vis_side():
                 RANK() OVER (ORDER BY s.M3 DESC NULLS LAST) as M3_RANK
             FROM KLUB_HVIDOVREIF.AXIS.OPTA_PLAYERS p
             JOIN STATS s ON p.PLAYER_OPTAUUID = s.PLAYER_OPTAUUID
+        ),
+        VALGT_TRUP_WYS AS (
+            SELECT TRIM(LASTNAME) as L_NAME, (TRIM(FIRSTNAME) || ' ' || TRIM(LASTNAME)) as FULL_NAME, MAX(IMAGEDATAURL) as IMG
+            FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_PLAYERS WHERE CURRENTTEAM_WYID = {target_wyid} GROUP BY 1, 2
         )
+        SELECT DISTINCT t.IMG, t.FULL_NAME as WYS_NAME, r.* FROM VALGT_TRUP_WYS t
+        INNER JOIN LIGA_RANKED r ON (r.P_NAME LIKE '%' || t.L_NAME || '%')
+        QUALIFY ROW_NUMBER() OVER (PARTITION BY t.FULL_NAME ORDER BY r.M2 DESC) = 1
         """
     else:
-        # Second Spectrum sektion rettet med dine specifikke kolonnenavne
+        # SECOND SPECTRUM LOGIK (Integreret med din avancerede navne-match)
         metrics_def = {
             "Løbe-volumen": [("Total Distance", "M1_RANK"), ("Højintakt løb", "M2_RANK")],
             "Sprints": [("Sprint Distance", "M3_RANK"), ("Top Speed", "M4_RANK")]
         }
-        query_base = f"""
-        WITH STATS AS (
+        query = f"""
+        WITH HVI_TRUP AS (
+            SELECT 
+                (TRIM(w.FIRSTNAME) || ' ' || TRIM(w.LASTNAME)) as FULL_NAME,
+                w.SHORTNAME,
+                o.MATCH_NAME as OPTA_MATCH_NAME,
+                o.PLAYER_OPTAUUID,
+                MAX(w.IMAGEDATAURL) as IMG_URL
+            FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_PLAYERS w
+            LEFT JOIN KLUB_HVIDOVREIF.AXIS.OPTA_PLAYERS o ON w.PLAYER_WYID = o.PLAYER_OPTAUUID
+            WHERE w.CURRENTTEAM_WYID = {target_wyid}
+            GROUP BY 1, 2, 3, 4
+        ),
+        SS_PHYSICAL AS (
             SELECT 
                 PLAYER_NAME,
                 "optaId" as PLAYER_OPTAID,
@@ -84,38 +105,30 @@ def vis_side():
             GROUP BY PLAYER_NAME, "optaId"
         ),
         LIGA_RANKED AS (
-            SELECT PLAYER_NAME as P_NAME, PLAYER_OPTAID, s.*,
+            SELECT s.*,
                 RANK() OVER (ORDER BY s.M1 DESC NULLS LAST) as M1_RANK,
                 RANK() OVER (ORDER BY s.M2 DESC NULLS LAST) as M2_RANK,
                 RANK() OVER (ORDER BY s.M3 DESC NULLS LAST) as M3_RANK,
                 RANK() OVER (ORDER BY s.M4 DESC NULLS LAST) as M4_RANK
-            FROM STATS s
+            FROM SS_PHYSICAL s
         )
+        SELECT DISTINCT 
+            COALESCE(w.IMG_URL, 'https://via.placeholder.com/150') as IMG,
+            w.FULL_NAME as WYS_NAME,
+            r.*
+        FROM HVI_TRUP w
+        INNER JOIN LIGA_RANKED r ON (
+            r.PLAYER_OPTAID = w.PLAYER_OPTAUUID OR
+            r.PLAYER_NAME = w.FULL_NAME OR
+            r.PLAYER_NAME = w.SHORTNAME OR
+            r.PLAYER_NAME = w.OPTA_MATCH_NAME OR
+            w.FULL_NAME LIKE '%' || r.PLAYER_NAME || '%'
+        )
+        QUALIFY ROW_NUMBER() OVER (PARTITION BY w.FULL_NAME ORDER BY r.M1 DESC) = 1
         """
 
-    # --- Samling af data (Wyscout Join) ---
-    # Vi bruger r.P_NAME (efternavns-match) som backup, hvis ID ikke findes
-    final_query = query_base + f"""
-    , VALGT_TRUP_WYS AS (
-        SELECT 
-            TRIM(LASTNAME) as L_NAME, 
-            (TRIM(FIRSTNAME) || ' ' || TRIM(LASTNAME)) as FULL_NAME, 
-            MAX(IMAGEDATAURL) as IMG
-        FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_PLAYERS 
-        WHERE CURRENTTEAM_WYID = {target_wyid} 
-        GROUP BY 1, 2
-    )
-    SELECT DISTINCT 
-        t.IMG, 
-        t.FULL_NAME as WYS_NAME, 
-        r.* FROM VALGT_TRUP_WYS t
-    INNER JOIN LIGA_RANKED r ON (r.P_NAME LIKE '%' || t.L_NAME || '%')
-    QUALIFY ROW_NUMBER() OVER (PARTITION BY t.FULL_NAME ORDER BY r.M1 DESC) = 1
-    ORDER BY r.M1 DESC
-    """
-
     try:
-        df = pd.read_sql(final_query, conn)
+        df = pd.read_sql(query, conn)
         
         if not df.empty:
             display_df = df.head(5)
@@ -124,7 +137,7 @@ def vis_side():
             cols = st.columns([2.5, 1, 1, 1, 1, 1])
             for i, (_, row) in enumerate(display_df.iterrows()):
                 with cols[i+1]:
-                    img = row['IMG'] if row['IMG'] and str(row['IMG']) != 'None' else "https://via.placeholder.com/150"
+                    img = row['IMG']
                     st.markdown(f'<div class="player-card"><img src="{img}" class="player-img-round" width="70" height="70"><br><span class="player-name-text">{row["WYS_NAME"]}</span></div>', unsafe_allow_html=True)
 
             # --- Render Ranks ---
