@@ -33,7 +33,7 @@ def vis_side():
         -- I mange Wyscout-tabeller hedder den 'OPTA_ID' eller 'optaId'.
         -- Vi prøver her med "OPTAID" (uden præfiks i definitionen)
         SELECT 
-            OPTAID, 
+            PLAYER_WYID, 
             IMAGEDATAURL as PLAYER_IMG
         FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_PLAYERS
         WHERE CURRENTTEAM_WYID = (SELECT TEAM_WYID FROM HOLD)
