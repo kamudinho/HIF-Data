@@ -53,7 +53,10 @@ def vis_side():
         # Vi bruger PLAYER_WYID eller CURRENTTEAM_WYID (som vi ved er i tabellen fra din upload)
         names_list = "('" + "','".join(df_top5['PLAYER_NAME'].tolist()) + "')"
         
-        # Her bruger vi CURRENTTEAM_WYID i stedet for TEAMNAME-tekst
+        # Vi henter wyid fra din mapping fil
+        target_wyid = team_info.get('wyid') 
+        
+        # Vi søger i kolonnen CURRENTTEAM_WYID, som vi så i din fildump
         sql_img = f"""
             SELECT 
                 (TRIM(FIRSTNAME) || ' ' || TRIM(LASTNAME)) as FULL_NAME,
