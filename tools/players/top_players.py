@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 from data.data_load import _get_snowflake_conn
 from data.utils.team_mapping import TEAMS
-import time
 
 def vis_side():
     try:
@@ -11,7 +10,7 @@ def vis_side():
         st.error(f"Forbindelsesfejl: {e}")
         return
 
-    # --- CSS: Rent scouting-look med Rank på én linje ---
+    # --- CSS: Rent scouting-look med tekst på én linje ---
     st.markdown("""
         <style>
         .category-header { font-weight: bold; font-size: 1rem; padding: 15px 0 5px 0; color: #111; border-bottom: 2px solid #eee; margin-top: 10px; }
@@ -25,7 +24,7 @@ def vis_side():
             font-weight: bold; 
             color: black; 
             font-size: 0.75rem; 
-            white-space: nowrap; 
+            white-space: nowrap; /* Tvinger Rank X på én linje */
             min-width: fit-content;
         }
         .player-card { text-align: center; min-height: 100px; }
@@ -33,7 +32,7 @@ def vis_side():
         </style>
     """, unsafe_allow_html=True)
 
-    # 1. HOLDVALG
+    # 1. HOLDVALG - Vi bruger en helt unik, men stabil key
     alle_hold = list(TEAMS.keys())
     col_sel, _ = st.columns([2, 2])
     with col_sel:
@@ -42,18 +41,18 @@ def vis_side():
             "Vælg hold:", 
             alle_hold, 
             index=alle_hold.index(initial_hold), 
-            key=f"phys_rank_final_{int(time.time() / 60)}" # Dynamisk key
+            key="physical_top5_final_stable_key" # Fast unik nøgle
         )
     
     target_wyid = TEAMS[valgt_navn]["team_wyid"]
 
-    # 2. SQL: Rettet til dine faktiske kolonnenavne (JOGGING, RUNNING, SPRINTING)
+    # 2. SQL: Præcise kolonnenavne fra din csv-oversigt
     query = f"""
     WITH LIGA_STATS AS (
         SELECT 
             PLAYER_NAME,
             AVG(DISTANCE) as DIST,
-            AVG(JOGGING + RUNNING) as RUN_DIST,
+            AVG(RUNNING) as RUN_DIST,
             AVG("HIGH SPEED RUNNING") as HSR,
             AVG(SPRINTING) as SPRINT_DIST,
             MAX(TOP_SPEED) as SPEED,
@@ -108,12 +107,12 @@ def vis_side():
             # --- KATEGORIER ---
             metrics_map = {
                 "Volume Metrics": [
-                    ("Distance Per 90", "DIST_RANK"),
-                    ("Running Distance Per 90", "RUN_DIST_RANK")
+                    ("Total Distance", "DIST_RANK"),
+                    ("Running Distance", "RUN_DIST_RANK")
                 ],
                 "High Intensity Metrics": [
-                    ("Hi Distance Per 90", "HSR_RANK"),
-                    ("Sprint Distance Per 90", "SPRINT_DIST_RANK")
+                    ("Hi Distance", "HSR_RANK"),
+                    ("Sprint Distance", "SPRINT_DIST_RANK")
                 ],
                 "Explosive Metrics": [
                     ("Top Speed", "SPEED_RANK"),
@@ -130,9 +129,13 @@ def vis_side():
                     
                     for i, (_, row) in enumerate(df.iterrows()):
                         rank_val = int(row[col_name])
-                        fill_width = max(22, (1 - (rank_val / 300)) * 100) if rank_val <= 300 else 22
+                        # Beregner bredde (1-300 skala)
+                        fill_width = max(25, (1 - (rank_val / 300)) * 100) if rank_val <= 300 else 25
                         
-                        color = "#22c55e" if rank_val <= 20 else "#facc15" if rank_val <= 80 else "#fca5a5"
+                        # Farve baseret på liga-rank
+                        if rank_val <= 20: color = "#22c55e"    # Top 20 = Grøn
+                        elif rank_val <= 80: color = "#facc15"  # Top 80 = Gul
+                        else: color = "#fca5a5"                 # Bund = Rød
                         
                         with m_cols[i+1]:
                             st.markdown(f"""
@@ -143,8 +146,8 @@ def vis_side():
                                 </div>
                             """, unsafe_allow_html=True)
         else:
-            st.info("Ingen match fundet.")
+            st.info("Ingen match fundet i fysiske data for dette hold.")
     except Exception as e:
-        st.error(f"Fejl: {e}")
+        st.error(f"Fejl ved indlæsning: {e}")
 
 vis_side()
