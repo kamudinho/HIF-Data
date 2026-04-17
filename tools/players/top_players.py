@@ -123,7 +123,7 @@ def vis_side():
                 st.markdown(f'**{kat}**')
                 for label, col in metrics:
                     m_cols = st.columns([2.5, 1, 1, 1, 1, 1])
-                    m_cols[0].small(label)
+                    m_cols[0].caption(label)
                     for i, (_, row) in enumerate(df.iterrows()):
                         rank = int(row[col])
                         color = "#22c55e" if rank <= 20 else "#facc15"
