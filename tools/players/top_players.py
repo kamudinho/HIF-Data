@@ -3,19 +3,6 @@ import pandas as pd
 from data.data_load import _get_snowflake_conn
 from data.utils.team_mapping import TEAMS
 
-def load_player_overrides():
-    try:
-        df_overrides = pd.read_csv("data/player_overrides.csv")
-        overrides = {}
-        for _, row in df_overrides.iterrows():
-            spiller = row['PLAYER_NAME'].strip()
-            klub_navn = row['TEAM_NAME'].strip()
-            if klub_navn in TEAMS:
-                overrides[spiller] = TEAMS[klub_navn]["team_wyid"]
-        return overrides
-    except:
-        return {}
-
 def vis_side():
     try:
         conn = _get_snowflake_conn()
@@ -23,18 +10,16 @@ def vis_side():
         st.error(f"Forbindelsesfejl: {e}")
         return
 
-    player_overrides = load_player_overrides()
-
     # --- TOP BAR ---
     col1, col2 = st.columns([2, 2])
     with col1:
         valgt_navn = st.selectbox("Vælg hold:", list(TEAMS.keys()), key="phys_tech_rank")
         target_wyid = TEAMS[valgt_navn]["team_wyid"]
     with col2:
-        mode = st.radio("Vælg data-visning:", ["Fysiske Data", "Tekniske Data (Opta)"], horizontal=True)
+        mode = st.radio("Vælg data-visning:", ["Fysiske Data (P90)", "Tekniske Data (P90)"], horizontal=True)
 
-    # --- SQL LOGIK ---
-    if mode == "Fysiske Data":
+    # --- SQL LOGIK (P90) ---
+    if "Fysiske Data" in mode:
         query = f"""
         WITH LIGA_STATS AS (
             SELECT PLAYER_NAME, 
@@ -59,13 +44,14 @@ def vis_side():
         INNER JOIN LIGA_RANKED r ON (t.FULL_NAME LIKE '%' || r.PLAYER_NAME || '%' OR r.PLAYER_NAME LIKE '%' || t.FULL_NAME || '%')
         """
         metrics_labels = {
-            "Volume": [("Total Distance", "M1_RANK", "M1", "km"), ("Running", "M2_RANK", "M2", "km")],
-            "Intensity": [("Hi Distance", "M3_RANK", "M3", "m"), ("Sprints", "M4_RANK", "M4", "m")],
-            "Explosive": [("Top Speed", "M5_RANK", "M5", "km/t")]
+            "Volume (P90)": [("Total Dist.", "M1_RANK", "M1", "km"), ("Running", "M2_RANK", "M2", "km")],
+            "Intensity (P90)": [("Hi Dist.", "M3_RANK", "M3", "m"), ("Sprints", "M4_RANK", "M4", "m")],
+            "Top Speed": [("Max Speed", "M5_RANK", "M5", "km/t")]
         }
     else:
+        # Her bruger vi gennemsnit pr. kamp som P90-indikator
         query = f"""
-        WITH PLAYER_XG AS (
+        WITH PLAYER_STATS AS (
             SELECT PLAYER_OPTAUUID,
                 AVG(CASE WHEN STAT_TYPE = 'expectedGoals' THEN STAT_VALUE END) as AVG_XG,
                 AVG(CASE WHEN STAT_TYPE = 'goals' THEN STAT_VALUE END) as AVG_GOALS
@@ -75,11 +61,11 @@ def vis_side():
         ),
         LIGA_RANKED AS (
             SELECT p.MATCH_NAME as PLAYER_NAME,
-                x.AVG_XG as M1, x.AVG_GOALS as M2,
-                RANK() OVER (ORDER BY x.AVG_XG DESC) as M1_RANK,
-                RANK() OVER (ORDER BY x.AVG_GOALS DESC) as M2_RANK
-            FROM PLAYER_XG x
-            JOIN KLUB_HVIDOVREIF.AXIS.OPTA_PLAYERS p ON x.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
+                s.AVG_XG as M1, s.AVG_GOALS as M2,
+                RANK() OVER (ORDER BY s.AVG_XG DESC) as M1_RANK,
+                RANK() OVER (ORDER BY s.AVG_GOALS DESC) as M2_RANK
+            FROM PLAYER_STATS s
+            JOIN KLUB_HVIDOVREIF.AXIS.OPTA_PLAYERS p ON s.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
         ),
         VALGT_TRUP AS (
             SELECT (TRIM(FIRSTNAME) || ' ' || TRIM(LASTNAME)) as FULL_NAME, MAX(IMAGEDATAURL) as IMG
@@ -89,16 +75,13 @@ def vis_side():
         INNER JOIN LIGA_RANKED r ON (t.FULL_NAME LIKE '%' || r.PLAYER_NAME || '%' OR r.PLAYER_NAME LIKE '%' || t.FULL_NAME || '%')
         """
         metrics_labels = {
-            "Attacking": [("Expected Goals", "M1_RANK", "M1", "xG"), ("Actual Goals", "M2_RANK", "M2", "stk")]
+            "Attacking (P90)": [("xG P90", "M1_RANK", "M1", "xG"), ("Goals P90", "M2_RANK", "M2", "stk")]
         }
 
-    # --- RENDER LOGIK ---
+    # --- RENDER ---
     try:
         df = pd.read_sql(query, conn)
         if not df.empty:
-            if player_overrides:
-                df = df[df.apply(lambda row: player_overrides.get(row['WYS_NAME'], target_wyid) == target_wyid, axis=1)]
-            
             df = df.sort_values("M1_RANK").head(5)
             
             st.write("---")
@@ -117,22 +100,25 @@ def vis_side():
                     for i, (_, row) in enumerate(df.iterrows()):
                         rank = int(row[rank_col])
                         val = row[val_col]
-                        val_str = f"{val:.2f}" if isinstance(val, float) else str(val)
+                        val_str = f"{val:.2f}" if val >= 0.1 else f"{val:.3f}"
                         
-                        # Farve baseret på rank
+                        # Farve logik
                         color = "#22c55e" if rank <= 20 else "#facc15" if rank <= 50 else "#ef4444"
                         
-                        # Bar visualisering
-                        bar_width = max(10, 100 - (rank / 2)) # Simpel skalering af baren
-                        
+                        # Dynamisk bredde (omvendt af rank)
+                        # Hvis rank 1, bredde 100%. Hvis rank 200, bredde 10%.
+                        bar_width = max(15, 100 - (rank / 3)) 
+
                         m_cols[i+1].markdown(f"""
-                            <div style="background-color: #f0f2f6; border-radius: 4px; width: 100%; height: 20px; margin-bottom: 5px;">
-                                <div style="background-color: {color}; width: {bar_width}%; height: 100%; border-radius: 4px; display: flex; align-items: center; justify-content: center; min-width: 20px;">
+                            <div style="background-color: #f0f2f6; border-radius: 4px; width: 100%; height: 28px; position: relative; margin-bottom: 8px;">
+                                <div style="background-color: {color}; width: {bar_width}%; height: 100%; border-radius: 4px; display: flex; align-items: center; padding-left: 5px; min-width: 45px;">
+                                    <span style="color: black; font-size: 9px; font-weight: bold; white-space: nowrap;">
+                                        R{rank} ({val_str})
+                                    </span>
                                 </div>
-                            </div>
-                            <div style="text-align: center; font-size: 10px; margin-top: -3px;">
-                                <b>Rank {rank}</b><br>({val_str} {unit})
                             </div>
                         """, unsafe_allow_html=True)
     except Exception as e:
         st.error(f"Fejl: {e}")
+
+vis_side()
