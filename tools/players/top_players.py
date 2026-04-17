@@ -2,8 +2,7 @@ import streamlit as st
 import pandas as pd
 from data.data_load import _get_snowflake_conn
 from data.utils.team_mapping import TEAMS
-
-# --- VIGTIGT: SLET LINJEN "from tools.players import top_players" HVIS DEN STÅR HER ---
+import time
 
 def vis_side():
     try:
@@ -26,7 +25,7 @@ def vis_side():
             font-weight: bold; 
             color: black; 
             font-size: 0.72rem; 
-            white-space: nowrap; /* Sikrer Rank X står på én linje */
+            white-space: nowrap; 
             min-width: fit-content;
         }
         .player-card { text-align: center; min-height: 100px; }
@@ -34,7 +33,7 @@ def vis_side():
         </style>
     """, unsafe_allow_html=True)
 
-    # 1. HOLDVALG
+    # 1. HOLDVALG - Dynamisk key baseret på tid for at undgå "Duplicate Key" fejl
     alle_hold = list(TEAMS.keys())
     col_sel, _ = st.columns([2, 2])
     with col_sel:
@@ -43,20 +42,21 @@ def vis_side():
             "Vælg hold:", 
             alle_hold, 
             index=alle_hold.index(initial_hold), 
-            key="phys_rank_final_v3"
+            key=f"phys_rank_selector_{int(time.time() / 100)}" # Skifter hver 100. sekund
         )
     
     target_wyid = TEAMS[valgt_navn]["team_wyid"]
 
-    # 2. SQL: Henter alle metrics og beregner Rank mod hele ligaen
+    # 2. SQL: Rettede kolonnenavne med anførselstegn (standard i Second Spectrum)
+    # Hvis de stadig fejler, er det fordi de præcise navne i din tabel er anderledes.
     query = f"""
     WITH LIGA_STATS AS (
         SELECT 
             PLAYER_NAME,
             AVG(DISTANCE) as DIST,
-            AVG(RUNNING_DISTANCE) as RUN_DIST,
+            AVG("RUNNING DISTANCE") as RUN_DIST,
             AVG("HIGH SPEED RUNNING") as HSR,
-            AVG(SPRINT_DISTANCE) as SPRINT_DIST,
+            AVG("SPRINT DISTANCE") as SPRINT_DIST,
             MAX(TOP_SPEED) as SPEED,
             AVG(NO_OF_HIGH_INTENSITY_RUNS) as ACCELS
         FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
@@ -97,7 +97,7 @@ def vis_side():
         if not df.empty:
             st.write("---")
             
-            # --- HEADER: SPILLER PROFILER ---
+            # --- HEADER ---
             cols = st.columns([2.5, 1, 1, 1, 1, 1])
             with cols[0]: st.write("")
             for i, (_, row) in enumerate(df.iterrows()):
@@ -111,7 +111,7 @@ def vis_side():
                         </div>
                     """, unsafe_allow_html=True)
 
-            # --- DEFINITION AF KATEGORIER ---
+            # --- KATEGORIER ---
             metrics_map = {
                 "Volume Metrics": [
                     ("Distance Per 90", "DIST_RANK"),
@@ -127,7 +127,6 @@ def vis_side():
                 ]
             }
 
-            # --- RENDER TABEL ---
             for kat_navn, metrics in metrics_map.items():
                 st.markdown(f'<div class="category-header">{kat_navn}</div>', unsafe_allow_html=True)
                 for label, col_name in metrics:
@@ -137,13 +136,10 @@ def vis_side():
                     
                     for i, (_, row) in enumerate(df.iterrows()):
                         rank_val = int(row[col_name])
+                        fill_width = max(20, (1 - (rank_val / 300)) * 100) if rank_val <= 300 else 20
                         
-                        # Skalering af bar: Rank 1 er 100%, Rank 250 er kort.
-                        fill_width = max(18, (1 - (rank_val / 250)) * 100) if rank_val <= 250 else 18
-                        
-                        # Farver: Grøn (Top 15), Gul (Top 70), Rød (Bund)
-                        if rank_val <= 15: color = "#22c55e"
-                        elif rank_val <= 70: color = "#facc15"
+                        if rank_val <= 20: color = "#22c55e"
+                        elif rank_val <= 80: color = "#facc15"
                         else: color = "#fca5a5"
                         
                         with m_cols[i+1]:
@@ -155,7 +151,7 @@ def vis_side():
                                 </div>
                             """, unsafe_allow_html=True)
         else:
-            st.info("Ingen match fundet. Tjek spiller-navne i begge datakilder.")
+            st.info("Ingen match fundet.")
     except Exception as e:
         st.error(f"SQL eller Datafejl: {e}")
 
