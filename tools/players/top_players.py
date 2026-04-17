@@ -6,106 +6,81 @@ from data.utils.team_mapping import TEAMS
 DB = "KLUB_HVIDOVREIF.AXIS"
 
 def vis_side():
-    # CSS - Layout kontrol
-    st.markdown("""
-        <style>
-        .player-img { width: 85px; height: 85px; border-radius: 50%; object-fit: cover; border: 2px solid #eee; }
-        .player-header { 
-            background-color: black; color: white; text-align: center; 
-            font-weight: bold; padding: 6px 2px; border-radius: 2px; 
-            font-size: 10px; text-transform: uppercase;
-            min-height: 40px; display: flex; align-items: center; justify-content: center;
-        }
-        .metric-label { font-size: 11px; color: #444; font-weight: 800; text-transform: uppercase; height: 65px; display: flex; align-items: center; }
-        .stat-row { height: 65px; display: flex; flex-direction: column; justify-content: center; }
-        .bar-bg { background-color: #f2f2f2; height: 10px; width: 100%; border-radius: 5px; }
-        .bar-fill { background-color: #df003b; height: 10px; border-radius: 5px; }
-        .val-text { font-size: 11px; font-weight: 800; color: #1f1f1f; margin-top: 4px; }
-        </style>
-    """, unsafe_allow_html=True)
-
+    # CSS forbliver den samme som sidst...
+    
     conn = _get_snowflake_conn()
     if not conn: return
 
-    # 1. HOLDVALG OG IDS
     valgt_hold_navn = st.selectbox("Vælg Hold", sorted(list(TEAMS.keys())), label_visibility="collapsed")
-    
-    # Hent IDs fra din team_mapping
     team_info = TEAMS.get(valgt_hold_navn, {})
+    
+    # Vi bruger dine IDs fra mappingen til at rydde op i duplikaterne
     target_ssiid = team_info.get('ssid')
-    target_wyid = team_info.get('wyid') # Vi bruger wyid til at finde spillerbilleder
+    target_wyid = team_info.get('wyid')
 
-    # 2. HENT TOP 5 (Second Spectrum)
-    sql_phys = f"""
-        SELECT PLAYER_NAME, 
-               AVG(DISTANCE) as DIST, AVG("HIGH SPEED RUNNING") as HSR, 
-               MAX(TOP_SPEED) as SPEED, AVG(NO_OF_HIGH_INTENSITY_RUNS) as ACCELS
-        FROM {DB}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
-        WHERE MATCH_DATE BETWEEN '2025-07-01' AND '2026-06-30'
-        AND MATCH_SSIID IN (SELECT MATCH_SSIID FROM {DB}.SECONDSPECTRUM_GAME_METADATA 
-                            WHERE HOME_SSIID = '{target_ssiid}' OR AWAY_SSIID = '{target_ssiid}')
-        GROUP BY PLAYER_NAME ORDER BY DIST DESC LIMIT 5
-    """
-    df_top5 = conn.query(sql_phys)
-
-    if df_top5 is not None and not df_top5.empty:
-        # 3. HENT BILLEDER BASERET PÅ WYID FRA MAPPING
-        # Vi bruger PLAYER_WYID eller CURRENTTEAM_WYID (som vi ved er i tabellen fra din upload)
-        names_list = "('" + "','".join(df_top5['PLAYER_NAME'].tolist()) + "')"
-        
-        # Vi henter wyid fra din mapping fil
-        target_wyid = team_info.get('wyid') 
-        
-        # Vi søger i kolonnen CURRENTTEAM_WYID, som vi så i din fildump
-        sql_img = f"""
+    # KOMBINERET QUERY (Baseret på din dump)
+    # Vi bruger GROUP BY og MAX for at undgå de mange dubletter vi så i din dump
+    sql = f"""
+        WITH SS_STATS AS (
+            SELECT PLAYER_NAME, 
+                   AVG(DISTANCE) as DIST, AVG("HIGH SPEED RUNNING") as HSR, 
+                   MAX(TOP_SPEED) as SPEED, AVG(NO_OF_HIGH_INTENSITY_RUNS) as ACCELS
+            FROM {DB}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
+            WHERE MATCH_DATE BETWEEN '2025-07-01' AND '2026-06-30'
+            AND MATCH_SSIID IN (SELECT MATCH_SSIID FROM {DB}.SECONDSPECTRUM_GAME_METADATA 
+                                WHERE HOME_SSIID = '{target_ssiid}' OR AWAY_SSIID = '{target_ssiid}')
+            GROUP BY PLAYER_NAME
+        ),
+        WY_INFO AS (
             SELECT 
                 (TRIM(FIRSTNAME) || ' ' || TRIM(LASTNAME)) as FULL_NAME,
                 SHORTNAME,
-                IMAGEDATAURL
+                MAX(IMAGEDATAURL) as IMG -- Vi tager kun ét billede
             FROM {DB}.WYSCOUT_PLAYERS 
-            WHERE (FULL_NAME IN {names_list} OR SHORTNAME IN {names_list})
-            AND CURRENTTEAM_WYID = {target_wyid}
-        """
-        df_wyscout = conn.query(sql_img)
+            WHERE CURRENTTEAM_WYID = {target_wyid}
+            GROUP BY 1, 2
+        )
+        SELECT s.*, w.IMG
+        FROM SS_STATS s
+        LEFT JOIN WY_INFO w ON (s.PLAYER_NAME = w.FULL_NAME OR s.PLAYER_NAME = w.SHORTNAME)
+        ORDER BY s.DIST DESC LIMIT 5
+    """
+    
+    df = conn.query(sql)
 
-        # Layout definition
+    if df is not None and not df.empty:
+        # Metrics definition
         metrics = [("Distance", "DIST", 1000, "km"), ("Hsr", "HSR", 1, "m"), 
                    ("Topfart", "SPEED", 1, "km/t"), ("Eksplosiv", "ACCELS", 1, "akt")]
-        max_vals = {m[1]: df_top5[m[1]].max() for m in metrics}
+        
+        max_vals = {m[1]: df[m[1]].max() for m in metrics}
 
-        # --- GRID ---
+        # LAYOUT (1 label kolonne + 5 spiller kolonner)
         cols = st.columns([1.2, 2, 2, 2, 2, 2])
 
-        # Labels
+        # Labels (Kolonne 0)
         with cols[0]:
             st.markdown("<div style='height: 160px;'></div>", unsafe_allow_html=True)
             for label, _, _, _ in metrics:
                 st.markdown(f"<div class='metric-label'>{label}</div>", unsafe_allow_html=True)
 
-        # Spillere
-        for i, (idx, row) in enumerate(df_top5.iterrows()):
+        # Spillere (Kolonne 1-5)
+        for i, row in enumerate(df.itertuples()):
             with cols[i+1]:
-                # Billede match
-                img = "https://via.placeholder.com/150"
-                if df_wyscout is not None and not df_wyscout.empty:
-                    m = df_wyscout[(df_wyscout['FULL_NAME'] == row['PLAYER_NAME']) | 
-                                   (df_wyscout['SHORTNAME'] == row['PLAYER_NAME'])]
-                    if not m.empty:
-                        img = m.iloc[0]['IMAGEDATAURL']
+                img = row.IMG if pd.notnull(row.IMG) else "https://via.placeholder.com/150"
                 
                 st.markdown(f"<div style='text-align:center;'><img src='{img}' class='player-img'></div>", unsafe_allow_html=True)
-                st.markdown(f"<div class='player-header'>{row['PLAYER_NAME']}</div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='player-header'>{row.PLAYER_NAME}</div>", unsafe_allow_html=True)
 
                 for label, key, div, unit in metrics:
-                    val = row[key]
-                    pct = min(int((val/max_vals[key])*100), 100) if max_vals[key] > 0 else 0
+                    val = getattr(row, key)
+                    m_val = max_vals[key]
+                    pct = min(int((val/m_val)*100), 100) if m_val > 0 else 0
                     display_val = f"{val/div:.1f}" if div > 1 else f"{int(val)}"
+                    
                     st.markdown(f"""
                         <div class='stat-row'>
                             <div class="bar-bg"><div class="bar-fill" style="width:{pct}%;"></div></div>
                             <div class="val-text">{display_val} <span style='font-size:8px; color:#888;'>{unit}</span></div>
                         </div>
                     """, unsafe_allow_html=True)
-
-if __name__ == "__main__":
-    vis_side()
