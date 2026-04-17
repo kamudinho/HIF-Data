@@ -7,38 +7,38 @@ def vis_side():
     try:
         conn = _get_snowflake_conn()
     except Exception as e:
-        st.error(f"Kunne ikke forbinde til Snowflake: {e}")
+        st.error(f"Forbindelsesfejl: {e}")
         return
 
-    # --- CSS: Samme lækre stil som før ---
+    # --- CSS: Genskaber det professionelle scouting-look ---
     st.markdown("""
         <style>
-        .category-header { font-weight: bold; font-size: 1.05rem; padding: 15px 0 5px 0; color: #111; border-bottom: 2px solid #eee; margin-top: 10px; }
-        .metric-label { font-size: 0.85rem; color: #444; display: flex; align-items: center; height: 35px; }
+        .category-header { font-weight: bold; font-size: 1.1rem; padding: 20px 0 10px 0; color: #111; border-bottom: 2px solid #eee; }
+        .metric-label { font-size: 0.9rem; color: #444; display: flex; align-items: center; height: 35px; }
         .rank-container { position: relative; background-color: #f0f0f0; height: 32px; width: 100%; border-radius: 4px; overflow: hidden; display: flex; align-items: center; margin-bottom: 2px; }
-        .rank-fill { height: 100%; display: flex; align-items: center; padding-left: 8px; font-weight: bold; color: black; font-size: 0.75rem; }
-        .player-card { text-align: center; min-height: 110px; }
-        .player-img-round { border-radius: 50%; object-fit: cover; border: 2px solid #f0f2f6; background-color: #fff; }
+        .rank-fill { height: 100%; display: flex; align-items: center; padding-left: 8px; font-weight: bold; color: black; font-size: 0.8rem; }
+        .player-card { text-align: center; min-height: 120px; }
+        .player-img-round { border-radius: 50%; object-fit: cover; border: 2px solid #f0f2f6; }
         </style>
     """, unsafe_allow_html=True)
 
-    # 1. HOLDVALG (Tilføjet 'key' for at fjerne din fejl)
+    # 1. HOLDVALG
     alle_hold = list(TEAMS.keys())
-    
     col_sel, _ = st.columns([2, 2])
     with col_sel:
         valgt_navn = st.selectbox(
             "Vælg hold:", 
             alle_hold, 
             index=alle_hold.index("Hvidovre") if "Hvidovre" in alle_hold else 0,
-            key="team_selector_physical_top5" # Dette fjerner fejlen!
+            key="phys_top5_selector"
         )
     
     target_wyid = TEAMS[valgt_navn]["team_wyid"]
 
-    # 2. SQL: Vi holder os til de sikre kolonner (DISTANCE, HSR, SPEED, ACCELS)
+    # 2. SQL: Beregner rank mod HELE ligaen
     query = f"""
-    WITH STATS AS (
+    WITH LIGA_STATS AS (
+        -- Her henter vi data for ALLE spillere i databasen for at kunne ranke dem korrekt
         SELECT 
             PLAYER_NAME,
             AVG(DISTANCE) as DIST,
@@ -49,15 +49,17 @@ def vis_side():
         WHERE MATCH_DATE BETWEEN '2025-07-01' AND '2026-06-30'
         GROUP BY PLAYER_NAME
     ),
-    RANKED AS (
+    LIGA_RANKED AS (
+        -- Vi bruger PERCENT_RANK over HELE ligaen
         SELECT *,
-            PERCENT_RANK() OVER (ORDER BY DIST ASC) as DIST_RANK,
-            PERCENT_RANK() OVER (ORDER BY HSR ASC) as HSR_RANK,
-            PERCENT_RANK() OVER (ORDER BY SPEED ASC) as SPEED_RANK,
-            PERCENT_RANK() OVER (ORDER BY ACCELS ASC) as ACCELS_RANK
-        FROM STATS
+            PERCENT_RANK() OVER (ORDER BY DIST ASC) as DIST_PR,
+            PERCENT_RANK() OVER (ORDER BY HSR ASC) as HSR_PR,
+            PERCENT_RANK() OVER (ORDER BY SPEED ASC) as SPEED_PR,
+            PERCENT_RANK() OVER (ORDER BY ACCELS ASC) as ACCELS_PR
+        FROM LIGA_STATS
     ),
-    TRUP AS (
+    VALGT_TRUP AS (
+        -- Vi isolerer de unikke spillere fra dit valgte hold
         SELECT 
             (TRIM(FIRSTNAME) || ' ' || TRIM(LASTNAME)) as FULL_NAME,
             MAX(IMAGEDATAURL) as IMG
@@ -65,9 +67,10 @@ def vis_side():
         WHERE CURRENTTEAM_WYID = {target_wyid}
         GROUP BY 1
     )
+    -- Joiner truppen med liga-ranks
     SELECT t.IMG, r.*
-    FROM TRUP t
-    INNER JOIN RANKED r ON (
+    FROM VALGT_TRUP t
+    INNER JOIN LIGA_RANKED r ON (
         t.FULL_NAME = r.PLAYER_NAME 
         OR r.PLAYER_NAME LIKE '%' || t.FULL_NAME || '%'
         OR t.FULL_NAME LIKE '%' || r.PLAYER_NAME || '%'
@@ -82,52 +85,65 @@ def vis_side():
         if not df.empty:
             st.write("---")
             
-            # --- HEADER: SPILLER PROFILER ---
+            # --- HEADER: SPILLER BILLEDER ---
             cols = st.columns([2.5, 1, 1, 1, 1, 1])
             with cols[0]: st.write("")
             
             for i, (_, row) in enumerate(df.iterrows()):
                 with cols[i+1]:
-                    img_path = row['IMG'] if row['IMG'] and str(row['IMG']) != 'None' else "https://via.placeholder.com/150"
-                    short_name = row['PLAYER_NAME'].split()[-1]
+                    img_url = row['IMG'] if row['IMG'] and str(row['IMG']) != 'None' else "https://via.placeholder.com/150"
+                    efternavn = row['PLAYER_NAME'].split()[-1]
                     st.markdown(f"""
                         <div class="player-card">
-                            <img src="{img_path}" class="player-img-round" width="65" height="65">
-                            <br><b>{short_name}</b>
+                            <img src="{img_url}" class="player-img-round" width="65" height="65">
+                            <br><b>{efternavn}</b>
                         </div>
                     """, unsafe_allow_html=True)
 
-            # --- DEFINER KATEGORIER ---
+            # --- DEFINER KATEGORIER FRA BILLEDE ---
             kategorier = {
-                "Volume Metrics": [("Distance Per 90", "DIST_RANK")],
-                "High Intensity Metrics": [("Hi Distance Per 90", "HSR_RANK")],
-                "Explosive Metrics": [("Top Speed", "SPEED_RANK"), ("Accelerations", "ACCELS_RANK")]
+                "Volume Metrics": [
+                    ("Distance Per 90", "DIST_PR")
+                ],
+                "High Intensity Metrics": [
+                    ("Hi Distance Per 90", "HSR_PR")
+                ],
+                "Explosive Metrics": [
+                    ("Top Speed", "SPEED_PR"),
+                    ("Accelerations", "ACCELS_PR")
+                ]
             }
 
-            # --- RENDER RÆKKER ---
+            # --- RENDER TABEL ---
             for kat_navn, metrics in kategorier.items():
                 st.markdown(f'<div class="category-header">{kat_navn}</div>', unsafe_allow_html=True)
                 
-                for label, rank_col in metrics:
+                for label, pr_col in metrics:
                     m_cols = st.columns([2.5, 1, 1, 1, 1, 1])
                     with m_cols[0]:
                         st.markdown(f'<div class="metric-label">{label}</div>', unsafe_allow_html=True)
                     
                     for i, (_, row) in enumerate(df.iterrows()):
-                        val = row[rank_col] * 100
-                        # Grøn (Top), Gul (Midt), Rød (Bund)
-                        color = "#22c55e" if val >= 75 else "#facc15" if val >= 40 else "#fca5a5"
+                        # Procent-rank på tværs af ligaen (0-100%)
+                        val_pct = int(row[pr_col] * 100)
+                        
+                        # Farve-logik: Grøn for top, gul for midt, rød for bund
+                        if val_pct >= 80: color = "#22c55e"
+                        elif val_pct >= 40: color = "#facc15"
+                        else: color = "#fca5a5"
                         
                         with m_cols[i+1]:
                             st.markdown(f"""
                                 <div class="rank-container">
-                                    <div class="rank-fill" style="width: {max(val, 15)}%; background-color: {color};">
-                                        {int(val)}%
+                                    <div class="rank-fill" style="width: {max(val_pct, 15)}%; background-color: {color};">
+                                        {val_pct}%
                                     </div>
                                 </div>
                             """, unsafe_allow_html=True)
         else:
-            st.info(f"Ingen kampdata fundet for spillere i {valgt_navn} truppen.")
+            st.info(f"Ingen match fundet mellem {valgt_navn} og fysiske data.")
 
     except Exception as e:
-        st.error(f"SQL Fejl: {e}")
+        st.error(f"Fejl ved datahentning: {e}")
+
+vis_side()
