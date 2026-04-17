@@ -20,7 +20,7 @@ def vis_side():
     # Håndtér apostroffer (fx B.93's)
     safe_hold = valgt_hold.replace("'", "''")
 
-    # 3. SQL: Din rene rækkefølge (Teams -> Players -> Physical)
+    # 3. SQL: Navne-match inden for det valgte hold
     query = f"""
     WITH HOLD AS (
         SELECT TEAM_WYID, IMAGEDATAURL as TEAM_LOGO
@@ -29,11 +29,9 @@ def vis_side():
         LIMIT 1
     ),
     SPILLERE AS (
-        -- Vi fjerner 'p.' præfikset i SELECT og tjekker kolonnenavnet. 
-        -- I mange Wyscout-tabeller hedder den 'OPTA_ID' eller 'optaId'.
-        -- Vi prøver her med "OPTAID" (uden præfiks i definitionen)
+        -- Vi henter SHORTNAME og billedet for alle spillere på det specifikke hold
         SELECT 
-            PLAYER_WYID, 
+            SHORTNAME, 
             IMAGEDATAURL as PLAYER_IMG
         FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_PLAYERS
         WHERE CURRENTTEAM_WYID = (SELECT TEAM_WYID FROM HOLD)
@@ -46,7 +44,8 @@ def vis_side():
         MAX(sp.PLAYER_IMG) as IMG,
         (SELECT TEAM_LOGO FROM HOLD) as LOGO
     FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS s
-    JOIN SPILLERE sp ON s."optaId" = sp.PLAYER_WYID
+    -- Vi joiner nu på NAVN, men kun mod spillere fra det valgte hold (via vores CTE)
+    JOIN SPILLERE sp ON s.PLAYER_NAME = sp.SHORTNAME
     WHERE s.MATCH_DATE BETWEEN '2025-07-01' AND '2026-06-30'
     GROUP BY s.PLAYER_NAME
     ORDER BY DIST DESC
