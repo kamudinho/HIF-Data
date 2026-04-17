@@ -33,8 +33,9 @@ def vis_side():
         .metric-label { font-size: 0.8rem; color: #444; display: flex; align-items: center; height: 35px; line-height: 1.1; }
         .rank-container { position: relative; background-color: #f0f0f0; height: 32px; width: 100%; border-radius: 4px; overflow: hidden; display: flex; align-items: center; margin-bottom: 2px; }
         .rank-fill { height: 100%; display: flex; align-items: center; padding-left: 8px; font-weight: bold; color: black; font-size: 0.72rem; white-space: nowrap; min-width: fit-content; }
-        .player-card { text-align: center; min-height: 100px; }
-        .player-img-round { border-radius: 50%; object-fit: cover; border: 2px solid #f0f2f6; background-color: white; }
+        .player-card { text-align: center; min-height: 120px; vertical-align: top; }
+        .player-img-round { border-radius: 50%; object-fit: cover; border: 2px solid #f0f2f6; background-color: white; margin-bottom: 5px; }
+        .player-name-text { font-size: 0.75rem; line-height: 1.2; display: block; height: 30px; overflow: hidden; }
         </style>
     """, unsafe_allow_html=True)
 
@@ -46,7 +47,7 @@ def vis_side():
     with col2:
         mode = st.radio("Vælg data-visning:", ["Fysiske Data (SS)", "Tekniske Data (Opta)"], horizontal=True)
 
-    # --- SQL Logik Konfiguration ---
+    # --- SQL Logik ---
     if mode == "Fysiske Data (SS)":
         table = "KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS"
         sql_metrics = """
@@ -54,33 +55,29 @@ def vis_side():
             AVG(SPRINTING) as M4, MAX(TOP_SPEED) as M5, AVG(NO_OF_HIGH_INTENSITY_RUNS) as M6
         """
         date_filter = "WHERE MATCH_DATE BETWEEN '2025-07-01' AND '2026-06-30'"
-        join_key = "PLAYER_NAME"
         metrics_labels = {
             "Volume": [("Total Distance", "M1_RANK"), ("Running Distance", "M2_RANK")],
             "Intensity": [("Hi Distance", "M3_RANK"), ("Sprint Distance", "M4_RANK")],
             "Explosive": [("Top Speed", "M5_RANK"), ("Accelerations", "M6_RANK")]
         }
     else:
-        # Forbedret Opta-logik baseret på din verificerede OPTA_EVENTS tabel
         table = "KLUB_HVIDOVREIF.AXIS.OPTA_EVENTS"
         sql_metrics = """
-            COUNT(CASE WHEN EVENT_TYPEID = 16 THEN 1 END) as M1, -- Mål
-            COUNT(CASE WHEN EVENT_TYPEID = 1 AND EVENT_OUTCOME = 1 THEN 1 END) as M2, -- Succesfulde afleveringer
-            COUNT(CASE WHEN EVENT_TYPEID = 15 THEN 1 END) as M3, -- Tacklinger
-            COUNT(CASE WHEN EVENT_TYPEID = 12 THEN 1 END) as M4, -- Clearance
-            COUNT(CASE WHEN EVENT_TYPEID = 2 THEN 1 END) as M5, -- Offsides
-            COUNT(CASE WHEN EVENT_TYPEID = 3 AND EVENT_OUTCOME = 1 THEN 1 END) as M6 -- Driblinger vundet
+            COUNT(CASE WHEN EVENT_TYPEID = 16 THEN 1 END) as M1,
+            COUNT(CASE WHEN EVENT_TYPEID = 1 AND EVENT_OUTCOME = 1 THEN 1 END) as M2,
+            COUNT(CASE WHEN EVENT_TYPEID = 15 THEN 1 END) as M3,
+            COUNT(CASE WHEN EVENT_TYPEID = 12 THEN 1 END) as M4,
+            COUNT(CASE WHEN EVENT_TYPEID = 2 THEN 1 END) as M5,
+            COUNT(CASE WHEN EVENT_TYPEID = 3 AND EVENT_OUTCOME = 1 THEN 1 END) as M6
         """
         date_filter = "" 
-        join_key = "PLAYER_OPTAUUID"
         metrics_labels = {
             "Offensivt": [("Mål", "M1_RANK"), ("Vundne Driblinger", "M6_RANK")],
             "Distribution": [("Succesfulde Afleveringer", "M2_RANK"), ("Offsides", "M5_RANK")],
             "Defensivt": [("Tacklinger", "M3_RANK"), ("Clearances", "M4_RANK")]
         }
 
-    # --- Den Store "Double-Check" Query ---
-    # Vi bruger QUALIFY ROW_NUMBER() til at sikre, at én person kun optræder én gang
+    # --- Query ---
     if mode == "Fysiske Data (SS)":
         query = f"""
         WITH LIGA_STATS AS (
@@ -135,17 +132,21 @@ def vis_side():
             if player_overrides:
                 df = df[df.apply(lambda row: player_overrides.get(row['WYS_NAME'], target_id) == target_id, axis=1)]
             
-            # Sortering: Vis de mest aktive spillere først (M2 er ofte god volumen-indikator)
             df = df.sort_values("M2_RANK").head(5)
             st.write("---")
             
-            # --- Render Spiller-kort ---
+            # --- Render Spiller-kort med FULDE navne ---
             cols = st.columns([2.5, 1, 1, 1, 1, 1])
             for i, (_, row) in enumerate(df.iterrows()):
                 with cols[i+1]:
                     img = row['IMG'] if row['IMG'] and str(row['IMG']) != 'None' else "https://via.placeholder.com/150"
-                    fuldt_navn = row['WYS_NAME']
-                    st.markdown(f'<div class="player-card"><img src="{img}" class="player-img-round" width="60" height="60"><br><small><b>{fuldt_navn}</b></small></div>', unsafe_allow_html=True)
+                    fuldt_navn = row['WYS_NAME'] # Her bruger vi nu det fulde navn
+                    st.markdown(f"""
+                        <div class="player-card">
+                            <img src="{img}" class="player-img-round" width="60" height="60"><br>
+                            <span class="player-name-text"><b>{fuldt_navn}</b></span>
+                        </div>
+                    """, unsafe_allow_html=True)
 
             # --- Render Rækker med Ranks ---
             for kat_navn, metrics in metrics_labels.items():
@@ -157,7 +158,6 @@ def vis_side():
                     
                     for i, (_, row) in enumerate(df.iterrows()):
                         rank_val = int(row[col_name]) if pd.notnull(row[col_name]) else 999
-                        # Bar-længde beregning (Rank 1 er top)
                         fill_width = max(15, (1 - (rank_val / 500)) * 100) if rank_val <= 500 else 10
                         color = "#22c55e" if rank_val <= 50 else "#facc15" if rank_val <= 150 else "#fca5a5"
                         
@@ -170,10 +170,10 @@ def vis_side():
                                 </div>
                             """, unsafe_allow_html=True)
         else:
-            st.info(f"Ingen data fundet for {valgt_navn} i de valgte tabeller.")
+            st.info(f"Ingen data fundet for {valgt_navn}.")
 
     except Exception as e:
-        st.error(f"Fejl i data-processering: {e}")
+        st.error(f"Fejl: {e}")
 
 if __name__ == "__main__":
     vis_side()
