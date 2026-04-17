@@ -11,7 +11,7 @@ def vis_side():
         st.error(f"Forbindelsesfejl: {e}")
         return
 
-    # --- CSS: Tvinger tekst på én linje og optimerer layout ---
+    # --- CSS: Rent scouting-look med Rank på én linje ---
     st.markdown("""
         <style>
         .category-header { font-weight: bold; font-size: 1rem; padding: 15px 0 5px 0; color: #111; border-bottom: 2px solid #eee; margin-top: 10px; }
@@ -21,10 +21,10 @@ def vis_side():
             height: 100%; 
             display: flex; 
             align-items: center; 
-            padding-left: 6px; 
+            padding-left: 8px; 
             font-weight: bold; 
             color: black; 
-            font-size: 0.72rem; 
+            font-size: 0.75rem; 
             white-space: nowrap; 
             min-width: fit-content;
         }
@@ -33,7 +33,7 @@ def vis_side():
         </style>
     """, unsafe_allow_html=True)
 
-    # 1. HOLDVALG - Dynamisk key baseret på tid for at undgå "Duplicate Key" fejl
+    # 1. HOLDVALG
     alle_hold = list(TEAMS.keys())
     col_sel, _ = st.columns([2, 2])
     with col_sel:
@@ -42,21 +42,20 @@ def vis_side():
             "Vælg hold:", 
             alle_hold, 
             index=alle_hold.index(initial_hold), 
-            key=f"phys_rank_selector_{int(time.time() / 100)}" # Skifter hver 100. sekund
+            key=f"phys_rank_final_{int(time.time() / 60)}" # Dynamisk key
         )
     
     target_wyid = TEAMS[valgt_navn]["team_wyid"]
 
-    # 2. SQL: Rettede kolonnenavne med anførselstegn (standard i Second Spectrum)
-    # Hvis de stadig fejler, er det fordi de præcise navne i din tabel er anderledes.
+    # 2. SQL: Rettet til dine faktiske kolonnenavne (JOGGING, RUNNING, SPRINTING)
     query = f"""
     WITH LIGA_STATS AS (
         SELECT 
             PLAYER_NAME,
             AVG(DISTANCE) as DIST,
-            AVG("RUNNING DISTANCE") as RUN_DIST,
+            AVG(JOGGING + RUNNING) as RUN_DIST,
             AVG("HIGH SPEED RUNNING") as HSR,
-            AVG("SPRINT DISTANCE") as SPRINT_DIST,
+            AVG(SPRINTING) as SPRINT_DIST,
             MAX(TOP_SPEED) as SPEED,
             AVG(NO_OF_HIGH_INTENSITY_RUNS) as ACCELS
         FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
@@ -104,12 +103,7 @@ def vis_side():
                 with cols[i+1]:
                     img_path = row['IMG'] if row['IMG'] and str(row['IMG']) != 'None' else "https://via.placeholder.com/150"
                     efternavn = row['PLAYER_NAME'].split()[-1]
-                    st.markdown(f"""
-                        <div class="player-card">
-                            <img src="{img_path}" class="player-img-round" width="60" height="60">
-                            <br><small><b>{efternavn}</b></small>
-                        </div>
-                    """, unsafe_allow_html=True)
+                    st.markdown(f'<div class="player-card"><img src="{img_path}" class="player-img-round" width="60" height="60"><br><small><b>{efternavn}</b></small></div>', unsafe_allow_html=True)
 
             # --- KATEGORIER ---
             metrics_map = {
@@ -136,11 +130,9 @@ def vis_side():
                     
                     for i, (_, row) in enumerate(df.iterrows()):
                         rank_val = int(row[col_name])
-                        fill_width = max(20, (1 - (rank_val / 300)) * 100) if rank_val <= 300 else 20
+                        fill_width = max(22, (1 - (rank_val / 300)) * 100) if rank_val <= 300 else 22
                         
-                        if rank_val <= 20: color = "#22c55e"
-                        elif rank_val <= 80: color = "#facc15"
-                        else: color = "#fca5a5"
+                        color = "#22c55e" if rank_val <= 20 else "#facc15" if rank_val <= 80 else "#fca5a5"
                         
                         with m_cols[i+1]:
                             st.markdown(f"""
@@ -153,6 +145,6 @@ def vis_side():
         else:
             st.info("Ingen match fundet.")
     except Exception as e:
-        st.error(f"SQL eller Datafejl: {e}")
+        st.error(f"Fejl: {e}")
 
 vis_side()
