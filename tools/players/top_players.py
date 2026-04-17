@@ -1,16 +1,12 @@
-import pandas as pd
+# tools/players/top_players.py
 import streamlit as st
+import pandas as pd
 from data.data_load import _get_snowflake_conn
 
-def hent_hold_performance(valgt_hold_navn, teams_dict):
+def hent_performance_data(wyid, opta_uuid):
     conn = _get_snowflake_conn()
     
-    # Trækker IDs fra din ordbog baseret på det hold, brugeren vælger
-    config = teams_dict[valgt_hold_navn]
-    wyid = config['team_wyid']
-    opta_uuid = config['opta_uuid']
-    ssid = config.get('ssid', '') # Vi tager ssid hvis den findes
-
+    # Den optimerede query med Fuzzy Match og unikt ID-tjek
     query = f"""
     WITH WYS_BASE AS (
         SELECT 
@@ -46,31 +42,38 @@ def hent_hold_performance(valgt_hold_navn, teams_dict):
         (o.O_FIRST = w.W_FIRST AND o.O_LAST = w.W_LAST) OR
         (o.MATCH_NAME ILIKE '%' || w.W_LAST || '%' AND o.MATCH_NAME ILIKE '%' || LEFT(w.W_FIRST, 1) || '%')
     )
-    -- QUALIFY fjerner dubletter (f.eks. Alexander Johansen) ved kun at tage den række med flest afleveringer
     QUALIFY ROW_NUMBER() OVER (PARTITION BY w.FULL_NAME ORDER BY o.PASSES DESC) = 1
     ORDER BY PASSES DESC
     """
-    
     return pd.read_sql(query, conn)
 
-# --- Streamlit UI eksempel ---
-def app(TEAMS):
-    st.title("Performance Oversigt")
+def vis_side(TEAMS):
+    st.header("🏆 Top 5: Spillere (Sæson 25/26)")
     
-    # Brugeren vælger hold (f.eks. 'Hvidovre')
-    valg = st.selectbox("Vælg dit hold", list(TEAMS.keys()))
+    # Vi henter værdierne for Hvidovre som standard, eller lader brugeren vælge
+    valgt_hold = st.selectbox("Vælg hold:", list(TEAMS.keys()), index=0)
     
-    if st.button("Hent Data"):
-        df = hent_hold_performance(valg, TEAMS)
+    team_cfg = TEAMS[valgt_hold]
+    
+    with st.spinner(f"Henter data for {valgt_hold}..."):
+        df = hent_performance_data(team_cfg['team_wyid'], team_cfg['opta_uuid'])
+    
+    if not df.empty:
+        # Vis Top 5 i kolonner med billeder
+        st.subheader("Flest afleveringer")
+        top_5 = df.head(5)
         
-        # Visning i Streamlit
-        st.dataframe(df[['FULL_NAME', 'GOALS', 'PASSES']])
-        
-        # Eksempel: Vis de 3 bedste spillere med billeder
-        top3 = df.head(3)
-        cols = st.columns(3)
-        for i, (idx, row) in enumerate(top3.iterrows()):
+        cols = st.columns(5)
+        for i, (idx, row) in enumerate(top_5.iterrows()):
             with cols[i]:
-                st.image(row['IMG_URL'], width=120)
-                st.write(f"**{row['FULL_NAME']}**")
-                st.write(f"Mål: {int(row['GOALS'])}")
+                # Vi bruger en placeholder hvis billedet mangler
+                img = row['IMG_URL'] if row['IMG_URL'] else "https://cdn.wyscout.com/photos/players/public/ndplayer_100x130.png"
+                st.image(img, use_container_width=True)
+                st.markdown(f"**{row['FULL_NAME']}**")
+                st.caption(f"⚽ {int(row['GOALS'])} mål")
+                st.metric("Passes", int(row['PASSES']))
+        
+        st.divider()
+        st.dataframe(df[['FULL_NAME', 'GOALS', 'PASSES']], use_container_width=True)
+    else:
+        st.warning("Ingen aktive spillere fundet for dette hold i 2026.")
