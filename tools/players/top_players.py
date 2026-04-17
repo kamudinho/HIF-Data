@@ -10,7 +10,7 @@ def vis_side():
         st.error(f"Forbindelsesfejl: {e}")
         return
 
-    # --- CSS: Scouting Layout ---
+    # --- CSS: Justeret til Rank-visning ---
     st.markdown("""
         <style>
         .category-header { font-weight: bold; font-size: 1.1rem; padding: 20px 0 10px 0; color: #111; border-bottom: 2px solid #eee; }
@@ -22,22 +22,15 @@ def vis_side():
         </style>
     """, unsafe_allow_html=True)
 
-    # 1. HOLDVALG med dynamisk key
     alle_hold = list(TEAMS.keys())
     col_sel, _ = st.columns([2, 2])
     with col_sel:
-        # Vi tilføjer valgt_navn til key'en for at gøre den unik
         initial_hold = "Hvidovre" if "Hvidovre" in alle_hold else alle_hold[0]
-        valgt_navn = st.selectbox(
-            "Vælg hold:", 
-            alle_hold, 
-            index=alle_hold.index(initial_hold),
-            key=f"phys_top5_selector_{initial_hold.lower()}" 
-        )
+        valgt_navn = st.selectbox("Vælg hold:", alle_hold, index=alle_hold.index(initial_hold), key=f"phys_rank_selector_{initial_hold.lower()}")
     
     target_wyid = TEAMS[valgt_navn]["team_wyid"]
 
-    # 2. SQL: Percent_Rank på tværs af HELE ligaen
+    # 2. SQL: Bruger nu RANK() på tværs af hele ligaen
     query = f"""
     WITH LIGA_STATS AS (
         SELECT 
@@ -45,17 +38,18 @@ def vis_side():
             AVG(DISTANCE) as DIST,
             AVG("HIGH SPEED RUNNING") as HSR,
             MAX(TOP_SPEED) as SPEED,
-            AVG(NO_OF_HIGH_INTENSITY_RUNS) as ACCELS
+            AVG(NO_OF_HIGH_INTENSITY_RUNS) as ACCELS,
+            COUNT(*) OVER () as TOTAL_PLAYERS -- Bruges til at beregne bar-længde
         FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
         WHERE MATCH_DATE BETWEEN '2025-07-01' AND '2026-06-30'
         GROUP BY PLAYER_NAME
     ),
     LIGA_RANKED AS (
         SELECT *,
-            PERCENT_RANK() OVER (ORDER BY DIST ASC) as DIST_PR,
-            PERCENT_RANK() OVER (ORDER BY HSR ASC) as HSR_PR,
-            PERCENT_RANK() OVER (ORDER BY SPEED ASC) as SPEED_PR,
-            PERCENT_RANK() OVER (ORDER BY ACCELS ASC) as ACCELS_PR
+            RANK() OVER (ORDER BY DIST DESC) as DIST_RANK,
+            RANK() OVER (ORDER BY HSR DESC) as HSR_RANK,
+            RANK() OVER (ORDER BY SPEED DESC) as SPEED_RANK,
+            RANK() OVER (ORDER BY ACCELS DESC) as ACCELS_RANK
         FROM LIGA_STATS
     ),
     VALGT_TRUP AS (
@@ -68,77 +62,61 @@ def vis_side():
     )
     SELECT t.IMG, r.*
     FROM VALGT_TRUP t
-    INNER JOIN LIGA_RANKED r ON (
-        t.FULL_NAME = r.PLAYER_NAME 
-        OR r.PLAYER_NAME LIKE '%' || t.FULL_NAME || '%'
-        OR t.FULL_NAME LIKE '%' || r.PLAYER_NAME || '%'
-    )
-    ORDER BY r.DIST DESC 
-    LIMIT 5
+    INNER JOIN LIGA_RANKED r ON (t.FULL_NAME = r.PLAYER_NAME OR r.PLAYER_NAME LIKE '%' || t.FULL_NAME || '%')
+    ORDER BY r.DIST DESC LIMIT 5
     """
 
     try:
         df = pd.read_sql(query, conn)
-        
         if not df.empty:
             st.write("---")
+            total_players = df['TOTAL_PLAYERS'].iloc[0] if 'TOTAL_PLAYERS' in df.columns else 500
             
-            # --- HEADER: SPILLER PROFILER ---
+            # --- HEADER ---
             cols = st.columns([2.5, 1, 1, 1, 1, 1])
             with cols[0]: st.write("")
-            
             for i, (_, row) in enumerate(df.iterrows()):
                 with cols[i+1]:
-                    img_url = row['IMG'] if row['IMG'] and str(row['IMG']) != 'None' else "https://via.placeholder.com/150"
-                    efternavn = row['PLAYER_NAME'].split()[-1]
-                    st.markdown(f"""
-                        <div class="player-card">
-                            <img src="{img_url}" class="player-img-round" width="65" height="65">
-                            <br><b>{efternavn}</b>
-                        </div>
-                    """, unsafe_allow_html=True)
+                    img = row['IMG'] if row['IMG'] and str(row['IMG']) != 'None' else "https://via.placeholder.com/150"
+                    st.markdown(f'<div class="player-card"><img src="{img}" class="player-img-round" width="65" height="65"><br><b>{row["PLAYER_NAME"].split()[-1]}</b></div>', unsafe_allow_html=True)
 
-            # --- KATEGORIER FRA DIT REFERENCEBILLEDE ---
-            kategorier = {
-                "Volume Metrics": [
-                    ("Distance Per 90", "DIST_PR")
-                ],
-                "High Intensity Metrics": [
-                    ("Hi Distance Per 90", "HSR_PR")
-                ],
-                "Explosive Metrics": [
-                    ("Top Speed", "SPEED_PR"),
-                    ("Accelerations", "ACCELS_PR")
-                ]
+            # --- KATEGORIER ---
+            metrics_map = {
+                "Volume Metrics": [("Distance Per 90", "DIST_RANK")],
+                "High Intensity Metrics": [("Hi Distance Per 90", "HSR_RANK")],
+                "Explosive Metrics": [("Top Speed", "SPEED_RANK"), ("Accelerations", "ACCELS_RANK")]
             }
 
-            # --- RENDER TABEL ---
-            for kat_navn, metrics in kategorier.items():
+            for kat_navn, metrics in metrics_map.items():
                 st.markdown(f'<div class="category-header">{kat_navn}</div>', unsafe_allow_html=True)
-                
-                for label, pr_col in metrics:
+                for label, col_name in metrics:
                     m_cols = st.columns([2.5, 1, 1, 1, 1, 1])
                     with m_cols[0]:
                         st.markdown(f'<div class="metric-label">{label}</div>', unsafe_allow_html=True)
                     
                     for i, (_, row) in enumerate(df.iterrows()):
-                        val_pct = int(row[pr_col] * 100)
+                        rank_val = int(row[col_name])
                         
-                        # Farver: Grøn (>80), Gul (>40), Rød (<40)
-                        if val_pct >= 80: color = "#22c55e"
-                        elif val_pct >= 40: color = "#facc15"
-                        else: color = "#fca5a5"
+                        # Beregn bar-længde (Inverteret, da Rank 1 skal have fuld bar)
+                        # Vi antager at top 100 er interessant, ellers bruger vi total_players
+                        fill_width = max(5, (1 - (rank_val / 150)) * 100) if rank_val <= 150 else 5
+                        
+                        # Farver baseret på rank
+                        if rank_val <= 20: color = "#22c55e"    # Top 20: Grøn
+                        elif rank_val <= 100: color = "#facc15" # Top 100: Gul
+                        else: color = "#fca5a5"                # Resten: Rød
                         
                         with m_cols[i+1]:
                             st.markdown(f"""
                                 <div class="rank-container">
-                                    <div class="rank-fill" style="width: {max(val_pct, 15)}%; background-color: {color};">
-                                        {val_pct}%
+                                    <div class="rank-fill" style="width: {fill_width}%; background-color: {color};">
+                                        Rank {rank_val}
                                     </div>
                                 </div>
                             """, unsafe_allow_html=True)
         else:
-            st.info(f"Ingen match fundet for {valgt_navn}.")
-
+            st.info("Ingen match fundet.")
     except Exception as e:
-        st.error(f"Fejl ved datahentning: {e}")
+        st.error(f"Fejl: {e}")
+
+vis_side()
