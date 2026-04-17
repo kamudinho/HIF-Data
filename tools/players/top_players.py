@@ -26,7 +26,7 @@ def vis_side():
         SELECT TEAM_WYID, IMAGEDATAURL as TEAM_LOGO
         FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_TEAMS
         WHERE TEAMNAME = '{safe_hold}'
-        LIMIT 10
+        LIMIT 1
     ),
     SPILLERE AS (
         -- Vi henter SHORTNAME og billedet for alle spillere på det specifikke hold
@@ -49,7 +49,7 @@ def vis_side():
     WHERE s.MATCH_DATE BETWEEN '2025-07-01' AND '2026-06-30'
     GROUP BY s.PLAYER_NAME
     ORDER BY DIST DESC
-    LIMIT 5
+    LIMIT 15
     """
 
     try:
