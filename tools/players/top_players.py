@@ -3,12 +3,13 @@ import pandas as pd
 from data.data_load import _get_snowflake_conn
 from data.utils.team_mapping import TEAMS
 
-# --- KONFIGURATION ---
+# --- KONFIGURATION FRA DINE TABEL-INFO ---
 DB = "KLUB_HVIDOVREIF.AXIS"
 CURRENT_SEASON = "2025/2026"
 LIGA_IDS = "('335', '328', '329', '43319', '331')"
 
 def vis_side():
+    # CSS til styling af kortene
     st.markdown("""
         <style>
         .player-header { 
@@ -29,8 +30,16 @@ def vis_side():
     conn = _get_snowflake_conn()
     if not conn: return
 
-    # 1. HOLDVALG (OPTA KILDE)
-    df_teams_raw = conn.query(f"SELECT DISTINCT CONTESTANTHOME_NAME, CONTESTANTHOME_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS}")
+    # 1. HENT HOLD FRA OPTA_MATCHINFO
+    # Vi bruger kolonnenavne fra din oversigt: CONTESTANTHOME_NAME, CONTESTANTHOME_OPTAUUID
+    query_teams = f"""
+        SELECT DISTINCT CONTESTANTHOME_NAME, CONTESTANTHOME_OPTAUUID 
+        FROM {DB}.OPTA_MATCHINFO 
+        WHERE TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS}
+    """
+    df_teams_raw = conn.query(query_teams)
+    
+    # Mapping logik (matcher UUID med din interne TEAMS mapping)
     mapping_lookup = {str(info['opta_uuid']).lower().replace('t', ''): name for name, info in TEAMS.items() if 'opta_uuid' in info}
 
     team_map = {}
@@ -43,7 +52,7 @@ def vis_side():
     valgt_hold = st.selectbox("Vælg Hold", sorted(list(team_map.keys())), label_visibility="collapsed")
     target_ssiid = TEAMS.get(valgt_hold, {}).get('ssid', '56fa29c7-3a48-4186-9d14-dbf45fbc78d9')
 
-    # 2. HENT TOP 5 FYSISKE DATA (SECOND SPECTRUM KILDE)
+    # 2. HENT TOP 5 FRA SECOND SPECTRUM
     sql_phys = f"""
         SELECT 
             p.PLAYER_NAME,
@@ -68,41 +77,49 @@ def vis_side():
             st.warning("Ingen fysiske data fundet.")
             return
 
-        # 3. HENT BILLEDER FRA WYSCOUT BASERET PÅ NAVN
-        # Vi laver en liste af navne til SQL-opslaget
+        # 3. HENT BILLEDER FRA WYSCOUT_PLAYERS
+        # Vi matcher på PLAYER_NAME i din WYSCOUT_PLAYERS tabel
         names_list = "('" + "','".join(df_top5['PLAYER_NAME'].tolist()) + "')"
         df_wyscout = conn.query(f"SELECT PLAYER_NAME, MAX(IMAGEDATAURL) as IMG FROM {DB}.WYSCOUT_PLAYERS WHERE PLAYER_NAME IN {names_list} GROUP BY 1")
 
+        # 4. GRID VISNING
         cols = st.columns(5)
-        max_vals = {"DIST": df_top5['DIST'].max(), "HSR": df_top5['HSR'].max(), "SPEED": df_top5['SPEED'].max(), "ACCELS": df_top5['ACCELS'].max()}
+        max_vals = {
+            "DIST": df_top5['DIST'].max(), 
+            "HSR": df_top5['HSR'].max(), 
+            "SPEED": df_top5['SPEED'].max(), 
+            "ACCELS": df_top5['ACCELS'].max()
+        }
 
         for i, (idx, row) in enumerate(df_top5.iterrows()):
             with cols[i]:
-                # Match billede på navn fra Wyscout-tabellen
+                # Find billede
                 img_url = "https://via.placeholder.com/150"
-                if df_wyscout is not None and not df_wyscout.empty:
+                if df_wyscout is not None:
                     match = df_wyscout[df_wyscout['PLAYER_NAME'] == row['PLAYER_NAME']]
                     if not match.empty and pd.notnull(match['IMG'].iloc[0]):
                         img_url = match['IMG'].iloc[0]
 
+                # Profil visning
                 st.image(img_url, use_container_width=True)
                 st.markdown(f"<div class='player-header'>{row['PLAYER_NAME']}</div>", unsafe_allow_html=True)
 
-                # Metrics
-                metrics = [
+                # Metrikker med bars
+                stats_to_show = [
                     ("Distance", row['DIST']/1000, max_vals['DIST']/1000, "km"),
                     ("HSR", row['HSR'], max_vals['HSR'], "m"),
                     ("Topfart", row['SPEED'], max_vals['SPEED'], "km/t"),
-                    ("Explosive", row['ACCELS'], max_vals['ACCELS'], "akt")
+                    ("Eksplosiv", row['ACCELS'], max_vals['ACCELS'], "akt")
                 ]
 
-                for label, val, m_val, unit in metrics:
+                for label, val, m_val, unit in stats_to_show:
                     pct = min(int((val / m_val) * 100), 100) if m_val > 0 else 0
-                    val_str = f"{val:.1f} {unit}" if unit != "m" else f"{int(val)} {unit}"
+                    val_display = f"{val:.1f}" if unit != "m" else f"{int(val)}"
+                    
                     st.markdown(f"""
                         <div class="stat-label">{label}</div>
                         <div class="bar-bg"><div class="bar-fill" style="width:{pct}%;"></div></div>
-                        <div class="val-text">{val_str}</div>
+                        <div class="val-text">{val_display} <span style="font-size:9px; color:#888;">{unit}</span></div>
                     """, unsafe_allow_html=True)
 
     except Exception as e:
