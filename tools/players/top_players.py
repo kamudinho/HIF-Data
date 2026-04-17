@@ -144,8 +144,8 @@ def vis_side():
             for i, (_, row) in enumerate(df.iterrows()):
                 with cols[i+1]:
                     img = row['IMG'] if row['IMG'] and str(row['IMG']) != 'None' else "https://via.placeholder.com/150"
-                    efternavn = row['WYS_NAME'].split()[-1]
-                    st.markdown(f'<div class="player-card"><img src="{img}" class="player-img-round" width="60" height="60"><br><small><b>{efternavn}</b></small></div>', unsafe_allow_html=True)
+                    fuldt_navn = row['WYS_NAME']
+                    st.markdown(f'<div class="player-card"><img src="{img}" class="player-img-round" width="60" height="60"><br><small><b>{fuldt_navn}</b></small></div>', unsafe_allow_html=True)
 
             # --- Render Rækker med Ranks ---
             for kat_navn, metrics in metrics_labels.items():
