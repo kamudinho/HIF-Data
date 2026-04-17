@@ -3,7 +3,7 @@ import pandas as pd
 from data.data_load import _get_snowflake_conn
 from data.utils.team_mapping import TEAMS
 
-# VIGTIGT: Sørg for at der ikke står "from tools.players import ..." herover.
+# --- VIGTIGT: SLET LINJEN "from tools.players import top_players" HVIS DEN STÅR HER ---
 
 def vis_side():
     try:
@@ -12,7 +12,7 @@ def vis_side():
         st.error(f"Forbindelsesfejl: {e}")
         return
 
-    # --- CSS: Sikrer én linje og korrekt skalering ---
+    # --- CSS: Tvinger tekst på én linje og optimerer layout ---
     st.markdown("""
         <style>
         .category-header { font-weight: bold; font-size: 1rem; padding: 15px 0 5px 0; color: #111; border-bottom: 2px solid #eee; margin-top: 10px; }
@@ -26,7 +26,7 @@ def vis_side():
             font-weight: bold; 
             color: black; 
             font-size: 0.72rem; 
-            white-space: nowrap; /* Tvinger teksten på én linje */
+            white-space: nowrap; /* Sikrer Rank X står på én linje */
             min-width: fit-content;
         }
         .player-card { text-align: center; min-height: 100px; }
@@ -43,14 +43,12 @@ def vis_side():
             "Vælg hold:", 
             alle_hold, 
             index=alle_hold.index(initial_hold), 
-            key="phys_rank_final_v2"
+            key="phys_rank_final_v3"
         )
     
     target_wyid = TEAMS[valgt_navn]["team_wyid"]
 
-    # 2. SQL: Henter alle metrics og beregner Rank på tværs af ligaen
-    # Hvis RUNNING_DISTANCE eller SPRINT_DISTANCE fejler i din Snowflake, 
-    # skal de omdøbes til de præcise kolonnenavne i din tabel.
+    # 2. SQL: Henter alle metrics og beregner Rank mod hele ligaen
     query = f"""
     WITH LIGA_STATS AS (
         SELECT 
@@ -113,7 +111,7 @@ def vis_side():
                         </div>
                     """, unsafe_allow_html=True)
 
-            # --- KATEGORIER: Kobling af alle tal ---
+            # --- DEFINITION AF KATEGORIER ---
             metrics_map = {
                 "Volume Metrics": [
                     ("Distance Per 90", "DIST_RANK"),
@@ -140,13 +138,12 @@ def vis_side():
                     for i, (_, row) in enumerate(df.iterrows()):
                         rank_val = int(row[col_name])
                         
-                        # Skalering af bar: Rank 1 er 100%, Rank 200 er tæt på 0.
-                        # min-width sikrer at teksten altid kan ses.
+                        # Skalering af bar: Rank 1 er 100%, Rank 250 er kort.
                         fill_width = max(18, (1 - (rank_val / 250)) * 100) if rank_val <= 250 else 18
                         
-                        # Farver: Grøn (Top 20), Gul (Top 80), Rød (Resten)
-                        if rank_val <= 20: color = "#22c55e"
-                        elif rank_val <= 80: color = "#facc15"
+                        # Farver: Grøn (Top 15), Gul (Top 70), Rød (Bund)
+                        if rank_val <= 15: color = "#22c55e"
+                        elif rank_val <= 70: color = "#facc15"
                         else: color = "#fca5a5"
                         
                         with m_cols[i+1]:
@@ -158,9 +155,8 @@ def vis_side():
                                 </div>
                             """, unsafe_allow_html=True)
         else:
-            st.info("Ingen match fundet mellem trup og liga-data.")
-
+            st.info("Ingen match fundet. Tjek spiller-navne i begge datakilder.")
     except Exception as e:
-        st.error(f"Fejl ved indlæsning: {e}")
+        st.error(f"SQL eller Datafejl: {e}")
 
 vis_side()
