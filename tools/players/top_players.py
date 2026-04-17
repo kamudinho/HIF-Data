@@ -13,10 +13,21 @@ def vis_side():
     # --- TOP BAR ---
     col1, col2 = st.columns([2, 2])
     with col1:
-        valgt_navn = st.selectbox("Vælg hold:", list(TEAMS.keys()), key="phys_tech_rank")
+        # Vi tilføjer et unikt prefix til key for at undgå 'multiple elements' fejlen
+        valgt_navn = st.selectbox(
+            "Vælg hold:", 
+            list(TEAMS.keys()), 
+            key=f"selectbox_top5_{valgt_navn if 'valgt_navn' in locals() else 'default'}"
+        )
         target_wyid = TEAMS[valgt_navn]["team_wyid"]
+        
     with col2:
-        mode = st.radio("Vælg data-visning:", ["Fysiske Data (P90)", "Tekniske Data (P90)"], horizontal=True)
+        mode = st.radio(
+            "Vælg data-visning:", 
+            ["Fysiske Data (P90)", "Tekniske Data (P90)"], 
+            horizontal=True,
+            key="radio_top5_mode"
+        )
 
     # --- SQL LOGIK ---
     if "Fysiske Data" in mode:
@@ -37,11 +48,19 @@ def vis_side():
             FROM LIGA_STATS
         ),
         VALGT_TRUP AS (
-            SELECT (TRIM(FIRSTNAME) || ' ' || TRIM(LASTNAME)) as FULL_NAME, MAX(IMAGEDATAURL) as IMG
-            FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_PLAYERS WHERE CURRENTTEAM_WYID = {target_wyid} GROUP BY 1
+            SELECT 
+                (TRIM(FIRSTNAME) || ' ' || TRIM(LASTNAME)) as FULL_NAME, 
+                MAX(IMAGEDATAURL) as IMG,
+                CASE 
+                    WHEN (TRIM(FIRSTNAME) || ' ' || TRIM(LASTNAME)) = 'Marius Enemark' THEN 7485 -- Hobro ID
+                    ELSE MAX(CURRENTTEAM_WYID) 
+                END as ACTUAL_TEAM_ID
+            FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_PLAYERS 
+            GROUP BY 1
         )
         SELECT t.IMG, t.FULL_NAME as WYS_NAME, r.* FROM VALGT_TRUP t
         INNER JOIN LIGA_RANKED r ON (t.FULL_NAME LIKE '%' || r.PLAYER_NAME || '%' OR r.PLAYER_NAME LIKE '%' || t.FULL_NAME || '%')
+        WHERE t.ACTUAL_TEAM_ID = {target_wyid}
         """
         metrics_labels = {
             "Volume (P90)": [("Total Dist.", "M1_RANK", "M1", "km"), ("Running", "M2_RANK", "M2", "km")],
@@ -49,6 +68,7 @@ def vis_side():
             "Top Speed": [("Max Speed", "M5_RANK", "M5", "km/t")]
         }
     else:
+        # (Tekniske Data SQL - Samme princip med Enemark override)
         query = f"""
         WITH PLAYER_STATS AS (
             SELECT PLAYER_OPTAUUID,
@@ -59,19 +79,26 @@ def vis_side():
             GROUP BY PLAYER_OPTAUUID
         ),
         LIGA_RANKED AS (
-            SELECT p.MATCH_NAME as PLAYER_NAME,
-                s.AVG_XG as M1, s.AVG_GOALS as M2,
+            SELECT p.MATCH_NAME as PLAYER_NAME, s.AVG_XG as M1, s.AVG_GOALS as M2,
                 RANK() OVER (ORDER BY s.AVG_XG DESC) as M1_RANK,
                 RANK() OVER (ORDER BY s.AVG_GOALS DESC) as M2_RANK
             FROM PLAYER_STATS s
             JOIN KLUB_HVIDOVREIF.AXIS.OPTA_PLAYERS p ON s.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
         ),
         VALGT_TRUP AS (
-            SELECT (TRIM(FIRSTNAME) || ' ' || TRIM(LASTNAME)) as FULL_NAME, MAX(IMAGEDATAURL) as IMG
-            FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_PLAYERS WHERE CURRENTTEAM_WYID = {target_wyid} GROUP BY 1
+            SELECT 
+                (TRIM(FIRSTNAME) || ' ' || TRIM(LASTNAME)) as FULL_NAME, 
+                MAX(IMAGEDATAURL) as IMG,
+                CASE 
+                    WHEN (TRIM(FIRSTNAME) || ' ' || TRIM(LASTNAME)) = 'Marius Enemark' THEN 7485 
+                    ELSE MAX(CURRENTTEAM_WYID) 
+                END as ACTUAL_TEAM_ID
+            FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_PLAYERS 
+            GROUP BY 1
         )
         SELECT t.IMG, t.FULL_NAME as WYS_NAME, r.* FROM VALGT_TRUP t
         INNER JOIN LIGA_RANKED r ON (t.FULL_NAME LIKE '%' || r.PLAYER_NAME || '%' OR r.PLAYER_NAME LIKE '%' || t.FULL_NAME || '%')
+        WHERE t.ACTUAL_TEAM_ID = {target_wyid}
         """
         metrics_labels = {
             "Attacking (P90)": [("xG p90", "M1_RANK", "M1", ""), ("Mål p90", "M2_RANK", "M2", "")]
@@ -99,19 +126,14 @@ def vis_side():
                     for i, (_, row) in enumerate(df.iterrows()):
                         rank = int(row[rank_col])
                         val = row[val_col]
+                        val_str = f"{val:.2f}"
                         
-                        # Formatering af tal
-                        val_str = f"{val:.2f}" if val >= 0.1 else f"{val:.3f}"
-                        
-                        # Farve logik (Traffic Light)
                         color = "#22c55e" if rank <= 20 else "#facc15" if rank <= 50 else "#ef4444"
-                        
-                        # Bar bredde beregning (Rank 1 = 100%, Rank 200 = 15%)
-                        bar_width = max(20, 100 - (rank / 2.5)) 
+                        bar_width = max(25, 100 - (rank / 2.5)) 
 
                         m_cols[i+1].markdown(f"""
                             <div style="background-color: #f0f2f6; border-radius: 4px; width: 100%; height: 26px; position: relative; margin-bottom: 4px;">
-                                <div style="background-color: {color}; width: {bar_width}%; height: 100%; border-radius: 4px; display: flex; align-items: center; padding-left: 4px; min-width: 50px; overflow: hidden;">
+                                <div style="background-color: {color}; width: {bar_width}%; height: 100%; border-radius: 4px; display: flex; align-items: center; padding-left: 4px; min-width: 60px; overflow: hidden;">
                                     <span style="color: black; font-size: 8.5px; font-weight: bold; white-space: nowrap;">
                                         R{rank} ({val_str})
                                     </span>
