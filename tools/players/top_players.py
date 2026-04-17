@@ -83,18 +83,19 @@ def vis_side():
         df_all = pd.read_sql(query, conn)
         
         # --- PYTHON FIREWALL & TRANSFERS ---
-        # 1. Håndtér Enemark (7485) og Westh (7481) manuelt
+        # Vi definerer de manuelle klubskifter her
         mask_enemark = df_all['WYS_NAME'].str.contains('Enemark', case=False, na=False)
         mask_westh = df_all['WYS_NAME'].str.contains('Westh', case=False, na=False)
-        mask_vestergaard = df_all['WYS_NAME'].str.contains('Vestergaard', case=False, na=False)
         mask_jalal = df_all['WYS_NAME'].str.contains('Jalal', case=False, na=False)
-
+        mask_vestergaard = df_all['WYS_NAME'].str.contains('Vestergaard', case=False, na=False)
         
-        # Sæt deres team_id manuelt i dataframe
-        df_all.loc[mask_enemark, 'WYS_TEAM_ID'] = 7485
-        df_all.loc[mask_westh, 'WYS_TEAM_ID'] = 7481
+        # Sæt de korrekte team_id'er manuelt i dataframe
+        df_all.loc[mask_enemark, 'WYS_TEAM_ID'] = 7485      # Hobro
+        df_all.loc[mask_westh, 'WYS_TEAM_ID'] = 7481       # Silkeborg
+        df_all.loc[mask_jalal, 'WYS_TEAM_ID'] = 7476       # Viborg
+        df_all.loc[mask_vestergaard, 'WYS_TEAM_ID'] = 7491 # Horsens
         
-        # 2. Filtrér nu så vi kun ser spillere for det valgte hold
+        # Filtrér nu datasættet, så det kun indeholder spillere for det hold, du har valgt i dropdown
         df = df_all[df_all['WYS_TEAM_ID'] == target_wyid].copy()
 
         if not df.empty:
