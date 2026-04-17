@@ -4,103 +4,81 @@ from data.data_load import _get_snowflake_conn
 from data.utils.team_mapping import TEAMS
 
 def vis_side():
-    try:
-        conn = _get_snowflake_conn()
-    except Exception as e:
-        st.error(f"Forbindelsesfejl: {e}")
-        return
+    conn = _get_snowflake_conn()
 
-    # 1. HOLDVALG FRA DIN TEAM_MAPPING
-    # Vi tager alle hold fra din fil
-    liga_hold = list(TEAMS.keys())
-    
-    col_sel, _ = st.columns([2, 2])
-    with col_sel:
-        default_idx = liga_hold.index("Hvidovre") if "Hvidovre" in liga_hold else 0
-        valgt_navn = st.selectbox("Vælg hold:", liga_hold, index=default_idx)
-    
-    # Hent ID og Logo direkte fra din mapping ordbog
-    team_info = TEAMS[valgt_navn]
-    target_wyid = team_info["team_wyid"]
-    logo_url = team_info["logo"]
+    # --- 1. HOLDVALG ---
+    alle_hold = list(TEAMS.keys())
+    valgt_navn = st.selectbox("Vælg hold:", alle_hold)
+    target_wyid = TEAMS[valgt_navn]["team_wyid"]
 
-    # 2. SQL: Din velfungerende logik gjort dynamisk
-    # Vi bruger target_wyid til at isolere truppen
-    query = f"""
-    WITH SELECTED_TRUP AS (
+    st.write(f"### Data-inspektion for {valgt_navn}")
+    
+    # Opret Tabs til at vise de forskellige trin i processen
+    tab1, tab2, tab3 = st.tabs(["📋 Trup (Wyscout/Opta)", "🏃 SS Fysisk Data", "🏆 Endelig Top 5"])
+
+    # --- TAB 1: TRUP QUERY ---
+    with tab1:
+        st.markdown("**Formål:** Henter alle navne-varianter og billeder for at sikre match.")
+        trup_sql = f"""
         SELECT 
-            (TRIM(FIRSTNAME) || ' ' || TRIM(LASTNAME)) as FULL_NAME,
-            SHORTNAME,
-            PLAYER_WYID,
-            MAX(IMAGEDATAURL) as IMG_URL
-        FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_PLAYERS 
-        WHERE CURRENTTEAM_WYID = {target_wyid}
-        GROUP BY 1, 2, 3
-    ),
-    SS_PHYSICAL AS (
+            (TRIM(w.FIRSTNAME) || ' ' || TRIM(w.LASTNAME)) as FULL_NAME,
+            w.SHORTNAME,
+            o.MATCH_NAME as OPTA_MATCH_NAME,
+            w.PLAYER_WYID,
+            w.IMAGEDATAURL
+        FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_PLAYERS w
+        LEFT JOIN KLUB_HVIDOVREIF.AXIS.OPTA_PLAYERS o ON w.PLAYER_WYID = o.PLAYER_WYID
+        WHERE w.CURRENTTEAM_WYID = {target_wyid}
+        """
+        df_trup = pd.read_sql(trup_sql, conn)
+        st.dataframe(df_trup, use_container_width=True)
+
+    # --- TAB 2: SS QUERY ---
+    with tab2:
+        st.markdown("**Formål:** Viser gennemsnitlig data fra Second Spectrum for ALLE spillere i ligaen.")
+        ss_sql = """
         SELECT 
             PLAYER_NAME,
             AVG(DISTANCE) as DIST, 
             AVG("HIGH SPEED RUNNING") as HSR, 
-            MAX(TOP_SPEED) as SPEED, 
-            AVG(NO_OF_HIGH_INTENSITY_RUNS) as ACCELS
+            MAX(TOP_SPEED) as SPEED
         FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
         WHERE MATCH_DATE BETWEEN '2025-07-01' AND '2026-06-30'
         GROUP BY PLAYER_NAME
-    )
-    SELECT 
-        w.FULL_NAME,
-        s.DIST,
-        s.HSR,
-        s.SPEED,
-        s.ACCELS,
-        COALESCE(w.IMG_URL, 'https://via.placeholder.com/150') as FINAL_IMAGE_URL
-    FROM SELECTED_TRUP w
-    INNER JOIN SS_PHYSICAL s ON (
-        -- Din stærke navne-match logik
-        s.PLAYER_NAME = w.FULL_NAME 
-        OR s.PLAYER_NAME = w.SHORTNAME
-        OR w.FULL_NAME LIKE '%' || s.PLAYER_NAME || '%'
-        OR s.PLAYER_NAME LIKE '%' || w.SHORTNAME || '%'
-    )
-    ORDER BY s.DIST DESC 
-    LIMIT 5
-    """
+        """
+        df_ss = pd.read_sql(ss_sql, conn)
+        st.dataframe(df_ss, use_container_width=True)
 
-    try:
-        df = pd.read_sql(query, conn)
-        df.columns = [x.upper() for x in df.columns]
-
-        if not df.empty:
-            st.write("---")
-            c_logo, c_text = st.columns([1, 6])
-            with c_logo:
-                st.image(logo_url, width=80)
-            with c_text:
-                st.subheader(f"Top 5: Fysiske Profiler | {valgt_navn}")
-
-            max_dist = df['DIST'].max()
-
-            for _, row in df.iterrows():
-                p1, p2 = st.columns([1, 5])
-                with p1:
-                    p_img = row['FINAL_IMAGE_URL']
-                    if not p_img or str(p_img) == 'None' or "ndplayer" in str(p_img):
-                        p_img = "https://via.placeholder.com/150"
-                    st.image(p_img, width=70)
-                with p2:
-                    st.markdown(f"**{row['FULL_NAME']}**")
-                    procent = (row['DIST'] / max_dist) * 100
-                    st.markdown(f"""
-                        <div style="background:#333; width:100%; height:12px; border-radius:6px;">
-                            <div style="background:#df003b; width:{procent}%; height:12px; border-radius:6px;"></div>
-                        </div>
-                    """, unsafe_allow_html=True)
-                    km = row['DIST'] / 1000
-                    st.caption(f"{km:.2f} km | {int(row['HSR'])}m HSR | {row['SPEED']} km/t max")
-                    st.write("")
-        else:
-            st.info(f"Ingen kampdata fundet for {valgt_navn} (WYID: {target_wyid}).")
-
-    except Exception as e:
-        st.error(f"Fejl ved datahentning: {e}")
+    # --- TAB 3: JOINED QUERY (RESULTATET) ---
+    with tab3:
+        st.markdown("**Formål:** Det endelige resultat hvor vi kobler truppen med fysisk data.")
+        # Her bruger vi din store kombinerede query
+        final_sql = f"""
+        WITH HVI_TRUP AS ({trup_sql}),
+             SS_PHYSICAL AS ({ss_sql})
+        SELECT 
+            w.FULL_NAME,
+            s.*,
+            COALESCE(w.IMAGEDATAURL, 'https://via.placeholder.com/150') as FINAL_IMAGE_URL
+        FROM HVI_TRUP w
+        INNER JOIN SS_PHYSICAL s ON (
+            s.PLAYER_NAME = w.FULL_NAME 
+            OR s.PLAYER_NAME = w.SHORTNAME
+            OR s.PLAYER_NAME = w.OPTA_MATCH_NAME
+            OR w.FULL_NAME LIKE '%' || s.PLAYER_NAME || '%'
+            OR s.PLAYER_NAME LIKE '%' || w.SHORTNAME || '%'
+        )
+        ORDER BY s.DIST DESC 
+        LIMIT 5
+        """
+        df_final = pd.read_sql(final_sql, conn)
+        
+        # Vis de visuelle bars (din eksisterende visning)
+        for _, row in df_final.iterrows():
+            col1, col2 = st.columns([1, 4])
+            with col1:
+                st.image(row['FINAL_IMAGE_URL'], width=60)
+            with col2:
+                st.write(f"**{row['FULL_NAME']}**")
+                st.progress(min(row['DIST']/12000, 1.0)) # Eksempel bar
+                st.caption(f"{row['DIST']:.0f}m | {row['SPEED']} km/t")
