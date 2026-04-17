@@ -197,7 +197,16 @@ try:
             im.vis_side()
         elif sel == "Top 5: Spillere":
             import tools.players.top_players as tp
-            tp.vis_side()
+            
+            # 1. Vi skal bruge en session til Snowflake
+            conn = _get_snowflake_conn()
+            
+            # 2. Brugeren skal vælge et hold, så vi har 'valgt_hold_navn'
+            # Du kan evt. bruge en liste over alle hold her
+            valgt_hold = st.selectbox("Vælg hold til Top 5", ["Hvidovre", "Kolding IF", "FC Fredericia", "OB", "ACH"])
+            
+            # 3. NU sender vi de 2 argumenter med, som funktionen kræver
+            tp.vis_side(conn, valgt_hold)
 
 
 except Exception as e:
