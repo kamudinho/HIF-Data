@@ -16,7 +16,7 @@ def vis_side():
         valgt_navn = st.selectbox(
             "Vælg hold:", 
             list(TEAMS.keys()), 
-            key="sb_top5_team_stable" 
+            key="sb_top5_final_stable" 
         )
         target_wyid = TEAMS[valgt_navn]["team_wyid"]
         
@@ -25,10 +25,10 @@ def vis_side():
             "Vælg data-visning:", 
             ["Fysiske Data (P90)", "Tekniske Data (P90)"], 
             horizontal=True,
-            key="radio_top5_mode_stable"
+            key="radio_top5_final_stable"
         )
 
-    # --- MANUEL OVERRIDE LOGIK ---
+    # --- MANUEL TRANSFER LOGIK ---
     # Enemark -> Hobro (7485), Westh -> Silkeborg (7481)
     transfer_logic = """
         CASE 
@@ -109,41 +109,52 @@ def vis_side():
     try:
         df = pd.read_sql(query, conn)
         if not df.empty:
+            # Sortér så de bedste p90-præstationer (laveste rank) er først
             df = df.sort_values("M1_RANK").head(5)
             
             st.write("---")
+            # Billeder og navne
             cols = st.columns([2.5, 1, 1, 1, 1, 1])
             for i, (_, row) in enumerate(df.iterrows()):
                 with cols[i+1]:
                     img = row['IMG'] if row['IMG'] and str(row['IMG']) != 'None' else "https://cdn.wyscout.com/photos/players/public/ndplayer_100x130.png"
-                    st.markdown(f'<div style="text-align:center"><img src="{img}" style="border-radius:50%" width="60"><br><small><b>{row["WYS_NAME"].split()[-1]}</b></small></div>', unsafe_allow_html=True)
+                    st.markdown(f'''
+                        <div style="text-align:center">
+                            <img src="{img}" style="border-radius:50%; border: 1px solid #eee;" width="65">
+                            <div style="font-size: 11px; font-weight: bold; margin-top: 5px;">{row["WYS_NAME"].split()[-1]}</div>
+                        </div>
+                    ''', unsafe_allow_html=True)
 
+            # Kategorier og Bars
             for kat, metrics in metrics_labels.items():
-                st.markdown(f'<div style="margin-top:15px; font-weight:bold; font-size: 14px;">{kat}</div>', unsafe_allow_html=True)
+                st.markdown(f'<div style="margin-top:20px; font-weight:bold; font-size: 13px;">{kat}</div>', unsafe_allow_html=True)
                 for label, rank_col, val_col in metrics:
                     m_cols = st.columns([2.5, 1, 1, 1, 1, 1])
-                    m_cols[0].caption(label)
+                    m_cols[0].markdown(f'<div style="font-size: 12px; color: #666; padding-top: 5px;">{label}</div>', unsafe_allow_html=True)
                     
                     for i, (_, row) in enumerate(df.iterrows()):
                         rank = int(row[rank_col])
                         val = row[val_col]
                         val_str = f"{val:.2f}"
                         
+                        # Trafiklys farver
                         color = "#22c55e" if rank <= 20 else "#facc15" if rank <= 50 else "#ef4444"
-                        bar_width = max(30, 100 - (rank / 2.5)) 
+                        
+                        # Bar bredde logik
+                        bar_width = max(35, 100 - (rank / 2.5)) 
 
                         m_cols[i+1].markdown(f"""
-                            <div style="background-color: #f0f2f6; border-radius: 4px; width: 100%; height: 24px; position: relative; margin-bottom: 4px;">
-                                <div style="background-color: {color}; width: {bar_width}%; height: 100%; border-radius: 4px; display: flex; align-items: center; padding-left: 4px; overflow: hidden;">
-                                    <span style="color: black; font-size: 8px; font-weight: bold; white-space: nowrap;">
+                            <div style="background-color: #f0f2f6; border-radius: 4px; width: 100%; height: 26px; position: relative; margin-top: 4px;">
+                                <div style="background-color: {color}; width: {bar_width}%; height: 100%; border-radius: 4px; display: flex; align-items: center; padding-left: 6px; overflow: hidden;">
+                                    <span style="color: black; font-size: 8.5px; font-weight: bold; white-space: nowrap;">
                                         R{rank} ({val_str})
                                     </span>
                                 </div>
                             </div>
                         """, unsafe_allow_html=True)
         else:
-            st.warning("Ingen data fundet for det valgte hold.")
+            st.info("Ingen spillere fundet for det valgte hold.")
     except Exception as e:
-        st.error(f"Fejl ved indlæsning: {e}")
+        st.error(f"Fejl ved rendering: {e}")
 
 vis_side()
