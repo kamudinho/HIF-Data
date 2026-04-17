@@ -40,40 +40,45 @@ def vis_side():
     # --- TOP BAR ---
     col1, col2 = st.columns([2, 2])
     with col1:
-        valgt_navn = st.selectbox("Vælg hold:", list(TEAMS.keys()), key="team_sel_final_v7")
+        valgt_navn = st.selectbox("Vælg hold:", list(TEAMS.keys()), key="team_sel_vfinal")
         target_id = TEAMS[valgt_navn]["team_wyid"]
     with col2:
         mode = st.radio("Vælg data-visning:", ["Fysiske Data", "Tekniske Data"], horizontal=True)
 
-    # --- DYNAMISKE METRICS OG TABELNAVNE ---
+    # --- SQL KONFIGURATION ---
     if mode == "Fysiske Data":
         table = "KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS"
         sql_metrics = """
             AVG(DISTANCE) as M1, AVG(RUNNING) as M2, AVG("HIGH SPEED RUNNING") as M3,
             AVG(SPRINTING) as M4, MAX(TOP_SPEED) as M5, AVG(NO_OF_HIGH_INTENSITY_RUNS) as M6
         """
+        # Second Spectrum bruger MATCH_DATE
+        date_filter = "WHERE MATCH_DATE BETWEEN '2025-07-01' AND '2026-06-30'"
         metrics_labels = {
             "Volume": [("Total Distance", "M1_RANK"), ("Running Distance", "M2_RANK")],
             "Intensity": [("Hi Distance", "M3_RANK"), ("Sprint Distance", "M4_RANK")],
             "Explosive": [("Top Speed", "M5_RANK"), ("Accelerations", "M6_RANK")]
         }
     else:
-        # RETTET: Bruger nu den korrekte Wyscout tabel og typiske kolonnenavne
         table = "KLUB_HVIDOVREIF.AXIS.WYSCOUT_PLAYERS_STATS" 
         sql_metrics = """
             AVG(GOALS_TOTAL) as M1, AVG(ASSISTS_TOTAL) as M2, AVG(DRIBbles_TOTAL) as M3,
             AVG(PASSES_ACCURATE_PERCENT) as M4, AVG(RECOVERIES_TOTAL) as M5, AVG(DUELS_WON_PERCENT) as M6
         """
+        # Wyscout stats tabellen bruger ofte SEASONNAME
+        date_filter = "WHERE SEASONNAME = '2025/2026'"
         metrics_labels = {
             "Attacking": [("Goals Per 90", "M1_RANK"), ("Assists Per 90", "M2_RANK")],
             "On the Ball": [("Dribbles", "M3_RANK"), ("Passing %", "M4_RANK")],
             "Defensive": [("Recoveries", "M5_RANK"), ("Duels Won %", "M6_RANK")]
         }
 
+    # Opdateret query med korrekte tabel-referencer
     query = f"""
     WITH LIGA_STATS AS (
-        SELECT PLAYER_NAME, {sql_metrics} FROM {table}
-        WHERE SEASONNAME = '2025/2026'
+        SELECT PLAYER_NAME, {sql_metrics} 
+        FROM {table}
+        {date_filter}
         GROUP BY PLAYER_NAME
     ),
     LIGA_RANKED AS (
@@ -85,10 +90,15 @@ def vis_side():
     ),
     VALGT_TRUP AS (
         SELECT (TRIM(FIRSTNAME) || ' ' || TRIM(LASTNAME)) as FULL_NAME, MAX(IMAGEDATAURL) as IMG
-        FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_PLAYERS WHERE CURRENTTEAM_WYID = {target_id} GROUP BY 1
+        FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_PLAYERS 
+        WHERE CURRENTTEAM_WYID = {target_id} 
+        GROUP BY 1
     )
     SELECT t.IMG, t.FULL_NAME as WYS_NAME, r.* FROM VALGT_TRUP t
-    INNER JOIN LIGA_RANKED r ON (t.FULL_NAME LIKE '%' || r.PLAYER_NAME || '%' OR r.PLAYER_NAME LIKE '%' || t.FULL_NAME || '%')
+    INNER JOIN LIGA_RANKED r ON (
+        t.FULL_NAME LIKE '%' || r.PLAYER_NAME || '%' 
+        OR r.PLAYER_NAME LIKE '%' || t.FULL_NAME || '%'
+    )
     """
 
     try:
@@ -101,6 +111,7 @@ def vis_side():
             df = df.sort_values("M1_RANK").head(5)
             st.write("---")
             
+            # --- VISNING ---
             cols = st.columns([2.5, 1, 1, 1, 1, 1])
             for i, (_, row) in enumerate(df.iterrows()):
                 with cols[i+1]:
@@ -119,7 +130,7 @@ def vis_side():
                         with m_cols[i+1]:
                             st.markdown(f'<div class="rank-container"><div class="rank-fill" style="width: {fill_width}%; background-color: {color};">Rank {rank_val}</div></div>', unsafe_allow_html=True)
         else:
-            st.info("Ingen data fundet. Tjek om tabel- eller kolonnenavne er korrekte.")
+            st.info("Ingen data fundet for det valgte hold.")
     except Exception as e:
         st.error(f"SQL fejl: {e}")
 
