@@ -48,7 +48,7 @@ def vis_side():
         mode = st.radio("Vælg data-visning:", ["Fysiske Data (SS)", "Tekniske Data (Opta)"], horizontal=True)
 
     # --- Periode-filter (1. Jan 2026 til dags dato) ---
-    start_dato_2026 = "2026-01-01"
+    start_dato_2026 = "2026-03-01"
 
     # --- SQL Logik Konfiguration ---
     if mode == "Fysiske Data (SS)":
