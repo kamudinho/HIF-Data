@@ -18,7 +18,7 @@ def vis_side():
     with col2:
         mode = st.radio("Vælg data-visning:", ["Fysiske Data (P90)", "Tekniske Data (P90)"], horizontal=True)
 
-    # --- SQL LOGIK (P90) ---
+    # --- SQL LOGIK ---
     if "Fysiske Data" in mode:
         query = f"""
         WITH LIGA_STATS AS (
@@ -49,7 +49,6 @@ def vis_side():
             "Top Speed": [("Max Speed", "M5_RANK", "M5", "km/t")]
         }
     else:
-        # Her bruger vi gennemsnit pr. kamp som P90-indikator
         query = f"""
         WITH PLAYER_STATS AS (
             SELECT PLAYER_OPTAUUID,
@@ -75,7 +74,7 @@ def vis_side():
         INNER JOIN LIGA_RANKED r ON (t.FULL_NAME LIKE '%' || r.PLAYER_NAME || '%' OR r.PLAYER_NAME LIKE '%' || t.FULL_NAME || '%')
         """
         metrics_labels = {
-            "Attacking (P90)": [("xG P90", "M1_RANK", "M1", "xG"), ("Goals P90", "M2_RANK", "M2", "stk")]
+            "Attacking (P90)": [("xG p90", "M1_RANK", "M1", ""), ("Mål p90", "M2_RANK", "M2", "")]
         }
 
     # --- RENDER ---
@@ -89,10 +88,10 @@ def vis_side():
             for i, (_, row) in enumerate(df.iterrows()):
                 with cols[i+1]:
                     img = row['IMG'] if row['IMG'] and str(row['IMG']) != 'None' else "https://cdn.wyscout.com/photos/players/public/ndplayer_100x130.png"
-                    st.markdown(f'<div style="text-align:center"><img src="{img}" style="border-radius:50%" width="60"><br><small><b>{row["PLAYER_NAME"].split()[-1]}</b></small></div>', unsafe_allow_html=True)
+                    st.markdown(f'<div style="text-align:center"><img src="{img}" style="border-radius:50%" width="60"><br><small><b>{row["WYS_NAME"].split()[-1]}</b></small></div>', unsafe_allow_html=True)
 
             for kat, metrics in metrics_labels.items():
-                st.markdown(f'**{kat}**')
+                st.markdown(f'<div style="margin-top:20px; font-weight:bold;">{kat}</div>', unsafe_allow_html=True)
                 for label, rank_col, val_col, unit in metrics:
                     m_cols = st.columns([2.5, 1, 1, 1, 1, 1])
                     m_cols[0].caption(label)
@@ -100,19 +99,20 @@ def vis_side():
                     for i, (_, row) in enumerate(df.iterrows()):
                         rank = int(row[rank_col])
                         val = row[val_col]
+                        
+                        # Formatering af tal
                         val_str = f"{val:.2f}" if val >= 0.1 else f"{val:.3f}"
                         
-                        # Farve logik
+                        # Farve logik (Traffic Light)
                         color = "#22c55e" if rank <= 20 else "#facc15" if rank <= 50 else "#ef4444"
                         
-                        # Dynamisk bredde (omvendt af rank)
-                        # Hvis rank 1, bredde 100%. Hvis rank 200, bredde 10%.
-                        bar_width = max(15, 100 - (rank / 3)) 
+                        # Bar bredde beregning (Rank 1 = 100%, Rank 200 = 15%)
+                        bar_width = max(20, 100 - (rank / 2.5)) 
 
                         m_cols[i+1].markdown(f"""
-                            <div style="background-color: #f0f2f6; border-radius: 4px; width: 100%; height: 28px; position: relative; margin-bottom: 8px;">
-                                <div style="background-color: {color}; width: {bar_width}%; height: 100%; border-radius: 4px; display: flex; align-items: center; padding-left: 5px; min-width: 45px;">
-                                    <span style="color: black; font-size: 9px; font-weight: bold; white-space: nowrap;">
+                            <div style="background-color: #f0f2f6; border-radius: 4px; width: 100%; height: 26px; position: relative; margin-bottom: 4px;">
+                                <div style="background-color: {color}; width: {bar_width}%; height: 100%; border-radius: 4px; display: flex; align-items: center; padding-left: 4px; min-width: 50px; overflow: hidden;">
+                                    <span style="color: black; font-size: 8.5px; font-weight: bold; white-space: nowrap;">
                                         R{rank} ({val_str})
                                     </span>
                                 </div>
