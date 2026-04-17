@@ -23,9 +23,7 @@ def vis_side():
         </style>
     """, unsafe_allow_html=True)
 
-    # --- Kontrolpanel ---
-    st.title("Performance Hub 2026")
-    
+    # --- Kontrolpanel ---    
     col_ctrl1, col_ctrl2 = st.columns([2, 2])
     with col_ctrl1:
         valgt_hold_navn = st.selectbox("Vælg hold:", list(TEAMS.keys()), index=0)
@@ -36,13 +34,12 @@ def vis_side():
 
     # --- SQL Logik ---
     if datakilde == "OPTA (Teknisk)":
-        # OPTA Query
         metrics_def = {
             "Offensivt": [("Mål", "M1_RANK")],
             "Distribution": [("Succesf. Afleveringer", "M2_RANK")],
             "Defensivt": [("Tacklinger", "M3_RANK")]
         }
-        query = f"""
+        query_base = f"""
         WITH SELECTED_TEAM AS (
             SELECT CONTESTANT_OPTAUUID FROM KLUB_HVIDOVREIF.AXIS.OPTA_TEAMS 
             WHERE NAME = '{valgt_hold_navn}' OR OFFICIALNAME = '{valgt_hold_navn}' LIMIT 1
@@ -67,25 +64,27 @@ def vis_side():
         )
         """
     else:
-        # Second Spectrum Query
+        # Second Spectrum sektion rettet med dine specifikke kolonnenavne
         metrics_def = {
             "Løbe-volumen": [("Total Distance", "M1_RANK"), ("Højintakt løb", "M2_RANK")],
             "Sprints": [("Sprint Distance", "M3_RANK"), ("Top Speed", "M4_RANK")]
         }
-        query = f"""
+        query_base = f"""
         WITH STATS AS (
-            SELECT PLAYER_NAME,
+            SELECT 
+                PLAYER_NAME,
+                "optaId" as PLAYER_OPTAID,
                 AVG(DISTANCE) as M1,
                 AVG("HIGH SPEED RUNNING") as M2,
                 AVG(SPRINTING) as M3,
                 MAX(TOP_SPEED) as M4
             FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
-            WHERE DATE >= '2026-01-01'
-              AND TEAM_NAME = '{valgt_hold_navn}'
-            GROUP BY PLAYER_NAME
+            WHERE MATCH_DATE >= '2026-01-01'
+              AND MATCH_TEAMS LIKE '%{valgt_hold_navn}%'
+            GROUP BY PLAYER_NAME, "optaId"
         ),
         LIGA_RANKED AS (
-            SELECT PLAYER_NAME as P_NAME, s.*,
+            SELECT PLAYER_NAME as P_NAME, PLAYER_OPTAID, s.*,
                 RANK() OVER (ORDER BY s.M1 DESC NULLS LAST) as M1_RANK,
                 RANK() OVER (ORDER BY s.M2 DESC NULLS LAST) as M2_RANK,
                 RANK() OVER (ORDER BY s.M3 DESC NULLS LAST) as M3_RANK,
@@ -95,15 +94,24 @@ def vis_side():
         """
 
     # --- Samling af data (Wyscout Join) ---
-    final_query = query + f"""
+    # Vi bruger r.P_NAME (efternavns-match) som backup, hvis ID ikke findes
+    final_query = query_base + f"""
     , VALGT_TRUP_WYS AS (
-        SELECT TRIM(LASTNAME) as L_NAME, (TRIM(FIRSTNAME) || ' ' || TRIM(LASTNAME)) as FULL_NAME, MAX(IMAGEDATAURL) as IMG
-        FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_PLAYERS WHERE CURRENTTEAM_WYID = {target_wyid} GROUP BY 1, 2
+        SELECT 
+            TRIM(LASTNAME) as L_NAME, 
+            (TRIM(FIRSTNAME) || ' ' || TRIM(LASTNAME)) as FULL_NAME, 
+            MAX(IMAGEDATAURL) as IMG
+        FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_PLAYERS 
+        WHERE CURRENTTEAM_WYID = {target_wyid} 
+        GROUP BY 1, 2
     )
-    SELECT DISTINCT t.IMG, t.FULL_NAME as WYS_NAME, r.* FROM VALGT_TRUP_WYS t
+    SELECT DISTINCT 
+        t.IMG, 
+        t.FULL_NAME as WYS_NAME, 
+        r.* FROM VALGT_TRUP_WYS t
     INNER JOIN LIGA_RANKED r ON (r.P_NAME LIKE '%' || t.L_NAME || '%')
-    QUALIFY ROW_NUMBER() OVER (PARTITION BY t.FULL_NAME ORDER BY r.M2 DESC) = 1
-    ORDER BY r.M2 DESC
+    QUALIFY ROW_NUMBER() OVER (PARTITION BY t.FULL_NAME ORDER BY r.M1 DESC) = 1
+    ORDER BY r.M1 DESC
     """
 
     try:
@@ -112,14 +120,14 @@ def vis_side():
         if not df.empty:
             display_df = df.head(5)
             
-            # --- Spiller Billeder ---
+            # --- Render Spiller Kort ---
             cols = st.columns([2.5, 1, 1, 1, 1, 1])
             for i, (_, row) in enumerate(display_df.iterrows()):
                 with cols[i+1]:
                     img = row['IMG'] if row['IMG'] and str(row['IMG']) != 'None' else "https://via.placeholder.com/150"
                     st.markdown(f'<div class="player-card"><img src="{img}" class="player-img-round" width="70" height="70"><br><span class="player-name-text">{row["WYS_NAME"]}</span></div>', unsafe_allow_html=True)
 
-            # --- Ranks ---
+            # --- Render Ranks ---
             for kat, items in metrics_def.items():
                 st.markdown(f'<div class="category-header">{kat}</div>', unsafe_allow_html=True)
                 for label, r_col in items:
@@ -132,7 +140,7 @@ def vis_side():
                         with m_cols[i+1]:
                             st.markdown(f'<div class="rank-container"><div class="rank-fill" style="width: {width}%; background-color: {color};">R {rank}</div></div>', unsafe_allow_html=True)
         else:
-            st.warning(f"Ingen data fundet for {valgt_hold_navn} i 2026 via {datakilde}.")
+            st.warning(f"Ingen data fundet for {valgt_hold_navn} i 2026.")
 
     except Exception as e:
         st.error(f"Fejl ved datahentning: {e}")
