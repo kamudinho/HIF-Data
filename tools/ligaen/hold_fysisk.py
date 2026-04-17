@@ -57,6 +57,11 @@ def vis_side():
         # Hent data ind i Pandas
         df = pd.read_sql(query, conn)
 
+        st.write(f"Søger efter hold: {valgt_hold}")
+        st.write(f"Antal rækker fundet: {len(df)}")
+        if not df.empty:
+            st.write(df.head()) # Vis de første par rækker
+
         if not df.empty:
             # Tving alle kolonnenavne til UPPERCASE for at undgå KeyError
             df.columns = [x.upper() for x in df.columns]
