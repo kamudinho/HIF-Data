@@ -10,7 +10,7 @@ def vis_side():
         st.error(f"Forbindelsesfejl: {e}")
         return
 
-    # 1. HOLDVALG: Trækker navne fra din TEAMS mapping
+    # 1. HOLDVALG
     liga_hold = [name for name, info in TEAMS.items() if info.get("league") == "1. Division"]
     
     col_sel, _ = st.columns([2, 2])
@@ -18,21 +18,21 @@ def vis_side():
         default_idx = liga_hold.index("Hvidovre") if "Hvidovre" in liga_hold else 0
         valgt_navn = st.selectbox("Vælg hold:", liga_hold, index=default_idx)
     
-    # Hent ID og Logo direkte fra din mapping
     team_info = TEAMS[valgt_navn]
     target_wyid = team_info["team_wyid"]
     logo_url = team_info["logo"]
 
-    # 2. SQL: Den direkte kæde
-    # Vi bruger target_wyid til at finde truppen i OPTA_PLAYERS, 
-    # og derefter MATCH_NAME til at finde deres løbedata.
+    # 2. SQL: Vi fjerner IMAGEDATAURL fra Opta-delen og henter det fra Wyscout i stedet
     query = f"""
     WITH TRUP AS (
+        -- Vi henter MATCH_NAME fra Opta for at ramme Second Spectrum rigtigt
+        -- Vi joiner med Wyscout herinde for at få fat i billedet (PLAYER_IMG)
         SELECT 
-            MATCH_NAME, 
-            IMAGEDATAURL AS PLAYER_IMG
-        FROM KLUB_HVIDOVREIF.AXIS.OPTA_PLAYERS
-        WHERE CURRENTTEAM_WYID = {target_wyid}
+            o.MATCH_NAME, 
+            w.IMAGEDATAURL AS PLAYER_IMG
+        FROM KLUB_HVIDOVREIF.AXIS.OPTA_PLAYERS o
+        LEFT JOIN KLUB_HVIDOVREIF.AXIS.WYSCOUT_PLAYERS w ON o.PLAYER_OPTAUUID = w.PLAYER_OPTAUUID
+        WHERE o.CURRENTTEAM_WYID = {target_wyid}
     )
     SELECT 
         s.PLAYER_NAME,
@@ -65,7 +65,10 @@ def vis_side():
             for _, row in df.iterrows():
                 p1, p2 = st.columns([1, 5])
                 with p1:
-                    p_img = row['IMG'] if row['IMG'] and str(row['IMG']) != 'None' else "https://via.placeholder.com/150"
+                    # Billed-fallback hvis URL'en er tom eller forkert
+                    p_img = row['IMG']
+                    if not p_img or str(p_img) == 'None' or "ndplayer" in str(p_img):
+                        p_img = "https://via.placeholder.com/150"
                     st.image(p_img, width=70)
                 with p2:
                     st.markdown(f"**{row['PLAYER_NAME']}**")
@@ -79,7 +82,7 @@ def vis_side():
                     st.caption(f"{km:.2f} km gns. | {int(row['HSR'])}m HSR | {row['SPEED']} km/t max")
                     st.write("")
         else:
-            st.warning(f"Ingen kampdata fundet for spillere på {valgt_navn} (ID: {target_wyid}).")
+            st.warning(f"Ingen kampdata fundet for spillere på {valgt_navn}.")
 
     except Exception as e:
         st.error(f"Fejl ved datahentning: {e}")
