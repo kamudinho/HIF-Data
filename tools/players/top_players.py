@@ -30,13 +30,12 @@ def vis_side():
     with col1:
         valgt_navn = st.selectbox("Vælg hold:", list(TEAMS.keys()), key="phys_tech_rank")
         target_wyid = TEAMS[valgt_navn]["team_wyid"]
-        target_opta_uuid = TEAMS[valgt_navn]["opta_uuid"] # Vi bruger nu din Opta UUID
+        target_opta_uuid = TEAMS[valgt_navn]["opta_uuid"]
     with col2:
         mode = st.radio("Vælg data-visning:", ["Fysiske Data", "Tekniske Data (Opta)"], horizontal=True)
 
-    # --- SQL LOGIK ---
+    # --- SQL LOGIK (Uændret som ønsket) ---
     if mode == "Fysiske Data":
-        # Second Spectrum Query (Match_Date)
         query = f"""
         WITH LIGA_STATS AS (
             SELECT PLAYER_NAME, 
@@ -66,8 +65,6 @@ def vis_side():
             "Explosive": [("Top Speed", "M5_RANK"), ("Accelerations", "M6_RANK")]
         }
     else:
-        # Opta Technical Query (Bruger OPTA_MATCHEXPECTEDGOALS til xG og mål)
-        # Her pivotere vi data fra OPTA_MATCHEXPECTEDGOALS for at få overblik
         query = f"""
         WITH PLAYER_XG AS (
             SELECT PLAYER_OPTAUUID,
@@ -81,7 +78,7 @@ def vis_side():
             SELECT p.MATCH_NAME as PLAYER_NAME,
                 RANK() OVER (ORDER BY x.AVG_XG DESC) as M1_RANK,
                 RANK() OVER (ORDER BY x.AVG_GOALS DESC) as M2_RANK,
-                RANK() OVER (ORDER BY x.AVG_XG DESC) as M3_RANK, -- Placeholder for mere data
+                RANK() OVER (ORDER BY x.AVG_XG DESC) as M3_RANK,
                 RANK() OVER (ORDER BY x.AVG_GOALS DESC) as M4_RANK,
                 RANK() OVER (ORDER BY x.AVG_XG DESC) as M5_RANK,
                 RANK() OVER (ORDER BY x.AVG_GOALS DESC) as M6_RANK
@@ -101,34 +98,48 @@ def vis_side():
             "Efficiency": [("Conversion xG", "M5_RANK"), ("Finishing", "M6_RANK")]
         }
 
-    # --- RENDER LOGIK (Samme som før, men med de nye data) ---
+    # --- RENDER LOGIK ---
     try:
         df = pd.read_sql(query, conn)
         if not df.empty:
-            # Overrides
             if player_overrides:
                 df = df[df.apply(lambda row: player_overrides.get(row['WYS_NAME'], target_wyid) == target_wyid, axis=1)]
             
             df = df.sort_values("M1_RANK").head(5)
             
-            # (CSS og Render kode herfra er identisk med din fungerende version)
             st.write("---")
+            # Header række med billeder
             cols = st.columns([2.5, 1, 1, 1, 1, 1])
             for i, (_, row) in enumerate(df.iterrows()):
                 with cols[i+1]:
-                    img = row['IMG'] if row['IMG'] and str(row['IMG']) != 'None' else "https://via.placeholder.com/150"
-                    st.markdown(f'<div style="text-align:center"><img src="{img}" style="border-radius:50%" width="60"><br><small><b>{row["PLAYER_NAME"].split()[-1]}</b></small></div>', unsafe_allow_html=True)
+                    img = row['IMG'] if row['IMG'] and str(row['IMG']) != 'None' else "https://cdn.wyscout.com/photos/players/public/ndplayer_100x130.png"
+                    st.markdown(f'<div style="text-align:center"><img src="{img}" style="border-radius:50%; border: 2px solid #ddd" width="60"><br><small><b>{row["PLAYER_NAME"].split()[-1]}</b></small></div>', unsafe_allow_html=True)
 
+            # Rækker med Metrics
             for kat, metrics in metrics_labels.items():
-                st.markdown(f'**{kat}**')
-                for label, col in metrics:
+                st.markdown(f'<br><b>{kat}</b>', unsafe_allow_html=True)
+                for label, col_name in metrics:
                     m_cols = st.columns([2.5, 1, 1, 1, 1, 1])
-                    m_cols[0].caption(label)
+                    m_cols[0].caption(label) # RETTET FRA .small()
                     for i, (_, row) in enumerate(df.iterrows()):
-                        rank = int(row[col])
-                        color = "#22c55e" if rank <= 20 else "#facc15"
-                        m_cols[i+1].markdown(f'<div style="background:{color}; padding:2px; border-radius:4px; text-align:center">R {rank}</div>', unsafe_allow_html=True)
+                        rank = int(row[col_name])
+                        
+                        # Opdateret farvelogik (Traffic Light)
+                        if rank <= 20:
+                            color = "#22c55e" # Grøn
+                        elif rank <= 50:
+                            color = "#facc15" # Gul
+                        else:
+                            color = "#ef4444" # Rød
+                            
+                        m_cols[i+1].markdown(
+                            f'<div style="background:{color}; color:black; font-weight:bold; padding:2px; border-radius:4px; text-align:center; font-size: 0.8rem">'
+                            f'R {rank}'
+                            f'</div>', 
+                            unsafe_allow_html=True
+                        )
     except Exception as e:
-        st.error(f"Fejl: {e}")
+        st.error(f"Fejl ved rendering: {e}")
 
+# Kald funktionen
 vis_side()
