@@ -10,40 +10,43 @@ def vis_side():
         st.error(f"Forbindelsesfejl: {e}")
         return
 
-    # --- NY HOLDVÆLGER SEKTION ---
-    # Vi henter alle hold fra NordicBet Liga (328) for at fylde selectboxen
+    # --- HOLDVÆLGER BASERET PÅ KONFIGURATION ---
+    # Vi bruger turnering ID 328 (NordicBet Liga) som defineret i din konfiguration
+    comp_id = 328 
+    
     try:
-        hold_liste_query = """
+        # Vi henter holdnavne der er tilknyttet den specifikke turnering
+        # Dette sikrer at vi kun ser hold fra 1. division
+        hold_liste_query = f"""
             SELECT DISTINCT TEAMNAME 
             FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_TEAMS 
-            WHERE AREA_NAME = 'Denmark' 
-            -- Du kan tilføje specifikt turneringstjek her hvis nødvendigt
+            WHERE COMPETITION_WYID = {comp_id}
             ORDER BY TEAMNAME
         """
         hold_df = pd.read_sql(hold_liste_query, conn)
         hold_navne = hold_df['TEAMNAME'].tolist()
         
-        # Selectbox placeres øverst
-        # Vi sætter default til 'Hvidovre' hvis det findes i listen
-        default_index = hold_navne.index('Hvidovre') if 'Hvidovre' in hold_navne else 0
-        valgt_hold = st.selectbox("Vælg hold fra ligaen:", hold_navne, index=default_index)
-        
-        # Vi gemmer valget i session_state, så andre sider også ved hvilket hold vi kigger på
+        if not hold_navne:
+            hold_navne = ["Hvidovre"] # Fallback
+
+        # Selectbox til valg af hold
+        default_idx = hold_navne.index('Hvidovre') if 'Hvidovre' in hold_navne else 0
+        valgt_hold = st.selectbox("Vælg hold (NordicBet Liga):", hold_navne, index=default_idx)
         st.session_state["valgt_hold"] = valgt_hold
         
     except Exception as e:
-        st.warning(f"Kunne ikke hente holdlisten: {e}")
+        st.warning(f"Kunne ikke hente holdlisten via turnering ID: {e}")
         valgt_hold = st.session_state.get("valgt_hold", "Hvidovre")
-    # -----------------------------
 
+    # 2. SQL Logik til Top 5
     safe_hold = valgt_hold.replace("'", "''")
 
-    # 3. SQL: Navne-match inden for det valgte hold
     query = f"""
     WITH HOLD AS (
         SELECT TEAM_WYID, IMAGEDATAURL as TEAM_LOGO
         FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_TEAMS
         WHERE TEAMNAME = '{safe_hold}'
+        AND COMPETITION_WYID = {comp_id}
         LIMIT 1
     ),
     SPILLERE AS (
@@ -74,14 +77,12 @@ def vis_side():
         if not df.empty:
             df.columns = [x.upper() for x in df.columns]
 
-            st.write("---") # Skillelinje efter vælgeren
-
-            # Layout: Logo og Overskrift
+            st.write("---")
             col_l, col_t = st.columns([1, 6])
             with col_l:
-                logo_url = df['LOGO'].iloc[0]
-                if logo_url:
-                    st.image(logo_url, width=80)
+                logo = df['LOGO'].iloc[0]
+                if logo:
+                    st.image(logo, width=80)
             with col_t:
                 st.subheader(f"Top 5: Fysiske Profiler ({valgt_hold})")
 
@@ -106,7 +107,7 @@ def vis_side():
                     st.caption(f"{dist_km:.2f} km | {int(row['HSR'])}m HSR | {row['SPEED']} km/t")
                     st.write("")
         else:
-            st.info(f"Ingen fysiske data fundet for {valgt_hold} i den valgte periode.")
+            st.info(f"Ingen fysiske data fundet for {valgt_hold}.")
 
     except Exception as e:
         st.error(f"Fejl ved datahentning: {e}")
