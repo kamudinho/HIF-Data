@@ -3,14 +3,14 @@ import pandas as pd
 from data.data_load import _get_snowflake_conn
 
 def vis_side():
-    # 1. Forbindelse
+    # 1. Opret forbindelse
     try:
-        session = _get_snowflake_conn()
+        conn = _get_snowflake_conn()
     except Exception as e:
         st.error(f"Forbindelsesfejl: {e}")
         return
 
-    # 2. Hent valgt hold - håndtér apostroffer i holdnavne (fx "B.93's Venner")
+    # 2. Hent valgt hold fra session_state
     valgt_hold = st.session_state.get("valgt_hold", "Hvidovre")
     safe_hold = valgt_hold.replace("'", "''")
 
@@ -23,8 +23,6 @@ def vis_side():
         LIMIT 1
     ),
     SPILLERE AS (
-        -- Vi tager højde for at Wyscout tabellen ofte har FIRSTNAME/LASTNAME
-        -- Hvis din tabel har FULLNAME, kan du fjerne CONCAT'en.
         SELECT 
             OPTAID, 
             IMAGEDATAURL as PLAYER_IMG
@@ -39,7 +37,7 @@ def vis_side():
         MAX(sp.PLAYER_IMG) as IMG,
         (SELECT TEAM_LOGO FROM HOLD) as LOGO
     FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS s
-    JOIN SPILLERE sp ON s."optaId" = sp.OPTAID -- Tjek om det er "optaId" eller OPTAID
+    JOIN SPILLERE sp ON s."optaId" = sp.OPTAID
     WHERE s.MATCH_DATE BETWEEN '2025-07-01' AND '2026-06-30'
     GROUP BY s.PLAYER_NAME
     ORDER BY DIST DESC
@@ -47,12 +45,16 @@ def vis_side():
     """
 
     try:
-        df = session.sql(query).to_pandas()
+        # RETTELSE: Vi bruger pd.read_sql i stedet for session.sql
+        df = pd.read_sql(query, conn)
 
         if not df.empty:
+            # Layout: Logo og Overskrift
             col_l, col_t = st.columns([1, 6])
             with col_l:
-                st.image(df['LOGO'].iloc[0], width=80)
+                # Snowflake returnerer ofte kolonnenavne i UPPERCASE i Pandas
+                logo_url = df['LOGO'].iloc[0]
+                st.image(logo_url, width=80)
             with col_t:
                 st.subheader(f"Top 5: Fysiske Profiler ({valgt_hold})")
 
@@ -66,6 +68,7 @@ def vis_side():
                 with c2:
                     st.markdown(f"**{row['PLAYER_NAME']}**")
                     
+                    # Rød bar baseret på distance
                     bredde = (row['DIST'] / max_dist) * 100
                     st.markdown(f"""
                         <div style="background:#222; width:100%; height:10px; border-radius:5px; margin: 5px 0;">
@@ -77,7 +80,7 @@ def vis_side():
                     st.caption(f"{dist_km:.2f} km | {int(row['HSR'])}m HSR | {row['SPEED']} km/t")
                     st.write("")
         else:
-            st.info(f"Ingen data fundet for {valgt_hold}.")
+            st.info(f"Ingen fysiske data fundet for {valgt_hold}.")
 
     except Exception as e:
         st.error(f"Fejl ved datahentning: {e}")
