@@ -26,7 +26,7 @@ def vis_side():
         SELECT TEAM_WYID, IMAGEDATAURL as TEAM_LOGO
         FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_TEAMS
         WHERE TEAMNAME = '{safe_hold}'
-        LIMIT 2
+        LIMIT 1
     ),
     SPILLERE AS (
         -- Vi henter SHORTNAME og billedet for alle spillere på det specifikke hold
