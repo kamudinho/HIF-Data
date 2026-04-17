@@ -3,11 +3,6 @@ import pandas as pd
 from data.data_load import _get_snowflake_conn
 
 def vis_side():
-    """
-    Henter Top 5 fysiske profiler. 
-    Bruger pd.read_sql da forbindelsen er en standard SnowflakeConnection.
-    """
-    
     # 1. Opret forbindelse
     try:
         conn = _get_snowflake_conn()
@@ -15,9 +10,32 @@ def vis_side():
         st.error(f"Forbindelsesfejl: {e}")
         return
 
-    # 2. Hent det valgte hold fra din session_state
-    valgt_hold = st.session_state.get("valgt_hold", "Hvidovre")
-    # Håndtér apostroffer (fx B.93's)
+    # --- NY HOLDVÆLGER SEKTION ---
+    # Vi henter alle hold fra NordicBet Liga (328) for at fylde selectboxen
+    try:
+        hold_liste_query = """
+            SELECT DISTINCT TEAMNAME 
+            FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_TEAMS 
+            WHERE AREA_NAME = 'Denmark' 
+            -- Du kan tilføje specifikt turneringstjek her hvis nødvendigt
+            ORDER BY TEAMNAME
+        """
+        hold_df = pd.read_sql(hold_liste_query, conn)
+        hold_navne = hold_df['TEAMNAME'].tolist()
+        
+        # Selectbox placeres øverst
+        # Vi sætter default til 'Hvidovre' hvis det findes i listen
+        default_index = hold_navne.index('Hvidovre') if 'Hvidovre' in hold_navne else 0
+        valgt_hold = st.selectbox("Vælg hold fra ligaen:", hold_navne, index=default_index)
+        
+        # Vi gemmer valget i session_state, så andre sider også ved hvilket hold vi kigger på
+        st.session_state["valgt_hold"] = valgt_hold
+        
+    except Exception as e:
+        st.warning(f"Kunne ikke hente holdlisten: {e}")
+        valgt_hold = st.session_state.get("valgt_hold", "Hvidovre")
+    # -----------------------------
+
     safe_hold = valgt_hold.replace("'", "''")
 
     # 3. SQL: Navne-match inden for det valgte hold
@@ -29,7 +47,6 @@ def vis_side():
         LIMIT 1
     ),
     SPILLERE AS (
-        -- Vi henter SHORTNAME og billedet for alle spillere på det specifikke hold
         SELECT 
             SHORTNAME, 
             IMAGEDATAURL as PLAYER_IMG
@@ -44,26 +61,27 @@ def vis_side():
         MAX(sp.PLAYER_IMG) as IMG,
         (SELECT TEAM_LOGO FROM HOLD) as LOGO
     FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS s
-    -- Vi joiner nu på NAVN, men kun mod spillere fra det valgte hold (via vores CTE)
     JOIN SPILLERE sp ON s.PLAYER_NAME = sp.SHORTNAME
     WHERE s.MATCH_DATE BETWEEN '2025-07-01' AND '2026-06-30'
     GROUP BY s.PLAYER_NAME
     ORDER BY DIST DESC
-    LIMIT 15
+    LIMIT 5
     """
 
     try:
-        # LØSNINGEN: Brug pandas til at læse fra 'conn' objektet
         df = pd.read_sql(query, conn)
 
         if not df.empty:
-            # Snowflake returnerer ofte kolonnenavne i UPPERCASE i Pandas
             df.columns = [x.upper() for x in df.columns]
+
+            st.write("---") # Skillelinje efter vælgeren
 
             # Layout: Logo og Overskrift
             col_l, col_t = st.columns([1, 6])
             with col_l:
-                st.image(df['LOGO'].iloc[0], width=80)
+                logo_url = df['LOGO'].iloc[0]
+                if logo_url:
+                    st.image(logo_url, width=80)
             with col_t:
                 st.subheader(f"Top 5: Fysiske Profiler ({valgt_hold})")
 
@@ -77,7 +95,6 @@ def vis_side():
                 with c2:
                     st.markdown(f"**{row['PLAYER_NAME']}**")
                     
-                    # Rød bar baseret på distance
                     bredde = (row['DIST'] / max_dist) * 100
                     st.markdown(f"""
                         <div style="background:#222; width:100%; height:10px; border-radius:5px; margin: 5px 0;">
@@ -89,7 +106,7 @@ def vis_side():
                     st.caption(f"{dist_km:.2f} km | {int(row['HSR'])}m HSR | {row['SPEED']} km/t")
                     st.write("")
         else:
-            st.info(f"Ingen fysiske data fundet for {valgt_hold}.")
+            st.info(f"Ingen fysiske data fundet for {valgt_hold} i den valgte periode.")
 
     except Exception as e:
         st.error(f"Fejl ved datahentning: {e}")
