@@ -12,14 +12,15 @@ def vis_side():
     if not conn: return
 
     valgt_hold_navn = st.selectbox("Vælg Hold", sorted(list(TEAMS.keys())), label_visibility="collapsed")
+    # Hent IDs fra mapping
     team_info = TEAMS.get(valgt_hold_navn, {})
-    
-    # Vi bruger dine IDs fra mappingen til at rydde op i duplikaterne
     target_ssiid = team_info.get('ssid')
     target_wyid = team_info.get('wyid')
-
-    # KOMBINERET QUERY (Baseret på din dump)
-    # Vi bruger GROUP BY og MAX for at undgå de mange dubletter vi så i din dump
+    
+    # Sikkerhedstjek: Hvis wyid mangler, sætter vi det til en værdi der ikke fejler SQL (f.eks. 0)
+    sql_wyid = target_wyid if target_wyid is not None else 0
+    
+    # KOMBINERET QUERY
     sql = f"""
         WITH SS_STATS AS (
             SELECT PLAYER_NAME, 
@@ -32,18 +33,22 @@ def vis_side():
             GROUP BY PLAYER_NAME
         ),
         WY_INFO AS (
-            SELECT 
+            -- Vi bruger DISTINCT og filtrerer på det specifikke hold-ID
+            SELECT DISTINCT
                 (TRIM(FIRSTNAME) || ' ' || TRIM(LASTNAME)) as FULL_NAME,
                 SHORTNAME,
-                MAX(IMAGEDATAURL) as IMG -- Vi tager kun ét billede
+                IMAGEDATAURL
             FROM {DB}.WYSCOUT_PLAYERS 
-            WHERE CURRENTTEAM_WYID = {target_wyid}
-            GROUP BY 1, 2
+            WHERE CURRENTTEAM_WYID = {sql_wyid}
         )
-        SELECT s.*, w.IMG
+        SELECT 
+            s.PLAYER_NAME, s.DIST, s.HSR, s.SPEED, s.ACCELS,
+            MAX(w.IMAGEDATAURL) as IMG -- Sikrer én række per spiller hvis der er dubletter
         FROM SS_STATS s
         LEFT JOIN WY_INFO w ON (s.PLAYER_NAME = w.FULL_NAME OR s.PLAYER_NAME = w.SHORTNAME)
-        ORDER BY s.DIST DESC LIMIT 5
+        GROUP BY 1, 2, 3, 4, 5
+        ORDER BY DIST DESC 
+        LIMIT 5
     """
     
     df = conn.query(sql)
