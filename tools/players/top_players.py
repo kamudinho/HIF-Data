@@ -1,84 +1,107 @@
 import streamlit as st
 import pandas as pd
-from data.data_load import _get_snowflake_conn
+import data.HIF_load as hif_load
 
 def vis_side():
+    # CSS til at matche dit billede (Sort overskrift-bar og røde stats)
+    st.markdown("""
+        <style>
+        .player-header { background-color: black; color: white; text-align: center; font-weight: bold; padding: 5px; margin-bottom: 10px; border-radius: 2px; }
+        .stat-box { margin-bottom: 8px; }
+        .bar-bg { background-color: #eee; height: 6px; width: 100%; border-radius: 3px; }
+        .bar-fill { background-color: #df003b; height: 6px; border-radius: 3px; }
+        .val-text { font-size: 10px; font-weight: bold; text-align: right; }
+        </style>
+    """, unsafe_allow_html=True)
+
     st.markdown("<h2 style='text-align: center; color: #1f1f1f;'>EXPLOSIVE PHYSICAL PROFILES</h2>", unsafe_allow_html=True)
     
     try:
-        conn = _get_snowflake_conn()
+        # 1. HENT DATA VIA DIN PAKKE
+        dp = hif_load.get_scouting_package()
         
-        # 1. HENT DATA DIREKTE (Vi bruger de filtre du har oplyst)
-        # Jeg har fjernet 'SHOW TABLES' for at undgå den ukendte fejl
-        query = """
-            SELECT * FROM WYSCOUT_PLAYERS 
-            WHERE SEASONNAME = '2025/2026' 
-            AND COMPETITION_WYID IN (328, 335)
-        """
-        
-        # Hvis 'WYSCOUT_PLAYERS' ikke er det rigtige navn, så tjek din 'data/HIF_load.py'
-        # og se hvad tabellen hedder der.
-        try:
-            df_all = conn.query(query)
-        except:
-            # Backup: Hvis tabellen ovenfor ikke findes, prøver vi en generel query
-            df_all = conn.query("SELECT * FROM PLAYERS WHERE SEASONNAME = '2025/2026' LIMIT 1000")
+        # Prøv at finde spiller-data i pakken
+        df = dp.get("players", pd.DataFrame())
+        if df.empty:
+            df = dp.get("advanced_stats", pd.DataFrame())
+            
+        df_meta = dp.get("sql_players", pd.DataFrame())
 
-        if df_all is None or df_all.empty:
-            st.warning("Kunne ikke hente data. Tjek venligst om tabelnavnet i SQL-forespørgslen er korrekt.")
+        if df.empty:
+            st.error("Kunne ikke hente data fra hif_load.get_scouting_package().")
             return
 
-        df_all.columns = [c.upper() for c in df_all.columns]
+        # Normaliser kolonner til STORE
+        df.columns = [c.upper() for c in df.columns]
 
-        # 2. FIND DE RIGTIGE KOLONNER
-        team_col = next((c for c in df_all.columns if 'TEAM' in c or 'HOLD' in c), None)
-        name_col = next((c for c in df_all.columns if 'PLAYER_NAME' in c or 'NAVN' in c), None)
+        # 2. FIND DINE FILTRE (Hvidovre-app værdier)
+        # Vi filtrerer på de værdier, du oplyste i starten
+        if 'SEASONNAME' in df.columns:
+            df = df[df['SEASONNAME'] == "2025/2026"]
         
-        if not team_col or not name_col:
-            st.error("Kunne ikke finde hold- eller spiller-kolonner.")
+        team_col = next((c for c in df.columns if 'TEAM' in c or 'HOLD' in c), None)
+        if not team_col:
+            st.error("Kunne ikke finde hold-kolonnen.")
             return
 
-        hold_liste = sorted([str(x) for x in df_all[team_col].unique() if pd.notnull(x)])
+        hold_liste = sorted([str(x) for x in df[team_col].unique() if pd.notnull(x)])
         valgt_hold = st.selectbox("VÆLG HOLD", options=hold_liste)
 
         if valgt_hold:
-            df_hold = df_all[df_all[team_col] == valgt_hold].copy()
+            # Filtrer til det valgte hold
+            df_hold = df[df[team_col] == valgt_hold].copy()
 
-            # Rens numeriske data (Dræber float/str fejl)
+            # 3. RENS ALT DATA (Vigtigt!)
+            # Tving alle kolonner undtagen navne til at være tal
             for col in df_hold.columns:
-                if col not in [name_col, team_col, 'IMAGEDATAURL']:
+                if col not in ['PLAYER_NAME', team_col, 'IMAGEDATAURL']:
                     df_hold[col] = pd.to_numeric(df_hold[col], errors='coerce').fillna(0.0)
 
-            # Find Top 5 (Sorteret efter Distance eller lignende stabil stat)
-            sort_col = next((c for c in df_hold.columns if 'DIST' in c), df_hold.columns[-1])
-            top_5 = df_hold.sort_values(sort_col, ascending=False).head(5)
+            # Find Top 5 spillere baseret på summen af deres stats (aktivitet)
+            num_cols = df_hold.select_dtypes(include=['number']).columns
+            df_hold['SCORE'] = df_hold[num_cols].sum(axis=1)
+            top_5 = df_hold.sort_values('SCORE', ascending=False).head(5)
 
-            # 3. VISNING
+            # 4. DEFINER METRICS (Matcher dit billede)
+            # Vi leder efter de fysiske stats i dine data
+            metrics = {
+                "Distance": next((c for c in df_hold.columns if 'DIST' in c), None),
+                "Sprints": next((c for c in df_hold.columns if 'SPRINT' in c), None),
+                "Speed": next((c for c in df_hold.columns if 'SPEED' in c or 'VMAX' in c), None),
+                "Accels": next((c for c in df_hold.columns if 'ACC' in c), None)
+            }
+
+            # 5. GRID VISNING
             cols = st.columns(5)
             for i, (idx, row) in enumerate(top_5.iterrows()):
                 with cols[i]:
-                    name = str(row[name_col])
-                    # Efternavn i sort bar
-                    st.markdown(f"<div style='background:black;color:white;text-align:center;font-weight:bold;padding:5px;font-size:12px;'>{name.split()[-1].upper()}</div>", unsafe_allow_html=True)
+                    name = str(row.get('PLAYER_NAME', 'Ukendt'))
+                    efternavn = name.split()[-1].upper() if " " in name else name.upper()
                     
-                    img = row.get('IMAGEDATAURL')
-                    st.image(img if img else "https://via.placeholder.com/150", use_container_width=True)
+                    # Hent billede fra meta-data hvis muligt
+                    img_url = None
+                    if not df_meta.empty:
+                        m = df_meta[df_meta['PLAYER_NAME'] == name] if 'PLAYER_NAME' in df_meta.columns else pd.DataFrame()
+                        if not m.empty:
+                            img_url = m.iloc[0].get('IMAGEDATAURL') or m.iloc[0].get('ImageDataURL')
 
-                    # Barer for de vigtigste stats
-                    metrics = {"Distance": "DIST", "Sprint": "SPRINT", "Speed": "SPEED"}
-                    for label, key in metrics.items():
-                        c_name = next((c for c in df_hold.columns if key in c), None)
+                    st.image(img_url if img_url else "https://via.placeholder.com/150", use_container_width=True)
+                    st.markdown(f"<div class='player-header'>{efternavn}</div>", unsafe_allow_html=True)
+
+                    for label, c_name in metrics.items():
+                        val, pct = 0.0, 0
                         if c_name:
                             val = float(row[c_name])
-                            max_v = df_hold[c_name].max()
-                            pct = min(int((val/max_v)*100), 100) if max_v > 0 else 0
-                            st.markdown(f"""
-                                <div style='font-size:9px;color:gray;margin-top:5px;'>{label}</div>
-                                <div style='background:#eee;height:4px;border-radius:2px;'>
-                                    <div style='background:#df003b;width:{pct}%;height:4px;border-radius:2px;'></div>
-                                </div>
-                                <div style='font-size:10px;text-align:right;font-weight:bold;'>{val:.1f}</div>
-                            """, unsafe_allow_html=True)
+                            max_val = df_hold[c_name].max()
+                            pct = min(int((val / max_val) * 100), 100) if max_val > 0 else 0
+
+                        st.markdown(f"""
+                            <div class="stat-box">
+                                <div style='font-size:9px; color:#666;'>{label}</div>
+                                <div class="bar-bg"><div class="bar-fill" style="width:{pct}%;"></div></div>
+                                <div class="val-text">{val:.1f}</div>
+                            </div>
+                        """, unsafe_allow_html=True)
 
     except Exception as e:
-        st.error(f"Der opstod en fejl: {str(e)}")
+        st.error(f"Fejl: {e}")
