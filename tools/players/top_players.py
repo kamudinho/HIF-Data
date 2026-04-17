@@ -16,7 +16,7 @@ def vis_side():
         valgt_navn = st.selectbox(
             "Vælg hold:", 
             list(TEAMS.keys()), 
-            key="sb_top5_final_v3" 
+            key="sb_top5_final_v4" 
         )
         target_wyid = TEAMS[valgt_navn]["team_wyid"]
         
@@ -25,15 +25,17 @@ def vis_side():
             "Vælg data-visning:", 
             ["Fysiske Data (P90)", "Tekniske Data (P90)"], 
             horizontal=True,
-            key="radio_top5_final_v3"
+            key="radio_top5_final_v4"
         )
 
-    # --- SQL LOGIK ---
-    # Vi bruger en string til at filtrere navne fra, hvis Kolding er valgt
-    # Kolding IF ID er typisk 7482 i dit system
-    filter_sql = ""
+    # --- MANUELT NAVNE-FILTER (Kolding-specifikt) ---
+    # Vi fjerner dem fra Kolding (7482)
+    exclusion_sql = ""
     if valgt_navn == "Kolding IF":
-        filter_sql = "AND r.PLAYER_NAME NOT LIKE '%Enemark%' AND r.PLAYER_NAME NOT LIKE '%Westh%'"
+        exclusion_sql = """
+            AND (TRIM(FIRSTNAME) || ' ' || TRIM(LASTNAME)) NOT LIKE '%Enemark%'
+            AND (TRIM(FIRSTNAME) || ' ' || TRIM(LASTNAME)) NOT LIKE '%Westh%'
+        """
 
     if "Fysiske Data" in mode:
         query = f"""
@@ -58,11 +60,11 @@ def vis_side():
                 MAX(IMAGEDATAURL) as IMG
             FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_PLAYERS 
             WHERE CURRENTTEAM_WYID = {target_wyid}
+            {exclusion_sql}
             GROUP BY 1
         )
         SELECT t.IMG, t.FULL_NAME as WYS_NAME, r.* FROM VALGT_TRUP t
         INNER JOIN LIGA_RANKED r ON (t.FULL_NAME LIKE '%' || r.PLAYER_NAME || '%' OR r.PLAYER_NAME LIKE '%' || t.FULL_NAME || '%')
-        WHERE 1=1 {filter_sql}
         """
         metrics_labels = {
             "Volume (P90)": [("Total Dist.", "M1_RANK", "M1"), ("Running", "M2_RANK", "M2")],
@@ -92,11 +94,11 @@ def vis_side():
                 MAX(IMAGEDATAURL) as IMG
             FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_PLAYERS 
             WHERE CURRENTTEAM_WYID = {target_wyid}
+            {exclusion_sql}
             GROUP BY 1
         )
         SELECT t.IMG, t.FULL_NAME as WYS_NAME, r.* FROM VALGT_TRUP t
         INNER JOIN LIGA_RANKED r ON (t.FULL_NAME LIKE '%' || r.PLAYER_NAME || '%' OR r.PLAYER_NAME LIKE '%' || t.FULL_NAME || '%')
-        WHERE 1=1 {filter_sql}
         """
         metrics_labels = {
             "Attacking (P90)": [("xG p90", "M1_RANK", "M1"), ("Mål p90", "M2_RANK", "M2")]
@@ -124,7 +126,7 @@ def vis_side():
                 st.markdown(f'<div style="margin-top:20px; font-weight:bold; font-size: 13px;">{kat}</div>', unsafe_allow_html=True)
                 for label, rank_col, val_col in metrics:
                     m_cols = st.columns([2.5, 1, 1, 1, 1, 1])
-                    m_cols[0].markdown(f'<div style="font-size: 12px; color: #666; padding-top: 4px;">{label}</div>', unsafe_allow_html=True)
+                    m_cols[0].markdown(f'<div style="font-size: 11px; color: #666; padding-top: 4px;">{label}</div>', unsafe_allow_html=True)
                     
                     for i, (_, row) in enumerate(df.iterrows()):
                         rank = int(row[rank_col])
