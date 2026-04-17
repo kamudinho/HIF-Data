@@ -90,6 +90,7 @@ def vis_side():
     try:
         df = pd.read_sql(query, conn)
         if not df.empty:
+            st.write("---")
             
             # --- HEADER: Spillerbilleder ---
             cols = st.columns([2, 1, 1, 1, 1, 1])
