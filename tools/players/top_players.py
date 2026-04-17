@@ -23,19 +23,21 @@ def vis_side():
     # 3. SQL: Din rene rækkefølge (Teams -> Players -> Physical)
     query = f"""
     WITH HOLD AS (
-        -- Find holdet i WYSCOUT_TEAMS
         SELECT TEAM_WYID, IMAGEDATAURL as TEAM_LOGO
         FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_TEAMS
         WHERE TEAMNAME = '{safe_hold}'
         LIMIT 1
     ),
     SPILLERE AS (
-        -- Find alle spillere for det hold i WYSCOUT_PLAYERS
-        SELECT p.OPTAID, p.IMAGEDATAURL as PLAYER_IMG
-        FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_PLAYERS p
-        WHERE p.CURRENTTEAM_WYID = (SELECT TEAM_WYID FROM HOLD)
+        -- Vi fjerner 'p.' præfikset i SELECT og tjekker kolonnenavnet. 
+        -- I mange Wyscout-tabeller hedder den 'OPTA_ID' eller 'optaId'.
+        -- Vi prøver her med "OPTAID" (uden præfiks i definitionen)
+        SELECT 
+            OPTAID, 
+            IMAGEDATAURL as PLAYER_IMG
+        FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_PLAYERS
+        WHERE CURRENTTEAM_WYID = (SELECT TEAM_WYID FROM HOLD)
     )
-    -- Kobbel på Second Spectrum Physical Summary via optaId
     SELECT 
         s.PLAYER_NAME,
         AVG(s.DISTANCE) as DIST, 
