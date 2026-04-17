@@ -86,6 +86,9 @@ def vis_side():
         # 1. Håndtér Enemark (7485) og Westh (7481) manuelt
         mask_enemark = df_all['WYS_NAME'].str.contains('Enemark', case=False, na=False)
         mask_westh = df_all['WYS_NAME'].str.contains('Westh', case=False, na=False)
+        mask_vestergaard = df_all['WYS_NAME'].str.contains('Vestergaard', case=False, na=False)
+        mask_jalal = df_all['WYS_NAME'].str.contains('Jalal', case=False, na=False)
+
         
         # Sæt deres team_id manuelt i dataframe
         df_all.loc[mask_enemark, 'WYS_TEAM_ID'] = 7485
