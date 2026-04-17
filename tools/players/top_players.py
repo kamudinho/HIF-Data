@@ -13,11 +13,10 @@ def vis_side():
     # --- TOP BAR ---
     col1, col2 = st.columns([2, 2])
     with col1:
-        # Vi tilføjer et unikt prefix til key for at undgå 'multiple elements' fejlen
         valgt_navn = st.selectbox(
             "Vælg hold:", 
             list(TEAMS.keys()), 
-            key=f"selectbox_top5_{valgt_navn if 'valgt_navn' in locals() else 'default'}"
+            key="sb_top5_team_stable" 
         )
         target_wyid = TEAMS[valgt_navn]["team_wyid"]
         
@@ -26,10 +25,19 @@ def vis_side():
             "Vælg data-visning:", 
             ["Fysiske Data (P90)", "Tekniske Data (P90)"], 
             horizontal=True,
-            key="radio_top5_mode"
+            key="radio_top5_mode_stable"
         )
 
-    # --- SQL LOGIK ---
+    # --- MANUEL OVERRIDE LOGIK ---
+    # Enemark -> Hobro (7485), Westh -> Silkeborg (7481)
+    transfer_logic = """
+        CASE 
+            WHEN (TRIM(FIRSTNAME) || ' ' || TRIM(LASTNAME)) = 'Marius Enemark' THEN 7485
+            WHEN (TRIM(FIRSTNAME) || ' ' || TRIM(LASTNAME)) = 'Alexander Westh' THEN 7481
+            ELSE MAX(CURRENTTEAM_WYID) 
+        END
+    """
+
     if "Fysiske Data" in mode:
         query = f"""
         WITH LIGA_STATS AS (
@@ -51,10 +59,7 @@ def vis_side():
             SELECT 
                 (TRIM(FIRSTNAME) || ' ' || TRIM(LASTNAME)) as FULL_NAME, 
                 MAX(IMAGEDATAURL) as IMG,
-                CASE 
-                    WHEN (TRIM(FIRSTNAME) || ' ' || TRIM(LASTNAME)) = 'Marius Enemark' THEN 7485 -- Hobro ID
-                    ELSE MAX(CURRENTTEAM_WYID) 
-                END as ACTUAL_TEAM_ID
+                {transfer_logic} as ACTUAL_TEAM_ID
             FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_PLAYERS 
             GROUP BY 1
         )
@@ -63,12 +68,11 @@ def vis_side():
         WHERE t.ACTUAL_TEAM_ID = {target_wyid}
         """
         metrics_labels = {
-            "Volume (P90)": [("Total Dist.", "M1_RANK", "M1", "km"), ("Running", "M2_RANK", "M2", "km")],
-            "Intensity (P90)": [("Hi Dist.", "M3_RANK", "M3", "m"), ("Sprints", "M4_RANK", "M4", "m")],
-            "Top Speed": [("Max Speed", "M5_RANK", "M5", "km/t")]
+            "Volume (P90)": [("Total Dist.", "M1_RANK", "M1"), ("Running", "M2_RANK", "M2")],
+            "Intensity (P90)": [("Hi Dist.", "M3_RANK", "M3"), ("Sprints", "M4_RANK", "M4")],
+            "Top Speed": [("Max Speed", "M5_RANK", "M5")]
         }
     else:
-        # (Tekniske Data SQL - Samme princip med Enemark override)
         query = f"""
         WITH PLAYER_STATS AS (
             SELECT PLAYER_OPTAUUID,
@@ -89,10 +93,7 @@ def vis_side():
             SELECT 
                 (TRIM(FIRSTNAME) || ' ' || TRIM(LASTNAME)) as FULL_NAME, 
                 MAX(IMAGEDATAURL) as IMG,
-                CASE 
-                    WHEN (TRIM(FIRSTNAME) || ' ' || TRIM(LASTNAME)) = 'Marius Enemark' THEN 7485 
-                    ELSE MAX(CURRENTTEAM_WYID) 
-                END as ACTUAL_TEAM_ID
+                {transfer_logic} as ACTUAL_TEAM_ID
             FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_PLAYERS 
             GROUP BY 1
         )
@@ -101,7 +102,7 @@ def vis_side():
         WHERE t.ACTUAL_TEAM_ID = {target_wyid}
         """
         metrics_labels = {
-            "Attacking (P90)": [("xG p90", "M1_RANK", "M1", ""), ("Mål p90", "M2_RANK", "M2", "")]
+            "Attacking (P90)": [("xG p90", "M1_RANK", "M1"), ("Mål p90", "M2_RANK", "M2")]
         }
 
     # --- RENDER ---
@@ -118,8 +119,8 @@ def vis_side():
                     st.markdown(f'<div style="text-align:center"><img src="{img}" style="border-radius:50%" width="60"><br><small><b>{row["WYS_NAME"].split()[-1]}</b></small></div>', unsafe_allow_html=True)
 
             for kat, metrics in metrics_labels.items():
-                st.markdown(f'<div style="margin-top:20px; font-weight:bold;">{kat}</div>', unsafe_allow_html=True)
-                for label, rank_col, val_col, unit in metrics:
+                st.markdown(f'<div style="margin-top:15px; font-weight:bold; font-size: 14px;">{kat}</div>', unsafe_allow_html=True)
+                for label, rank_col, val_col in metrics:
                     m_cols = st.columns([2.5, 1, 1, 1, 1, 1])
                     m_cols[0].caption(label)
                     
@@ -129,18 +130,20 @@ def vis_side():
                         val_str = f"{val:.2f}"
                         
                         color = "#22c55e" if rank <= 20 else "#facc15" if rank <= 50 else "#ef4444"
-                        bar_width = max(25, 100 - (rank / 2.5)) 
+                        bar_width = max(30, 100 - (rank / 2.5)) 
 
                         m_cols[i+1].markdown(f"""
-                            <div style="background-color: #f0f2f6; border-radius: 4px; width: 100%; height: 26px; position: relative; margin-bottom: 4px;">
-                                <div style="background-color: {color}; width: {bar_width}%; height: 100%; border-radius: 4px; display: flex; align-items: center; padding-left: 4px; min-width: 60px; overflow: hidden;">
-                                    <span style="color: black; font-size: 8.5px; font-weight: bold; white-space: nowrap;">
+                            <div style="background-color: #f0f2f6; border-radius: 4px; width: 100%; height: 24px; position: relative; margin-bottom: 4px;">
+                                <div style="background-color: {color}; width: {bar_width}%; height: 100%; border-radius: 4px; display: flex; align-items: center; padding-left: 4px; overflow: hidden;">
+                                    <span style="color: black; font-size: 8px; font-weight: bold; white-space: nowrap;">
                                         R{rank} ({val_str})
                                     </span>
                                 </div>
                             </div>
                         """, unsafe_allow_html=True)
+        else:
+            st.warning("Ingen data fundet for det valgte hold.")
     except Exception as e:
-        st.error(f"Fejl: {e}")
+        st.error(f"Fejl ved indlæsning: {e}")
 
 vis_side()
