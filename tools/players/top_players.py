@@ -6,131 +6,123 @@ from data.utils.team_mapping import TEAMS
 def vis_side():
     conn = _get_snowflake_conn()
 
-    # --- 1. STYLING (Genskaber looket fra billedet) ---
+    # --- 1. STYLING (Genskaber tabel-looket) ---
     st.markdown("""
         <style>
-        .player-card {
-            background-color: transparent;
-            padding: 10px 0px;
-            border-bottom: 1px solid #333;
+        .metric-row {
+            display: flex;
+            align-items: center;
+            border-bottom: 1px solid #eee;
+            padding: 5px 0;
         }
-        .player-name {
+        .metric-name {
+            width: 200px;
             font-weight: bold;
-            font-size: 1.1rem;
-            margin-bottom: 5px;
+            font-size: 0.9rem;
+            color: #333;
         }
-        .custom-bar-container {
-            background-color: #333;
-            border-radius: 10px;
-            width: 100%;
-            height: 8px;
-            margin: 8px 0;
+        .player-col {
+            flex: 1;
+            text-align: center;
+            padding: 0 5px;
         }
-        .custom-bar-fill {
-            background-color: #df003b; /* Den røde fra billedet */
-            height: 100%;
-            border-radius: 10px;
-        }
-        .stat-text {
-            color: #999;
+        .rank-box {
+            border-radius: 4px;
+            padding: 5px 0;
+            font-weight: bold;
             font-size: 0.85rem;
+            color: white;
         }
-        img.player-img {
-            border-radius: 50%; /* Gør billederne runde som på dit screenshot */
+        /* Farvekoder baseret på rank (Grøn for top, rød for bund) */
+        .rank-high { background-color: #00ff00; color: black; } /* Top 10% */
+        .rank-mid { background-color: #90ee90; color: black; }  /* Top 30% */
+        .rank-low { background-color: #ffcccb; color: black; }  /* Resten */
+        
+        .player-header-img {
+            border-radius: 50%;
             object-fit: cover;
+            margin-bottom: 5px;
         }
         </style>
     """, unsafe_allow_html=True)
 
     # --- 2. HOLDVALG ---
     alle_hold = list(TEAMS.keys())
-    col_header, _ = st.columns([2, 2])
-    with col_header:
-        valgt_navn = st.selectbox("Vælg hold:", alle_hold, index=alle_hold.index("Hvidovre") if "Hvidovre" in alle_hold else 0)
-    
-    team_info = TEAMS[valgt_navn]
-    target_wyid = team_info["team_wyid"]
-    logo_url = team_info["logo"]
+    valgt_navn = st.selectbox("Vælg hold:", alle_hold, index=alle_hold.index("Hvidovre") if "Hvidovre" in alle_hold else 0)
+    target_wyid = TEAMS[valgt_navn]["team_wyid"]
 
-    # --- 3. DATA HENTNING (Din optimerede SQL) ---
+    # --- 3. DATA (Vi henter flere metrics og beregner rank) ---
     query = f"""
-    WITH TRUP AS (
-        SELECT 
-            (TRIM(w.FIRSTNAME) || ' ' || TRIM(w.LASTNAME)) as FULL_NAME,
-            w.SHORTNAME,
-            MAX(w.IMAGEDATAURL) as IMG_URL
-        FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_PLAYERS w
-        WHERE w.CURRENTTEAM_WYID = {target_wyid}
-        GROUP BY 1, 2
-    ),
-    SS_PHYSICAL AS (
+    WITH STATS AS (
         SELECT 
             PLAYER_NAME,
-            AVG(DISTANCE) as DIST, 
-            AVG("HIGH SPEED RUNNING") as HSR, 
-            MAX(TOP_SPEED) as SPEED
+            AVG(DISTANCE) as DIST,
+            AVG("HIGH SPEED RUNNING") as HSR,
+            MAX(TOP_SPEED) as SPEED,
+            AVG(NO_OF_HIGH_INTENSITY_RUNS) as ACCELS
         FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
         WHERE MATCH_DATE BETWEEN '2025-07-01' AND '2026-06-30'
         GROUP BY PLAYER_NAME
+    ),
+    RANKED AS (
+        SELECT *,
+            PERCENT_RANK() OVER (ORDER BY DIST DESC) as DIST_RANK,
+            PERCENT_RANK() OVER (ORDER BY HSR DESC) as HSR_RANK,
+            PERCENT_RANK() OVER (ORDER BY SPEED DESC) as SPEED_RANK,
+            PERCENT_RANK() OVER (ORDER BY ACCELS DESC) as ACCELS_RANK
+        FROM STATS
+    ),
+    TRUP AS (
+        SELECT (FIRSTNAME || ' ' || LASTNAME) as FULL_NAME, SHORTNAME, IMAGEDATAURL
+        FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_PLAYERS
+        WHERE CURRENTTEAM_WYID = {target_wyid}
     )
-    SELECT 
-        w.FULL_NAME, s.DIST, s.HSR, s.SPEED,
-        COALESCE(w.IMG_URL, 'https://via.placeholder.com/150') as IMG
-    FROM TRUP w
-    INNER JOIN SS_PHYSICAL s ON (
-        s.PLAYER_NAME = w.FULL_NAME OR s.PLAYER_NAME = w.SHORTNAME
-        OR w.FULL_NAME LIKE '%' || s.PLAYER_NAME || '%'
-    )
-    ORDER BY s.DIST DESC LIMIT 5
+    SELECT r.*, t.IMAGEDATAURL 
+    FROM RANKED r
+    JOIN TRUP t ON (r.PLAYER_NAME = t.FULL_NAME OR r.PLAYER_NAME = t.SHORTNAME)
+    ORDER BY r.DIST DESC LIMIT 5
     """
 
     try:
         df = pd.read_sql(query, conn)
-        df.columns = [x.upper() for x in df.columns]
-
+        
         if not df.empty:
-            # Overskrift med Logo
-            st.write("---")
-            c1, c2 = st.columns([1, 8])
-            with c1: st.image(logo_url, width=60)
-            with c2: st.subheader(f"Top 5: Fysiske Profiler | {valgt_navn}")
+            # --- HEADER RÆKKE (Spiller billeder og navne) ---
+            cols = st.columns([1.5, 1, 1, 1, 1, 1]) # 6 kolonner
+            
+            with cols[0]: st.write("") # Tom plads over metrics navne
+            
+            for i, (_, row) in enumerate(df.iterrows()):
+                with cols[i+1]:
+                    img = row['IMAGEDATAURL'] if row['IMAGEDATAURL'] else "https://via.placeholder.com/150"
+                    st.markdown(f'<img src="{img}" class="player-header-img" width="60">', unsafe_allow_html=True)
+                    st.markdown(f"**{row['PLAYER_NAME'].split()[-1]}**", help=row['PLAYER_NAME']) # Kun efternavn
 
-            max_dist = df['DIST'].max()
+            # --- METRIC RÆKKER ---
+            metrics = [
+                ("Distance Per 90", "DIST_RANK", "DIST"),
+                ("Hi Distance Per 90", "HSR_RANK", "HSR"),
+                ("Top Speed", "SPEED_RANK", "SPEED"),
+                ("Accelerations", "ACCELS_RANK", "ACCELS")
+            ]
 
-            # --- 4. RENDER PLAYERS (Genskabelsen af billedet) ---
-            for _, row in df.iterrows():
-                # Beregn procent til baren
-                procent = (row['DIST'] / max_dist) * 100
+            for label, rank_col, val_col in metrics:
+                st.markdown("---")
+                m_cols = st.columns([1.5, 1, 1, 1, 1, 1])
+                with m_cols[0]:
+                    st.markdown(f"**{label}**")
                 
-                # Container for hver spiller
-                with st.container():
-                    col_img, col_data = st.columns([1, 6])
+                for i, (_, row) in enumerate(df.iterrows()):
+                    rank_val = row[rank_col]
+                    # Bestem farveklasse baseret på rank
+                    color_class = "rank-high" if rank_val <= 0.1 else "rank-mid" if rank_val <= 0.3 else "rank-low"
                     
-                    with col_img:
-                        # Vi bruger HTML for at få det runde billede præcis som på screenshot
-                        st.markdown(f'<img src="{row["IMG"]}" class="player-img" width="70" height="70">', unsafe_allow_html=True)
-                    
-                    with col_data:
-                        st.markdown(f'<div class="player-name">{row["FULL_NAME"]}</div>', unsafe_allow_html=True)
-                        
-                        # Den røde bar
-                        st.markdown(f"""
-                            <div class="custom-bar-container">
-                                <div class="custom-bar-fill" style="width: {procent}%;"></div>
-                            </div>
-                        """, unsafe_allow_html=True)
-                        
-                        # Stats tekst
-                        km = row['DIST'] / 1000
-                        st.markdown(f"""
-                            <div class="stat-text">
-                                {km:.2f} km gns. | {int(row['HSR'])}m HSR | {row['SPEED']} km/t max
-                            </div>
-                        """, unsafe_allow_html=True)
-                    
-                    st.markdown('<div style="margin-bottom:20px;"></div>', unsafe_allow_html=True)
-        else:
-            st.info("Ingen data fundet for dette hold.")
+                    with m_cols[i+1]:
+                        # Viser rank som "1st", "2nd" osv (simuleret her)
+                        rank_text = f"{int(rank_val * 100)}%" 
+                        st.markdown(f'<div class="rank-box {color_class}">{rank_text}</div>', unsafe_allow_html=True)
 
+        else:
+            st.info("Ingen data fundet.")
     except Exception as e:
         st.error(f"Fejl: {e}")
