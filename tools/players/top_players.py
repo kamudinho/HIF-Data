@@ -34,7 +34,7 @@ def vis_side():
     with col2:
         mode = st.radio("Vælg data-visning:", ["Fysiske Data", "Tekniske Data (Opta)"], horizontal=True)
 
-    # --- SQL LOGIK (Uændret som ønsket) ---
+    # --- SQL LOGIK ---
     if mode == "Fysiske Data":
         query = f"""
         WITH LIGA_STATS AS (
@@ -60,9 +60,9 @@ def vis_side():
         INNER JOIN LIGA_RANKED r ON (t.FULL_NAME LIKE '%' || r.PLAYER_NAME || '%' OR r.PLAYER_NAME LIKE '%' || t.FULL_NAME || '%')
         """
         metrics_labels = {
-            "Volume": [("Total Distance", "M1_RANK"), ("Running Distance", "M2_RANK")],
-            "Intensity": [("Hi Distance", "M3_RANK"), ("Sprint Distance", "M4_RANK")],
-            "Explosive": [("Top Speed", "M5_RANK"), ("Accelerations", "M6_RANK")]
+            "Volume": [("Total Distance", "M1_RANK", "M1", "km"), ("Running Distance", "M2_RANK", "M2", "km")],
+            "Intensity": [("Hi Distance", "M3_RANK", "M3", "m"), ("Sprint Distance", "M4_RANK", "M4", "m")],
+            "Explosive": [("Top Speed", "M5_RANK", "M5", "km/t"), ("Accelerations", "M6_RANK", "M6", "stk")]
         }
     else:
         query = f"""
@@ -76,6 +76,7 @@ def vis_side():
         ),
         LIGA_RANKED AS (
             SELECT p.MATCH_NAME as PLAYER_NAME,
+                x.AVG_XG as M1, x.AVG_GOALS as M2, x.AVG_XG as M3, x.AVG_GOALS as M4, x.AVG_XG as M5, x.AVG_GOALS as M6,
                 RANK() OVER (ORDER BY x.AVG_XG DESC) as M1_RANK,
                 RANK() OVER (ORDER BY x.AVG_GOALS DESC) as M2_RANK,
                 RANK() OVER (ORDER BY x.AVG_XG DESC) as M3_RANK,
@@ -93,9 +94,8 @@ def vis_side():
         INNER JOIN LIGA_RANKED r ON (t.FULL_NAME LIKE '%' || r.PLAYER_NAME || '%' OR r.PLAYER_NAME LIKE '%' || t.FULL_NAME || '%')
         """
         metrics_labels = {
-            "Attacking": [("Expected Goals (xG)", "M1_RANK"), ("Actual Goals", "M2_RANK")],
-            "Performance": [("xG Rank", "M3_RANK"), ("Goal Rank", "M4_RANK")],
-            "Efficiency": [("Conversion xG", "M5_RANK"), ("Finishing", "M6_RANK")]
+            "Attacking": [("xG", "M1_RANK", "M1", "xG"), ("Goals", "M2_RANK", "M2", "stk")],
+            "Efficiency": [("Conv.", "M5_RANK", "M5", "%")]
         }
 
     # --- RENDER LOGIK ---
@@ -113,33 +113,41 @@ def vis_side():
             for i, (_, row) in enumerate(df.iterrows()):
                 with cols[i+1]:
                     img = row['IMG'] if row['IMG'] and str(row['IMG']) != 'None' else "https://cdn.wyscout.com/photos/players/public/ndplayer_100x130.png"
-                    st.markdown(f'<div style="text-align:center"><img src="{img}" style="border-radius:50%; border: 2px solid #ddd" width="60"><br><small><b>{row["PLAYER_NAME"].split()[-1]}</b></small></div>', unsafe_allow_html=True)
+                    st.markdown(f'<div style="text-align:center"><img src="{img}" style="border-radius:50%" width="60"><br><small><b>{row["PLAYER_NAME"].split()[-1]}</b></small></div>', unsafe_allow_html=True)
 
-            # Rækker med Metrics
+            # Rækker med Metrics og Bars
             for kat, metrics in metrics_labels.items():
                 st.markdown(f'<br><b>{kat}</b>', unsafe_allow_html=True)
-                for label, col_name in metrics:
+                for label, rank_col, val_col, unit in metrics:
                     m_cols = st.columns([2.5, 1, 1, 1, 1, 1])
-                    m_cols[0].caption(label) # RETTET FRA .small()
+                    m_cols[0].caption(label)
+                    
                     for i, (_, row) in enumerate(df.iterrows()):
-                        rank = int(row[col_name])
+                        rank = int(row[rank_col])
+                        raw_val = row[val_col]
                         
-                        # Opdateret farvelogik (Traffic Light)
-                        if rank <= 20:
-                            color = "#22c55e" # Grøn
-                        elif rank <= 50:
-                            color = "#facc15" # Gul
-                        else:
-                            color = "#ef4444" # Rød
-                            
+                        # Farve baseret på rank
+                        if rank <= 20: color = "#22c55e"
+                        elif rank <= 50: color = "#facc15"
+                        else: color = "#ef4444"
+                        
+                        # Formatering af tal (f.eks. 10.22 km)
+                        val_str = f"{raw_val:.2f}" if isinstance(raw_val, float) else str(raw_val)
+                        
+                        # Render Bar med Rank og (Værdi)
                         m_cols[i+1].markdown(
-                            f'<div style="background:{color}; color:black; font-weight:bold; padding:2px; border-radius:4px; text-align:center; font-size: 0.8rem">'
-                            f'R {rank}'
-                            f'</div>', 
+                            f'''
+                            <div style="background-color: #f0f2f6; border-radius: 4px; width: 100%; position: relative; height: 24px; margin-bottom: 2px;">
+                                <div style="background-color: {color}; width: {max(5, 100 - (rank/5))}%; height: 100%; border-radius: 4px; display: flex; align-items: center; justify-content: center;">
+                                    <span style="color: black; font-size: 10px; font-weight: bold; white-space: nowrap; padding: 0 5px;">
+                                        R {rank} ({val_str} {unit})
+                                    </span>
+                                </div>
+                            </div>
+                            ''', 
                             unsafe_allow_html=True
                         )
     except Exception as e:
-        st.error(f"Fejl ved rendering: {e}")
+        st.error(f"Fejl: {e}")
 
-# Kald funktionen
 vis_side()
