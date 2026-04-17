@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 from data.data_load import _get_snowflake_conn
+from data.utils.team_mapping import TEAMS
 
 def vis_side():
     try:
@@ -9,7 +10,7 @@ def vis_side():
         st.error(f"Forbindelsesfejl: {e}")
         return
 
-    # --- CSS til rapport-layout ---
+    # --- CSS til professionel rapport ---
     st.markdown("""
         <style>
         .category-header { font-weight: bold; font-size: 1rem; padding: 15px 0 5px 0; color: #111; border-bottom: 2px solid #eee; margin-top: 10px; }
@@ -22,13 +23,18 @@ def vis_side():
         </style>
     """, unsafe_allow_html=True)
 
-    # Låst til Hvidovre (target_id 7490)
-    target_id = 7490 
+    # --- 1. Vælg hold fra team_mapping ---
+    valgt_hold_navn = st.selectbox("Vælg hold fra Betinia Ligaen:", list(TEAMS.keys()))
     
-    st.title("Hvidovre IF - Teknisk Rapport (2026)")
-    st.info("Periode: 01.01.2026 - i dag")
+    # Hent ID'er fra din mapping
+    target_wyid = TEAMS[valgt_hold_navn]["team_wyid"]
+    # Vi antager at team_mapping også indeholder opta_id eller vi matcher på holdnavnet
+    target_opta_name = valgt_hold_navn 
 
-    # --- SQL Query med de korrekte OPTA_TEAMS kolonner ---
+    st.title(f"{valgt_hold_navn} - Teknisk Rapport")
+    st.info("Data fra 01.01.2026 til dags dato.")
+
+    # --- 2. SQL Query der bruger team_mapping til filtrering ---
     query = f"""
     WITH PLAYER_STATS AS (
         SELECT 
@@ -45,19 +51,19 @@ def vis_side():
         SELECT 
             p.MATCH_NAME as PLAYER_NAME,
             p.PLAYER_OPTAUUID,
-            -- Vi trækker holdnavnet fra OPTA_TEAMS tabellen
-            ot.NAME as TEAM_NAME, 
-            ot.CODE as TEAM_CODE,
+            ot.NAME as TEAM_NAME,
             s.GOALS as M1,
             s.SUCCESSFUL_PASSES as M2,
             s.TOTAL_TACKLES as M3,
+            -- Rank beregnes mod hele ligaen (før vi filtrerer på hold)
             RANK() OVER (ORDER BY s.GOALS DESC NULLS LAST) as M1_RANK,
             RANK() OVER (ORDER BY s.SUCCESSFUL_PASSES DESC NULLS LAST) as M2_RANK,
             RANK() OVER (ORDER BY s.TOTAL_TACKLES DESC NULLS LAST) as M3_RANK
         FROM KLUB_HVIDOVREIF.AXIS.OPTA_PLAYERS p
         JOIN PLAYER_STATS s ON p.PLAYER_OPTAUUID = s.PLAYER_OPTAUUID
-        -- Join til din OPTA_TEAMS tabel med de kolonner du sendte
         LEFT JOIN KLUB_HVIDOVREIF.AXIS.OPTA_TEAMS ot ON p.TEAM_OPTAUUID = ot.CONTESTANT_OPTAUUID
+        -- FILTER: Her bruger vi holdnavnet fra din team_mapping
+        WHERE ot.NAME = '{target_opta_name}'
     ),
     VALGT_TRUP AS (
         SELECT 
@@ -66,7 +72,8 @@ def vis_side():
             (TRIM(FIRSTNAME) || ' ' || TRIM(LASTNAME)) as FULL_NAME, 
             MAX(IMAGEDATAURL) as IMG
         FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_PLAYERS 
-        WHERE CURRENTTEAM_WYID = {target_id} 
+        -- FILTER: Her bruger vi team_wyid fra din team_mapping
+        WHERE CURRENTTEAM_WYID = {target_wyid} 
         GROUP BY 1, 2, 3
     )
     SELECT DISTINCT
@@ -74,16 +81,13 @@ def vis_side():
         t.FULL_NAME as WYS_NAME, 
         r.PLAYER_NAME as OPTA_NAME,
         r.TEAM_NAME,
-        r.TEAM_CODE,
         r.M1, r.M2, r.M3,
         r.M1_RANK, r.M2_RANK, r.M3_RANK
     FROM VALGT_TRUP t
     INNER JOIN LIGA_RANKED r ON (
-        -- Matcher på efternavn og sikrer at spilleren har været aktiv
+        -- Nu er det sikkert at matche på efternavn, da r kun indeholder det valgte hold
         r.PLAYER_NAME LIKE '%' || t.L_NAME || '%'
-        AND r.M2 > 0
     )
-    -- Sikrer én unik række per spiller (håndterer navnesammenfald)
     QUALIFY ROW_NUMBER() OVER (PARTITION BY t.FULL_NAME ORDER BY r.M2 DESC) = 1
     ORDER BY r.M2 DESC
     """
@@ -92,10 +96,9 @@ def vis_side():
         df = pd.read_sql(query, conn)
         
         if not df.empty:
-            # Vi viser de 5 mest centrale spillere (flest afleveringer)
             display_df = df.head(5)
             
-            # --- Spiller-kort (Billeder + Navne) ---
+            # --- Render Spiller-kort ---
             cols = st.columns([2.5, 1, 1, 1, 1, 1])
             for i, (_, row) in enumerate(display_df.iterrows()):
                 with cols[i+1]:
@@ -104,7 +107,6 @@ def vis_side():
                         <div class="player-card">
                             <img src="{img}" class="player-img-round" width="60" height="60"><br>
                             <span class="player-name-text">{row['WYS_NAME']}</span>
-                            <small style="color:gray;">{row['TEAM_CODE']}</small>
                         </div>
                     """, unsafe_allow_html=True)
 
@@ -136,10 +138,10 @@ def vis_side():
                                 </div>
                             """, unsafe_allow_html=True)
         else:
-            st.warning("Ingen spillere fundet for Hvidovre i den valgte periode.")
+            st.warning(f"Ingen data fundet for {valgt_hold_navn} i 2026. Tjek om holdnavnet matcher præcis i Opta.")
 
     except Exception as e:
-        st.error(f"SQL eller Datafejl: {e}")
+        st.error(f"Fejl: {e}")
 
 if __name__ == "__main__":
     vis_side()
