@@ -33,32 +33,35 @@ def vis_side():
         .metric-label { font-size: 0.8rem; color: #444; display: flex; align-items: center; height: 35px; line-height: 1.1; }
         .rank-container { position: relative; background-color: #f0f0f0; height: 32px; width: 100%; border-radius: 4px; overflow: hidden; display: flex; align-items: center; margin-bottom: 2px; }
         .rank-fill { height: 100%; display: flex; align-items: center; padding-left: 8px; font-weight: bold; color: black; font-size: 0.72rem; white-space: nowrap; min-width: fit-content; }
-        .player-card { text-align: center; min-height: 120px; vertical-align: top; }
-        .player-img-round { border-radius: 50%; object-fit: cover; border: 2px solid #f0f2f6; background-color: white; margin-bottom: 5px; }
-        .player-name-text { font-size: 0.75rem; line-height: 1.2; display: block; height: 30px; overflow: hidden; }
+        .player-card { text-align: center; min-height: 130px; vertical-align: top; }
+        .player-img-round { border-radius: 50%; object-fit: cover; border: 2px solid #f0f2f6; background-color: white; margin-bottom: 8px; }
+        .player-name-text { font-size: 0.75rem; line-height: 1.1; font-weight: bold; color: #111; display: block; }
         </style>
     """, unsafe_allow_html=True)
 
     # --- Kontrolpanel ---
     col1, col2 = st.columns([2, 2])
     with col1:
-        valgt_navn = st.selectbox("Vælg hold:", list(TEAMS.keys()), key="opta_ss_stable_v1")
+        valgt_navn = st.selectbox("Vælg hold:", list(TEAMS.keys()), key="hvidovre_report_2026")
         target_id = TEAMS[valgt_navn]["team_wyid"]
     with col2:
         mode = st.radio("Vælg data-visning:", ["Fysiske Data (SS)", "Tekniske Data (Opta)"], horizontal=True)
 
-    # --- SQL Logik ---
+    # --- Periode-filter (1. Jan 2026 til dags dato) ---
+    start_dato_2026 = "2026-01-01"
+
+    # --- SQL Logik Konfiguration ---
     if mode == "Fysiske Data (SS)":
         table = "KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS"
         sql_metrics = """
             AVG(DISTANCE) as M1, AVG(RUNNING) as M2, AVG("HIGH SPEED RUNNING") as M3,
             AVG(SPRINTING) as M4, MAX(TOP_SPEED) as M5, AVG(NO_OF_HIGH_INTENSITY_RUNS) as M6
         """
-        date_filter = "WHERE MATCH_DATE BETWEEN '2025-07-01' AND '2026-06-30'"
+        date_filter = f"WHERE MATCH_DATE >= '{start_dato_2026}'"
         metrics_labels = {
-            "Volume": [("Total Distance", "M1_RANK"), ("Running Distance", "M2_RANK")],
-            "Intensity": [("Hi Distance", "M3_RANK"), ("Sprint Distance", "M4_RANK")],
-            "Explosive": [("Top Speed", "M5_RANK"), ("Accelerations", "M6_RANK")]
+            "Volume (2026)": [("Total Distance", "M1_RANK"), ("Running Distance", "M2_RANK")],
+            "Intensity (2026)": [("Hi Distance", "M3_RANK"), ("Sprint Distance", "M4_RANK")],
+            "Explosive (2026)": [("Top Speed", "M5_RANK"), ("Accelerations", "M6_RANK")]
         }
     else:
         table = "KLUB_HVIDOVREIF.AXIS.OPTA_EVENTS"
@@ -70,14 +73,15 @@ def vis_side():
             COUNT(CASE WHEN EVENT_TYPEID = 2 THEN 1 END) as M5,
             COUNT(CASE WHEN EVENT_TYPEID = 3 AND EVENT_OUTCOME = 1 THEN 1 END) as M6
         """
-        date_filter = "" 
+        # Opta Events filteres her på den dato de er indtruffet
+        date_filter = f"WHERE MATCH_DATE >= '{start_dato_2026}'" 
         metrics_labels = {
-            "Offensivt": [("Mål", "M1_RANK"), ("Vundne Driblinger", "M6_RANK")],
-            "Distribution": [("Succesfulde Afleveringer", "M2_RANK"), ("Offsides", "M5_RANK")],
-            "Defensivt": [("Tacklinger", "M3_RANK"), ("Clearances", "M4_RANK")]
+            "Offensivt (2026)": [("Mål", "M1_RANK"), ("Vundne Driblinger", "M6_RANK")],
+            "Distribution (2026)": [("Succesfulde Afleveringer", "M2_RANK"), ("Offsides", "M5_RANK")],
+            "Defensivt (2026)": [("Tacklinger", "M3_RANK"), ("Clearances", "M4_RANK")]
         }
 
-    # --- Query ---
+    # --- Query Generering ---
     if mode == "Fysiske Data (SS)":
         query = f"""
         WITH LIGA_STATS AS (
@@ -101,7 +105,7 @@ def vis_side():
     else:
         query = f"""
         WITH PLAYER_SUMS AS (
-            SELECT PLAYER_OPTAUUID, {sql_metrics} FROM {table} GROUP BY PLAYER_OPTAUUID
+            SELECT PLAYER_OPTAUUID, {sql_metrics} FROM {table} {date_filter} GROUP BY PLAYER_OPTAUUID
         ),
         LIGA_RANKED AS (
             SELECT p.MATCH_NAME as PLAYER_NAME, p.PLAYER_OPTAUUID, s.*,
@@ -132,19 +136,20 @@ def vis_side():
             if player_overrides:
                 df = df[df.apply(lambda row: player_overrides.get(row['WYS_NAME'], target_id) == target_id, axis=1)]
             
+            # Sortering: Top 5 spillere baseret på aktivitet (M2_RANK)
             df = df.sort_values("M2_RANK").head(5)
             st.write("---")
             
-            # --- Render Spiller-kort med FULDE navne ---
+            # --- Render Spiller-kort ---
             cols = st.columns([2.5, 1, 1, 1, 1, 1])
             for i, (_, row) in enumerate(df.iterrows()):
                 with cols[i+1]:
                     img = row['IMG'] if row['IMG'] and str(row['IMG']) != 'None' else "https://via.placeholder.com/150"
-                    fuldt_navn = row['WYS_NAME'] # Her bruger vi nu det fulde navn
+                    fuldt_navn = row['WYS_NAME']
                     st.markdown(f"""
                         <div class="player-card">
                             <img src="{img}" class="player-img-round" width="60" height="60"><br>
-                            <span class="player-name-text"><b>{fuldt_navn}</b></span>
+                            <span class="player-name-text">{fuldt_navn}</span>
                         </div>
                     """, unsafe_allow_html=True)
 
@@ -170,10 +175,10 @@ def vis_side():
                                 </div>
                             """, unsafe_allow_html=True)
         else:
-            st.info(f"Ingen data fundet for {valgt_navn}.")
+            st.info(f"Ingen data fundet for {valgt_navn} i perioden fra 1. januar 2026.")
 
     except Exception as e:
-        st.error(f"Fejl: {e}")
+        st.error(f"Fejl i data-processering: {e}")
 
 if __name__ == "__main__":
     vis_side()
