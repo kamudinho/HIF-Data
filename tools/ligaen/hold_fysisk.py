@@ -1,151 +1,110 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
-import plotly.express as px
 from data.data_load import _get_snowflake_conn
 
-# --- Streamlit konfiguration ---
-st.set_page_config(page_title="Hvidovre IF Taktisk Analyse", layout="wide", initial_sidebar_state="collapsed")
-
-# Styling til mørkt tema og gennemsigtighed
-st.markdown("""
-<style>
-    .stApp {
-        background-color: #1E1E1E;
-        color: white;
-    }
-    .stSelectbox div[data-baseweb="select"] > div {
-        background-color: #2D2D2D;
-        color: white;
-    }
-    .stRadio div[role="radiogroup"] > label {
-        color: white;
-    }
-    hr {
-        border-color: #444444;
-    }
-</style>
-""", unsafe_allow_html=True)
-
-# --- 1. DATA-PROCESSERING ---
-def get_league_data(conn):
-    sql = """
-        SELECT 
-            P.PLAYER_NAME, P.MATCH_TEAMS, P.DISTANCE, 
-            P."HIGH SPEED RUNNING" as HSR, P.NO_OF_HIGH_INTENSITY_RUNS as HI_RUNS, P.TOP_SPEED,
-            CASE 
-              WHEN P.MINUTES LIKE '%:%' THEN TRY_CAST(SPLIT_PART(P.MINUTES, ':', 1) AS FLOAT) + (TRY_CAST(SPLIT_PART(P.MINUTES, ':', 2) AS FLOAT)/60)
-              ELSE COALESCE(TRY_CAST(P.MINUTES AS FLOAT), 90.0) 
-            END as MIN_DEC
-        FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS P
-        INNER JOIN KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_SEASON_METADATA M ON P.MATCH_SSIID = M.MATCH_SSIID
-        WHERE (M.COMPETITION_OPTAID = '148' OR M.SECOND_SPECTRUM_COMPETITION_ID = '328')
-          AND M.DATE >= '2025-07-01'
-    """
-    df = conn.query(sql)
-    if df is None: return pd.DataFrame()
-    df.columns = [c.upper() for c in df.columns]
-    
-    df['TOP_SPEED'] = df['TOP_SPEED'].apply(lambda x: x if x < 36.5 else 34.0 + np.random.uniform(0.1, 1.2))
-    
-    df['HI_P90'] = (df['HI_RUNS'] / df['MIN_DEC']) * 90
-    df['DIST_P90'] = (df['DISTANCE'] / df['MIN_DEC']) * 90
-    df['HSR_P90'] = (df['HSR'] / df['MIN_DEC']) * 90
-    
-    return df
-
-# --- 2. DYNAMISK ANALYSE ---
-def generate_nuanced_advice(stats_a, stats_b):
-    advice = []
-    hi_diff_pct = ((stats_a['HI_P90'] / stats_b['HI_P90']) - 1) * 100
-    if hi_diff_pct < -5:
-        advice.append(f"Pres-overmatch: Modstanderen leverer {abs(hi_diff_pct):.1f}% højere intensitet. Forvent et aggressivt pres.")
-    elif hi_diff_pct > 5:
-        advice.append(f"Intensitets-fordel: I overgår modstanderen med {hi_diff_pct:.1f}% i HI-løb. Pres dem højt.")
-    else:
-        advice.append("Intensitets-ligevægt: Kampen bliver taktisk afgjort frem for på rent løbe-output.")
-    return advice
-
-# --- 3. HOVEDSIDE ---
 def vis_side():
-    st.title("Taktisk Beslutningsstøtte")
+    """
+    Henter Top 5 mest løbestærke spillere for det valgte hold.
+    Følger rækkefølgen: WyScout_Teams -> WyScout_Players -> Second Spectrum Stats.
+    """
     
-    conn = _get_snowflake_conn()
-    df = get_league_data(conn)
-    if df.empty: return
+    # 1. Opret forbindelse til Snowflake
+    try:
+        conn = _get_snowflake_conn()
+    except Exception as e:
+        st.error(f"Forbindelsesfejl: {e}")
+        return
 
-    # Holdvalg
-    unique_teams = sorted(list(set([t.strip() for sublist in df['MATCH_TEAMS'].str.split('-').tolist() for t in sublist])))
-    
-    c_sel1, c_sel2 = st.columns(2)
-    with c_sel1:
-        t1 = st.selectbox("Vores Hold", unique_teams, index=unique_teams.index("Hvidovre") if "Hvidovre" in unique_teams else 0)
-    with c_sel2:
-        t2 = st.selectbox("Modstander", unique_teams, index=unique_teams.index("Kolding IF") if "Kolding IF" in unique_teams else 0)
+    # 2. Hent valgt hold fra session_state
+    valgt_hold = st.session_state.get("valgt_hold", "Hvidovre")
+    # Sikrer mod fejl hvis holdnavnet indeholder en apostrof (fx B.93')
+    safe_hold = valgt_hold.replace("'", "''")
 
-    # Aggregering pr. hold
-    def agg_team(name):
-        mask = df['MATCH_TEAMS'].str.contains(name)
-        return df[mask][['HI_P90', 'DIST_P90', 'HSR_P90', 'TOP_SPEED']].mean()
-
-    stats_a = agg_team(t1)
-    stats_b = agg_team(t2)
-
-    # Liga-oversigt
-    st.divider()
-    st.subheader("Fysisk Hierarki: Hele Ligaen")
-    
-    league_metrics = []
-    for team in unique_teams:
-        m = agg_team(team)
-        league_metrics.append({'Hold': team, 'HI': m['HI_P90'], 'HSR': m['HSR_P90'], 'Dist': m['DIST_P90'], 'Speed': m['TOP_SPEED']})
-    df_l = pd.DataFrame(league_metrics)
-
-    m_choice = st.radio("Vælg metrik", ['HI', 'HSR', 'Dist', 'Speed'], horizontal=True)
-    df_l = df_l.sort_values(m_choice, ascending=False)
-    
-    # Farver: Kun de to valgte hold
-    color_map = {team: '#4A4A4A' for team in unique_teams}
-    color_map[t1] = '#006D00'
-    color_map[t2] = '#FF0000'
-
-    # FIGUR BYGNING
-    fig = px.bar(
-        df_l, 
-        x='Hold', 
-        y=m_choice, 
-        color='Hold', 
-        color_discrete_map=color_map,
-        text_auto='.1f'
+    # 3. SQL Query med din optimerede CTE-struktur
+    query = f"""
+    WITH HOLD AS (
+        -- Find holdet og logo i WYSCOUT_TEAMS
+        SELECT TEAM_WYID, IMAGEDATAURL as TEAM_LOGO
+        FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_TEAMS
+        WHERE TEAMNAME = '{safe_hold}'
+        LIMIT 1
+    ),
+    SPILLERE AS (
+        -- Find alle spillere for holdet i WYSCOUT_PLAYERS
+        SELECT 
+            OPTAID, 
+            IMAGEDATAURL as PLAYER_IMG
+        FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_PLAYERS
+        WHERE CURRENTTEAM_WYID = (SELECT TEAM_WYID FROM HOLD)
     )
+    -- Hent fysisk data og kobl på spillere via OptaID
+    SELECT 
+        s.PLAYER_NAME,
+        AVG(s.DISTANCE) as DIST, 
+        AVG(s."HIGH SPEED RUNNING") as HSR, 
+        MAX(s.TOP_SPEED) as SPEED,
+        MAX(sp.PLAYER_IMG) as IMG,
+        (SELECT TEAM_LOGO FROM HOLD) as LOGO
+    FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS s
+    JOIN SPILLERE sp ON s."optaId" = sp.OPTAID
+    WHERE s.MATCH_DATE BETWEEN '2025-07-01' AND '2026-06-30'
+    GROUP BY s.PLAYER_NAME
+    ORDER BY DIST DESC
+    LIMIT 5
+    """
 
-    # Layout rettelse: Vi bruger fig.update_layout til det meste for at undgå attribut-fejl
-    fig.update_layout(
-        showlegend=False, 
-        plot_bgcolor='rgba(0,0,0,0)', 
-        paper_bgcolor='rgba(0,0,0,0)',
-        font=dict(color="white"),
-        height=500,
-        margin=dict(l=20, r=20, t=30, b=100),
-        xaxis=dict(tickangle=45, title=""),
-        yaxis=dict(gridcolor='#444444', zerolinecolor='#666666', title="")
-    )
-    
-    st.plotly_chart(fig, use_container_width=True)
+    try:
+        # Hent data ind i Pandas
+        df = pd.read_sql(query, conn)
 
-    # Tekstlig vurdering
-    st.divider()
-    st.subheader("Taktisk Vurdering")
-    
-    col1, col2 = st.columns([1, 2])
-    with col1:
-        st.write(f"Intensitet (HI): {stats_a['HI_P90']:.1f} vs {stats_b['HI_P90']:.1f}")
-        st.write(f"Sprint (HSR): {stats_a['HSR_P90']:.0f}m vs {stats_b['HSR_P90']:.0f}m")
-    
-    with col2:
-        analysis = generate_nuanced_advice(stats_a, stats_b)
-        for line in analysis:
-            st.write(f"- {line}")
+        if not df.empty:
+            # Tving alle kolonnenavne til UPPERCASE for at undgå KeyError
+            df.columns = [x.upper() for x in df.columns]
 
-if __name__ == "__main__":
-    vis_side()
+            # Layout: Logo og Overskrift
+            col_l, col_t = st.columns([1, 6])
+            with col_l:
+                logo_url = df['LOGO'].iloc[0]
+                st.image(logo_url, width=80)
+            with col_t:
+                st.subheader(f"Top 5: Fysiske Profiler ({valgt_hold})")
+
+            # Find max distance til skalering af bars
+            max_dist = df['DIST'].max()
+
+            st.write("---")
+
+            # Loop gennem de 5 spillere
+            for _, row in df.iterrows():
+                c1, c2 = st.columns([1, 5])
+                
+                with c1:
+                    # Vis spillerbillede (eller placeholder hvis det mangler)
+                    img_path = row['IMG']
+                    if not img_path or str(img_path) == 'None' or "ndplayer" in str(img_path):
+                        img_path = "https://via.placeholder.com/150"
+                    st.image(img_path, width=75)
+                
+                with c2:
+                    st.markdown(f"**{row['PLAYER_NAME']}**")
+                    
+                    # Beregn bar-bredde
+                    bredde = (row['DIST'] / max_dist) * 100
+                    
+                    # Rød progress bar (Hvidovre stil)
+                    st.markdown(f"""
+                        <div style="background:#262626; width:100%; height:12px; border-radius:6px; margin: 8px 0;">
+                            <div style="background:#df003b; width:{bredde}%; height:12px; border-radius:6px;"></div>
+                        </div>
+                    """, unsafe_allow_html=True)
+                    
+                    # Stats i bunden
+                    dist_km = row['DIST'] / 1000
+                    st.caption(f"🏃 {dist_km:.2f} km gns.  |  ⚡ {int(row['HSR'])}m HSR  |  🚀 {row['SPEED']} km/t max")
+                    st.write("") # Ekstra luft mellem spillere
+
+        else:
+            st.info(f"Der blev ikke fundet nogle fysiske kampdata for {valgt_hold} i denne periode.")
+
+    except Exception as e:
+        st.error(f"Der skete en fejl ved behandling af data: {e}")
