@@ -6,52 +6,56 @@ from data.utils.team_mapping import TEAMS
 def vis_side():
     conn = _get_snowflake_conn()
 
-    # --- 1. STYLING (Genskaber tabel-looket) ---
+    # --- CSS: Finpudsning af celler og barer ---
     st.markdown("""
         <style>
-        .metric-row {
+        .metric-label {
+            font-weight: bold;
+            font-size: 1rem;
+            color: #333;
             display: flex;
             align-items: center;
-            border-bottom: 1px solid #eee;
-            padding: 5px 0;
+            height: 40px;
         }
-        .metric-name {
-            width: 200px;
-            font-weight: bold;
-            font-size: 0.9rem;
-            color: #333;
-        }
-        .player-col {
-            flex: 1;
-            text-align: center;
-            padding: 0 5px;
-        }
-        .rank-box {
+        .rank-container {
+            position: relative;
+            background-color: #eee; /* Baggrund på tom bar */
+            height: 40px;
+            width: 100%;
             border-radius: 4px;
-            padding: 5px 0;
-            font-weight: bold;
-            font-size: 0.85rem;
-            color: white;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            margin-bottom: 2px;
         }
-        /* Farvekoder baseret på rank (Grøn for top, rød for bund) */
-        .rank-high { background-color: #00ff00; color: black; } /* Top 10% */
-        .rank-mid { background-color: #90ee90; color: black; }  /* Top 30% */
-        .rank-low { background-color: #ffcccb; color: black; }  /* Resten */
-        
-        .player-header-img {
+        .rank-fill {
+            height: 100%;
+            display: flex;
+            align-items: center;
+            padding-left: 10px;
+            font-weight: bold;
+            color: black;
+            white-space: nowrap;
+        }
+        .player-header {
+            text-align: center;
+            padding-bottom: 10px;
+        }
+        .player-img-round {
             border-radius: 50%;
             object-fit: cover;
-            margin-bottom: 5px;
+            border: 2px solid #f0f2f6;
         }
         </style>
     """, unsafe_allow_html=True)
 
-    # --- 2. HOLDVALG ---
+    # --- 1. HOLDVALG ---
     alle_hold = list(TEAMS.keys())
     valgt_navn = st.selectbox("Vælg hold:", alle_hold, index=alle_hold.index("Hvidovre") if "Hvidovre" in alle_hold else 0)
     target_wyid = TEAMS[valgt_navn]["team_wyid"]
 
-    # --- 3. DATA (Vi henter flere metrics og beregner rank) ---
+    # --- 2. SQL ---
     query = f"""
     WITH STATS AS (
         SELECT 
@@ -66,10 +70,10 @@ def vis_side():
     ),
     RANKED AS (
         SELECT *,
-            PERCENT_RANK() OVER (ORDER BY DIST DESC) as DIST_RANK,
-            PERCENT_RANK() OVER (ORDER BY HSR DESC) as HSR_RANK,
-            PERCENT_RANK() OVER (ORDER BY SPEED DESC) as SPEED_RANK,
-            PERCENT_RANK() OVER (ORDER BY ACCELS DESC) as ACCELS_RANK
+            PERCENT_RANK() OVER (ORDER BY DIST DESC) as DIST_PR,
+            PERCENT_RANK() OVER (ORDER BY HSR DESC) as HSR_PR,
+            PERCENT_RANK() OVER (ORDER BY SPEED DESC) as SPEED_PR,
+            PERCENT_RANK() OVER (ORDER BY ACCELS DESC) as ACCELS_PR
         FROM STATS
     ),
     TRUP AS (
@@ -85,44 +89,57 @@ def vis_side():
 
     try:
         df = pd.read_sql(query, conn)
-        
         if not df.empty:
-            # --- HEADER RÆKKE (Spiller billeder og navne) ---
-            cols = st.columns([1.5, 1, 1, 1, 1, 1]) # 6 kolonner
+            st.write("---")
             
-            with cols[0]: st.write("") # Tom plads over metrics navne
+            # --- HEADER: Spillerbilleder ---
+            cols = st.columns([2, 1, 1, 1, 1, 1])
+            with cols[0]: st.write("") # Plads til labels
             
             for i, (_, row) in enumerate(df.iterrows()):
                 with cols[i+1]:
                     img = row['IMAGEDATAURL'] if row['IMAGEDATAURL'] else "https://via.placeholder.com/150"
-                    st.markdown(f'<img src="{img}" class="player-header-img" width="60">', unsafe_allow_html=True)
-                    st.markdown(f"**{row['PLAYER_NAME'].split()[-1]}**", help=row['PLAYER_NAME']) # Kun efternavn
+                    st.markdown(f"""
+                        <div class="player-header">
+                            <img src="{img}" class="player-img-round" width="70">
+                            <br><b>{row['PLAYER_NAME'].split()[-1]}</b>
+                        </div>
+                    """, unsafe_allow_html=True)
 
-            # --- METRIC RÆKKER ---
-            metrics = [
-                ("Distance Per 90", "DIST_RANK", "DIST"),
-                ("Hi Distance Per 90", "HSR_RANK", "HSR"),
-                ("Top Speed", "SPEED_RANK", "SPEED"),
-                ("Accelerations", "ACCELS_RANK", "ACCELS")
+            # --- RÆKKER: Metrics ---
+            # Liste over (Navn, Procent-kolonne, Farve-skala)
+            metrics_to_show = [
+                ("Distance Per 90", "DIST_PR"),
+                ("Hi Distance Per 90", "HSR_PR"),
+                ("Top Speed", "SPEED_PR"),
+                ("Accelerations", "ACCELS_PR")
             ]
 
-            for label, rank_col, val_col in metrics:
-                st.markdown("---")
-                m_cols = st.columns([1.5, 1, 1, 1, 1, 1])
+            for label, pr_col in metrics_to_show:
+                st.write("") # Padding
+                m_cols = st.columns([2, 1, 1, 1, 1, 1])
+                
                 with m_cols[0]:
-                    st.markdown(f"**{label}**")
+                    st.markdown(f'<div class="metric-label">{label}</div>', unsafe_allow_html=True)
                 
                 for i, (_, row) in enumerate(df.iterrows()):
-                    rank_val = row[rank_col]
-                    # Bestem farveklasse baseret på rank
-                    color_class = "rank-high" if rank_val <= 0.1 else "rank-mid" if rank_val <= 0.3 else "rank-low"
+                    # Vi inverterer pr_col (da PERCENT_RANK 0 er bedst i SQL)
+                    val_pct = (1 - row[pr_col]) * 100
+                    
+                    # Dynamisk farve (Stærk grøn for top, lysere for midt, rødlig for bund)
+                    color = "#00ff00" if val_pct > 80 else "#90ee90" if val_pct > 50 else "#ffcccb"
                     
                     with m_cols[i+1]:
-                        # Viser rank som "1st", "2nd" osv (simuleret her)
-                        rank_text = f"{int(rank_val * 100)}%" 
-                        st.markdown(f'<div class="rank-box {color_class}">{rank_text}</div>', unsafe_allow_html=True)
-
+                        st.markdown(f"""
+                            <div class="rank-container">
+                                <div class="rank-fill" style="width: {val_pct}%; background-color: {color};">
+                                    {int(val_pct)}%
+                                </div>
+                            </div>
+                        """, unsafe_allow_html=True)
         else:
-            st.info("Ingen data fundet.")
+            st.warning("Ingen spillere fundet for det valgte hold.")
     except Exception as e:
-        st.error(f"Fejl: {e}")
+        st.error(f"Der opstod en fejl: {e}")
+
+vis_side()
