@@ -3,6 +3,8 @@ import pandas as pd
 from data.data_load import _get_snowflake_conn
 from data.utils.team_mapping import TEAMS
 
+# VIGTIGT: Sørg for at der ikke står "from tools.players import ..." herover.
+
 def vis_side():
     try:
         conn = _get_snowflake_conn()
@@ -10,7 +12,7 @@ def vis_side():
         st.error(f"Forbindelsesfejl: {e}")
         return
 
-    # --- CSS: Rettet til én linje og bedre plads ---
+    # --- CSS: Sikrer én linje og korrekt skalering ---
     st.markdown("""
         <style>
         .category-header { font-weight: bold; font-size: 1rem; padding: 15px 0 5px 0; color: #111; border-bottom: 2px solid #eee; margin-top: 10px; }
@@ -23,24 +25,32 @@ def vis_side():
             padding-left: 6px; 
             font-weight: bold; 
             color: black; 
-            font-size: 0.7rem; 
-            white-space: nowrap; /* Tvinger tekst på én linje */
+            font-size: 0.72rem; 
+            white-space: nowrap; /* Tvinger teksten på én linje */
+            min-width: fit-content;
         }
         .player-card { text-align: center; min-height: 100px; }
-        .player-img-round { border-radius: 50%; object-fit: cover; border: 2px solid #f0f2f6; }
+        .player-img-round { border-radius: 50%; object-fit: cover; border: 2px solid #f0f2f6; background-color: white; }
         </style>
     """, unsafe_allow_html=True)
 
+    # 1. HOLDVALG
     alle_hold = list(TEAMS.keys())
     col_sel, _ = st.columns([2, 2])
     with col_sel:
         initial_hold = "Hvidovre" if "Hvidovre" in alle_hold else alle_hold[0]
-        valgt_navn = st.selectbox("Vælg hold:", alle_hold, index=alle_hold.index(initial_hold), key="phys_rank_final_v1")
+        valgt_navn = st.selectbox(
+            "Vælg hold:", 
+            alle_hold, 
+            index=alle_hold.index(initial_hold), 
+            key="phys_rank_final_v2"
+        )
     
     target_wyid = TEAMS[valgt_navn]["team_wyid"]
 
-    # 2. SQL: Tilføjet Running Distance og Sprint Distance
-    # Bemærk: Jeg bruger de mest gængse kolonnenavne for disse metrics
+    # 2. SQL: Henter alle metrics og beregner Rank på tværs af ligaen
+    # Hvis RUNNING_DISTANCE eller SPRINT_DISTANCE fejler i din Snowflake, 
+    # skal de omdøbes til de præcise kolonnenavne i din tabel.
     query = f"""
     WITH LIGA_STATS AS (
         SELECT 
@@ -75,8 +85,13 @@ def vis_side():
     )
     SELECT t.IMG, r.*
     FROM VALGT_TRUP t
-    INNER JOIN LIGA_RANKED r ON (t.FULL_NAME = r.PLAYER_NAME OR r.PLAYER_NAME LIKE '%' || t.FULL_NAME || '%')
-    ORDER BY r.DIST DESC LIMIT 5
+    INNER JOIN LIGA_RANKED r ON (
+        t.FULL_NAME = r.PLAYER_NAME 
+        OR r.PLAYER_NAME LIKE '%' || t.FULL_NAME || '%'
+        OR t.FULL_NAME LIKE '%' || r.PLAYER_NAME || '%'
+    )
+    ORDER BY r.DIST DESC 
+    LIMIT 5
     """
 
     try:
@@ -84,15 +99,21 @@ def vis_side():
         if not df.empty:
             st.write("---")
             
-            # --- HEADER ---
+            # --- HEADER: SPILLER PROFILER ---
             cols = st.columns([2.5, 1, 1, 1, 1, 1])
             with cols[0]: st.write("")
             for i, (_, row) in enumerate(df.iterrows()):
                 with cols[i+1]:
-                    img = row['IMG'] if row['IMG'] and str(row['IMG']) != 'None' else "https://via.placeholder.com/150"
-                    st.markdown(f'<div class="player-card"><img src="{img}" class="player-img-round" width="60" height="60"><br><small><b>{row["PLAYER_NAME"].split()[-1]}</b></small></div>', unsafe_allow_html=True)
+                    img_path = row['IMG'] if row['IMG'] and str(row['IMG']) != 'None' else "https://via.placeholder.com/150"
+                    efternavn = row['PLAYER_NAME'].split()[-1]
+                    st.markdown(f"""
+                        <div class="player-card">
+                            <img src="{img_path}" class="player-img-round" width="60" height="60">
+                            <br><small><b>{efternavn}</b></small>
+                        </div>
+                    """, unsafe_allow_html=True)
 
-            # --- KATEGORIER: Nu med Running og Sprint Distance ---
+            # --- KATEGORIER: Kobling af alle tal ---
             metrics_map = {
                 "Volume Metrics": [
                     ("Distance Per 90", "DIST_RANK"),
@@ -108,6 +129,7 @@ def vis_side():
                 ]
             }
 
+            # --- RENDER TABEL ---
             for kat_navn, metrics in metrics_map.items():
                 st.markdown(f'<div class="category-header">{kat_navn}</div>', unsafe_allow_html=True)
                 for label, col_name in metrics:
@@ -118,12 +140,14 @@ def vis_side():
                     for i, (_, row) in enumerate(df.iterrows()):
                         rank_val = int(row[col_name])
                         
-                        # Justeret fill: selv ved høj rank (kort bar) vises teksten nu pænt
-                        fill_width = max(15, (1 - (rank_val / 250)) * 100) if rank_val <= 250 else 15
+                        # Skalering af bar: Rank 1 er 100%, Rank 200 er tæt på 0.
+                        # min-width sikrer at teksten altid kan ses.
+                        fill_width = max(18, (1 - (rank_val / 250)) * 100) if rank_val <= 250 else 18
                         
-                        if rank_val <= 20: color = "#22c55e"    
-                        elif rank_val <= 75: color = "#facc15" 
-                        else: color = "#fca5a5"                
+                        # Farver: Grøn (Top 20), Gul (Top 80), Rød (Resten)
+                        if rank_val <= 20: color = "#22c55e"
+                        elif rank_val <= 80: color = "#facc15"
+                        else: color = "#fca5a5"
                         
                         with m_cols[i+1]:
                             st.markdown(f"""
@@ -134,9 +158,9 @@ def vis_side():
                                 </div>
                             """, unsafe_allow_html=True)
         else:
-            st.info("Ingen match fundet.")
+            st.info("Ingen match fundet mellem trup og liga-data.")
+
     except Exception as e:
-        # Hvis RUNNING_DISTANCE eller SPRINT_DISTANCE mangler i din tabel, vil denne fange det
-        st.error(f"Der mangler data i tabellen (tjek kolonnenavne): {e}")
+        st.error(f"Fejl ved indlæsning: {e}")
 
 vis_side()
