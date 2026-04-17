@@ -16,7 +16,7 @@ def vis_side():
         valgt_navn = st.selectbox(
             "Vælg hold:", 
             list(TEAMS.keys()), 
-            key="sb_top5_vfinal_stable" 
+            key="sb_top5_final_v3" 
         )
         target_wyid = TEAMS[valgt_navn]["team_wyid"]
         
@@ -25,11 +25,16 @@ def vis_side():
             "Vælg data-visning:", 
             ["Fysiske Data (P90)", "Tekniske Data (P90)"], 
             horizontal=True,
-            key="radio_top5_vfinal_stable"
+            key="radio_top5_final_v3"
         )
 
     # --- SQL LOGIK ---
-    # Vi definerer overførslerne her: Enemark (7485), Westh (7481)
+    # Vi bruger en string til at filtrere navne fra, hvis Kolding er valgt
+    # Kolding IF ID er typisk 7482 i dit system
+    filter_sql = ""
+    if valgt_navn == "Kolding IF":
+        filter_sql = "AND r.PLAYER_NAME NOT LIKE '%Enemark%' AND r.PLAYER_NAME NOT LIKE '%Westh%'"
+
     if "Fysiske Data" in mode:
         query = f"""
         WITH LIGA_STATS AS (
@@ -50,18 +55,14 @@ def vis_side():
         VALGT_TRUP AS (
             SELECT 
                 (TRIM(FIRSTNAME) || ' ' || TRIM(LASTNAME)) as FULL_NAME, 
-                MAX(IMAGEDATAURL) as IMG,
-                CASE 
-                    WHEN (TRIM(FIRSTNAME) || ' ' || TRIM(LASTNAME)) = 'Marius Enemark' THEN 7485
-                    WHEN (TRIM(FIRSTNAME) || ' ' || TRIM(LASTNAME)) = 'Alexander Westh' THEN 7481
-                    ELSE MAX(CURRENTTEAM_WYID) 
-                END as ACTUAL_TEAM_ID
+                MAX(IMAGEDATAURL) as IMG
             FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_PLAYERS 
+            WHERE CURRENTTEAM_WYID = {target_wyid}
             GROUP BY 1
         )
         SELECT t.IMG, t.FULL_NAME as WYS_NAME, r.* FROM VALGT_TRUP t
         INNER JOIN LIGA_RANKED r ON (t.FULL_NAME LIKE '%' || r.PLAYER_NAME || '%' OR r.PLAYER_NAME LIKE '%' || t.FULL_NAME || '%')
-        WHERE t.ACTUAL_TEAM_ID = {target_wyid}  -- HER FILTRERES DE UD FRA DET FORKERTE HOLD
+        WHERE 1=1 {filter_sql}
         """
         metrics_labels = {
             "Volume (P90)": [("Total Dist.", "M1_RANK", "M1"), ("Running", "M2_RANK", "M2")],
@@ -88,18 +89,14 @@ def vis_side():
         VALGT_TRUP AS (
             SELECT 
                 (TRIM(FIRSTNAME) || ' ' || TRIM(LASTNAME)) as FULL_NAME, 
-                MAX(IMAGEDATAURL) as IMG,
-                CASE 
-                    WHEN (TRIM(FIRSTNAME) || ' ' || TRIM(LASTNAME)) = 'Marius Enemark' THEN 7485
-                    WHEN (TRIM(FIRSTNAME) || ' ' || TRIM(LASTNAME)) = 'Alexander Westh' THEN 7481
-                    ELSE MAX(CURRENTTEAM_WYID) 
-                END as ACTUAL_TEAM_ID
+                MAX(IMAGEDATAURL) as IMG
             FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_PLAYERS 
+            WHERE CURRENTTEAM_WYID = {target_wyid}
             GROUP BY 1
         )
         SELECT t.IMG, t.FULL_NAME as WYS_NAME, r.* FROM VALGT_TRUP t
         INNER JOIN LIGA_RANKED r ON (t.FULL_NAME LIKE '%' || r.PLAYER_NAME || '%' OR r.PLAYER_NAME LIKE '%' || t.FULL_NAME || '%')
-        WHERE t.ACTUAL_TEAM_ID = {target_wyid} -- HER FILTRERES DE UD FRA DET FORKERTE HOLD
+        WHERE 1=1 {filter_sql}
         """
         metrics_labels = {
             "Attacking (P90)": [("xG p90", "M1_RANK", "M1"), ("Mål p90", "M2_RANK", "M2")]
@@ -109,7 +106,6 @@ def vis_side():
     try:
         df = pd.read_sql(query, conn)
         if not df.empty:
-            # Vi tager de 5 med den bedste rank (laveste tal) i første metric
             df = df.sort_values("M1_RANK").head(5)
             
             st.write("---")
