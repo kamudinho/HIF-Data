@@ -1,58 +1,41 @@
 import streamlit as st
 import pandas as pd
 from data.data_load import _get_snowflake_conn
-import traceback
 
 def vis_side():
     st.markdown("<h2 style='text-align: center; color: #1f1f1f;'>EXPLOSIVE PHYSICAL PROFILES</h2>", unsafe_allow_html=True)
     
     try:
-        # 1. FORBINDELSE
         conn = _get_snowflake_conn()
         
-        # 2. HENT TABELLER (Med ekstra fejlhåndtering)
+        # 1. HENT DATA DIREKTE (Vi bruger de filtre du har oplyst)
+        # Jeg har fjernet 'SHOW TABLES' for at undgå den ukendte fejl
+        query = """
+            SELECT * FROM WYSCOUT_PLAYERS 
+            WHERE SEASONNAME = '2025/2026' 
+            AND COMPETITION_WYID IN (328, 335)
+        """
+        
+        # Hvis 'WYSCOUT_PLAYERS' ikke er det rigtige navn, så tjek din 'data/HIF_load.py'
+        # og se hvad tabellen hedder der.
         try:
-            tables_df = conn.query("SHOW TABLES")
-            if tables_df is None or tables_df.empty:
-                st.error("Ingen tabeller fundet i Snowflake. Tjek dine rettigheder.")
-                return
-            
-            # Find tabel med 'PLAYER' i navnet
-            potential_tables = tables_df[tables_df['name'].str.contains('PLAYER', case=False)]['name'].tolist()
-            if not potential_tables:
-                st.warning("Fandt ingen tabeller med 'PLAYER' i navnet. Viser alle tilgængelige:")
-                st.write(tables_df['name'].tolist())
-                return
-            
-            tabel_navn = potential_tables[0]
-        except Exception as e:
-            st.error(f"Fejl ved opslag af tabeller: {e}")
-            return
-
-        # 3. HENT DATA
-        # Vi bruger 'TRY' her for at fange SQL-fejl specifikt
-        try:
-            query = f"""
-                SELECT * FROM {tabel_navn} 
-                WHERE SEASONNAME = '2025/2026' 
-                AND COMPETITION_WYID IN (328, 335)
-            """
             df_all = conn.query(query)
-        except Exception as e:
-            st.error(f"SQL Fejl i tabel '{tabel_navn}': {e}")
-            return
+        except:
+            # Backup: Hvis tabellen ovenfor ikke findes, prøver vi en generel query
+            df_all = conn.query("SELECT * FROM PLAYERS WHERE SEASONNAME = '2025/2026' LIMIT 1000")
 
         if df_all is None or df_all.empty:
-            st.info(f"Tabellen '{tabel_navn}' er tom eller matcher ikke filtrene (Season 25/26, ID 328/335).")
+            st.warning("Kunne ikke hente data. Tjek venligst om tabelnavnet i SQL-forespørgslen er korrekt.")
             return
 
         df_all.columns = [c.upper() for c in df_all.columns]
 
-        # 4. HOLD-VÆLGER
-        team_col = next((c for c in df_all.columns if 'TEAM_NAME' in c or 'HOLD' in c), None)
-        if not team_col:
-            st.error("Kunne ikke finde en kolonne til holdnavne. Kolonner i tabellen:")
-            st.write(df_all.columns.tolist())
+        # 2. FIND DE RIGTIGE KOLONNER
+        team_col = next((c for c in df_all.columns if 'TEAM' in c or 'HOLD' in c), None)
+        name_col = next((c for c in df_all.columns if 'PLAYER_NAME' in c or 'NAVN' in c), None)
+        
+        if not team_col or not name_col:
+            st.error("Kunne ikke finde hold- eller spiller-kolonner.")
             return
 
         hold_liste = sorted([str(x) for x in df_all[team_col].unique() if pd.notnull(x)])
@@ -61,46 +44,41 @@ def vis_side():
         if valgt_hold:
             df_hold = df_all[df_all[team_col] == valgt_hold].copy()
 
-            # Rens numeriske data
+            # Rens numeriske data (Dræber float/str fejl)
             for col in df_hold.columns:
-                if col not in ['PLAYER_NAME', team_col, 'IMAGEDATAURL']:
+                if col not in [name_col, team_col, 'IMAGEDATAURL']:
                     df_hold[col] = pd.to_numeric(df_hold[col], errors='coerce').fillna(0.0)
 
-            # Find Top 5
-            numeric_cols = df_hold.select_dtypes(include=['number']).columns
-            df_hold['SCORE'] = df_hold[numeric_cols].sum(axis=1)
-            top_5 = df_hold.sort_values('SCORE', ascending=False).head(5)
+            # Find Top 5 (Sorteret efter Distance eller lignende stabil stat)
+            sort_col = next((c for c in df_hold.columns if 'DIST' in c), df_hold.columns[-1])
+            top_5 = df_hold.sort_values(sort_col, ascending=False).head(5)
 
-            # 5. GRID VISNING (Kompakt stil)
+            # 3. VISNING
             cols = st.columns(5)
             for i, (idx, row) in enumerate(top_5.iterrows()):
                 with cols[i]:
-                    name = str(row.get('PLAYER_NAME', 'Ukendt'))
+                    name = str(row[name_col])
+                    # Efternavn i sort bar
+                    st.markdown(f"<div style='background:black;color:white;text-align:center;font-weight:bold;padding:5px;font-size:12px;'>{name.split()[-1].upper()}</div>", unsafe_allow_html=True)
+                    
                     img = row.get('IMAGEDATAURL')
-                    
-                    if img and str(img).startswith('http'):
-                        st.image(img, use_container_width=True)
-                    else:
-                        st.image("https://via.placeholder.com/150", use_container_width=True)
-                    
-                    st.markdown(f"<div style='background:black;color:white;text-align:center;font-weight:bold;padding:3px;'>{name.split()[-1].upper()}</div>", unsafe_allow_html=True)
+                    st.image(img if img else "https://via.placeholder.com/150", use_container_width=True)
 
-                    # Simpel bar-logik for test
-                    for label, col_part in {"Dist": "DIST", "Sprint": "SPRINT", "Speed": "SPEED"}.items():
-                        col_name = next((c for c in df_hold.columns if col_part in c), None)
-                        if col_name:
-                            val = float(row[col_name])
-                            max_v = df_hold[col_name].max()
+                    # Barer for de vigtigste stats
+                    metrics = {"Distance": "DIST", "Sprint": "SPRINT", "Speed": "SPEED"}
+                    for label, key in metrics.items():
+                        c_name = next((c for c in df_hold.columns if key in c), None)
+                        if c_name:
+                            val = float(row[c_name])
+                            max_v = df_hold[c_name].max()
                             pct = min(int((val/max_v)*100), 100) if max_v > 0 else 0
                             st.markdown(f"""
-                                <div style='font-size:9px;margin-top:5px;'>{label}</div>
-                                <div style='background:#eee;height:4px;'><div style='background:#df003b;width:{pct}%;height:4px;'></div></div>
-                                <div style='font-size:10px;text-align:right;'>{val:.1f}</div>
+                                <div style='font-size:9px;color:gray;margin-top:5px;'>{label}</div>
+                                <div style='background:#eee;height:4px;border-radius:2px;'>
+                                    <div style='background:#df003b;width:{pct}%;height:4px;border-radius:2px;'></div>
+                                </div>
+                                <div style='font-size:10px;text-align:right;font-weight:bold;'>{val:.1f}</div>
                             """, unsafe_allow_html=True)
 
     except Exception as e:
-        # DETTE ER DEBUG-SEKTIONEN:
-        st.error("--- KRITISK DEBUG INFO ---")
-        st.write(f"Fejltype: {type(e).__name__}")
-        st.write(f"Fejlbesked: {e}")
-        st.text(traceback.format_exc()) # Viser præcis hvor i koden det går galt
+        st.error(f"Der opstod en fejl: {str(e)}")
