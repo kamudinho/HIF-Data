@@ -46,80 +46,97 @@ def vis_side():
     with col2:
         mode = st.radio("Vælg data-visning:", ["Fysiske Data (SS)", "Tekniske Data (Opta)"], horizontal=True)
 
-    # --- SQL Logik baseret på dine verificerede tabeller ---
+    # --- SQL Logik Konfiguration ---
     if mode == "Fysiske Data (SS)":
-        # Bruger Second Spectrum
         table = "KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS"
         sql_metrics = """
             AVG(DISTANCE) as M1, AVG(RUNNING) as M2, AVG("HIGH SPEED RUNNING") as M3,
             AVG(SPRINTING) as M4, MAX(TOP_SPEED) as M5, AVG(NO_OF_HIGH_INTENSITY_RUNS) as M6
         """
         date_filter = "WHERE MATCH_DATE BETWEEN '2025-07-01' AND '2026-06-30'"
+        join_key = "PLAYER_NAME"
         metrics_labels = {
             "Volume": [("Total Distance", "M1_RANK"), ("Running Distance", "M2_RANK")],
             "Intensity": [("Hi Distance", "M3_RANK"), ("Sprint Distance", "M4_RANK")],
             "Explosive": [("Top Speed", "M5_RANK"), ("Accelerations", "M6_RANK")]
         }
     else:
-        # Bruger Opta Matchstats (baseret på de STAT_TYPEs vi fandt)
-        table = "KLUB_HVIDOVREIF.AXIS.OPTA_MATCHSTATS"
+        # Forbedret Opta-logik baseret på din verificerede OPTA_EVENTS tabel
+        table = "KLUB_HVIDOVREIF.AXIS.OPTA_EVENTS"
         sql_metrics = """
-            AVG(CASE WHEN STAT_TYPE = 'totalScoringAtt' THEN STAT_TOTAL END) as M1,
-            AVG(CASE WHEN STAT_TYPE = 'goalAssist' THEN STAT_TOTAL END) as M2,
-            AVG(CASE WHEN STAT_TYPE = 'totalPass' THEN STAT_TOTAL END) as M3,
-            AVG(CASE WHEN STAT_TYPE = 'accuratePass' THEN STAT_TOTAL END) as M4,
-            AVG(CASE WHEN STAT_TYPE = 'wonTackle' THEN STAT_TOTAL END) as M5,
-            AVG(CASE WHEN STAT_TYPE = 'totalClearance' THEN STAT_TOTAL END) as M6
+            COUNT(CASE WHEN EVENT_TYPEID = 16 THEN 1 END) as M1, -- Mål
+            COUNT(CASE WHEN EVENT_TYPEID = 1 AND EVENT_OUTCOME = 1 THEN 1 END) as M2, -- Succesfulde afleveringer
+            COUNT(CASE WHEN EVENT_TYPEID = 15 THEN 1 END) as M3, -- Tacklinger
+            COUNT(CASE WHEN EVENT_TYPEID = 12 THEN 1 END) as M4, -- Clearance
+            COUNT(CASE WHEN EVENT_TYPEID = 2 THEN 1 END) as M5, -- Offsides
+            COUNT(CASE WHEN EVENT_TYPEID = 3 AND EVENT_OUTCOME = 1 THEN 1 END) as M6 -- Driblinger vundet
         """
-        # Her bruger vi ikke MATCH_DATE da den ikke altid er i Matchstats, men vi kan tilføje den hvis nødvendigt
         date_filter = "" 
+        join_key = "PLAYER_OPTAUUID"
         metrics_labels = {
-            "Attacking": [("Shots", "M1_RANK"), ("Assists", "M2_RANK")],
-            "Passing": [("Total Passes", "M3_RANK"), ("Accurate Passes", "M4_RANK")],
-            "Defensive": [("Won Tackles", "M5_RANK"), ("Clearances", "M6_RANK")]
+            "Offensivt": [("Mål", "M1_RANK"), ("Vundne Driblinger", "M6_RANK")],
+            "Distribution": [("Succesfulde Afleveringer", "M2_RANK"), ("Offsides", "M5_RANK")],
+            "Defensivt": [("Tacklinger", "M3_RANK"), ("Clearances", "M4_RANK")]
         }
 
-    # Den samlede query der også laver Fuzzy Match på navne (Louka Prip problematikken)
-    query = f"""
-    WITH LIGA_STATS AS (
-        SELECT PLAYER_NAME, {sql_metrics} 
-        FROM {table} 
-        {date_filter} 
-        GROUP BY PLAYER_NAME
-    ),
-    LIGA_RANKED AS (
-        SELECT *,
-            RANK() OVER (ORDER BY M1 DESC NULLS LAST) as M1_RANK, 
-            RANK() OVER (ORDER BY M2 DESC NULLS LAST) as M2_RANK,
-            RANK() OVER (ORDER BY M3 DESC NULLS LAST) as M3_RANK, 
-            RANK() OVER (ORDER BY M4 DESC NULLS LAST) as M4_RANK,
-            RANK() OVER (ORDER BY M5 DESC NULLS LAST) as M5_RANK, 
-            RANK() OVER (ORDER BY M6 DESC NULLS LAST) as M6_RANK
-        FROM LIGA_STATS
-    ),
-    VALGT_TRUP AS (
-        SELECT (TRIM(FIRSTNAME) || ' ' || TRIM(LASTNAME)) as FULL_NAME, MAX(IMAGEDATAURL) as IMG
-        FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_PLAYERS 
-        WHERE CURRENTTEAM_WYID = {target_id} 
-        GROUP BY 1
-    )
-    SELECT t.IMG, t.FULL_NAME as WYS_NAME, r.* FROM VALGT_TRUP t
-    INNER JOIN LIGA_RANKED r ON (
-        t.FULL_NAME LIKE '%' || r.PLAYER_NAME || '%' 
-        OR r.PLAYER_NAME LIKE '%' || t.FULL_NAME || '%'
-    )
-    """
+    # --- Den Store "Double-Check" Query ---
+    # Vi bruger QUALIFY ROW_NUMBER() til at sikre, at én person kun optræder én gang
+    if mode == "Fysiske Data (SS)":
+        query = f"""
+        WITH LIGA_STATS AS (
+            SELECT PLAYER_NAME, {sql_metrics} FROM {table} {date_filter} GROUP BY PLAYER_NAME
+        ),
+        LIGA_RANKED AS (
+            SELECT *,
+                RANK() OVER (ORDER BY M1 DESC NULLS LAST) as M1_RANK, RANK() OVER (ORDER BY M2 DESC NULLS LAST) as M2_RANK,
+                RANK() OVER (ORDER BY M3 DESC NULLS LAST) as M3_RANK, RANK() OVER (ORDER BY M4 DESC NULLS LAST) as M4_RANK,
+                RANK() OVER (ORDER BY M5 DESC NULLS LAST) as M5_RANK, RANK() OVER (ORDER BY M6 DESC NULLS LAST) as M6_RANK
+            FROM LIGA_STATS
+        ),
+        VALGT_TRUP AS (
+            SELECT (TRIM(FIRSTNAME) || ' ' || TRIM(LASTNAME)) as FULL_NAME, MAX(IMAGEDATAURL) as IMG
+            FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_PLAYERS WHERE CURRENTTEAM_WYID = {target_id} GROUP BY 1
+        )
+        SELECT t.IMG, t.FULL_NAME as WYS_NAME, r.* FROM VALGT_TRUP t
+        INNER JOIN LIGA_RANKED r ON (t.FULL_NAME LIKE '%' || r.PLAYER_NAME || '%' OR r.PLAYER_NAME LIKE '%' || t.FULL_NAME || '%')
+        QUALIFY ROW_NUMBER() OVER (PARTITION BY t.FULL_NAME ORDER BY r.M1 DESC) = 1
+        """
+    else:
+        query = f"""
+        WITH PLAYER_SUMS AS (
+            SELECT PLAYER_OPTAUUID, {sql_metrics} FROM {table} GROUP BY PLAYER_OPTAUUID
+        ),
+        LIGA_RANKED AS (
+            SELECT p.MATCH_NAME as PLAYER_NAME, p.PLAYER_OPTAUUID, s.*,
+                RANK() OVER (ORDER BY s.M1 DESC NULLS LAST) as M1_RANK, RANK() OVER (ORDER BY s.M2 DESC NULLS LAST) as M2_RANK,
+                RANK() OVER (ORDER BY s.M3 DESC NULLS LAST) as M3_RANK, RANK() OVER (ORDER BY s.M4 DESC NULLS LAST) as M4_RANK,
+                RANK() OVER (ORDER BY s.M5 DESC NULLS LAST) as M5_RANK, RANK() OVER (ORDER BY s.M6 DESC NULLS LAST) as M6_RANK
+            FROM KLUB_HVIDOVREIF.AXIS.OPTA_PLAYERS p
+            JOIN PLAYER_SUMS s ON p.PLAYER_OPTAUUID = s.PLAYER_OPTAUUID
+        ),
+        VALGT_TRUP AS (
+            SELECT TRIM(FIRSTNAME) as F_NAME, TRIM(LASTNAME) as L_NAME,
+                   (TRIM(FIRSTNAME) || ' ' || TRIM(LASTNAME)) as FULL_NAME, MAX(IMAGEDATAURL) as IMG
+            FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_PLAYERS WHERE CURRENTTEAM_WYID = {target_id} GROUP BY 1, 2, 3
+        )
+        SELECT t.IMG, t.FULL_NAME as WYS_NAME, r.* FROM VALGT_TRUP t
+        INNER JOIN LIGA_RANKED r ON (
+            r.PLAYER_NAME LIKE LEFT(t.F_NAME, 1) || '. ' || t.L_NAME
+            OR r.PLAYER_NAME = t.FULL_NAME
+            OR (r.PLAYER_NAME LIKE '%' || t.L_NAME || '%' AND r.M2 > 0)
+        )
+        QUALIFY ROW_NUMBER() OVER (PARTITION BY t.FULL_NAME ORDER BY r.M2 DESC) = 1
+        """
 
     try:
         df = pd.read_sql(query, conn)
         
         if not df.empty:
-            # Anvend manuelle overrides for klubskifter
             if player_overrides:
                 df = df[df.apply(lambda row: player_overrides.get(row['WYS_NAME'], target_id) == target_id, axis=1)]
             
-            # Vi sorterer efter den første metric og viser top 5
-            df = df.sort_values("M1_RANK").head(5)
+            # Sortering: Vis de mest aktive spillere først (M2 er ofte god volumen-indikator)
+            df = df.sort_values("M2_RANK").head(5)
             st.write("---")
             
             # --- Render Spiller-kort ---
@@ -127,7 +144,7 @@ def vis_side():
             for i, (_, row) in enumerate(df.iterrows()):
                 with cols[i+1]:
                     img = row['IMG'] if row['IMG'] and str(row['IMG']) != 'None' else "https://via.placeholder.com/150"
-                    efternavn = row['PLAYER_NAME'].split()[-1]
+                    efternavn = row['WYS_NAME'].split()[-1]
                     st.markdown(f'<div class="player-card"><img src="{img}" class="player-img-round" width="60" height="60"><br><small><b>{efternavn}</b></small></div>', unsafe_allow_html=True)
 
             # --- Render Rækker med Ranks ---
@@ -140,9 +157,9 @@ def vis_side():
                     
                     for i, (_, row) in enumerate(df.iterrows()):
                         rank_val = int(row[col_name]) if pd.notnull(row[col_name]) else 999
-                        # Beregn bar-længde (Rank 1 er længst)
-                        fill_width = max(15, (1 - (rank_val / 300)) * 100) if rank_val <= 300 else 10
-                        color = "#22c55e" if rank_val <= 30 else "#facc15" if rank_val <= 100 else "#fca5a5"
+                        # Bar-længde beregning (Rank 1 er top)
+                        fill_width = max(15, (1 - (rank_val / 500)) * 100) if rank_val <= 500 else 10
+                        color = "#22c55e" if rank_val <= 50 else "#facc15" if rank_val <= 150 else "#fca5a5"
                         
                         with m_cols[i+1]:
                             st.markdown(f"""
@@ -158,4 +175,5 @@ def vis_side():
     except Exception as e:
         st.error(f"Fejl i data-processering: {e}")
 
-vis_side()
+if __name__ == "__main__":
+    vis_side()
