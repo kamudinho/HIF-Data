@@ -1,0 +1,13 @@
+Begreb,Beskrivelse
+Z-score,"Et statistisk værktøj, der bruges til at sammenligne en spillers eller et holds præstationer i forhold til gennemsnittet i en given population (f.eks. NordicBet Ligaen). En score på 0 er gennemsnittet."
+P90 (Per 90),"Statistik beregnet pr. 90 minutters spilletid (ekskl. tillægstid). Dette gør det muligt at sammenligne spillere med forskellig mængde spilletid på et fair grundlag."
+xG (Expected Goals),"Forventede mål. En statistisk værdi for chancen for, at et skud resulterer i mål, baseret på historiske data, skudposition og situation."
+High Speed Running (HSR),"Løb i høj intensitet, typisk defineret som hastigheder mellem 19,8 og 25,1 km/t. Viser spillerens evne til at arbejde i højt tempo."
+Sprinting,"Den mest intensive form for løb, defineret som hastigheder over 25,1 km/t. Afgørende for gennembrud og defensive løb."
+Running,"Løb i moderat tempo (14,4 - 19,8 km/t). Viser spillerens generelle motor og evne til at være i konstant bevægelse."
+Total Distance,"Den samlede tilbagelagte distance for en spiller i løbet af en kamp. Viser den samlede volumen i arbejdet."
+High Intensity Runs,"Antallet af aktioner udført i høj intensitet (summen af HSR og Sprints). Viser hvor ofte en spiller kan lave eksplosive aktioner."
+Top Speed,"Den højeste målte hastighed (km/t) for en spiller. Viser spillerens absolutte topfart."
+Rank (R),"Spillerens placering i ligaen på den specifikke parameter. R1 er den bedste i ligaen på det pågældende datapunkt."
+OPTA,"Dataleverandør der leverer de tekniske kampdata (skud, afleveringer, bolderobringer)."
+WYSCOUT,"Dataleverandør der leverer scouting-data, video, transfers og spillerprofiler."
