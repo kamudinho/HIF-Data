@@ -11,7 +11,7 @@ def vis_side():
         st.error(f"Kunne ikke finde ordbogen på stien: {csv_path}")
         return
 
-    # Load data med fejlhåndtering for danske tegn
+    # Load data
     try:
         df = pd.read_csv(csv_path, encoding='utf-8-sig')
     except Exception:
@@ -21,10 +21,10 @@ def vis_side():
     search_query = st.text_input(
         "Søg i begreber eller forklaringer:", 
         placeholder="Indtast søgeord...", 
-        key="ordbog_search_v3"
+        key="ordbog_search_v4"
     )
 
-    # Filtrering baseret på søgning
+    # Filtrering
     if search_query:
         mask = (
             df['Begreb'].str.contains(search_query, case=False, na=False) | 
@@ -32,31 +32,36 @@ def vis_side():
         )
         df = df[mask]
 
-    # --- VISNING MED TVUNGET WRAP ---
+    # --- VISNING MED STICKY HEADERS OG TEXT WRAP ---
     if not df.empty:
-        # Vi bruger st.markdown med CSS til at styre kolonnebredden præcist
-        # og sikre at teksten ombrydes (wrap)
+        # Vi bruger st.dataframe med specifik konfiguration
+        st.data_editor(
+            df,
+            use_container_width=True,
+            hide_index=True,
+            disabled=True, # Gør at man ikke kan redigere, men kun læse
+            height=600,    # Fast højde sikrer at overskriften (header) bliver 'sticky'
+            column_config={
+                "Begreb": st.column_config.TextColumn(
+                    "Begreb",
+                    width="small",
+                    required=True,
+                ),
+                "Beskrivelse": st.column_config.TextColumn(
+                    "Beskrivelse",
+                    width="large", # Tvinger kolonnen til at være bred
+                )
+            }
+        )
+        
+        # Denne CSS sikrer at teksten inde i Streamlit tabellen ombrydes i stedet for at blive skåret af
         st.markdown("""
             <style>
-                table {
-                    width: 100%;
-                }
-                th:first-child, td:first-child {
-                    width: 150px !important;
-                    min-width: 150px !important;
-                    max-width: 150px !important;
-                    font-weight: bold;
-                }
-                td {
+                div[data-testid="stDataEditor"] div {
                     white-space: normal !important;
-                    word-wrap: break-word !important;
-                    vertical-align: top !important;
                 }
             </style>
         """, unsafe_allow_html=True)
-        
-        # Vi bruger st.table i stedet for st.dataframe for at få fuld tekstvisning
-        st.table(df)
     else:
         st.info("Ingen resultater fundet.")
 
