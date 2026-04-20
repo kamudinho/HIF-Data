@@ -137,7 +137,7 @@ with st.sidebar:
     # Vi bruger en kolonne-struktur for at centrere knappen i sidebaren
     side_col1, side_col2, side_col3 = st.columns([1, 5, 1])
     with side_col2:
-        if st.button("🔄 Ryd Session", use_container_width=True, help="Hvis appen driller eller viser fejl, så tryk her for at nulstille data"):
+        if st.button("Clear Cache", use_container_width=True, help="Hvis appen driller eller viser fejl, så tryk her for at nulstille data"):
             st.cache_data.clear()
             st.cache_resource.clear()
             st.rerun()
