@@ -105,16 +105,22 @@ if not st.session_state["logged_in"]:
 
 # --- 3. SIDEBAR NAVIGATION ---
 with st.sidebar:
+    # Definer hovedområder
     alle_omraader = ["HVIDOVRE IF", "HOLDANALYSE", "SPILLERANALYSE", "SCOUTING", "ADMIN"]
+    
+    # Hent brugerinfo og tjek for restriktioner
     user_info = USER_DB.get(st.session_state["user"], {})
     restriktioner = [r.lower().strip() for r in user_info.get("restricted", [])]
 
+    # Filtrer hovedmenu baseret på rettigheder
     synlige_hoved_options = [o for o in alle_omraader if o.lower().strip() not in restriktioner]
     hoved_omraade = option_menu(None, options=synlige_hoved_options, default_index=0)
 
+    # Hjælpefunktion til at filtrere undermenuer
     def filtrer_menu(liste):
         return [o for o in liste if o.lower().strip() not in restriktioner]
 
+    # Undermenu logik
     if hoved_omraade == "HVIDOVRE IF":
         sel = option_menu(None, options=filtrer_menu(["Oversigt", "Forecast"]))
     elif hoved_omraade == "HOLDANALYSE":
@@ -126,6 +132,17 @@ with st.sidebar:
     elif hoved_omraade == "ADMIN":
         sel = option_menu(None, options=filtrer_menu(["System Log", "Profil", "Fysisk profil", "Hold: Fysisk profil", "Intern analyse", "Top 5: Spillere"]))
 
+    # --- DISKRET CACHE-RYDDER (Placeret nederst i sidebaren) ---
+    st.markdown("<br>" * 10, unsafe_allow_html=True) # Skubber knappen ned i bunden
+    st.markdown("---") 
+    
+    # Vi bruger en kolonne-struktur for at centrere knappen i sidebaren
+    side_col1, side_col2, side_col3 = st.columns([1, 5, 1])
+    with side_col2:
+        if st.button("🔄 Ryd Session", use_container_width=True, help="Hvis appen driller eller viser fejl, så tryk her for at nulstille data"):
+            st.cache_data.clear()
+            st.cache_resource.clear()
+            st.rerun()
 # --- 4. DATA LOADING & RENDERING ---
 render_hif_header(f"{hoved_omraade}  |  {sel.upper()}")
 
