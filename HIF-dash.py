@@ -133,7 +133,7 @@ with st.sidebar:
         sel = option_menu(None, options=filtrer_menu(["System Log", "Profil", "Fysisk profil", "Hold: Fysisk profil", "Intern analyse", "Top 5: Spillere"]))
 
     # --- DISKRET CACHE-RYDDER (Placeret nederst i sidebaren) ---
-    st.markdown("<br>" * 10, unsafe_allow_html=True) # Skubber knappen ned i bunden    
+    st.markdown("<br>" * 4, unsafe_allow_html=True) # Skubber knappen ned i bunden    
     # Vi bruger en kolonne-struktur for at centrere knappen i sidebaren
     side_col1, side_col2, side_col3 = st.columns([1, 5, 1])
     with side_col2:
