@@ -219,16 +219,3 @@ try:
 
 except Exception as e:
     st.error(f"Fejl ved indlæsning af {sel}: {e}")
-
-# DISKRET CACHE-RYDDER (Nederst i sidebaren)
-    st.markdown("---") # En lille adskiller
-    
-    # Vi bruger en kolonne-struktur for at gøre knappen diskret
-    c1, c2, c3 = st.columns([1, 3, 1])
-    with center_content: # Vi genbruger din centreringstanke eller bare:
-        with c2:
-            # Et anonymt ikon (f.eks. en lille genstart-pil eller skraldespand)
-            if st.button("🔄 Ryd Session", use_container_width=True, help="Rydder midlertidig data hvis appen driller"):
-                st.cache_data.clear()
-                st.cache_resource.clear()
-                st.rerun()
