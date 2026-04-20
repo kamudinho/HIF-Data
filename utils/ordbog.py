@@ -5,7 +5,7 @@ import os
 def vis_side():
     # Find stien til din CSV-fil
     base_path = os.path.dirname(os.path.abspath(__file__))
-    csv_path = os.path.join(base_path, '..', 'data', 'ordbog.csv')
+    csv_path = os.path.join(base_path, '..', 'utils', 'ordbog.csv')
 
     if not os.path.exists(csv_path):
         st.error(f"Kunne ikke finde ordbogen på stien: {csv_path}")
