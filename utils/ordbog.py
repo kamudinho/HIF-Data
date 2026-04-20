@@ -21,10 +21,9 @@ def vis_side():
     search_query = st.text_input(
         "Søg i begreber eller forklaringer:", 
         placeholder="Indtast søgeord...", 
-        key="ordbog_search_v4"
+        key="ordbog_search_v_final"
     )
 
-    # Filtrering
     if search_query:
         mask = (
             df['Begreb'].str.contains(search_query, case=False, na=False) | 
@@ -32,38 +31,55 @@ def vis_side():
         )
         df = df[mask]
 
-    # --- VISNING MED STICKY HEADERS OG TEXT WRAP ---
+    # --- VISNING MED HTML/CSS (Garanteret Wrap + Sticky Header) ---
     if not df.empty:
-        # Vi bruger st.dataframe med specifik konfiguration
-        st.data_editor(
-            df,
-            use_container_width=True,
-            hide_index=True,
-            disabled=True, # Gør at man ikke kan redigere, men kun læse
-            height=600,    # Fast højde sikrer at overskriften (header) bliver 'sticky'
-            column_config={
-                "Begreb": st.column_config.TextColumn(
-                    "Begreb",
-                    width="small",
-                    required=True,
-                ),
-                "Beskrivelse": st.column_config.TextColumn(
-                    "Beskrivelse",
-                    width="large", # Tvinger kolonnen til at være bred
-                )
-            }
-        )
-        
-        # Denne CSS sikrer at teksten inde i Streamlit tabellen ombrydes i stedet for at blive skåret af
+        # Vi bygger vores egen tabel med CSS for at garantere resultatet
         st.markdown("""
             <style>
-                div[data-testid="stDataEditor"] div {
-                    white-space: normal !important;
+                .ordbog-container {
+                    max-height: 700px;
+                    overflow-y: auto;
+                    border: 1px solid #e6e9ef;
+                    border-radius: 5px;
                 }
+                .ordbog-table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    font-family: sans-serif;
+                }
+                .ordbog-table thead th {
+                    position: sticky;
+                    top: 0;
+                    background-color: #f0f2f6;
+                    z-index: 1;
+                    text-align: left;
+                    padding: 12px;
+                    border-bottom: 2px solid #e6e9ef;
+                }
+                .ordbog-table td {
+                    padding: 12px;
+                    border-bottom: 1px solid #e6e9ef;
+                    vertical-align: top;
+                    line-height: 1.5;
+                    white-space: normal !important; /* Garanterer wrap */
+                }
+                .col-begreb { width: 20%; font-weight: 600; }
+                .col-beskrivelse { width: 80%; }
             </style>
         """, unsafe_allow_html=True)
+
+        # Start tabellen
+        html_table = '<div class="ordbog-container"><table class="ordbog-table"><thead><tr>'
+        html_table += '<th class="col-begreb">Begreb</th><th class="col-beskrivelse">Beskrivelse</th>'
+        html_table += '</tr></thead><tbody>'
+
+        # Tilføj rækker
+        for _, row in df.iterrows():
+            html_table += f'<tr><td class="col-begreb">{row["Begreb"]}</td>'
+            html_table += f'<td class="col-beskrivelse">{row["Beskrivelse"]}</td></tr>'
+
+        html_table += '</tbody></table></div>'
+        
+        st.write(html_table, unsafe_allow_html=True)
     else:
         st.info("Ingen resultater fundet.")
-
-if __name__ == "__main__":
-    vis_side()
