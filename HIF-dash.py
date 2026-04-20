@@ -214,7 +214,7 @@ try:
             import tools.players.top_players as tp
             tp.vis_side()
         elif sel == "Ordbog":
-            import tools.utils.ordbog as ob
+            import utils.ordbog as ob
             ob.vis_side()
 
 
