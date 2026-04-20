@@ -63,7 +63,7 @@ def vis_side():
                     line-height: 1.5;
                     white-space: normal !important; /* Garanterer wrap */
                 }
-                .col-begreb { width: 20%; font-weight: 600; }
+                .col-begreb { width: 20%; font-weight: 300; }
                 .col-beskrivelse { width: 80%; }
             </style>
         """, unsafe_allow_html=True)
