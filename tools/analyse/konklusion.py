@@ -1,17 +1,17 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-from data.utils.team_mapping import TEAMS
+from data.utils.team_mapping import TEAMS, TEAM_COLORS
 from data.data_load import _get_snowflake_conn
 
 def vis_side(dp=None):
+    # --- 1. DATA LOAD ---
     conn = _get_snowflake_conn()
     if not conn:
         st.error("Kunne ikke forbinde til Snowflake.")
         return
 
     DB = "KLUB_HVIDOVREIF.AXIS"
-    # Sørg for at denne UUID matcher 2025/2026 sæsonen i din database
     LIGA_UUID = "dyjr458hcmrcy87fsabfsy87o" 
 
     sql = f"""
@@ -56,40 +56,87 @@ def vis_side(dp=None):
         LEFT JOIN XGPivot ax ON b.MATCH_OPTAUUID = ax.MATCH_ID AND b.CONTESTANTAWAY_OPTAUUID = ax.CONTESTANT_OPTAUUID
     """
 
-    df_matches = conn.query(sql) if hasattr(conn, 'query') else pd.read_sql(sql, conn)
+    with st.spinner("Henter live data..."):
+        df_matches = conn.query(sql) if hasattr(conn, 'query') else pd.read_sql(sql, conn)
 
     if df_matches is None or df_matches.empty:
-        st.warning(f"Ingen rækker fundet i databasen for LIGA_UUID: {LIGA_UUID}")
+        st.warning("Ingen data fundet i Snowflake.")
         return
 
+    # --- 2. DATA PREP ---
     df_matches.columns = [str(c).upper() for c in df_matches.columns]
     
-    # --- DYNAMISK HOLDVALG ---
+    # Rens UUID'er i dataframen med det samme
+    for col in ['CONTESTANTHOME_OPTAUUID', 'CONTESTANTAWAY_OPTAUUID']:
+        df_matches[col] = df_matches[col].astype(str).str.strip().str.upper()
+
     liga_hold_options = {n: i.get("opta_uuid") for n, i in TEAMS.items() if i.get("league") == "1. Division"}
     h_list = sorted(liga_hold_options.keys())
     
-    col_titel, col_drop = st.columns([3, 1])
+    # --- 3. UI ---
+    st.markdown("""
+        <style>
+            .conclusion-text { color: #df003b; font-weight: bold; margin-top: 10px; font-size: 14px; }
+            .section-title { font-weight: bold; font-size: 1.1rem; margin-bottom: 10px; color: #333; }
+        </style>
+    """, unsafe_allow_html=True)
+
+    col_titel, col_spacer, col_drop = st.columns([2, 1, 1.2])
     with col_titel:
         st.markdown("## Performance Analyse")
     with col_drop:
-        valgt_hold = st.selectbox("Vælg hold:", h_list)
+        # Prøv at sætte default til Hvidovre hvis den findes
+        hif_idx = h_list.index("Hvidovre") if "Hvidovre" in h_list else 0
+        valgt_hold = st.selectbox("Vælg hold:", h_list, index=hif_idx)
         valgt_uuid = str(liga_hold_options[valgt_hold]).strip().upper()
 
-    # --- FILTRERING (Løsere krav til status) ---
-    # Vi tager alle kampe hvor status ikke er 'void' eller 'postponed'
+    # --- 4. FILTRERING ---
+    # Vi filtrerer på UUID og sikrer os at kampen har en score (er spillet)
     team_df = df_matches[
-        ((df_matches['CONTESTANTHOME_OPTAUUID'].str.upper() == valgt_uuid) | 
-         (df_matches['CONTESTANTAWAY_OPTAUUID'].str.upper() == valgt_uuid))
+        ((df_matches['CONTESTANTHOME_OPTAUUID'] == valgt_uuid) | 
+         (df_matches['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid)) &
+        (df_matches['TOTAL_HOME_SCORE'].notnull())
     ].copy()
-    
-    # Smid kampe væk der ikke er spillet endnu (score er NaN eller None)
-    team_df = team_df.dropna(subset=['TOTAL_HOME_SCORE'])
 
     if team_df.empty:
-        st.info(f"Ingen spillede kampe fundet for {valgt_hold} (UUID: {valgt_uuid}).")
-        # DEBUG: Vis de første 2 rækker af rådata for at se hvad der er galt
-        with st.expander("Se rådata (Debug)"):
-            st.write(df_matches[['CONTESTANTHOME_NAME', 'CONTESTANTHOME_OPTAUUID', 'MATCH_STATUS']].head(5))
+        st.info(f"Ingen spillede kampe fundet for {valgt_hold}. Tjekker UUID: {valgt_uuid}")
         return
 
-    # ... Resten af beregningerne (avg_goals, osv.) som i forrige svar ...
+    # --- 5. BEREGNINGER & GRID ---
+    # Hjælper til at finde "vores" tal uanset om vi er hjemme eller ude
+    def get_val(row, base_col):
+        pref = "HOME_" if row['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else "AWAY_"
+        return float(row.get(f"{pref}{base_col}") or 0)
+
+    # Aggregering
+    avg_goals = team_df.apply(lambda r: r['TOTAL_HOME_SCORE'] if r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else r['TOTAL_AWAY_SCORE'], axis=1).mean()
+    avg_xg = team_df.apply(lambda r: get_val(r, 'XG'), axis=1).mean()
+    avg_shots = team_df.apply(lambda r: get_val(r, 'SHOTS'), axis=1).mean()
+    avg_poss = team_df.apply(lambda r: get_val(r, 'POSS'), axis=1).mean()
+    avg_passes = team_df.apply(lambda r: get_val(r, 'PASSES'), axis=1).mean()
+    avg_touches = team_df.apply(lambda r: get_val(r, 'TOUCHES'), axis=1).mean()
+
+    # Visning
+    r1c1, r1c2 = st.columns(2)
+    with r1c1:
+        with st.container(border=True):
+            st.markdown('<p class="section-title">Angreb & Output</p>', unsafe_allow_html=True)
+            st.write(f"• Snit på **{avg_goals:.2f}** mål pr. kamp")
+            st.write(f"• xG snit: **{avg_xg:.2f}**")
+            diff = avg_goals - avg_xg
+            st.markdown(f'<p class="conclusion-text">{"Overperformer xG" if diff > 0 else "Underperformer xG"}</p>', unsafe_allow_html=True)
+
+    with r1c2:
+        with st.container(border=True):
+            st.markdown('<p class="section-title">Chanceskabelse</p>', unsafe_allow_html=True)
+            st.write(f"• Afslutninger: **{avg_shots:.1f}**")
+            st.write(f"• Felt-berøringer: **{avg_touches:.1f}**")
+            st.markdown(f'<p class="conclusion-text">{"Høj aktivitet i feltet" if avg_touches > 15 else "Lav aktivitet i feltet"}</p>', unsafe_allow_html=True)
+
+    r2c1, r2c2 = st.columns(2)
+    with r2c1:
+        with st.container(border=True):
+            st.markdown('<p class="section-title">Dominerance</p>', unsafe_allow_html=True)
+            st.write(f"• Possession: **{avg_poss:.1f}%**")
+            st.write(f"• Afleveringer: **{int(avg_passes)}**")
+            st.markdown(f'<p class="conclusion-text">{"Dominerende stil" if avg_poss > 50 else "Kontra-stil"}</p>', unsafe_allow_html=True)
