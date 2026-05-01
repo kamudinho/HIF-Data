@@ -8,7 +8,6 @@ def vis_side(dp=None):
     # --- 1. KONFIGURATION (Fra din mapping-fil) ---
     # Vi henter Opta UUID for 1. Division direkte fra din ordbog
     LIGA_UUID = COMPETITIONS[COMPETITION_NAME]["COMPETITION_OPTAUUID"]
-    SAESON_NAVN = TOURNAMENTCALENDAR_NAME # "2025/2026"
 
     conn = _get_snowflake_conn()
     if not conn:
@@ -17,20 +16,24 @@ def vis_side(dp=None):
 
     DB = "KLUB_HVIDOVREIF.AXIS"
 
-    # SQL er nu rettet til at bruge Opta-tabeller og UUID-strenge
+    # SQL er rettet til kun at bruge TOURNAMENTCALENDAR_OPTAUUID for at undgå 'SEASONNAME' fejl
     sql = f"""
         WITH MatchBase AS (
             SELECT 
-                MATCH_OPTAUUID, MATCH_DATE_FULL, 
-                CONTESTANTHOME_OPTAUUID, CONTESTANTAWAY_OPTAUUID,
-                TOTAL_HOME_SCORE, TOTAL_AWAY_SCORE, MATCH_STATUS
+                MATCH_OPTAUUID, 
+                MATCH_DATE_FULL, 
+                CONTESTANTHOME_OPTAUUID, 
+                CONTESTANTAWAY_OPTAUUID,
+                TOTAL_HOME_SCORE, 
+                TOTAL_AWAY_SCORE, 
+                MATCH_STATUS
             FROM {DB}.OPTA_MATCHINFO
             WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
-              OR SEASONNAME = '{SAESON_NAVN}' -- Vi sikrer os at ramme rigtigt
         ),
         StatsPivot AS (
             SELECT 
-                MATCH_OPTAUUID, CONTESTANT_OPTAUUID,
+                MATCH_OPTAUUID, 
+                CONTESTANT_OPTAUUID,
                 MAX(CASE WHEN STAT_TYPE = 'possessionPercentage' THEN STAT_TOTAL END) AS POSSESSION,
                 SUM(CASE WHEN STAT_TYPE = 'totalPass' THEN STAT_TOTAL ELSE 0 END) AS PASSES,
                 SUM(CASE WHEN STAT_TYPE = 'totalScoringAtt' THEN STAT_TOTAL ELSE 0 END) AS SHOTS,
@@ -40,7 +43,8 @@ def vis_side(dp=None):
         ),
         XGPivot AS (
             SELECT 
-                MATCH_ID, CONTESTANT_OPTAUUID,
+                MATCH_ID, 
+                CONTESTANT_OPTAUUID,
                 SUM(CASE WHEN STAT_TYPE IN ('expectedGoals', 'expectedGoal') THEN STAT_VALUE ELSE 0 END) AS XG
             FROM {DB}.OPTA_MATCHEXPECTEDGOALS
             GROUP BY 1, 2
@@ -59,16 +63,20 @@ def vis_side(dp=None):
     """
 
     with st.spinner("Henter Opta data..."):
-        df_matches = conn.query(sql) if hasattr(conn, 'query') else pd.read_sql(sql, conn)
+        try:
+            df_matches = conn.query(sql) if hasattr(conn, 'query') else pd.read_sql(sql, conn)
+        except Exception as e:
+            st.error(f"Fejl ved hentning af data: {e}")
+            return
 
     if df_matches is None or df_matches.empty:
-        st.warning(f"Ingen data fundet for {COMPETITION_NAME} i sæsonen {SAESON_NAVN}.")
+        st.warning(f"Ingen data fundet for {COMPETITION_NAME} med UUID {LIGA_UUID}.")
         return
 
     # --- 2. DATA PREP ---
     df_matches.columns = [str(c).upper() for c in df_matches.columns]
     
-    # Filtrer hold baseret på den valgte liga i din kontrol-sektion
+    # Filtrer hold baseret på den valgte liga
     liga_hold = {n: i for n, i in TEAMS.items() if i.get("league") == COMPETITION_NAME}
     h_list = sorted(liga_hold.keys())
 
@@ -97,7 +105,13 @@ def vis_side(dp=None):
         val = row.get(f"{pref}{base_col}")
         return float(val) if pd.notnull(val) else 0.0
 
-    avg_goals = team_df.apply(lambda r: r['TOTAL_HOME_SCORE'] if r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else r['TOTAL_AWAY_SCORE'], axis=1).mean()
+    # Beregn gennemsnit for det valgte hold
+    goals_list = []
+    for _, r in team_df.iterrows():
+        g = r['TOTAL_HOME_SCORE'] if r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else r['TOTAL_AWAY_SCORE']
+        goals_list.append(float(g))
+    
+    avg_goals = np.mean(goals_list)
     avg_xg = team_df.apply(lambda r: get_val(r, 'XG'), axis=1).mean()
     avg_poss = team_df.apply(lambda r: get_val(r, 'POSS'), axis=1).mean()
     avg_shots = team_df.apply(lambda r: get_val(r, 'SHOTS'), axis=1).mean()
