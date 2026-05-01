@@ -201,6 +201,9 @@ try:
         elif sel == "Profil":
             import tools.admin_page.profil as profil
             profil.vis_side({})
+        elif sel == "Konklusioner":
+            import tools.analyse.konklusion as kon
+            kon.vis_side()
         elif sel == "Fysisk profil":
             import tools.players.fysisk_player as fp
             fp.vis_side()
