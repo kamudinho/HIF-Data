@@ -1,21 +1,34 @@
 import streamlit as st
 
 def vis_side():
-    # --- STYLING ---
+    # --- STYLING AF KONKLUSIONSTEKST ---
     st.markdown("""
         <style>
-            .section-header { margin-top: 20px; font-weight: bold; font-size: 1.1rem; }
-            .conclusion-text { color: #df003b; font-weight: bold; margin-top: 5px; margin-bottom: 20px; }
-            .metric-line { margin: 2px 0; }
+            .conclusion-text { 
+                color: #df003b; 
+                font-weight: bold; 
+                margin-top: 10px; 
+            }
+            /* Gør overskrifterne i boksene lidt mindre og skarpe */
+            .section-title {
+                font-weight: bold;
+                font-size: 1.1rem;
+                margin-bottom: 10px;
+            }
         </style>
     """, unsafe_allow_html=True)
 
-    st.markdown("## Performance Analysis")
+    # --- TOP SEKTION MED TITEL OG DROPDOWN TIL HØJRE ---
+    col1, col2 = st.columns([3, 1])
+    
+    with col1:
+        st.markdown("## Performance Analysis")
+    
+    with col2:
+        # Flytter dropdown op til højre
+        valgt_hold = st.selectbox("Vælg hold:", ["Hvidovre", "OB", "FC Fredericia"], label_visibility="collapsed")
 
-    # 1. VALG AF HOLD (Hardkodet liste)
-    valgt_hold = st.selectbox("Vælg hold til analyse:", ["Hvidovre", "OB", "FC Fredericia"])
-
-    # 2. HARDKODET DATA FOR TRE HOLD
+    # --- HARDKODET DATA ---
     hold_data = {
         "Hvidovre": {
             "attack": [
@@ -82,26 +95,34 @@ def vis_side():
         }
     }
 
-    # 3. RENDERING AF DATA
     data = hold_data[valgt_hold]
 
+    # --- RENDERING MED BORDERS ---
+
     # Attacking Output
-    st.markdown('<p class="section-header">Attacking Output:</p>', unsafe_allow_html=True)
-    for line in data["attack"]:
-        st.markdown(f"• {line}")
-    st.markdown(f'<p class="conclusion-text">Conclusion – {data["attack_conc"]}</p>', unsafe_allow_html=True)
+    with st.container(border=True):
+        st.markdown('<p class="section-title">Attacking Output:</p>', unsafe_allow_html=True)
+        for line in data["attack"]:
+            st.markdown(f"• {line}")
+        st.markdown(f'<p class="conclusion-text">Conclusion – {data["attack_conc"]}</p>', unsafe_allow_html=True)
+
+    st.write("") # Mellemrum
 
     # Chance Creation
-    st.markdown('<p class="section-header">Chance Creation:</p>', unsafe_allow_html=True)
-    for line in data["chance"]:
-        st.markdown(f"• {line}")
-    st.markdown(f'<p class="conclusion-text">Conclusion – {data["chance_conc"]}</p>', unsafe_allow_html=True)
+    with st.container(border=True):
+        st.markdown('<p class="section-title">Chance Creation:</p>', unsafe_allow_html=True)
+        for line in data["chance"]:
+            st.markdown(f"• {line}")
+        st.markdown(f'<p class="conclusion-text">Conclusion – {data["chance_conc"]}</p>', unsafe_allow_html=True)
+
+    st.write("") # Mellemrum
 
     # Build-Up
-    st.markdown('<p class="section-header">Build-Up:</p>', unsafe_allow_html=True)
-    for line in data["build"]:
-        st.markdown(f"• {line}")
-    st.markdown(f'<p class="conclusion-text">Conclusion – {data["build_conc"]}</p>', unsafe_allow_html=True)
+    with st.container(border=True):
+        st.markdown('<p class="section-title">Build-Up:</p>', unsafe_allow_html=True)
+        for line in data["build"]:
+            st.markdown(f"• {line}")
+        st.markdown(f'<p class="conclusion-text">Conclusion – {data["build_conc"]}</p>', unsafe_allow_html=True)
 
 if __name__ == "__main__":
     vis_side()
