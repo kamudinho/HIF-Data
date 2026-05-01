@@ -1,74 +1,74 @@
 import streamlit as st
 import pandas as pd
-import plotly.graph_objects as go
 from data.data_load import _get_snowflake_conn
 
-def beregn_status(aktuel, forventet, metric_navn):
-    diff = aktuel - forventet
-    tærskel = forventet * 0.1  # 10% margen
+def generer_konklusion(aktuel, base, metric_navn):
+    """Matcher stilen fra dit screenshot med specifikke tekst-output"""
+    diff = aktuel - base
+    # For PPDA og xG imod er lavere tal bedre
+    if metric_navn in ["PPDA", "xG imod"]:
+        if diff < 0: return "Strong defensive organization and pressure"
+        return "Struggling to limit opposition chances"
     
-    if diff > tærskel:
-        return "Overperformer", "normal", "#28a745"
-    elif diff < -tærskel:
-        return "Underperformer", "inverse", "#dc3545"
-    else:
-        return "Som forventet", "off", "#ffc107"
+    if diff > 0: return "Performing above league average in this area"
+    return "Limited output - currently underperforming"
 
 def vis_side():
-    st.title("Hold Performance Opsummering")
+    # Overskrift der matcher din branding
+    st.markdown("### Performance Analysis")
     
-    # 1. Load data (genbrug dine eksisterende funktioner)
+    # 1. Load data
     conn = _get_snowflake_conn()
-    # Her henter vi gennemsnit for ligaen eller specifikke hold-stats
-    df_wy = conn.query("SELECT * FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_MATCHADVANCEDSTATS_GENERAL") 
+    # Bruger dine gemte værdier for sæson og liga
+    query = """
+        SELECT t.TEAMNAME, AVG(adv.XG) as XG, AVG(adv.GOALS) as GOALS
+        FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_TEAMMATCHES tm
+        JOIN KLUB_HVIDOVREIF.AXIS.WYSCOUT_TEAMS t ON tm.TEAM_WYID = t.TEAM_WYID
+        LEFT JOIN KLUB_HVIDOVREIF.AXIS.WYSCOUT_MATCHADVANCEDSTATS_GENERAL adv ON tm.MATCH_WYID = adv.MATCH_WYID
+        WHERE tm.COMPETITION_WYID = 328 AND tm.SEASONNAME = '2025/2026'
+        GROUP BY t.TEAMNAME
+    """
+    df_wy = conn.query(query)
     
     # 2. Vælg hold
-    hold_liste = ["Hvidovre", "FC Fredericia", "OB", "AC Horsens"] # Eksempel
+    hold_liste = sorted(df_wy['TEAMNAME'].unique().tolist())
     valgt_hold = st.selectbox("Vælg hold til analyse:", hold_liste)
     
-    # 3. Definer de 5 metrics (Eksempel)
-    # Vi lader som om vi har beregnet gennemsnit for det valgte hold
-    metrics = {
-        "Mål vs xG": {"aktuel": 1.5, "base": 1.2, "enhed": "pr. kamp"},
-        "Skud vs xG": {"aktuel": 12.4, "base": 14.1, "enhed": "pr. kamp"},
-        "Erobringer": {"aktuel": 45.0, "base": 42.0, "enhed": "pr. kamp"},
-        "PPDA": {"aktuel": 10.5, "base": 12.0, "enhed": "intensitet"},
-        "xG imod": {"aktuel": 0.9, "base": 1.1, "enhed": "pr. kamp"}
+    # 3. Metrics Setup (Her kan du tilføje flere fra dine data)
+    # Som eksempel bruger vi faste værdier for at matche dit billede 1:1
+    sections = {
+        "Attacking Output": {
+            "Total goals scored": {"val": 63, "rank": "8th"},
+            "Open-play goals": {"val": 25, "rank": "15th"},
+            "xG Difference": {"val": -10, "text": "10 fewer goals scored than xG created"},
+            "conclusion": "limited by poor quality finishing"
+        },
+        "Chance Creation": {
+            "xG per shot": {"val": 0.14, "rank": "1st"},
+            "Shots outside box": {"val": "27%", "rank": "24th"},
+            "Final-third to box entries": {"val": "16%", "rank": "18th"},
+            "conclusion": "prefer high quality chances, but struggle to get into the box"
+        }
     }
 
-    # 4. Visning i kolonner
-    cols = st.columns(5)
-    
-    for i, (navn, data) in enumerate(metrics.items()):
-        status, label_type, farve = beregn_status(data['aktuel'], data['base'], navn)
+    # 4. Rendering i det ønskede liste-format
+    for section, metrics in sections.items():
+        st.markdown(f"#### {section}:")
         
-        with cols[i]:
-            st.metric(
-                label=navn, 
-                value=f"{data['aktuel']} {data['enhed']}", 
-                delta=f"{round(data['aktuel'] - data['base'], 2)} vs gns."
-            )
-            st.markdown(f"<span style='color:{farve}; font-weight:bold;'>{status}</span>", unsafe_allow_html=True)
+        # Loop gennem metrics i sektionen (undtagen konklusionen)
+        for m_navn, m_data in metrics.items():
+            if m_navn == "conclusion":
+                continue
+                
+            # Formater linjen: Rank (hvis findes) + Navn + Værdi
+            if "rank" in m_data:
+                st.markdown(f"• **{m_data['rank']}** for {m_navn.lower()} ({m_data['val']})")
+            else:
+                st.markdown(f"• {m_data['text']}")
+        
+        # Tilføj den farvede konklusion nederst i hver sektion
+        st.markdown(f"<p style='color:#df003b; font-weight:bold; margin-top:5px;'>Conclusion – {metrics['conclusion']}</p>", unsafe_allow_html=True)
+        st.write("") # Skaber luft mellem sektioner
 
-    # 5. Visualisering (Radar Chart er genialt her)
-    st.subheader("Performance Profil")
-    vis_radar_chart(valgt_hold, metrics)
-
-def vis_radar_chart(hold, metrics):
-    categories = list(metrics.keys())
-    values = [d['aktuel'] for d in metrics.values()]
-    base_values = [d['base'] for d in metrics.values()]
-
-    fig = go.Figure()
-
-    fig.add_trace(go.Scatterpolar(
-        r=values, theta=categories, fill='toself', name=hold,
-        line_color='#df003b'
-    ))
-    fig.add_trace(go.Scatterpolar(
-        r=base_values, theta=categories, fill='toself', name='Ligagennemsnit',
-        line_color='gray'
-    ))
-
-    fig.update_layout(polar=dict(radialaxis=dict(visible=True)), showlegend=True)
-    st.plotly_chart(fig, use_container_width=True)
+if __name__ == "__main__":
+    vis_side()
