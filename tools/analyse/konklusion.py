@@ -6,14 +6,13 @@ from data.data_load import _get_snowflake_conn
 
 def vis_side(dp=None):
     # --- 1. KONFIGURATION ---
-    # Vi bruger de gemte værdier for sæson og liga
     LIGA_UUID = COMPETITIONS[COMPETITION_NAME]["COMPETITION_OPTAUUID"]
     DB = "KLUB_HVIDOVREIF.AXIS"
     
     conn = _get_snowflake_conn()
     if not conn: return
 
-    # SQL er opdateret til at filtrere XG specifikt på den valgte sæson/liga
+    # SQL er nu rettet til at filtrere XG specifikt på LIGA_UUID (sæsonen)
     sql = f"""
         WITH UniqueMatchStats AS (
             SELECT 
@@ -50,25 +49,26 @@ def vis_side(dp=None):
         LEFT JOIN XGStats x ON l.CONTESTANT_OPTAUUID = x.CONTESTANT_OPTAUUID
     """
 
-    try:
-        df_raw = conn.query(sql) if hasattr(conn, 'query') else pd.read_sql(sql, conn)
-        df_raw.columns = [c.upper() for c in df_raw.columns]
+    df_raw = conn.query(sql) if hasattr(conn, 'query') else pd.read_sql(sql, conn)
+    df_raw.columns = [c.upper() for c in df_raw.columns]
+    
+    # Numerisk vask
+    for col in ['TOTAL_GOALS', 'TOTAL_OP_GOALS', 'TOTAL_SHOTS', 'TOTAL_XG', 'AVG_POSS']:
+        df_raw[col] = pd.to_numeric(df_raw[col], errors='coerce').fillna(0).astype(float)
         
-        # Konvertering og sikring af 0-værdier
-        for col in ['TOTAL_GOALS', 'TOTAL_OP_GOALS', 'TOTAL_SHOTS', 'TOTAL_XG', 'AVG_POSS']:
-            df_raw[col] = pd.to_numeric(df_raw[col], errors='coerce').fillna(0).astype(float)
-            
-        # FIX: Korrekt skalering af possession (fra f.eks. 0.52 til 52.0)
-        if df_raw['AVG_POSS'].max() <= 1.0:
-            df_raw['AVG_POSS'] = df_raw['AVG_POSS'] * 100
+    # Skalering af possession
+    if df_raw['AVG_POSS'].max() <= 1.0:
+        df_raw['AVG_POSS'] *= 100
 
-        # FILTRERING: Kun de 12 hold i ligaen
-        aktuelle_uuids = [i.get("opta_uuid") for n, i in TEAMS.items() if i.get("league") == COMPETITION_NAME]
-        df_league = df_raw[df_raw['CONTESTANT_OPTAUUID'].isin(aktuelle_uuids)].copy()
-            
-    except Exception as e:
-        st.error(f"Fejl ved indlæsning: {e}")
-        return
+    # Kun de 12 hold i rækken
+    aktuelle_uuids = [i.get("opta_uuid") for n, i in TEAMS.items() if i.get("league") == COMPETITION_NAME]
+    df_league = df_raw[df_raw['CONTESTANT_OPTAUUID'].isin(aktuelle_uuids)].copy()
+
+    # --- HJÆLPEFUNKTION TIL DANSK FORMAT (Komma i stedet for punktum) ---
+    def dk_f(val, decimals=1):
+        if pd.isna(val): return "0"
+        s = f"{val:.{decimals}f}"
+        return s.replace('.', ',')
 
     # --- 2. LOGIK ---
     liga_hold_navne = {n: i.get("opta_uuid") for n, i in TEAMS.items() if i.get("league") == COMPETITION_NAME}
@@ -76,13 +76,7 @@ def vis_side(dp=None):
                               index=sorted(liga_hold_navne.keys()).index("Hvidovre") if "Hvidovre" in liga_hold_navne else 0)
     target_uuid = liga_hold_navne[valgt_hold]
 
-    # Beregn xG per afslutning
     df_league['XG_PER_SHOT'] = df_league['TOTAL_XG'] / df_league['TOTAL_SHOTS'].replace(0, np.nan)
-    
-    if target_uuid not in df_league['CONTESTANT_OPTAUUID'].values:
-        st.warning(f"Ingen data fundet for {valgt_hold} i sæsonen 2025/2026.")
-        return
-        
     row = df_league[df_league['CONTESTANT_OPTAUUID'] == target_uuid].iloc[0]
     
     def get_stat_and_rank(col, ascending=False):
@@ -97,28 +91,24 @@ def vis_side(dp=None):
     st.subheader("Angrebs-output:")
     r_g, v_g = get_stat_and_rank('TOTAL_GOALS')
     r_op, v_op = get_stat_and_rank('TOTAL_OP_GOALS')
-    
-    # Præcis beregning af difference
-    real_xg = float(row['TOTAL_XG'])
-    real_goals = float(v_g)
-    xg_diff = round(real_goals - real_xg, 1)
+    xg_diff = float(v_g) - float(row['TOTAL_XG'])
     
     st.markdown(f"* **{r_g}. plads** for flest mål scoret ({int(v_g)})")
     st.markdown(f"* **{r_op}. plads** for mål i åbent spil ({int(v_op)})")
-    st.markdown(f"* **{abs(xg_diff)}** {'flere' if xg_diff > 0 else 'færre'} mål scoret end xG skabt")
+    st.markdown(f"* **{dk_f(abs(xg_diff))}** {'flere' if xg_diff > 0 else 'færre'} mål scoret end xG skabt")
     
     conc_style = "color:#ff6600; font-weight:bold; display:block; margin-bottom:15px;"
     konkl_angreb = "stærk kynisme" if xg_diff > 0 else "begrænset af manglende skarphed"
     st.markdown(f"<span style='{conc_style}'>Konklusion – {konkl_angreb}</span>", unsafe_allow_html=True)
 
-    # Chance-skabelse
+    # Chance
     st.subheader("Chance-skabelse:")
     r_xgs, v_xgs = get_stat_and_rank('XG_PER_SHOT')
-    st.markdown(f"* **{r_xgs}. plads** for xG pr. afslutning ({v_xgs:.2f})")
+    st.markdown(f"* **{r_xgs}. plads** for xG pr. afslutning ({dk_f(v_xgs, 2)})")
     st.markdown(f"<span style='{conc_style}'>Konklusion – foretrækker chancer af høj kvalitet</span>", unsafe_allow_html=True)
 
     # Opbygning
     st.subheader("Opbygningsspil:")
     r_p, v_p = get_stat_and_rank('AVG_POSS')
-    st.markdown(f"* **{r_p}. plads** for højeste gennemsnitlige besiddelse ({v_p:.1f}%)")
+    st.markdown(f"* **{r_p}. plads** for højeste gennemsnitlige besiddelse ({dk_f(v_p)}%)")
     st.markdown(f"<span style='{conc_style}'>Konklusion – stærk i boldomgang</span>", unsafe_allow_html=True)
