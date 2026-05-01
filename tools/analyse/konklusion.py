@@ -9,23 +9,25 @@ def vis_side():
                 font-weight: bold; 
                 margin-top: 10px; 
             }
-            /* Gør overskrifterne i boksene lidt mindre og skarpe */
             .section-title {
                 font-weight: bold;
                 font-size: 1.1rem;
                 margin-bottom: 10px;
             }
+            /* Sikrer at boksene har samme højde i en række */
+            [data-testid="stVerticalBlockBorderWrapper"] {
+                height: 100%;
+            }
         </style>
     """, unsafe_allow_html=True)
 
     # --- TOP SEKTION MED TITEL OG DROPDOWN TIL HØJRE ---
-    col1, col2 = st.columns([3, 1])
+    col_titel, col_spacer, col_drop = st.columns([2, 1, 1])
     
-    with col1:
+    with col_titel:
         st.markdown("## Performance Analysis")
     
-    with col2:
-        # Flytter dropdown op til højre
+    with col_drop:
         valgt_hold = st.selectbox("Vælg hold:", ["Hvidovre", "OB", "FC Fredericia"], label_visibility="collapsed")
 
     # --- HARDKODET DATA ---
@@ -97,32 +99,38 @@ def vis_side():
 
     data = hold_data[valgt_hold]
 
-    # --- RENDERING MED BORDERS ---
+    # --- GRID LAYOUT (2 BOKSE PR. RÆKKE) ---
 
-    # Attacking Output
-    with st.container(border=True):
-        st.markdown('<p class="section-title">Attacking Output:</p>', unsafe_allow_html=True)
-        for line in data["attack"]:
-            st.markdown(f"• {line}")
-        st.markdown(f'<p class="conclusion-text">Conclusion – {data["attack_conc"]}</p>', unsafe_allow_html=True)
+    # Række 1
+    row1_col1, row1_col2 = st.columns(2)
 
-    st.write("") # Mellemrum
+    with row1_col1:
+        with st.container(border=True):
+            st.markdown('<p class="section-title">Attacking Output:</p>', unsafe_allow_html=True)
+            for line in data["attack"]:
+                st.markdown(f"• {line}")
+            st.markdown(f'<p class="conclusion-text">Conclusion – {data["attack_conc"]}</p>', unsafe_allow_html=True)
 
-    # Chance Creation
-    with st.container(border=True):
-        st.markdown('<p class="section-title">Chance Creation:</p>', unsafe_allow_html=True)
-        for line in data["chance"]:
-            st.markdown(f"• {line}")
-        st.markdown(f'<p class="conclusion-text">Conclusion – {data["chance_conc"]}</p>', unsafe_allow_html=True)
+    with row1_col2:
+        with st.container(border=True):
+            st.markdown('<p class="section-title">Chance Creation:</p>', unsafe_allow_html=True)
+            for line in data["chance"]:
+                st.markdown(f"• {line}")
+            st.markdown(f'<p class="conclusion-text">Conclusion – {data["chance_conc"]}</p>', unsafe_allow_html=True)
 
-    st.write("") # Mellemrum
+    # Række 2
+    row2_col1, row2_col2 = st.columns(2)
 
-    # Build-Up
-    with st.container(border=True):
-        st.markdown('<p class="section-title">Build-Up:</p>', unsafe_allow_html=True)
-        for line in data["build"]:
-            st.markdown(f"• {line}")
-        st.markdown(f'<p class="conclusion-text">Conclusion – {data["build_conc"]}</p>', unsafe_allow_html=True)
+    with row2_col1:
+        with st.container(border=True):
+            st.markdown('<p class="section-title">Build-Up:</p>', unsafe_allow_html=True)
+            for line in data["build"]:
+                st.markdown(f"• {line}")
+            st.markdown(f'<p class="conclusion-text">Conclusion – {data["build_conc"]}</p>', unsafe_allow_html=True)
+
+    with row2_col2:
+        # Denne boks er tom indtil videre, men holder layoutet pænt
+        st.empty()
 
 if __name__ == "__main__":
     vis_side()
