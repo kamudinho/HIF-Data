@@ -31,6 +31,8 @@ def vis_side(dp=None):
         SELECT 
             CONTESTANT_OPTAUUID,
             SUM(CASE WHEN STAT_TYPE = 'expectedGoals' THEN STAT_VALUE ELSE 0 END) as XG
+            SUM(CASE WHEN STAT_TYPE = 'touches' THEN STAT_VALUE ELSE 0 END) as TOUCHES
+
         FROM {DB}.OPTA_MATCHEXPECTEDGOALS
         WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
         GROUP BY 1
@@ -104,6 +106,7 @@ def vis_side(dp=None):
         <div class="analysis-card">
             <b>Build-Up:</b><br>
             • {get_rank('POSS')}. highest average possession ({row['POSS']:.1f}%)<br>
+            • {get_rank('TOUCHES')}. FLEST BERØRINGER ({row['TOUCHES']:.1f}%)<br>
             <div class="conclusion-text">Conclusion – strong passing retention.</div>
         </div>
         """, unsafe_allow_html=True)
