@@ -44,6 +44,7 @@ def vis_side(dp=None):
         df = conn.query(sql) if hasattr(conn, 'query') else pd.read_sql(sql, conn)
         df.columns = [str(c).upper() for c in df.columns]
         
+        # Possession fix
         if df['POSS'].mean() < 1:
             df['POSS'] = df['POSS'] * 100
             
@@ -51,13 +52,20 @@ def vis_side(dp=None):
         st.error(f"❌ SQL Fejl: {e}")
         return
 
-    # --- 3. UI STYLING (HIF RØD) ---
+    # --- 3. UI STYLING ---
     st.markdown("""
         <style>
-        .analysis-card { border: 1px solid #e6e6e6; padding: 20px; border-radius: 5px; margin-bottom: 20px; background-color: white; }
-        .section-title { font-weight: bold; margin-bottom: 10px; font-size: 1.1rem; }
-        /* HIF Rød konklusion */
-        .conclusion-text { color: #C8102E; font-weight: bold; margin-top: 15px; text-transform: uppercase; font-size: 0.9rem; }
+        .analysis-card { 
+            border: 1px solid #e6e6e6; 
+            padding: 20px; 
+            border-radius: 5px; 
+            margin-bottom: 20px; 
+            background-color: white;
+            min-height: 250px;
+        }
+        .section-title { font-weight: bold; margin-bottom: 10px; font-size: 1.2rem; border-bottom: 2px solid #C8102E; padding-bottom: 5px; }
+        .conclusion-text { color: #C8102E; font-weight: bold; margin-top: 15px; text-transform: uppercase; font-size: 0.85rem; }
+        .stat-line { margin-bottom: 8px; font-size: 0.95rem; }
         </style>
     """, unsafe_allow_html=True)
 
@@ -67,7 +75,7 @@ def vis_side(dp=None):
             suffix = 'th'
         else:
             suffix = {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')
-        return f"{n}{suffix}"
+        return f"**{n}{suffix}**"
 
     def get_rank(col, ascending=False):
         temp = df.sort_values(col, ascending=ascending).reset_index(drop=True)
@@ -75,7 +83,7 @@ def vis_side(dp=None):
             rank = temp[temp['TEAM_ID'] == target_uuid].index[0] + 1
             return get_ordinal(rank)
         except:
-            return "?"
+            return "**?**"
 
     # --- 5. FILTRERING ---
     hold_options = {n: i.get("opta_uuid") for n, i in TEAMS.items() if i.get("league") == COMPETITION_NAME}
@@ -83,37 +91,35 @@ def vis_side(dp=None):
     target_uuid = str(hold_options[valgt_navn]).strip().upper()
     
     row_match = df[df['TEAM_ID'] == target_uuid]
-
     if row_match.empty:
         st.warning(f"⚠️ Ingen data fundet for {valgt_navn}.")
         return
-
     row = row_match.iloc[0]
 
-    # --- 6. VISNING ---
-    
-    # Attacking Output
-    with st.container():
+    # --- 6. VISNING I TO KOLONNER ---
+    col1, col2 = st.columns(2)
+
+    with col1:
         st.markdown(f"""
         <div class="analysis-card">
-            <div class="section-title">Attacking Output:</div>
-            • {get_rank('GOALS')}. flest mål scoret ({int(row['GOALS'])})<br>
-            • {get_rank('XG')}. højeste expected goals ({row['XG']:.1f} xG)<br>
+            <div class="section-title">Angreb & Mål</div>
+            <div class="stat-line">• {get_rank('GOALS')} flest mål scoret ({int(row['GOALS'])})</div>
+            <div class="stat-line">• {get_rank('XG')} højeste expected goals ({row['XG']:.1f} xG)</div>
+            <div class="stat-line">• Forskel: {row['GOALS'] - row['XG']:.1f} mål vs xG</div>
             <div class="conclusion-text">Konklusion – {valgt_navn} præsterer med en xG på {row['XG']:.1f}.</div>
         </div>
         """, unsafe_allow_html=True)
 
-    # Build-Up
-    with st.container():
+    with col2:
         f_raw = str(int(row['FORMATION'])) if pd.notnull(row['FORMATION']) else "N/A"
         f_pretty = "-".join(list(f_raw)) if f_raw != "N/A" and len(f_raw) > 2 else f_raw
 
         st.markdown(f"""
         <div class="analysis-card">
-            <div class="section-title">Build-Up:</div>
-            • {get_rank('POSS')}. højeste gennemsnitlige boldbesiddelse ({row['POSS']:.1f}%)<br>
-            • {get_rank('TOUCHES')}. flest berøringer i alt ({int(row['TOUCHES'])})<br>
-            • Primær formation: {f_pretty}<br>
+            <div class="section-title">Opbygning & Formation</div>
+            <div class="stat-line">• {get_rank('POSS')} højeste boldbesiddelse ({row['POSS']:.1f}%)</div>
+            <div class="stat-line">• {get_rank('TOUCHES')} flest berøringer i alt ({int(row['TOUCHES'])})</div>
+            <div class="stat-line">• Foretrukken formation: {f_pretty}</div>
             <div class="conclusion-text">Konklusion – Benytter primært en {f_pretty} struktur.</div>
         </div>
         """, unsafe_allow_html=True)
