@@ -3,37 +3,43 @@ import pandas as pd
 
 def vis_side(conn):
     """
-    Viser datakataloget. 
-    Modtager 'conn' som er et Streamlit SnowflakeConnection objekt 
-    fra din robuste data_load funktion.
+    Viser datakataloget med forklaringer på STAT_TYPE.
     """
-    st.title("🛠 Datakatalog & Kolonneoversigt")
+    # --- ORDBOG TIL STAT_TYPE FORKLARINGER ---
+    # Du kan løbende udvide denne liste, når du finder nye stats i din Snowflake
+    stat_forklaringer = {
+        "expected_goals": "xG - Sandsynligheden for at et skud resulterer i mål.",
+        "expected_assists": "xA - Sandsynligheden for at en aflevering bliver til en assist.",
+        "goals": "Antal scorede mål.",
+        "assists": "Antal målgivende afleveringer.",
+        "touches_in_box": "Berøringer i modstanderens felt.",
+        "successful_dribbles": "Gennemførte driblinger.",
+        "progressive_passes": "Fremadrettede afleveringer der flytter spillet markant fremad.",
+        "interceptions": "Bolderobringer ved at læse modstanderens aflevering.",
+        "tackles_won": "Vundne tacklinger.",
+        "yellow_cards": "Gule kort tildelt spilleren.",
+    }
 
-    # --- TRIN 1: FORBINDELSES-STATUS (Ligesom din test-side) ---
+    # --- FORBINDELSES-STATUS ---
     try:
-        # Vi bruger .query() da din data_load returnerer st.connection
         status = conn.query("SELECT CURRENT_USER(), CURRENT_ROLE(), CURRENT_DATABASE(), CURRENT_SCHEMA(), CURRENT_WAREHOUSE()")
-        
         col1, col2, col3 = st.columns(3)
         col1.metric("Bruger", status.iloc[0,0])
         col2.metric("Rolle", status.iloc[0,1])
         col3.metric("Warehouse", status.iloc[0,4])
-        
-        st.write(f"**Aktiv Database:** `{status.iloc[0,2]}` | **Schema:** `{status.iloc[0,3]}`")
     except Exception as e:
         st.error(f"🚨 Kunne ikke hente forbindelsesstatus: {e}")
 
     st.divider()
 
-    # --- TRIN 2: TABELVALG OG KOLONNEOVERSIGT ---
-    # Vi holder os til de relevante tabeller for din Hvidovre-app
+    # --- TABELVALG OG KOLONNEOVERSIGT ---
     tabeller = ['OPTA_MATCHEXPECTEDGOALS', 'OPTA_MATCHSTATS', 'OPTA_PLAYERS']
     valgt_tabel = st.selectbox("Vælg tabel for at se tilgængelige kolonner:", tabeller)
 
     if valgt_tabel:
         st.subheader(f"Oversigt for {valgt_tabel}")
         
-        # SQL til metadata
+        # Metadata Query
         query_cols = f"""
             SELECT COLUMN_NAME, DATA_TYPE, IS_NULLABLE
             FROM KLUB_HVIDOVREIF.INFORMATION_SCHEMA.COLUMNS 
@@ -44,32 +50,33 @@ def vis_side(conn):
         
         try:
             df_cols = conn.query(query_cols)
-            
             if not df_cols.empty:
                 st.dataframe(df_cols, use_container_width=True, hide_index=True)
                 
-                # --- TRIN 3: STAT_TYPE TJEK (Hvis relevant) ---
+                # --- STAT_TYPE OVERSIGT MED FORKLARINGER ---
                 if "STATS" in valgt_tabel or "EXPECTED" in valgt_tabel:
-                    st.write("#### Eksisterende data-typer (STAT_TYPE)")
-                    # Vi kigger på tværs af alle sæsoner i denne oversigt
-                    query_stats = f"SELECT DISTINCT STAT_TYPE FROM KLUB_HVIDOVREIF.AXIS.{valgt_tabel} LIMIT 100"
+                    st.write("#### Eksisterende data-typer (STAT_TYPE) med forklaring")
+                    
+                    # Hent unikke stat_types fra Snowflake
+                    query_stats = f"SELECT DISTINCT STAT_TYPE FROM KLUB_HVIDOVREIF.AXIS.{valgt_tabel} LIMIT 200"
                     df_stats = conn.query(query_stats)
-                    st.dataframe(df_stats, use_container_width=True)
+                    
+                    # Tilføj forklaringen ved at mappe mod vores ordbog
+                    df_stats['Forklaring'] = df_stats['STAT_TYPE'].map(stat_forklaringer).fillna("Ingen forklaring fundet - kontakt admin")
+                    
+                    # Vis som en tabel hvor STAT_TYPE og Forklaring står ved siden af hinanden
+                    st.dataframe(
+                        df_stats[['STAT_TYPE', 'Forklaring']], 
+                        use_container_width=True, 
+                        hide_index=True
+                    )
             else:
-                st.warning(f"Ingen kolonner fundet for {valgt_tabel}. Tjek om tabellen findes i AXIS-schemaet.")
+                st.warning(f"Ingen kolonner fundet for {valgt_tabel}.")
                 
         except Exception as e:
-            st.error(f"❌ Fejl ved indlæsning af metadata for {valgt_tabel}: {e}")
+            st.error(f"❌ Fejl ved indlæsning: {e}")
 
-    # --- TRIN 4: RETTIGHEDS-TJEK (Fra din test-side) ---
-    with st.expander("Se systemrettigheder (Diagnose)"):
-        try:
-            db_list = conn.query("SHOW DATABASES")
-            st.write("✅ **Synlige databaser:**", db_list['name'].tolist())
-            
-            # Bruger din specifikke database fra secrets
-            s_db = st.secrets["connections"]["snowflake"]["database"]
-            schema_list = conn.query(f"SHOW SCHEMAS IN DATABASE {s_db}")
-            st.write(f"✅ **Synlige skemaer i {s_db}:**", schema_list['name'].tolist())
-        except Exception as e:
-            st.error(f"Kunne ikke køre diagnose: {e}")
+    # Diagnose expander
+    with st.expander("System Diagnose"):
+        st.write(f"Sæson: 2025/2026")
+        st.write(f"Konfiguration: {st.secrets['connections']['snowflake']['database']}")
