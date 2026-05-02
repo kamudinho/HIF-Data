@@ -20,9 +20,9 @@ def vis_side(dp=None):
         SELECT 
             UPPER(TRIM(CONTESTANT_OPTAUUID)) as TEAM_ID,
             SUM(CASE WHEN STAT_TYPE = 'goals' THEN STAT_TOTAL ELSE 0 END) as GOALS,
-            SUM(CASE WHEN STAT_TYPE = 'goalsConceded' THEN STAT_TOTAL ELSE 0 END) as CONCEDED,
-            SUM(CASE WHEN STAT_TYPE = 'totalScoringAtt' THEN STAT_TOTAL ELSE 0 END) as SHOTS,
-            AVG(CASE WHEN STAT_TYPE = 'possessionPercentage' THEN STAT_TOTAL ELSE 0 END) as POSS,
+            -- Vi tager kun gennemsnit af værdier over 0 for at undgå fejl-målinger
+            AVG(CASE WHEN STAT_TYPE = 'possessionPercentage' AND STAT_TOTAL > 0 
+                     THEN CAST(STAT_TOTAL AS FLOAT) END) as POSS,
             MAX(CASE WHEN STAT_TYPE = 'formationUsed' THEN STAT_TOTAL ELSE NULL END) as FORMATION
         FROM {DB}.OPTA_MATCHSTATS
         WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
@@ -37,10 +37,7 @@ def vis_side(dp=None):
         WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
         GROUP BY 1
     )
-    SELECT 
-        m.*, 
-        COALESCE(e.XG, 0) as XG,
-        COALESCE(e.TOUCHES, 0) as TOUCHES
+    SELECT m.*, COALESCE(e.XG, 0) as XG, COALESCE(e.TOUCHES, 0) as TOUCHES
     FROM MatchStats m
     LEFT JOIN ExpectedStats e ON m.TEAM_ID = e.TEAM_ID
     '''
