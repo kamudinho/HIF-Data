@@ -1,54 +1,38 @@
 import streamlit as st
-import pandas as pd
 
 def vis_side(conn):
-    st.write("### 🛠 Data & Kolonne Administration")
+    st.write("### 🛠 Datakatalog & Kolonneoversigt")
     
-    # Session info i din faste stil
+    # Samme stil som din profil-side
     st.info(f"Bruger: {st.session_state.get('user')}")
-    st.info(f"Sæson: 2025/2026") # Din SEASONNAME værdi
+    st.info(f"Rolle: Admin") 
+    st.info(f"Sæson: 2025/2026") # NordicBet Liga (328)
 
-    # Liste over de centrale Opta-tabeller
-    tabeller = [
-        'OPTA_MATCHEXPECTEDGOALS', 
-        'OPTA_MATCHSTATS', 
-        'OPTA_PLAYERS', 
-        'OPTA_MATCHINFO',
-        'OPTA_AREAS'
-    ]
-    
-    valgt_tabel = st.selectbox("Vælg tabel for at inspicere rådata:", tabeller)
+    # Liste over relevante tabeller
+    tabeller = ['OPTA_MATCHEXPECTEDGOALS', 'OPTA_MATCHSTATS', 'OPTA_PLAYERS']
+    valgt_tabel = st.selectbox("Vælg tabel for at se tilgængelige kolonner:", tabeller)
 
     if valgt_tabel:
-        st.write(f"#### Definitioner for {valgt_tabel}")
+        st.write(f"#### Kolonner i {valgt_tabel}")
         
-        # Henter tabel-strukturen (Kolonnenavne og typer)
+        # SQL til at hente metadata
         query_cols = f"""
-            SELECT COLUMN_NAME, DATA_TYPE, ORDINAL_POSITION
-            FROM KLUB_HVIDOVREIF.INFORMATION_SCHEMA.COLUMNS
-            WHERE TABLE_NAME = '{valgt_tabel}'
+            SELECT COLUMN_NAME, DATA_TYPE 
+            FROM KLUB_HVIDOVREIF.INFORMATION_SCHEMA.COLUMNS 
+            WHERE TABLE_NAME = '{valgt_tabel}' 
             AND TABLE_SCHEMA = 'AXIS'
-            ORDER BY ORDINAL_POSITION
         """
         
         try:
             df_cols = conn.query(query_cols)
-            st.dataframe(df_cols, use_container_width=True, hide_index=True)
+            st.dataframe(df_cols, use_container_width=True)
             
-            # Hvis tabellen indeholder STAT_TYPE (som xG eller MatchStats)
-            # viser vi hvilke unikke værdier der findes i rækkerne
-            if valgt_tabel in ['OPTA_MATCHEXPECTEDGOALS', 'OPTA_MATCHSTATS']:
-                st.write("#### Tilgængelige rækker (STAT_TYPE)")
-                
-                query_rows = f"""
-                    SELECT DISTINCT STAT_TYPE, COUNT(*) as forekomster
-                    FROM KLUB_HVIDOVREIF.AXIS.{valgt_tabel}
-                    WHERE TOURNAMENTCALENDAR_OPTAUUID = 'dyjr458hcmrcy87fsabfsy87o'
-                    GROUP BY 1 ORDER BY 2 DESC
-                """
-                df_rows = conn.query(query_rows)
-                st.table(df_rows)
+            # Hvis det er en stat-tabel, viser vi også de underliggende stat_types
+            if "STATS" in valgt_tabel or "EXPECTED" in valgt_tabel:
+                st.write("#### Underliggende data (STAT_TYPE)")
+                query_stats = f"SELECT DISTINCT STAT_TYPE FROM KLUB_HVIDOVREIF.AXIS.{valgt_tabel} LIMIT 50"
+                df_stats = conn.query(query_stats)
+                st.table(df_stats)
                 
         except Exception as e:
-            st.error(f"Kunne ikke hente data: {e}")
-            st.warning("Tjek om din rolle har USAGE rettigheder til INFORMATION_SCHEMA.")
+            st.error(f"Kunne ikke hente kolonner: {e}")
