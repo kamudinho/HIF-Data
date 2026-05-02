@@ -1,9 +1,10 @@
 import streamlit as st
+import pandas as pd
 
 def vis_side(conn):
     st.write("### 🛠 Datakatalog & Kolonneoversigt")
     
-    # Samme stil som din profil-side
+    # Header information i din faste stil
     st.info(f"Bruger: {st.session_state.get('user')}")
     st.info(f"Rolle: Admin") 
     st.info(f"Sæson: 2025/2026") # NordicBet Liga (328)
@@ -15,24 +16,34 @@ def vis_side(conn):
     if valgt_tabel:
         st.write(f"#### Kolonner i {valgt_tabel}")
         
-        # SQL til at hente metadata
+        # SQL til at hente metadata fra INFORMATION_SCHEMA
         query_cols = f"""
             SELECT COLUMN_NAME, DATA_TYPE 
             FROM KLUB_HVIDOVREIF.INFORMATION_SCHEMA.COLUMNS 
             WHERE TABLE_NAME = '{valgt_tabel}' 
             AND TABLE_SCHEMA = 'AXIS'
+            ORDER BY ORDINAL_POSITION
         """
         
         try:
-            df_cols = conn.query(query_cols)
-            st.dataframe(df_cols, use_container_width=True)
+            # Da vi bruger en manuel connector, bruger vi pandas til at læse SQL'en
+            df_cols = pd.read_sql(query_cols, conn)
+            st.dataframe(df_cols, use_container_width=True, hide_index=True)
             
-            # Hvis det er en stat-tabel, viser vi også de underliggende stat_types
+            # Hvis det er en stat-tabel, viser vi de unikke STAT_TYPEs (f.eks. xG, xA)
             if "STATS" in valgt_tabel or "EXPECTED" in valgt_tabel:
                 st.write("#### Underliggende data (STAT_TYPE)")
-                query_stats = f"SELECT DISTINCT STAT_TYPE FROM KLUB_HVIDOVREIF.AXIS.{valgt_tabel} LIMIT 50"
-                df_stats = conn.query(query_stats)
-                st.table(df_stats)
+                
+                # Vi filtrerer på din aktuelle sæson for at gøre oversigten relevant
+                query_stats = f"""
+                    SELECT DISTINCT STAT_TYPE 
+                    FROM KLUB_HVIDOVREIF.AXIS.{valgt_tabel} 
+                    WHERE TOURNAMENTCALENDAR_OPTAUUID = 'dyjr458hcmrcy87fsabfsy87o'
+                    LIMIT 100
+                """
+                df_stats = pd.read_sql(query_stats, conn)
+                st.dataframe(df_stats, use_container_width=True, hide_index=True)
                 
         except Exception as e:
             st.error(f"Kunne ikke hente kolonner: {e}")
+            st.warning("Dette skyldes ofte manglende USAGE-rettigheder på INFORMATION_SCHEMA for din rolle.")
