@@ -30,7 +30,7 @@ def vis_side(dp=None):
     ExpectedStats AS (
         SELECT 
             CONTESTANT_OPTAUUID,
-            SUM(CASE WHEN STAT_TYPE = 'expectedGoals' THEN STAT_VALUE ELSE 0 END) as XG
+            SUM(CASE WHEN STAT_TYPE = 'expectedGoals' THEN STAT_VALUE ELSE 0 END) as XG,
             SUM(CASE WHEN STAT_TYPE = 'touches' THEN STAT_VALUE ELSE 0 END) as TOUCHES
 
         FROM {DB}.OPTA_MATCHEXPECTEDGOALS
