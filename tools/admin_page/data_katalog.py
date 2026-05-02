@@ -137,31 +137,46 @@ def vis_side(conn):
         except Exception as e:
             st.error(f"Kunne ikke hente stat-typer: {e}")
 
-    # --- FANE 3: KODE-EKSEMPEL ---
+    # --- FANE 3: INTERAKTIV KODE-GENERATOR ---
     with tab_kode:
-        st.subheader("Sådan bruger du STAT_TYPE i din kode")
-        st.info("Brug denne metode når du skal trække specifikke tal ud til spiller- eller kampsider.")
-        
-        kode_eksempel = """
-# Eksempel på hvordan du filtrerer xG og Assists i din data-load
-def get_player_performance(conn, player_uuid):
-    query = f'''
-        SELECT 
-            STAT_TYPE, 
-            STAT_VALUE 
-        FROM KLUB_HVIDOVREIF.AXIS.OPTA_MATCHSTATS
-        WHERE PLAYER_OPTAUUID = '{player_uuid}'
-        AND STAT_TYPE IN ('expectedGoals', 'goalAssist', 'touchesInOppBox')
-    '''
-    df = conn.query(query)
-    
-    # Map forklaringerne på i koden
-    ordbog = {
-        'expectedGoals': 'xG',
-        'goalAssist': 'Assists',
-        'touchesInOppBox': 'Felt-aktioner'
-    }
-    df['Label'] = df['STAT_TYPE'].map(ordbog)
-    return df
-        """
-        st.code(kode_eksempel, language='python')
+        st.subheader("Interaktiv SQL & Python Generator")
+        st.write("Vælg de stats du vil bruge, for at generere din kode:")
+
+        # 1. Checkboxes til valg af stats (baseret på din ordbog)
+        # Vi sorterer dem alfabetisk så de er lette at finde
+        mulige_stats = sorted(list(stat_forklaringer.keys()))
+        valgte_stats = st.multiselect("Vælg statistikker:", mulige_stats, default=["expectedGoals", "goalAssist"])
+
+        if valgte_stats:
+            # Lav formateret streng til SQL: 'stat1', 'stat2'
+            sql_list = ", ".join([f"'{s}'" for s in valgte_stats])
+            
+            # Lav formateret dict til Python mapping
+            python_mapping = "{\n" + ",\n".join([f"        '{s}': '{stat_forklaringer[s]}'" for s in valgte_stats]) + "\n    }"
+
+            st.markdown("### 1. SQL Query")
+            st.info("Kopier denne query til din Snowflake-funktion:")
+            sql_kode = f"""
+SELECT 
+    PLAYER_NAME,
+    STAT_TYPE,
+    SUM(STAT_VALUE) as TOTAL
+FROM KLUB_HVIDOVREIF.AXIS.OPTA_MATCHSTATS
+WHERE STAT_TYPE IN ({sql_list})
+AND TOURNAMENTCALENDAR_OPTAUUID = 'dyjr458hcmrcy87fsabfsy87o' -- Sæson 25/26
+GROUP BY PLAYER_NAME, STAT_TYPE
+            """
+            st.code(sql_kode, language="sql")
+
+            st.markdown("### 2. Python Mapping")
+            st.info("Brug dette i din Streamlit-app til at give flotte navne:")
+            python_kode = f"""
+# Definer navne baseret på dine valg i kataloget
+stat_map = {python_mapping}
+
+# Påfør navne på dit dataframe
+df['Visningsnavn'] = df['STAT_TYPE'].map(stat_map)
+            """
+            st.code(python_kode, language="python")
+        else:
+            st.warning("Vælg mindst én statistik for at generere kode.")
