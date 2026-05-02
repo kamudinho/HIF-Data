@@ -206,8 +206,7 @@ try:
             kon.vis_side()
         elif sel == "Datakatalog":
             import tools.admin_page.data_katalog as dk
-            conn = st.connection("snowflake") 
-            dk.vis_side(conn)
+            dk.vis_side(hif_load._get_snowflake_conn())
         elif sel == "Fysisk profil":
             import tools.players.fysisk_player as fp
             fp.vis_side()
