@@ -1,42 +1,32 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-from data.utils.team_mapping import TEAMS, COMPETITIONS, COMPETITION_NAME
+from data.utils.team_mapping import TEAMS, COMPETITIONS, COMPETITION_NAME, TEAM_COLORS
 from data.data_load import _get_snowflake_conn
 
 def vis_side(dp=None):
-    # --- 1. KONFIGURATION & FORBINDELSE ---
-    # Vi bruger de gemte værdier for sæson og turnering
+    # --- 1. KONFIGURATION ---
     LIGA_UUID = COMPETITIONS[COMPETITION_NAME]["COMPETITION_OPTAUUID"]
     DB = "KLUB_HVIDOVREIF.AXIS"
-    
     conn = _get_snowflake_conn()
+    
     if not conn: 
-        st.error("Kunne ikke oprette forbindelse til databasen.")
+        st.error("Kunne ikke forbinde til Snowflake.")
         return
 
-    # --- 2. VALG AF HOLD ---
-    # Filtrerer hold baseret på den aktuelle liga
-    liga_hold = {n: i.get("opta_uuid") for n, i in TEAMS.items() if i.get("league") == COMPETITION_NAME}
-    valgt_hold_navn = st.selectbox(
-        "Vælg hold", 
-        sorted(liga_hold.keys()), 
-        index=sorted(liga_hold.keys()).index("Hvidovre") if "Hvidovre" in liga_hold else 0
-    )
-    target_uuid = liga_hold[valgt_hold_navn]
-
-    # --- 3. SQL: HOLD-DATA (Fra MATCHSTATS) ---
-    sql_hold = f'''
+    # --- 2. SQL: KOMBINERET HOLD & SPILLER DATA ---
+    # Vi bruger CTE-logikken fra dit eksempel for at sikre konsistens
+    sql = f'''
     WITH UniqueMatchStats AS (
         SELECT 
-            MATCH_OPTAUUID,
-            CONTESTANT_OPTAUUID,
+            MATCH_OPTAUUID, CONTESTANT_OPTAUUID,
             MAX(CASE WHEN STAT_TYPE = 'goals' THEN STAT_TOTAL ELSE 0 END) as GOALS,
             MAX(CASE WHEN STAT_TYPE = 'goalsOpenplay' THEN STAT_TOTAL ELSE 0 END) as OP_GOALS,
             MAX(CASE WHEN STAT_TYPE = 'possessionPercentage' THEN STAT_TOTAL ELSE 0 END) as POSS,
             MAX(CASE WHEN STAT_TYPE = 'totalScoringAtt' THEN STAT_TOTAL ELSE 0 END) as SHOTS,
             MAX(CASE WHEN STAT_TYPE = 'expectedGoals' THEN STAT_TOTAL ELSE 0 END) as XG,
-            MAX(CASE WHEN STAT_TYPE = 'bigChanceCreated' THEN STAT_TOTAL ELSE 0 END) as BIGCHANCES
+            MAX(CASE WHEN STAT_TYPE = 'bigChanceCreated' THEN STAT_TOTAL ELSE 0 END) as BIGCHANCES,
+            MAX(CASE WHEN STAT_TYPE = 'interceptions' THEN STAT_TOTAL ELSE 0 END) as INTERCEPTIONS
         FROM {DB}.OPTA_MATCHSTATS
         WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
         GROUP BY 1, 2
@@ -49,21 +39,93 @@ def vis_side(dp=None):
             AVG(POSS) as AVG_POSS,
             SUM(SHOTS) as TOTAL_SHOTS,
             SUM(XG) as TOTAL_XG,
-            SUM(BIGCHANCES) as TOTAL_BIGCHANCES
+            SUM(BIGCHANCES) as TOTAL_BIGCHANCES,
+            SUM(INTERCEPTIONS) as TOTAL_INTERCEPTIONS
         FROM UniqueMatchStats
         GROUP BY 1
     )
     SELECT * FROM LeagueStats
     '''
 
-    # --- 4. SQL: SPILLER-DATA (Fra PLAYERSTATS) ---
+    with st.spinner("Analyserer liga-data..."):
+        df_raw = conn.query(sql) if hasattr(conn, 'query') else pd.read_sql(sql, conn)
+
+    if df_raw is None or df_raw.empty:
+        st.warning("Ingen data fundet.")
+        return
+
+    # --- 3. DATA PREP (Fix Snowflake typer) ---
+    df_raw.columns = [str(c).upper() for c in df_raw.columns]
+    
+    # Numerisk vask (Som i dit eksempel)
+    cols_to_fix = df_raw.columns.drop('CONTESTANT_OPTAUUID')
+    for col in cols_to_fix:
+        df_raw[col] = pd.to_numeric(df_raw[col], errors='coerce').fillna(0).astype(float)
+    
+    if df_raw['AVG_POSS'].max() <= 1.0:
+        df_raw['AVG_POSS'] *= 100
+
+    # --- 4. VALG AF HOLD ---
+    liga_hold_options = {n: i.get("opta_uuid") for n, i in TEAMS.items() if i.get("league") == COMPETITION_NAME}
+    h_list = sorted(liga_hold_options.keys())
+    valgt_navn = st.selectbox("Vælg hold til analyse", h_list, 
+                              index=h_list.index("Hvidovre") if "Hvidovre" in h_list else 0)
+    target_uuid = str(liga_hold_options[valgt_navn]).strip().upper()
+
+    # Find data for valgt hold vs ligaen
+    df_league = df_raw.copy()
+    row = df_league[df_league['CONTESTANT_OPTAUUID'].str.strip().upper() == target_uuid].iloc[0]
+
+    # --- 5. UI STYLING (Ingen ikoner, ren tekst) ---
+    st.markdown("""
+        <style>
+        .stat-card { background: #f8f9fa; border-left: 5px solid #222; padding: 15px; border-radius: 4px; margin-bottom: 20px; }
+        .stat-header { font-size: 12px; color: #666; text-transform: uppercase; letter-spacing: 1px; font-weight: bold; }
+        .stat-value { font-size: 24px; font-weight: 800; color: #111; }
+        .stat-rank { font-size: 14px; color: #cc0000; font-weight: bold; }
+        </style>
+    """, unsafe_allow_html=True)
+
+    # --- 6. VISNING ---
+    st.title(f"Konklusion: {valgt_navn}")
+
+    def get_rank(col):
+        temp = df_league.sort_values(col, ascending=False).reset_index(drop=True)
+        # Sørg for case-insensitive match på UUID
+        rank = temp[temp['CONTESTANT_OPTAUUID'].str.strip().upper() == target_uuid].index[0] + 1
+        return rank
+
+    # SEKTION 1: OFFENSIVT OUTPUT
+    c1, c2, c3 = st.columns(3)
+    
+    metrics = [
+        ("Mål scoret", 'TOTAL_GOALS', 0, ""),
+        ("Expected Goals", 'TOTAL_XG', 1, " xG"),
+        ("Store Chancer", 'TOTAL_BIGCHANCES', 0, "")
+    ]
+
+    for i, (label, col, dec, suf) in enumerate(metrics):
+        with [c1, c2, c3][i]:
+            val = row[col]
+            rank = get_rank(col)
+            st.markdown(f"""
+                <div class='stat-card'>
+                    <div class='stat-header'>{label}</div>
+                    <div class='stat-value'>{val:.{dec}f}{suf}</div>
+                    <div class='stat-rank'>NR. {rank} I LIGAEN</div>
+                </div>
+            """, unsafe_allow_html=True)
+
+    # SEKTION 2: TOPSCORERE (Spiller-niveau SQL)
+    st.divider()
+    st.subheader("Individuelle Profiler")
+    
     sql_spillere = f'''
     SELECT 
         PLAYER_NAME,
         SUM(CASE WHEN STAT_TYPE = 'goals' THEN STAT_VALUE ELSE 0 END) as GOALS,
-        SUM(CASE WHEN STAT_TYPE = 'goalAssist' THEN STAT_VALUE ELSE 0 END) as ASSISTS,
-        SUM(CASE WHEN STAT_TYPE = 'expectedGoals' THEN STAT_VALUE ELSE 0 END) as XG_INDIVIDUEL
-    FROM {DB}.OPTA_PLAYERS
+        SUM(CASE WHEN STAT_TYPE = 'goalAssist' THEN STAT_VALUE ELSE 0 END) as ASSISTS
+    FROM {DB}.OPTA_PLAYERSTATS
     WHERE CONTESTANT_OPTAUUID = '{target_uuid}'
     AND TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
     GROUP BY PLAYER_NAME
@@ -71,74 +133,30 @@ def vis_side(dp=None):
     ORDER BY GOALS DESC, ASSISTS DESC
     LIMIT 5
     '''
-
-    try:
-        # Hentning af data
-        df_raw = conn.query(sql_hold)
-        df_raw.columns = [c.upper() for c in df_raw.columns]
-        
-        df_spillere = conn.query(sql_spillere)
+    
+    df_spillere = conn.query(sql_spillere)
+    if df_spillere is not None and not df_spillere.empty:
         df_spillere.columns = [c.upper() for c in df_spillere.columns]
+        for _, p in df_spillere.iterrows():
+            col_a, col_b = st.columns([3, 1])
+            col_a.markdown(f"**{p['PLAYER_NAME']}**")
+            col_b.markdown(f"{int(p['GOALS'])} mål / {int(p['ASSISTS'])} assists")
+            st.markdown("<div style='height:1px; background:#eee; margin-bottom:10px;'></div>", unsafe_allow_html=True)
 
-        # Numerisk vask af hold-data
-        cols_to_fix = ['TOTAL_GOALS', 'TOTAL_OP_GOALS', 'TOTAL_SHOTS', 'TOTAL_XG', 'AVG_POSS', 'TOTAL_BIGCHANCES']
-        for col in cols_to_fix:
-            df_raw[col] = pd.to_numeric(df_raw[col], errors='coerce').fillna(0).astype(float)
-        
-        if df_raw['AVG_POSS'].max() <= 1.0:
-            df_raw['AVG_POSS'] *= 100
-        
-        # Rangering i ligaen
-        aktuelle_uuids = [i.get("opta_uuid") for n, i in TEAMS.items() if i.get("league") == COMPETITION_NAME]
-        df_league = df_raw[df_raw['CONTESTANT_OPTAUUID'].isin(aktuelle_uuids)].copy()
-        row = df_league[df_league['CONTESTANT_OPTAUUID'] == target_uuid].iloc[0]
-
-    except Exception as e:
-        st.error(f"Fejl ved databehandling: {e}")
-        return
-
-    # --- 5. HJÆLPEFUNKTIONER ---
-    def dk_format(val, decimals=1):
-        if pd.isna(val): return "0"
-        return f"{val:.{decimals}f}".replace('.', ',')
-
-    def get_rank(col):
-        temp = df_league.sort_values(col, ascending=False).reset_index(drop=True)
-        return temp[temp['CONTESTANT_OPTAUUID'] == target_uuid].index[0] + 1
-
-    # --- 6. VISNING ---
-    st.title(f"Performance Analyse: {valgt_hold_navn}")
-    
-    col1, col2 = st.columns([2, 1])
-
-    with col1:
-        st.subheader("Hold Performance")
-        
-        rank_g = get_rank('TOTAL_GOALS')
-        st.write(f"Mål i alt: {int(row['TOTAL_GOALS'])} (Nr. {rank_g} i ligaen)")
-        
-        rank_xg = get_rank('TOTAL_XG')
-        st.write(f"xG skabt: {dk_format(row['TOTAL_XG'])} (Nr. {rank_xg} i ligaen)")
-        
-        xg_diff = row['TOTAL_GOALS'] - row['TOTAL_XG']
-        konklusion_tekst = "Holdet overperformer deres xG (skarphed)" if xg_diff > 0 else "Holdet underperformer deres xG (mangler kynisme)"
-        
-        st.markdown(f"**Konklusion:** {konklusion_tekst}")
-        st.markdown(f"Difference: {dk_format(xg_diff)} mål")
-
-    with col2:
-        st.subheader("Topscorere")
-        if not df_spillere.empty:
-            for _, p in df_spillere.iterrows():
-                st.markdown(f"**{p['PLAYER_NAME']}**")
-                st.write(f"{int(p['GOALS'])} mål / {int(p['ASSISTS'])} assists")
-                st.divider()
-        else:
-            st.write("Ingen spillerdata fundet.")
-
+    # SEKTION 3: TAKTISK OPSUMMERING
     st.divider()
+    st.subheader("Taktisk Opsamling")
     
-    # Opbygningssektion
-    st.subheader("Opbygningsspil")
-    rank_p = get_rank('AVG_POSS')
-    st.write(f"Gennemsnitlig boldbesiddelse: {dk_format(row['AVG_POSS'])}% (Nr. {rank_p} i ligaen)")
+    xg_diff = row['TOTAL_GOALS'] - row['TOTAL_XG']
+    rank_poss = get_rank('AVG_POSS')
+    
+    if xg_diff > 1:
+        eval_skarp = "Høj kynisme (scorer mere end forventet)"
+    elif xg_diff < -1:
+        eval_skarp = "Manglende skarphed (scorer mindre end forventet)"
+    else:
+        eval_skarp = "Præstation som forventet ud fra chancer"
+
+    st.write(f"**Boldbesiddelse:** Holdet ligger nr. {rank_poss} i ligaen med {row['AVG_POSS']:.1f}% i snit.")
+    st.write(f"**Afslutningseffektivitet:** {eval_skarp}.")
+    st.write(f"**Defensivt:** Har foretaget {int(row['TOTAL_INTERCEPTIONS'])} bolderobringer i sæsonen.")
