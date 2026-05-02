@@ -2,10 +2,8 @@ import streamlit as st
 import pandas as pd
 
 def vis_side(conn):
-    # --- ORDBOG TIL STAT_TYPE ---
-    # --- UDVIDET ORDBOG TIL STAT_TYPE FORKLARINGER ---
     stat_forklaringer = {
-        # Grundlæggende kampstatistik
+        # --- Grundlæggende kampstatistik ---
         "minsPlayed": "Antal spillede minutter.",
         "yellowCard": "Gule kort.",
         "secondYellow": "Andet gult kort (rødt).",
@@ -14,8 +12,9 @@ def vis_side(conn):
         "totalSubOff": "Udskiftninger.",
         "touches": "Antal berøringer i alt.",
         "touchesInOppBox": "Berøringer i modstanderens felt.",
+        "possessionPercentage": "Boldbesiddelse i procent.",
 
-        # Mål og Assists
+        # --- Mål og Assists ---
         "goals": "Antal scorede mål i alt.",
         "ownGoals": "Selvemål.",
         "goalsOpenplay": "Mål scoret i åbent spil.",
@@ -30,7 +29,7 @@ def vis_side(conn):
         "assistPenaltyWon": "Fremprovokeret straffespark (der fører til mål).",
         "assistFreeKickWon": "Fremprovokeret frispark (der fører til mål).",
 
-        # Skud og Afslutninger
+        # --- Skud og Afslutninger ---
         "totalScoringAtt": "Samlede afslutninger (skud på mål, ved siden af og blokerede).",
         "ontargetScoringAtt": "Skud indenfor rammen.",
         "shotOffTarget": "Skud udenfor rammen.",
@@ -47,7 +46,31 @@ def vis_side(conn):
         "bigChanceScored": "Store chancer omsat til mål.",
         "bigChanceMissed": "Store chancer brændt.",
 
-        # Expected Goals (xG) & Assists (xA)
+        # --- Afleveringer, Tacklinger & Forsvar ---
+        "accuratePass": "Succesfulde afleveringer.",
+        "totalPass": "Afleveringer i alt.",
+        "totalTackle": "Tacklinger i alt.",
+        "wonTackle": "Vundne tacklinger.",
+        "totalClearance": "Rensninger (clearinger).",
+        "interceptions": "Bolderobringer (interceptions).",
+        "fkFoulLost": "Frispark begået.",
+        "fkFoulWon": "Frispark vundet.",
+        "totalOffside": "Offsides i alt.",
+        "cornerTaken": "Hjørnespark taget.",
+        "wonCorners": "Hjørnespark vundet.",
+        "lostCorners": "Hjørnespark givet væk.",
+        "totalThrows": "Indkast.",
+
+        # --- Målmand & Defensiv ---
+        "saves": "Redninger.",
+        "cleanSheet": "Rent bur (ingen mål lukket ind).",
+        "goalsConceded": "Mål lukket ind.",
+        "penaltySave": "Straffespark reddet.",
+        "penaltyFaced": "Straffespark stået overfor.",
+        "penaltyConceded": "Straffespark begået.",
+        "penGoalsConceded": "Mål lukket ind på straffe.",
+
+        # --- Expected Goals (xG) & Assists (xA) ---
         "expectedGoals": "xG - Samlet forventede mål.",
         "expectedGoalsNonpenalty": "xG - Forventede mål uden straffespark.",
         "expectedGoalsOpenplay": "xG - Forventede mål i åbent spil.",
@@ -61,19 +84,12 @@ def vis_side(conn):
         "expectedAssistsOpenplay": "xA - Forventede assists i åbent spil.",
         "expectedAssistsSetplay": "xA - Forventede assists på dødbolde.",
 
-        # Specifikke skud-detaljer (Fod/Position)
+        # --- Specifikke detaljer ---
         "attRfTotal": "Samlede afslutninger med højre fod.",
         "attLfTotal": "Samlede afslutninger med venstre fod.",
         "attHdTotal": "Samlede afslutninger med hovedet.",
-        "attIboxGoal": "Mål scoret inde i feltet.",
-        "attOboxGoal": "Mål scoret udenfor feltet.",
-        "attPenGoal": "Mål scoret på straffespark.",
-        "penaltyWon": "Straffespark fremprovokeret.",
-        
-        # Forsvars-orienteret xG (Conceded)
-        "expectedGoalsConceded": "xGC - Forventede mål indkasseret.",
-        "expectedGoalsNonpenaltyConceded": "xGC - Forventede mål indkasseret (uden straffe).",
-        "expectedGoalsontargetConceded": "xGOTC - xG på mål indkasseret.",
+        "penaltyWon": "Straffespark vundet (fremprovokeret).",
+        "formationUsed": "Holdets formation.",
     }
 
     # 1. Forbindelses-status (Hurtigt overblik)
