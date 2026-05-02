@@ -7,17 +7,77 @@ def vis_side(conn):
     """
     # --- ORDBOG TIL STAT_TYPE FORKLARINGER ---
     # Du kan løbende udvide denne liste, når du finder nye stats i din Snowflake
+    # --- UDVIDET ORDBOG TIL STAT_TYPE FORKLARINGER ---
     stat_forklaringer = {
-        "expected_goals": "xG - Sandsynligheden for at et skud resulterer i mål.",
-        "expected_assists": "xA - Sandsynligheden for at en aflevering bliver til en assist.",
-        "goals": "Antal scorede mål.",
-        "assists": "Antal målgivende afleveringer.",
-        "touches_in_box": "Berøringer i modstanderens felt.",
-        "successful_dribbles": "Gennemførte driblinger.",
-        "progressive_passes": "Fremadrettede afleveringer der flytter spillet markant fremad.",
-        "interceptions": "Bolderobringer ved at læse modstanderens aflevering.",
-        "tackles_won": "Vundne tacklinger.",
-        "yellow_cards": "Gule kort tildelt spilleren.",
+        # Grundlæggende kampstatistik
+        "minsPlayed": "Antal spillede minutter.",
+        "yellowCard": "Gule kort.",
+        "secondYellow": "Andet gult kort (rødt).",
+        "redCard": "Rødt kort.",
+        "totalSubOn": "Indskiftninger.",
+        "totalSubOff": "Udskiftninger.",
+        "touches": "Antal berøringer i alt.",
+        "touchesInOppBox": "Berøringer i modstanderens felt.",
+
+        # Mål og Assists
+        "goals": "Antal scorede mål i alt.",
+        "ownGoals": "Selvemål.",
+        "goalsOpenplay": "Mål scoret i åbent spil.",
+        "goalFastbreak": "Mål scoret på kontraangreb.",
+        "goalAssist": "Målgivende aflevering (Assist).",
+        "secondGoalAssist": "Anden-assist (afleveringen før assisten).",
+        "goalAssistOpenplay": "Assist i åbent spil.",
+        "goalAssistSetplay": "Assist på dødbolde.",
+        "goalAssistDeadball": "Assist på dødbolde (frispark/hjørne).",
+        "goalAssistIntentional": "Bevidst målgivende aflevering.",
+        "assistOwnGoal": "Fremprovokeret selvmål.",
+        "assistPenaltyWon": "Fremprovokeret straffespark (der fører til mål).",
+        "assistFreeKickWon": "Fremprovokeret frispark (der fører til mål).",
+
+        # Skud og Afslutninger
+        "totalScoringAtt": "Samlede afslutninger (skud på mål, ved siden af og blokerede).",
+        "ontargetScoringAtt": "Skud indenfor rammen.",
+        "shotOffTarget": "Skud udenfor rammen.",
+        "blockedScoringAtt": "Blokerede skudforsøg.",
+        "hitWoodwork": "Skud på stolpe eller overligger.",
+        "postScoringAtt": "Afslutning der rammer stolpen.",
+        "totalAttAssist": "Chancer skabt (aflevering til skud).",
+        "ontargetAttAssist": "Chancer skabt til skud på mål.",
+        "offtargetAttAssist": "Chancer skabt til skud ved siden af mål.",
+        "attOpenplay": "Afslutninger i åbent spil.",
+        "attSetpiece": "Afslutninger på dødbolde.",
+        "attFastbreak": "Afslutninger på kontraangreb.",
+        "bigChanceCreated": "Store chancer skabt.",
+        "bigChanceScored": "Store chancer omsat til mål.",
+        "bigChanceMissed": "Store chancer brændt.",
+
+        # Expected Goals (xG) & Assists (xA)
+        "expectedGoals": "xG - Samlet forventede mål.",
+        "expectedGoalsNonpenalty": "xG - Forventede mål uden straffespark.",
+        "expectedGoalsOpenplay": "xG - Forventede mål i åbent spil.",
+        "expectedGoalsSetplay": "xG - Forventede mål på dødbolde.",
+        "expectedGoalsFreekick": "xG - Forventede mål på direkte frispark.",
+        "expectedGoalsHd": "xG - Forventede mål på hovedstød.",
+        "expectedGoalsRf": "xG - Forventede mål med højre fod.",
+        "expectedGoalsLf": "xG - Forventede mål med venstre fod.",
+        "expectedGoalsontarget": "xG på mål (xGOT) - Værdien af skuddets placering.",
+        "expectedAssists": "xA - Forventede assists.",
+        "expectedAssistsOpenplay": "xA - Forventede assists i åbent spil.",
+        "expectedAssistsSetplay": "xA - Forventede assists på dødbolde.",
+
+        # Specifikke skud-detaljer (Fod/Position)
+        "attRfTotal": "Samlede afslutninger med højre fod.",
+        "attLfTotal": "Samlede afslutninger med venstre fod.",
+        "attHdTotal": "Samlede afslutninger med hovedet.",
+        "attIboxGoal": "Mål scoret inde i feltet.",
+        "attOboxGoal": "Mål scoret udenfor feltet.",
+        "attPenGoal": "Mål scoret på straffespark.",
+        "penaltyWon": "Straffespark fremprovokeret.",
+        
+        # Forsvars-orienteret xG (Conceded)
+        "expectedGoalsConceded": "xGC - Forventede mål indkasseret.",
+        "expectedGoalsNonpenaltyConceded": "xGC - Forventede mål indkasseret (uden straffe).",
+        "expectedGoalsontargetConceded": "xGOTC - xG på mål indkasseret.",
     }
 
     # --- FORBINDELSES-STATUS ---
