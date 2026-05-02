@@ -1,5 +1,14 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import plotly.express as px
+from mplsoccer import Pitch, VerticalPitch
+from data.data_load import _get_snowflake_conn
+from data.utils.team_mapping import TEAMS
+import requests
+from PIL import Image
+from io import BytesIO
 
 def vis_side(conn):
     st.write("### 🛠 Datakatalog & Kolonneoversigt")
