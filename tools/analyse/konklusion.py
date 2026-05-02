@@ -80,7 +80,7 @@ def vis_side(dp=None):
             suffix = 'th'
         else:
             suffix = {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')
-        return f"**{n}{suffix}**"
+        return f"{n}{suffix}"
 
     def get_rank(col, ascending=False):
         temp = df.sort_values(col, ascending=ascending).reset_index(drop=True)
