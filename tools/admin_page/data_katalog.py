@@ -137,60 +137,71 @@ def vis_side(conn):
         except Exception as e:
             st.error(f"Kunne ikke hente stat-typer: {e}")
 
-    # --- FANE 3: INTERAKTIV KODE-GENERATOR ---
+    # --- FANE 3: KODE-GENERATOR TIL DIN ARKITEKTUR ---
     with tab_kode:
-        st.subheader("🚀 Hvidovre Code Generator")
-        st.write("Vælg dine datapunkter herunder for at generere færdig SQL og Python-kode.")
+        st.subheader("🚀 Hvidovre SQL-Architect")
+        st.write("Vælg de metrics du vil have med i din CTE-baserede SQL query:")
 
-        # Multiselect baseret på din ordbog
+        # Vi lader dig vælge de stats, du vil have ind i din UniqueMatchStats CTE
         mulige_stats = sorted(list(stat_forklaringer.keys()))
         valgte_stats = st.multiselect(
-            "Hvilke statistikker skal bruges på siden?", 
+            "Vælg metrics til SQL-beregning:", 
             mulige_stats, 
-            default=["expectedGoals", "goalAssist", "touchesInOppBox"]
+            default=["goals", "touchesInOppBox", "accuratePass"]
         )
 
         if valgte_stats:
-            # Forberedelse af strenge til koden
-            sql_list = ", ".join([f"'{s}'" for s in valgte_stats])
-            python_mapping = "{\n" + ",\n".join([f"    '{s}': '{stat_forklaringer[s]}'" for s in valgte_stats]) + "\n}"
+            # Dynamisk generering af CASE statements til SQL
+            case_statements = "\n".join([
+                f"                MAX(CASE WHEN STAT_TYPE = '{s}' THEN STAT_TOTAL ELSE 0 END) as {s.upper()}," 
+                for s in valgte_stats
+            ]).rstrip(',') # Fjerner det sidste komma
 
-            col1, col2 = st.columns(2)
+            # Dynamisk generering af SUM statements til LeagueStats
+            sum_statements = "\n".join([
+                f"                SUM({s.upper()}) as TOTAL_{s.upper()}," 
+                for s in valgte_stats
+            ]).rstrip(',')
 
-            with col1:
-                st.markdown("#### 1. SQL til `data_load.py`")
-                # Her bruger vi dine specifikke koder for sæsonen 25/26
-                sql_kode = f"""
--- Henter valgte stats for Hvidovre-spillere
-SELECT 
-    PLAYER_NAME,
-    STAT_TYPE,
-    SUM(STAT_VALUE) as TOTAL_VALUE
-FROM KLUB_HVIDOVREIF.AXIS.OPTA_MATCHSTATS
-WHERE STAT_TYPE IN ({sql_list})
-AND SEASONNAME = '2025/2026'
-GROUP BY 1, 2
-ORDER BY TOTAL_VALUE DESC;
-                """
-                st.code(sql_kode, language="sql")
+            st.markdown("### 1. Tilpas din SQL Query")
+            st.info("Denne query er bygget til din `vis_side()` struktur med CTEs:")
+            
+            sql_gen = f"""
+sql = f'''
+    WITH UniqueMatchStats AS (
+        SELECT 
+            MATCH_OPTAUUID,
+            CONTESTANT_OPTAUUID,
+{case_statements}
+        FROM {{DB}}.OPTA_MATCHSTATS
+        WHERE TOURNAMENTCALENDAR_OPTAUUID = '{{LIGA_UUID}}'
+        GROUP BY 1, 2
+    ),
+    LeagueStats AS (
+        SELECT 
+            CONTESTANT_OPTAUUID,
+{sum_statements}
+        FROM UniqueMatchStats
+        GROUP BY 1
+    )
+    SELECT * FROM LeagueStats
+'''
+            """
+            st.code(sql_gen, language="python")
 
-            with col2:
-                st.markdown("#### 2. Python til Visning")
-                python_kode = f"""
-# 1. Definer ordbog til labels
-stat_labels = {python_mapping}
+            st.markdown("### 2. Tilpas din Python Logik")
+            st.info("Tilføj disse kolonner til din 'Numerisk vask' sektion:")
+            
+            python_cols = ", ".join([f"'TOTAL_{s.upper()}'" for s in valgte_stats])
+            python_gen = f"""
+# Tilføj til din liste over kolonner der skal vaskes:
+cols_to_fix = [{python_cols}]
 
-# 2. Hent data fra Snowflake
-df = conn.query(sql_query)
+# Hjælpefunktion til visning (get_rank_and_val):
+# r_stat, v_stat = get_rank_and_val('TOTAL_{valgte_stats[0].upper()}')
+            """
+            st.code(python_gen, language="python")
 
-# 3. Tilføj pæne navne til grafer/tabeller
-df['Label'] = df['STAT_TYPE'].map(stat_labels)
-
-# 4. Lav hurtig tabel
-st.dataframe(df[['PLAYER_NAME', 'Label', 'TOTAL_VALUE']])
-                """
-                st.code(python_kode, language="python")
-                
-            st.success("💡 Tip: Du kan nu bare kopiere blokkene direkte ind i dit projekt!")
+            st.success("Kopier SQL-delen ind i din `sql = f\"\"\"...\"\"\"` blok.")
         else:
-            st.info("Vælg nogle statistikker i boksen ovenover for at se magien.")
+            st.warning("Vælg mindst én stat for at generere koden.")
