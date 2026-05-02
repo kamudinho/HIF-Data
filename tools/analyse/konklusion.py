@@ -15,15 +15,24 @@ def vis_side(dp=None):
         return
 
     # --- 2. SQL QUERY ---
-    sql = f"""
+    sql = f'''
     WITH UniqueMatchStats AS (
         SELECT 
             MATCH_OPTAUUID,
             CONTESTANT_OPTAUUID,
-            MAX(CASE WHEN STAT_TYPE = 'goals' THEN STAT_TOTAL ELSE 0 END) as GOALS,
-            MAX(CASE WHEN STAT_TYPE = 'openPlayGoal' THEN STAT_TOTAL ELSE 0 END) as OP_GOALS,
-            MAX(CASE WHEN STAT_TYPE = 'possessionPercentage' THEN STAT_TOTAL ELSE 0 END) as POSS,
-            MAX(CASE WHEN STAT_TYPE = 'totalScoringAtt' THEN STAT_TOTAL ELSE 0 END) as SHOTS
+                MAX(CASE WHEN STAT_TYPE = 'goals' THEN STAT_TOTAL ELSE 0 END) as GOALS,
+                MAX(CASE WHEN STAT_TYPE = 'touchesInOppBox' THEN STAT_TOTAL ELSE 0 END) as TOUCHESINOPPBOX,
+                MAX(CASE WHEN STAT_TYPE = 'accuratePass' THEN STAT_TOTAL ELSE 0 END) as ACCURATEPASS,
+                MAX(CASE WHEN STAT_TYPE = 'bigChanceCreated' THEN STAT_TOTAL ELSE 0 END) as BIGCHANCECREATED,
+                MAX(CASE WHEN STAT_TYPE = 'bigChanceMissed' THEN STAT_TOTAL ELSE 0 END) as BIGCHANCEMISSED,
+                MAX(CASE WHEN STAT_TYPE = 'bigChanceScored' THEN STAT_TOTAL ELSE 0 END) as BIGCHANCESCORED,
+                MAX(CASE WHEN STAT_TYPE = 'expectedGoals' THEN STAT_TOTAL ELSE 0 END) as EXPECTEDGOALS,
+                MAX(CASE WHEN STAT_TYPE = 'goalsOpenplay' THEN STAT_TOTAL ELSE 0 END) as GOALSOPENPLAY,
+                MAX(CASE WHEN STAT_TYPE = 'goalsConceded' THEN STAT_TOTAL ELSE 0 END) as GOALSCONCEDED,
+                MAX(CASE WHEN STAT_TYPE = 'totalPass' THEN STAT_TOTAL ELSE 0 END) as TOTALPASS,
+                MAX(CASE WHEN STAT_TYPE = 'interceptions' THEN STAT_TOTAL ELSE 0 END) as INTERCEPTIONS,
+                MAX(CASE WHEN STAT_TYPE = 'expectedGoalsSetplay' THEN STAT_TOTAL ELSE 0 END) as EXPECTEDGOALSSETPLAY,
+                MAX(CASE WHEN STAT_TYPE = 'expectedGoalsOpenplay' THEN STAT_TOTAL ELSE 0 END) as EXPECTEDGOALSOPENPLAY
         FROM {DB}.OPTA_MATCHSTATS
         WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
         GROUP BY 1, 2
@@ -31,25 +40,24 @@ def vis_side(dp=None):
     LeagueStats AS (
         SELECT 
             CONTESTANT_OPTAUUID,
-            SUM(GOALS) as TOTAL_GOALS,
-            SUM(OP_GOALS) as TOTAL_OP_GOALS,
-            AVG(POSS) as AVG_POSS,
-            SUM(SHOTS) as TOTAL_SHOTS
+                SUM(GOALS) as TOTAL_GOALS,
+                SUM(TOUCHESINOPPBOX) as TOTAL_TOUCHESINOPPBOX,
+                SUM(ACCURATEPASS) as TOTAL_ACCURATEPASS,
+                SUM(BIGCHANCECREATED) as TOTAL_BIGCHANCECREATED,
+                SUM(BIGCHANCEMISSED) as TOTAL_BIGCHANCEMISSED,
+                SUM(BIGCHANCESCORED) as TOTAL_BIGCHANCESCORED,
+                SUM(EXPECTEDGOALS) as TOTAL_EXPECTEDGOALS,
+                SUM(GOALSOPENPLAY) as TOTAL_GOALSOPENPLAY,
+                SUM(GOALSCONCEDED) as TOTAL_GOALSCONCEDED,
+                SUM(TOTALPASS) as TOTAL_TOTALPASS,
+                SUM(INTERCEPTIONS) as TOTAL_INTERCEPTIONS,
+                SUM(EXPECTEDGOALSSETPLAY) as TOTAL_EXPECTEDGOALSSETPLAY,
+                SUM(EXPECTEDGOALSOPENPLAY) as TOTAL_EXPECTEDGOALSOPENPLAY
         FROM UniqueMatchStats
         GROUP BY 1
-    ),
-    XGStats AS (
-        SELECT 
-            CONTESTANT_OPTAUUID,
-            SUM(STAT_VALUE) as TOTAL_XG
-        FROM {DB}.OPTA_MATCHEXPECTEDGOALS
-        WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
-        GROUP BY 1
     )
-    SELECT l.*, x.TOTAL_XG 
-    FROM LeagueStats l
-    LEFT JOIN XGStats x ON l.CONTESTANT_OPTAUUID = x.CONTESTANT_OPTAUUID
-    """
+    SELECT * FROM LeagueStats
+'''
 
     try:
         # Hent data
