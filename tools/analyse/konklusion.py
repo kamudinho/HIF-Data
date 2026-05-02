@@ -104,10 +104,10 @@ def vis_side(dp=None):
     # --- 6. VISNING I TO KOLONNER ---
     col1, col2 = st.columns(2)
 
-    with col1:
+    with col2:
         st.markdown(f"""
         <div class="analysis-card">
-            <div class="section-title">Angreb & Mål</div>
+            <div class="section-title">Afslutningsspil</div>
             <div class="stat-line">• {get_rank('GOALS')} flest mål scoret ({int(row['GOALS'])})</div>
             <div class="stat-line">• {get_rank('XG')} højeste expected goals ({row['XG']:.1f} xG)</div>
             <div class="stat-line">• Forskel: {row['GOALS'] - row['XG']:.1f} mål vs xG</div>
@@ -115,13 +115,13 @@ def vis_side(dp=None):
         </div>
         """, unsafe_allow_html=True)
 
-    with col2:
+    with col1:
         f_raw = str(int(row['FORMATION'])) if pd.notnull(row['FORMATION']) else "N/A"
         f_pretty = "-".join(list(f_raw)) if f_raw != "N/A" and len(f_raw) > 2 else f_raw
 
         st.markdown(f"""
         <div class="analysis-card">
-            <div class="section-title">Opbygning & Formation</div>
+            <div class="section-title">Opbygningsspil</div>
             <div class="stat-line">• {get_rank('POSS')} højeste boldbesiddelse ({row['POSS']:.1f}%)</div>
             <div class="stat-line">• {get_rank('TOUCHES')} flest berøringer i alt ({int(row['TOUCHES'])})</div>
             <div class="stat-line">• Foretrukken formation: {f_pretty}</div>
