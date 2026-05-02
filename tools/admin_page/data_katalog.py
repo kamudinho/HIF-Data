@@ -139,44 +139,58 @@ def vis_side(conn):
 
     # --- FANE 3: INTERAKTIV KODE-GENERATOR ---
     with tab_kode:
-        st.subheader("Interaktiv SQL & Python Generator")
-        st.write("Vælg de stats du vil bruge, for at generere din kode:")
+        st.subheader("🚀 Hvidovre Code Generator")
+        st.write("Vælg dine datapunkter herunder for at generere færdig SQL og Python-kode.")
 
-        # 1. Checkboxes til valg af stats (baseret på din ordbog)
-        # Vi sorterer dem alfabetisk så de er lette at finde
+        # Multiselect baseret på din ordbog
         mulige_stats = sorted(list(stat_forklaringer.keys()))
-        valgte_stats = st.multiselect("Vælg statistikker:", mulige_stats, default=["expectedGoals", "goalAssist"])
+        valgte_stats = st.multiselect(
+            "Hvilke statistikker skal bruges på siden?", 
+            mulige_stats, 
+            default=["expectedGoals", "goalAssist", "touchesInOppBox"]
+        )
 
         if valgte_stats:
-            # Lav formateret streng til SQL: 'stat1', 'stat2'
+            # Forberedelse af strenge til koden
             sql_list = ", ".join([f"'{s}'" for s in valgte_stats])
-            
-            # Lav formateret dict til Python mapping
-            python_mapping = "{\n" + ",\n".join([f"        '{s}': '{stat_forklaringer[s]}'" for s in valgte_stats]) + "\n    }"
+            python_mapping = "{\n" + ",\n".join([f"    '{s}': '{stat_forklaringer[s]}'" for s in valgte_stats]) + "\n}"
 
-            st.markdown("### 1. SQL Query")
-            st.info("Kopier denne query til din Snowflake-funktion:")
-            sql_kode = f"""
+            col1, col2 = st.columns(2)
+
+            with col1:
+                st.markdown("#### 1. SQL til `data_load.py`")
+                # Her bruger vi dine specifikke koder for sæsonen 25/26
+                sql_kode = f"""
+-- Henter valgte stats for Hvidovre-spillere
 SELECT 
     PLAYER_NAME,
     STAT_TYPE,
-    SUM(STAT_VALUE) as TOTAL
+    SUM(STAT_VALUE) as TOTAL_VALUE
 FROM KLUB_HVIDOVREIF.AXIS.OPTA_MATCHSTATS
 WHERE STAT_TYPE IN ({sql_list})
-AND TOURNAMENTCALENDAR_OPTAUUID = 'dyjr458hcmrcy87fsabfsy87o' -- Sæson 25/26
-GROUP BY PLAYER_NAME, STAT_TYPE
-            """
-            st.code(sql_kode, language="sql")
+AND SEASONNAME = '2025/2026'
+GROUP BY 1, 2
+ORDER BY TOTAL_VALUE DESC;
+                """
+                st.code(sql_kode, language="sql")
 
-            st.markdown("### 2. Python Mapping")
-            st.info("Brug dette i din Streamlit-app til at give flotte navne:")
-            python_kode = f"""
-# Definer navne baseret på dine valg i kataloget
-stat_map = {python_mapping}
+            with col2:
+                st.markdown("#### 2. Python til Visning")
+                python_kode = f"""
+# 1. Definer ordbog til labels
+stat_labels = {python_mapping}
 
-# Påfør navne på dit dataframe
-df['Visningsnavn'] = df['STAT_TYPE'].map(stat_map)
-            """
-            st.code(python_kode, language="python")
+# 2. Hent data fra Snowflake
+df = conn.query(sql_query)
+
+# 3. Tilføj pæne navne til grafer/tabeller
+df['Label'] = df['STAT_TYPE'].map(stat_labels)
+
+# 4. Lav hurtig tabel
+st.dataframe(df[['PLAYER_NAME', 'Label', 'TOTAL_VALUE']])
+                """
+                st.code(python_kode, language="python")
+                
+            st.success("💡 Tip: Du kan nu bare kopiere blokkene direkte ind i dit projekt!")
         else:
-            st.warning("Vælg mindst én statistik for at generere kode.")
+            st.info("Vælg nogle statistikker i boksen ovenover for at se magien.")
