@@ -2,8 +2,6 @@ import streamlit as st
 import pandas as pd
 
 def vis_side(conn):
-    st.title("🛠 Datakatalog & Dokumentation")
-
     # --- ORDBOG TIL STAT_TYPE ---
     # --- UDVIDET ORDBOG TIL STAT_TYPE FORKLARINGER ---
     stat_forklaringer = {
