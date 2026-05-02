@@ -104,13 +104,20 @@ def vis_side(conn):
     # --- FANE 2: STAT_TYPE FORKLARINGER ---
     with tab_stats:
         st.subheader("Oversættelse af Opta Stats")
-        # Vi henter de unikke typer fra de to primære stat-tabeller
         try:
+            # 1. Hent unikke typer
             st_query = "SELECT DISTINCT STAT_TYPE FROM KLUB_HVIDOVREIF.AXIS.OPTA_MATCHSTATS"
             df_st = conn.query(st_query)
-            df_st['Forklaring'] = df_st['STAT_TYPE'].map(stat_forklaringer).fillna("⚠️ Mangler forklaring")
             
+            # 2. Lav en kopi af din ordbog med små bogstaver for at sikre match
+            stat_forklaringer_lower = {k.lower(): v for k, v in stat_forklaringer.items()}
+            
+            # 3. Map ved at konvertere Snowflake-kolonnen til små bogstaver midlertidigt
+            df_st['Forklaring'] = df_st['STAT_TYPE'].str.lower().map(stat_forklaringer_lower).fillna("-")
+            
+            # 4. Vis resultatet
             st.dataframe(df_st.sort_values('STAT_TYPE'), use_container_width=True, hide_index=True)
+            
         except Exception as e:
             st.error(f"Kunne ikke hente stat-typer: {e}")
 
