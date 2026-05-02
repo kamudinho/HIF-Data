@@ -92,8 +92,6 @@ def vis_side(dp=None):
         except:
             return "?"
 
-    st.title("Performance Analysis")
-
     # Attacking Output
     with st.container():
         st.markdown(f"""
