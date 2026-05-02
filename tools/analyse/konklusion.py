@@ -44,6 +44,11 @@ def vis_side(dp=None):
         df = conn.query(sql) if hasattr(conn, 'query') else pd.read_sql(sql, conn)
         df.columns = [str(c).upper() for c in df.columns]
         
+        # FIX: Konverter Decimal til float for at undgå beregningsfejl
+        for col in ['GOALS', 'XG', 'POSS', 'TOUCHES']:
+            if col in df.columns:
+                df[col] = df[col].astype(float)
+        
         # Possession fix
         if df['POSS'].mean() < 1:
             df['POSS'] = df['POSS'] * 100
