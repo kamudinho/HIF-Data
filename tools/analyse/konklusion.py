@@ -5,7 +5,6 @@ from data.data_load import _get_snowflake_conn
 
 def vis_side(dp=None):
     # --- 1. SETUP ---
-    # Vi henter UUID'et fra din gemte profil
     LIGA_UUID = COMPETITIONS[COMPETITION_NAME]["COMPETITION_OPTAUUID"]
     DB = "KLUB_HVIDOVREIF.AXIS"
     
@@ -20,7 +19,6 @@ def vis_side(dp=None):
         SELECT 
             UPPER(TRIM(CONTESTANT_OPTAUUID)) as TEAM_ID,
             SUM(CASE WHEN STAT_TYPE = 'goals' THEN STAT_TOTAL ELSE 0 END) as GOALS,
-            -- Vi tager kun gennemsnit af værdier over 0 for at undgå fejl-målinger
             AVG(CASE WHEN STAT_TYPE = 'possessionPercentage' AND STAT_TOTAL > 0 
                      THEN CAST(STAT_TOTAL AS FLOAT) END) as POSS,
             MAX(CASE WHEN STAT_TYPE = 'formationUsed' THEN STAT_TOTAL ELSE NULL END) as FORMATION
@@ -46,7 +44,6 @@ def vis_side(dp=None):
         df = conn.query(sql) if hasattr(conn, 'query') else pd.read_sql(sql, conn)
         df.columns = [str(c).upper() for c in df.columns]
         
-        # Possession fix (fra dine rå data: 36.3 skal forblive 36.3)
         if df['POSS'].mean() < 1:
             df['POSS'] = df['POSS'] * 100
             
@@ -54,52 +51,55 @@ def vis_side(dp=None):
         st.error(f"❌ SQL Fejl: {e}")
         return
 
-    # --- 3. UI STYLING ---
+    # --- 3. UI STYLING (HIF RØD) ---
     st.markdown("""
         <style>
         .analysis-card { border: 1px solid #e6e6e6; padding: 20px; border-radius: 5px; margin-bottom: 20px; background-color: white; }
         .section-title { font-weight: bold; margin-bottom: 10px; font-size: 1.1rem; }
-        .conclusion-text { color: #ff6600; font-weight: bold; margin-top: 15px; }
+        /* HIF Rød konklusion */
+        .conclusion-text { color: #C8102E; font-weight: bold; margin-top: 15px; text-transform: uppercase; font-size: 0.9rem; }
         </style>
     """, unsafe_allow_html=True)
 
-    # --- 4. FILTRERING (MED ROBUST MATCHING) ---
+    # --- 4. HJÆLPEFUNKTIONER ---
+    def get_ordinal(n):
+        if 11 <= (n % 100) <= 13:
+            suffix = 'th'
+        else:
+            suffix = {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')
+        return f"{n}{suffix}"
+
+    def get_rank(col, ascending=False):
+        temp = df.sort_values(col, ascending=ascending).reset_index(drop=True)
+        try:
+            rank = temp[temp['TEAM_ID'] == target_uuid].index[0] + 1
+            return get_ordinal(rank)
+        except:
+            return "?"
+
+    # --- 5. FILTRERING ---
     hold_options = {n: i.get("opta_uuid") for n, i in TEAMS.items() if i.get("league") == COMPETITION_NAME}
     valgt_navn = st.selectbox("Vælg hold", sorted(hold_options.keys()))
-    
-    # Gør target UUID helt rent
     target_uuid = str(hold_options[valgt_navn]).strip().upper()
     
-    # Find rækken
     row_match = df[df['TEAM_ID'] == target_uuid]
 
     if row_match.empty:
-        st.warning(f"⚠️ Ingen data fundet i Snowflake for {valgt_navn}.")
-        # Debug hjælp (kan fjernes):
-        with st.expander("Debug: Hvorfor fejler matchet?"):
-            st.write(f"Leder efter UUID: '{target_uuid}'")
-            st.write("UUIDs fundet i databasen:", df['TEAM_ID'].unique().tolist())
+        st.warning(f"⚠️ Ingen data fundet for {valgt_navn}.")
         return
 
     row = row_match.iloc[0]
 
-    # --- 5. VISNING ---
-    def get_rank(col, ascending=False):
-        temp = df.sort_values(col, ascending=ascending).reset_index(drop=True)
-        # Find position ved hjælp af rækkenummer
-        try:
-            return temp[temp['TEAM_ID'] == target_uuid].index[0] + 1
-        except:
-            return "?"
-
+    # --- 6. VISNING ---
+    
     # Attacking Output
     with st.container():
         st.markdown(f"""
         <div class="analysis-card">
             <div class="section-title">Attacking Output:</div>
-            • {get_rank('GOALS')}. for total goals scored ({int(row['GOALS'])})<br>
-            • {get_rank('XG')}. for expected goals ({row['XG']:.1f} xG)<br>
-            <div class="conclusion-text">Conclusion – {valgt_navn} is performing with {row['XG']:.1f} xG.</div>
+            • {get_rank('GOALS')}. flest mål scoret ({int(row['GOALS'])})<br>
+            • {get_rank('XG')}. højeste expected goals ({row['XG']:.1f} xG)<br>
+            <div class="conclusion-text">Konklusion – {valgt_navn} præsterer med en xG på {row['XG']:.1f}.</div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -111,9 +111,9 @@ def vis_side(dp=None):
         st.markdown(f"""
         <div class="analysis-card">
             <div class="section-title">Build-Up:</div>
-            • {get_rank('POSS')}. highest average possession ({row['POSS']:.1f}%)<br>
-            • {get_rank('TOUCHES')}. for total touches ({int(row['TOUCHES'])})<br>
-            • Most used formation: {f_pretty}<br>
-            <div class="conclusion-text">Conclusion – Uses {f_pretty} as primary structure.</div>
+            • {get_rank('POSS')}. højeste gennemsnitlige boldbesiddelse ({row['POSS']:.1f}%)<br>
+            • {get_rank('TOUCHES')}. flest berøringer i alt ({int(row['TOUCHES'])})<br>
+            • Primær formation: {f_pretty}<br>
+            <div class="conclusion-text">Konklusion – Benytter primært en {f_pretty} struktur.</div>
         </div>
         """, unsafe_allow_html=True)
