@@ -13,7 +13,7 @@ def vis_side(dp=None):
 
     # Konstanter fra din profil
     DB = "KLUB_HVIDOVREIF.AXIS"
-    LIGA_UUID = "328" # NordicBet Liga jf. din profil
+    LIGA_UUID = "dyjr458hcmrcy87fsabfsy87o" # NordicBet Liga jf. din profil
 
     sql = f"""
         WITH MatchBase AS (
