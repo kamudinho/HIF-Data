@@ -5,7 +5,7 @@ from data.utils.team_mapping import TEAMS, TEAM_COLORS
 from data.data_load import _get_snowflake_conn
 
 def vis_side(dp=None):
-    # --- 1. DATA LOAD (Snowflake) ---
+    # --- 1. DATA LOAD (Uændret SQL) ---
     conn = _get_snowflake_conn()
     if not conn:
         st.error("Kunne ikke forbinde til Snowflake.")
@@ -82,7 +82,10 @@ def vis_side(dp=None):
     df_matches.columns = [str(c).upper() for c in df_matches.columns]
     df_matches['MATCH_DATE_FULL'] = pd.to_datetime(df_matches['MATCH_DATE_FULL'], errors='coerce')
     
-    # Håndter time-objekter fra Snowflake
+    # Robust håndtering af scores (vigtigt for dagens kamp)
+    df_matches['TOTAL_HOME_SCORE'] = pd.to_numeric(df_matches['TOTAL_HOME_SCORE'], errors='coerce').fillna(0)
+    df_matches['TOTAL_AWAY_SCORE'] = pd.to_numeric(df_matches['TOTAL_AWAY_SCORE'], errors='coerce').fillna(0)
+
     if 'MATCH_LOCALTIME' in df_matches.columns:
         df_matches['MATCH_LOCALTIME'] = df_matches['MATCH_LOCALTIME'].astype(str)
     for col in ['CONTESTANTHOME_OPTAUUID', 'CONTESTANTAWAY_OPTAUUID']:
@@ -93,7 +96,7 @@ def vis_side(dp=None):
     h_list = sorted(liga_hold_options.keys())
     hif_idx = h_list.index("Hvidovre") if "Hvidovre" in h_list else 0
 
-    # --- 3. UI STYLING ---
+    # --- 3. UI STYLING (Uændret) ---
     st.markdown("""
         <style>
         .stat-box { text-align: center; background: #f8f9fa; border-radius: 6px; padding: 8px 4px; border-bottom: 2px solid #cc0000; height: 52px; display: flex; flex-direction: column; justify-content: center; }
@@ -104,7 +107,7 @@ def vis_side(dp=None):
         </style>
     """, unsafe_allow_html=True)
 
-    # --- 4. TOP LAYOUT ---
+    # --- 4. TOP LAYOUT & LOGIK ---
     col_layout = [2.2, 0.5, 0.5, 0.5, 0.5, 0.6, 0.6, 0.6]
     row1 = st.columns(col_layout)
     with row1[0]:
@@ -121,7 +124,7 @@ def vis_side(dp=None):
         with c_side:
             valgt_side = st.selectbox("Side", ["Samlet", "Hjemme", "Ude"], label_visibility="collapsed", key="s_sel")
 
-    # --- FILTRERING ---
+    # FILTRERING
     if valgt_periode == "Efterår 25":
         f_matches = team_matches[(team_matches['MATCH_DATE_FULL'] >= '2025-07-01') & (team_matches['MATCH_DATE_FULL'] <= '2025-12-31')]
     elif valgt_periode == "Forår 26":
@@ -134,12 +137,13 @@ def vis_side(dp=None):
     elif valgt_side == "Ude":
         f_matches = f_matches[f_matches['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid]
 
-    played_p = f_matches[f_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)]
+    played_p = f_matches[f_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].copy()
     
     summary = {"K": len(played_p), "S": 0, "U": 0, "N": 0, "M+": 0, "M-": 0}
     for _, m in played_p.iterrows():
         is_h = m['CONTESTANTHOME_OPTAUUID'] == valgt_uuid
-        h_s, a_s = int(m.get('TOTAL_HOME_SCORE', 0)), int(m.get('TOTAL_AWAY_SCORE', 0))
+        # Her bruges de konverterede scores
+        h_s, a_s = int(m['TOTAL_HOME_SCORE']), int(m['TOTAL_AWAY_SCORE'])
         summary["M+"] += h_s if is_h else a_s
         summary["M-"] += a_s if is_h else h_s
         if h_s == a_s: summary["U"] += 1
@@ -185,7 +189,7 @@ def vis_side(dp=None):
             team_avgs[t_uuid] = avgs
 
         for _, row in played_p.sort_values('MATCH_DATE_FULL', ascending=False).iterrows():
-            st.markdown(f"<div class='date-header'>RUNDE {int(row['WEEK'])} — {row['MATCH_DATE_FULL'].strftime('%d. %b %Y').upper()}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='date-header'>RUNDE {int(row['WEEK']) if pd.notnull(row['WEEK']) else 0} — {row['MATCH_DATE_FULL'].strftime('%d. %b %Y').upper()}</div>", unsafe_allow_html=True)
             
             with st.container(border=True):
                 h_uuid, a_uuid = row['CONTESTANTHOME_OPTAUUID'], row['CONTESTANTAWAY_OPTAUUID']
@@ -209,7 +213,13 @@ def vis_side(dp=None):
                 ]
 
                 for hc, ac, s_key, lbl, dec, suf in stats_conf:
-                    hv, av = float(row.get(hc) or 0), float(row.get(ac) or 0)
+                    hv_raw = pd.to_numeric(row.get(hc), errors='coerce')
+                    av_raw = pd.to_numeric(row.get(ac), errors='coerce')
+                    
+                    if pd.isna(hv_raw) and pd.isna(av_raw):
+                        continue
+                        
+                    hv, av = float(hv_raw or 0), float(av_raw or 0)
                     h_avg, a_avg = team_avgs.get(h_uuid, {}).get(s_key, 0), team_avgs.get(a_uuid, {}).get(s_key, 0)
                     hd, ad = hv - h_avg, av - a_avg
                     
