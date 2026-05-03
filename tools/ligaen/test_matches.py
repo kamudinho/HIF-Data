@@ -5,7 +5,7 @@ from data.utils.team_mapping import TEAMS, TEAM_COLORS
 from data.data_load import _get_snowflake_conn
 
 def vis_side(dp=None):
-    # --- 1. DATA LOAD (Snowflake) ---
+   # --- 1. DATA LOAD (Snowflake) ---
     conn = _get_snowflake_conn()
     if not conn:
         st.error("Kunne ikke forbinde til Snowflake.")
