@@ -112,11 +112,13 @@ def vis_side():
         WHERE e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid_hold}' AND e.EVENT_TIMESTAMP >= '2025-07-01'
         GROUP BY 1, 2, 3, 4, 5, 6
     """
-    df_all = conn.query(sql_events)
+    # Rettelse: Hent data FØR vi prøver at bruge Action_Label
+
+    df_all = conn.query(sql)
     
-    if df_all is None or df_all.empty:
-        st.warning("Ingen data fundet.")
-        return
+    if df_all is not None and not df_all.empty:
+            df_all['qual_list'] = df_all['QUALIFIERS'].fillna('').str.split(',')
+            df_all['Action_Label'] = df_all.apply(get_action_label, axis=1)
 
     df_all['Action_Label'] = df_all.apply(get_action_label, axis=1)
     spiller_liste = sorted([s for s in df_all['VISNINGSNAVN'].unique() if s is not None])
