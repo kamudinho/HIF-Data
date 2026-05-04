@@ -100,15 +100,14 @@ def vis_side(dp=None):
         <style>
         [data-testid="stMetricValue"] { font-size: 16px !important; text-align: center; font-weight: bold !important; width: 100%; }
         [data-testid="stMetricLabel"] { font-size: 10px !important; text-align: center; width: 100%; }
-        [data-testid="stMetric"] { display: flex; flex-direction: column; align-items: center; }
-        .player-header { font-size: 20px; font-weight: bold; margin-bottom: 10px; color: #1E1E1E; }
+        .profile-card { background-color: #003366; color: white; padding: 15px; border-radius: 12px; }
         </style>
         """, unsafe_allow_html=True)
 
     conn = _get_snowflake_conn()
     if not conn: return
 
-    # 1. HOLDVALG
+    # 1. HOLDVALG OG SPILLEVALG (Som før)
     df_teams_raw = conn.query(f"SELECT DISTINCT CONTESTANTHOME_NAME, CONTESTANTHOME_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS}")
     mapping_lookup = {str(info['opta_uuid']).lower().replace('t', ''): name for name, info in TEAMS.items() if 'opta_uuid' in info}
 
@@ -124,7 +123,7 @@ def vis_side(dp=None):
     valgt_uuid_hold = team_map[valgt_hold]
     hold_logo = get_logo_img(valgt_uuid_hold)
 
-    # 2. HENT DATA
+    # 2. HENT HÆNDELSESDATA (Som før)
     with st.spinner("Henter spillerdata..."):
         sql = f"""
             SELECT 
@@ -146,8 +145,6 @@ def vis_side(dp=None):
             st.warning("Ingen hændelsesdata fundet.")
             return
 
-        df_all = df_all.dropna(subset=['VISNINGSNAVN'])
-        df_all['EVENT_TIMESTAMP'] = pd.to_datetime(df_all['EVENT_TIMESTAMP_STR'])
         df_all['qual_list'] = df_all['QUALIFIERS'].fillna('').str.split(',')
         df_all['Action_Label'] = df_all.apply(get_action_label, axis=1)
 
@@ -156,25 +153,28 @@ def vis_side(dp=None):
     valgt_player_uuid = df_all[df_all['VISNINGSNAVN'] == valgt_spiller]['PLAYER_OPTAUUID'].iloc[0]
     df_spiller = df_all[df_all['VISNINGSNAVN'] == valgt_spiller].copy()
 
+    # --- KRITISK RETTELSE: HENT FYSISK DATA HER, SÅ DEN ER KLAR TIL PROFILEN ---
+    df_phys = get_physical_data(valgt_spiller, valgt_player_uuid, valgt_hold, conn)
+
     t_profile, t_pitch, t_phys, t_stats, t_compare = st.tabs(["Spillerprofil", "Spilleraktioner", "Fysisk data", "Statistik", "Sammenligning"])
 
-    # --- TAB 1: SPILLERPROFIL (OPDATERET OG DYNAMISK) ---
+    # --- TAB 1: SPILLERPROFIL (NU HELT DYNAMISK) ---
     with t_profile:
         col_card, col_main = st.columns([1, 3.5])
         
-        # 1. BEREGN DYNAMISKE STATS TIL KORTET
-        # Vi bruger df_spiller (hændelser) og df_phys (fysisk data) som allerede er hentet
-        antall_kampe = df_phys['MATCH_DATE'].nunique() if not df_phys.empty else 0
-        total_minutter = int(df_phys['MINUTES'].sum()) if not df_phys.empty else 0
-        
-        # Mål (Event Type 16 er mål i Opta)
+        # Beregn værdier dynamisk
+        if df_phys is not None and not df_phys.empty:
+            antall_kampe = df_phys['MATCH_DATE'].nunique()
+            total_minutter = int(df_phys['MINUTES'].sum())
+        else:
+            antall_kampe = 0
+            total_minutter = 0
+            
         maal = len(df_spiller[df_spiller['EVENT_TYPEID'] == 16])
-        
-        # Assists (Vi kigger efter 'assist' i Qualifiers)
+        # 154 er Opta Qualifier for Assist
         assists = len(df_spiller[df_spiller['QUALIFIERS'].fillna('').str.contains('154')]) 
-    
+
         with col_card:
-            # Spiller-info boks med DYNAMISKE DATA
             st.markdown(f"""
                 <div class="profile-card">
                     <h5 style='margin:0;'>{valgt_spiller}</h5>
