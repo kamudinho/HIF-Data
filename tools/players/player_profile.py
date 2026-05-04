@@ -12,9 +12,9 @@ from io import BytesIO
 
 # --- IMPORT FRA MAPPING ---
 from data.utils.mapping import (
-OPTA_EVENT_TYPES, 
-OPTA_QUALIFIERS,
-get_action_label
+    OPTA_EVENT_TYPES, 
+    OPTA_QUALIFIERS,
+    get_action_label
 )
 
 # --- KONFIGURATION ---
@@ -25,14 +25,17 @@ CURRENT_SEASON = "2025/2026"
 # --- HJÆLPEFUNKTIONER ---
 @st.cache_data(ttl=3600)
 def get_logo_img(opta_uuid):
-    if not opta_uuid: return None
+    if not opta_uuid: 
+        return None
     uuid_clean = str(opta_uuid).lower().replace('t', '')
     url = next((info['logo'] for name, info in TEAMS.items() if str(info.get('opta_uuid', '')).lower().replace('t','') == uuid_clean), None)
-    if not url: return None
+    if not url: 
+        return None
     try:
         response = requests.get(url, timeout=5)
         return Image.open(BytesIO(response.content))
-    except: return None
+    except: 
+        return None
 
 def draw_player_info_box(ax, team_logo, player_name, season_str, category_str):
     if team_logo:
@@ -88,7 +91,8 @@ def vis_side(dp=None):
         """, unsafe_allow_html=True)
 
     conn = _get_snowflake_conn()
-    if not conn: return
+    if not conn: 
+        return
 
     # 1. HOLDVALG
     df_teams_raw = conn.query(f"SELECT DISTINCT CONTESTANTHOME_NAME, CONTESTANTHOME_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS}")
@@ -124,14 +128,15 @@ def vis_side(dp=None):
             GROUP BY 1, 2, 3, 4, 5, 6, 7
         """
         df_all = conn.query(sql)
-        if df_all is None or df_all.empty:
-            st.warning("Ingen hændelsesdata fundet.")
-            return
+        
+    if df_all is None or df_all.empty:
+        st.warning("Ingen hændelsesdata fundet.")
+        return
 
-        df_all = df_all.dropna(subset=['VISNINGSNAVN'])
-        df_all['EVENT_TIMESTAMP'] = pd.to_datetime(df_all['EVENT_TIMESTAMP_STR'])
-        df_all['qual_list'] = df_all['QUALIFIERS'].fillna('').str.split(',')
-        df_all['Action_Label'] = df_all.apply(get_action_label, axis=1)
+    df_all = df_all.dropna(subset=['VISNINGSNAVN'])
+    df_all['EVENT_TIMESTAMP'] = pd.to_datetime(df_all['EVENT_TIMESTAMP_STR'])
+    df_all['qual_list'] = df_all['QUALIFIERS'].fillna('').str.split(',')
+    df_all['Action_Label'] = df_all.apply(get_action_label, axis=1)
 
     spiller_liste = sorted(df_all['VISNINGSNAVN'].unique())
     valgt_spiller = col_h_spiller.selectbox("Spiller", spiller_liste, label_visibility="collapsed")
@@ -149,6 +154,7 @@ def vis_side(dp=None):
         }
         touch_ids = [1, 3, 7, 10, 11, 12, 13, 14, 15, 16, 42, 44, 49, 50, 51, 54, 61, 73]
         df_filtreret = df_spiller[~df_spiller['Action_Label'].isin(['Pasning', 'Indkast'])]
+        
         akt_stats = pd.DataFrame()
         if not df_filtreret.empty:
             akt_stats = df_filtreret.groupby('Action_Label').agg(Total=('OUTCOME', 'count'), Succes=('OUTCOME', 'sum')).sort_values('Total', ascending=False)
@@ -161,6 +167,7 @@ def vis_side(dp=None):
             pas_df = df_spiller[df_spiller['EVENT_TYPEID'] == 1]
             pas_count = len(pas_df)
             pas_acc = (pas_df['OUTCOME'].sum() / pas_count * 100) if pas_count > 0 else 0
+            
             chancer_skabt = akt_stats[akt_stats.index.str.contains("Key Pass|assist|Stor chance", case=False, na=False)]['Total'].sum() if not akt_stats.empty else 0
             shots_count = len(df_spiller[df_spiller['EVENT_TYPEID'].isin([13, 14, 15, 16])])
             cross_count = len(df_spiller[df_spiller['qual_list'].apply(lambda x: "2" in x if isinstance(x, list) else False)])
@@ -172,6 +179,7 @@ def vis_side(dp=None):
             m_r1[1].metric("Berøringer", touch_count)
             m_r1[2].metric("Pasninger", pas_count)
             m_r1[3].metric("Pasning %", f"{int(pas_acc)}%")
+            
             m_r2 = st.columns(4)
             m_r2[0].metric("Skud", shots_count)
             m_r2[1].metric("Chancer", int(chancer_skabt))
@@ -207,98 +215,82 @@ def vis_side(dp=None):
                     ax.scatter(d.EVENT_X, d.EVENT_Y, color='#084594', s=40, edgecolors='white', alpha=0.5)
                 elif visning == "Afslutninger":
                     d = df_plot[df_plot['EVENT_TYPEID'].isin([13, 14, 15, 16])]
-                    goals = d[d['EVENT_TYPEID'] == 16]; misses = d[d['EVENT_TYPEID'].isin([13, 14, 15])]
-                    ax.scatter(misses.EVENT_X, misses.EVENT_Y, color='red', s=80, edgecolors='black', alpha=0.6)
-                    ax.scatter(goals.EVENT_X, goals.EVENT_Y, color='gold', s=150, marker='s', edgecolors='black', zorder=5)
+                    goals = d[d['EVENT_TYPEID'] == 16]
+                    misses = d[d['EVENT_TYPEID'].isin([13, 14, 15])]
                     ax.scatter(misses.EVENT_X, misses.EVENT_Y, color='red', s=60, edgecolors='black', alpha=0.6)
-                    ax.scatter(goals.EVENT_X, goals.EVENT_Y, color='red', s=120, marker='s', edgecolors='black', zorder=5)
+                    ax.scatter(goals.EVENT_X, goals.EVENT_Y, color='gold', s=120, marker='s', edgecolors='black', zorder=5)
                 elif visning == "Erobringer":
                     d = df_plot[df_plot['EVENT_TYPEID'].isin([7, 8, 12, 49])]
                     ax.scatter(d.EVENT_X, d.EVENT_Y, color='orange', s=100, edgecolors='white')
+            
             st.pyplot(fig, use_container_width=True)
 
-with t_phys:
-    df_phys = get_physical_data(valgt_spiller, valgt_player_uuid, valgt_hold, conn)
-    if df_phys is not None and not df_phys.empty:
-        df_phys['MATCH_DATE'] = pd.to_datetime(df_phys['MATCH_DATE'])
-        df_phys = df_phys.sort_values('MATCH_DATE', ascending=False)
-        avg_dist = df_phys['DISTANCE'].mean()
-        avg_hsr = df_phys['HSR'].mean()
-        latest = df_phys.iloc[0]
-
-        m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Seneste Distance", f"{round(latest['DISTANCE']/1000, 2)} km", delta=f"{round((latest['DISTANCE'] - avg_dist)/1000, 2)} km")
-        m2.metric("HSR Meter", f"{int(latest['HSR'])} m", delta=f"{int(latest['HSR'] - avg_hsr)} m")
-        m3.metric("Topfart", f"{round(latest['TOP_SPEED'], 1)} km/t")
-        m4.metric("Højintense Akt.", int(latest['HI_RUNS']))
-
-        t_sub_log, t_sub_charts = st.tabs(["Kampoversigt", "Grafer"])
-
-        with t_sub_charts:
-            cat_choice = st.segmented_control("Vælg metrik", options=["HSR (m)", "Sprint (m)", "Distance (km)", "Topfart (km/t)"], default="HSR (m)", key="phys_graph_control")
-            mapping = {"HSR (m)": ("HSR", 1, "m"), "Sprint (m)": ("SPRINTING", 1, "m"), "Distance (km)": ("DISTANCE", 1000, "km"), "Topfart (km/t)": ("TOP_SPEED", 1, "km/t")}
-            col, div, suffix = mapping[cat_choice]
-
-            df_chart = df_phys[df_phys['MATCH_DATE'] >= '2025-07-01'].copy()
-            df_chart = df_chart.drop_duplicates(subset=['MATCH_DATE', 'MATCH_TEAMS'])
-            df_chart = df_chart.sort_values('MATCH_DATE', ascending=True)
-
-            if not df_chart.empty:
-                def get_opponent(teams_str, my_team):
-                    if not teams_str: return "?"
-                    parts = [p.strip() for p in teams_str.split('-')]
-                    if len(parts) < 2: return teams_str
-                    return parts[1] if parts[0].lower() in my_team.lower() else parts[0]
-
-                df_chart['Opponent'] = df_chart['MATCH_TEAMS'].apply(lambda x: get_opponent(x, valgt_hold))
-                df_chart['Label'] = df_chart['Opponent'] + "<br>" + df_chart['MATCH_DATE'].dt.strftime('%d/%m')
-                y_vals = df_chart[col] / div
-                season_avg = y_vals.mean()
-
-                fig = go.Figure()
-                fig.add_trace(go.Bar(
-                    x=df_chart['Label'], 
-                    y=y_vals,
-                    text=y_vals.apply(lambda x: f"{x:.0f}" if x > 100 else f"{x:.1f}"),
-                    textposition='outside', 
-                    marker_color='#cc0000', 
-                    textfont=dict(size=9, color="black"),
-                    cliponaxis=False
-                ))
-
-                fig.add_shape(type="line", x0=-0.5, x1=len(df_chart)-0.5, y0=season_avg, y1=season_avg, 
-                            line=dict(color="#D3D3D3", width=2, dash="dash"))
-
-                fig.update_layout(
-                    plot_bgcolor="white", 
-                    height=400, 
-                    margin=dict(t=50, b=80, l=10, r=10),
-                    xaxis=dict(showgrid=False, tickangle=-45, tickfont=dict(size=10), type='category'),
-                    yaxis=dict(showgrid=True, gridcolor='#f0f0f0', showticklabels=False, zeroline=False, range=[0, y_vals.max() * 1.3]),
-                    showlegend=False
-                )
-                st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-            else:
-                st.info("Ingen fysiske data fundet for denne sæson.")
-
-        with t_sub_log:
-            st.data_editor(df_phys, hide_index=True, use_container_width=True, disabled=True)
-
-with t_phys:
-        # Her var fejlen sandsynligvis før. 
-        # Sørg for at denne 'with'-blok er indrykket på samme niveau som 'with t_pitch'
+    with t_phys:
         df_phys = get_physical_data(valgt_spiller, valgt_player_uuid, valgt_hold, conn)
         if df_phys is not None and not df_phys.empty:
-            st.subheader("Fysiske Stats")
-            st.dataframe(df_phys)
-        else:
-            st.info("Ingen fysiske data fundet.")
+            df_phys['MATCH_DATE'] = pd.to_datetime(df_phys['MATCH_DATE'])
+            df_phys = df_phys.sort_values('MATCH_DATE', ascending=False)
+            avg_dist = df_phys['DISTANCE'].mean()
+            avg_hsr = df_phys['HSR'].mean()
+            latest = df_phys.iloc[0]
 
-    with t_stats:
-        st.write("Statistik sektion")
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("Seneste Distance", f"{round(latest['DISTANCE']/1000, 2)} km", delta=f"{round((latest['DISTANCE'] - avg_dist)/1000, 2)} km")
+            m2.metric("HSR Meter", f"{int(latest['HSR'])} m", delta=f"{int(latest['HSR'] - avg_hsr)} m")
+            m3.metric("Topfart", f"{round(latest['TOP_SPEED'], 1)} km/t")
+            m4.metric("Højintense Akt.", int(latest['HI_RUNS']))
 
-    with t_compare:
-        st.write("Sammenlignings sektion")
+            t_sub_log, t_sub_charts = st.tabs(["Kampoversigt", "Grafer"])
+
+            with t_sub_charts:
+                cat_choice = st.segmented_control("Vælg metrik", options=["HSR (m)", "Sprint (m)", "Distance (km)", "Topfart (km/t)"], default="HSR (m)", key="phys_graph_control")
+                mapping = {"HSR (m)": ("HSR", 1, "m"), "Sprint (m)": ("SPRINTING", 1, "m"), "Distance (km)": ("DISTANCE", 1000, "km"), "Topfart (km/t)": ("TOP_SPEED", 1, "km/t")}
+                col, div, suffix = mapping[cat_choice]
+
+                df_chart = df_phys[df_phys['MATCH_DATE'] >= '2025-07-01'].copy()
+                df_chart = df_chart.drop_duplicates(subset=['MATCH_DATE', 'MATCH_TEAMS'])
+                df_chart = df_chart.sort_values('MATCH_DATE', ascending=True)
+
+                if not df_chart.empty:
+                    def get_opponent(teams_str, my_team):
+                        if not teams_str: return "?"
+                        parts = [p.strip() for p in teams_str.split('-')]
+                        if len(parts) < 2: return teams_str
+                        return parts[1] if parts[0].lower() in my_team.lower() else parts[0]
+
+                    df_chart['Opponent'] = df_chart['MATCH_TEAMS'].apply(lambda x: get_opponent(x, valgt_hold))
+                    df_chart['Label'] = df_chart['Opponent'] + "<br>" + df_chart['MATCH_DATE'].dt.strftime('%d/%m')
+                    y_vals = df_chart[col] / div
+                    season_avg = y_vals.mean()
+
+                    fig = go.Figure()
+                    fig.add_trace(go.Bar(
+                        x=df_chart['Label'], 
+                        y=y_vals,
+                        text=y_vals.apply(lambda x: f"{x:.0f}" if x > 100 else f"{x:.1f}"),
+                        textposition='outside', 
+                        marker_color='#cc0000', 
+                        textfont=dict(size=9, color="black"),
+                        cliponaxis=False
+                    ))
+
+                    fig.add_shape(type="line", x0=-0.5, x1=len(df_chart)-0.5, y0=season_avg, y1=season_avg, 
+                                  line=dict(color="#D3D3D3", width=2, dash="dash"))
+
+                    fig.update_layout(
+                        plot_bgcolor="white", 
+                        height=400, 
+                        margin=dict(t=50, b=80, l=10, r=10),
+                        xaxis=dict(showgrid=False, tickangle=-45, tickfont=dict(size=10), type='category'),
+                        yaxis=dict(showgrid=True, gridcolor='#f0f0f0', showticklabels=False, zeroline=False, range=[0, y_vals.max() * 1.3]),
+                        showlegend=False
+                    )
+                    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+                else:
+                    st.info("Ingen fysiske data fundet for denne sæson.")
+
+            with t_sub_log:
+                st.data_editor(df_phys, hide_index=True, use_container_width=True, disabled=True)
 
 if __name__ == "__main__":
     vis_side()
