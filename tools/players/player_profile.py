@@ -206,66 +206,83 @@ def vis_side(dp=None):
                     d = df_plot[df_plot['EVENT_TYPEID'].isin(touch_ids)]
                     ax.scatter(d.EVENT_X, d.EVENT_Y, color='#084594', s=40, edgecolors='white', alpha=0.5)
                 elif visning == "Afslutninger":
-                    # 1. Hent data
+                    # 1. Forbered data med modstander-navne fra din TEAMS mapping
                     d = df_plot[df_plot['EVENT_TYPEID'].isin([13, 14, 15, 16])].copy()
                     
-                    # 2. Tegn det statiske baggrundsbillede (Matplotlib)
+                    # Lav en hurtig lookup til modstander-navne
+                    opta_to_name = {str(v.get('opta_uuid', '')).lower(): k for k, v in TEAMS.items()}
+                    
+                    def get_opp_name(row):
+                        h_id = str(row.get('HOMECONTESTANT_OPTAUUID', '')).lower()
+                        a_id = str(row.get('AWAYCONTESTANT_OPTAUUID', '')).lower()
+                        my_id = str(valgt_uuid_hold).lower()
+                        opp_id = a_id if h_id == my_id else h_id
+                        return opta_to_name.get(opp_id, "Ukendt Modstander")
+
+                    # Vi antager her, at du har trukket modstander-UUIDs med i din SQL
+                    if 'HOMECONTESTANT_OPTAUUID' in d.columns:
+                        d['OPPONENT_CLEAN'] = d.apply(get_opp_name, axis=1)
+                    else:
+                        d['OPPONENT_CLEAN'] = "Kamp"
+
+                    # 2. Statisk lag (Matplotlib) - Bruges til den visuelle banegrafik
                     pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
                     fig_static, ax = pitch.draw(figsize=(10, 7))
                     draw_player_info_box(ax, hold_logo, valgt_spiller, CURRENT_SEASON, visning)
                     
-                    # Vi tegner de visuelle punkter på Matplotlib ax som før
                     goals = d[d['EVENT_TYPEID'] == 16]
                     misses = d[d['EVENT_TYPEID'].isin([13, 14, 15])]
-                    ax.scatter(misses.EVENT_X, misses.EVENT_Y, color='grey', s=60, edgecolors='black', alpha=0.7)
-                    ax.scatter(goals.EVENT_X, goals.EVENT_Y, color='red', s=120, marker='s', edgecolors='black', zorder=5)
-                
-                    # 3. Skab det "Invisible Overlay" med Plotly
+                    
+                    # Tegn de faktiske symboler (Cirkler for skud, Firkanter for mål)
+                    ax.scatter(misses.EVENT_X, misses.EVENT_Y, color='grey', s=80, edgecolors='black', alpha=0.4)
+                    ax.scatter(goals.EVENT_X, goals.EVENT_Y, color='#cc0000', s=150, marker='s', edgecolors='black', zorder=5)
+
+                    # 3. Interaktivt lag (Plotly) - "Det usynlige tæppe"
                     fig_overlay = go.Figure()
-                
-                    if not d.empty:
-                        # Vi mapper modstander-navne (husk at have denne info i din df)
-                        # Her antager vi at du har 'OPPONENT_NAME' i din dataframe
-                        
-                        fig_overlay.add_trace(go.Scatter(
-                            x=d.EVENT_X,
-                            y=d.EVENT_Y,
-                            mode='markers',
-                            marker=dict(
-                                size=15, 
-                                color='rgba(0,0,0,0)', # FULDSTÆNDIG GENNEMSIGTIG
-                            ),
-                            # Her designer vi hover-boksen
-                            hovertemplate=(
-                                "<b>vs. %{customdata[0]}</b><br>" +
-                                "Minut: %{customdata[1]}'<br>" +
-                                "xG: %{customdata[2]}<br>" +
-                                "<extra></extra>"
-                            ),
-                            customdata=np.stack((
-                                d['OPPONENT_NAME'].fillna('Ukendt'), 
-                                d['EVENT_MINUTE'].fillna('-'),
-                                d['XG'].fillna(0.0).apply(lambda x: f"{x:.2f}")
-                            ), axis=-1)
-                        ))
-                
-                    # Konfigurer overlay-layout så det matcher Opta-banen (0-100)
+                    
+                    fig_overlay.add_trace(go.Scatter(
+                        x=d.EVENT_X,
+                        y=d.EVENT_Y,
+                        mode='markers',
+                        marker=dict(
+                            size=18, 
+                            color='rgba(0,0,0,0)', # Fuldstændig gennemsigtig
+                        ),
+                        hovertemplate=(
+                            "<b>vs. %{customdata[0]}</b><br>" +
+                            "Aktion: %{customdata[3]}<br>" +
+                            "xG: %{customdata[2]}<br>" +
+                            "<extra></extra>"
+                        ),
+                        customdata=np.stack((
+                            d['OPPONENT_CLEAN'], 
+                            d['EVENT_TIMESTAMP_STR'], # Eller minut hvis du har det
+                            d['XG'].fillna(0.0).apply(lambda x: f"{x:.2f}"),
+                            d['Action_Label']
+                        ), axis=-1)
+                    ))
+
+                    # Synkroniser layout med Opta koordinater (0-100)
                     fig_overlay.update_layout(
                         xaxis=dict(range=[0, 100], visible=False, fixedrange=True),
                         yaxis=dict(range=[0, 100], visible=False, fixedrange=True, scaleanchor="x"),
                         margin=dict(l=0, r=0, t=0, b=0),
                         showlegend=False,
-                        plot_bgcolor="rgba(0,0,0,0)", # Gennemsigtig baggrund
+                        plot_bgcolor="rgba(0,0,0,0)",
                         paper_bgcolor="rgba(0,0,0,0)",
-                        hoverlabel=dict(bgcolor="white", font_size=12)
+                        hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial")
                     )
-                
-                    # 4. Vis Matplotlib i bunden og Plotly ovenpå
-                    st.pyplot(fig_static) # Bevar det visuelle
+
+                    # 4. Container-trick: Læg dem ovenpå hinanden med CSS
+                    st.markdown('<div style="position: relative;">', unsafe_allow_html=True)
                     
-                    # Flyt Plotly op så den dækker over Matplotlib (kræver lidt CSS eller blot st.plotly_chart efter)
-                    # Den mest stabile Streamlit-måde er at bruge Plotly til det HELE i denne tab:
-                    # st.plotly_chart(fig_overlay, use_container_width=True, config={'displayModeBar': False})
+                    # Nederste lag: Matplotlib
+                    st.pyplot(fig_static)
+                    
+                    # Øverste lag: Plotly (flyttes op med negativ margin)
+                    st.markdown('<div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;">', unsafe_allow_html=True)
+                    st.plotly_chart(fig_overlay, use_container_width=True, config={'displayModeBar': False})
+                    st.markdown('</div></div>', unsafe_allow_html=True)
                 elif visning == "Erobringer":
                     d = df_plot[df_plot['EVENT_TYPEID'].isin([7, 8, 12, 49])]
                     ax.scatter(d.EVENT_X, d.EVENT_Y, color='orange', s=100, edgecolors='white')
