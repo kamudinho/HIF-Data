@@ -37,25 +37,46 @@ def get_logo_img(opta_uuid):
     except: 
         return None
 
-def create_relative_donut(player_val, max_val, label, color="#003366"):
-    """Din originale logik til sammenligning med truppens maks"""
+def create_relative_donut(player_val, max_val, label, color="#df003b"): # Standardfarve sat til rød
+    """
+    Viser spillerens andel i rød mod grå baggrund. 
+    Starter i toppen (12-positionen) og kører med uret.
+    """
+    # Sikrer at vi ikke dividerer med 0, og at max_val altid er mindst player_val
     base_max = max(max_val, player_val, 1)
-    reminder = max(100, base_max - player_val)
+    reminder = base_max - player_val
+    
     fig = go.Figure(go.Pie(
         values=[player_val, reminder],
         hole=0.7,
-        marker_colors=[color, "#df003b"],
+        # Sætter spillerens farve til rød (#df003b) og resten til lys grå (#eeeeee)
+        marker_colors=[color, "#eeeeee"],
         textinfo='none',
-        hoverinfo='none'
+        hoverinfo='none',
+        # Rotation 90 starter den i toppen. 
+        # Direction 'clockwise' får den til at løbe mod højre.
+        rotation=90,
+        direction='clockwise',
+        sort=False # Vigtigt for at bevare rækkefølgen af values
     ))
+    
     pct = int((player_val / base_max) * 100) if base_max > 0 else 0
+    
     fig.update_layout(
-        showlegend=False, margin=dict(t=0, b=0, l=0, r=0), height=130, width=130,
-        annotations=[dict(text=f"{player_val}<br><span style='font-size:10px;'>{pct}%</span>", 
-                     x=0.5, y=0.5, font_size=14, showarrow=False, font_family="Arial Black")]
+        showlegend=False, 
+        margin=dict(t=0, b=0, l=0, r=0), 
+        height=130, 
+        width=130,
+        annotations=[dict(
+            text=f"<b>{player_val}</b><br><span style='font-size:10px; color:gray;'>{pct}%</span>", 
+            x=0.5, y=0.5, 
+            font_size=16, 
+            showarrow=False, 
+            font_family="Arial"
+        )]
     )
     return fig
-
+    
 def draw_player_info_box(ax, team_logo, player_name, season_str, category_str):
     if team_logo:
         ax_l = ax.inset_axes([0.02, 0.88, 0.07, 0.07], transform=ax.transAxes)
