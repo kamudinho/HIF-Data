@@ -120,7 +120,7 @@ def vis_side(dp=None):
                 e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, 
                 TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME) as VISNINGSNAVN, 
                 e.PLAYER_OPTAUUID, e.EVENT_OUTCOME as OUTCOME,
-                e.MINUTE, -- Rettet fra EVENT_MINUTE
+                e.EVENT_MINUTE, -- Rettet fra EVENT_MINUTE
                 e.EVENT_CONTESTANT_OPTAUUID,
                 m.CONTESTANTHOME_OPTAUUID as HOMECONTESTANT_OPTAUUID,
                 m.CONTESTANTHOME_NAME as HOMECONTESTANT_NAME,
@@ -159,9 +159,6 @@ def vis_side(dp=None):
     with t_pitch:
         # --- UI Layout ---
         c_stats_side, c_buffer, c_pitch_side = st.columns([1, 0.05, 2.2])
-        
-        # ... (Statistik-metrikker logik herfra din kode er fin) ...
-        # (Jeg hopper direkte til Pitch-delen for at vise rettelsen af overlays)
 
         with c_pitch_side:
             descriptions = {
