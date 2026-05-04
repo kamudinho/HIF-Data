@@ -158,22 +158,33 @@ def vis_side(dp=None):
 
     t_profile, t_pitch, t_phys, t_stats, t_compare = st.tabs(["Spillerprofil", "Spilleraktioner", "Fysisk data", "Statistik", "Sammenligning"])
 
-    # --- TAB 1: SPILLERPROFIL (NY) ---
-    with t_profile:
-        col_card, col_main = st.columns([1, 3])
+    # --- TAB 1: SPILLERPROFIL (OPDATERET OG DYNAMISK) ---
+    with tabs[0]:
+        col_card, col_main = st.columns([1, 3.5])
         
+        # 1. BEREGN DYNAMISKE STATS TIL KORTET
+        # Vi bruger df_spiller (hændelser) og df_phys (fysisk data) som allerede er hentet
+        antall_kampe = df_phys['MATCH_DATE'].nunique() if not df_phys.empty else 0
+        total_minutter = int(df_phys['MINUTES'].sum()) if not df_phys.empty else 0
+        
+        # Mål (Event Type 16 er mål i Opta)
+        maal = len(df_spiller[df_spiller['EVENT_TYPEID'] == 16])
+        
+        # Assists (Vi kigger efter 'assist' i Qualifiers)
+        assists = len(df_spiller[df_spiller['QUALIFIERS'].fillna('').str.contains('154')]) 
+    
         with col_card:
-            # Spiller-info boks (Blå boks til venstre)
+            # Spiller-info boks med DYNAMISKE DATA
             st.markdown(f"""
                 <div class="profile-card">
                     <h5 style='margin:0;'>{valgt_spiller}</h5>
                     <p style='margin:0; opacity:0.8;'>Position: Midtbane</p>
                     <hr style='border-color: rgba(255,255,255,0.2);'>
                     <table style='width:100%; font-size:14px;'>
-                        <tr><td>Kampe:</td><td style='text-align:right;'><b>16</b></td></tr>
-                        <tr><td>Minutter:</td><td style='text-align:right;'><b>1423</b></td></tr>
-                        <tr><td>Mål:</td><td style='text-align:right;'><b>3</b></td></tr>
-                        <tr><td>Assists:</td><td style='text-align:right;'><b>4</b></td></tr>
+                        <tr><td>Kampe:</td><td style='text-align:right;'><b>{antall_kampe}</b></td></tr>
+                        <tr><td>Minutter:</td><td style='text-align:right;'><b>{total_minutter}</b></td></tr>
+                        <tr><td>Mål:</td><td style='text-align:right;'><b>{maal}</b></td></tr>
+                        <tr><td>Assists:</td><td style='text-align:right;'><b>{assists}</b></td></tr>
                     </table>
                 </div>
             """, unsafe_allow_html=True)
