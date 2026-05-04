@@ -35,92 +35,141 @@ def get_logo_img(opta_uuid):
     except: return None
 
 def draw_player_info_box(ax, logo, player_name, season, view_name):
-    """Tegner info-boksen på banen præcis som i den tidligere fungerende version"""
-    ax.add_patch(plt.Rectangle((1, 82), 40, 16, color='#003366', alpha=0.9, zorder=10))
-    ax.text(12, 94, player_name.upper(), color='white', fontsize=11, fontweight='bold', zorder=11)
-    ax.text(12, 89, f"{season} | {view_name}", color='white', fontsize=9, alpha=0.8, zorder=11)
+    """Tegner en info-boks i hjørnet af fodboldbanen"""
+    # Baggrundsboks (Hvidovre blå farve)
+    ax.add_patch(plt.Rectangle((1, 85), 38, 14, color='#003366', alpha=0.9, zorder=10))
+    # Spillertekst
+    ax.text(12, 95, player_name.upper(), color='white', fontsize=10, fontweight='bold', zorder=11)
+    ax.text(12, 91, f"{season} | {view_name}", color='white', fontsize=8, alpha=0.8, zorder=11)
+    # Logo hvis det findes
     if logo:
+        # Konverter PIL Image til array for matplotlib
         logo_arr = np.array(logo.convert("RGBA"))
-        newax = ax.inset_axes([0.02, 0.84, 0.08, 0.12], zorder=12)
+        newax = ax.inset_axes([0.02, 0.87, 0.08, 0.1], zorder=12)
         newax.imshow(logo_arr)
         newax.axis('off')
 
+# --- RETTELSE 1: NY DONUT FUNKTION FOR "PROCENT AF MAKS" ---
 def create_relative_donut(player_val, max_val, label, color="#003366"):
-    """Donut med overskrift inkluderet i layout"""
+    """
+    Viser spillerens præstation relativt til den bedste på holdet (maks).
+    Center-teksten viser spillerens rå antal, og procent-teksten viser andelen af maks.
+    """
+    # Sikrer vi ikke dividerer med 0. Base_max er den højeste værdi på holdet for denne metric.
     base_max = max(max_val, player_val, 1)
+    
+    # Beregn restværdi for at fylde cirklen ud.
     remainder = max(0, base_max - player_val)
+    
     fig = go.Figure(go.Pie(
         values=[player_val, remainder],
-        hole=0.72,
-        marker_colors=[color, "#EEEEEE"],
+        hole=0.7,
+        marker_colors=[color, "#EEEEEE"], # Farve for spiller, lysegrå for rest
         textinfo='none',
         hoverinfo='none'
     ))
+    
+    # Beregn hvor mange procent spilleren er af den bedste (maks)
     pct = int((player_val / base_max) * 100) if base_max > 0 else 0
+    
     fig.update_layout(
-        title={'text': f"<b>{label}</b>", 'y':0.9, 'x':0.5, 'xanchor': 'center', 'yanchor': 'top', 'font': {'size': 14}},
-        showlegend=False, margin=dict(t=40, b=10, l=10, r=10), height=180, width=150,
-        annotations=[dict(text=f"{player_val}<br><span style='font-size:10px;'>{pct}%</span>", 
-                     x=0.5, y=0.5, font_size=15, showarrow=False, font_family="Arial Black")]
+        showlegend=False,
+        margin=dict(t=0, b=0, l=0, r=0),
+        height=130,
+        width=130,
+        annotations=[dict(
+            # Center tekst: Rå antal over procent af maks
+            text=f"{player_val}<br><span style='font-size:10px;'>{pct}% af maks</span>", 
+            x=0.5, y=0.5, font_size=16, showarrow=False, font_family="Arial Black"
+        )]
     )
     return fig
 
 def get_physical_data(player_name, player_opta_uuid, valgt_hold_navn, db_conn):
+    target_ssiid = TEAMS.get(valgt_hold_navn, {}).get('ssid')
+    if not target_ssiid:
+        target_ssiid = '56fa29c7-3a48-4186-9d14-dbf45fbc78d9'
+
     clean_id = str(player_opta_uuid).lower().replace('p', '').strip()
     navne_dele = [n.strip() for n in player_name.split(' ') if len(n.strip()) > 2]
-    name_cond = " OR ".join([f"PLAYER_NAME ILIKE '%{n}%'" for n in navne_dele])
+    name_conditions = " OR ".join([f"PLAYER_NAME ILIKE '%{n}%'" for n in navne_dele])
+
     sql = f"""
-        SELECT p.MATCH_DATE, MAX(p.MINUTES) as MINUTES, SUM(p.DISTANCE) as DISTANCE,
-               SUM(p."HIGH SPEED RUNNING") as HSR, SUM(p.SPRINTING) as SPRINTING,
-               MAX(p.TOP_SPEED) as TOP_SPEED
+        SELECT 
+            p.MATCH_DATE, ANY_VALUE(p.MATCH_TEAMS) as MATCH_TEAMS,
+            MAX(p.MINUTES) as MINUTES, SUM(p.DISTANCE) as DISTANCE,
+            SUM(p."HIGH SPEED RUNNING") as HSR, SUM(p.SPRINTING) as SPRINTING,
+            MAX(p.TOP_SPEED) as TOP_SPEED, SUM(p.NO_OF_HIGH_INTENSITY_RUNS) as HI_RUNS
         FROM {DB}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS p
-        WHERE (({name_cond}) OR ("optaId" LIKE '%{clean_id}%'))
-          AND p.MATCH_DATE >= '2025-07-01'
-        GROUP BY p.MATCH_DATE, p.PLAYER_NAME ORDER BY p.MATCH_DATE DESC
+        WHERE (({name_conditions}) OR ("optaId" LIKE '%{clean_id}%'))
+          AND p.MATCH_DATE BETWEEN '2025-07-01' AND '2026-06-30'
+          AND p.MATCH_SSIID IN (
+              SELECT MATCH_SSIID 
+              FROM {DB}.SECONDSPECTRUM_GAME_METADATA
+              WHERE HOME_SSIID = '{target_ssiid}' 
+                 OR AWAY_SSIID = '{target_ssiid}'
+          )
+        GROUP BY p.MATCH_DATE, p.PLAYER_NAME
+        ORDER BY p.MATCH_DATE DESC
     """
     return db_conn.query(sql)
 
 def vis_side():
-    st.markdown("<style>[data-testid='stMetricValue'] { font-size: 18px !important; text-align: center; font-weight: bold; }</style>", unsafe_allow_html=True)
+    st.markdown("""
+        <style>
+        [data-testid="stMetricValue"] { font-size: 16px !important; text-align: center; font-weight: bold !important; width: 100%; }
+        [data-testid="stMetricLabel"] { font-size: 10px !important; text-align: center; width: 100%; }
+        .profile-card { background-color: #003366; color: white; padding: 15px; border-radius: 12px; }
+        </style>
+        """, unsafe_allow_html=True)
+
     conn = _get_snowflake_conn()
     if not conn: return
 
-    # --- TOP MENU ---
+    # --- TOP-MENU KONFIGURATION (Logo venstre, Dropdowns højre) ---
     df_teams_raw = conn.query(f"SELECT DISTINCT CONTESTANTHOME_NAME, CONTESTANTHOME_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS}")
     mapping_lookup = {str(info['opta_uuid']).lower().replace('t', ''): name for name, info in TEAMS.items() if 'opta_uuid' in info}
+    
+    # 1. Definer team_map FØRST
     team_map = {mapping_lookup[str(r['CONTESTANTHOME_OPTAUUID']).lower().replace('t','')]: r['CONTESTANTHOME_OPTAUUID'] 
                 for _, r in df_teams_raw.iterrows() if str(r['CONTESTANTHOME_OPTAUUID']).lower().replace('t','') in mapping_lookup}
 
-    col_logo, col_space, col_h_hold, col_h_spiller = st.columns([1, 2.5, 1.2, 1.2])
+    # 2. Definer kolonnerne [1, 2.5, 1.2, 1.2] for at få logo til venstre og dropdowns helt til højre
+    col_logo, col_spacer_mid, col_h_hold, col_h_spiller = st.columns([1, 2.5, 1.2, 1.2])
 
     with col_h_hold:
         valgt_hold = st.selectbox("Hold", sorted(list(team_map.keys())), label_visibility="collapsed")
         valgt_uuid_hold = team_map[valgt_hold]
     
+    # 3. HENT OG VIS LOGOET HER (Nu er holdet valgt, så vi kan hente det og vise det øverst)
     hold_logo = get_logo_img(valgt_uuid_hold)
     with col_logo:
-        if hold_logo: st.image(hold_logo, width=80)
+        if hold_logo:
+            st.image(hold_logo, width=85)
 
-    # --- HENT DATA ---
-    sql_events = f"""
-        SELECT e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME) as VISNINGSNAVN, 
-               e.PLAYER_OPTAUUID, e.EVENT_OUTCOME as OUTCOME, 
-               LISTAGG(q.QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY q.QUALIFIER_QID) as QUALIFIERS
-        FROM {DB}.OPTA_EVENTS e
-        JOIN {DB}.OPTA_PLAYERS p ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
-        LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
-        WHERE e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid_hold}' AND e.EVENT_TIMESTAMP >= '2025-07-01'
-        GROUP BY 1, 2, 3, 4, 5, 6
-    """
-    # Rettelse: Hent data FØR vi prøver at bruge Action_Label
-
-    df_all = conn.query(sql)
-    
-    if df_all is not None and not df_all.empty:
+    # 4. HENT DATA MED Action_Label
+    with st.spinner("Henter spillerdata..."):
+        sql = f"""
+            SELECT 
+                e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME) as VISNINGSNAVN, 
+                e.PLAYER_OPTAUUID, e.EVENT_OUTCOME as OUTCOME,
+                TO_CHAR(e.EVENT_TIMESTAMP, 'YYYY-MM-DD HH24:MI:SS') as EVENT_TIMESTAMP_STR,
+                LISTAGG(q.QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY q.QUALIFIER_QID) as QUALIFIERS
+            FROM {DB}.OPTA_EVENTS e
+            JOIN (SELECT DISTINCT PLAYER_OPTAUUID, FIRST_NAME, LAST_NAME FROM {DB}.OPTA_PLAYERS WHERE FIRST_NAME IS NOT NULL) p 
+                ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
+            LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
+            WHERE e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid_hold}' 
+            AND e.EVENT_TIMESTAMP >= '2025-07-01'
+            GROUP BY 1, 2, 3, 4, 5, 6, 7
+        """
+        df_all = conn.query(sql)
+        
+        if df_all is not None and not df_all.empty:
             df_all['qual_list'] = df_all['QUALIFIERS'].fillna('').str.split(',')
             df_all['Action_Label'] = df_all.apply(get_action_label, axis=1)
 
-    df_all['Action_Label'] = df_all.apply(get_action_label, axis=1)
+    # Rettelse: Fjern NoneType fra spillerliste før sortering
     spiller_liste = sorted([s for s in df_all['VISNINGSNAVN'].unique() if s is not None])
     
     with col_h_spiller:
@@ -128,195 +177,292 @@ def vis_side():
         df_spiller = df_all[df_all['VISNINGSNAVN'] == valgt_spiller].copy()
         valgt_player_uuid = df_spiller['PLAYER_OPTAUUID'].iloc[0]
 
+    # 5. HENT FYSISK DATA (Flyttet herop for at undgå 'local variable' fejl i profil-fanen)
     df_phys = get_physical_data(valgt_spiller, valgt_player_uuid, valgt_hold, conn)
 
     # --- TABS ---
-    t_profile, t_pitch, t_phys, t_stats, t_compare = st.tabs(["Profil", "Aktioner", "Fysisk", "Statistik", "Sammenligning"])
-
+    t_profile, t_pitch, t_phys, t_stats, t_compare = st.tabs([
+        "Spillerprofil", "Spilleraktioner", "Fysisk data", "Statistik", "Sammenligning"
+    ])
+    
+    # --- TAB 1: SPILLERPROFIL (OPDATERET VISNING) ---
     with t_profile:
         col_card, col_main = st.columns([1, 3.5])
-        with col_card:
-            maal = len(df_spiller[df_spiller['EVENT_TYPEID'] == 16])
-            assists = len(df_spiller[df_spiller['QUALIFIERS'].fillna('').str.contains('154')])
-            st.markdown(f"""<div style='background:#003366;color:white;padding:20px;border-radius:10px;text-align:center;'>
-                <h3 style='margin:0;'>{valgt_spiller}</h3><p style='opacity:0.8;'>{SEASONNAME}</p><hr>
-                <p style='font-size:20px;margin:10px 0;'>Mål: <b>{maal}</b></p>
-                <p style='font-size:20px;margin:10px 0;'>Assists: <b>{assists}</b></p></div>""", unsafe_allow_html=True)
         
+        with col_card:
+            antall_kampe = 0
+            total_minutter = 0
+            
+            if df_phys is not None and not df_phys.empty:
+                df_phys['MATCH_DATE'] = pd.to_datetime(df_phys['MATCH_DATE'])
+                antall_kampe = df_phys['MATCH_DATE'].nunique()
+                total_minutter = int(pd.to_numeric(df_phys['MINUTES'], errors='coerce').sum())
+                
+            # RETTELSE 2: HÅNDTERING AF MÅL (16)
+            maal = len(df_spiller[df_spiller['EVENT_TYPEID'] == 16])
+            # 154 er Opta Qualifier for Assist
+            assists = len(df_spiller[df_spiller['QUALIFIERS'].fillna('').str.contains('154')]) 
+
+            st.markdown(f"""
+                <div class="profile-card">
+                    <h5 style='margin:0;'>{valgt_spiller}</h5>
+                    <p style='margin:0; opacity:0.8;'>Sæson: {SEASONNAME}</p>
+                    <hr style='border-color: rgba(255,255,255,0.2);'>
+                    <table style='width:100%; font-size:14px;'>
+                        <tr><td>Kampe:</td><td style='text-align:right;'><b>{antall_kampe}</b></td></tr>
+                        <tr><td>Minutter:</td><td style='text-align:right;'><b>{total_minutter}</b></td></tr>
+                        <tr><td>Mål:</td><td style='text-align:right;'><b>{maal}</b></td></tr>
+                        <tr><td>Assists:</td><td style='text-align:right;'><b>{assists}</b></td></tr>
+                    </table>
+                </div>
+            """, unsafe_allow_html=True)
+            
+            # (Resten af volumen-bars koden lander her...)
+            st.write("")
+            st.write("Volumen i forhold til liga")
+            metrics = {"Afleveringer": 29.2, "Dueller": 25.7, "Boldtab": 11.6, "Skud": 1.7, "xG": 0.3, "Pasnings %": 77.4}
+            for m, val in metrics.items():
+                st.write(f"<div style='font-size:12px; margin-bottom:-10px;'>{m} <span style='float:right;'>{val}</span></div>", unsafe_allow_html=True)
+                st.progress(min(val/50 if "Pasning" not in m else val/100, 1.0))
+
         with col_main:
-            truppen = df_all.groupby('VISNINGSNAVN').agg(
-                p=('EVENT_TYPEID', lambda x: (x == 1).sum()),
-                m=('EVENT_TYPEID', lambda x: (x == 16).sum()),
-                s=('EVENT_TYPEID', lambda x: x.isin([13, 14, 15, 16]).sum()),
-                a=('EVENT_TYPEID', 'count')
+            # --- RETTELSE 3: BEREGN STATS FOR ALLE SPILLERE FOR AT FINDE MAKS (TRUP-NIVEAU) ---
+            st.markdown("<h4 style='text-align:center; color:#003366;'>Truppens Performance (Relativt til maks)</h4>", unsafe_allow_html=True)
+            
+            # Vi grupperer df_all pr. spiller for at finde de korrekte totaler pr. metric
+            truppen_stats = df_all.groupby('VISNINGSNAVN').agg(
+                raw_pasninger=('EVENT_TYPEID', lambda x: (x == 1).sum()),
+                # RETTELSE 4: HÅNDTERING AF SKUD (13,14,15,16) IDS
+                raw_skud=('EVENT_TYPEID', lambda x: x.isin([13, 14, 15, 16]).sum()),
+                raw_erobringer=('EVENT_TYPEID', lambda x: x.isin([7, 8, 12, 49]).sum()),
+                # RETTELSE 5: BEREGN TOTALE AKTIONER KORREKT (ALLE RÆKKER PR SPILLER)
+                raw_aktioner=('EVENT_TYPEID', 'count')
             )
-            s_val = truppen.loc[valgt_spiller]
-            c1, c2, c3, c4 = st.columns(4)
-            c1.plotly_chart(create_relative_donut(s_val['p'], truppen['p'].max(), "Pasninger"), config={'displayModeBar': False})
-            c2.plotly_chart(create_relative_donut(s_val['m'], truppen['m'].max(), "Mål", "#11caa0"), config={'displayModeBar': False})
-            c3.plotly_chart(create_relative_donut(s_val['s'], truppen['s'].max(), "Skud"), config={'displayModeBar': False})
-            c4.plotly_chart(create_relative_donut(s_val['a'], truppen['a'].max(), "Totale Aktioner", "#FFD700"), config={'displayModeBar': False})
+            
+            # Find maksimumværdierne i truppen for hver metric
+            maks_pas = truppen_stats['raw_pasninger'].max()
+            maks_skud = truppen_stats['raw_skud'].max()
+            maks_erob = truppen_stats['raw_erobringer'].max()
+            maks_akt = truppen_stats['raw_aktioner'].max()
 
+            # Find den valgte spillers specifikke tal fra truppen_stats
+            if valgt_spiller in truppen_stats.index:
+                spiller_stats_rel = truppen_stats.loc[valgt_spiller]
+            else:
+                # Placeholder hvis spilleren ikke har data
+                spiller_stats_rel = pd.Series([0,0,0,0], index=truppen_stats.columns)
+
+            # Vis Donuts relativt til maks i rækker
+            r1_donut = st.columns(3)
+            with r1_donut[0]: 
+                st.write("Pasninger")
+                st.plotly_chart(create_relative_donut(spiller_stats_rel['raw_pasninger'], maks_pas, "Pasninger"), config={'displayModeBar': False})
+            with r1_donut[1]: 
+                st.write("Skudforsøg (ID 13-16)")
+                st.plotly_chart(create_relative_donut(spiller_stats_rel['raw_skud'], maks_skud, "Skud"), config={'displayModeBar': False})
+            with r1_donut[2]: 
+                st.write("Erobringer")
+                st.plotly_chart(create_relative_donut(spiller_stats_rel['raw_erobringer'], maks_erob, "Erobringer", color="#cc0000"), config={'displayModeBar': False})
+            
+            r2_donut = st.columns(3)
+            with r2_donut[0]: 
+                st.write("Totale Aktioner (Truppen)")
+                st.plotly_chart(create_relative_donut(spiller_stats_rel['raw_aktioner'], maks_akt, "Aktioner", color="#FFD700"), config={'displayModeBar': False})
+            # (Tilføj flere metrics her hvis ønsket...)
+
+    # --- TAB 2: SPILLERAKTIONER (FASTHOLDT VISNING SOM TIDLIGERE) ---
     with t_pitch:
-
         descriptions = {
-
             "Heatmap": "Viser spillerens generelle bevægelsesmønster og intensitet på banen.",
-
             "Berøringer": "Alle aktioner hvor spilleren har været i kontakt med bolden.",
-
             "Afslutninger": "Oversigt over alle skudforsøg (Mål markeres med stjerne).",
-
             "Erobringer": "Tacklinger, bolderobringer og opsnappede afleveringer."
-
         }
-
+        # IDs der tæller som berøringer
         touch_ids = [1, 3, 7, 10, 11, 12, 13, 14, 15, 16, 42, 44, 49, 50, 51, 54, 61, 73]
-
+        
+        # Opret statistik baseret på Action_Label
         df_filtreret = df_spiller[~df_spiller['Action_Label'].isin(['Pasning', 'Indkast'])]
-
         akt_stats = pd.DataFrame()
-
-        if not df_filtreret.empty:
-
+        if df_all is not None and not df_filtreret.empty:
             akt_stats = df_filtreret.groupby('Action_Label').agg(Total=('OUTCOME', 'count'), Succes=('OUTCOME', 'sum')).sort_values('Total', ascending=False)
-
-
 
         c_stats_side, c_buffer, c_pitch_side = st.columns([1, 0.05, 2.2])
 
-
-
         with c_stats_side:
-
-            total_akt = len(df_spiller)
-
+            # RETTELSE 6: TOTALE AKTIONER VIST KORREKT (ALLE RÆKKER FOR SPILLER I df_spiller)
+            total_akt_spiller = len(df_spiller)
             pas_df = df_spiller[df_spiller['EVENT_TYPEID'] == 1]
-
             pas_count = len(pas_df)
-
             pas_acc = (pas_df['OUTCOME'].sum() / pas_count * 100) if pas_count > 0 else 0
-
+            
+            # Beregn udvidet stats
             chancer_skabt = akt_stats[akt_stats.index.str.contains("Key Pass|assist|Stor chance", case=False, na=False)]['Total'].sum() if not akt_stats.empty else 0
-
+            # Skudforsøg (IDs 13, 14, 15, 16)
             shots_count = len(df_spiller[df_spiller['EVENT_TYPEID'].isin([13, 14, 15, 16])])
-
+            # Indlæg (Qualifier 2)
             cross_count = len(df_spiller[df_spiller['qual_list'].apply(lambda x: "2" in x if isinstance(x, list) else False)])
-
+            # Erobringer (IDs 7, 8, 12, 49)
             erob_count = len(df_spiller[df_spiller['EVENT_TYPEID'].isin([7, 8, 12, 49])])
-
+            # Berøringer (Liste af IDs)
             touch_count = len(df_spiller[df_spiller['EVENT_TYPEID'].isin(touch_ids)])
 
-
-
+            # Vis metrikker i to rækker
             m_r1 = st.columns(4)
-
-            m_r1[0].metric("Aktioner", total_akt)
-
+            m_r1[0].metric("Aktioner", total_akt_spiller)
             m_r1[1].metric("Berøringer", touch_count)
-
             m_r1[2].metric("Pasninger", pas_count)
-
             m_r1[3].metric("Pasning %", f"{int(pas_acc)}%")
-
             m_r2 = st.columns(4)
-
             m_r2[0].metric("Skud", shots_count)
-
             m_r2[1].metric("Chancer", int(chancer_skabt))
-
             m_r2[2].metric("Indlæg", cross_count)
-
             m_r2[3].metric("Erobringer", erob_count)
 
-
-
             st.markdown("<hr style='margin: 15px 0; opacity: 0.5;'>", unsafe_allow_html=True)
-
             st.write("**Top 10: Aktioner**")
-
             if not akt_stats.empty:
-
                 bare_antal = ['Erobring', 'Clearing', 'Boldtab', 'Frispark vundet', 'Blokeret skud', 'Interception']
-
                 for akt, row in akt_stats.head(10).iterrows():
-
                     total, succes = int(row['Total']), int(row['Succes'])
-
                     stats_html = f"<b>{total}</b>" if akt in bare_antal else f"{succes}/{total} <b>({int(succes/total*100)}%)</b>"
-
                     st.markdown(f'<div style="display:flex; justify-content:space-between; font-size:11px; border-bottom:0.5px solid #eee; padding:5px 0;"><span>{akt}</span><span style="font-family:monospace;">{stats_html}</span></div>', unsafe_allow_html=True)
 
-
-
         with c_pitch_side:
-
+            # Menu og beskrivelse over banen
             c_side_spacer, c_desc_col, c_menu_col = st.columns([0.2, 2.0, 1.0])
-
             with c_menu_col:
-
                 visning = st.selectbox("Visning", list(descriptions.keys()), key="pitch_view_sel", label_visibility="collapsed")
-
             with c_desc_col:
-
                 st.markdown(f'<div style="text-align: right; margin-top: 8px; line-height: 1.2;"><span style="color: #666; font-size: 0.85rem;">{descriptions.get(visning)}</span></div>', unsafe_allow_html=True)
 
-
-
+            # Tegn banen med mplsoccer
             pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
-
             fig, ax = pitch.draw(figsize=(10, 7))
+            
+            # Tilføj spiller-info boks i hjørnet (Fastholdt visning)
+            draw_player_info_box(ax, hold_logo, valgt_spiller, SEASONNAME, visning)
 
-            draw_player_info_box(ax, hold_logo, valgt_spiller, CURRENT_SEASON, visning)
-
-
-
+            # Placer aktioner på banen
             df_plot = df_spiller.dropna(subset=['EVENT_X', 'EVENT_Y'])
-
             if not df_plot.empty:
-
                 if visning == "Heatmap":
-
                     pitch.kdeplot(df_plot.EVENT_X, df_plot.EVENT_Y, ax=ax, cmap='Blues', fill=True, alpha=0.6, levels=50)
-
                 elif visning == "Berøringer":
-
                     d = df_plot[df_plot['EVENT_TYPEID'].isin(touch_ids)]
-
                     ax.scatter(d.EVENT_X, d.EVENT_Y, color='#084594', s=40, edgecolors='white', alpha=0.5)
-
                 elif visning == "Afslutninger":
-
+                    # IDs 13, 14, 15, 16. ID 16 = Goal.
                     d = df_plot[df_plot['EVENT_TYPEID'].isin([13, 14, 15, 16])]
-
-                    goals = d[d['EVENT_TYPEID'] == 16]; misses = d[d['EVENT_TYPEID'].isin([13, 14, 15])]
-
+                    goals = d[d['EVENT_TYPEID'] == 16]
+                    misses = d[d['EVENT_TYPEID'].isin([13, 14, 15])]
+                    # Scatter misses (cirkler)
                     ax.scatter(misses.EVENT_X, misses.EVENT_Y, color='grey', s=60, edgecolors='black', alpha=0.7)
-
+                    # Scatter goals (firkantede)
                     ax.scatter(goals.EVENT_X, goals.EVENT_Y, color='red', s=120, marker='s', edgecolors='black', zorder=5)
-
                 elif visning == "Erobringer":
-
+                    # Tackler, Opsnappede, Erobringer (IDs 7, 8, 12, 49)
                     d = df_plot[df_plot['EVENT_TYPEID'].isin([7, 8, 12, 49])]
-
                     ax.scatter(d.EVENT_X, d.EVENT_Y, color='orange', s=100, edgecolors='white')
 
             st.pyplot(fig, use_container_width=True)
 
+    # --- TAB 3: FYSISK DATA ---
     with t_phys:
         if df_phys is not None and not df_phys.empty:
-            m1, m2, m3, m4 = st.columns(4)
-            m1.metric("Gns. Distance", f"{round(df_phys['DISTANCE'].mean()/1000, 2)} km")
-            m2.metric("Gns. HSR", f"{int(df_phys['HSR'].mean())} m")
-            m3.metric("Gns. Sprints", f"{int(df_phys['SPRINTING'].mean())} m")
-            m4.metric("Top Speed", f"{round(df_phys['TOP_SPEED'].max(), 1)} km/h")
+            df_phys['MATCH_DATE'] = pd.to_datetime(df_phys['MATCH_DATE'])
+            # Sorter faldende for at få seneste kamp øverst i data_editor
+            df_phys = df_phys.sort_values('MATCH_DATE', ascending=False)
             
-            st.write("---")
-            fig_dist = go.Figure(go.Bar(x=df_phys['MATCH_DATE'], y=df_phys['DISTANCE'], marker_color='#003366'))
-            fig_dist.update_layout(title="Total distance pr. kamp (meter)", height=350, margin=dict(t=50, b=20))
-            st.plotly_chart(fig_dist, use_container_width=True)
+            # Beregn gennemsnit
+            avg_dist = df_phys['DISTANCE'].mean()
+            avg_hsr = df_phys['HSR'].mean()
+            # Få seneste kamp
+            latest = df_phys.iloc[0]
+
+            # Vis metrikker
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("Seneste Distance", f"{round(latest['DISTANCE']/1000, 2)} km", delta=f"{round((latest['DISTANCE'] - avg_dist)/1000, 2)} km")
+            m2.metric("HSR Meter", f"{int(latest['HSR'])} m", delta=f"{int(latest['HSR'] - avg_hsr)} m")
+            m3.metric("Topfart", f"{round(latest['TOP_SPEED'], 1)} km/t")
+            m4.metric("Højintense Akt.", int(latest['HI_RUNS']))
+
+            # Undertabs for graf og tabel
+            t_sub_log, t_sub_charts = st.tabs(["Kampoversigt", "Grafer"])
+
+            with t_sub_charts:
+                # Segmented control til at vælge metrik
+                cat_choice = st.segmented_control("Vælg metrik", options=["HSR (m)", "Sprint (m)", "Distance (km)", "Topfart (km/t)"], default="HSR (m)", key="phys_graph_control")
+                
+                # Mapping af valg til kolonnenavne og enheder
+                mapping = {
+                    "HSR (m)": ("HSR", 1, "m"),
+                    "Sprint (m)": ("SPRINTING", 1, "m"),
+                    "Distance (km)": ("DISTANCE", 1000, "km"),
+                    "Topfart (km/t)": ("TOP_SPEED", 1, "km/t")
+                }
+                col, div, suffix = mapping[cat_choice]
+
+                # Forbered data til graf (fjern dubletter af dato og sorter stigende)
+                df_chart = df_phys[df_phys['MATCH_DATE'] >= '2025-07-01'].copy()
+                # Da data kan have flere rækker pr. kamp (hvis man skifter klub eller pga p.PLAYER_NAME ILIKE %),
+                # fjerner vi dubletter baseret på MATCH_DATE og MATCH_TEAMS
+                df_chart = df_chart.drop_duplicates(subset=['MATCH_DATE', 'MATCH_TEAMS'])
+                df_chart = df_chart.sort_values('MATCH_DATE', ascending=True)
+
+                if not df_chart.empty:
+                    # Beregn modstander til labels
+                    def get_opponent(teams_str, my_team):
+                        if not teams_str: return "?"
+                        parts = [p.strip() for p in teams_str.split('-')]
+                        if len(parts) < 2: return teams_str
+                        # Hvis Hvidovre er hjemmehold, returner away (parts[1]), ellers home (parts[0])
+                        return parts[1] if parts[part[0].lower() in my_team.lower() or part[0] in my_team] else parts[part[0]]
+
+                    # Lav x-akse labels: "Modstander\nDato"
+                    df_chart['Opponent'] = df_chart['MATCH_TEAMS'].apply(lambda x: get_opponent(x, valgt_hold))
+                    df_chart['Label'] = df_chart['Opponent'] + "<br>" + df_chart['MATCH_DATE'].dt.strftime('%d/%m')
+                    
+                    # Konverter y-værdier (f.eks distance fra meter til km)
+                    y_vals = df_chart[col] / div
+                    
+                    # Beregn sæsongennemsnit til den stiplede linje
+                    season_avg = y_vals.mean()
+
+                    # Opret bar-chart med Plotly
+                    fig = go.Figure()
+                    fig.add_trace(go.Bar(
+                        x=df_chart['Label'], 
+                        y=y_vals,
+                        text=y_vals.apply(lambda x: f"{x:.0f}" if x > 100 else f"{x:.1f}"), # Vis tal på søjler
+                        textposition='outside', 
+                        marker_color='#cc0000', # Hvidovre rød
+                        textfont=dict(size=9, color="black"),
+                        cliponaxis=False
+                    ))
+
+                    # Tilføj stiplede gennemsnitslinje
+                    fig.add_shape(type="line", x0=-0.5, x1=len(df_chart)-0.5, y0=season_avg, y1=season_avg, 
+                                 line=dict(color="#D3D3D3", width=2, dash="dash"))
+
+                    # Opdater layout (Hvid baggrund, ingen akse-streger, labels under 45 grader)
+                    fig.update_layout(
+                        plot_bgcolor="white", 
+                        height=400, 
+                        margin=dict(t=50, b=80, l=10, r=10),
+                        xaxis=dict(showgrid=False, tickangle=-45, tickfont=dict(size=10), type='category'),
+                        yaxis=dict(showgrid=True, gridcolor='#f0f0f0', showticklabels=False, zeroline=False, range=[0, y_vals.max() * 1.3]),
+                        showlegend=False
+                    )
+                    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+                else:
+                    st.info("Ingen fysiske data fundet for denne sæson.")
+
+            with t_sub_log:
+                # Vis data i et redigerbart skema
+                st.data_editor(df_phys, hide_index=True, use_container_width=True, disabled=True)
         else:
-            st.info("Ingen fysiske data tilgængelige for perioden.")
+            st.warning("Ingen fysiske data tilgængelige for perioden.")
 
     with t_stats:
         st.subheader("Fordeling af aktioner")
