@@ -107,10 +107,7 @@ def vis_side(dp=None):
     conn = _get_snowflake_conn()
     if not conn: return
 
-    # 1. HENT HOLD OG KONFIGURATION (Fra din Saved Information)
-    # Vi bruger de faste værdier for Hvidovre-appen
-    SEASON_VAL = "2025/2026" 
-    
+    # 1. HENT HOLD (Baseret på dine gemte værdier)
     df_teams_raw = conn.query(f"SELECT DISTINCT CONTESTANTHOME_NAME, CONTESTANTHOME_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS}")
     mapping_lookup = {str(info['opta_uuid']).lower().replace('t', ''): name for name, info in TEAMS.items() if 'opta_uuid' in info}
 
@@ -125,51 +122,53 @@ def vis_side(dp=None):
     valgt_hold = col_h_hold.selectbox("Hold", sorted(list(team_map.keys())), label_visibility="collapsed")
     valgt_uuid_hold = team_map[valgt_hold]
 
-    # 2. HENT DATA
+    # 2. HENT DATA MED ACTION_LABEL
     with st.spinner("Henter spillerdata..."):
-        # Vi henter hændelsesdata først
-        sql_events = f"""
+        sql = f"""
             SELECT 
-                e.EVENT_TYPEID, e.PLAYER_OPTAUUID, e.EVENT_OUTCOME as OUTCOME,
-                TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME) as VISNINGSNAVN,
+                e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, 
+                TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME) as VISNINGSNAVN, 
+                e.PLAYER_OPTAUUID, e.EVENT_OUTCOME as OUTCOME,
+                TO_CHAR(e.EVENT_TIMESTAMP, 'YYYY-MM-DD HH24:MI:SS') as EVENT_TIMESTAMP_STR,
                 LISTAGG(q.QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY q.QUALIFIER_QID) as QUALIFIERS
             FROM {DB}.OPTA_EVENTS e
-            JOIN (SELECT DISTINCT PLAYER_OPTAUUID, FIRST_NAME, LAST_NAME FROM {DB}.OPTA_PLAYERS) p 
+            JOIN (SELECT DISTINCT PLAYER_OPTAUUID, FIRST_NAME, LAST_NAME FROM {DB}.OPTA_PLAYERS WHERE FIRST_NAME IS NOT NULL) p 
                 ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
             LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
             WHERE e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid_hold}' 
             AND e.EVENT_TIMESTAMP >= '2025-07-01'
-            GROUP BY 1, 2, 3, 4
+            GROUP BY 1, 2, 3, 4, 5, 6, 7
         """
-        df_all = conn.query(sql_events)
+        df_all = conn.query(sql)
         
+        if df_all is not None and not df_all.empty:
+            # VIGTIGT: Her oprettes Action_Label kolonnen som manglede
+            df_all['qual_list'] = df_all['QUALIFIERS'].fillna('').str.split(',')
+            df_all['Action_Label'] = df_all.apply(get_action_label, axis=1)
+
     spiller_liste = sorted(df_all['VISNINGSNAVN'].unique())
     valgt_spiller = col_h_spiller.selectbox("Spiller", spiller_liste, label_visibility="collapsed")
     valgt_player_uuid = df_all[df_all['VISNINGSNAVN'] == valgt_spiller]['PLAYER_OPTAUUID'].iloc[0]
     df_spiller = df_all[df_all['VISNINGSNAVN'] == valgt_spiller].copy()
 
-    # 3. HENT OG FIX FYSISK DATA (Løsning på int() fejlen)
+    # 3. HENT FYSISK DATA
     df_phys = get_physical_data(valgt_spiller, valgt_player_uuid, valgt_hold, conn)
 
-    # --- TAB SEKTION ---
     t_profile, t_pitch, t_phys, t_stats, t_compare = st.tabs(["Spillerprofil", "Spilleraktioner", "Fysisk data", "Statistik", "Sammenligning"])
 
     with t_profile:
         col_card, col_main = st.columns([1, 3.5])
         
-        # DYNAMISK BEREGNING MED FEJLRETNING
+        # Beregn værdier
         antall_kampe = 0
         total_minutter = 0
         
         if df_phys is not None and not df_phys.empty:
             antall_kampe = df_phys['MATCH_DATE'].nunique()
-            # FIX: Vi sikrer os at vi summerer tal og håndterer eventuelle mærkelige strenge
-            try:
-                # Vi tvinger konvertering til numerisk og fjerner fejl (NaN), før vi summerer
-                total_minutter = int(pd.to_numeric(df_phys['MINUTES'], errors='coerce').sum())
-            except:
-                total_minutter = 0
+            # Vi renser minutterne for mærkelige strenge (som den du så før)
+            total_minutter = int(pd.to_numeric(df_phys['MINUTES'], errors='coerce').sum())
             
+        # Mål og assists fra hændelsesdata
         maal = len(df_spiller[df_spiller['EVENT_TYPEID'] == 16])
         assists = len(df_spiller[df_spiller['QUALIFIERS'].fillna('').str.contains('154')]) 
 
@@ -177,7 +176,7 @@ def vis_side(dp=None):
             st.markdown(f"""
                 <div class="profile-card">
                     <h5 style='margin:0;'>{valgt_spiller}</h5>
-                    <p style='margin:0; opacity:0.8;'>Sæson: {SEASON_VAL}</p>
+                    <p style='margin:0; opacity:0.8;'>Sæson: 2025/2026</p>
                     <hr style='border-color: rgba(255,255,255,0.2);'>
                     <table style='width:100%; font-size:14px;'>
                         <tr><td>Kampe:</td><td style='text-align:right;'><b>{antall_kampe}</b></td></tr>
@@ -187,7 +186,7 @@ def vis_side(dp=None):
                     </table>
                 </div>
             """, unsafe_allow_html=True)
-            
+                        
             st.write("")
             # Volumen-bars (som på billedet)
             st.write("Volumen i forhold til liga")
