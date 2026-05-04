@@ -37,42 +37,34 @@ def get_logo_img(opta_uuid):
     except: 
         return None
 
-def create_relative_donut(player_val, max_val, label, color="#df003b"): # Standardfarve sat til rød
-    """
-    Viser spillerens andel i rød mod grå baggrund. 
-    Starter i toppen (12-positionen) og kører med uret.
-    """
-    # Sikrer at vi ikke dividerer med 0, og at max_val altid er mindst player_val
+def get_ordinal(n):
+    if 11 <= (n % 100) <= 13:
+        suffix = 'th'
+    else:
+        suffix = {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')
+    return f"{n}{suffix}"
+
+def create_relative_donut(player_val, max_val, label, rank_text, color="#df003b"):
     base_max = max(max_val, player_val, 1)
     reminder = base_max - player_val
     
     fig = go.Figure(go.Pie(
         values=[player_val, reminder],
         hole=0.7,
-        # Sætter spillerens farve til rød (#df003b) og resten til lys grå (#eeeeee)
         marker_colors=[color, "#eeeeee"],
         textinfo='none',
         hoverinfo='none',
-        # Rotation 90 starter den i toppen. 
-        # Direction 'clockwise' får den til at løbe mod højre.
         rotation=0,
         direction='clockwise',
-        sort=False # Vigtigt for at bevare rækkefølgen af values
+        sort=False
     ))
     
-    pct = int((player_val / base_max) * 100) if base_max > 0 else 0
-    
     fig.update_layout(
-        showlegend=False, 
-        margin=dict(t=0, b=0, l=0, r=0), 
-        height=130, 
-        width=130,
+        showlegend=False, margin=dict(t=0, b=0, l=0, r=0), height=130, width=130,
         annotations=[dict(
-            text=f"<b>{player_val}</b><br><span style='font-size:10px; color:gray;'>{pct}%</span>", 
-            x=0.5, y=0.5, 
-            font_size=16, 
-            showarrow=False, 
-            font_family="Arial"
+            # Her viser vi nu rank_text i stedet for procent
+            text=f"<b>{player_val}</b><br><span style='font-size:12px; color:#df003b; font-weight:bold;'>{rank_text}</span>", 
+            x=0.5, y=0.5, font_size=16, showarrow=False, font_family="Arial"
         )]
     )
     return fig
@@ -186,12 +178,17 @@ def vis_side(dp=None):
     t_profile, t_pitch, t_phys, t_stats, t_compare = st.tabs(["Spillerprofil", "Spilleraktioner", "Fysisk data", "Statistik", "Sammenligning"])
 
     with t_profile:
-        # 1. Beregn truppens maks-værdier
+        # 1. Beregn stats for ALLE spillere på holdet
         truppen_stats = df_all.groupby('VISNINGSNAVN').agg(
-            max_pasninger=('EVENT_TYPEID', lambda x: (x == 1).sum()),
-            max_skud=('EVENT_TYPEID', lambda x: x.isin([13, 14, 15, 16]).sum()),
-            max_erobringer=('EVENT_TYPEID', lambda x: x.isin([7, 8, 12, 49]).sum())
+            Pasninger=('EVENT_TYPEID', lambda x: (x == 1).sum()),
+            Afslutninger=('EVENT_TYPEID', lambda x: x.isin([13, 14, 15, 16]).sum()),
+            Erobringer=('EVENT_TYPEID', lambda x: x.isin([7, 8, 12, 49]).sum())
         )
+        
+        # 2. Find rangering for den valgte spiller
+        # Vi bruger .rank(ascending=False, method='min') så flest aktioner = 1st
+        ranks = truppen_stats.rank(ascending=False, method='min').astype(int)
+        spiller_ranks = ranks.loc[valgt_spiller]
         
         col_info, col_charts = st.columns([1, 4])
         
@@ -212,20 +209,33 @@ def vis_side(dp=None):
 
         with col_charts:
             kategorier = [
-                {"label": "PASNINGER", "aktuel": len(df_spiller[df_spiller['EVENT_TYPEID'] == 1]), "maks": truppen_stats['max_pasninger'].max()},
-                {"label": "AFSLUTNINGER", "aktuel": len(df_spiller[df_spiller['EVENT_TYPEID'].isin([13, 14, 15, 16])]), "maks": truppen_stats['max_skud'].max()},
-                {"label": "EROBRINGER", "aktuel": len(df_spiller[df_spiller['EVENT_TYPEID'].isin([7, 8, 12, 49])]), "maks": truppen_stats['max_erobringer'].max()}
+                {
+                    "label": "PASNINGER", 
+                    "aktuel": truppen_stats.loc[valgt_spiller, 'Pasninger'], 
+                    "maks": truppen_stats['Pasninger'].max(),
+                    "rank": get_ordinal(spiller_ranks['Pasninger'])
+                },
+                {
+                    "label": "AFSLUTNINGER", 
+                    "aktuel": truppen_stats.loc[valgt_spiller, 'Afslutninger'], 
+                    "maks": truppen_stats['Afslutninger'].max(),
+                    "rank": get_ordinal(spiller_ranks['Afslutninger'])
+                },
+                {
+                    "label": "EROBRINGER", 
+                    "aktuel": truppen_stats.loc[valgt_spiller, 'Erobringer'], 
+                    "maks": truppen_stats['Erobringer'].max(),
+                    "rank": get_ordinal(spiller_ranks['Erobringer'])
+                }
             ]
             
             chart_cols = st.columns(len(kategorier))
-            
             for i, kat in enumerate(kategorier):
                 with chart_cols[i]:
-                    # RETTELSE: Tilføj overskrift manuelt over grafen
-                    st.markdown(f"<p style='text-align:center; font-weight:bold; font-size:12px; color:#1E1E1E; margin-bottom:20px;'>{kat['label']}</p>", unsafe_allow_html=True)
+                    st.markdown(f"<p style='text-align:center; font-weight:bold; font-size:12px; margin-bottom:-20px;'>{kat['label']}</p>", unsafe_allow_html=True)
                     
-                    fig = create_relative_donut(kat["aktuel"], kat["maks"], kat["label"])
-                    fig.update_layout(height=180) # Øget højde lidt for at give plads til overskrift
+                    # Vi sender kat["rank"] med til funktionen
+                    fig = create_relative_donut(kat["aktuel"], kat["maks"], kat["label"], kat["rank"])
                     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
             
     with t_pitch:
