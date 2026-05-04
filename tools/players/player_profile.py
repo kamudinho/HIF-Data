@@ -120,7 +120,7 @@ def vis_side(dp=None):
                 e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, 
                 TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME) as VISNINGSNAVN, 
                 e.PLAYER_OPTAUUID, e.EVENT_OUTCOME as OUTCOME,
-                e.EVENT_MINUTE, -- Rettet fra EVENT_MINUTE
+                e.EVENT_MINUTE,
                 e.EVENT_CONTESTANT_OPTAUUID,
                 m.CONTESTANTHOME_OPTAUUID as HOMECONTESTANT_OPTAUUID,
                 m.CONTESTANTHOME_NAME as HOMECONTESTANT_NAME,
@@ -210,7 +210,7 @@ def vis_side(dp=None):
                             d['EVENT_TIMESTAMP_STR'], 
                             d['XG'].map('{:.2f}'.format),
                             d['Action_Label'],
-                            d['MINUTE'].fillna('?') # Rettet her
+                            d['EVENT_MINUTE'].fillna('?') # Rettet her
                         ), axis=-1)
                     ))
                     fig_overlay.update_layout(
