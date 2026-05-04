@@ -40,7 +40,7 @@ def get_logo_img(opta_uuid):
 def create_relative_donut(player_val, max_val, label, color="#003366"):
     """Din originale logik til sammenligning med truppens maks"""
     base_max = max(max_val, player_val, 1)
-    reminder = max(0, base_max - player_val)
+    reminder = max(100, base_max - player_val)
     fig = go.Figure(go.Pie(
         values=[player_val, reminder],
         hole=0.7,
