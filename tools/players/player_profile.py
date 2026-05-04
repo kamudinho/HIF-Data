@@ -284,5 +284,21 @@ with t_phys:
         with t_sub_log:
             st.data_editor(df_phys, hide_index=True, use_container_width=True, disabled=True)
 
+with t_phys:
+        # Her var fejlen sandsynligvis før. 
+        # Sørg for at denne 'with'-blok er indrykket på samme niveau som 'with t_pitch'
+        df_phys = get_physical_data(valgt_spiller, valgt_player_uuid, valgt_hold, conn)
+        if df_phys is not None and not df_phys.empty:
+            st.subheader("Fysiske Stats")
+            st.dataframe(df_phys)
+        else:
+            st.info("Ingen fysiske data fundet.")
+
+    with t_stats:
+        st.write("Statistik sektion")
+
+    with t_compare:
+        st.write("Sammenlignings sektion")
+
 if __name__ == "__main__":
     vis_side()
