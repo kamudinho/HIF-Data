@@ -11,7 +11,7 @@ from PIL import Image
 from io import BytesIO
 
 # --- IMPORT FRA MAPPING ---
-from data.utils.mapping import (
+from data.utils.mapping import(
     OPTA_EVENT_TYPES, 
     OPTA_QUALIFIERS,
     get_action_label
