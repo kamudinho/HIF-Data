@@ -194,7 +194,7 @@ def vis_side(dp=None):
                 st.progress(min(val/50 if "Pasning" not in m else val/100, 1.0))
 
         with col_main:
-            st.markdown("<h3 style='text-align:center; color:#003366;'>Spillerstatistik</h3>", unsafe_allow_html=True)
+            st.markdown("<h4 style='text-align:center; color:#003366;'>Spillerstatistik</h4>", unsafe_allow_html=True)
             
             # Beregn værdier fra data (Her bruger vi dummy-tal eller simpel optælling)
             pas_df = df_spiller[df_spiller['EVENT_TYPEID'] == 1]
