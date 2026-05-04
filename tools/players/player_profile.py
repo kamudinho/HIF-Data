@@ -176,54 +176,54 @@ def vis_side(dp=None):
     # 2. Layout: Venstre kolonne til Info, Højre til Donuts
     col_info, col_charts = st.columns([1, 4])
     
-        with col_info:
-            # Tilpas navnet: Mindre font og margen
-            st.markdown(f"""
-                <div style="margin-bottom: 10px;">
-                    <p style="font-size: 18px; font-weight: bold; margin: 0; line-height: 1.2;">{valgt_spiller}</p>
-                    <p style="font-size: 12px; color: gray; margin: 0;">{valgt_hold}</p>
-                </div>
-            """, unsafe_allow_html=True)
+    with col_info:
+        # Tilpas navnet: Mindre font og margen
+        st.markdown(f"""
+            <div style="margin-bottom: 10px;">
+                <p style="font-size: 18px; font-weight: bold; margin: 0; line-height: 1.2;">{valgt_spiller}</p>
+                <p style="font-size: 12px; color: gray; margin: 0;">{valgt_hold}</p>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        # Gør logoet mindre (width=60)
+        if hold_logo: 
+            st.image(hold_logo, width=60)
             
-            # Gør logoet mindre (width=60)
-            if hold_logo: 
-                st.image(hold_logo, width=60)
+        st.markdown("---")
+        st.caption("Sammenlignet med holdets topscorer i hver kategori.")
+
+    with col_charts:
+        # Opsætning af kategorier til visning
+        kategorier = [
+            {
+                "label": "Pasninger", 
+                "aktuel": len(df_spiller[df_spiller['EVENT_TYPEID'] == 1]), 
+                "maks": truppen_stats['max_pasninger'].max()
+            },
+            {
+                "label": "Afslutninger", 
+                "aktuel": len(df_spiller[df_spiller['EVENT_TYPEID'].isin([13, 14, 15, 16])]), 
+                "maks": truppen_stats['max_skud'].max()
+            },
+            {
+                "label": "Erobringer", 
+                "aktuel": len(df_spiller[df_spiller['EVENT_TYPEID'].isin([7, 8, 12, 49])]), 
+                "maks": truppen_stats['max_erobringer'].max()
+            }
+        ]
+        
+        # Opret 3 kolonner til donuts
+        chart_cols = st.columns(len(kategorier))
+        
+        for i, kat in enumerate(kategorier):
+            with chart_cols[i]:
+                # Vi bruger din eksisterende create_relative_donut funktion
+                fig = create_relative_donut(kat["aktuel"], kat["maks"], kat["label"])
                 
-            st.markdown("---")
-            st.caption("Sammenlignet med holdets topscorer i hver kategori.")
-    
-        with col_charts:
-            # Opsætning af kategorier til visning
-            kategorier = [
-                {
-                    "label": "Pasninger", 
-                    "aktuel": len(df_spiller[df_spiller['EVENT_TYPEID'] == 1]), 
-                    "maks": truppen_stats['max_pasninger'].max()
-                },
-                {
-                    "label": "Afslutninger", 
-                    "aktuel": len(df_spiller[df_spiller['EVENT_TYPEID'].isin([13, 14, 15, 16])]), 
-                    "maks": truppen_stats['max_skud'].max()
-                },
-                {
-                    "label": "Erobringer", 
-                    "aktuel": len(df_spiller[df_spiller['EVENT_TYPEID'].isin([7, 8, 12, 49])]), 
-                    "maks": truppen_stats['max_erobringer'].max()
-                }
-            ]
-            
-            # Opret 3 kolonner til donuts
-            chart_cols = st.columns(len(kategorier))
-            
-            for i, kat in enumerate(kategorier):
-                with chart_cols[i]:
-                    # Vi bruger din eksisterende create_relative_donut funktion
-                    fig = create_relative_donut(kat["aktuel"], kat["maks"], kat["label"])
-                    
-                    # Gør grafen lidt mere kompakt
-                    fig.update_layout(height=150, margin=dict(t=0, b=0, l=0, r=0))
-                    
-                    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+                # Gør grafen lidt mere kompakt
+                fig.update_layout(height=150, margin=dict(t=0, b=0, l=0, r=0))
+                
+                st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
             
     with t_pitch:
         descriptions = {
