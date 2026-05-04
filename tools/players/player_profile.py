@@ -178,7 +178,7 @@ def vis_side(dp=None):
     t_profile, t_pitch, t_phys, t_stats, t_compare = st.tabs(["Spillerprofil", "Spilleraktioner", "Fysisk data", "Statistik", "Sammenligning"])
 
     with t_profile:
-        # 1. Beregn stats for ALLE spillere (Korrekt agg-syntaks)
+        # 1. Beregn de rå tal for ALLE spillere (Korrekt agg-syntaks)
         truppen_stats = df_all.groupby('VISNINGSNAVN').agg(
             Pasninger=('EVENT_TYPEID', lambda x: (x == 1).sum()),
             Afslutninger=('EVENT_TYPEID', lambda x: x.isin([13, 14, 15, 16]).sum()),
@@ -186,11 +186,10 @@ def vis_side(dp=None):
             Erobringer=('EVENT_TYPEID', lambda x: x.isin([7, 8, 12, 49]).sum())
         )
         
-        # 2. Beregn rank korrekt (ascending=False er KRITISK her)
-        # method='min' betyder: hvis to har 6 mål, får begge 1. pladsen.
+        # 2. Beregn rank (Vi tvinger flest = 1st plads)
+        # method='min' er vigtig: Hvis Marvin har 6 mål og ingen har flere, er han altid #1.
         ranks = truppen_stats.rank(ascending=False, method='min').astype(int)
         
-        # 3. Hent den specifikke rank for Marvin
         spiller_ranks = ranks.loc[valgt_spiller]
         
         col_info, col_charts = st.columns([1, 4])
@@ -211,6 +210,7 @@ def vis_side(dp=None):
             st.caption("Sammenlignet med holdets bedste.")
 
         with col_charts:
+            # Vi definerer de 4 kategorier her
             kategorier = [
                 {
                     "label": "PASNINGER", 
@@ -228,7 +228,7 @@ def vis_side(dp=None):
                     "label": "MÅL", 
                     "aktuel": truppen_stats.loc[valgt_spiller, 'Mål'], 
                     "maks": truppen_stats['Mål'].max(),
-                    "rank": get_ordinal(spiller_ranks['Erobringer'])
+                    "rank": get_ordinal(spiller_ranks['Mål'])
                 },
                 {
                     "label": "EROBRINGER", 
@@ -238,12 +238,10 @@ def vis_side(dp=None):
                 }
             ]
             
-            chart_cols = st.columns(len(kategorier))
+            chart_cols = st.columns(4) # Nu med 4 kolonner
             for i, kat in enumerate(kategorier):
                 with chart_cols[i]:
-                    st.markdown(f"<p style='text-align:center; font-weight:bold; font-size:12px; margin-bottom:0px;'>{kat['label']}</p>", unsafe_allow_html=True)
-                    
-                    # Vi sender kat["rank"] med til funktionen
+                    st.markdown(f"<p style='text-align:center; font-weight:bold; font-size:12px; margin-bottom:-20px;'>{kat['label']}</p>", unsafe_allow_html=True)
                     fig = create_relative_donut(kat["aktuel"], kat["maks"], kat["label"], kat["rank"])
                     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
             
