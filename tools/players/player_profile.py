@@ -24,6 +24,7 @@ CURRENT_SEASON = "2025/2026"
 
 # --- HJÆLPEFUNKTIONER ---
 @st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600)
 def get_logo_img(opta_uuid):
     if not opta_uuid: return None
     uuid_clean = str(opta_uuid).lower().replace('t', '')
@@ -43,6 +44,24 @@ def draw_player_info_box(ax, team_logo, player_name, season_str, category_str):
             fontsize=10, fontweight='bold', color='black', va='center')
     ax.text(0.10, 0.89, f"{season_str} | {category_str}", transform=ax.transAxes, 
             fontsize=8, color='#666666', va='center')
+
+def create_donut_chart(value, label, color="#003366"):
+    """Hjælpefunktion til at lave cirkel-statistikker (donuts)"""
+    fig = go.Figure(go.Pie(
+        values=[value, max(1, 100-value) if "%" in str(label) else 0],
+        hole=0.7,
+        marker_colors=[color, "#EEEEEE"],
+        textinfo='none',
+        hoverinfo='none'
+    ))
+    fig.update_layout(
+        showlegend=False,
+        margin=dict(t=0, b=0, l=0, r=0),
+        height=150,
+        width=150,
+        annotations=[dict(text=str(value), x=0.5, y=0.5, font_size=20, showarrow=False, font_family="Arial Black")]
+    )
+    return fig
 
 def get_physical_data(player_name, player_opta_uuid, valgt_hold_navn, db_conn):
     target_ssiid = TEAMS.get(valgt_hold_navn, {}).get('ssid')
