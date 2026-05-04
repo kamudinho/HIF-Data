@@ -97,56 +97,89 @@ def vis_side(dp=None):
     conn = _get_snowflake_conn()
     if not conn: return
 
-    # --- TOP-MENU MED LOGO + DROPDOWNS (Retter din fejl: flytter logo op) ---
-    # Vi henter holddata først for at kunne definere team_map
+    # --- TOP-MENU KONFIGURATION (Løser 'hold_logo' fejlen & skubber dropdowns til højre) ---
     df_teams_raw = conn.query(f"SELECT DISTINCT CONTESTANTHOME_NAME, CONTESTANTHOME_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS}")
     mapping_lookup = {str(info['opta_uuid']).lower().replace('t', ''): name for name, info in TEAMS.items() if 'opta_uuid' in info}
+    
+    # team_map must be defined before selectbox can use it
     team_map = {mapping_lookup[str(r['CONTESTANTHOME_OPTAUUID']).lower().replace('t','')]: r['CONTESTANTHOME_OPTAUUID'] 
                 for _, r in df_teams_raw.iterrows() if str(r['CONTESTANTHOME_OPTAUUID']).lower().replace('t','') in mapping_lookup}
 
-    # Definer kolonnerne for headeren (Logo yderst til venstre)
-    # --- TOP-MENU (LOGO TIL VENSTRE, DROPDOWNS TIL HØJRE) ---
-    # Vi bruger en bred spacer i midten [1, 2.5, 1.2, 1.2] 
-    # for at skubbe dropdowns helt ud til højre.
-    col_logo, col_spacer_mid, col_h_hold, col_h_spiller = st.columns([0.8, 2.5, 1.2, 1.2])
-    
-    with col_logo:
-        if hold_logo:
-            # Logoet placeres her (løftet op på højde med dropdowns)
-            st.image(hold_logo, width=85)
-    
+    # Definer kolonnerne [1, 2.5, 1.2, 1.2] for at få dropdowns til højre
+    col_logo, col_spacer_mid, col_h_hold, col_h_spiller = st.columns([1, 2.5, 1.2, 1.2])
+
     with col_h_hold:
         valgt_hold = st.selectbox("Hold", sorted(list(team_map.keys())), label_visibility="collapsed")
         valgt_uuid_hold = team_map[valgt_hold]
     
+    # HENT OG VIS LOGOET HER (Løftet op på højde med dropdowns)
+    hold_logo = get_logo_img(valgt_uuid_hold)
+    with col_logo:
+        if hold_logo:
+            st.image(hold_logo, width=85)
+
+    # 1. HENT DATA MED ACTION_LABEL
+    with st.spinner("Henter spillerdata..."):
+        sql = f"""
+            SELECT 
+                e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, 
+                TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME) as VISNINGSNAVN, 
+                e.PLAYER_OPTAUUID, e.EVENT_OUTCOME as OUTCOME,
+                TO_CHAR(e.EVENT_TIMESTAMP, 'YYYY-MM-DD HH24:MI:SS') as EVENT_TIMESTAMP_STR,
+                LISTAGG(q.QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY q.QUALIFIER_QID) as QUALIFIERS
+            FROM {DB}.OPTA_EVENTS e
+            JOIN (SELECT DISTINCT PLAYER_OPTAUUID, FIRST_NAME, LAST_NAME FROM {DB}.OPTA_PLAYERS WHERE FIRST_NAME IS NOT NULL) p 
+                ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
+            LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
+            WHERE e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid_hold}' 
+            AND e.EVENT_TIMESTAMP >= '2025-07-01'
+            GROUP BY 1, 2, 3, 4, 5, 6, 7
+        """
+        df_all = conn.query(sql)
+        
+        if df_all is not None and not df_all.empty:
+            df_all['qual_list'] = df_all['QUALIFIERS'].fillna('').str.split(',')
+            df_all['Action_Label'] = df_all.apply(get_action_label, axis=1)
+
+    spiller_liste = sorted(df_all['VISNINGSNAVN'].unique())
+    
     with col_h_spiller:
-        # (Sørg for df_all er hentet før dette punkt)
-        spiller_liste = sorted(df_all['VISNINGSNAVN'].unique())
         valgt_spiller = st.selectbox("Spiller", spiller_liste, label_visibility="collapsed")
         valgt_player_uuid = df_all[df_all['VISNINGSNAVN'] == valgt_spiller]['PLAYER_OPTAUUID'].iloc[0]
         df_spiller = df_all[df_all['VISNINGSNAVN'] == valgt_spiller].copy()
-    
-    # --- TABS ---
+
+    # 3. HENT FYSISK DATA (Flyttet herop for at undgå 'local variable' fejl)
+    df_phys = get_physical_data(valgt_spiller, valgt_player_uuid, valgt_hold, conn)
+
+    # --- TABS (Placeret under dropdowns/logo) ---
     t_profile, t_pitch, t_phys, t_stats, t_compare = st.tabs([
         "Spillerprofil", "Spilleraktioner", "Fysisk data", "Statistik", "Sammenligning"
     ])
     
-    # --- TAB INDHOLD (Løser 'col_main' fejlen) ---
+    # --- TAB INDHOLD ---
     with t_profile:
         # Her definerer vi col_card (venstre) og col_main (højre) inde i fanen
         col_card, col_main = st.columns([1, 3.5])
         
         with col_card:
-            # Beregn værdier dynamisk (Brug dine gemte værdier: SEASONNAME = "2025/2026" osv.)
-            antall_kampe = df_phys['MATCH_DATE'].nunique() if df_phys is not None else 0
-            total_minutter = int(pd.to_numeric(df_phys['MINUTES'], errors='coerce').sum()) if df_phys is not None else 0
+            # Beregn værdier dynamisk for den valgte spiller
+            antall_kampe = 0
+            total_minutter = 0
+            
+            if df_phys is not None and not df_phys.empty:
+                df_phys['MATCH_DATE'] = pd.to_datetime(df_phys['MATCH_DATE'])
+                antall_kampe = df_phys['MATCH_DATE'].nunique()
+                total_minutter = int(pd.to_numeric(df_phys['MINUTES'], errors='coerce').sum())
+                
             maal = len(df_spiller[df_spiller['EVENT_TYPEID'] == 16])
-            assists = len(df_spiller[df_spiller['QUALIFIERS'].fillna('').str.contains('154')])
-    
+            # 154 er Opta Qualifier for Assist
+            assists = len(df_spiller[df_spiller['QUALIFIERS'].fillna('').str.contains('154')]) 
+
+            # Den blå boks (uden logo, da det er flyttet op)
             st.markdown(f"""
                 <div class="profile-card">
                     <h5 style='margin:0;'>{valgt_spiller}</h5>
-                    <p style='margin:0; opacity:0.8;'>Sæson: 2025/2026</p>
+                    <p style='margin:0; opacity:0.8;'>Sæson: {CURRENT_SEASON}</p>
                     <hr style='border-color: rgba(255,255,255,0.2);'>
                     <table style='width:100%; font-size:14px;'>
                         <tr><td>Kampe:</td><td style='text-align:right;'><b>{antall_kampe}</b></td></tr>
@@ -157,15 +190,25 @@ def vis_side(dp=None):
                 </div>
             """, unsafe_allow_html=True)
             
+            # (Resten af volumen-bars koden lander her...)
             st.write("")
             st.write("Volumen i forhold til liga")
-            # Indsæt dine volumen-bars her...
-    
-        with col_main:
-            # Her placeres selve statistikken (Donuts osv.)
-            st.markdown("<h4 style='text-align:center; color:#003366;'>Spillerstatistik</h4>", unsafe_allow_html=True)
+            metrics = {
+                "Afleveringer": 29.2,
+                "Dueller": 25.7,
+                "Boldtab": 11.6,
+                "Skud": 1.7,
+                "xG": 0.3,
+                "Pasnings %": 77.4
+            }
+            for m, val in metrics.items():
+                st.write(f"<div style='font-size:12px; margin-bottom:-10px;'>{m} <span style='float:right;'>{val}</span></div>", unsafe_allow_html=True)
+                st.progress(min(val/50 if "Pasning" not in m else val/100, 1.0))
 
-        # Beregn værdier fra data (Her bruger vi dummy-tal eller simpel optælling)
+        with col_main:
+            st.markdown("<h4 style='text-align:center; color:#003366;'>Spillerstatistik</h4>", unsafe_allow_html=True)
+            
+            # Beregn værdier fra data for Donuts
             pas_df = df_spiller[df_spiller['EVENT_TYPEID'] == 1]
             pas_total = len(pas_df)
             pas_acc = int((pas_df['OUTCOME'].sum() / pas_total * 100)) if pas_total > 0 else 0
