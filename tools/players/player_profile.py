@@ -178,75 +178,61 @@ def vis_side(dp=None):
     t_profile, t_pitch, t_phys, t_stats, t_compare = st.tabs(["Spillerprofil", "Spilleraktioner", "Fysisk data", "Statistik", "Sammenligning"])
 
     with t_profile:
-        # 1. Beregn de rå tal for ALLE spillere (Udvidet med 4 ekstra kategorier)
-        truppen_stats = df_all.groupby('VISNINGSNAVN').agg(
-            Pasninger=('EVENT_TYPEID', lambda x: (x == 1).sum()),
-            Afslutninger=('EVENT_TYPEID', lambda x: x.isin([13, 14, 15, 16]).sum()),
-            Mål=('EVENT_TYPEID', lambda x: (x == 16).sum()),
-            Erobringer=('EVENT_TYPEID', lambda x: x.isin([7, 8, 12, 49]).sum()),
-            # Nye kategorier
-            Driblinger=('EVENT_TYPEID', lambda x: (x == 3).sum()),
-            Indlæg=('qual_list', lambda x: x.apply(lambda q: '2' in q).sum()),
-            Chancer_skabt=('qual_list', lambda x: x.apply(lambda q: '210' in q).sum()),
-            Boldtab=('EVENT_TYPEID', lambda x: (x == 7).sum())
-        )
-        
-        # 2. Beregn rank (Husk at 'Boldtab' måske skal rankes omvendt, hvis lavt er godt)
-        ranks = truppen_stats.rank(ascending=False, method='min').astype(int)
-        
-        # Hvis 'Boldtab' skal rankes med 1st = færrest tab:
-        ranks['Boldtab'] = truppen_stats['Boldtab'].rank(ascending=True, method='min').astype(int)
-                
-        spiller_ranks = ranks.loc[valgt_spiller]
-        
-        col_info, col_charts = st.columns([1, 4])
-        
-        with col_info:
-            st.markdown(f"""
-                <div style="margin-bottom: 10px;">
-                    <p style="font-size: 18px; font-weight: bold; margin: 0; line-height: 1.2;">{valgt_spiller}</p>
-                    <p style="font-size: 12px; color: gray; margin: 0;">{valgt_hold}</p>
-                </div>
-            """, unsafe_allow_html=True)
-            
-            # RETTELSE: Tjek om logoet er en gyldig PIL Image instans
-            if hold_logo is not None and hasattr(hold_logo, 'size'): 
-                st.image(hold_logo, width=60)
-            
-            st.markdown("---")
-            st.caption("Sammenlignet med holdets bedste.")
+    # 1. Beregn stats (Husk at tilføje de nye kolonner her i din .agg funktion!)
+    # Jeg har tilføjet 4 eksempler mere her:
+    truppen_stats = df_all.groupby('VISNINGSNAVN').agg(
+        Pasninger=('EVENT_TYPEID', lambda x: (x == 1).sum()),
+        Afslutninger=('EVENT_TYPEID', lambda x: x.isin([13, 14, 15, 16]).sum()),
+        Mål=('EVENT_TYPEID', lambda x: (x == 16).sum()),
+        Erobringer=('EVENT_TYPEID', lambda x: x.isin([7, 8, 12, 49]).sum()),
+        Driblinger=('EVENT_TYPEID', lambda x: (x == 3).sum()),
+        Chancer_skabt=('EVENT_TYPEID', lambda x: (x == 10).sum()), # Eksempel ID
+        Indlæg=('EVENT_TYPEID', lambda x: (x == 2).sum()), # Eksempel ID
+        Key_Passes=('EVENT_TYPEID', lambda x: (x == 11).sum()) # Eksempel ID
+    )
+    
+    ranks = truppen_stats.rank(ascending=False, method='min').astype(int)
+    spiller_ranks = ranks.loc[valgt_spiller]
 
-        with col_charts:
-    # Definer alle 8 kategorier
-    alle_kategorier = [
-        {"label": "PASNINGER", "id": "Pasninger"},
-        {"label": "AFSLUTNINGER", "id": "Afslutninger"},
-        {"label": "MÅL", "id": "Mål"},
-        {"label": "EROBRINGER", "id": "Erobringer"},
-        {"label": "DRIBLINGER", "id": "Driblinger"},
-        {"label": "INDLÆG", "id": "Indlæg"},
-        {"label": "CHANCER SKABT", "id": "Chancer_skabt"},
-        {"label": "BOLDTAB", "id": "Boldtab"}
+    # Vi laver to kolonner i toppen: En til Spiller Info og en til de første 4 charts
+    col_info, col_charts_top = st.columns([1, 4])
+
+    with col_info:
+        st.markdown(f"### {valgt_spiller}")
+        st.caption(f"{valgt_hold}")
+        if hold_logo is not None: st.image(hold_logo, width=80)
+        st.markdown("---")
+        st.caption("Sammenlignet med holdets bedste.")
+
+    # Listen med de 8 kategorier
+    kat_liste = [
+        ("PASNINGER", "Pasninger"), ("AFSLUTNINGER", "Afslutninger"), 
+        ("MÅL", "Mål"), ("EROBRINGER", "Erobringer"),
+        ("DRIBLINGER", "Driblinger"), ("CHANCER SKABT", "Chancer_skabt"),
+        ("INDLÆG", "Indlæg"), ("KEY PASSES", "Key_Passes")
     ]
 
-    # Del listen op i bidder af 4
-    for i in range(0, len(alle_kategorier), 4):
-        bid = alle_kategorier[i:i+4]
-        cols = st.columns(4)
-        
-        for j, kat_info in enumerate(bid):
-            k_id = kat_info["id"]
-            with cols[j]:
-                # Overskrift
-                st.markdown(f"<p style='text-align:center; font-weight:bold; font-size:11px; margin-bottom:0px;'>{kat_info['label']}</p>", unsafe_allow_html=True)
-                
-                # Data
-                aktuel = truppen_stats.loc[valgt_spiller, k_id]
-                maks = truppen_stats[k_id].max()
-                rank = get_ordinal(ranks.loc[valgt_spiller, k_id])
-                
-                # Donut
-                fig = create_relative_donut(aktuel, maks, kat_info['label'], rank)
+    # RÆKKE 1 (De første 4 - placeres i col_charts_top)
+    with col_charts_top:
+        cols1 = st.columns(4)
+        for i in range(4):
+            label, k_id = kat_liste[i]
+            with cols1[i]:
+                st.markdown(f"<p style='text-align:center; font-weight:bold; font-size:12px; margin-bottom:-20px;'>{label}</p>", unsafe_allow_html=True)
+                fig = create_relative_donut(truppen_stats.loc[valgt_spiller, k_id], truppen_stats[k_id].max(), label, get_ordinal(spiller_ranks[k_id]))
+                st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+
+    # RÆKKE 2 (De næste 4 - placeres UNDER de to første kolonner, så de fylder hele bredden eller flugter)
+    # For at de flugter perfekt med de øverste, bruger vi samme layout igen:
+    _, col_charts_bottom = st.columns([1, 4]) # Den tomme '_' gør at den starter samme sted som rækken over
+    
+    with col_charts_bottom:
+        cols2 = st.columns(4)
+        for i in range(4, 8):
+            label, k_id = kat_liste[i]
+            with cols2[i-4]:
+                st.markdown(f"<p style='text-align:center; font-weight:bold; font-size:12px; margin-bottom:-20px;'>{label}</p>", unsafe_allow_html=True)
+                fig = create_relative_donut(truppen_stats.loc[valgt_spiller, k_id], truppen_stats[k_id].max(), label, get_ordinal(spiller_ranks[k_id]))
                 st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
             
     with t_pitch:
