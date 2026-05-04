@@ -165,7 +165,7 @@ def vis_side(dp=None):
                 "Heatmap": "Viser spillerens generelle bevægelsesmønster.",
                 "Berøringer": "Alle aktioner i kontakt med bolden.",
                 "Afslutninger": "Oversigt over skudforsøg (Mål = kvadrat).",
-                "Erobringer": "Tacklinger og interceptions."
+                "Erobringer": "Tacklinger og interceptions (Type 7, 8, 12, 49)."
             }
             
             c_side_spacer, c_desc_col, c_menu_col = st.columns([0.2, 2.0, 1.0])
@@ -174,70 +174,77 @@ def vis_side(dp=None):
             with c_desc_col:
                 st.markdown(f'<div style="text-align: right; margin-top: 8px;"><span style="color: #666; font-size: 0.85rem;">{descriptions.get(visning)}</span></div>', unsafe_allow_html=True)
 
+            # --- Forbered statisk bane ---
             pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
             fig_static, ax = pitch.draw(figsize=(10, 7))
             draw_player_info_box(ax, hold_logo, valgt_spiller, CURRENT_SEASON, visning)
 
             df_plot = df_spiller.dropna(subset=['EVENT_X', 'EVENT_Y'])
             
+            # --- Logik for de forskellige visninger ---
             if visning == "Afslutninger":
                 d = df_plot[df_plot['EVENT_TYPEID'].isin([13, 14, 15, 16])].copy()
                 if not d.empty:
-                    # Identificer modstander
+                    # Modstander-logik
                     def get_opp_name(row):
                         h_uuid = str(row['HOMECONTESTANT_OPTAUUID']).lower().replace('t','')
                         a_uuid = str(row['AWAYCONTESTANT_OPTAUUID']).lower().replace('t','')
                         my_uuid = str(valgt_uuid_hold).lower().replace('t','')
                         return row['AWAYCONTESTANT_NAME'] if h_uuid == my_uuid else row['HOMECONTESTANT_NAME']
-
                     d['OPPONENT_CLEAN'] = d.apply(get_opp_name, axis=1)
                     
-                    # Tegn på Matplotlib (Statisk)
+                    # Tegn statiske punkter (Matplotlib)
                     goals = d[d['EVENT_TYPEID'] == 16]
                     misses = d[d['EVENT_TYPEID'] != 16]
                     ax.scatter(misses.EVENT_X, misses.EVENT_Y, color='grey', s=80, edgecolors='black', alpha=0.4)
                     ax.scatter(goals.EVENT_X, goals.EVENT_Y, color='#cc0000', s=150, marker='s', edgecolors='black', zorder=5)
 
-                    # Plotly Overlay (Interaktivt)
+                    # Lav interaktivt Plotly lag
                     fig_overlay = go.Figure()
                     fig_overlay.add_trace(go.Scatter(
                         x=d.EVENT_X, y=d.EVENT_Y,
                         mode='markers',
-                        marker=dict(size=20, color='rgba(0,0,0,0)'), # Usynlige men klikbare
+                        marker=dict(size=25, color='rgba(0,0,0,0)'), # Usynlige hits-zones
                         hovertemplate="<b>vs. %{customdata[0]}</b><br>Type: %{customdata[3]}<br>xG: %{customdata[2]}<br>Minut: %{customdata[4]}'<extra></extra>",
                         customdata=np.stack((
-                            d['OPPONENT_CLEAN'], 
-                            d['EVENT_TIMESTAMP_STR'], 
-                            d['XG'].map('{:.2f}'.format),
-                            d['Action_Label'],
-                            d['EVENT_MINUTE'].fillna('?') # Rettet her
+                            d['OPPONENT_CLEAN'], d['EVENT_TIMESTAMP_STR'], 
+                            d['XG'].map('{:.2f}'.format), d['Action_Label'],
+                            d['EVENT_MINUTE'].fillna('?')
                         ), axis=-1)
                     ))
                     fig_overlay.update_layout(
                         xaxis=dict(range=[0, 100], visible=False, fixedrange=True),
                         yaxis=dict(range=[0, 100], visible=False, fixedrange=True),
                         margin=dict(l=0, r=0, t=0, b=0),
-                        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)"
+                        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", showlegend=False
                     )
-                    
-                    # CSS Overlap
+
+                    # CSS magi til Overlay
                     st.markdown('<div style="position: relative;">', unsafe_allow_html=True)
                     st.pyplot(fig_static)
-                    st.markdown('<div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;">', unsafe_allow_html=True)
+                    # Dette lag sikrer at Plotly ligger PRÆCIS ovenpå Matplotlib-billedet
+                    st.markdown('<div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 999;">', unsafe_allow_html=True)
                     st.plotly_chart(fig_overlay, use_container_width=True, config={'displayModeBar': False})
                     st.markdown('</div></div>', unsafe_allow_html=True)
                 else:
                     st.pyplot(fig_static)
-            else:
-                # Standard Heatmap / Berøringer logik
-                if visning == "Heatmap":
-                    pitch.kdeplot(df_plot.EVENT_X, df_plot.EVENT_Y, ax=ax, cmap='Blues', fill=True, alpha=0.6, levels=50)
-                elif visning == "Berøringer":
-                    touch_ids = [1, 3, 7, 10, 11, 12, 13, 14, 15, 16]
-                    d = df_plot[df_plot['EVENT_TYPEID'].isin(touch_ids)]
-                    ax.scatter(d.EVENT_X, d.EVENT_Y, color='#084594', s=40, edgecolors='white', alpha=0.5)
+
+            elif visning == "Erobringer":
+                # TypeID 7: Tackling, 8: Interception, 12: Clearing, 49: Recovery
+                d_ero = df_plot[df_plot['EVENT_TYPEID'].isin([7, 8, 12, 49])]
+                ax.scatter(d_ero.EVENT_X, d_ero.EVENT_Y, color='orange', s=100, edgecolors='white', alpha=0.7)
                 st.pyplot(fig_static, use_container_width=True)
 
+            elif visning == "Heatmap":
+                pitch.kdeplot(df_plot.EVENT_X, df_plot.EVENT_Y, ax=ax, cmap='Blues', fill=True, alpha=0.6, levels=50)
+                st.pyplot(fig_static, use_container_width=True)
+
+            elif visning == "Berøringer":
+                touch_ids = [1, 3, 7, 10, 11, 12, 13, 14, 15, 16]
+                d_touch = df_plot[df_plot['EVENT_TYPEID'].isin(touch_ids)]
+                ax.scatter(d_touch.EVENT_X, d_touch.EVENT_Y, color='#084594', s=40, edgecolors='white', alpha=0.5)
+                st.pyplot(fig_static, use_container_width=True)
+                
     with t_phys:
         df_phys = get_physical_data(valgt_spiller, valgt_player_uuid, valgt_hold, conn)
         if df_phys is not None and not df_phys.empty:
