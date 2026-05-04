@@ -241,7 +241,7 @@ def vis_side(dp=None):
             chart_cols = st.columns(4) # Nu med 4 kolonner
             for i, kat in enumerate(kategorier):
                 with chart_cols[i]:
-                    st.markdown(f"<p style='text-align:center; font-weight:bold; font-size:12px; margin-bottom:-20px;'>{kat['label']}</p>", unsafe_allow_html=True)
+                    st.markdown(f"<p style='text-align:center; font-weight:bold; font-size:12px; margin-bottom:0px;'>{kat['label']}</p>", unsafe_allow_html=True)
                     fig = create_relative_donut(kat["aktuel"], kat["maks"], kat["label"], kat["rank"])
                     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
             
