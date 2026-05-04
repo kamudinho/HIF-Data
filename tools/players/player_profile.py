@@ -156,21 +156,150 @@ def vis_side():
             c4.plotly_chart(create_relative_donut(s_val['a'], truppen['a'].max(), "Totale Aktioner", "#FFD700"), config={'displayModeBar': False})
 
     with t_pitch:
-        col_p1, col_p2 = st.columns([1, 4])
-        with col_p1:
-            labels = sorted([l for l in df_spiller['Action_Label'].unique() if l])
-            valgt_label = st.multiselect("Vælg aktioner", labels, default=[l for l in ["Shot", "Goal"] if l in labels])
-        with col_p2:
-            # Pitch visning ført tilbage til stabil visning
-            pitch = Pitch(pitch_type='opta', pitch_color='#fdfdfd', line_color='#555555', linewidth=1)
-            fig, ax = pitch.draw(figsize=(12, 8))
-            draw_player_info_box(ax, hold_logo, valgt_spiller, SEASONNAME, "Positionskort")
-            
-            plot_df = df_spiller[df_spiller['Action_Label'].isin(valgt_label)]
-            if not plot_df.empty:
-                pitch.scatter(plot_df.EVENT_X, plot_df.EVENT_Y, ax=ax, alpha=0.8, s=120, 
-                              edgecolors='#003366', facecolors='white', linewidth=1.5, zorder=3)
-            st.pyplot(fig)
+
+        descriptions = {
+
+            "Heatmap": "Viser spillerens generelle bevægelsesmønster og intensitet på banen.",
+
+            "Berøringer": "Alle aktioner hvor spilleren har været i kontakt med bolden.",
+
+            "Afslutninger": "Oversigt over alle skudforsøg (Mål markeres med stjerne).",
+
+            "Erobringer": "Tacklinger, bolderobringer og opsnappede afleveringer."
+
+        }
+
+        touch_ids = [1, 3, 7, 10, 11, 12, 13, 14, 15, 16, 42, 44, 49, 50, 51, 54, 61, 73]
+
+        df_filtreret = df_spiller[~df_spiller['Action_Label'].isin(['Pasning', 'Indkast'])]
+
+        akt_stats = pd.DataFrame()
+
+        if not df_filtreret.empty:
+
+            akt_stats = df_filtreret.groupby('Action_Label').agg(Total=('OUTCOME', 'count'), Succes=('OUTCOME', 'sum')).sort_values('Total', ascending=False)
+
+
+
+        c_stats_side, c_buffer, c_pitch_side = st.columns([1, 0.05, 2.2])
+
+
+
+        with c_stats_side:
+
+            total_akt = len(df_spiller)
+
+            pas_df = df_spiller[df_spiller['EVENT_TYPEID'] == 1]
+
+            pas_count = len(pas_df)
+
+            pas_acc = (pas_df['OUTCOME'].sum() / pas_count * 100) if pas_count > 0 else 0
+
+            chancer_skabt = akt_stats[akt_stats.index.str.contains("Key Pass|assist|Stor chance", case=False, na=False)]['Total'].sum() if not akt_stats.empty else 0
+
+            shots_count = len(df_spiller[df_spiller['EVENT_TYPEID'].isin([13, 14, 15, 16])])
+
+            cross_count = len(df_spiller[df_spiller['qual_list'].apply(lambda x: "2" in x if isinstance(x, list) else False)])
+
+            erob_count = len(df_spiller[df_spiller['EVENT_TYPEID'].isin([7, 8, 12, 49])])
+
+            touch_count = len(df_spiller[df_spiller['EVENT_TYPEID'].isin(touch_ids)])
+
+
+
+            m_r1 = st.columns(4)
+
+            m_r1[0].metric("Aktioner", total_akt)
+
+            m_r1[1].metric("Berøringer", touch_count)
+
+            m_r1[2].metric("Pasninger", pas_count)
+
+            m_r1[3].metric("Pasning %", f"{int(pas_acc)}%")
+
+            m_r2 = st.columns(4)
+
+            m_r2[0].metric("Skud", shots_count)
+
+            m_r2[1].metric("Chancer", int(chancer_skabt))
+
+            m_r2[2].metric("Indlæg", cross_count)
+
+            m_r2[3].metric("Erobringer", erob_count)
+
+
+
+            st.markdown("<hr style='margin: 15px 0; opacity: 0.5;'>", unsafe_allow_html=True)
+
+            st.write("**Top 10: Aktioner**")
+
+            if not akt_stats.empty:
+
+                bare_antal = ['Erobring', 'Clearing', 'Boldtab', 'Frispark vundet', 'Blokeret skud', 'Interception']
+
+                for akt, row in akt_stats.head(10).iterrows():
+
+                    total, succes = int(row['Total']), int(row['Succes'])
+
+                    stats_html = f"<b>{total}</b>" if akt in bare_antal else f"{succes}/{total} <b>({int(succes/total*100)}%)</b>"
+
+                    st.markdown(f'<div style="display:flex; justify-content:space-between; font-size:11px; border-bottom:0.5px solid #eee; padding:5px 0;"><span>{akt}</span><span style="font-family:monospace;">{stats_html}</span></div>', unsafe_allow_html=True)
+
+
+
+        with c_pitch_side:
+
+            c_side_spacer, c_desc_col, c_menu_col = st.columns([0.2, 2.0, 1.0])
+
+            with c_menu_col:
+
+                visning = st.selectbox("Visning", list(descriptions.keys()), key="pitch_view_sel", label_visibility="collapsed")
+
+            with c_desc_col:
+
+                st.markdown(f'<div style="text-align: right; margin-top: 8px; line-height: 1.2;"><span style="color: #666; font-size: 0.85rem;">{descriptions.get(visning)}</span></div>', unsafe_allow_html=True)
+
+
+
+            pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
+
+            fig, ax = pitch.draw(figsize=(10, 7))
+
+            draw_player_info_box(ax, hold_logo, valgt_spiller, CURRENT_SEASON, visning)
+
+
+
+            df_plot = df_spiller.dropna(subset=['EVENT_X', 'EVENT_Y'])
+
+            if not df_plot.empty:
+
+                if visning == "Heatmap":
+
+                    pitch.kdeplot(df_plot.EVENT_X, df_plot.EVENT_Y, ax=ax, cmap='Blues', fill=True, alpha=0.6, levels=50)
+
+                elif visning == "Berøringer":
+
+                    d = df_plot[df_plot['EVENT_TYPEID'].isin(touch_ids)]
+
+                    ax.scatter(d.EVENT_X, d.EVENT_Y, color='#084594', s=40, edgecolors='white', alpha=0.5)
+
+                elif visning == "Afslutninger":
+
+                    d = df_plot[df_plot['EVENT_TYPEID'].isin([13, 14, 15, 16])]
+
+                    goals = d[d['EVENT_TYPEID'] == 16]; misses = d[d['EVENT_TYPEID'].isin([13, 14, 15])]
+
+                    ax.scatter(misses.EVENT_X, misses.EVENT_Y, color='grey', s=60, edgecolors='black', alpha=0.7)
+
+                    ax.scatter(goals.EVENT_X, goals.EVENT_Y, color='red', s=120, marker='s', edgecolors='black', zorder=5)
+
+                elif visning == "Erobringer":
+
+                    d = df_plot[df_plot['EVENT_TYPEID'].isin([7, 8, 12, 49])]
+
+                    ax.scatter(d.EVENT_X, d.EVENT_Y, color='orange', s=100, edgecolors='white')
+
+            st.pyplot(fig, use_container_width=True)
 
     with t_phys:
         if df_phys is not None and not df_phys.empty:
