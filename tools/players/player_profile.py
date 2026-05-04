@@ -201,7 +201,7 @@ def vis_side(dp=None):
             for i, kat in enumerate(kategorier):
                 with chart_cols[i]:
                     # RETTELSE: Tilføj overskrift manuelt over grafen
-                    st.markdown(f"<p style='text-align:center; font-weight:bold; font-size:12px; color:#1E1E1E; margin-bottom:-20px;'>{kat['label']}</p>", unsafe_allow_html=True)
+                    st.markdown(f"<p style='text-align:center; font-weight:bold; font-size:12px; color:#1E1E1E; margin-bottom:20px;'>{kat['label']}</p>", unsafe_allow_html=True)
                     
                     fig = create_relative_donut(kat["aktuel"], kat["maks"], kat["label"])
                     fig.update_layout(height=180) # Øget højde lidt for at give plads til overskrift
