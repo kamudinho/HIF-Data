@@ -236,7 +236,6 @@ def vis_side(dp=None):
         c_stats_side, c_buffer, c_pitch_side = st.columns([1, 0.05, 2.2])
 
         with c_stats_side:
-            st.markdown(f'<div class="player-header" style="margin: 0; line-height: 1;">{valgt_spiller}</div>', unsafe_allow_html=True)
             total_akt = len(df_spiller)
             pas_df = df_spiller[df_spiller['EVENT_TYPEID'] == 1]
             pas_count = len(pas_df)
