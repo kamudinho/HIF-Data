@@ -158,24 +158,30 @@ def vis_side(dp=None):
 
     with t_pitch:
         # --- UI Layout ---
+        # Vi holder fast i din opdeling, men gør venstre side mere ren
         c_stats_side, c_buffer, c_pitch_side = st.columns([1, 0.05, 2.2])
 
-        # 1. VENSTRE SIDE: Top Aktioner (Statistik)
+        # 1. VENSTRE SIDE: Top Aktioner (Forenklet visning)
         with c_stats_side:
             st.markdown('<p class="player-header">Top Aktioner</p>', unsafe_allow_html=True)
             
-            # Beregn de mest hyppige aktioner for spilleren
+            # Vi tæller alle aktioner for spilleren
             if not df_spiller.empty:
-                top_actions = df_spiller['Action_Label'].value_counts().head(8)
+                # Vi bruger 'Action_Label' til at gruppere de mest hyppige handlinger
+                top_actions = df_spiller['Action_Label'].value_counts().head(10)
+                
                 for action, count in top_actions.items():
+                    # Opretter rækker der minder om dem i Skærmbillede 2026-05-04 kl. 20.58.53.png
                     col_txt, col_num = st.columns([3, 1])
-                    col_txt.markdown(f"**{action}**")
-                    col_num.markdown(f'<div style="text-align: right;">{count}</div>', unsafe_allow_html=True)
-                    st.divider()
+                    with col_txt:
+                        st.markdown(f"**{action}**")
+                    with col_num:
+                        st.markdown(f'<div style="text-align: right;">{count}</div>', unsafe_allow_html=True)
+                    st.markdown("<hr style='margin: 5px 0; opacity: 0.2;'>", unsafe_allow_html=True)
             else:
-                st.info("Ingen data")
+                st.info("Ingen hændelser fundet for denne spiller.")
 
-        # 2. HØJRE SIDE: Bane-visualisering
+        # 2. HØJRE SIDE: Bane-visualisering med Overlay-fix
         with c_pitch_side:
             descriptions = {
                 "Heatmap": "Viser spillerens generelle bevægelsesmønster.",
@@ -184,14 +190,14 @@ def vis_side(dp=None):
                 "Erobringer": "Tacklinger, interceptions og recoveries."
             }
             
-            # Menu og beskrivelse i toppen af banen
+            # Menu og beskrivelse i toppen
             c_side_spacer, c_desc_col, c_menu_col = st.columns([0.1, 2.1, 1.0])
             with c_menu_col:
                 visning = st.selectbox("Visning", list(descriptions.keys()), key="pitch_view_sel", label_visibility="collapsed")
             with c_desc_col:
                 st.markdown(f'<div style="text-align: right; margin-top: 8px;"><span style="color: #666; font-size: 0.85rem;">{descriptions.get(visning)}</span></div>', unsafe_allow_html=True)
 
-            # Forbered Pitch
+            # Pitch setup
             pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
             fig_static, ax = pitch.draw(figsize=(10, 7))
             draw_player_info_box(ax, hold_logo, valgt_spiller, CURRENT_SEASON, visning)
@@ -199,34 +205,23 @@ def vis_side(dp=None):
             df_plot = df_spiller.dropna(subset=['EVENT_X', 'EVENT_Y'])
 
             if visning == "Afslutninger":
+                # Vi filtrerer skud-hændelser
                 d = df_plot[df_plot['EVENT_TYPEID'].isin([13, 14, 15, 16])].copy()
                 if not d.empty:
-                    # Modstander logik
-                    def get_opp_name(row):
-                        h_uuid = str(row['HOMECONTESTANT_OPTAUUID']).lower().replace('t','')
-                        a_uuid = str(row['AWAYCONTESTANT_OPTAUUID']).lower().replace('t','')
-                        my_uuid = str(valgt_uuid_hold).lower().replace('t','')
-                        return row['AWAYCONTESTANT_NAME'] if h_uuid == my_uuid else row['HOMECONTESTANT_NAME']
-                    d['OPPONENT_CLEAN'] = d.apply(get_opp_name, axis=1)
-
-                    # Statisk plot (Matplotlib)
+                    # Statisk tegning (Matplotlib)
                     goals = d[d['EVENT_TYPEID'] == 16]
                     misses = d[d['EVENT_TYPEID'] != 16]
                     ax.scatter(misses.EVENT_X, misses.EVENT_Y, color='grey', s=80, edgecolors='black', alpha=0.4)
                     ax.scatter(goals.EVENT_X, goals.EVENT_Y, color='#cc0000', s=150, marker='s', edgecolors='black', zorder=5)
 
-                    # Interaktivt overlay (Plotly)
+                    # Interaktivt lag (Plotly) - Dette sikrer hover-effekt
                     fig_overlay = go.Figure()
                     fig_overlay.add_trace(go.Scatter(
                         x=d.EVENT_X, y=d.EVENT_Y,
                         mode='markers',
                         marker=dict(size=22, color='rgba(0,0,0,0)'),
-                        hovertemplate="<b>vs. %{customdata[0]}</b><br>Type: %{customdata[3]}<br>xG: %{customdata[2]}<br>Minut: %{customdata[4]}'<extra></extra>",
-                        customdata=np.stack((
-                            d['OPPONENT_CLEAN'], d['EVENT_TIMESTAMP_STR'], 
-                            d['XG'].map('{:.2f}'.format), d['Action_Label'],
-                            d['EVENT_MINUTE'].fillna('?')
-                        ), axis=-1)
+                        hovertemplate="<b>Type: %{customdata[0]}</b><br>Resultat: %{customdata[1]}<extra></extra>",
+                        customdata=np.stack((d['Action_Label'], d['OUTCOME']), axis=-1)
                     ))
                     fig_overlay.update_layout(
                         xaxis=dict(range=[0, 100], visible=False, fixedrange=True),
@@ -235,7 +230,7 @@ def vis_side(dp=None):
                         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)"
                     )
                     
-                    # CSS Wrapper til at lægge Plotly ovenpå Matplotlib
+                    # Sammenfletning af de to lag
                     st.markdown('<div style="position: relative;">', unsafe_allow_html=True)
                     st.pyplot(fig_static)
                     st.markdown('<div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10;">', unsafe_allow_html=True)
@@ -244,6 +239,12 @@ def vis_side(dp=None):
                 else:
                     st.pyplot(fig_static)
 
+            elif visning == "Erobringer":
+                # Defensive aktioner (Type 7, 8, 12, 49)
+                d_def = df_plot[df_plot['EVENT_TYPEID'].isin([7, 8, 12, 49])]
+                ax.scatter(d_def.EVENT_X, d_def.EVENT_Y, color='#e67e22', s=80, edgecolors='black', alpha=0.7)
+                st.pyplot(fig_static, use_container_width=True)
+
             elif visning == "Heatmap":
                 pitch.kdeplot(df_plot.EVENT_X, df_plot.EVENT_Y, ax=ax, cmap='Blues', fill=True, alpha=0.6, levels=50)
                 st.pyplot(fig_static, use_container_width=True)
@@ -251,12 +252,6 @@ def vis_side(dp=None):
             elif visning == "Berøringer":
                 d_touch = df_plot[df_plot['EVENT_TYPEID'].isin([1, 3, 7, 10, 11, 12, 13, 14, 15, 16])]
                 ax.scatter(d_touch.EVENT_X, d_touch.EVENT_Y, color='#084594', s=40, edgecolors='white', alpha=0.5)
-                st.pyplot(fig_static, use_container_width=True)
-
-            elif visning == "Erobringer":
-                # Defensive aktioner: 7 (Tackling), 8 (Interception), 12 (Clearing), 49 (Recovery)
-                d_def = df_plot[df_plot['EVENT_TYPEID'].isin([7, 8, 12, 49])]
-                ax.scatter(d_def.EVENT_X, d_def.EVENT_Y, color='#e67e22', s=80, edgecolors='black', alpha=0.7)
                 st.pyplot(fig_static, use_container_width=True)
                 
     with t_phys:
