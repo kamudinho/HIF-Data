@@ -206,10 +206,66 @@ def vis_side(dp=None):
                     d = df_plot[df_plot['EVENT_TYPEID'].isin(touch_ids)]
                     ax.scatter(d.EVENT_X, d.EVENT_Y, color='#084594', s=40, edgecolors='white', alpha=0.5)
                 elif visning == "Afslutninger":
-                    d = df_plot[df_plot['EVENT_TYPEID'].isin([13, 14, 15, 16])]
-                    goals = d[d['EVENT_TYPEID'] == 16]; misses = d[d['EVENT_TYPEID'].isin([13, 14, 15])]
+                    # 1. Hent data
+                    d = df_plot[df_plot['EVENT_TYPEID'].isin([13, 14, 15, 16])].copy()
+                    
+                    # 2. Tegn det statiske baggrundsbillede (Matplotlib)
+                    pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
+                    fig_static, ax = pitch.draw(figsize=(10, 7))
+                    draw_player_info_box(ax, hold_logo, valgt_spiller, CURRENT_SEASON, visning)
+                    
+                    # Vi tegner de visuelle punkter på Matplotlib ax som før
+                    goals = d[d['EVENT_TYPEID'] == 16]
+                    misses = d[d['EVENT_TYPEID'].isin([13, 14, 15])]
                     ax.scatter(misses.EVENT_X, misses.EVENT_Y, color='grey', s=60, edgecolors='black', alpha=0.7)
                     ax.scatter(goals.EVENT_X, goals.EVENT_Y, color='red', s=120, marker='s', edgecolors='black', zorder=5)
+                
+                    # 3. Skab det "Invisible Overlay" med Plotly
+                    fig_overlay = go.Figure()
+                
+                    if not d.empty:
+                        # Vi mapper modstander-navne (husk at have denne info i din df)
+                        # Her antager vi at du har 'OPPONENT_NAME' i din dataframe
+                        
+                        fig_overlay.add_trace(go.Scatter(
+                            x=d.EVENT_X,
+                            y=d.EVENT_Y,
+                            mode='markers',
+                            marker=dict(
+                                size=15, 
+                                color='rgba(0,0,0,0)', # FULDSTÆNDIG GENNEMSIGTIG
+                            ),
+                            # Her designer vi hover-boksen
+                            hovertemplate=(
+                                "<b>vs. %{customdata[0]}</b><br>" +
+                                "Minut: %{customdata[1]}'<br>" +
+                                "xG: %{customdata[2]}<br>" +
+                                "<extra></extra>"
+                            ),
+                            customdata=np.stack((
+                                d['OPPONENT_NAME'].fillna('Ukendt'), 
+                                d['EVENT_MINUTE'].fillna('-'),
+                                d['XG'].fillna(0.0).apply(lambda x: f"{x:.2f}")
+                            ), axis=-1)
+                        ))
+                
+                    # Konfigurer overlay-layout så det matcher Opta-banen (0-100)
+                    fig_overlay.update_layout(
+                        xaxis=dict(range=[0, 100], visible=False, fixedrange=True),
+                        yaxis=dict(range=[0, 100], visible=False, fixedrange=True, scaleanchor="x"),
+                        margin=dict(l=0, r=0, t=0, b=0),
+                        showlegend=False,
+                        plot_bgcolor="rgba(0,0,0,0)", # Gennemsigtig baggrund
+                        paper_bgcolor="rgba(0,0,0,0)",
+                        hoverlabel=dict(bgcolor="white", font_size=12)
+                    )
+                
+                    # 4. Vis Matplotlib i bunden og Plotly ovenpå
+                    st.pyplot(fig_static) # Bevar det visuelle
+                    
+                    # Flyt Plotly op så den dækker over Matplotlib (kræver lidt CSS eller blot st.plotly_chart efter)
+                    # Den mest stabile Streamlit-måde er at bruge Plotly til det HELE i denne tab:
+                    # st.plotly_chart(fig_overlay, use_container_width=True, config={'displayModeBar': False})
                 elif visning == "Erobringer":
                     d = df_plot[df_plot['EVENT_TYPEID'].isin([7, 8, 12, 49])]
                     ax.scatter(d.EVENT_X, d.EVENT_Y, color='orange', s=100, edgecolors='white')
