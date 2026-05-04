@@ -122,6 +122,8 @@ def vis_side(dp=None):
     valgt_hold = col_h_hold.selectbox("Hold", sorted(list(team_map.keys())), label_visibility="collapsed")
     valgt_uuid_hold = team_map[valgt_hold]
 
+    hold_logo = get_logo_img(valgt_uuid_hold)
+
     # 2. HENT DATA MED ACTION_LABEL
     with st.spinner("Henter spillerdata..."):
         sql = f"""
@@ -173,6 +175,10 @@ def vis_side(dp=None):
         assists = len(df_spiller[df_spiller['QUALIFIERS'].fillna('').str.contains('154')]) 
 
         with col_card:
+            # VIS LOGOET HVIS DET FINDES
+            if hold_logo:
+                st.image(hold_logo, width=80)
+                
             st.markdown(f"""
                 <div class="profile-card">
                     <h5 style='margin:0;'>{valgt_spiller}</h5>
