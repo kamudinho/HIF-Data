@@ -24,7 +24,6 @@ CURRENT_SEASON = "2025/2026"
 
 # --- HJÆLPEFUNKTIONER ---
 @st.cache_data(ttl=3600)
-@st.cache_data(ttl=3600)
 def get_logo_img(opta_uuid):
     if not opta_uuid: return None
     uuid_clean = str(opta_uuid).lower().replace('t', '')
