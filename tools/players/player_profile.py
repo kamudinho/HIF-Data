@@ -60,7 +60,7 @@ def create_relative_donut(player_val, max_val, label, rank_text, color="#df003b"
     ))
     
     fig.update_layout(
-        showlegend=False, margin=dict(t=0, b=0, l=0, r=0), height=130, width=130,
+        showlegend=False, margin=dict(t=0, b=0, l=0, r=0), height=110, width=130,
         annotations=[dict(
             # Her viser vi nu rank_text i stedet for procent
             text=f"<b>{player_val}</b><br><span style='font-size:12px; color:#df003b; font-weight:bold;'>{rank_text}</span>", 
@@ -218,7 +218,7 @@ def vis_side(dp=None):
             for i in range(4):
                 label, k_id = kat_liste[i]
                 with cols1[i]:
-                    st.markdown(f"<p style='text-align:center; font-weight:bold; font-size:12px; margin-bottom:-20px;'>{label}</p>", unsafe_allow_html=True)
+                    st.markdown(f"<p style='text-align:center; font-weight:bold; font-size:12px; margin-bottom:0px;'>{label}</p>", unsafe_allow_html=True)
                     fig = create_relative_donut(truppen_stats.loc[valgt_spiller, k_id], truppen_stats[k_id].max(), label, get_ordinal(spiller_ranks[k_id]))
                     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
     
@@ -231,7 +231,7 @@ def vis_side(dp=None):
             for i in range(4, 8):
                 label, k_id = kat_liste[i]
                 with cols2[i-4]:
-                    st.markdown(f"<p style='text-align:center; font-weight:bold; font-size:12px; margin-bottom:-20px;'>{label}</p>", unsafe_allow_html=True)
+                    st.markdown(f"<p style='text-align:center; font-weight:bold; font-size:12px; margin-bottom:0px;'>{label}</p>", unsafe_allow_html=True)
                     fig = create_relative_donut(truppen_stats.loc[valgt_spiller, k_id], truppen_stats[k_id].max(), label, get_ordinal(spiller_ranks[k_id]))
                     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
             
