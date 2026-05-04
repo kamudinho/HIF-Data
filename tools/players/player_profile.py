@@ -37,6 +37,25 @@ def get_logo_img(opta_uuid):
     except: 
         return None
 
+def create_relative_donut(player_val, max_val, label, color="#003366"):
+    """Din originale logik til sammenligning med truppens maks"""
+    base_max = max(max_val, player_val, 1)
+    reminder = max(0, base_max - player_val)
+    fig = go.Figure(go.Pie(
+        values=[player_val, reminder],
+        hole=0.7,
+        marker_colors=[color, "#EEEEEE"],
+        textinfo='none',
+        hoverinfo='none'
+    ))
+    pct = int((player_val / base_max) * 100) if base_max > 0 else 0
+    fig.update_layout(
+        showlegend=False, margin=dict(t=0, b=0, l=0, r=0), height=130, width=130,
+        annotations=[dict(text=f"{player_val}<br><span style='font-size:10px;'>{pct}%</span>", 
+                     x=0.5, y=0.5, font_size=14, showarrow=False, font_family="Arial Black")]
+    )
+    return fig
+
 def draw_player_info_box(ax, team_logo, player_name, season_str, category_str):
     if team_logo:
         ax_l = ax.inset_axes([0.02, 0.88, 0.07, 0.07], transform=ax.transAxes)
@@ -143,8 +162,24 @@ def vis_side(dp=None):
     valgt_player_uuid = df_all[df_all['VISNINGSNAVN'] == valgt_spiller]['PLAYER_OPTAUUID'].iloc[0]
     df_spiller = df_all[df_all['VISNINGSNAVN'] == valgt_spiller].copy()
 
-    t_pitch, t_phys, t_stats, t_compare = st.tabs(["Spillerprofil", "Fysisk data", "Statistik", "Sammenligning"])
+    t_profile, t_pitch, t_phys, t_stats, t_compare = st.tabs(["Spillerprofil", "Spilleraktioner", "Fysisk data", "Statistik", "Sammenligning"])
 
+    with t_profile:
+        # Din donut-sammenligning
+        truppen_stats = df_all.groupby('VISNINGSNAVN').agg(
+            raw_pasninger=('EVENT_TYPEID', lambda x: (x == 1).sum())
+        )
+        maks_pas = truppen_stats['raw_pasninger'].max()
+        
+        col_l, col_r = st.columns([1, 3.5])
+        with col_l:
+            st.markdown(f'<div class="player-header">{valgt_spiller}</div>', unsafe_allow_html=True)
+            if hold_logo: st.image(hold_logo, width=100)
+        
+        with col_r:
+            pas_spiller = len(df_spiller[df_spiller['EVENT_TYPEID'] == 1])
+            st.plotly_chart(create_relative_donut(pas_spiller, maks_pas, "Pasninger"), config={'displayModeBar': False})
+            
     with t_pitch:
         descriptions = {
             "Heatmap": "Viser spillerens generelle bevægelsesmønster og intensitet på banen.",
