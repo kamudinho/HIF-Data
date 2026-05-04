@@ -178,19 +178,19 @@ def vis_side(dp=None):
     t_profile, t_pitch, t_phys, t_stats, t_compare = st.tabs(["Spillerprofil", "Spilleraktioner", "Fysisk data", "Statistik", "Sammenligning"])
 
     with t_profile:
-        # 1. Beregn stats for ALLE spillere på holdet
+        # 1. Beregn stats for ALLE spillere (Korrekt agg-syntaks)
         truppen_stats = df_all.groupby('VISNINGSNAVN').agg(
-            truppen_stats = df_all.groupby('VISNINGSNAVN').agg(
             Pasninger=('EVENT_TYPEID', lambda x: (x == 1).sum()),
             Afslutninger=('EVENT_TYPEID', lambda x: x.isin([13, 14, 15, 16]).sum()),
-            Mål=('EVENT_TYPEID', lambda x: (x == 16).sum()), # <--- Tjek denne!
+            Mål=('EVENT_TYPEID', lambda x: (x == 16).sum()),
             Erobringer=('EVENT_TYPEID', lambda x: x.isin([7, 8, 12, 49]).sum())
         )
-        )
         
-        # 2. Find rangering for den valgte spiller
-        # Vi bruger .rank(ascending=False, method='min') så flest aktioner = 1st
+        # 2. Beregn rank korrekt (ascending=False er KRITISK her)
+        # method='min' betyder: hvis to har 6 mål, får begge 1. pladsen.
         ranks = truppen_stats.rank(ascending=False, method='min').astype(int)
+        
+        # 3. Hent den specifikke rank for Marvin
         spiller_ranks = ranks.loc[valgt_spiller]
         
         col_info, col_charts = st.columns([1, 4])
