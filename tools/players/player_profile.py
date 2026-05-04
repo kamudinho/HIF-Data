@@ -35,30 +35,33 @@ def get_logo_img(opta_uuid):
     except: return None
 
 def draw_player_info_box(ax, logo, player_name, season, view_name):
-    ax.add_patch(plt.Rectangle((1, 85), 38, 14, color='#003366', alpha=0.9, zorder=10))
-    ax.text(12, 95, player_name.upper(), color='white', fontsize=10, fontweight='bold', zorder=11)
-    ax.text(12, 91, f"{season} | {view_name}", color='white', fontsize=8, alpha=0.8, zorder=11)
+    """Tegner info-boksen på banen præcis som i den tidligere fungerende version"""
+    ax.add_patch(plt.Rectangle((1, 82), 40, 16, color='#003366', alpha=0.9, zorder=10))
+    ax.text(12, 94, player_name.upper(), color='white', fontsize=11, fontweight='bold', zorder=11)
+    ax.text(12, 89, f"{season} | {view_name}", color='white', fontsize=9, alpha=0.8, zorder=11)
     if logo:
         logo_arr = np.array(logo.convert("RGBA"))
-        newax = ax.inset_axes([0.02, 0.87, 0.08, 0.1], zorder=12)
+        newax = ax.inset_axes([0.02, 0.84, 0.08, 0.12], zorder=12)
         newax.imshow(logo_arr)
         newax.axis('off')
 
 def create_relative_donut(player_val, max_val, label, color="#003366"):
+    """Donut med overskrift inkluderet i layout"""
     base_max = max(max_val, player_val, 1)
     remainder = max(0, base_max - player_val)
     fig = go.Figure(go.Pie(
         values=[player_val, remainder],
-        hole=0.7,
+        hole=0.72,
         marker_colors=[color, "#EEEEEE"],
         textinfo='none',
         hoverinfo='none'
     ))
     pct = int((player_val / base_max) * 100) if base_max > 0 else 0
     fig.update_layout(
-        showlegend=False, margin=dict(t=0, b=0, l=0, r=0), height=130, width=130,
-        annotations=[dict(text=f"{player_val}<br><span style='font-size:10px;'>{pct}% af maks</span>", 
-                     x=0.5, y=0.5, font_size=16, showarrow=False, font_family="Arial Black")]
+        title={'text': f"<b>{label}</b>", 'y':0.9, 'x':0.5, 'xanchor': 'center', 'yanchor': 'top', 'font': {'size': 14}},
+        showlegend=False, margin=dict(t=40, b=10, l=10, r=10), height=180, width=150,
+        annotations=[dict(text=f"{player_val}<br><span style='font-size:10px;'>{pct}%</span>", 
+                     x=0.5, y=0.5, font_size=15, showarrow=False, font_family="Arial Black")]
     )
     return fig
 
@@ -116,15 +119,12 @@ def vis_side():
         return
 
     df_all['Action_Label'] = df_all.apply(get_action_label, axis=1)
-    
-    # RETTELSE: Fjern NoneType før sortering for at undgå '<' fejl
     spiller_liste = sorted([s for s in df_all['VISNINGSNAVN'].unique() if s is not None])
     
     with col_h_spiller:
         valgt_spiller = st.selectbox("Spiller", spiller_liste, label_visibility="collapsed")
-        spiller_info = df_all[df_all['VISNINGSNAVN'] == valgt_spiller].iloc[0]
-        valgt_player_uuid = spiller_info['PLAYER_OPTAUUID']
         df_spiller = df_all[df_all['VISNINGSNAVN'] == valgt_spiller].copy()
+        valgt_player_uuid = df_spiller['PLAYER_OPTAUUID'].iloc[0]
 
     df_phys = get_physical_data(valgt_spiller, valgt_player_uuid, valgt_hold, conn)
 
@@ -136,11 +136,12 @@ def vis_side():
         with col_card:
             maal = len(df_spiller[df_spiller['EVENT_TYPEID'] == 16])
             assists = len(df_spiller[df_spiller['QUALIFIERS'].fillna('').str.contains('154')])
-            st.markdown(f"""<div style='background:#003366;color:white;padding:15px;border-radius:10px;'>
-                <h4>{valgt_spiller}</h4><hr>Mål: {maal}<br>Assists: {assists}</div>""", unsafe_allow_html=True)
+            st.markdown(f"""<div style='background:#003366;color:white;padding:20px;border-radius:10px;text-align:center;'>
+                <h3 style='margin:0;'>{valgt_spiller}</h3><p style='opacity:0.8;'>{SEASONNAME}</p><hr>
+                <p style='font-size:20px;margin:10px 0;'>Mål: <b>{maal}</b></p>
+                <p style='font-size:20px;margin:10px 0;'>Assists: <b>{assists}</b></p></div>""", unsafe_allow_html=True)
         
         with col_main:
-            # Beregn truppens maks-værdier for relativ visning
             truppen = df_all.groupby('VISNINGSNAVN').agg(
                 p=('EVENT_TYPEID', lambda x: (x == 1).sum()),
                 m=('EVENT_TYPEID', lambda x: (x == 16).sum()),
@@ -152,19 +153,23 @@ def vis_side():
             c1.plotly_chart(create_relative_donut(s_val['p'], truppen['p'].max(), "Pasninger"), config={'displayModeBar': False})
             c2.plotly_chart(create_relative_donut(s_val['m'], truppen['m'].max(), "Mål", "#11caa0"), config={'displayModeBar': False})
             c3.plotly_chart(create_relative_donut(s_val['s'], truppen['s'].max(), "Skud"), config={'displayModeBar': False})
-            c4.plotly_chart(create_relative_donut(s_val['a'], truppen['a'].max(), "Total", "#FFD700"), config={'displayModeBar': False})
+            c4.plotly_chart(create_relative_donut(s_val['a'], truppen['a'].max(), "Totale Aktioner", "#FFD700"), config={'displayModeBar': False})
 
     with t_pitch:
         col_p1, col_p2 = st.columns([1, 4])
         with col_p1:
             labels = sorted([l for l in df_spiller['Action_Label'].unique() if l])
-            valgt_label = st.multiselect("Filtrer aktioner", labels, default=[l for l in ["Shot", "Goal"] if l in labels])
+            valgt_label = st.multiselect("Vælg aktioner", labels, default=[l for l in ["Shot", "Goal"] if l in labels])
         with col_p2:
-            pitch = Pitch(pitch_type='opta', pitch_color='#f8f8f8', line_color='#888888')
-            fig, ax = pitch.draw(figsize=(10, 7))
+            # Pitch visning ført tilbage til stabil visning
+            pitch = Pitch(pitch_type='opta', pitch_color='#fdfdfd', line_color='#555555', linewidth=1)
+            fig, ax = pitch.draw(figsize=(12, 8))
             draw_player_info_box(ax, hold_logo, valgt_spiller, SEASONNAME, "Positionskort")
+            
             plot_df = df_spiller[df_spiller['Action_Label'].isin(valgt_label)]
-            pitch.scatter(plot_df.EVENT_X, plot_df.EVENT_Y, ax=ax, alpha=0.7, s=100, edgecolors='white', color='#003366')
+            if not plot_df.empty:
+                pitch.scatter(plot_df.EVENT_X, plot_df.EVENT_Y, ax=ax, alpha=0.8, s=120, 
+                              edgecolors='#003366', facecolors='white', linewidth=1.5, zorder=3)
             st.pyplot(fig)
 
     with t_phys:
@@ -174,28 +179,32 @@ def vis_side():
             m2.metric("Gns. HSR", f"{int(df_phys['HSR'].mean())} m")
             m3.metric("Gns. Sprints", f"{int(df_phys['SPRINTING'].mean())} m")
             m4.metric("Top Speed", f"{round(df_phys['TOP_SPEED'].max(), 1)} km/h")
+            
+            st.write("---")
             fig_dist = go.Figure(go.Bar(x=df_phys['MATCH_DATE'], y=df_phys['DISTANCE'], marker_color='#003366'))
-            fig_dist.update_layout(title="Distance pr. kamp", height=300, margin=dict(t=30, b=0))
+            fig_dist.update_layout(title="Total distance pr. kamp (meter)", height=350, margin=dict(t=50, b=20))
             st.plotly_chart(fig_dist, use_container_width=True)
         else:
-            st.info("Ingen fysiske data tilgængelige.")
+            st.info("Ingen fysiske data tilgængelige for perioden.")
 
     with t_stats:
-        st.subheader("Aktionsoversigt")
+        st.subheader("Fordeling af aktioner")
         stats_df = df_spiller['Action_Label'].value_counts().reset_index()
-        stats_df.columns = ['Aktion', 'Antal']
+        stats_df.columns = ['Aktionstype', 'Antal']
         st.dataframe(stats_df, use_container_width=True, hide_index=True)
 
     with t_compare:
-        st.subheader("Sammenlign med holdkammerat")
+        st.subheader("Sammenligning")
         modstander = st.selectbox("Vælg spiller at sammenligne med", [s for s in spiller_liste if s != valgt_spiller])
         df_comp = df_all[df_all['VISNINGSNAVN'] == modstander]
         
         c_left, c_right = st.columns(2)
-        c_left.write(f"**{valgt_spiller}**")
-        c_left.write(f"Total aktioner: {len(df_spiller)}")
-        c_right.write(f"**{modstander}**")
-        c_right.write(f"Total aktioner: {len(df_comp)}")
+        with c_left:
+            st.write(f"**{valgt_spiller}**")
+            st.write(f"Antal aktioner: {len(df_spiller)}")
+        with c_right:
+            st.write(f"**{modstander}**")
+            st.write(f"Antal aktioner: {len(df_comp)}")
 
 if __name__ == "__main__":
     vis_side()
