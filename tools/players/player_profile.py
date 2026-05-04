@@ -138,7 +138,7 @@ def vis_side(dp=None):
     valgt_player_uuid = df_all[df_all['VISNINGSNAVN'] == valgt_spiller]['PLAYER_OPTAUUID'].iloc[0]
     df_spiller = df_all[df_all['VISNINGSNAVN'] == valgt_spiller].copy()
 
-    t_pitch, t_phys, t_stats, t_compare = st.tabs(["Spillerprofil", "Fysisk data", "Statistik", "Sammenligning"])
+    t_pitch, t_phys, t_stats, t_compare = st.tabs(["Spilleraktioner", "Fysisk data", "Statistik", "Sammenligning"])
 
     with t_pitch:
         descriptions = {
