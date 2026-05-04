@@ -120,7 +120,7 @@ def vis_side(dp=None):
                 e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, 
                 TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME) as VISNINGSNAVN, 
                 e.PLAYER_OPTAUUID, e.EVENT_OUTCOME as OUTCOME,
-                e.EVENT_MINUTE,
+                e.EVENT_TIMEMIN AS EVENT_MINUTE,
                 e.EVENT_CONTESTANT_OPTAUUID,
                 m.CONTESTANTHOME_OPTAUUID as HOMECONTESTANT_OPTAUUID,
                 m.CONTESTANTHOME_NAME as HOMECONTESTANT_NAME,
