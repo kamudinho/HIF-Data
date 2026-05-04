@@ -55,7 +55,7 @@ def create_relative_donut(player_val, max_val, label, color="#df003b"): # Standa
         hoverinfo='none',
         # Rotation 90 starter den i toppen. 
         # Direction 'clockwise' får den til at løbe mod højre.
-        rotation=90,
+        rotation=0,
         direction='clockwise',
         sort=False # Vigtigt for at bevare rækkefølgen af values
     ))
