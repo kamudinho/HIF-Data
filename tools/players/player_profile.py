@@ -44,7 +44,7 @@ def create_relative_donut(player_val, max_val, label, color="#003366"):
     fig = go.Figure(go.Pie(
         values=[player_val, reminder],
         hole=0.7,
-        marker_colors=[color, "#EEEEEE"],
+        marker_colors=[color, "#df003b"],
         textinfo='none',
         hoverinfo='none'
     ))
