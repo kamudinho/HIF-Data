@@ -34,6 +34,21 @@ def get_logo_img(opta_uuid):
         return Image.open(BytesIO(response.content))
     except: return None
 
+def draw_player_info_box(ax, logo, player_name, season, view_name):
+    """Tegner en info-boks i hjørnet af fodboldbanen"""
+    # Baggrundsboks
+    ax.add_patch(plt.Rectangle((1, 85), 35, 14, color='#003366', alpha=0.9, zorder=10))
+    # Spillertekst
+    ax.text(12, 95, player_name.upper(), color='white', fontsize=10, fontweight='bold', zorder=11)
+    ax.text(12, 91, f"{season} | {view_name}", color='white', fontsize=8, alpha=0.8, zorder=11)
+    # Logo hvis det findes
+    if logo:
+        # Konverter PIL Image til array for matplotlib
+        logo_arr = np.array(logo)
+        newax = ax.inset_axes([0.02, 0.87, 0.08, 0.1], zorder=12)
+        newax.imshow(logo_arr)
+        newax.axis('off')
+
 def create_donut_chart(value, label, color="#003366"):
     """Hjælpefunktion til at lave cirkel-statistikker (donuts)"""
     fig = go.Figure(go.Pie(
