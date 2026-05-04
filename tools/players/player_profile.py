@@ -165,65 +165,61 @@ def vis_side(dp=None):
     t_profile, t_pitch, t_phys, t_stats, t_compare = st.tabs(["Spillerprofil", "Spilleraktioner", "Fysisk data", "Statistik", "Sammenligning"])
 
     with t_profile:
-    # 1. Beregn truppens maks-værdier for sammenligning
-    # Vi tilføjer flere kategorier her (Type 1=Pasning, 13-16=Skud, 7,8,12,49=Erobring)
-    truppen_stats = df_all.groupby('VISNINGSNAVN').agg(
-        max_pasninger=('EVENT_TYPEID', lambda x: (x == 1).sum()),
-        max_skud=('EVENT_TYPEID', lambda x: x.isin([13, 14, 15, 16]).sum()),
-        max_erobringer=('EVENT_TYPEID', lambda x: x.isin([7, 8, 12, 49]).sum())
-    )
-    
-    # 2. Layout: Venstre kolonne til Info, Højre til Donuts
-    col_info, col_charts = st.columns([1, 4])
-    
-    with col_info:
-        # Tilpas navnet: Mindre font og margen
-        st.markdown(f"""
-            <div style="margin-bottom: 10px;">
-                <p style="font-size: 18px; font-weight: bold; margin: 0; line-height: 1.2;">{valgt_spiller}</p>
-                <p style="font-size: 12px; color: gray; margin: 0;">{valgt_hold}</p>
-            </div>
-        """, unsafe_allow_html=True)
-        
-        # Gør logoet mindre (width=60)
-        if hold_logo: 
-            st.image(hold_logo, width=60)
+            # 1. Beregn truppens maks-værdier for sammenligning (RYKKET IND)
+            truppen_stats = df_all.groupby('VISNINGSNAVN').agg(
+                max_pasninger=('EVENT_TYPEID', lambda x: (x == 1).sum()),
+                max_skud=('EVENT_TYPEID', lambda x: x.isin([13, 14, 15, 16]).sum()),
+                max_erobringer=('EVENT_TYPEID', lambda x: x.isin([7, 8, 12, 49]).sum())
+            )
             
-        st.markdown("---")
-        st.caption("Sammenlignet med holdets topscorer i hver kategori.")
-
-    with col_charts:
-        # Opsætning af kategorier til visning
-        kategorier = [
-            {
-                "label": "Pasninger", 
-                "aktuel": len(df_spiller[df_spiller['EVENT_TYPEID'] == 1]), 
-                "maks": truppen_stats['max_pasninger'].max()
-            },
-            {
-                "label": "Afslutninger", 
-                "aktuel": len(df_spiller[df_spiller['EVENT_TYPEID'].isin([13, 14, 15, 16])]), 
-                "maks": truppen_stats['max_skud'].max()
-            },
-            {
-                "label": "Erobringer", 
-                "aktuel": len(df_spiller[df_spiller['EVENT_TYPEID'].isin([7, 8, 12, 49])]), 
-                "maks": truppen_stats['max_erobringer'].max()
-            }
-        ]
-        
-        # Opret 3 kolonner til donuts
-        chart_cols = st.columns(len(kategorier))
-        
-        for i, kat in enumerate(kategorier):
-            with chart_cols[i]:
-                # Vi bruger din eksisterende create_relative_donut funktion
-                fig = create_relative_donut(kat["aktuel"], kat["maks"], kat["label"])
+            # 2. Layout: Venstre kolonne til Info, Højre til Donuts (RYKKET IND)
+            col_info, col_charts = st.columns([1, 4])
+            
+            with col_info:
+                # Tilpas navnet: Mindre font og margen
+                st.markdown(f"""
+                    <div style="margin-bottom: 10px;">
+                        <p style="font-size: 18px; font-weight: bold; margin: 0; line-height: 1.2;">{valgt_spiller}</p>
+                        <p style="font-size: 12px; color: gray; margin: 0;">{valgt_hold}</p>
+                    </div>
+                """, unsafe_allow_html=True)
                 
-                # Gør grafen lidt mere kompakt
-                fig.update_layout(height=150, margin=dict(t=0, b=0, l=0, r=0))
+                # Gør logoet mindre (width=60)
+                if hold_logo: 
+                    st.image(hold_logo, width=60)
+                    
+                st.markdown("---")
+                st.caption("Sammenlignet med holdets bedste.")
+    
+            with col_charts:
+                # Opsætning af kategorier til visning
+                kategorier = [
+                    {
+                        "label": "Pasninger", 
+                        "aktuel": len(df_spiller[df_spiller['EVENT_TYPEID'] == 1]), 
+                        "maks": truppen_stats['max_pasninger'].max()
+                    },
+                    {
+                        "label": "Afslutninger", 
+                        "aktuel": len(df_spiller[df_spiller['EVENT_TYPEID'].isin([13, 14, 15, 16])]), 
+                        "maks": truppen_stats['max_skud'].max()
+                    },
+                    {
+                        "label": "Erobringer", 
+                        "aktuel": len(df_spiller[df_spiller['EVENT_TYPEID'].isin([7, 8, 12, 49])]), 
+                        "maks": truppen_stats['max_erobringer'].max()
+                    }
+                ]
                 
-                st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+                # Opret kolonner til donuts
+                chart_cols = st.columns(len(kategorier))
+                
+                for i, kat in enumerate(kategorier):
+                    with chart_cols[i]:
+                        fig = create_relative_donut(kat["aktuel"], kat["maks"], kat["label"])
+                        # Sørg for at højden passer til det nye layout
+                        fig.update_layout(height=140, margin=dict(t=0, b=0, l=0, r=0))
+                        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
             
     with t_pitch:
         descriptions = {
