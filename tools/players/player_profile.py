@@ -113,15 +113,23 @@ def vis_side(dp=None):
                 e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, 
                 TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME) as VISNINGSNAVN, 
                 e.PLAYER_OPTAUUID, e.EVENT_OUTCOME as OUTCOME,
+                e.EVENT_MINUTE,
+                e.EVENT_CONTESTANT_OPTAUUID,
+                m.CONTESTANTHOME_OPTAUUID as HOMECONTESTANT_OPTAUUID,
+                m.CONTESTANTHOME_NAME as HOMECONTESTANT_NAME,
+                m.CONTESTANTAWAY_OPTAUUID as AWAYCONTESTANT_OPTAUUID,
+                m.CONTESTANTAWAY_NAME as AWAYCONTESTANT_NAME,
                 TO_CHAR(e.EVENT_TIMESTAMP, 'YYYY-MM-DD HH24:MI:SS') as EVENT_TIMESTAMP_STR,
-                LISTAGG(q.QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY q.QUALIFIER_QID) as QUALIFIERS
+                LISTAGG(q.QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY q.QUALIFIER_QID) as QUALIFIERS,
+                MAX(CASE WHEN q.QUALIFIER_QID = 321 THEN TRY_TO_DOUBLE(q.QUALIFIER_VALUE) ELSE 0 END) as XG
             FROM {DB}.OPTA_EVENTS e
             JOIN (SELECT DISTINCT PLAYER_OPTAUUID, FIRST_NAME, LAST_NAME FROM {DB}.OPTA_PLAYERS WHERE FIRST_NAME IS NOT NULL) p 
                 ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
+            JOIN {DB}.OPTA_MATCHINFO m ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
             LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
             WHERE e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid_hold}' 
             AND e.EVENT_TIMESTAMP >= '2025-07-01'
-            GROUP BY 1, 2, 3, 4, 5, 6, 7
+            GROUP BY 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13
         """
         df_all = conn.query(sql)
         if df_all is None or df_all.empty:
@@ -206,10 +214,9 @@ def vis_side(dp=None):
                     d = df_plot[df_plot['EVENT_TYPEID'].isin(touch_ids)]
                     ax.scatter(d.EVENT_X, d.EVENT_Y, color='#084594', s=40, edgecolors='white', alpha=0.5)
                 elif visning == "Afslutninger":
-                    # 1. Forbered data med modstander-navne fra din TEAMS mapping
                     d = df_plot[df_plot['EVENT_TYPEID'].isin([13, 14, 15, 16])].copy()
                     
-                    # Lav en hurtig lookup til modstander-navne
+                    # Mapping til modstander-navne fra din TEAMS mapping
                     opta_to_name = {str(v.get('opta_uuid', '')).lower(): k for k, v in TEAMS.items()}
                     
                     def get_opp_name(row):
@@ -217,15 +224,14 @@ def vis_side(dp=None):
                         a_id = str(row.get('AWAYCONTESTANT_OPTAUUID', '')).lower()
                         my_id = str(valgt_uuid_hold).lower()
                         opp_id = a_id if h_id == my_id else h_id
-                        return opta_to_name.get(opp_id, "Ukendt Modstander")
+                        # Prøv først din mapping, ellers brug navnet fra DB
+                        if opp_id in opta_to_name:
+                            return opta_to_name[opp_id]
+                        return row['AWAYCONTESTANT_NAME'] if h_id == my_id else row['HOMECONTESTANT_NAME']
 
-                    # Vi antager her, at du har trukket modstander-UUIDs med i din SQL
-                    if 'HOMECONTESTANT_OPTAUUID' in d.columns:
-                        d['OPPONENT_CLEAN'] = d.apply(get_opp_name, axis=1)
-                    else:
-                        d['OPPONENT_CLEAN'] = "Kamp"
+                    d['OPPONENT_CLEAN'] = d.apply(get_opp_name, axis=1)
 
-                    # 2. Statisk lag (Matplotlib) - Bruges til den visuelle banegrafik
+                    # Statisk Matplotlib-bane
                     pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
                     fig_static, ax = pitch.draw(figsize=(10, 7))
                     draw_player_info_box(ax, hold_logo, valgt_spiller, CURRENT_SEASON, visning)
@@ -233,53 +239,44 @@ def vis_side(dp=None):
                     goals = d[d['EVENT_TYPEID'] == 16]
                     misses = d[d['EVENT_TYPEID'].isin([13, 14, 15])]
                     
-                    # Tegn de faktiske symboler (Cirkler for skud, Firkanter for mål)
                     ax.scatter(misses.EVENT_X, misses.EVENT_Y, color='grey', s=80, edgecolors='black', alpha=0.4)
                     ax.scatter(goals.EVENT_X, goals.EVENT_Y, color='#cc0000', s=150, marker='s', edgecolors='black', zorder=5)
 
-                    # 3. Interaktivt lag (Plotly) - "Det usynlige tæppe"
+                    # Plotly Invisible Overlay
                     fig_overlay = go.Figure()
-                    
                     fig_overlay.add_trace(go.Scatter(
                         x=d.EVENT_X,
                         y=d.EVENT_Y,
                         mode='markers',
-                        marker=dict(
-                            size=18, 
-                            color='rgba(0,0,0,0)', # Fuldstændig gennemsigtig
-                        ),
+                        marker=dict(size=20, color='rgba(0,0,0,0)'),
                         hovertemplate=(
                             "<b>vs. %{customdata[0]}</b><br>" +
-                            "Aktion: %{customdata[3]}<br>" +
+                            "Resultat: %{customdata[3]}<br>" +
                             "xG: %{customdata[2]}<br>" +
+                            "Minut: %{customdata[4]}'<br>" +
                             "<extra></extra>"
                         ),
                         customdata=np.stack((
                             d['OPPONENT_CLEAN'], 
-                            d['EVENT_TIMESTAMP_STR'], # Eller minut hvis du har det
-                            d['XG'].fillna(0.0).apply(lambda x: f"{x:.2f}"),
-                            d['Action_Label']
+                            d['EVENT_TIMESTAMP_STR'], 
+                            d['XG'].apply(lambda x: f"{x:.2f}"),
+                            d['Action_Label'],
+                            d['EVENT_MINUTE'].fillna('?')
                         ), axis=-1)
                     ))
 
-                    # Synkroniser layout med Opta koordinater (0-100)
                     fig_overlay.update_layout(
                         xaxis=dict(range=[0, 100], visible=False, fixedrange=True),
                         yaxis=dict(range=[0, 100], visible=False, fixedrange=True, scaleanchor="x"),
                         margin=dict(l=0, r=0, t=0, b=0),
                         showlegend=False,
                         plot_bgcolor="rgba(0,0,0,0)",
-                        paper_bgcolor="rgba(0,0,0,0)",
-                        hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial")
+                        paper_bgcolor="rgba(0,0,0,0)"
                     )
 
-                    # 4. Container-trick: Læg dem ovenpå hinanden med CSS
+                    # Visning med CSS overlap
                     st.markdown('<div style="position: relative;">', unsafe_allow_html=True)
-                    
-                    # Nederste lag: Matplotlib
                     st.pyplot(fig_static)
-                    
-                    # Øverste lag: Plotly (flyttes op med negativ margin)
                     st.markdown('<div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;">', unsafe_allow_html=True)
                     st.plotly_chart(fig_overlay, use_container_width=True, config={'displayModeBar': False})
                     st.markdown('</div></div>', unsafe_allow_html=True)
