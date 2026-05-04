@@ -178,18 +178,25 @@ def vis_side(dp=None):
     t_profile, t_pitch, t_phys, t_stats, t_compare = st.tabs(["Spillerprofil", "Spilleraktioner", "Fysisk data", "Statistik", "Sammenligning"])
 
     with t_profile:
-        # 1. Beregn de rå tal for ALLE spillere (Korrekt agg-syntaks)
+        # 1. Beregn de rå tal for ALLE spillere (Udvidet med 4 ekstra kategorier)
         truppen_stats = df_all.groupby('VISNINGSNAVN').agg(
             Pasninger=('EVENT_TYPEID', lambda x: (x == 1).sum()),
             Afslutninger=('EVENT_TYPEID', lambda x: x.isin([13, 14, 15, 16]).sum()),
             Mål=('EVENT_TYPEID', lambda x: (x == 16).sum()),
-            Erobringer=('EVENT_TYPEID', lambda x: x.isin([7, 8, 12, 49]).sum())
+            Erobringer=('EVENT_TYPEID', lambda x: x.isin([7, 8, 12, 49]).sum()),
+            # Nye kategorier
+            Driblinger=('EVENT_TYPEID', lambda x: (x == 3).sum()),
+            Indlæg=('qual_list', lambda x: x.apply(lambda q: '2' in q).sum()),
+            Chancer_skabt=('qual_list', lambda x: x.apply(lambda q: '210' in q).sum()),
+            Boldtab=('EVENT_TYPEID', lambda x: (x == 7).sum())
         )
         
-        # 2. Beregn rank (Vi tvinger flest = 1st plads)
-        # method='min' er vigtig: Hvis Marvin har 6 mål og ingen har flere, er han altid #1.
+        # 2. Beregn rank (Husk at 'Boldtab' måske skal rankes omvendt, hvis lavt er godt)
         ranks = truppen_stats.rank(ascending=False, method='min').astype(int)
         
+        # Hvis 'Boldtab' skal rankes med 1st = færrest tab:
+        ranks['Boldtab'] = truppen_stats['Boldtab'].rank(ascending=True, method='min').astype(int)
+                
         spiller_ranks = ranks.loc[valgt_spiller]
         
         col_info, col_charts = st.columns([1, 4])
@@ -210,40 +217,37 @@ def vis_side(dp=None):
             st.caption("Sammenlignet med holdets bedste.")
 
         with col_charts:
-            # Vi definerer de 4 kategorier her
-            kategorier = [
-                {
-                    "label": "PASNINGER", 
-                    "aktuel": truppen_stats.loc[valgt_spiller, 'Pasninger'], 
-                    "maks": truppen_stats['Pasninger'].max(),
-                    "rank": get_ordinal(spiller_ranks['Pasninger'])
-                },
-                {
-                    "label": "AFSLUTNINGER", 
-                    "aktuel": truppen_stats.loc[valgt_spiller, 'Afslutninger'], 
-                    "maks": truppen_stats['Afslutninger'].max(),
-                    "rank": get_ordinal(spiller_ranks['Afslutninger'])
-                },
-                {
-                    "label": "MÅL", 
-                    "aktuel": truppen_stats.loc[valgt_spiller, 'Mål'], 
-                    "maks": truppen_stats['Mål'].max(),
-                    "rank": get_ordinal(spiller_ranks['Mål'])
-                },
-                {
-                    "label": "EROBRINGER", 
-                    "aktuel": truppen_stats.loc[valgt_spiller, 'Erobringer'], 
-                    "maks": truppen_stats['Erobringer'].max(),
-                    "rank": get_ordinal(spiller_ranks['Erobringer'])
-                }
-            ]
-            
-            chart_cols = st.columns(4) # Nu med 4 kolonner
-            for i, kat in enumerate(kategorier):
-                with chart_cols[i]:
-                    st.markdown(f"<p style='text-align:center; font-weight:bold; font-size:12px; margin-bottom:0px;'>{kat['label']}</p>", unsafe_allow_html=True)
-                    fig = create_relative_donut(kat["aktuel"], kat["maks"], kat["label"], kat["rank"])
-                    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+    # Definer alle 8 kategorier
+    alle_kategorier = [
+        {"label": "PASNINGER", "id": "Pasninger"},
+        {"label": "AFSLUTNINGER", "id": "Afslutninger"},
+        {"label": "MÅL", "id": "Mål"},
+        {"label": "EROBRINGER", "id": "Erobringer"},
+        {"label": "DRIBLINGER", "id": "Driblinger"},
+        {"label": "INDLÆG", "id": "Indlæg"},
+        {"label": "CHANCER SKABT", "id": "Chancer_skabt"},
+        {"label": "BOLDTAB", "id": "Boldtab"}
+    ]
+
+    # Del listen op i bidder af 4
+    for i in range(0, len(alle_kategorier), 4):
+        bid = alle_kategorier[i:i+4]
+        cols = st.columns(4)
+        
+        for j, kat_info in enumerate(bid):
+            k_id = kat_info["id"]
+            with cols[j]:
+                # Overskrift
+                st.markdown(f"<p style='text-align:center; font-weight:bold; font-size:11px; margin-bottom:0px;'>{kat_info['label']}</p>", unsafe_allow_html=True)
+                
+                # Data
+                aktuel = truppen_stats.loc[valgt_spiller, k_id]
+                maks = truppen_stats[k_id].max()
+                rank = get_ordinal(ranks.loc[valgt_spiller, k_id])
+                
+                # Donut
+                fig = create_relative_donut(aktuel, maks, kat_info['label'], rank)
+                st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
             
     with t_pitch:
         descriptions = {
