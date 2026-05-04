@@ -37,7 +37,7 @@ def get_logo_img(opta_uuid):
 def draw_player_info_box(ax, logo, player_name, season, view_name):
     """Tegner en info-boks i hjørnet af fodboldbanen"""
     # Baggrundsboks
-    ax.add_patch(plt.Rectangle((1, 85), 35, 14, color='#ffffff', alpha=0.9, zorder=10))
+    ax.add_patch(plt.Rectangle((1, 85), 35, 14, color='white', alpha=0.9, zorder=10))
     # Spillertekst
     ax.text(12, 95, player_name.upper(), color='black', fontsize=10, fontweight='bold', zorder=11)
     ax.text(12, 91, f"{season} | {view_name}", color='black', fontsize=8, alpha=0.8, zorder=11)
