@@ -11,7 +11,7 @@ from PIL import Image
 from io import BytesIO
 
 # --- IMPORT FRA MAPPING ---
-from data.utils.mapping import(
+from data.utils.mapping import (
     OPTA_EVENT_TYPES, 
     OPTA_QUALIFIERS,
     get_action_label
@@ -284,6 +284,3 @@ def vis_side(dp=None):
 
 if __name__ == "__main__":
     vis_side()
-
-
-Kan du hjælpe med en hoover over afslutningerne, så man kan se "vs. modstander", "minuttal", "xG"
