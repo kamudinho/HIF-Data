@@ -181,6 +181,7 @@ def vis_side(dp=None):
         # 1. Beregn stats for ALLE spillere på holdet
         truppen_stats = df_all.groupby('VISNINGSNAVN').agg(
             Pasninger=('EVENT_TYPEID', lambda x: (x == 1).sum()),
+            Mål=('EVENT_TYPEID', lambda x: (x == 16).sum()),
             Afslutninger=('EVENT_TYPEID', lambda x: x.isin([13, 14, 15, 16]).sum()),
             Erobringer=('EVENT_TYPEID', lambda x: x.isin([7, 8, 12, 49]).sum())
         )
@@ -222,6 +223,12 @@ def vis_side(dp=None):
                     "rank": get_ordinal(spiller_ranks['Afslutninger'])
                 },
                 {
+                    "label": "MÅL", 
+                    "aktuel": truppen_stats.loc[valgt_spiller, 'Mål'], 
+                    "maks": truppen_stats['Mål'].max(),
+                    "rank": get_ordinal(spiller_ranks['Erobringer'])
+                },
+                {
                     "label": "EROBRINGER", 
                     "aktuel": truppen_stats.loc[valgt_spiller, 'Erobringer'], 
                     "maks": truppen_stats['Erobringer'].max(),
@@ -232,7 +239,7 @@ def vis_side(dp=None):
             chart_cols = st.columns(len(kategorier))
             for i, kat in enumerate(kategorier):
                 with chart_cols[i]:
-                    st.markdown(f"<p style='text-align:center; font-weight:bold; font-size:12px; margin-bottom:-10px;'>{kat['label']}</p>", unsafe_allow_html=True)
+                    st.markdown(f"<p style='text-align:center; font-weight:bold; font-size:12px; margin-bottom:0px;'>{kat['label']}</p>", unsafe_allow_html=True)
                     
                     # Vi sender kat["rank"] med til funktionen
                     fig = create_relative_donut(kat["aktuel"], kat["maks"], kat["label"], kat["rank"])
