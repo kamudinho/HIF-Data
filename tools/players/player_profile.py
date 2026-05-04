@@ -34,13 +34,14 @@ def get_logo_img(opta_uuid):
         return Image.open(BytesIO(response.content))
     except: return None
 
+# --- RETTELSE: DEFINERER FUNKTIONEN TIL PITCH-INFO-BOKS ---
 def draw_player_info_box(ax, logo, player_name, season, view_name):
     """Tegner en info-boks i hjørnet af fodboldbanen"""
-    # Baggrundsboks
-    ax.add_patch(plt.Rectangle((1, 85), 35, 14, alpha=0.9, zorder=10))
+    # Baggrundsboks (Vi bruger din Hvidovre blå farve)
+    ax.add_patch(plt.Rectangle((1, 85), 35, 14, color='#003366', alpha=0.9, zorder=10))
     # Spillertekst
-    ax.text(12, 95, player_name.upper(), color='black', fontsize=10, fontweight='bold', zorder=11)
-    ax.text(12, 91, f"{season} | {view_name}", color='black', fontsize=8, alpha=0.8, zorder=11)
+    ax.text(12, 95, player_name.upper(), color='white', fontsize=10, fontweight='bold', zorder=11)
+    ax.text(12, 91, f"{season} | {view_name}", color='white', fontsize=8, alpha=0.8, zorder=11)
     # Logo hvis det findes
     if logo:
         # Konverter PIL Image til array for matplotlib
@@ -49,10 +50,11 @@ def draw_player_info_box(ax, logo, player_name, season, view_name):
         newax.imshow(logo_arr)
         newax.axis('off')
 
+# --- OPDATERET DONUT FUNKTION FOR HOLD-RELATION ---
 def create_team_donut(player_val, team_total, label, color="#003366"):
     """
     Viser spillerens andel af holdets samlede præstation.
-    Hvis team_total er 0, bruges 100 som baseline for procenter.
+    Center-teksten viser spillerens rå antal, og procent-teksten viser andelen af totalen.
     """
     if team_total <= 0: team_total = max(player_val, 1)
     
@@ -76,7 +78,8 @@ def create_team_donut(player_val, team_total, label, color="#003366"):
         height=130,
         width=130,
         annotations=[dict(
-            text=f"{player_val}<br><span style='font-size:10px;'>{pct}%</span>", 
+            # Center tekst: Rå antal over procent
+            text=f"{player_val}<br><span style='font-size:10px;'>{pct}% af hold</span>", 
             x=0.5, y=0.5, font_size=16, showarrow=False, font_family="Arial Black"
         )]
     )
@@ -127,33 +130,33 @@ def vis_side(dp=None):
     conn = _get_snowflake_conn()
     if not conn: return
 
-    # --- TOP-MENU KONFIGURATION (Løser 'hold_logo' fejlen & skubber dropdowns til højre) ---
+    # --- TOP-MENU KONFIGURATION (Løser 'hold_logo' fejlen, løfter logo op & skubber dropdowns til højre) ---
     df_teams_raw = conn.query(f"SELECT DISTINCT CONTESTANTHOME_NAME, CONTESTANTHOME_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS}")
     mapping_lookup = {str(info['opta_uuid']).lower().replace('t', ''): name for name, info in TEAMS.items() if 'opta_uuid' in info}
     
-    # team_map must be defined before selectbox can use it
+    # 1. Definer team_map FØRST
     team_map = {mapping_lookup[str(r['CONTESTANTHOME_OPTAUUID']).lower().replace('t','')]: r['CONTESTANTHOME_OPTAUUID'] 
                 for _, r in df_teams_raw.iterrows() if str(r['CONTESTANTHOME_OPTAUUID']).lower().replace('t','') in mapping_lookup}
 
-    # Definer kolonnerne [1, 2.5, 1.2, 1.2] for at få dropdowns til højre
+    # 2. Definer kolonnerne [1, 2.5, 1.2, 1.2] for at få logo til venstre og dropdowns helt til højre
     col_logo, col_spacer_mid, col_h_hold, col_h_spiller = st.columns([1, 2.5, 1.2, 1.2])
 
     with col_h_hold:
+        # Rettelse: selectbox skal bruge team_map, som nu er defineret før brug
         valgt_hold = st.selectbox("Hold", sorted(list(team_map.keys())), label_visibility="collapsed")
         valgt_uuid_hold = team_map[valgt_hold]
     
-    # HENT OG VIS LOGOET HER (Løftet op på højde med dropdowns)
+    # 3. HENT OG VIS LOGOET HER (Nu er holdet valgt, så vi kan hente det og vise det øverst)
     hold_logo = get_logo_img(valgt_uuid_hold)
     with col_logo:
         if hold_logo:
             st.image(hold_logo, width=85)
 
-    # 1. HENT DATA MED ACTION_LABEL
+    # 4. HENT DATA MED Action_Label (Sørg for den findes)
     with st.spinner("Henter spillerdata..."):
         sql = f"""
             SELECT 
-                e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, 
-                TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME) as VISNINGSNAVN, 
+                e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME) as VISNINGSNAVN, 
                 e.PLAYER_OPTAUUID, e.EVENT_OUTCOME as OUTCOME,
                 TO_CHAR(e.EVENT_TIMESTAMP, 'YYYY-MM-DD HH24:MI:SS') as EVENT_TIMESTAMP_STR,
                 LISTAGG(q.QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY q.QUALIFIER_QID) as QUALIFIERS
@@ -165,6 +168,7 @@ def vis_side(dp=None):
             AND e.EVENT_TIMESTAMP >= '2025-07-01'
             GROUP BY 1, 2, 3, 4, 5, 6, 7
         """
+        # Rettelse: Hent data FØR vi prøver at bruge Action_Label
         df_all = conn.query(sql)
         
         if df_all is not None and not df_all.empty:
@@ -178,7 +182,7 @@ def vis_side(dp=None):
         valgt_player_uuid = df_all[df_all['VISNINGSNAVN'] == valgt_spiller]['PLAYER_OPTAUUID'].iloc[0]
         df_spiller = df_all[df_all['VISNINGSNAVN'] == valgt_spiller].copy()
 
-    # 3. HENT FYSISK DATA (Flyttet herop for at undgå 'local variable' fejl)
+    # 5. HENT FYSISK DATA (Flyttet herop for at undgå 'local variable' fejl i profil-fanen)
     df_phys = get_physical_data(valgt_spiller, valgt_player_uuid, valgt_hold, conn)
 
     # --- TABS (Placeret under dropdowns/logo) ---
@@ -186,13 +190,13 @@ def vis_side(dp=None):
         "Spillerprofil", "Spilleraktioner", "Fysisk data", "Statistik", "Sammenligning"
     ])
     
-    # --- TAB INDHOLD ---
+    # --- TAB INDHOLD (Løser 'col_main' fejlen) ---
     with t_profile:
         # Her definerer vi col_card (venstre) og col_main (højre) inde i fanen
         col_card, col_main = st.columns([1, 3.5])
         
         with col_card:
-            # Beregn værdier dynamisk for den valgte spiller
+            # Beregn værdier dynamisk for den valgte spiller fra dine variable
             antall_kampe = 0
             total_minutter = 0
             
@@ -236,31 +240,24 @@ def vis_side(dp=None):
                 st.progress(min(val/50 if "Pasning" not in m else val/100, 1.0))
 
         with col_main:
-            st.markdown("<h4 style='text-align:center; color:#003366;'>Spillerstatistik</h4>", unsafe_allow_html=True)
+            # --- OPDATEREDE DONUTS: Sammenlign med holdniveau ---
+            st.markdown("<h4 style='text-align:center; color:#003366;'>Sammenligning med holdets total</h4>", unsafe_allow_html=True)
             
-            # Beregn værdier fra data for Donuts
+            # 1. Beregn holdets samlede præstation fra df_all
+            # Vi tager alle hændelser for holdet og fjerner eventuelle dubletter hvis nødvendigt
+            total_pas_hold = len(df_all[df_all['EVENT_TYPEID'] == 1])
+            total_skud_hold = len(df_all[df_all['EVENT_TYPEID'].isin([13, 14, 15, 16])])
+            total_erob_hold = len(df_all[df_all['EVENT_TYPEID'].isin([7, 8, 12, 49])])
+            
+            # 2. Beregn spillerens egne data for donuts (som i din oprindelige kode)
             pas_df = df_spiller[df_spiller['EVENT_TYPEID'] == 1]
-            pas_total = len(pas_df)
-            pas_acc = int((pas_df['OUTCOME'].sum() / pas_total * 100)) if pas_total > 0 else 0
+            spiller_pas = len(pas_df)
             
-            # Donut grid 4x3
-            r1 = st.columns(4)
-            with r1[0]: st.write("Afleveringer"); st.plotly_chart(create_donut_chart(pas_total, "Total"), config={'displayModeBar': False})
-            with r1[1]: st.write("Pasning %"); st.plotly_chart(create_donut_chart(pas_acc, "Acc %", color="#11caa0"), config={'displayModeBar': False})
-            with r1[2]: st.write("Fremadrettet"); st.plotly_chart(create_donut_chart(158, "Frem"), config={'displayModeBar': False})
-            with r1[3]: st.write("Progressive"); st.plotly_chart(create_donut_chart(77, "Prog"), config={'displayModeBar': False})
-            
-            r2 = st.columns(4)
-            with r2[0]: st.write("Lange pasninger"); st.plotly_chart(create_donut_chart(22, "Lange"), config={'displayModeBar': False})
-            with r2[1]: st.write("Sidste 1/3"); st.plotly_chart(create_donut_chart(68, "1/3"), config={'displayModeBar': False})
-            with r2[2]: st.write("Off. Aktioner"); st.plotly_chart(create_donut_chart(0, "Off"), config={'displayModeBar': False})
-            with r2[3]: st.write("Off. Dueller"); st.plotly_chart(create_donut_chart(235, "Duel"), config={'displayModeBar': False})
-
-            r3 = st.columns(4)
-            with r3[0]: st.write("Erobringer"); st.plotly_chart(create_donut_chart(87, "Erob"), config={'displayModeBar': False})
-            with r3[1]: st.write("Modst. bane"); st.plotly_chart(create_donut_chart(57, "Bane"), config={'displayModeBar': False})
-            with r3[2]: st.write("Generobringer"); st.plotly_chart(create_donut_chart(51, "Gen"), config={'displayModeBar': False})
-            with r3[3]: st.write("Interceptions"); st.plotly_chart(create_donut_chart(31, "Int"), config={'displayModeBar': False})
+            # 3. Vis Donuts i rækker (3x4 system)
+            r1 = st.columns(3)
+            with r1[0]: st.write("Andel af holdets pasninger"); st.plotly_chart(create_team_donut(spiller_pas, total_pas_hold, "Pasninger"), config={'displayModeBar': False})
+            with r1[1]: st.write("Andel af holdets skud"); st.plotly_chart(create_team_donut(maal, total_skud_hold, "Skud", color="#11caa0"), config={'displayModeBar': False})
+            with r1[2]: st.write("Andel af holdets erobringer"); st.plotly_chart(create_team_donut(total_akt, total_erob_hold, "Erobringer", color="#cc0000"), config={'displayModeBar': False})
                 
     with t_pitch:
         descriptions = {
