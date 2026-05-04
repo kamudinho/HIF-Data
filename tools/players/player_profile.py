@@ -37,7 +37,7 @@ def get_logo_img(opta_uuid):
 def draw_player_info_box(ax, logo, player_name, season, view_name):
     """Tegner en info-boks i hjørnet af fodboldbanen"""
     # Baggrundsboks
-    ax.add_patch(plt.Rectangle((1, 85), 35, 14, color='white', alpha=0.9, zorder=10))
+    ax.add_patch(plt.Rectangle((1, 85), 35, 14, alpha=0.9, zorder=10))
     # Spillertekst
     ax.text(12, 95, player_name.upper(), color='black', fontsize=10, fontweight='bold', zorder=11)
     ax.text(12, 91, f"{season} | {view_name}", color='black', fontsize=8, alpha=0.8, zorder=11)
@@ -49,21 +49,36 @@ def draw_player_info_box(ax, logo, player_name, season, view_name):
         newax.imshow(logo_arr)
         newax.axis('off')
 
-def create_donut_chart(value, label, color="#003366"):
-    """Hjælpefunktion til at lave cirkel-statistikker (donuts)"""
+def create_team_donut(player_val, team_total, label, color="#003366"):
+    """
+    Viser spillerens andel af holdets samlede præstation.
+    Hvis team_total er 0, bruges 100 som baseline for procenter.
+    """
+    if team_total <= 0: team_total = max(player_val, 1)
+    
+    # Beregn restværdi for at fylde cirklen ud
+    remainder = max(0, team_total - player_val)
+    
     fig = go.Figure(go.Pie(
-        values=[value, max(1, 100-value) if "%" in str(label) else 0],
+        values=[player_val, remainder],
         hole=0.7,
         marker_colors=[color, "#EEEEEE"],
         textinfo='none',
         hoverinfo='none'
     ))
+    
+    # Beregn procentvis andel til center-tekst
+    pct = int((player_val / team_total) * 100) if team_total > 0 else 0
+    
     fig.update_layout(
         showlegend=False,
         margin=dict(t=0, b=0, l=0, r=0),
-        height=150,
-        width=150,
-        annotations=[dict(text=str(value), x=0.5, y=0.5, font_size=20, showarrow=False, font_family="Arial Black")]
+        height=130,
+        width=130,
+        annotations=[dict(
+            text=f"{player_val}<br><span style='font-size:10px;'>{pct}%</span>", 
+            x=0.5, y=0.5, font_size=16, showarrow=False, font_family="Arial Black"
+        )]
     )
     return fig
 
