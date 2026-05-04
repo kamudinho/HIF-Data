@@ -232,7 +232,7 @@ def vis_side(dp=None):
             chart_cols = st.columns(len(kategorier))
             for i, kat in enumerate(kategorier):
                 with chart_cols[i]:
-                    st.markdown(f"<p style='text-align:center; font-weight:bold; font-size:12px; margin-bottom:-20px;'>{kat['label']}</p>", unsafe_allow_html=True)
+                    st.markdown(f"<p style='text-align:center; font-weight:bold; font-size:12px; margin-bottom:-10px;'>{kat['label']}</p>", unsafe_allow_html=True)
                     
                     # Vi sender kat["rank"] med til funktionen
                     fig = create_relative_donut(kat["aktuel"], kat["maks"], kat["label"], kat["rank"])
