@@ -208,7 +208,7 @@ def vis_side(dp=None):
                 elif visning == "Afslutninger":
                     d = df_plot[df_plot['EVENT_TYPEID'].isin([13, 14, 15, 16])]
                     goals = d[d['EVENT_TYPEID'] == 16]; misses = d[d['EVENT_TYPEID'].isin([13, 14, 15])]
-                    ax.scatter(misses.EVENT_X, misses.EVENT_Y, color='red', s=60, edgecolors='black', alpha=0.6)
+                    ax.scatter(misses.EVENT_X, misses.EVENT_Y, color='grey', s=60, edgecolors='black', alpha=0.7)
                     ax.scatter(goals.EVENT_X, goals.EVENT_Y, color='red', s=120, marker='s', edgecolors='black', zorder=5)
                 elif visning == "Erobringer":
                     d = df_plot[df_plot['EVENT_TYPEID'].isin([7, 8, 12, 49])]
