@@ -180,10 +180,12 @@ def vis_side(dp=None):
     with t_profile:
         # 1. Beregn stats for ALLE spillere på holdet
         truppen_stats = df_all.groupby('VISNINGSNAVN').agg(
+            truppen_stats = df_all.groupby('VISNINGSNAVN').agg(
             Pasninger=('EVENT_TYPEID', lambda x: (x == 1).sum()),
-            Mål=('EVENT_TYPEID', lambda x: (x == 16).sum()),
             Afslutninger=('EVENT_TYPEID', lambda x: x.isin([13, 14, 15, 16]).sum()),
+            Mål=('EVENT_TYPEID', lambda x: (x == 16).sum()), # <--- Tjek denne!
             Erobringer=('EVENT_TYPEID', lambda x: x.isin([7, 8, 12, 49]).sum())
+        )
         )
         
         # 2. Find rangering for den valgte spiller
