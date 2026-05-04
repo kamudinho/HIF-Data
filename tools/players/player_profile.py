@@ -157,8 +157,70 @@ def vis_side(dp=None):
     valgt_player_uuid = df_all[df_all['VISNINGSNAVN'] == valgt_spiller]['PLAYER_OPTAUUID'].iloc[0]
     df_spiller = df_all[df_all['VISNINGSNAVN'] == valgt_spiller].copy()
 
-    t_pitch, t_phys, t_stats, t_compare = st.tabs(["Spilleraktioner", "Fysisk data", "Statistik", "Sammenligning"])
+    t_profile, t_pitch, t_phys, t_stats, t_compare = st.tabs(["Spillerprofil", "Spilleraktioner", "Fysisk data", "Statistik", "Sammenligning"])
 
+    # --- TAB 1: SPILLERPROFIL (NY) ---
+    with t_profile:
+        col_card, col_main = st.columns([1, 3])
+        
+        with col_card:
+            # Spiller-info boks (Blå boks til venstre)
+            st.markdown(f"""
+                <div class="profile-card">
+                    <h5 style='margin:0;'>{valgt_spiller}</h5>
+                    <p style='margin:0; opacity:0.8;'>Position: Midtbane</p>
+                    <hr style='border-color: rgba(255,255,255,0.2);'>
+                    <table style='width:100%; font-size:14px;'>
+                        <tr><td>Kampe:</td><td style='text-align:right;'><b>16</b></td></tr>
+                        <tr><td>Minutter:</td><td style='text-align:right;'><b>1423</b></td></tr>
+                        <tr><td>Mål:</td><td style='text-align:right;'><b>3</b></td></tr>
+                        <tr><td>Assists:</td><td style='text-align:right;'><b>4</b></td></tr>
+                    </table>
+                </div>
+            """, unsafe_allow_html=True)
+            
+            st.write("")
+            # Volumen-bars (som på billedet)
+            st.write("Volumen i forhold til liga")
+            metrics = {
+                "Afleveringer": 29.2,
+                "Dueller": 25.7,
+                "Boldtab": 11.6,
+                "Skud": 1.7,
+                "xG": 0.3,
+                "Pasnings %": 77.4
+            }
+            for m, val in metrics.items():
+                st.write(f"<div style='font-size:12px; margin-bottom:-10px;'>{m} <span style='float:right;'>{val}</span></div>", unsafe_allow_html=True)
+                st.progress(min(val/50 if "Pasning" not in m else val/100, 1.0))
+
+        with col_main:
+            st.markdown("<h3 style='text-align:center; color:#003366;'>Spillerstatistik</h3>", unsafe_allow_html=True)
+            
+            # Beregn værdier fra data (Her bruger vi dummy-tal eller simpel optælling)
+            pas_df = df_spiller[df_spiller['EVENT_TYPEID'] == 1]
+            pas_total = len(pas_df)
+            pas_acc = int((pas_df['OUTCOME'].sum() / pas_total * 100)) if pas_total > 0 else 0
+            
+            # Donut grid 4x3
+            r1 = st.columns(4)
+            with r1[0]: st.write("Afleveringer"); st.plotly_chart(create_donut_chart(pas_total, "Total"), config={'displayModeBar': False})
+            with r1[1]: st.write("Pasning %"); st.plotly_chart(create_donut_chart(pas_acc, "Acc %", color="#11caa0"), config={'displayModeBar': False})
+            with r1[2]: st.write("Fremadrettet"); st.plotly_chart(create_donut_chart(158, "Frem"), config={'displayModeBar': False})
+            with r1[3]: st.write("Progressive"); st.plotly_chart(create_donut_chart(77, "Prog"), config={'displayModeBar': False})
+            
+            r2 = st.columns(4)
+            with r2[0]: st.write("Lange pasninger"); st.plotly_chart(create_donut_chart(22, "Lange"), config={'displayModeBar': False})
+            with r2[1]: st.write("Sidste 1/3"); st.plotly_chart(create_donut_chart(68, "1/3"), config={'displayModeBar': False})
+            with r2[2]: st.write("Off. Aktioner"); st.plotly_chart(create_donut_chart(0, "Off"), config={'displayModeBar': False})
+            with r2[3]: st.write("Off. Dueller"); st.plotly_chart(create_donut_chart(235, "Duel"), config={'displayModeBar': False})
+
+            r3 = st.columns(4)
+            with r3[0]: st.write("Erobringer"); st.plotly_chart(create_donut_chart(87, "Erob"), config={'displayModeBar': False})
+            with r3[1]: st.write("Modst. bane"); st.plotly_chart(create_donut_chart(57, "Bane"), config={'displayModeBar': False})
+            with r3[2]: st.write("Generobringer"); st.plotly_chart(create_donut_chart(51, "Gen"), config={'displayModeBar': False})
+            with r3[3]: st.write("Interceptions"); st.plotly_chart(create_donut_chart(31, "Int"), config={'displayModeBar': False})
+                
     with t_pitch:
         descriptions = {
             "Heatmap": "Viser spillerens generelle bevægelsesmønster og intensitet på banen.",
