@@ -159,7 +159,7 @@ def vis_side(dp=None):
     t_profile, t_pitch, t_phys, t_stats, t_compare = st.tabs(["Spillerprofil", "Spilleraktioner", "Fysisk data", "Statistik", "Sammenligning"])
 
     # --- TAB 1: SPILLERPROFIL (OPDATERET OG DYNAMISK) ---
-    with tabs[0]:
+    with t_profile:
         col_card, col_main = st.columns([1, 3.5])
         
         # 1. BEREGN DYNAMISKE STATS TIL KORTET
