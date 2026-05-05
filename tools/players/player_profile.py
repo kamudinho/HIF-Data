@@ -198,7 +198,7 @@ def vis_side(dp=None):
         col_info, col_charts_top = st.columns([1, 4])
     
         with col_info:
-            st.markdown(f"### {valgt_spiller}")
+            st.markdown(f'<div class="player-header" style="margin: 0; line-height: 1;">{valgt_spiller}</div>', unsafe_allow_html=True)
             st.caption(f"{valgt_hold}")
             if hold_logo is not None: st.image(hold_logo, width=80)
             st.markdown("---")
