@@ -195,7 +195,7 @@ def vis_side(dp=None):
         spiller_ranks = ranks.loc[valgt_spiller]
     
         # Vi laver to kolonner i toppen: En til Spiller Info og en til de første 4 charts
-        col_info, col_charts_top = st.columns([1, 4])
+        col_info, col_charts_top = st.columns([1.3, 4])
     
         with col_info:
             if hold_logo is not None: st.image(hold_logo, width=35)
