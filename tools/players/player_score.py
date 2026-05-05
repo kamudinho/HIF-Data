@@ -84,28 +84,30 @@ def vis_side():
     )
 
     # --- 3. DATAFETCH ---
-    # Vi beregner spillernes samlede spilletid i den valgte liga/sæson via WYSCOUT_MATCHADVANCEDPLAYERSTATS_TOTAL
-    # Og vi finder spillerens mest spillede specifikke position via WYSCOUT_MATCHADVANCEDPLAYERSTATS_BASE
     with st.spinner("Henter og beregner Wyscout-data..."):
+        # SQL-FORBEDRING: Vi begrænser nu også minut-beregningen (pm) til den specifikke sæson (SOGT_SAESON)
         sql = f"""
         WITH player_minutes AS (
             SELECT 
-                PLAYER_WYID,
-                SUM(MINUTESONFIELD) as total_minutes
-            FROM {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_TOTAL
-            WHERE COMPETITION_WYID = {valgt_liga}
-            GROUP BY PLAYER_WYID
-            HAVING SUM(MINUTESONFIELD) >= 270
+                t_stats.PLAYER_WYID,
+                SUM(t_stats.MINUTESONFIELD) as total_minutes
+            FROM {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_TOTAL t_stats
+            JOIN {DB}.WYSCOUT_SEASONS seas ON t_stats.SEASON_WYID = seas.SEASON_WYID
+            WHERE t_stats.COMPETITION_WYID = {valgt_liga}
+              AND seas.SEASONNAME = '{SOGT_SAESON}'
+            GROUP BY t_stats.PLAYER_WYID
+            HAVING SUM(t_stats.MINUTESONFIELD) >= 270
         ),
         player_primary_position AS (
             SELECT 
-                PLAYER_WYID,
-                POSITION1NAME as primary_position,
-                ROW_NUMBER() OVER (PARTITION BY PLAYER_WYID ORDER BY COUNT(*) DESC) as pos_rank
-            FROM {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_BASE
-            WHERE COMPETITION_WYID = {valgt_liga}
-              AND SEASON_WYID = (SELECT DISTINCT SEASON_WYID FROM {DB}.WYSCOUT_SEASONS WHERE SEASONNAME = '{SOGT_SAESON}' LIMIT 1)
-            GROUP BY PLAYER_WYID, POSITION1NAME
+                b_stats.PLAYER_WYID,
+                b_stats.POSITION1NAME as primary_position,
+                ROW_NUMBER() OVER (PARTITION BY b_stats.PLAYER_WYID ORDER BY COUNT(*) DESC) as pos_rank
+            FROM {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_BASE b_stats
+            JOIN {DB}.WYSCOUT_SEASONS seas ON b_stats.SEASON_WYID = seas.SEASON_WYID
+            WHERE b_stats.COMPETITION_WYID = {valgt_liga}
+              AND seas.SEASONNAME = '{SOGT_SAESON}'
+            GROUP BY b_stats.PLAYER_WYID, b_stats.POSITION1NAME
         )
         SELECT 
             p.PLAYER_WYID,
@@ -239,7 +241,7 @@ def vis_side():
                             <div style="font-size: 14px; color: #555; line-height: 1.5;">
                                 Klub: <b>{spiller_data['team_name']}</b><br>
                                 Detaljeret Position: <b>{spiller_data['specific_position']}</b><br>
-                                Spillede minutter: <b>{int(spiller_data['total_minutes'])} min.</b><br>
+                                Spillede minutter (2025/2026): <b>{int(spiller_data['total_minutes'])} min.</b><br>
                                 Samlet Score ({valgt_pos}): <b>{spiller_data[score_col]}</b>
                             </div>
                         </div>
