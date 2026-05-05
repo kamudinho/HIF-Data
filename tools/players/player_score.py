@@ -124,39 +124,52 @@ def vis_side():
         GROUP BY p.PLAYER_WYID, p.SHORTNAME, t.OFFICIALNAME, p.CURRENTTEAM_WYID
         """
         
-        df = conn.query(sql)
+        raw_df = conn.query(sql)
         
-        if df is not None and not df.empty:
-            df.columns = df.columns.str.lower()
-            df['visningsnavn'] = df['full_name'].apply(forkort_navn)
+        if raw_df is not None and not raw_df.empty:
+            raw_df.columns = raw_df.columns.str.lower()
             
             # --- 4. BEREGNING AF PASNINGSPROCENT ---
-            df['pass_pct'] = (df['successfulpasses'] / df['passes'].replace(0, 1)) * 100
+            raw_df['pass_pct'] = (raw_df['successfulpasses'] / raw_df['passes'].replace(0, 1)) * 100
 
             # Find den valgte profilkonfiguration
             config = POS_CONFIG[valgt_pos]
             
-            # BEREGN PERFORMANCE SCORE
+            # BEREGN PERFORMANCE SCORE INDEN GRUPPERING
             score_col = 'pos_score'
-            df[score_col] = 0.0
-            
+            raw_df[score_col] = 0.0
             for i, m_name in enumerate(config['metrics']):
                 weight = config['weights'][i]
-                df[score_col] += df[m_name] * weight
-
+                raw_df[score_col] += raw_df[m_name] * weight
+            
+            # --- 5. DET SIKRE PANDAS GRUPPERINGS-FILTER (SLÅR DUBLETTER HELT IHJEL) ---
+            # Vi grupperer hårdt på spiller-ID i Python for at garantere kun ÉN række pr. spiller i Plotly.
+            agg_dict = {
+                'full_name': 'first',
+                'team_name': 'first',
+                score_col: 'mean'
+            }
+            # Tilføj de underliggende metrics til aggregeringen, så de også er unikke
+            for m_name in config['metrics']:
+                agg_dict[m_name] = 'mean'
+                
+            df = raw_df.groupby('player_wyid', as_index=False).agg(agg_dict)
             df[score_col] = df[score_col].round(1)
             
-            # Sorter alle spillere, så den højeste score ender øverst på y-aksen
+            # Forkort navne til visning
+            df['visningsnavn'] = df['full_name'].apply(forkort_navn)
+            
+            # Sorter alle spillere opad til barchart
             df_alle = df.sort_values(score_col, ascending=True)
 
-            # --- 5. LYSBILLED-OPSÆTNING (SPLIT) ---
+            # --- 6. SPLIT-SCREEN LAYOUT ---
             rude_venstre, rude_hoejre = st.columns([1.1, 0.9])
 
-            # RUDE 1 (VENSTRE): Rent og professionelt barchart i klubbens røde farve
+            # RUDE 1 (VENSTRE): Rent og professionelt barchart (Kun 1 værdi pr. spiller!)
             with rude_venstre:
                 st.subheader(f"{valgt_pos} Scoreboard")
                 
-                # Dynamisk højde baseret på antallet af spillere (25px pr. række sikrer ren afstand)
+                # Dynamisk højde baseret på det unikke antal af spillere
                 hoejde_graf = max(500, len(df_alle) * 26)
                 
                 fig = px.bar(
@@ -168,11 +181,10 @@ def vis_side():
                     template='plotly_white'
                 )
                 
-                # Opdaterer bjælkernes farve til den dybe røde farve og formaterer teksten inden i dem
                 fig.update_traces(
-                    marker_color='#c11c2e',  # Professionel rød farve
+                    marker_color='#c11c2e',  # Solid rød farve
                     textposition='inside',   # Placerer scoren inde i bjælken
-                    textfont=dict(color='white', size=11, family="Arial"), # Hvid ren tekst
+                    textfont=dict(color='white', size=11, family="Arial"), 
                     insidetextanchor='end',  # Justerer tallet helt ud til kanten af bjælken
                     cliponaxis=False
                 )
