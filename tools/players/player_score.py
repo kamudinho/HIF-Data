@@ -120,19 +120,14 @@ def vis_side():
     with st.spinner("Henter og beregner Wyscout-data..."):
         sql = f"""
         WITH player_minutes AS (
+            -- Isoleret og unik opsummering for at undgå Cartesian Product-duplikering af minutter
             SELECT 
-                t_stats.PLAYER_WYID,
-                SUM(t_stats.MINUTESONFIELD) as total_minutes
-            FROM {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_TOTAL t_stats
-            JOIN {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_BASE b_stats 
-              ON t_stats.MATCH_WYID = b_stats.MATCH_WYID 
-             AND t_stats.PLAYER_WYID = b_stats.PLAYER_WYID
-            JOIN {DB}.WYSCOUT_PLAYERS p ON t_stats.PLAYER_WYID = p.PLAYER_WYID
-            JOIN {DB}.WYSCOUT_SEASONS seas ON b_stats.SEASON_WYID = seas.SEASON_WYID
-            WHERE (t_stats.COMPETITION_WYID = {valgt_liga} OR p.CURRENTTEAM_WYID = {HVIDOVRE_TEAM_WYID})
-              AND seas.SEASONNAME = '{SOGT_SAESON}'
-            GROUP BY t_stats.PLAYER_WYID
-            HAVING SUM(t_stats.MINUTESONFIELD) >= 150
+                PLAYER_WYID,
+                SUM(MINUTESONFIELD) as total_minutes
+            FROM {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_TOTAL
+            WHERE COMPETITION_WYID = {valgt_liga}
+            GROUP BY PLAYER_WYID
+            HAVING SUM(MINUTESONFIELD) >= 150
         ),
         most_played_position AS (
             SELECT 
@@ -253,7 +248,6 @@ def vis_side():
                 
                 hoejde_graf = max(500, len(visnings_df) * 26)
                 
-                # Plotly med klik-events aktiveret
                 fig = px.bar(
                     visnings_df, 
                     x=score_col, 
@@ -281,16 +275,12 @@ def vis_side():
                     clickmode='event+select'
                 )
                 
-                # Registrer kliks på søjlerne
                 valgt_klik = st.plotly_chart(fig, use_container_width=True, on_select="rerun")
 
-            # RUDE 2 (HØJRE): Spiller-detaljer (Uden dropdown / søgetekst)
+            # RUDE 2 (HØJRE): Spiller-detaljer (Uden dropdown)
             with rude_hoejre:
                 st.subheader("Spiller-detaljer")
                 
-                # Find ud af, hvilken spiller der skal vises:
-                # 1. Hvis brugeren har klikket på en spiller i grafen
-                # 2. Ellers tager vi den absolut bedste spiller på listen som standard
                 valgt_spiller_data = None
                 
                 if valgt_klik and "selection" in valgt_klik and valgt_klik["selection"]["points"]:
