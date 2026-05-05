@@ -107,7 +107,7 @@ def vis_side():
             s.PROGRESSIVERUN,
             s.DEFENSIVEDUELSWON,
             s.CLEARANCES,
-            s.ARIALDUELSWON AS AERIALDUELSWON, -- Rettet stavning
+            s.ARIALDUELS AS AERIALDUELS, -- Rettet stavning
             s.DANGEROUSOWNHALFLOSSES,
             s.ASSISTS
         FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_AVERAGE s
