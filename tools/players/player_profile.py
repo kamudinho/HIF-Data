@@ -236,7 +236,7 @@ def vis_side(dp=None):
             # NY ASSIST-LOGIK: 
             # Vi tæller afleveringer/hændelser, som har qualifier '29' (Direkte mål-assist) 
             # eller '210' kombineret med at have resulteret i et mål.
-            'Assists': x.apply(lambda r: '29' in r.get('qual_list', []), axis=1).sum(),
+            'Assists': x.apply(lambda r: '210' in r.get('qual_list', []), axis=1).sum(),
             
             'Erobringer': x['EVENT_TYPEID'].isin([7, 8, 12, 49]).sum(),
             'Driblinger': (x['EVENT_TYPEID'] == 3).sum(),
