@@ -105,8 +105,7 @@ def vis_side():
         format_func=lambda x: LIGA_MAP.get(x, f"Liga ID: {x}")
     )
 
-    # --- 2. SQL GEOMETRI (Fallback på kampspecifikke positioner) ---
-    # Vi mapper de kampspecifikke koder (fra b_stats.POSITION1CODE) som backup til kategorierne
+    # Backup-mapping til kampspecifikke positioner
     if valgt_profil == "Forsvar":
         pos_fallback_filter = "b_stats.POSITION1CODE IN ('CB', 'LB', 'RB', 'LWB', 'RWB')"
         role_code = "DEF"
@@ -117,7 +116,7 @@ def vis_side():
         pos_fallback_filter = "b_stats.POSITION1CODE IN ('CF', 'LWF', 'RWF', 'SS')"
         role_code = "FWD"
 
-    # --- 3. DATAFETCH ---
+    # --- 2. DATAFETCH ---
     with st.spinner("Henter og beregner Wyscout-data..."):
         sql = f"""
         WITH player_minutes AS (
@@ -136,7 +135,6 @@ def vis_side():
             HAVING SUM(t_stats.MINUTESONFIELD) >= 150
         ),
         most_played_position AS (
-            -- Finder den position spilleren har optrådt mest på i kamp-databasen denne sæson
             SELECT 
                 b_stats.PLAYER_WYID,
                 b_stats.POSITION1NAME as MATCH_POS_NAME,
@@ -156,7 +154,6 @@ def vis_side():
             t.OFFICIALNAME as TEAM_NAME,
             p.CURRENTTEAM_WYID as TEAM_WYID,
             pm.total_minutes,
-            -- Hvis ROLENAME mangler, snupper vi den mest spillede position fra kamp-historikken
             COALESCE(p.ROLENAME, mpp.MATCH_POS_NAME, 'Ukendt Position') as SPECIFIC_POSITION,
             AVG(s.GOALS) as GOALS,
             AVG(s.XGSHOT) AS XG,
@@ -181,13 +178,11 @@ def vis_side():
         JOIN {DB}.WYSCOUT_SEASONS seas ON s.SEASON_WYID = seas.SEASON_WYID
         JOIN player_minutes pm ON p.PLAYER_WYID = pm.PLAYER_WYID
         LEFT JOIN most_played_position mpp ON p.PLAYER_WYID = mpp.PLAYER_WYID AND mpp.rnk = 1
-        -- Fallback match-base join så vi kan hente deres kampspecifikke positioner
         JOIN {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_BASE b_stats 
           ON s.PLAYER_WYID = b_stats.PLAYER_WYID 
          AND s.SEASON_WYID = b_stats.SEASON_WYID
         WHERE (s.COMPETITION_WYID = {valgt_liga} OR p.CURRENTTEAM_WYID = {HVIDOVRE_TEAM_WYID})
           AND seas.SEASONNAME = '{SOGT_SAESON}'
-          -- Inkluder enten hvis stam-rollen passer, ELLER hvis de mangler stam-rolle men spiller i den rigtige position i kampene
           AND (p.ROLECODE3 = '{role_code}' OR (COALESCE(p.ROLECODE3, '') = '' AND {pos_fallback_filter}))
         GROUP BY p.PLAYER_WYID, p.FIRSTNAME, p.LASTNAME, p.SHORTNAME, t.OFFICIALNAME, p.CURRENTTEAM_WYID, pm.total_minutes, p.ROLENAME, mpp.MATCH_POS_NAME, p.ROLECODE3
         """
@@ -197,7 +192,7 @@ def vis_side():
         if raw_df is not None and not raw_df.empty:
             raw_df.columns = raw_df.columns.str.lower()
             
-            # --- 4. BEREGNING AF PASNINGSPROCENT ---
+            # --- 3. BEREGNING AF PASNINGSPROCENT ---
             raw_df['pass_pct'] = (raw_df['successfulpasses'] / raw_df['passes'].replace(0, 1)) * 100
 
             config = POS_CONFIG[valgt_profil]
@@ -209,7 +204,7 @@ def vis_side():
                 weight = config['weights'][i]
                 raw_df[score_col] += raw_df[m_name] * weight
             
-            # --- 5. CLEAN PANDAS GROUPBY ---
+            # --- 4. CLEAN PANDAS GROUPBY ---
             agg_dict = {
                 'full_name': 'first',
                 'team_name': 'first',
@@ -225,49 +220,48 @@ def vis_side():
             df = raw_df.groupby('player_wyid', as_index=False).agg(agg_dict)
             df[score_col] = df[score_col].round(1)
             
-            # Oversæt den specifikke position til dansk
             df['dk_position'] = df['specific_position'].map(POS_TRANSLATIONS).fillna(df['specific_position'])
-            
             df_sorteret = df.sort_values(score_col, ascending=False)
             
-            # --- 6. LOGIK: TOP 20 FRA LIGAEN + 2 BEDSTE FRA HVIDOVRE ---
+            # --- 5. LOGIK: TOP 20 FRA LIGAEN + 2 BEDSTE FRA HVIDOVRE ---
             liga_spillere = df_sorteret[df_sorteret['player_wyid'].isin(
                 raw_df[raw_df['team_wyid'] != HVIDOVRE_TEAM_WYID]['player_wyid']
             ) | (df_sorteret['team_wyid'] == HVIDOVRE_TEAM_WYID)]
             
             top_20_liga = liga_spillere[liga_spillere['team_wyid'] != HVIDOVRE_TEAM_WYID].head(20)
-            
             hvidovre_spillere = df_sorteret[df_sorteret['team_wyid'] == HVIDOVRE_TEAM_WYID]
             top_2_hvidovre = hvidovre_spillere.head(2)
             
             visnings_df = pd.concat([top_20_liga, top_2_hvidovre]).drop_duplicates(subset=['player_wyid'])
             
-            # Sorter til grafen
+            # Sorter så de bedste spillere lægges i toppen af det liggende søjlediagram
             visnings_df = visnings_df.sort_values(score_col, ascending=True)
             visnings_df['visningsnavn'] = visnings_df['full_name']
 
-            # Rød for Hvidovre (#c11c2e), Blå for andre (#1b365d)
+            # Hvidovre = Rød (#c11c2e), Andre klubber = Blå (#1b365d)
             farve_liste = [
                 '#c11c2e' if int(row['team_wyid']) == HVIDOVRE_TEAM_WYID else '#1b365d'
                 for _, row in visnings_df.iterrows()
             ]
 
-            # --- 7. SPLIT-SCREEN LAYOUT ---
+            # --- 6. SPLIT-SCREEN LAYOUT ---
             rude_venstre, rude_hoejre = st.columns([1.1, 0.9])
 
             # RUDE 1 (VENSTRE): Scoreboard
             with rude_venstre:
-                st.subheader(f"Scoreboard: Top 20")
+                st.subheader("Performance Scoreboard")
                 
-                hoejde_graf = max(400, len(visnings_df) * 26)
+                hoejde_graf = max(500, len(visnings_df) * 26)
                 
+                # Plotly med klik-events aktiveret
                 fig = px.bar(
                     visnings_df, 
                     x=score_col, 
                     y='visningsnavn', 
                     orientation='h',
                     text=score_col,
-                    template='plotly_white'
+                    template='plotly_white',
+                    custom_data=['player_wyid']
                 )
                 
                 fig.update_traces(
@@ -283,26 +277,39 @@ def vis_side():
                     xaxis={'title': f"{valgt_profil} Performance Score", 'showgrid': False},
                     showlegend=False, 
                     height=hoejde_graf,
-                    margin=dict(l=10, r=10, t=10, b=10)
+                    margin=dict(l=10, r=10, t=10, b=10),
+                    clickmode='event+select'
                 )
-                st.plotly_chart(fig, use_container_width=True)
-
-            # RUDE 2 (HØJRE): Spiller-vælger
-            with rude_hoejre:                
-                spillere_liste = sorted(df['full_name'].dropna().unique())
-                valgt_spiller_navn = st.selectbox("Vælg eller skriv spillernavn:", spillere_liste)
                 
-                if valgt_spiller_navn:
-                    spiller_data = df[df['full_name'] == valgt_spiller_navn].iloc[0]
-                    
+                # Registrer kliks på søjlerne
+                valgt_klik = st.plotly_chart(fig, use_container_width=True, on_select="rerun")
+
+            # RUDE 2 (HØJRE): Spiller-detaljer (Uden dropdown / søgetekst)
+            with rude_hoejre:
+                st.subheader("Spiller-detaljer")
+                
+                # Find ud af, hvilken spiller der skal vises:
+                # 1. Hvis brugeren har klikket på en spiller i grafen
+                # 2. Ellers tager vi den absolut bedste spiller på listen som standard
+                valgt_spiller_data = None
+                
+                if valgt_klik and "selection" in valgt_klik and valgt_klik["selection"]["points"]:
+                    klikket_navn = valgt_klik["selection"]["points"][0]["y"]
+                    valgt_spiller_data = df[df['full_name'] == klikket_navn].iloc[0]
+                else:
+                    # Standard: Vis den bedst rangerede spiller fra visnings_df
+                    bedste_spiller_id = visnings_df.sort_values(score_col, ascending=False).iloc[0]['player_wyid']
+                    valgt_spiller_data = df[df['player_wyid'] == bedste_spiller_id].iloc[0]
+
+                if valgt_spiller_data is not None:
                     st.markdown(f"""
                         <div class="score-card">
-                            <div class="pos-title">{spiller_data['full_name']}</div>
+                            <div class="pos-title">{valgt_spiller_data['full_name']}</div>
                             <div style="font-size: 14px; color: #555; line-height: 1.5;">
-                                Klub: <b>{spiller_data['team_name']}</b><br>
-                                Position (Wyscout / Kamp-data): <b>{spiller_data['dk_position']}</b><br>
-                                Spillede minutter (2025/2026): <b>{int(spiller_data['total_minutes'])} min.</b><br>
-                                Samlet Score ({valgt_profil}): <b>{spiller_data[score_col]}</b>
+                                Klub: <b>{valgt_spiller_data['team_name']}</b><br>
+                                Position (Wyscout / Kamp-data): <b>{valgt_spiller_data['dk_position']}</b><br>
+                                Spillede minutter (2025/2026): <b>{int(valgt_spiller_data['total_minutes'])} min.</b><br>
+                                Samlet Score ({valgt_profil}): <b>{valgt_spiller_data[score_col]}</b>
                             </div>
                         </div>
                     """, unsafe_allow_html=True)
@@ -310,7 +317,7 @@ def vis_side():
                     st.write(f"**Underliggende P90-værdier ({valgt_profil}):**")
                     
                     for idx, m_name in enumerate(config['metrics']):
-                        metric_vaerdi = spiller_data[m_name]
+                        metric_vaerdi = valgt_spiller_data[m_name]
                         visnings_vaerdi = f"{metric_vaerdi:.1f}%" if "pct" in m_name else f"{metric_vaerdi:.2f}"
                         
                         st.markdown(f"""
