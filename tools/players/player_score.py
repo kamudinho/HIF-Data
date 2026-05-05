@@ -27,7 +27,6 @@ def vis_side():
     if not conn: return
 
     # --- 1. KONFIGURATION AF VÆGTNINGER ---
-    # Vi bruger rene ASCII-nøgler her, der matcher SQL-outputtet 100%
     POS_CONFIG = {
         "Angriber": {
             "metrics": ["goals", "xg", "shots", "touches_in_box", "dribbles", "assists"],
@@ -51,7 +50,7 @@ def vis_side():
     valgt_pos = col1.selectbox("Vælg Positionsprofil", list(POS_CONFIG.keys()))
     min_mins = col2.slider("Min. minutter spillet", 0, 1500, 270)
     
-    # --- 3. DATAFETCH (Snowflake SQL uden specialtegn i aliaser) ---
+    # --- 3. DATAFETCH ---
     DB = "KLUB_HVIDOVREIF.AXIS"
     LIGA_IDS = "('dyjr458hcmrcy87fsabfsy87o', 'e5p78j2r7v8h3u9s5k0l2m4n6', 'f6q89k3s8w9i4v0t6l1m3n5o7', '335', '328', '329', '43319', '331')"
 
@@ -61,33 +60,33 @@ def vis_side():
             SELECT 
                 e.PLAYER_OPTAUUID,
                 ANY_VALUE(TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME)) as FULL_NAME,
-                ANY_VALUE(m.CONTESTANT_NAME) as TEAM_NAME,
+                ANY_VALUE(m.CONTESTANTHOME_NAME) as TEAM_NAME, -- Rettet fra CONTESTANT_NAME til CONTESTANTHOME_NAME
                 
-                -- Minutes, xG og xA (Omskrevet til Snowflake-sikker syntaks uden FILTER)
+                -- Minutes, xG og xA
                 SUM(CASE WHEN mx.STAT_TYPE = 'minsPlayed' THEN mx.STAT_VALUE ELSE 0 END) as total_minutes,
                 SUM(CASE WHEN mx.STAT_TYPE = 'expectedGoals' THEN mx.STAT_VALUE ELSE 0 END) as total_xg,
                 SUM(CASE WHEN mx.STAT_TYPE = 'expectedAssists' THEN mx.STAT_VALUE ELSE 0 END) as total_xa,
                 
-                -- Event counts omdøbt til ASCII
+                -- Event counts
                 SUM(CASE WHEN e.EVENT_TYPEID = 16 THEN 1 ELSE 0 END) as goals,
                 SUM(CASE WHEN e.EVENT_TYPEID IN (13,14,15,16) THEN 1 ELSE 0 END) as shots,
                 SUM(CASE WHEN e.EVENT_TYPEID = 1 THEN 1 ELSE 0 END) as passes_attempted,
                 SUM(CASE WHEN e.EVENT_TYPEID = 1 AND e.EVENT_OUTCOME = 1 THEN 1 ELSE 0 END) as passes_completed,
                 SUM(CASE WHEN e.EVENT_TYPEID = 3 THEN 1 ELSE 0 END) as dribbles,
                 
-                -- Berøringer i feltet (X over 83, Y mellem 21 og 79)
+                -- Berøringer i feltet
                 SUM(CASE WHEN e.EVENT_X > 83 AND e.EVENT_Y >= 21 AND e.EVENT_Y <= 79 THEN 1 ELSE 0 END) as touches_in_box,
                 SUM(CASE WHEN e.EVENT_TYPEID = 8 THEN 1 ELSE 0 END) as interceptions,
                 SUM(CASE WHEN e.EVENT_TYPEID = 7 THEN 1 ELSE 0 END) as tackles,
                 SUM(CASE WHEN e.EVENT_TYPEID = 12 THEN 1 ELSE 0 END) as clearances,
                 
-                -- Key Passes (Qualifier 210)
+                -- Key Passes
                 SUM(CASE WHEN q.QUALIFIER_QID = '210' THEN 1 ELSE 0 END) as key_passes,
                 
-                -- Luftdueller (Event 44 og vundet)
+                -- Luftdueller
                 SUM(CASE WHEN e.EVENT_TYPEID = 44 AND e.EVENT_OUTCOME = 1 THEN 1 ELSE 0 END) as aerials_won,
                 
-                -- Boldtab i egen zone (Egen zone defineret som X < 50)
+                -- Boldtab i egen zone
                 SUM(CASE WHEN e.EVENT_TYPEID IN (50, 51) AND e.EVENT_X < 50 THEN 1 ELSE 0 END) as turnovers_def
                 
             FROM {DB}.OPTA_EVENTS e
