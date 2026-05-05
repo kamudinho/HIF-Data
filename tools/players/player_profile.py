@@ -197,7 +197,7 @@ def vis_side(dp=None):
         """
         df_expected = conn.query(sql_expected)
 
-        # --- SQL 3: KORRIGERET OG DRIFTSIKKER MÅL & ASSISTS-QUERY ---
+        # --- SQL 3: DRIFTSIKKER MÅL & ASSISTS-QUERY ---
         sql_db_stats = f"""
             WITH EventQualifiers AS (
                 -- Trin 1: Saml qualifiers pr. event
@@ -239,14 +239,14 @@ def vis_side(dp=None):
                 GROUP BY PLAYER_OPTAUUID, VISNINGSNAVN
             ),
             PlayerAssists AS (
-                -- Trin 3b: Beregn assists baseret på hvem der lavede den næstsidste aktion før målet
+                -- Trin 3b: Beregn assists baseret på hvem der lavede den næstsidste hændelse før målet
                 SELECT 
                     ASSIST_PLAYER_UUID AS PLAYER_OPTAUUID,
                     COUNT(*) AS ASSISTS
                 FROM SortedEvents
                 WHERE EVENT_TYPEID = 16 
                   AND ASSIST_PLAYER_UUID IS NOT NULL
-                  AND ASSIST_PLAYER_UUID != PLAYER_OPTAUUID -- Undgå selv-afleveringer (selvmål/soloture)
+                  AND ASSIST_PLAYER_UUID != PLAYER_OPTAUUID -- Undgå selv-afleveringer
                   AND (
                       QUALIFIERS LIKE '%29%'             -- Målet har qualifier 29 (Assisted)
                       OR PREV_QUALIFIERS LIKE '%210%'    -- Forrige hændelse havde qualifier 210 (Key Pass)
@@ -273,10 +273,27 @@ def vis_side(dp=None):
     df_all['qual_list'] = df_all['QUALIFIERS'].fillna('').str.split(',')
     df_all['Action_Label'] = df_all.apply(get_action_label, axis=1)
 
-    spiller_liste = sorted(df_all['VISNINGSNAVN'].unique())
-    valgt_spiller = col_h_spiller.selectbox("Spiller", spiller_liste, label_visibility="collapsed")
-    valgt_player_uuid = df_all[df_all['VISNINGSNAVN'] == valgt_spiller]['PLAYER_OPTAUUID'].iloc[0]
-    df_spiller = df_all[df_all['VISNINGSNAVN'] == valgt_spiller].copy()
+    # --- SIKKER NAVIGATION PÅ BAGGRUND AF UNIKKE UUIDs ---
+    df_spillere_unikke = df_all[['VISNINGSNAVN', 'PLAYER_OPTAUUID']].drop_duplicates()
+    
+    # Skab en ordbog af unikke valgmuligheder, så ens navne kan adskilles med UUID-suffix
+    spiller_options = {}
+    for _, r in df_spillere_unikke.iterrows():
+        navn = r['VISNINGSNAVN']
+        uuid = r['PLAYER_OPTAUUID']
+        if navn in spiller_options.values():
+            visnings_label = f"{navn} ({uuid[-4:]})"
+        else:
+            visnings_label = navn
+        spiller_options[visnings_label] = uuid
+
+    spiller_liste = sorted(list(spiller_options.keys()))
+    valgt_label = col_h_spiller.selectbox("Spiller", spiller_liste, label_visibility="collapsed")
+    
+    valgt_player_uuid = spiller_options[valgt_label]
+    valgt_spiller = valgt_label.split(" (")[0] # Rå navn til displays
+
+    df_spiller = df_all[df_all['PLAYER_OPTAUUID'] == valgt_player_uuid].copy()
 
     t_profile, t_pitch, t_phys, t_stats, t_compare = st.tabs(["Spillerprofil", "Spilleraktioner", "Fysisk data", "Statistik", "Sammenligning"])
 
@@ -286,7 +303,7 @@ def vis_side(dp=None):
             return df_group.apply(lambda r: har_qualifier(r['EVENT_TYPEID'], r.get('qual_list', []), eid, qids), axis=1).sum()
 
         # 1. Beregn standard-hændelser for ALLE spillere i Python
-        event_stats = df_all.groupby(['VISNINGSNAVN', 'PLAYER_OPTAUUID']).apply(lambda x: pd.Series({
+        event_stats = df_all.groupby(['PLAYER_OPTAUUID', 'VISNINGSNAVN']).apply(lambda x: pd.Series({
             'Gule_kort': count_event_with_qual(x, 17, 31),
             'Roede_kort': count_event_with_qual(x, 17, 33),
             'Indskiftet': (x['EVENT_TYPEID'] == 19).sum(),
@@ -318,7 +335,7 @@ def vis_side(dp=None):
             truppen_stats_raw['xG'] = 0.0
             truppen_stats_raw['xA'] = 0.0
 
-        # --- 3. ERSTAT SÆSON-TAL FOR MÅL OG ASSISTS MED DE SKUDSIKKRE DATABASEVÆRDIER ---
+        # --- 3. ERSTAT SÆSON-TAL FOR MÅL OG ASSISTS MED DE SIKRE VÆRDIER ---
         if df_db_stats is not None and not df_db_stats.empty:
             db_stats_indexed = df_db_stats.set_index('PLAYER_OPTAUUID')
             truppen_stats_raw['Mål'] = db_stats_indexed['GOALS']
@@ -330,13 +347,15 @@ def vis_side(dp=None):
         truppen_stats_raw['Mål'] = truppen_stats_raw['Mål'].fillna(0).astype(int)
         truppen_stats_raw['Assists'] = truppen_stats_raw['Assists'].fillna(0).astype(int)
 
-        # Flyt index tilbage til VISNINGSNAVN så resten af din visnings-kode fungerer
-        truppen_stats = truppen_stats_raw.reset_index().set_index('VISNINGSNAVN')
+        # BEHOLD PLAYER_OPTAUUID SOM INDEX FOR AT UNDGÅ DUPLICATE LABELS FEJLEN
+        truppen_stats = truppen_stats_raw.copy()
 
         # 4. Beregn holdets interne ranking (Højeste værdi giver 1st plads)
-        ranks = truppen_stats.rank(ascending=False, method='min').astype(int)
-        spiller_ranks = ranks.loc[valgt_spiller]
-        s_data = truppen_stats.loc[valgt_spiller]
+        numeric_cols = truppen_stats.drop(columns=['VISNINGSNAVN'], errors='ignore')
+        ranks = numeric_cols.rank(ascending=False, method='min').astype(int)
+        
+        spiller_ranks = ranks.loc[valgt_player_uuid]
+        s_data = truppen_stats.loc[valgt_player_uuid]
 
         # 5. Layout: Vi skaber hovedstrukturen med fastlåste spalter
         main_col_left, main_col_right = st.columns([1.3, 4])
@@ -386,7 +405,7 @@ def vis_side(dp=None):
                 for j, (label, k_id) in enumerate(kat_liste[i:i+4]):
                     with cols[j]:
                         st.markdown(f"<p style='text-align:center; font-weight:bold; font-size:12px; margin-bottom:0px;'>{label}</p>", unsafe_allow_html=True)
-                        fig = create_relative_donut(truppen_stats.loc[valgt_spiller, k_id], truppen_stats[k_id].max(), label, get_ordinal(spiller_ranks[k_id]))
+                        fig = create_relative_donut(truppen_stats.loc[valgt_player_uuid, k_id], truppen_stats[k_id].max(), label, get_ordinal(spiller_ranks[k_id]))
                         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False}, key=f"p_{k_id}_{i}_{j}")
                         
     with t_pitch:
