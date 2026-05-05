@@ -288,9 +288,7 @@ def vis_side():
                 st.plotly_chart(fig, use_container_width=True)
 
             # RUDE 2 (HØJRE): Spiller-vælger
-            with rude_hoejre:
-                st.subheader("Søg Spiller")
-                
+            with rude_hoejre:                
                 spillere_liste = sorted(df['full_name'].dropna().unique())
                 valgt_spiller_navn = st.selectbox("Vælg eller skriv spillernavn:", spillere_liste)
                 
