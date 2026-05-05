@@ -39,13 +39,21 @@ def get_logo_img(opta_uuid):
     except: 
         return None
 
-def har_qualifier(row_events, row_quals, event_id, qual_id):
+def har_qualifier(row_events, row_quals, event_id, qual_ids):
     try:
         if str(row_events) != str(event_id):
             return False
-        # Håndter både liste og streng (Opta-data varierer tit)
+        
+        # Håndter både liste og streng for rækkens qualifiers (Opta format)
         ql = row_quals if isinstance(row_quals, list) else str(row_quals).split(',')
-        return str(qual_id) in [str(q).strip() for q in ql]
+        row_quals_set = {str(q).strip() for q in ql}
+        
+        # Hvis qual_ids er en liste (f.eks. [2, 155]), tjekker vi om der er overlap
+        if isinstance(qual_ids, list):
+            target_quals = {str(q).strip() for q in qual_ids}
+            return len(row_quals_set.intersection(target_quals)) > 0
+        else:
+            return str(qual_ids).strip() in row_quals_set
     except:
         return False
 
