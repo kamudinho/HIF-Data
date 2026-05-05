@@ -88,12 +88,15 @@ def vis_side():
 
     # --- 3. DATAFETCH ---
     with st.spinner("Henter og beregner Wyscout-data..."):
-        # SQL-FORBEDRING: Vi henter SHORTNAME (som FULL_NAME) for at få navnet råt ind
-        # TIP: Hvis din tabel understøtter p.PASSPORTNAME, kan du ændre "p.SHORTNAME" til "p.PASSPORTNAME" herunder for det fulde officielle navn
+        # SQL-FORBEDRING: Vi sammensætter p.FIRSTNAME og p.LASTNAME. 
+        # Hvis de er tomme, falder den tilbage på p.SHORTNAME via COALESCE.
         sql = f"""
         SELECT 
             p.PLAYER_WYID,
-            p.SHORTNAME as FULL_NAME, 
+            COALESCE(
+                NULLIF(TRIM(p.FIRSTNAME || ' ' || p.LASTNAME), ''), 
+                p.SHORTNAME
+            ) as FULL_NAME, 
             t.OFFICIALNAME as TEAM_NAME,
             p.CURRENTTEAM_WYID as TEAM_WYID,
             AVG(s.GOALS) as GOALS,
@@ -119,7 +122,7 @@ def vis_side():
         JOIN {DB}.WYSCOUT_SEASONS seas ON s.SEASON_WYID = seas.SEASON_WYID
         WHERE s.COMPETITION_WYID = {valgt_liga}
           AND seas.SEASONNAME = '{SOGT_SAESON}'
-        GROUP BY p.PLAYER_WYID, p.SHORTNAME, t.OFFICIALNAME, p.CURRENTTEAM_WYID
+        GROUP BY p.PLAYER_WYID, p.FIRSTNAME, p.LASTNAME, p.SHORTNAME, t.OFFICIALNAME, p.CURRENTTEAM_WYID
         """
         
         raw_df = conn.query(sql)
@@ -154,7 +157,7 @@ def vis_side():
             df = raw_df.groupby('player_wyid', as_index=False).agg(agg_dict)
             df[score_col] = df[score_col].round(1)
             
-            # HER ER ÆNDRINGEN: Vi gemmer navnet direkte uden nogen form for afkortning!
+            # Sæt visningsnavnet direkte til det sammensatte fulde navn
             df['visningsnavn'] = df['full_name']
             
             df_alle = df.sort_values(score_col, ascending=True)
