@@ -24,7 +24,35 @@ def vis_side():
     conn = _get_snowflake_conn()
     if not conn: return
 
-    # --- 1. KONFIGURATION AF VÆGTNINGER ---
+    DB = "KLUB_HVIDOVREIF.AXIS"
+
+    # --- 1. DYNAMISKE FILTRE (Hent direkte fra DB) ---
+    try:
+        # Hent unikke liga-ID'er der faktisk har data i din tabel
+        liga_data = conn.query(f"SELECT DISTINCT COMPETITION_WYID FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_AVERAGE")
+        ligaer = sorted([int(x) for x in liga_data['COMPETITION_WYID'].dropna().tolist()]) if liga_data is not None else [328, 1305]
+        
+        # Hent unikke sæson-ID'er der faktisk har data i din tabel
+        saeson_data = conn.query(f"SELECT DISTINCT SEASON_WYID FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_AVERAGE")
+        saesoner = sorted([int(x) for x in saeson_data['SEASON_WYID'].dropna().tolist()], reverse=True) if saeson_data is not None else [189030]
+    except Exception as e:
+        st.warning(f"Kunne ikke hente dynamiske filtre (bruger standardværdier): {e}")
+        ligaer = [328, 1305]
+        saesoner = [189030]
+
+    # Navne-mapping til de mest gængse ligaer i dit system
+    LIGA_MAP = {
+        328: "NordicBet Liga (328)",
+        335: "Superliga (335)",
+        329: "2. division (329)",
+        43319: "3. division (43319)",
+        331: "Oddset Pokalen (331)",
+        1305: "U19 Ligaen (1305)"
+    }
+
+    col1, col2, col3 = st.columns(3)
+    
+    # 1. Vælg positionsprofil
     POS_CONFIG = {
         "Angriber": {
             "metrics": ["goals", "xg", "shots", "touchinbox", "dribbles", "assists"],
@@ -42,21 +70,23 @@ def vis_side():
             "labels": ["Interceptions", "Vundne Def. Dueller", "Clearinger", "Vundne Luftdueller", "Pasnings %", "Farlige Boldtab (Egen banehalvdel)"]
         }
     }
-
-    # --- 2. FILTRE ---
-    col1, col2 = st.columns(2)
     valgt_pos = col1.selectbox("Vælg Positionsprofil", list(POS_CONFIG.keys()))
     
-    # Wyscout fastlagte værdier fra dine indstillinger
-    SEASON_WYID = 189030 # Svarer til 2025/2026 i din udtrukne data
-    COMPETITION_WYID = 328 # NordicBet Liga (eller 1305 for U19 jf. dit seneste udtræk)
+    # 2. Vælg liga (Dynamisk)
+    valgt_liga = col2.selectbox(
+        "Vælg Liga", 
+        ligaer, 
+        format_func=lambda x: LIGA_MAP.get(x, f"Liga ID: {x}")
+    )
+    
+    # 3. Vælg Sæson (Dynamisk)
+    valgt_saeson = col3.selectbox(
+        "Vælg Sæson ID", 
+        saesoner,
+        format_func=lambda x: f"Sæson: {x} (2025/2026)" if x == 189030 else f"Sæson ID: {x}"
+    )
 
-    # Mulighed for at skifte liga for test (f.eks. hvis du vil se U19 data i din test)
-    valgt_liga = col2.selectbox("Vælg Liga", [328, 1305], format_func=lambda x: "Betinia Ligaen" if x == 328 else "U19 Ligaen")
-
-    # --- 3. DATAFETCH (Optimeret til din præcise Wyscout struktur) ---
-    DB = "KLUB_HVIDOVREIF.AXIS"
-
+    # --- 2. DATAFETCH ---
     with st.spinner("Henter og beregner Wyscout-data..."):
         sql = f"""
         SELECT 
@@ -77,14 +107,14 @@ def vis_side():
             s.PROGRESSIVERUN,
             s.DEFENSIVEDUELSWON,
             s.CLEARANCES,
-            s.AERIALDUELS,
+            s.ARIALDUELSWON AS AERIALDUELSWON, -- Rettet stavning
             s.DANGEROUSOWNHALFLOSSES,
             s.ASSISTS
         FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_AVERAGE s
         JOIN {DB}.WYSCOUT_PLAYERS p ON s.PLAYER_WYID = p.PLAYER_WYID
         JOIN {DB}.WYSCOUT_TEAMS t ON p.CURRENTTEAM_WYID = t.TEAM_WYID
         WHERE s.COMPETITION_WYID = {valgt_liga}
-          AND s.SEASON_WYID = {SEASON_WYID}
+          AND s.SEASON_WYID = {valgt_saeson}
         """
         
         df = conn.query(sql)
@@ -93,8 +123,7 @@ def vis_side():
             df.columns = df.columns.str.lower()
             df['visningsnavn'] = df['full_name'].apply(forkort_navn)
             
-            # --- 4. BEREGNING AF PASNINGSPROCENT ---
-            # Vi sikrer os mod division med 0 ved at bruge replace(0, 1) på nævneren
+            # --- 3. BEREGNING AF PASNINGSPROCENT ---
             df['pass_pct'] = (df['successfulpasses'] / df['passes'].replace(0, 1)) * 100
 
             # Find den valgte profilkonfiguration
@@ -108,13 +137,12 @@ def vis_side():
                 weight = config['weights'][i]
                 df[score_col] += df[m_name] * weight
 
-            # Rund scoren til 1 decimal
             df[score_col] = df[score_col].round(1)
             
             # Sorter efter højeste score
             top_10 = df.sort_values(score_col, ascending=False).head(10)
 
-            # --- 5. VISNING ---
+            # --- 4. VISNING ---
             col_main, col_stats = st.columns([2, 1])
 
             with col_main:
@@ -152,7 +180,7 @@ def vis_side():
                     use_container_width=True
                 )
 
-            # --- 6. METODEFORKLARING ---
+            # --- 5. METODEFORKLARING ---
             with st.expander("Se beregnings-metode"):
                 st.write(f"**Formel for {valgt_pos}:**")
                 formula_text = " + ".join([f"({config['labels'][i]} * {config['weights'][i]})" for i in range(len(config['metrics']))])
@@ -160,7 +188,7 @@ def vis_side():
                 st.caption("Data leveres direkte som gennemsnit pr. 90 minutter (P90) fra Wyscout API'et.")
 
         else:
-            st.info("Ingen spillere fundet i systemet med de angivne kriterier.")
+            st.info("Ingen spillere fundet i systemet med de angivne kriterier. Prøv at skifte liga eller sæson i dropdown-menuerne.")
 
 if __name__ == "__main__":
     vis_side()
