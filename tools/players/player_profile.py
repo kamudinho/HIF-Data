@@ -198,21 +198,24 @@ def vis_side(dp=None):
     t_profile, t_pitch, t_phys, t_stats, t_compare = st.tabs(["Spillerprofil", "Spilleraktioner", "Fysisk data", "Statistik", "Sammenligning"])
 
     with t_profile:
-        # Vi laver en hjælper til at tælle inde i aggregeringen
-        def count_event_with_qual(df_group, eid, qid):
-            return df_group.apply(lambda r: har_qualifier(r['EVENT_TYPEID'], r.get('qual_list', []), eid, qid), axis=1).sum()
+        # Vores interne hjælper til at tælle (forbliver den samme)
+        def count_event_with_qual(df_group, eid, qids):
+            return df_group.apply(lambda r: har_qualifier(r['EVENT_TYPEID'], r.get('qual_list', []), eid, qids), axis=1).sum()
 
-        # 1. Beregn stats (Nu med korrekt Opta-logik)
+        # Beregn stats
         truppen_stats = df_all.groupby('VISNINGSNAVN').apply(lambda x: pd.Series({
             'Pasninger': (x['EVENT_TYPEID'] == 1).sum(),
             'Stikninger': count_event_with_qual(x, 1, 4),    # Event 1 + Qual 4
-            'Indlæg': count_event_with_qual(x, 1, 2),        # Event 1 + Qual 2
+            
+            # RETTELSE HER: Tæller nu hvis pasningen (Event 1) enten har Qual 2 ELLER Qual 155
+            'Indlæg': count_event_with_qual(x, 1, [2, 155]), 
+            
             'Afslutninger': x['EVENT_TYPEID'].isin([13, 14, 15, 16]).sum(),
             'Mål': (x['EVENT_TYPEID'] == 16).sum(),
             'Erobringer': x['EVENT_TYPEID'].isin([7, 8, 12, 49]).sum(),
             'Driblinger': (x['EVENT_TYPEID'] == 3).sum(),
             'Chancer_skabt': x.apply(lambda r: '210' in str(r.get('qual_list', '')), axis=1).sum(),
-            'Key_Passes': x.apply(lambda r: '210' in str(r.get('qual_list', '')), axis=1).sum() # Ofte det samme som chancer skabt
+            'Key_Passes': x.apply(lambda r: '210' in str(r.get('qual_list', '')), axis=1).sum()
         })).fillna(0)
 
         # 2. Beregn rank
