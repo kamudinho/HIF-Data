@@ -248,9 +248,8 @@ def vis_side(dp=None):
                   AND ASSIST_PLAYER_UUID IS NOT NULL
                   AND ASSIST_PLAYER_UUID != PLAYER_OPTAUUID -- Undgå selv-afleveringer (selvmål/soloture)
                   AND (
-                      QUALIFIERS LIKE '%29%'             -- Målet er markeret som "Assisted"
-                      OR PREV_EVENT_TYPEID = 'AS'        -- Forrige hændelse er en direkte assist-hændelse
-                      OR PREV_QUALIFIERS LIKE '%210%'    -- Forrige hændelse var en Key Pass/Chanceskabende aflevering
+                      QUALIFIERS LIKE '%29%'             -- Målet har qualifier 29 (Assisted)
+                      OR PREV_QUALIFIERS LIKE '%210%'    -- Forrige hændelse havde qualifier 210 (Key Pass)
                   )
                 GROUP BY ASSIST_PLAYER_UUID
             )
