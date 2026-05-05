@@ -160,7 +160,6 @@ def vis_side():
             t.OFFICIALNAME as TEAM_NAME,
             p.CURRENTTEAM_WYID as TEAM_WYID,
             pm.total_minutes,
-            COALESCE('Ukendt Position') as SPECIFIC_POSITION,
             AVG(s.GOALS) as GOALS,
             AVG(s.XGSHOT) AS XG,
             AVG(s.SHOTS) as SHOTS,
