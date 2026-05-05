@@ -117,26 +117,26 @@ def vis_side():
         role_code = "FWD"
 
     # --- 2. DATAFETCH ---
+    # --- 2. DATAFETCH ---
     with st.spinner("Henter og beregner Wyscout-data..."):
-        # Fuldstændig clean og fejlsikret SQL til minutter og 2026-aktivitet
+        # Fejlsikret SQL til minutter og 2026-aktivitet
         sql_minutter = f"""
             WITH hvidovre_2026_spillere AS (
-                -- Find spillere, der har spillet for Hvidovre (7490) i en kamp i 2026
-                SELECT DISTINCT mat_total.PLAYER_WYID
-                FROM {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_TOTAL mat_total
-                JOIN {DB}.WYSCOUT_MATCHES m ON mat_total.MATCH_WYID = m.MATCH_WYID
-                WHERE mat_total.TEAM_WYID = {HVIDOVRE_TEAM_WYID}
+                -- Finder spillere, der har spillet for Hvidovre (7490) i 2026 via BASE-tabellen
+                SELECT DISTINCT b_stats.PLAYER_WYID
+                FROM {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_BASE b_stats
+                JOIN {DB}.WYSCOUT_MATCHES m ON b_stats.MATCH_WYID = m.MATCH_WYID
+                WHERE b_stats.TEAM_WYID = {HVIDOVRE_TEAM_WYID}
                   AND m.DATE >= '2026-01-01'
             )
             SELECT 
                 m_total.PLAYER_WYID,
                 SUM(m_total.MINUTESONFIELD) as total_minutes,
-                -- Returnerer 1 hvis spilleren er aktiv i Hvidovre i 2026, ellers 0
+                -- Returnerer 1 hvis spilleren har spillet for HIF i 2026, ellers 0
                 MAX(CASE WHEN h26.PLAYER_WYID IS NOT NULL THEN 1 ELSE 0 END) as is_active_hvidovre
             FROM {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_TOTAL m_total
-            JOIN {DB}.WYSCOUT_PLAYERS p ON m_total.PLAYER_WYID = p.PLAYER_WYID
             LEFT JOIN hvidovre_2026_spillere h26 ON m_total.PLAYER_WYID = h26.PLAYER_WYID
-            WHERE (m_total.COMPETITION_WYID = {valgt_liga} OR h26.PLAYER_WYID IS NOT NULL)
+            WHERE m_total.COMPETITION_WYID = {valgt_liga} OR h26.PLAYER_WYID IS NOT NULL
             GROUP BY m_total.PLAYER_WYID
             HAVING SUM(m_total.MINUTESONFIELD) >= 150
         """
