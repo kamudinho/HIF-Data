@@ -40,7 +40,6 @@ def vis_side():
         "Angriber": "FWD"
     }
 
-    # Oversættelse af de specifikke ROLENAME-værdier fra Wyscout til dansk
     POS_TRANSLATIONS = {
         "Center Back": "Midterforsvarer",
         "Left Back": "Venstre Back",
@@ -57,7 +56,6 @@ def vis_side():
         "Right Winger": "Højre Winger",
         "Second Striker": "Hængende Angriber",
         "Ukendt Position": "Ukendt Position",
-        # Fallbacks til overordnede koder
         "DEF": "Forsvarer",
         "MID": "Midtbanespiller",
         "FWD": "Angrebsspiller"
@@ -114,12 +112,10 @@ def vis_side():
         format_func=lambda x: LIGA_MAP.get(x, f"Liga ID: {x}")
     )
 
-    # Identificer den søgte Wyscout-rolle (DEF, MID, FWD)
     sogt_role_code = ROLE_MAPPING[valgt_profil]
 
     # --- 4. DATAFETCH ---
     with st.spinner("Henter og beregner Wyscout-data..."):
-        # SQL-KORREKTION: Bruger ROLECODE3 og ROLENAME direkte fra WYSCOUT_PLAYERS
         sql = f"""
         WITH player_minutes AS (
             SELECT 
@@ -181,10 +177,9 @@ def vis_side():
             # --- 5. BEREGNING AF PASNINGSPROCENT ---
             raw_df['pass_pct'] = (raw_df['successfulpasses'] / raw_df['passes'].replace(0, 1)) * 100
 
-            # Hent konfigurationen
             config = POS_CONFIG[valgt_profil]
             
-            # Beregn score
+            # Beregn performance score
             score_col = 'pos_score'
             raw_df[score_col] = 0.0
             for i, m_name in enumerate(config['metrics']):
@@ -207,15 +202,31 @@ def vis_side():
             df = raw_df.groupby('player_wyid', as_index=False).agg(agg_dict)
             df[score_col] = df[score_col].round(1)
             
-            # Oversæt position til dansk
-            df['dk_position'] = df['specific_position'].map(POS_TRANSLATIONS).fillna(df['specific_position'])
+            # Sorter efter score (højeste først)
+            df_sorteret = df.sort_values(score_col, ascending=False)
             
-            df['visningsnavn'] = df['full_name']
-            df_alle = df.sort_values(score_col, ascending=True)
+            # --- NY LOGIK: TOP 20 + 2 BEDSTE FRA HVIDOVRE ---
+            # 1. Tag de 20 bedste fra ligaen
+            top_20_liga = df_sorteret.head(20)
+            
+            # 2. Tag de 2 bedste fra Hvidovre IF (team_wyid == 7490)
+            hvidovre_spillere = df_sorteret[df_sorteret['team_wyid'] == HVIDOVRE_TEAM_WYID]
+            top_2_hvidovre = hvidovre_spillere.head(2)
+            
+            # 3. Kombiner dem (og fjern eventuelle dubletter, hvis Hvidovre-spillerne allerede er i top 20)
+            visnings_df = pd.concat([top_20_liga, top_2_hvidovre]).drop_duplicates(subset=['player_wyid'])
+            
+            # Sorter til grafen (stigende score, så de bedste er øverst i det liggende søjlediagram)
+            visnings_df = visnings_df.sort_values(score_col, ascending=True)
+            
+            # Oversæt position
+            visnings_df['dk_position'] = visnings_df['specific_position'].map(POS_TRANSLATIONS).fillna(visnings_df['specific_position'])
+            visnings_df['visningsnavn'] = visnings_df['full_name']
 
+            # Tildel farver (Hvidovre = Blå, andre = Rød)
             farve_liste = [
                 '#1b365d' if int(row['team_wyid']) == HVIDOVRE_TEAM_WYID else '#c11c2e'
-                for _, row in df_alle.iterrows()
+                for _, row in visnings_df.iterrows()
             ]
 
             # --- 7. SPLIT-SCREEN LAYOUT ---
@@ -223,12 +234,12 @@ def vis_side():
 
             # RUDE 1 (VENSTRE): Scoreboard
             with rude_venstre:
-                st.subheader(f"Scoreboard: {valgt_profil}")
+                st.subheader(f"Scoreboard: Top 20 & Hvidovre Top 2")
                 
-                hoejde_graf = max(500, len(df_alle) * 26)
+                hoejde_graf = max(500, len(visnings_df) * 26)
                 
                 fig = px.bar(
-                    df_alle, 
+                    visnings_df, 
                     x=score_col, 
                     y='visningsnavn', 
                     orientation='h',
@@ -253,7 +264,7 @@ def vis_side():
                 )
                 st.plotly_chart(fig, use_container_width=True)
 
-            # RUDE 2 (HØJRE): Spiller-vælger
+            # RUDE 2 (HØJRE): Spiller-vælger (bruger det fulde datasæt df, så man stadig kan søge på alle spillere)
             with rude_hoejre:
                 st.subheader("Søg Spiller")
                 
@@ -268,7 +279,7 @@ def vis_side():
                             <div class="pos-title">{spiller_data['full_name']}</div>
                             <div style="font-size: 14px; color: #555; line-height: 1.5;">
                                 Klub: <b>{spiller_data['team_name']}</b><br>
-                                Primær Position: <b>{spiller_data['dk_position']}</b><br>
+                                Primær Position: <b>{spiller_data['specific_position'].map(POS_TRANSLATIONS).fillna(spiller_data['specific_position'])}</b><br>
                                 Spillede minutter (2025/2026): <b>{int(spiller_data['total_minutes'])} min.</b><br>
                                 Samlet Score ({valgt_profil}): <b>{spiller_data[score_col]}</b>
                             </div>
