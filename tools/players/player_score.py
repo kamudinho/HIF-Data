@@ -117,22 +117,25 @@ def vis_side():
         role_code = "FWD"
 
     # --- 2. DATAFETCH ---
-    # --- 2. DATAFETCH ---
     with st.spinner("Henter og beregner Wyscout-data..."):
-        # Fejlsikret SQL til minutter og 2026-aktivitet
+        # SQL der udelukkende bruger standardiserede kolonner (PLAYER_WYID, COMPETITION_WYID, MATCH_WYID)
         sql_minutter = f"""
             WITH hvidovre_2026_spillere AS (
-                -- Finder spillere, der har spillet for Hvidovre (7490) i 2026 via BASE-tabellen
-                SELECT DISTINCT b_stats.PLAYER_WYID
-                FROM {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_BASE b_stats
-                JOIN {DB}.WYSCOUT_MATCHES m ON b_stats.MATCH_WYID = m.MATCH_WYID
-                WHERE b_stats.TEAM_WYID = {HVIDOVRE_TEAM_WYID}
+                -- Finder spillere, der har spillet for Hvidovre (7490) i 2026.
+                -- Vi går igennem WYSCOUT_PLAYERS for at sikre, at spillerens nuværende eller historiske holdsamarbejde matcher,
+                -- og tjekker i MATCHES om de rent faktisk har været på banen i 2026.
+                SELECT DISTINCT m_tot.PLAYER_WYID
+                FROM {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_TOTAL m_tot
+                JOIN {DB}.WYSCOUT_MATCHES m ON m_tot.MATCH_WYID = m.MATCH_WYID
+                JOIN {DB}.WYSCOUT_PLAYERS p ON m_tot.PLAYER_WYID = p.PLAYER_WYID
+                WHERE p.CURRENTTEAM_WYID = {HVIDOVRE_TEAM_WYID}
                   AND m.DATE >= '2026-01-01'
+                  AND m_tot.MINUTESONFIELD > 0
             )
             SELECT 
                 m_total.PLAYER_WYID,
                 SUM(m_total.MINUTESONFIELD) as total_minutes,
-                -- Returnerer 1 hvis spilleren har spillet for HIF i 2026, ellers 0
+                -- Returnerer 1 hvis spilleren har spillet for Hvidovre i 2026, ellers 0
                 MAX(CASE WHEN h26.PLAYER_WYID IS NOT NULL THEN 1 ELSE 0 END) as is_active_hvidovre
             FROM {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_TOTAL m_total
             LEFT JOIN hvidovre_2026_spillere h26 ON m_total.PLAYER_WYID = h26.PLAYER_WYID
