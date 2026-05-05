@@ -198,40 +198,55 @@ def vis_side(dp=None):
     t_profile, t_pitch, t_phys, t_stats, t_compare = st.tabs(["Spillerprofil", "Spilleraktioner", "Fysisk data", "Statistik", "Sammenligning"])
 
     with t_profile:
-        # 1. Beregn stats (Samme logik som før)
+        # Vores interne hjælper til at tælle (kigger på både EVENT_TYPEID og qual_list)
+        # Vi konverterer nu internt til strenge under sammenligningen for at sikre, at '17' matcher 17.
         def count_event_with_qual(df_group, eid, qids):
             return df_group.apply(lambda r: har_qualifier(r['EVENT_TYPEID'], r.get('qual_list', []), eid, qids), axis=1).sum()
 
+        # 1. Beregn stats for ALLE spillere (Fejlsikker Opta-logik)
         truppen_stats = df_all.groupby('VISNINGSNAVN').apply(lambda x: pd.Series({
-            'Kampe': x['GAME_ID'].nunique() if 'GAME_ID' in x.columns else 0,
-            'Minutter': x['MINUTTER'].sum() if 'MINUTTER' in x.columns else 0,
-            'Gule_kort': (x['EVENT_TYPEID'] == 'YC').sum(),
-            'Roede_kort': (x['EVENT_TYPEID'] == 'RC').sum(),
-            'Indskiftet': (x['EVENT_TYPEID'] == '19').sum(),
-            'Udskiftet': (x['EVENT_TYPEID'] == '18').sum(),
+            # --- GRUNDLÆGGENDE KAMPDATA ---
+            'Kampe': x['GAME_ID'].nunique() if 'GAME_ID' in x.columns else (x['game_id'].nunique() if 'game_id' in x.columns else x['match_id'].nunique() if 'match_id' in x.columns else 0),
+            
+            # Da vi ikke kan summe EVENT_TIMEMIN direkte, tæller vi minutter, hvis du har en dedikeret kolonne til det
+            'Minutter': x['MINUTTER'].sum() if 'MINUTTER' in x.columns else (x['minutter'].sum() if 'minutter' in x.columns else x['minutes'].sum() if 'minutes' in x.columns else 0),
+            
+            # Gule kort: Event 17 + Qualifier 31
+            'Gule_kort': count_event_with_qual(x, 17, 31),
+            
+            # Røde kort: Event 17 + Qualifier 33
+            'Roede_kort': count_event_with_qual(x, 17, 33),
+            
+            # Indskiftet (Event 19) og Udskiftet (Event 18) som rene tal (uden ' ')
+            'Indskiftet': (x['EVENT_TYPEID'] == 19).sum(),
+            'Udskiftet': (x['EVENT_TYPEID'] == 18).sum(),
+            
+            # --- AKTIONER / DONUTS ---
             'Pasninger': (x['EVENT_TYPEID'] == 1).sum(),
-            'Stikninger': count_event_with_qual(x, 1, 4),
-            'Indlæg': count_event_with_qual(x, 1, [2, 155]),
+            'Stikninger': count_event_with_qual(x, 1, 4),    # Event 1 + Qual 4
+            'Indlæg': count_event_with_qual(x, 1, [2, 155]), # Event 1 + Qual 2 (eller 155: Chip)
             'Afslutninger': x['EVENT_TYPEID'].isin([13, 14, 15, 16]).sum(),
             'Mål': (x['EVENT_TYPEID'] == 16).sum(),
-            'Assists': x.apply(lambda r: '210' in str(r.get('qual_list', '')) and str(r['EVENT_TYPEID']) == '16', axis=1).sum(),
+            
+            # Assists i Opta: Pasning (Event 1) der har Qualifier 210 (Key Pass) OG som førte til et mål (Event 16)
+            'Assists': x.apply(lambda r: '210' in str(r.get('qual_list', '')) and r['EVENT_TYPEID'] == 16, axis=1).sum(),
+            
             'Erobringer': x['EVENT_TYPEID'].isin([7, 8, 12, 49]).sum(),
             'Driblinger': (x['EVENT_TYPEID'] == 3).sum(),
             'Chancer_skabt': x.apply(lambda r: '210' in str(r.get('qual_list', '')), axis=1).sum(),
             'Key_Passes': x.apply(lambda r: '210' in str(r.get('qual_list', '')), axis=1).sum()
         })).fillna(0)
 
+        # 2. Beregn rank (Højeste tal giver 1st plads)
         ranks = truppen_stats.rank(ascending=False, method='min').astype(int)
         spiller_ranks = ranks.loc[valgt_spiller]
         s_data = truppen_stats.loc[valgt_spiller]
 
-        # 2. Layout: Vi skaber hovedstrukturen
-        # Vi bruger en fast kolonne-opdeling for hele fanen
+        # 3. Layout: Vi skaber hovedstrukturen
         main_col_left, main_col_right = st.columns([1.3, 4])
 
         # VENSTRE SIDE: Spillerinfo og Kampdata
         with main_col_left:
-            # Header
             logo_html = ""
             if hold_logo is not None:
                 buffered = io.BytesIO()
@@ -242,7 +257,7 @@ def vis_side(dp=None):
             st.markdown(f'<div style="display: flex; align-items: center; margin-bottom: 10px;">{logo_html}<div style="font-size: 18px; font-weight: bold;">{valgt_spiller}</div></div>', unsafe_allow_html=True)
             st.markdown("<hr style='margin: 10px 0; opacity: 0.5;'>", unsafe_allow_html=True)
 
-            # Kampdata boks
+            # Kampdata boks (Helt renset for ikoner og emojis)
             st.markdown(f"""
                 <div style="background-color: #f8f9fa; padding: 12px; border-radius: 8px; border: 1px solid #e9ecef;">
                     <h4 style="margin: 0 0 10px 0; font-size: 14px; text-transform: uppercase; font-weight: bold;">Kampdata</h4>
