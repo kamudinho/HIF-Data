@@ -257,9 +257,9 @@ def vis_side():
 
             # RUDE 1 (VENSTRE): Scoreboard
             with rude_venstre:
-                st.subheader(f"Scoreboard: Top 20 & Hvidovre Top 2")
+                st.subheader(f"Scoreboard: Top 20")
                 
-                hoejde_graf = max(500, len(visnings_df) * 26)
+                hoejde_graf = max(400, len(visnings_df) * 26)
                 
                 fig = px.bar(
                     visnings_df, 
