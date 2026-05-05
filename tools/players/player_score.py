@@ -85,14 +85,18 @@ def vis_side():
 
     # --- 3. DATAFETCH ---
     with st.spinner("Henter og beregner Wyscout-data..."):
-        # SQL-FORBEDRING: Vi begrænser nu også minut-beregningen (pm) til den specifikke sæson (SOGT_SAESON)
+        # RETTELSE: Vi henter SEASON_WYID ved at joine TOTAL-tabellen sammen med BASE-tabellen på MATCH_WYID og PLAYER_WYID.
+        # På den måde sikrer vi, at vi kun tæller minutter for kampe spillet i den valgte sæson.
         sql = f"""
         WITH player_minutes AS (
             SELECT 
                 t_stats.PLAYER_WYID,
                 SUM(t_stats.MINUTESONFIELD) as total_minutes
             FROM {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_TOTAL t_stats
-            JOIN {DB}.WYSCOUT_SEASONS seas ON t_stats.SEASON_WYID = seas.SEASON_WYID
+            JOIN {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_BASE b_stats 
+              ON t_stats.MATCH_WYID = b_stats.MATCH_WYID 
+             AND t_stats.PLAYER_WYID = b_stats.PLAYER_WYID
+            JOIN {DB}.WYSCOUT_SEASONS seas ON b_stats.SEASON_WYID = seas.SEASON_WYID
             WHERE t_stats.COMPETITION_WYID = {valgt_liga}
               AND seas.SEASONNAME = '{SOGT_SAESON}'
             GROUP BY t_stats.PLAYER_WYID
