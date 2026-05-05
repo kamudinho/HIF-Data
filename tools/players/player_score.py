@@ -5,7 +5,7 @@ import plotly.express as px
 from data.data_load import _get_snowflake_conn
 
 def vis_side():
-    # CSS styling af metrics-bokse og overskrifter
+    # CSS styling af metrics-bokse og overskrifter (Uden ikoner)
     st.markdown("""
         <style>
         .score-card { background-color: #f8f9fa; padding: 15px; border-radius: 8px; border-left: 5px solid #df003b; margin-bottom: 15px; }
@@ -25,9 +25,6 @@ def vis_side():
         .metric-weight { font-size: 11px; color: #888; }
         </style>
     """, unsafe_allow_html=True)
-
-    st.title("🎯 Spilleranalyse | Performance Score (Wyscout)")
-    st.caption("Sammenligning af spillere baseret på positions-vægtede Wyscout P90-metrics for sæsonen 2025/2026.")
 
     conn = _get_snowflake_conn()
     if not conn: return
@@ -86,10 +83,8 @@ def vis_side():
         format_func=lambda x: LIGA_MAP.get(x, f"Liga ID: {x}")
     )
 
-    # --- 3. DATAFETCH ---
+    # --- 3. DATAFETCH (Med filter på minimum 270 minutter) ---
     with st.spinner("Henter og beregner Wyscout-data..."):
-        # SQL-FORBEDRING: Vi sammensætter p.FIRSTNAME og p.LASTNAME. 
-        # Hvis de er tomme, falder den tilbage på p.SHORTNAME via COALESCE.
         sql = f"""
         SELECT 
             p.PLAYER_WYID,
@@ -122,6 +117,7 @@ def vis_side():
         JOIN {DB}.WYSCOUT_SEASONS seas ON s.SEASON_WYID = seas.SEASON_WYID
         WHERE s.COMPETITION_WYID = {valgt_liga}
           AND seas.SEASONNAME = '{SOGT_SAESON}'
+          AND s.MINUTESPLAYED >= 270
         GROUP BY p.PLAYER_WYID, p.FIRSTNAME, p.LASTNAME, p.SHORTNAME, t.OFFICIALNAME, p.CURRENTTEAM_WYID
         """
         
@@ -157,12 +153,10 @@ def vis_side():
             df = raw_df.groupby('player_wyid', as_index=False).agg(agg_dict)
             df[score_col] = df[score_col].round(1)
             
-            # Sæt visningsnavnet direkte til det sammensatte fulde navn
             df['visningsnavn'] = df['full_name']
-            
             df_alle = df.sort_values(score_col, ascending=True)
 
-            # Tildel farver baseret på om det er Hvidovre IF (ID 7490)
+            # Tildel farver (Hvidovre = Blå, andre = Rød)
             farve_liste = [
                 '#1b365d' if int(row['team_wyid']) == HVIDOVRE_TEAM_WYID else '#c11c2e'
                 for _, row in df_alle.iterrows()
@@ -240,7 +234,7 @@ def vis_side():
                         """, unsafe_allow_html=True)
 
         else:
-            st.info(f"Ingen spillere fundet i systemet med de angivne kriterier for sæsonen {SOGT_SAESON}.")
+            st.info(f"Ingen spillere med over 270 minutter fundet i systemet med de angivne kriterier for sæsonen {SOGT_SAESON}.")
 
 if __name__ == "__main__":
     vis_side()
