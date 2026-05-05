@@ -181,12 +181,11 @@ def vis_side(dp=None):
         """
         df_all = conn.query(sql_events)
 
-        # SQL 2: Hent minutter, xG og xA fra OPTA_MATCHEXPECTEDGOALS
+        # SQL 2: Hent minutter, xG og xA baseret på PLAYER_OPTAUUID (fjernet PLAYER_NAME herfra)
         sql_expected = f"""
             SELECT 
                 MATCH_ID,
                 PLAYER_OPTAUUID,
-                PLAYER_NAME,
                 MAX(CASE WHEN STAT_TYPE = 'expectedGoals' THEN STAT_VALUE ELSE 0 END) AS xG,
                 MAX(CASE WHEN STAT_TYPE = 'expectedAssists' THEN STAT_VALUE ELSE 0 END) AS xA,
                 MAX(CASE WHEN STAT_TYPE = 'minsPlayed' THEN STAT_VALUE ELSE 0 END) AS Minutes
@@ -194,7 +193,7 @@ def vis_side(dp=None):
             WHERE TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS}
               AND MATCH_STATUS = 'Played'
               AND CONTESTANT_OPTAUUID = '{valgt_uuid_hold}'
-            GROUP BY MATCH_ID, PLAYER_OPTAUUID, PLAYER_NAME
+            GROUP BY MATCH_ID, PLAYER_OPTAUUID
         """
         df_expected = conn.query(sql_expected)
         
@@ -219,15 +218,17 @@ def vis_side(dp=None):
         def count_event_with_qual(df_group, eid, qids):
             return df_group.apply(lambda r: har_qualifier(r['EVENT_TYPEID'], r.get('qual_list', []), eid, qids), axis=1).sum()
 
-        # 1. Beregn stats for ALLE spillere fra event-data
-        event_stats = df_all.groupby('VISNINGSNAVN').apply(lambda x: pd.Series({
+        # 1. Beregn stats for ALLE spillere fra event-data.
+        # Vi inkluderer PLAYER_OPTAUUID (som as_index=False eller bevarer den i kolonnen), 
+        # så vi kan joine præcist på ID efterfølgende.
+        event_stats = df_all.groupby(['VISNINGSNAVN', 'PLAYER_OPTAUUID']).apply(lambda x: pd.Series({
             'Gule_kort': count_event_with_qual(x, 17, 31),
             'Roede_kort': count_event_with_qual(x, 17, 33),
             'Indskiftet': (x['EVENT_TYPEID'] == 19).sum(),
             'Udskiftet': (x['EVENT_TYPEID'] == 18).sum(),
             'Pasninger': (x['EVENT_TYPEID'] == 1).sum(),
-            'Stikninger': count_event_with_qual(x, 1, 4),    # Event 1 + Qual 4
-            'Indlæg': count_event_with_qual(x, 1, [2, 155]), # Event 1 + Qual 2 (eller 155: Chip)
+            'Stikninger': count_event_with_qual(x, 1, 4),
+            'Indlæg': count_event_with_qual(x, 1, [2, 155]),
             'Afslutninger': x['EVENT_TYPEID'].isin([13, 14, 15, 16]).sum(),
             'Mål': (x['EVENT_TYPEID'] == 16).sum(),
             'Assists': x.apply(lambda r: '210' in str(r.get('qual_list', '')) and r['EVENT_TYPEID'] == 16, axis=1).sum(),
@@ -235,29 +236,29 @@ def vis_side(dp=None):
             'Driblinger': (x['EVENT_TYPEID'] == 3).sum(),
             'Chancer_skabt': x.apply(lambda r: '210' in str(r.get('qual_list', '')), axis=1).sum(),
             'Key_Passes': x.apply(lambda r: '210' in str(r.get('qual_list', '')), axis=1).sum()
-        })).fillna(0)
+        })).reset_index().set_index('PLAYER_OPTAUUID') # Vi sætter ID som index for at gøre det klar til join
 
-        # 2. Beregn og join kamp-baserede stats fra OPTA_MATCHEXPECTEDGOALS
+        # 2. Beregn og join kamp-baserede stats fra OPTA_MATCHEXPECTEDGOALS via PLAYER_OPTAUUID
         if df_expected is not None and not df_expected.empty:
-            # Opta navne kan have overskydende mellemrum i databasen, så vi renser dem for et præcist match
-            df_expected['MATCH_PLAYER_CLEAN'] = df_expected['PLAYER_NAME'].str.strip()
-            
-            match_stats = df_expected.groupby('MATCH_PLAYER_CLEAN').apply(lambda x: pd.Series({
+            match_stats = df_expected.groupby('PLAYER_OPTAUUID').apply(lambda x: pd.Series({
                 'Kampe': x['MATCH_ID'].nunique(),
                 'Minutter': x['MINUTES'].sum() if 'MINUTES' in x.columns else x['Minutes'].sum(),
                 'xG': x['XG'].sum() if 'XG' in x.columns else x['xG'].sum(),
                 'xA': x['XA'].sum() if 'XA' in x.columns else x['xA'].sum()
             })).fillna(0)
             
-            # Kobbel event- og matchstats sammen
-            truppen_stats = event_stats.join(match_stats, how='left').fillna(0)
+            # Kobbel event- og matchstats sammen på den fælles spiller-UUID
+            truppen_stats_raw = event_stats.join(match_stats, how='left').fillna(0)
         else:
-            # Sikker fallback hvis tabellen er tom eller ikke kan loades
-            truppen_stats = event_stats.copy()
-            truppen_stats['Kampe'] = 0
-            truppen_stats['Minutter'] = 0
-            truppen_stats['xG'] = 0.0
-            truppen_stats['xA'] = 0.0
+            truppen_stats_raw = event_stats.copy()
+            truppen_stats_raw['Kampe'] = 0
+            truppen_stats_raw['Minutter'] = 0
+            truppen_stats_raw['xG'] = 0.0
+            truppen_stats_raw['xA'] = 0.0
+
+        # Vi flytter index tilbage til spillerens navn (VISNINGSNAVN), så resten af din kode 
+        # (visualiseringer, donuts og filters) fungerer uforstyrret videre på spillernavnet.
+        truppen_stats = truppen_stats_raw.reset_index().set_index('VISNINGSNAVN')
 
         # 3. Beregn holdets interne ranking (Højeste værdi giver 1st plads)
         ranks = truppen_stats.rank(ascending=False, method='min').astype(int)
