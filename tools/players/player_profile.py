@@ -206,7 +206,7 @@ def vis_side(dp=None):
         # 1. Beregn stats for ALLE spillere (Fejlsikker Opta-logik)
         truppen_stats = df_all.groupby('VISNINGSNAVN').apply(lambda x: pd.Series({
             # --- GRUNDLÆGGENDE KAMPDATA ---
-            'Kampe': x['GAME_ID'].nunique() if 'GAME_ID' in x.columns else (x['game_id'].nunique() if 'game_id' in x.columns else x['match_id'].nunique() if 'match_id' in x.columns else 0),
+            'Kampe': x['MATCH_DATE'].nunique() if 'MATCH_DATE' in x.columns else (x['match_date'].nunique() if 'match_date' in x.columns else x['match_id'].nunique() if 'match_id' in x.columns else 0),
             
             # Da vi ikke kan summe EVENT_TIMEMIN direkte, tæller vi minutter, hvis du har en dedikeret kolonne til det
             'Minutter': x['MINUTTER'].sum() if 'MINUTTER' in x.columns else (x['minutter'].sum() if 'minutter' in x.columns else x['minutes'].sum() if 'minutes' in x.columns else 0),
