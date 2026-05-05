@@ -130,7 +130,7 @@ with st.sidebar:
     elif hoved_omraade == "SCOUTING":
         sel = option_menu(None, options=filtrer_menu(["Scoutrapport", "Database", "Emnedatabase", "Sammenligning"]))
     elif hoved_omraade == "ADMIN":
-        sel = option_menu(None, options=filtrer_menu(["System Log", "Profil", "Datakatalog", "Konklusion", "Fysisk profil", "Hold: Fysisk profil", "Intern analyse", "Top 5: Spillere", "Ordbog"]))
+        sel = option_menu(None, options=filtrer_menu(["System Log", "Profil", "Spiller-score", "Datakatalog", "Konklusion", "Fysisk profil", "Hold: Fysisk profil", "Intern analyse", "Top 5: Spillere", "Ordbog"]))
 
     # --- DISKRET CACHE-RYDDER (Placeret nederst i sidebaren) ---
     st.markdown("<br>" * 4, unsafe_allow_html=True) # Skubber knappen ned i bunden    
@@ -222,6 +222,9 @@ try:
         elif sel == "Ordbog":
             import utils.ordbog as ob
             ob.vis_side()
+        elif sel == "Spiller-score":
+            import players.player_score as pscore
+            pscore.vis_side()
 
 
 except Exception as e:
