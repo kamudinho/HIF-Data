@@ -8,6 +8,8 @@ from data.data_load import _get_snowflake_conn
 from data.utils.team_mapping import TEAMS
 import requests
 from PIL import Image
+import io
+import base64
 from io import BytesIO
 
 # --- IMPORT FRA MAPPING ---
