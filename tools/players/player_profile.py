@@ -285,9 +285,16 @@ def vis_side(dp=None):
                         maks_val = truppen_stats[k_id].max()
                         rank_val = get_ordinal(spiller_ranks[k_id])
                         
-                        # Generer og vis plot
+                        # Generer plot
                         fig = create_relative_donut(aktuel_val, maks_val, label, rank_val)
-                        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+                        
+                        # RETTELSE: Vi tilføjer en unik key baseret på kategoriens ID (f.eks. key="chart_Pasninger")
+                        st.plotly_chart(
+                            fig, 
+                            use_container_width=True, 
+                            config={'displayModeBar': False},
+                            key=f"chart_{k_id}"
+                        )
             
     with t_pitch:
         descriptions = {
