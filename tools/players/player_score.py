@@ -27,19 +27,20 @@ def vis_side():
     if not conn: return
 
     # --- 1. KONFIGURATION AF VÆGTNINGER ---
+    # Vi bruger rene ASCII-nøgler her, der matcher SQL-outputtet 100%
     POS_CONFIG = {
         "Angriber": {
-            "metrics": ["mål", "xg", "afslutninger", "berøringer_i_felt", "driblinger", "assists"],
+            "metrics": ["goals", "xg", "shots", "touches_in_box", "dribbles", "assists"],
             "weights": [6.0, 4.0, 3.8, 2.4, 1.2, 2.0],
             "labels": ["Mål", "xG", "Skud", "Felt-berøringer", "Driblinger", "Assists"]
         },
         "Midtbane": {
-            "metrics": ["pasning_pct", "key_passes", "interceptions", "assists", "tacklinger", "driblinger"],
+            "metrics": ["pass_pct", "key_passes", "interceptions", "assists", "tackles", "dribbles"],
             "weights": [8.0, 4.5, 3.0, 4.0, 2.0, 1.5],
             "labels": ["Pasning %", "Key Passes", "Interceptions", "Assists", "Tacklinger", "Driblinger"]
         },
         "Forsvar": {
-            "metrics": ["interceptions", "tacklinger", "clearances", "luftdueller_vundet", "pasning_pct", "boldtab_forsvar"],
+            "metrics": ["interceptions", "tackles", "clearances", "aerials_won", "pass_pct", "turnovers_def"],
             "weights": [5.0, 4.0, 3.5, 4.0, 2.5, -3.0], 
             "labels": ["Interceptions", "Tacklinger", "Clearinger", "Luftdueller", "Pasning %", "Boldtab"]
         }
@@ -50,7 +51,7 @@ def vis_side():
     valgt_pos = col1.selectbox("Vælg Positionsprofil", list(POS_CONFIG.keys()))
     min_mins = col2.slider("Min. minutter spillet", 0, 1500, 270)
     
-    # --- 3. DATAFETCH (Snesikker Snowflake-SQL) ---
+    # --- 3. DATAFETCH (Snowflake SQL uden specialtegn i aliaser) ---
     DB = "KLUB_HVIDOVREIF.AXIS"
     LIGA_IDS = "('dyjr458hcmrcy87fsabfsy87o', 'e5p78j2r7v8h3u9s5k0l2m4n6', 'f6q89k3s8w9i4v0t6l1m3n5o7', '335', '328', '329', '43319', '331')"
 
@@ -62,32 +63,32 @@ def vis_side():
                 ANY_VALUE(TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME)) as FULL_NAME,
                 ANY_VALUE(m.CONTESTANT_NAME) as TEAM_NAME,
                 
-                -- Minutes, xG og xA (Omskrevet til Snowflake-venlig CASE WHEN)
+                -- Minutes, xG og xA (Omskrevet til Snowflake-sikker syntaks uden FILTER)
                 SUM(CASE WHEN mx.STAT_TYPE = 'minsPlayed' THEN mx.STAT_VALUE ELSE 0 END) as total_minutes,
                 SUM(CASE WHEN mx.STAT_TYPE = 'expectedGoals' THEN mx.STAT_VALUE ELSE 0 END) as total_xg,
                 SUM(CASE WHEN mx.STAT_TYPE = 'expectedAssists' THEN mx.STAT_VALUE ELSE 0 END) as total_xa,
                 
-                -- Event counts (Omskrevet fra FILTER WHERE til SUM CASE WHEN)
-                SUM(CASE WHEN e.EVENT_TYPEID = 16 THEN 1 ELSE 0 END) as mål,
-                SUM(CASE WHEN e.EVENT_TYPEID IN (13,14,15,16) THEN 1 ELSE 0 END) as afslutninger,
-                SUM(CASE WHEN e.EVENT_TYPEID = 1 THEN 1 ELSE 0 END) as pasninger_forsøg,
-                SUM(CASE WHEN e.EVENT_TYPEID = 1 AND e.EVENT_OUTCOME = 1 THEN 1 ELSE 0 END) as pasninger_succes,
-                SUM(CASE WHEN e.EVENT_TYPEID = 3 THEN 1 ELSE 0 END) as driblinger,
+                -- Event counts omdøbt til ASCII
+                SUM(CASE WHEN e.EVENT_TYPEID = 16 THEN 1 ELSE 0 END) as goals,
+                SUM(CASE WHEN e.EVENT_TYPEID IN (13,14,15,16) THEN 1 ELSE 0 END) as shots,
+                SUM(CASE WHEN e.EVENT_TYPEID = 1 THEN 1 ELSE 0 END) as passes_attempted,
+                SUM(CASE WHEN e.EVENT_TYPEID = 1 AND e.EVENT_OUTCOME = 1 THEN 1 ELSE 0 END) as passes_completed,
+                SUM(CASE WHEN e.EVENT_TYPEID = 3 THEN 1 ELSE 0 END) as dribbles,
                 
                 -- Berøringer i feltet (X over 83, Y mellem 21 og 79)
-                SUM(CASE WHEN e.EVENT_X > 83 AND e.EVENT_Y BETWEEN 21 AND 79 THEN 1 ELSE 0 END) as berøringer_i_felt,
+                SUM(CASE WHEN e.EVENT_X > 83 AND e.EVENT_Y >= 21 AND e.EVENT_Y <= 79 THEN 1 ELSE 0 END) as touches_in_box,
                 SUM(CASE WHEN e.EVENT_TYPEID = 8 THEN 1 ELSE 0 END) as interceptions,
-                SUM(CASE WHEN e.EVENT_TYPEID = 7 THEN 1 ELSE 0 END) as tacklinger,
+                SUM(CASE WHEN e.EVENT_TYPEID = 7 THEN 1 ELSE 0 END) as tackles,
                 SUM(CASE WHEN e.EVENT_TYPEID = 12 THEN 1 ELSE 0 END) as clearances,
                 
                 -- Key Passes (Qualifier 210)
                 SUM(CASE WHEN q.QUALIFIER_QID = '210' THEN 1 ELSE 0 END) as key_passes,
                 
-                -- Luftdueller (Event 44 eller specifikke qualifiers)
-                SUM(CASE WHEN e.EVENT_TYPEID = 44 AND e.EVENT_OUTCOME = 1 THEN 1 ELSE 0 END) as luftdueller_vundet,
+                -- Luftdueller (Event 44 og vundet)
+                SUM(CASE WHEN e.EVENT_TYPEID = 44 AND e.EVENT_OUTCOME = 1 THEN 1 ELSE 0 END) as aerials_won,
                 
-                -- Boldtab i forsvarszone (Event 50/51/erobret imod på egen banehalvdel X < 50)
-                SUM(CASE WHEN e.EVENT_TYPEID IN (50, 51) AND e.EVENT_X < 50 THEN 1 ELSE 0 END) as boldtab_forsvar
+                -- Boldtab i egen zone (Egen zone defineret som X < 50)
+                SUM(CASE WHEN e.EVENT_TYPEID IN (50, 51) AND e.EVENT_X < 50 THEN 1 ELSE 0 END) as turnovers_def
                 
             FROM {DB}.OPTA_EVENTS e
             JOIN {DB}.OPTA_PLAYERS p ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
@@ -108,29 +109,29 @@ def vis_side():
             # --- 4. P90 BEREGNING OG SCORING ---
             config = POS_CONFIG[valgt_pos]
             
-            # Sikker P90-omregning baseret på de faktiske minutter
-            df['mål_p90'] = (df['mål'] / df['total_minutes']) * 90
+            # Omregn til P90
+            df['goals_p90'] = (df['goals'] / df['total_minutes']) * 90
             df['xg_p90'] = (df['total_xg'] / df['total_minutes']) * 90
-            df['afslutninger_p90'] = (df['afslutninger'] / df['total_minutes']) * 90
-            df['berøringer_i_felt_p90'] = (df['berøringer_i_felt'] / df['total_minutes']) * 90
-            df['driblinger_p90'] = (df['driblinger'] / df['total_minutes']) * 90
-            df['pasning_pct'] = (df['pasninger_succes'] / df['pasninger_forsøg'].replace(0, 1)) * 100
+            df['shots_p90'] = (df['shots'] / df['total_minutes']) * 90
+            df['touches_in_box_p90'] = (df['touches_in_box'] / df['total_minutes']) * 90
+            df['dribbles_p90'] = (df['dribbles'] / df['total_minutes']) * 90
+            df['pass_pct'] = (df['passes_completed'] / df['passes_attempted'].replace(0, 1)) * 100
             df['interceptions_p90'] = (df['interceptions'] / df['total_minutes']) * 90
-            df['tacklinger_p90'] = (df['tacklinger'] / df['total_minutes']) * 90
+            df['tackles_p90'] = (df['tackles'] / df['total_minutes']) * 90
             df['clearances_p90'] = (df['clearances'] / df['total_minutes']) * 90
             df['key_passes_p90'] = (df['key_passes'] / df['total_minutes']) * 90
-            df['luftdueller_vundet_p90'] = (df['luftdueller_vundet'] / df['total_minutes']) * 90
-            df['boldtab_forsvar_p90'] = (df['boldtab_forsvar'] / df['total_minutes']) * 90
+            df['aerials_won_p90'] = (df['aerials_won'] / df['total_minutes']) * 90
+            df['turnovers_def_p90'] = (df['turnovers_def'] / df['total_minutes']) * 90
             
-            # Assists (Vi bruger xA_p90 som en stærk indikator, eller du kan koble assist-logikken på her)
+            # xA bruges som assist-metrik
             df['assists_p90'] = (df['total_xa'] / df['total_minutes']) * 90
 
-            # BEREGN PERFORMANCE SCORE (Din formel)
+            # BEREGN PERFORMANCE SCORE
             score_col = 'pos_score'
             df[score_col] = 0.0
             
             for i, m_name in enumerate(config['metrics']):
-                col_name = f"{m_name}_p90" if m_name != "pasning_pct" else m_name
+                col_name = f"{m_name}_p90" if m_name != "pass_pct" else m_name
                 weight = config['weights'][i]
                 df[score_col] += df[col_name] * weight
 
@@ -145,7 +146,6 @@ def vis_side():
             with col_main:
                 st.subheader(f"Top 10: {valgt_pos}")
                 
-                # Plotly Bar Chart
                 fig = px.bar(
                     top_10, 
                     x=score_col, 
@@ -184,7 +184,7 @@ def vis_side():
                 st.write(f"**Formel for {valgt_pos}:**")
                 formula_text = " + ".join([f"({config['labels'][i]} * {config['weights'][i]})" for i in range(len(config['metrics']))])
                 st.code(f"Score = {formula_text}")
-                st.caption("Alle volumetal (mål, skud osv.) er normaliseret til pr. 90 minutter.")
+                st.caption("Alle volumetal er normaliseret til pr. 90 minutter.")
 
         else:
             st.info("Ingen spillere fundet med de valgte kriterier.")
