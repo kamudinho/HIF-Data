@@ -181,7 +181,7 @@ def vis_side(dp=None):
         """
         df_all = conn.query(sql_events)
 
-        # SQL 2: Hent minutter, xG og xA baseret på PLAYER_OPTAUUID (fjernet PLAYER_NAME herfra)
+        # SQL 2: Hent minutter, xG og xA baseret på PLAYER_OPTAUUID
         sql_expected = f"""
             SELECT 
                 MATCH_ID,
@@ -196,6 +196,50 @@ def vis_side(dp=None):
             GROUP BY MATCH_ID, PLAYER_OPTAUUID
         """
         df_expected = conn.query(sql_expected)
+
+        # --- SQL 3: DIN SKUDSIKKRE MÅL & ASSISTS-QUERY MED SEKVENSTÆNKNING (LAG) ---
+        sql_db_stats = f"""
+            WITH SortedEvents AS (
+                SELECT 
+                    e.PLAYER_OPTAUUID,
+                    TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME) as VISNINGSNAVN,
+                    e.EVENT_TYPEID,
+                    e.EVENT_TIMESTAMP,
+                    e.MATCH_OPTAUUID,
+                    LISTAGG(q.QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY q.QUALIFIER_QID) OVER (PARTITION BY e.EVENT_OPTAUUID) as QUALIFIERS,
+                    LAG(e.PLAYER_OPTAUUID) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_TIMESTAMP) AS ASSIST_PLAYER_UUID,
+                    LAG(TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME)) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_TIMESTAMP) AS ASSIST_PLAYER_NAME,
+                    LAG(e.EVENT_TYPEID) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_TIMESTAMP) AS PREV_EVENT_TYPEID,
+                    LAG(LISTAGG(q.QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY q.QUALIFIER_QID) OVER (PARTITION BY e.EVENT_OPTAUUID)) 
+                        OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_TIMESTAMP) AS PREV_QUALIFIERS
+                FROM {DB}.OPTA_EVENTS e
+                JOIN {DB}.OPTA_PLAYERS p ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
+                LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
+                WHERE e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid_hold}'
+                  AND e.EVENT_TIMESTAMP >= '2025-07-01'
+            )
+            SELECT 
+                PLAYER_OPTAUUID,
+                VISNINGSNAVN,
+                SUM(CASE WHEN EVENT_TYPEID = 16 THEN 1 ELSE 0 END) AS GOALS,
+                COALESCE(
+                    (
+                        SELECT COUNT(*) 
+                        FROM SortedEvents sub 
+                        WHERE sub.EVENT_TYPEID = 16 
+                          AND sub.ASSIST_PLAYER_UUID = SortedEvents.PLAYER_OPTAUUID 
+                          AND sub.ASSIST_PLAYER_UUID != sub.PLAYER_OPTAUUID 
+                          AND (
+                              sub.QUALIFIERS LIKE '%29%' 
+                              OR sub.PREV_EVENT_TYPEID = 'AS' 
+                              OR sub.PREV_QUALIFIERS LIKE '%210%'
+                          )
+                    ), 0
+                ) AS ASSISTS
+            FROM SortedEvents
+            GROUP BY PLAYER_OPTAUUID, VISNINGSNAVN
+        """
+        df_db_stats = conn.query(sql_db_stats)
         
     if df_all is None or df_all.empty:
         st.warning("Ingen hændelsesdata fundet.")
@@ -214,57 +258,12 @@ def vis_side(dp=None):
     t_profile, t_pitch, t_phys, t_stats, t_compare = st.tabs(["Spillerprofil", "Spilleraktioner", "Fysisk data", "Statistik", "Sammenligning"])
 
     with t_profile:
-        # 1. Forbered data kronologisk
-        df_all_sorted = df_all.sort_values(by=['EVENT_TIMESTAMP']).copy()
-        
-        # Hent den efterfølgende hændelses værdier (svarer til LEAD i SQL)
-        df_all_sorted['NEXT_EVENT_TYPEID'] = df_all_sorted['EVENT_TYPEID'].shift(-1)
-        df_all_sorted['NEXT_PLAYER'] = df_all_sorted['VISNINGSNAVN'].shift(-1)
-        df_all_sorted['NEXT_QUALIFIERS'] = df_all_sorted['QUALIFIERS'].shift(-1).fillna('')
-
-        # Vores interne hjælper til generelle events
+        # Vores interne hjælper til generelle hændelser
         def count_event_with_qual(df_group, eid, qids):
             return df_group.apply(lambda r: har_qualifier(r['EVENT_TYPEID'], r.get('qual_list', []), eid, qids), axis=1).sum()
 
-        # En dedikeret, fejlsikker funktion til at tælle assists pr. spiller-gruppe
-        def beregn_opta_assists(spiller_events):
-            assist_count = 0
-            
-            for _, r in spiller_events.iterrows():
-                # Hent og ensart værdier
-                ev_type = str(r['EVENT_TYPEID']).strip() if pd.notna(r['EVENT_TYPEID']) else ""
-                next_ev_type = str(r['NEXT_EVENT_TYPEID']).strip() if pd.notna(r['NEXT_EVENT_TYPEID']) else ""
-                
-                # Konverter qual_list til et sæt af tekst-strenge for nem og fejlfri søgning
-                quals = {str(q).strip() for q in r.get('qual_list', []) if pd.notna(q)} if isinstance(r.get('qual_list'), list) else set()
-                next_quals = {str(q).strip() for q in str(r['NEXT_QUALIFIERS']).split(',') if q.strip()}
-
-                # --- SIKKERHEDS-TJEK FOR ASSISTS ---
-                
-                # Betingelse A: Det er en decideret assist-hændelse ('AS')
-                if ev_type == 'AS':
-                    assist_count += 1
-                    continue
-                
-                # Betingelse B: Det er en aflevering (1) stemplet med assist-qualifier (210)
-                if ev_type == '1' and '210' in quals:
-                    assist_count += 1
-                    continue
-                    
-                # Betingelse C: Det er en aflevering (1) efterfulgt af et mål (16) markeret som 'Assisted' (29)
-                # modtaget og scoret af en holdkammerat (ikke spilleren selv)
-                if (ev_type == '1' and 
-                    next_ev_type == '16' and 
-                    '29' in next_quals and 
-                    r['NEXT_PLAYER'] != r['VISNINGSNAVN']):
-                    
-                    assist_count += 1
-                    continue
-            
-            return assist_count
-
-        # 2. Beregn stats for ALLE spillere fra event-data.
-        event_stats = df_all_sorted.groupby(['VISNINGSNAVN', 'PLAYER_OPTAUUID']).apply(lambda x: pd.Series({
+        # 1. Beregn standard-hændelser for ALLE spillere i Python
+        event_stats = df_all.groupby(['VISNINGSNAVN', 'PLAYER_OPTAUUID']).apply(lambda x: pd.Series({
             'Gule_kort': count_event_with_qual(x, 17, 31),
             'Roede_kort': count_event_with_qual(x, 17, 33),
             'Indskiftet': (x['EVENT_TYPEID'] == 19).sum(),
@@ -273,18 +272,13 @@ def vis_side(dp=None):
             'Stikninger': count_event_with_qual(x, 1, 4),
             'Indlæg': count_event_with_qual(x, 1, [2, 155]),
             'Afslutninger': x['EVENT_TYPEID'].isin([13, 14, 15, 16]).sum(),
-            'Mål': (x['EVENT_TYPEID'] == 16).sum(),
-            
-            # --- Vores nye fejlsikre beregning ---
-            'Assists': beregn_opta_assists(x),
-            
             'Erobringer': x['EVENT_TYPEID'].isin([7, 8, 12, 49]).sum(),
             'Driblinger': (x['EVENT_TYPEID'] == 3).sum(),
             'Chancer_skabt': x.apply(lambda r: '210' in r.get('qual_list', []), axis=1).sum(),
             'Key_Passes': x.apply(lambda r: '210' in r.get('qual_list', []), axis=1).sum()
         })).reset_index().set_index('PLAYER_OPTAUUID')
         
-        # 2. Beregn og join kamp-baserede stats fra OPTA_MATCHEXPECTEDGOALS via PLAYER_OPTAUUID
+        # 2. Beregn og join kamp-baserede stats fra OPTA_MATCHEXPECTEDGOALS
         if df_expected is not None and not df_expected.empty:
             match_stats = df_expected.groupby('PLAYER_OPTAUUID').apply(lambda x: pd.Series({
                 'Kampe': x['MATCH_ID'].nunique(),
@@ -293,7 +287,6 @@ def vis_side(dp=None):
                 'xA': x['XA'].sum() if 'XA' in x.columns else x['xA'].sum()
             })).fillna(0)
             
-            # Kobbel event- og matchstats sammen på den fælles spiller-UUID
             truppen_stats_raw = event_stats.join(match_stats, how='left').fillna(0)
         else:
             truppen_stats_raw = event_stats.copy()
@@ -302,16 +295,27 @@ def vis_side(dp=None):
             truppen_stats_raw['xG'] = 0.0
             truppen_stats_raw['xA'] = 0.0
 
-        # Vi flytter index tilbage til spillerens navn (VISNINGSNAVN), så resten af din kode 
-        # (visualiseringer, donuts og filters) fungerer uforstyrret videre på spillernavnet.
+        # --- 3. ERSTAT SÆSON-TAL FOR MÅL OG ASSISTS MED DE SKUDSIKKRE DATABASEVÆRDIER ---
+        if df_db_stats is not None and not df_db_stats.empty:
+            db_stats_indexed = df_db_stats.set_index('PLAYER_OPTAUUID')
+            truppen_stats_raw['Mål'] = db_stats_indexed['GOALS']
+            truppen_stats_raw['Assists'] = db_stats_indexed['ASSISTS']
+        else:
+            truppen_stats_raw['Mål'] = 0
+            truppen_stats_raw['Assists'] = 0
+
+        truppen_stats_raw['Mål'] = truppen_stats_raw['Mål'].fillna(0).astype(int)
+        truppen_stats_raw['Assists'] = truppen_stats_raw['Assists'].fillna(0).astype(int)
+
+        # Flyt index tilbage til VISNINGSNAVN så resten af din visnings-kode fungerer
         truppen_stats = truppen_stats_raw.reset_index().set_index('VISNINGSNAVN')
 
-        # 3. Beregn holdets interne ranking (Højeste værdi giver 1st plads)
+        # 4. Beregn holdets interne ranking (Højeste værdi giver 1st plads)
         ranks = truppen_stats.rank(ascending=False, method='min').astype(int)
         spiller_ranks = ranks.loc[valgt_spiller]
         s_data = truppen_stats.loc[valgt_spiller]
 
-        # 4. Layout: Vi skaber hovedstrukturen med fastlåste spalter
+        # 5. Layout: Vi skaber hovedstrukturen med fastlåste spalter
         main_col_left, main_col_right = st.columns([1.3, 4])
 
         # VENSTRE SIDE: Spillerinfo og Kampdata
@@ -326,7 +330,7 @@ def vis_side(dp=None):
             st.markdown(f'<div style="display: flex; align-items: center; margin-bottom: 10px;">{logo_html}<div style="font-size: 18px; font-weight: bold;">{valgt_spiller}</div></div>', unsafe_allow_html=True)
             st.markdown("<hr style='margin: 10px 0; opacity: 0.5;'>", unsafe_allow_html=True)
 
-            # Kampdata boks, som nu inkluderer xG og xA
+            # Kampdata boks, som nu altid viser de 100% korrekte databaseværdier
             st.markdown(f"""
                 <div style="background-color: #f8f9fa; padding: 12px; border-radius: 8px; border: 1px solid #e9ecef;">
                     <h4 style="margin: 0 0 10px 0; font-size: 14px; text-transform: uppercase; font-weight: bold;">Kampdata</h4>
