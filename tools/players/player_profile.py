@@ -198,10 +198,9 @@ def vis_side(dp=None):
         col_info, col_charts_top = st.columns([1, 4])
     
         with col_info:
-            if hold_logo is not None: st.image(hold_logo, width=20)
+            if hold_logo is not None: st.image(hold_logo, width=35)
             st.markdown(f'<div class="player-header" style="margin: 0; line-height: 1;">{valgt_spiller}</div>', unsafe_allow_html=True)
             st.markdown("<hr style='margin: 15px 0; opacity: 0.5;'>", unsafe_allow_html=True)
-            st.markdown("---")
             st.caption("Sammenlignet med holdets bedste.")
     
         # Listen med de 8 kategorier
