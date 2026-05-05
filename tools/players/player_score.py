@@ -33,13 +33,6 @@ def vis_side():
     SOGT_SAESON = "2025/2026"
     HVIDOVRE_TEAM_WYID = 7490  # Hvidovre IF ID
 
-    # --- 1. MAPPING MOD DE OFFICIELLE KOLONNER (ROLECODE3 & ROLENAME) ---
-    ROLE_MAPPING = {
-        "Forsvar": "DEF",
-        "Midtbane": "MID",
-        "Angriber": "FWD"
-    }
-
     POS_TRANSLATIONS = {
         "Center Back": "Midterforsvarer",
         "Left Back": "Venstre Back",
@@ -61,29 +54,7 @@ def vis_side():
         "FWD": "Angrebsspiller"
     }
 
-    # --- 2. HENT LIGAER DYNAMISK ---
-    try:
-        liga_data = conn.query(f"""
-            SELECT DISTINCT s.COMPETITION_WYID 
-            FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_AVERAGE s
-            JOIN {DB}.WYSCOUT_SEASONS seas ON s.SEASON_WYID = seas.SEASON_WYID
-            WHERE seas.SEASONNAME = '{SOGT_SAESON}'
-        """)
-        ligaer = sorted([int(x) for x in liga_data['COMPETITION_WYID'].dropna().tolist()]) if liga_data is not None and not liga_data.empty else [328, 1305]
-    except Exception as e:
-        st.warning(f"Kunne ikke hente dynamiske ligaer (bruger standard): {e}")
-        ligaer = [328, 1305]
-
-    LIGA_MAP = {
-        328: "NordicBet Liga (328)",
-        335: "Superliga (335)",
-        329: "2. division (329)",
-        43319: "3. division (43319)",
-        331: "Oddset Pokalen (331)",
-        1305: "U19 Ligaen (1305)"
-    }
-
-    # --- 3. FILTRE ---
+    # --- 1. FILTRE ---
     col1, col2 = st.columns(2)
     
     POS_CONFIG = {
@@ -106,17 +77,48 @@ def vis_side():
     
     valgt_profil = col1.selectbox("Vælg Kategori", list(POS_CONFIG.keys()))
     
+    # Hent ligaer dynamisk
+    try:
+        liga_data = conn.query(f"""
+            SELECT DISTINCT s.COMPETITION_WYID 
+            FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_AVERAGE s
+            JOIN {DB}.WYSCOUT_SEASONS seas ON s.SEASON_WYID = seas.SEASON_WYID
+            WHERE seas.SEASONNAME = '{SOGT_SAESON}'
+        """)
+        ligaer = sorted([int(x) for x in liga_data['COMPETITION_WYID'].dropna().tolist()]) if liga_data is not None and not liga_data.empty else [328, 1305]
+    except Exception as e:
+        st.warning(f"Kunne ikke hente dynamiske ligaer (bruger standard): {e}")
+        ligaer = [328, 1305]
+
+    LIGA_MAP = {
+        328: "NordicBet Liga (328)",
+        335: "Superliga (335)",
+        329: "2. division (329)",
+        43319: "3. division (43319)",
+        331: "Oddset Pokalen (331)",
+        1305: "U19 Ligaen (1305)"
+    }
+    
     valgt_liga = col2.selectbox(
         "Vælg Liga", 
         ligaer, 
         format_func=lambda x: LIGA_MAP.get(x, f"Liga ID: {x}")
     )
 
-    sogt_role_code = ROLE_MAPPING[valgt_profil]
+    # --- 2. SQL GEOMETRI (Fallback på kampspecifikke positioner) ---
+    # Vi mapper de kampspecifikke koder (fra b_stats.POSITION1CODE) som backup til kategorierne
+    if valgt_profil == "Forsvar":
+        pos_fallback_filter = "b_stats.POSITION1CODE IN ('CB', 'LB', 'RB', 'LWB', 'RWB')"
+        role_code = "DEF"
+    elif valgt_profil == "Midtbane":
+        pos_fallback_filter = "b_stats.POSITION1CODE IN ('DMF', 'CMF', 'AMF', 'LM', 'RM')"
+        role_code = "MID"
+    else:  # Angriber
+        pos_fallback_filter = "b_stats.POSITION1CODE IN ('CF', 'LWF', 'RWF', 'SS')"
+        role_code = "FWD"
 
-    # --- 4. DATAFETCH ---
+    # --- 3. DATAFETCH ---
     with st.spinner("Henter og beregner Wyscout-data..."):
-        # SQL-FORBEDRING: Spiller-minutter tælles for den valgte liga ELLER hvis det er en Hvidovre-spiller (uanset liga)
         sql = f"""
         WITH player_minutes AS (
             SELECT 
@@ -131,7 +133,19 @@ def vis_side():
             WHERE (t_stats.COMPETITION_WYID = {valgt_liga} OR p.CURRENTTEAM_WYID = {HVIDOVRE_TEAM_WYID})
               AND seas.SEASONNAME = '{SOGT_SAESON}'
             GROUP BY t_stats.PLAYER_WYID
-            HAVING SUM(t_stats.MINUTESONFIELD) >= 150  -- Sænket en smule for at sikre, at unge/nye Hvidovre-spillere også kommer med
+            HAVING SUM(t_stats.MINUTESONFIELD) >= 150
+        ),
+        most_played_position AS (
+            -- Finder den position spilleren har optrådt mest på i kamp-databasen denne sæson
+            SELECT 
+                b_stats.PLAYER_WYID,
+                b_stats.POSITION1NAME as MATCH_POS_NAME,
+                ROW_NUMBER() OVER (PARTITION BY b_stats.PLAYER_WYID ORDER BY COUNT(*) DESC) as rnk
+            FROM {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_BASE b_stats
+            JOIN {DB}.WYSCOUT_SEASONS seas ON b_stats.SEASON_WYID = seas.SEASON_WYID
+            WHERE seas.SEASONNAME = '{SOGT_SAESON}'
+              AND b_stats.POSITION1NAME IS NOT NULL
+            GROUP BY b_stats.PLAYER_WYID, b_stats.POSITION1NAME
         )
         SELECT 
             p.PLAYER_WYID,
@@ -142,7 +156,8 @@ def vis_side():
             t.OFFICIALNAME as TEAM_NAME,
             p.CURRENTTEAM_WYID as TEAM_WYID,
             pm.total_minutes,
-            COALESCE(p.ROLENAME, p.ROLECODE3) as SPECIFIC_POSITION,
+            -- Hvis ROLENAME mangler, snupper vi den mest spillede position fra kamp-historikken
+            COALESCE(p.ROLENAME, mpp.MATCH_POS_NAME, 'Ukendt Position') as SPECIFIC_POSITION,
             AVG(s.GOALS) as GOALS,
             AVG(s.XGSHOT) AS XG,
             AVG(s.SHOTS) as SHOTS,
@@ -165,10 +180,16 @@ def vis_side():
         JOIN {DB}.WYSCOUT_TEAMS t ON p.CURRENTTEAM_WYID = t.TEAM_WYID
         JOIN {DB}.WYSCOUT_SEASONS seas ON s.SEASON_WYID = seas.SEASON_WYID
         JOIN player_minutes pm ON p.PLAYER_WYID = pm.PLAYER_WYID
+        LEFT JOIN most_played_position mpp ON p.PLAYER_WYID = mpp.PLAYER_WYID AND mpp.rnk = 1
+        -- Fallback match-base join så vi kan hente deres kampspecifikke positioner
+        JOIN {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_BASE b_stats 
+          ON s.PLAYER_WYID = b_stats.PLAYER_WYID 
+         AND s.SEASON_WYID = b_stats.SEASON_WYID
         WHERE (s.COMPETITION_WYID = {valgt_liga} OR p.CURRENTTEAM_WYID = {HVIDOVRE_TEAM_WYID})
           AND seas.SEASONNAME = '{SOGT_SAESON}'
-          AND p.ROLECODE3 = '{sogt_role_code}'
-        GROUP BY p.PLAYER_WYID, p.FIRSTNAME, p.LASTNAME, p.SHORTNAME, t.OFFICIALNAME, p.CURRENTTEAM_WYID, pm.total_minutes, p.ROLENAME, p.ROLECODE3
+          -- Inkluder enten hvis stam-rollen passer, ELLER hvis de mangler stam-rolle men spiller i den rigtige position i kampene
+          AND (p.ROLECODE3 = '{role_code}' OR (COALESCE(p.ROLECODE3, '') = '' AND {pos_fallback_filter}))
+        GROUP BY p.PLAYER_WYID, p.FIRSTNAME, p.LASTNAME, p.SHORTNAME, t.OFFICIALNAME, p.CURRENTTEAM_WYID, pm.total_minutes, p.ROLENAME, mpp.MATCH_POS_NAME, p.ROLECODE3
         """
         
         raw_df = conn.query(sql)
@@ -176,7 +197,7 @@ def vis_side():
         if raw_df is not None and not raw_df.empty:
             raw_df.columns = raw_df.columns.str.lower()
             
-            # --- 5. BEREGNING AF PASNINGSPROCENT ---
+            # --- 4. BEREGNING AF PASNINGSPROCENT ---
             raw_df['pass_pct'] = (raw_df['successfulpasses'] / raw_df['passes'].replace(0, 1)) * 100
 
             config = POS_CONFIG[valgt_profil]
@@ -188,7 +209,7 @@ def vis_side():
                 weight = config['weights'][i]
                 raw_df[score_col] += raw_df[m_name] * weight
             
-            # --- 6. CLEAN PANDAS GROUPBY ---
+            # --- 5. CLEAN PANDAS GROUPBY ---
             agg_dict = {
                 'full_name': 'first',
                 'team_name': 'first',
@@ -204,32 +225,28 @@ def vis_side():
             df = raw_df.groupby('player_wyid', as_index=False).agg(agg_dict)
             df[score_col] = df[score_col].round(1)
             
-            # Oversæt specifik position på DataFrame-niveau
+            # Oversæt den specifikke position til dansk
             df['dk_position'] = df['specific_position'].map(POS_TRANSLATIONS).fillna(df['specific_position'])
             
-            # Sorter efter score (højeste først)
             df_sorteret = df.sort_values(score_col, ascending=False)
             
-            # --- LOGIK: TOP 20 FRA LIGAEN + 2 BEDSTE FRA HVIDOVRE ---
-            # 1. Hent spillere, der faktisk har spillet i den valgte liga
+            # --- 6. LOGIK: TOP 20 FRA LIGAEN + 2 BEDSTE FRA HVIDOVRE ---
             liga_spillere = df_sorteret[df_sorteret['player_wyid'].isin(
                 raw_df[raw_df['team_wyid'] != HVIDOVRE_TEAM_WYID]['player_wyid']
             ) | (df_sorteret['team_wyid'] == HVIDOVRE_TEAM_WYID)]
             
             top_20_liga = liga_spillere[liga_spillere['team_wyid'] != HVIDOVRE_TEAM_WYID].head(20)
             
-            # 2. Hent Hvidovre-spillerne specifikt
             hvidovre_spillere = df_sorteret[df_sorteret['team_wyid'] == HVIDOVRE_TEAM_WYID]
             top_2_hvidovre = hvidovre_spillere.head(2)
             
-            # Kombiner dem uden dubletter
             visnings_df = pd.concat([top_20_liga, top_2_hvidovre]).drop_duplicates(subset=['player_wyid'])
             
-            # Sorter til grafen (stigende score, så de bedste er øverst i det liggende søjlediagram)
+            # Sorter til grafen
             visnings_df = visnings_df.sort_values(score_col, ascending=True)
             visnings_df['visningsnavn'] = visnings_df['full_name']
 
-            # OPPDATERET FARVE-MAPPING: Hvidovre = Rød (#c11c2e), Andre klubber = Blå (#1b365d)
+            # Rød for Hvidovre (#c11c2e), Blå for andre (#1b365d)
             farve_liste = [
                 '#c11c2e' if int(row['team_wyid']) == HVIDOVRE_TEAM_WYID else '#1b365d'
                 for _, row in visnings_df.iterrows()
@@ -285,7 +302,7 @@ def vis_side():
                             <div class="pos-title">{spiller_data['full_name']}</div>
                             <div style="font-size: 14px; color: #555; line-height: 1.5;">
                                 Klub: <b>{spiller_data['team_name']}</b><br>
-                                Primær Position: <b>{spiller_data['dk_position']}</b><br>
+                                Position (Wyscout / Kamp-data): <b>{spiller_data['dk_position']}</b><br>
                                 Spillede minutter (2025/2026): <b>{int(spiller_data['total_minutes'])} min.</b><br>
                                 Samlet Score ({valgt_profil}): <b>{spiller_data[score_col]}</b>
                             </div>
