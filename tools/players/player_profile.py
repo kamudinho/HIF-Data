@@ -197,27 +197,41 @@ def vis_side(dp=None):
         """
         df_expected = conn.query(sql_expected)
 
-        # --- SQL 3: DIN SKUDSIKKRE MÅL & ASSISTS-QUERY MED SEKVENSTÆNKNING (LAG) ---
+        # --- SQL 3: KORRIGERET OG OPTIMERET MÅL & ASSISTS-QUERY ---
         sql_db_stats = f"""
-            WITH SortedEvents AS (
+            WITH EventQualifiers AS (
+                -- Trin 1: Gruppér qualifiers pr. event for at undgå nestede window-funktioner
                 SELECT 
+                    e.EVENT_OPTAUUID,
                     e.PLAYER_OPTAUUID,
-                    TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME) as VISNINGSNAVN,
                     e.EVENT_TYPEID,
                     e.EVENT_TIMESTAMP,
                     e.MATCH_OPTAUUID,
-                    LISTAGG(q.QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY q.QUALIFIER_QID) OVER (PARTITION BY e.EVENT_OPTAUUID) as QUALIFIERS,
-                    LAG(e.PLAYER_OPTAUUID) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_TIMESTAMP) AS ASSIST_PLAYER_UUID,
-                    LAG(TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME)) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_TIMESTAMP) AS ASSIST_PLAYER_NAME,
-                    LAG(e.EVENT_TYPEID) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_TIMESTAMP) AS PREV_EVENT_TYPEID,
-                    LAG(LISTAGG(q.QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY q.QUALIFIER_QID) OVER (PARTITION BY e.EVENT_OPTAUUID)) 
-                        OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_TIMESTAMP) AS PREV_QUALIFIERS
+                    TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME) as VISNINGSNAVN,
+                    LISTAGG(q.QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY q.QUALIFIER_QID) as QUALIFIERS
                 FROM {DB}.OPTA_EVENTS e
                 JOIN {DB}.OPTA_PLAYERS p ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
                 LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
                 WHERE e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid_hold}'
                   AND e.EVENT_TIMESTAMP >= '2025-07-01'
+                GROUP BY e.EVENT_OPTAUUID, e.PLAYER_OPTAUUID, e.EVENT_TYPEID, e.EVENT_TIMESTAMP, e.MATCH_OPTAUUID, p.FIRST_NAME, p.LAST_NAME
+            ),
+            SortedEvents AS (
+                -- Trin 2: Udfør LAG-operationer på de flade data
+                SELECT 
+                    PLAYER_OPTAUUID,
+                    VISNINGSNAVN,
+                    EVENT_TYPEID,
+                    EVENT_TIMESTAMP,
+                    MATCH_OPTAUUID,
+                    QUALIFIERS,
+                    LAG(PLAYER_OPTAUUID) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_TIMESTAMP) AS ASSIST_PLAYER_UUID,
+                    LAG(VISNINGSNAVN) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_TIMESTAMP) AS ASSIST_PLAYER_NAME,
+                    LAG(EVENT_TYPEID) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_TIMESTAMP) AS PREV_EVENT_TYPEID,
+                    LAG(QUALIFIERS) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_TIMESTAMP) AS PREV_QUALIFIERS
+                FROM EventQualifiers
             )
+            -- Trin 3: Beregn mål og assists uden konflikter
             SELECT 
                 PLAYER_OPTAUUID,
                 VISNINGSNAVN,
