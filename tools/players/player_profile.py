@@ -198,150 +198,87 @@ def vis_side(dp=None):
     t_profile, t_pitch, t_phys, t_stats, t_compare = st.tabs(["Spillerprofil", "Spilleraktioner", "Fysisk data", "Statistik", "Sammenligning"])
 
     with t_profile:
-        # Vores interne hjælper til at tælle (kigger på både EVENT_TYPEID og qual_list)
+        # 1. Beregn stats (Samme logik som før)
         def count_event_with_qual(df_group, eid, qids):
             return df_group.apply(lambda r: har_qualifier(r['EVENT_TYPEID'], r.get('qual_list', []), eid, qids), axis=1).sum()
 
-        # 1. Beregn stats for ALLE spillere (Korrekt Opta-logik)
         truppen_stats = df_all.groupby('VISNINGSNAVN').apply(lambda x: pd.Series({
-            # --- NYE GRUNDLÆGGENDE KAMPDATA ---
             'Kampe': x['GAME_ID'].nunique() if 'GAME_ID' in x.columns else 0,
             'Minutter': x['MINUTTER'].sum() if 'MINUTTER' in x.columns else 0,
             'Gule_kort': (x['EVENT_TYPEID'] == 'YC').sum(),
             'Roede_kort': (x['EVENT_TYPEID'] == 'RC').sum(),
             'Indskiftet': (x['EVENT_TYPEID'] == '19').sum(),
             'Udskiftet': (x['EVENT_TYPEID'] == '18').sum(),
-            
-            # --- EKSISTERENDE STATS ---
             'Pasninger': (x['EVENT_TYPEID'] == 1).sum(),
-            'Stikninger': count_event_with_qual(x, 1, 4),    # Event 1 + Qual 4
-            'Indlæg': count_event_with_qual(x, 1, [2, 155]), # Event 1 + Qual 2 (eller 155: Chip)
+            'Stikninger': count_event_with_qual(x, 1, 4),
+            'Indlæg': count_event_with_qual(x, 1, [2, 155]),
             'Afslutninger': x['EVENT_TYPEID'].isin([13, 14, 15, 16]).sum(),
             'Mål': (x['EVENT_TYPEID'] == 16).sum(),
-            'Assists': x.apply(lambda r: '210' in str(r.get('qual_list', '')) and str(r['EVENT_TYPEID']) == '16', axis=1).sum(), # Event 16 + Qual 210
+            'Assists': x.apply(lambda r: '210' in str(r.get('qual_list', '')) and str(r['EVENT_TYPEID']) == '16', axis=1).sum(),
             'Erobringer': x['EVENT_TYPEID'].isin([7, 8, 12, 49]).sum(),
             'Driblinger': (x['EVENT_TYPEID'] == 3).sum(),
             'Chancer_skabt': x.apply(lambda r: '210' in str(r.get('qual_list', '')), axis=1).sum(),
             'Key_Passes': x.apply(lambda r: '210' in str(r.get('qual_list', '')), axis=1).sum()
         })).fillna(0)
 
-        # 2. Beregn rank (Højeste tal giver 1st plads)
         ranks = truppen_stats.rank(ascending=False, method='min').astype(int)
         spiller_ranks = ranks.loc[valgt_spiller]
-        
-        # Hent den valgte spillers rå tal ud til infoboksen
         s_data = truppen_stats.loc[valgt_spiller]
-        
-        # 3. Definer layout-kolonner for top-rækken (Spillerinfo til venstre, 4 charts til højre)
-        col_info, col_charts_top = st.columns([1.3, 4])
-        
-        # Spillerinfo & Kampdata (Venstre side)
-        with col_info:
+
+        # 2. Layout: Vi skaber hovedstrukturen
+        # Vi bruger en fast kolonne-opdeling for hele fanen
+        main_col_left, main_col_right = st.columns([1.3, 4])
+
+        # VENSTRE SIDE: Spillerinfo og Kampdata
+        with main_col_left:
+            # Header
             logo_html = ""
             if hold_logo is not None:
-                # Omdan PIL-billedet til base64 til inline HTML-visning
                 buffered = io.BytesIO()
                 hold_logo.save(buffered, format="PNG")
                 img_str = base64.b64encode(buffered.getvalue()).decode()
-                logo_html = f'<img src="data:image/png;base64,{img_str}" style="height: 35px; margin-right: 12px; object-fit: contain;">'
+                logo_html = f'<img src="data:image/png;base64,{img_str}" style="height: 35px; margin-right: 12px;">'
 
-            # HTML Flexbox placerer logo og navn på nøjagtig samme linje, centreret lodret
-            st.markdown(f"""
-                <div style="display: flex; align-items: center; margin-bottom: 10px;">
-                    {logo_html}
-                    <div class="player-header" style="margin: 0; line-height: 1.2; font-size: 18px; font-weight: bold;">
-                        {valgt_spiller}
-                    </div>
-                </div>
-            """, unsafe_allow_html=True)
-            
+            st.markdown(f'<div style="display: flex; align-items: center; margin-bottom: 10px;">{logo_html}<div style="font-size: 18px; font-weight: bold;">{valgt_spiller}</div></div>', unsafe_allow_html=True)
             st.markdown("<hr style='margin: 10px 0; opacity: 0.5;'>", unsafe_allow_html=True)
-            
-            # --- REN INFOBOKS UDEN IKONER ---
+
+            # Kampdata boks
             st.markdown(f"""
                 <div style="background-color: #f8f9fa; padding: 12px; border-radius: 8px; border: 1px solid #e9ecef;">
-                    <h4 style="margin: 0 0 10px 0; font-size: 14px; color: #333; text-transform: uppercase; letter-spacing: 0.5px; font-weight: bold;">Kampdata</h4>
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 13px;">
-                        <span><b>Kampe:</b></span> <span>{int(s_data['Kampe'])}</span>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 13px;">
-                        <span><b>Minutter:</b></span> <span>{int(s_data['Minutter'])}'</span>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 13px;">
-                        <span><b>Mål:</b></span> <span>{int(s_data['Mål'])}</span>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 13px;">
-                        <span><b>Assists:</b></span> <span>{int(s_data['Assists'])}</span>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 13px;">
-                        <span><b>Gule kort:</b></span> <span>{int(s_data['Gule_kort'])}</span>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 13px;">
-                        <span><b>Røde kort:</b></span> <span>{int(s_data['Roede_kort'])}</span>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 13px;">
-                        <span><b>Indskiftet:</b></span> <span>{int(s_data['Indskiftet'])}</span>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; font-size: 13px;">
-                        <span><b>Udskiftet:</b></span> <span>{int(s_data['Udskiftet'])}</span>
-                    </div>
+                    <h4 style="margin: 0 0 10px 0; font-size: 14px; text-transform: uppercase; font-weight: bold;">Kampdata</h4>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 13px;"><span><b>Kampe:</b></span><span>{int(s_data['Kampe'])}</span></div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 13px;"><span><b>Minutter:</b></span><span>{int(s_data['Minutter'])}'</span></div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 13px;"><span><b>Mål:</b></span><span>{int(s_data['Mål'])}</span></div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 13px;"><span><b>Assists:</b></span><span>{int(s_data['Assists'])}</span></div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 13px;"><span><b>Gule kort:</b></span><span>{int(s_data['Gule_kort'])}</span></div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 13px;"><span><b>Røde kort:</b></span><span>{int(s_data['Roede_kort'])}</span></div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 13px;"><span><b>Indskiftet:</b></span><span>{int(s_data['Indskiftet'])}</span></div>
+                    <div style="display: flex; justify-content: space-between; font-size: 13px;"><span><b>Udskiftet:</b></span><span>{int(s_data['Udskiftet'])}</span></div>
                 </div>
             """, unsafe_allow_html=True)
             
             st.markdown("<hr style='margin: 15px 0; opacity: 0.5;'>", unsafe_allow_html=True)
             st.caption("Sammenlignet med holdets bedste.")
 
-        # 4. Definer alle de kategorier, der skal vises som donuts
-        kat_liste = [
-            ("PASNINGER", "Pasninger"), 
-            ("STIKNINGER", "Stikninger"), 
-            ("AFSLUTNINGER", "Afslutninger"), 
-            ("MÅL", "Mål"),
-            ("EROBRINGER", "Erobringer"),
-            ("DRIBLINGER", "Driblinger"),
-            ("INDLÆG", "Indlæg"),
-            ("CHANCER SKABT", "Chancer_skabt"),
-            ("KEY PASSES", "Key_Passes")
-        ]
-        
-        # 5. Dynamisk opbygning af rækker (4 donuts per række)
-        antal_per_raekke = 4
-        
-        for row_start in range(0, len(kat_liste), antal_per_raekke):
-            # Udvælg de kategorier, der hører til denne specifikke række
-            aktuel_bid = kat_liste[row_start : row_start + antal_per_raekke]
+        # HØJRE SIDE: Alle Donuts (uafhængig af venstre sides højde)
+        with main_col_right:
+            kat_liste = [
+                ("PASNINGER", "Pasninger"), ("STIKNINGER", "Stikninger"), 
+                ("AFSLUTNINGER", "Afslutninger"), ("MÅL", "Mål"),
+                ("EROBRINGER", "Erobringer"), ("DRIBLINGER", "Driblinger"),
+                ("INDLÆG", "Indlæg"), ("CHANCER SKABT", "Chancer_skabt"),
+                ("KEY PASSES", "Key_Passes")
+            ]
             
-            # Vi opretter en usynlig spacer-kolonne [1.3, 4] for række 2, 3 osv.,
-            # så alle efterfølgende rækker rykker ind og flugter perfekt under den første.
-            _, col_row = st.columns([1.3, 4])
-            
-            # Første række skal tegnes i 'col_charts_top' (ved siden af spillerinfo).
-            # De efterfølgende rækker skal tegnes i 'col_row' (under spillerinfo).
-            target_col = col_charts_top if row_start == 0 else col_row
-            
-            with target_col:
-                chart_cols = st.columns(antal_per_raekke)
-                for i, (label, k_id) in enumerate(aktuel_bid):
-                    with chart_cols[i]:
-                        # Overskrift på donut
+            # Loop igennem alle kategorier i rækker af 4
+            for i in range(0, len(kat_liste), 4):
+                cols = st.columns(4)
+                for j, (label, k_id) in enumerate(kat_liste[i:i+4]):
+                    with cols[j]:
                         st.markdown(f"<p style='text-align:center; font-weight:bold; font-size:12px; margin-bottom:0px;'>{label}</p>", unsafe_allow_html=True)
+                        fig = create_relative_donut(truppen_stats.loc[valgt_spiller, k_id], truppen_stats[k_id].max(), label, get_ordinal(spiller_ranks[k_id]))
+                        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False}, key=f"p_{k_id}_{i}_{j}")
                         
-                        # Hent data og rank
-                        aktuel_val = truppen_stats.loc[valgt_spiller, k_id]
-                        maks_val = truppen_stats[k_id].max()
-                        rank_val = get_ordinal(spiller_ranks[k_id])
-                        
-                        # Generer plot
-                        fig = create_relative_donut(aktuel_val, maks_val, label, rank_val)
-                        
-                        # Vi tilføjer en unik key baseret på kategoriens ID
-                        st.plotly_chart(
-                            fig, 
-                            use_container_width=True, 
-                            config={'displayModeBar': False},
-                            key=f"chart_{k_id}"
-                        )
-            
     with t_pitch:
         descriptions = {
             "Heatmap": "Viser spillerens generelle bevægelsesmønster og intensitet på banen.",
