@@ -118,19 +118,30 @@ def vis_side():
 
     # --- 2. DATAFETCH ---
     with st.spinner("Henter og beregner Wyscout-data..."):
-        # Første SQL: Trækker de faktiske, rene minutter ud for hver spiller fuldstændig isoleret
+        # SQL til minutter med det nye filter: Spilleren SKAL have spillet for Hvidovre i 2026,
+        # hvis han skal kategoriseres som Hvidovre-spiller.
         sql_minutter = f"""
+            WITH hvidovre_2026_spillere AS (
+                -- Finder spillere, der faktisk har optrådt på banen for Hvidovre i 2026
+                SELECT DISTINCT t_stats.PLAYER_WYID
+                FROM {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_TOTAL t_stats
+                JOIN {DB}.WYSCOUT_MATCHES m ON t_stats.MATCH_WYID = m.MATCH_WYID
+                WHERE t_stats.TEAM_WYID = {HVIDOVRE_TEAM_WYID}
+                  AND m.DATE >= '2026-01-01'
+            )
             SELECT 
                 t_stats.PLAYER_WYID,
-                SUM(t_stats.MINUTESONFIELD) as total_minutes
+                SUM(t_stats.MINUTESONFIELD) as total_minutes,
+                -- Flag, der markerer om spilleren er en reel Hvidovre-spiller i 2026
+                CASE WHEN h26.PLAYER_WYID IS NOT NULL THEN 1 ELSE 0 END as is_active_hvidovre
             FROM {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_TOTAL t_stats
             JOIN {DB}.WYSCOUT_PLAYERS p ON t_stats.PLAYER_WYID = p.PLAYER_WYID
-            WHERE (t_stats.COMPETITION_WYID = {valgt_liga} OR p.CURRENTTEAM_WYID = {HVIDOVRE_TEAM_WYID})
-            GROUP BY t_stats.PLAYER_WYID
+            LEFT JOIN hvidovre_2026_spillere h26 ON t_stats.PLAYER_WYID = h26.PLAYER_WYID
+            WHERE (t_stats.COMPETITION_WYID = {valgt_liga} OR h26.PLAYER_WYID IS NOT NULL)
+            GROUP BY t_stats.PLAYER_WYID, h26.PLAYER_WYID
             HAVING SUM(t_stats.MINUTESONFIELD) >= 150
         """
         
-        # Anden SQL: Trækker de gennemsnitlige stats ud for spillerne
         sql_stats = f"""
         WITH most_played_position AS (
             SELECT 
@@ -190,7 +201,7 @@ def vis_side():
             df_minutter.columns = df_minutter.columns.str.lower()
             df_stats.columns = df_stats.columns.str.lower()
             
-            # Kobling af minutterne til spillerne i Python (Garanterer 100% korrekte, ikke-duplikerede minutter!)
+            # Kobling af minutter og Hvidovre-aktivitetsstatus
             raw_df = pd.merge(df_stats, df_minutter, on='player_wyid', how='inner')
             
             # --- 3. BEREGNING AF PASNINGSPROCENT ---
@@ -210,6 +221,7 @@ def vis_side():
                 'full_name': 'first',
                 'team_name': 'first',
                 'current_team_wyid': 'first',
+                'is_active_hvidovre': 'first', # Nu har vi det præcise 2026-aktivitetsflag med
                 'total_minutes': 'first',
                 'specific_position': 'first',
                 score_col: 'first'
@@ -224,13 +236,12 @@ def vis_side():
             df['dk_position'] = df['specific_position'].map(POS_TRANSLATIONS).fillna(df['specific_position'])
             df_sorteret = df.sort_values(score_col, ascending=False)
             
-            # --- 5. LOGIK: TOP 20 FRA LIGAEN + 2 BEDSTE FRA NUVÆRENDE HVIDOVRE ---
-            liga_spillere = df_sorteret[df_sorteret['player_wyid'].isin(
-                raw_df[raw_df['current_team_wyid'] != HVIDOVRE_TEAM_WYID]['player_wyid']
-            ) | (df_sorteret['current_team_wyid'] == HVIDOVRE_TEAM_WYID)]
+            # --- 5. LOGIK: TOP 20 FRA LIGAEN + 2 BEDSTE FRA NUVÆRENDE HVIDOVRE (AKTIVE I 2026) ---
+            # En spiller betragtes som Hvidovre-spiller, hvis de har is_active_hvidovre = 1
+            liga_spillere = df_sorteret[df_sorteret['is_active_hvidovre'] == 0]
+            hvidovre_spillere = df_sorteret[df_sorteret['is_active_hvidovre'] == 1]
             
-            top_20_liga = liga_spillere[liga_spillere['current_team_wyid'] != HVIDOVRE_TEAM_WYID].head(20)
-            hvidovre_spillere = df_sorteret[df_sorteret['current_team_wyid'] == HVIDOVRE_TEAM_WYID]
+            top_20_liga = liga_spillere.head(20)
             top_2_hvidovre = hvidovre_spillere.head(2)
             
             visnings_df = pd.concat([top_20_liga, top_2_hvidovre]).drop_duplicates(subset=['player_wyid'])
@@ -238,8 +249,9 @@ def vis_side():
             visnings_df = visnings_df.sort_values(score_col, ascending=True)
             visnings_df['visningsnavn'] = visnings_df['full_name']
 
+            # Farvelæg efter om de er aktive Hvidovre-spillere i 2026
             farve_liste = [
-                '#c11c2e' if int(row['current_team_wyid']) == HVIDOVRE_TEAM_WYID else '#1b365d'
+                '#c11c2e' if row['is_active_hvidovre'] == 1 else '#1b365d'
                 for _, row in visnings_df.iterrows()
             ]
 
