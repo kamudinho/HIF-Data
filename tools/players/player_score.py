@@ -32,7 +32,6 @@ def vis_side():
         </style>
     """, unsafe_allow_html=True)
 
-    st.title("🎯 Spilleranalyse | Performance Score (Wyscout)")
     st.caption("Sammenligning af spillere baseret på positions-vægtede Wyscout P90-metrics for sæsonen 2025/2026.")
 
     conn = _get_snowflake_conn()
@@ -40,6 +39,7 @@ def vis_side():
 
     DB = "KLUB_HVIDOVREIF.AXIS"
     SOGT_SAESON = "2025/2026"
+    HVIDOVRE_TEAM_WYID = 7490  # Hvidovre IF ID
 
     # --- 1. HENT LIGAER DYNAMISK ---
     try:
@@ -93,11 +93,13 @@ def vis_side():
 
     # --- 3. DATAFETCH ---
     with st.spinner("Henter og beregner Wyscout-data..."):
+        # Vi henter p.CURRENTTEAM_WYID med ud, så vi kan identificere Hvidovre-spillere
         sql = f"""
         SELECT 
             p.PLAYER_WYID,
             p.SHORTNAME as FULL_NAME,
             t.OFFICIALNAME as TEAM_NAME,
+            p.CURRENTTEAM_WYID as TEAM_WYID,
             AVG(s.GOALS) as GOALS,
             AVG(s.XGSHOT) AS XG,
             AVG(s.SHOTS) as SHOTS,
@@ -121,7 +123,7 @@ def vis_side():
         JOIN {DB}.WYSCOUT_SEASONS seas ON s.SEASON_WYID = seas.SEASON_WYID
         WHERE s.COMPETITION_WYID = {valgt_liga}
           AND seas.SEASONNAME = '{SOGT_SAESON}'
-        GROUP BY p.PLAYER_WYID, p.SHORTNAME, t.OFFICIALNAME
+        GROUP BY p.PLAYER_WYID, p.SHORTNAME, t.OFFICIALNAME, p.CURRENTTEAM_WYID
         """
         
         raw_df = conn.query(sql)
@@ -142,35 +144,37 @@ def vis_side():
                 weight = config['weights'][i]
                 raw_df[score_col] += raw_df[m_name] * weight
             
-            # --- 5. ULTRA-RENT PANDAS GROUPBY (Tvinger 1 række pr. spiller) ---
-            # Vi grupperer UDELUKKENDE på player_wyid, så der kun kan eksistere ét unikt ID i vores visualisering.
+            # --- 5. ULTRA-RENT PANDAS GROUPBY (Kun 1 række pr. spiller) ---
             agg_dict = {
-                'full_name': 'first', # Tag første navn hvis der er dubletter
-                'team_name': 'first', # Tag første holdnavn
-                score_col: 'first'    # Da tallene er ens pr. spiller, tager vi bare den første værdi
+                'full_name': 'first',
+                'team_name': 'first',
+                'team_wyid': 'first', # Gem holdets ID til farve-tjekket
+                score_col: 'first'
             }
             
-            # Tilføj metrics
             for m_name in config['metrics']:
                 agg_dict[m_name] = 'first'
                 
             df = raw_df.groupby('player_wyid', as_index=False).agg(agg_dict)
             df[score_col] = df[score_col].round(1)
             
-            # Generer visningsnavne efter aggregeringen
             df['visningsnavn'] = df['full_name'].apply(forkort_navn)
-            
-            # Sorter alle spillere opad til barchart
             df_alle = df.sort_values(score_col, ascending=True)
+
+            # --- NYT: Tildel farver baseret på om spilleren er fra Hvidovre ---
+            # Hvis hold-ID er 7490, får de den mørkeblå farve (#1b365d) - ellers rød (#c11c2e)
+            farve_liste = [
+                '#c11c2e' if int(row['team_wyid']) == HVIDOVRE_TEAM_WYID else '#1b365d'
+                for _, row in df_alle.iterrows()
+            ]
 
             # --- 6. SPLIT-SCREEN LAYOUT ---
             rude_venstre, rude_hoejre = st.columns([1.1, 0.9])
 
-            # RUDE 1 (VENSTRE): Rent og professionelt barchart (Kun 1 række pr. spiller!)
+            # RUDE 1 (VENSTRE): Scoreboard med Hvidovre markeret i blå
             with rude_venstre:
                 st.subheader(f"{valgt_pos} Scoreboard")
                 
-                # Dynamisk højde baseret på antallet af spillere (25px pr. spiller)
                 hoejde_graf = max(500, len(df_alle) * 26)
                 
                 fig = px.bar(
@@ -183,10 +187,10 @@ def vis_side():
                 )
                 
                 fig.update_traces(
-                    marker_color='#c11c2e',  # Solid rød farve
-                    textposition='inside',   # Placerer scoren inde i bjælken
+                    marker_color=farve_liste, # Sætter den dynamiske farveliste på bjælkerne
+                    textposition='inside',   
                     textfont=dict(color='white', size=11, family="Arial"), 
-                    insidetextanchor='end',  # Justerer tallet helt ud til kanten af bjælken
+                    insidetextanchor='end',  
                     cliponaxis=False
                 )
                 
