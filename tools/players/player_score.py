@@ -83,9 +83,30 @@ def vis_side():
         format_func=lambda x: LIGA_MAP.get(x, f"Liga ID: {x}")
     )
 
-    # --- 3. DATAFETCH (Med filter på minimum 270 minutter) ---
+    # --- 3. DATAFETCH ---
+    # Vi beregner spillernes samlede spilletid i den valgte liga/sæson via WYSCOUT_MATCHADVANCEDPLAYERSTATS_TOTAL
+    # Og vi finder spillerens mest spillede specifikke position via WYSCOUT_MATCHADVANCEDPLAYERSTATS_BASE
     with st.spinner("Henter og beregner Wyscout-data..."):
         sql = f"""
+        WITH player_minutes AS (
+            SELECT 
+                PLAYER_WYID,
+                SUM(MINUTESONFIELD) as total_minutes
+            FROM {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_TOTAL
+            WHERE COMPETITION_WYID = {valgt_liga}
+            GROUP BY PLAYER_WYID
+            HAVING SUM(MINUTESONFIELD) >= 270
+        ),
+        player_primary_position AS (
+            SELECT 
+                PLAYER_WYID,
+                POSITION1NAME as primary_position,
+                ROW_NUMBER() OVER (PARTITION BY PLAYER_WYID ORDER BY COUNT(*) DESC) as pos_rank
+            FROM {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_BASE
+            WHERE COMPETITION_WYID = {valgt_liga}
+              AND SEASON_WYID = (SELECT DISTINCT SEASON_WYID FROM {DB}.WYSCOUT_SEASONS WHERE SEASONNAME = '{SOGT_SAESON}' LIMIT 1)
+            GROUP BY PLAYER_WYID, POSITION1NAME
+        )
         SELECT 
             p.PLAYER_WYID,
             COALESCE(
@@ -94,6 +115,8 @@ def vis_side():
             ) as FULL_NAME, 
             t.OFFICIALNAME as TEAM_NAME,
             p.CURRENTTEAM_WYID as TEAM_WYID,
+            pm.total_minutes,
+            COALESCE(ppp.primary_position, 'Ukendt Position') as SPECIFIC_POSITION,
             AVG(s.GOALS) as GOALS,
             AVG(s.XGSHOT) AS XG,
             AVG(s.SHOTS) as SHOTS,
@@ -115,10 +138,11 @@ def vis_side():
         JOIN {DB}.WYSCOUT_PLAYERS p ON s.PLAYER_WYID = p.PLAYER_WYID
         JOIN {DB}.WYSCOUT_TEAMS t ON p.CURRENTTEAM_WYID = t.TEAM_WYID
         JOIN {DB}.WYSCOUT_SEASONS seas ON s.SEASON_WYID = seas.SEASON_WYID
+        JOIN player_minutes pm ON p.PLAYER_WYID = pm.PLAYER_WYID
+        LEFT JOIN player_primary_position ppp ON p.PLAYER_WYID = ppp.PLAYER_WYID AND ppp.pos_rank = 1
         WHERE s.COMPETITION_WYID = {valgt_liga}
           AND seas.SEASONNAME = '{SOGT_SAESON}'
-          AND s.MINUTESTAGGED >= 270
-        GROUP BY p.PLAYER_WYID, p.FIRSTNAME, p.LASTNAME, p.SHORTNAME, t.OFFICIALNAME, p.CURRENTTEAM_WYID
+        GROUP BY p.PLAYER_WYID, p.FIRSTNAME, p.LASTNAME, p.SHORTNAME, t.OFFICIALNAME, p.CURRENTTEAM_WYID, pm.total_minutes, ppp.primary_position
         """
         
         raw_df = conn.query(sql)
@@ -144,6 +168,8 @@ def vis_side():
                 'full_name': 'first',
                 'team_name': 'first',
                 'team_wyid': 'first',
+                'total_minutes': 'first',
+                'specific_position': 'first',
                 score_col: 'first'
             }
             
@@ -210,8 +236,10 @@ def vis_side():
                     st.markdown(f"""
                         <div class="score-card">
                             <div class="pos-title">{spiller_data['full_name']}</div>
-                            <div style="font-size: 14px; color: #555;">
+                            <div style="font-size: 14px; color: #555; line-height: 1.5;">
                                 Klub: <b>{spiller_data['team_name']}</b><br>
+                                Detaljeret Position: <b>{spiller_data['specific_position']}</b><br>
+                                Spillede minutter: <b>{int(spiller_data['total_minutes'])} min.</b><br>
                                 Samlet Score ({valgt_pos}): <b>{spiller_data[score_col]}</b>
                             </div>
                         </div>
