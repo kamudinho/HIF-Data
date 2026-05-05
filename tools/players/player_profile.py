@@ -39,6 +39,16 @@ def get_logo_img(opta_uuid):
     except: 
         return None
 
+def har_qualifier(row_events, row_quals, event_id, qual_id):
+    try:
+        if str(row_events) != str(event_id):
+            return False
+        # Håndter både liste og streng (Opta-data varierer tit)
+        ql = row_quals if isinstance(row_quals, list) else str(row_quals).split(',')
+        return str(qual_id) in [str(q).strip() for q in ql]
+    except:
+        return False
+
 def get_ordinal(n):
     if 11 <= (n % 100) <= 13:
         suffix = 'th'
@@ -180,20 +190,24 @@ def vis_side(dp=None):
     t_profile, t_pitch, t_phys, t_stats, t_compare = st.tabs(["Spillerprofil", "Spilleraktioner", "Fysisk data", "Statistik", "Sammenligning"])
 
     with t_profile:
-        # 1. Beregn stats (Husk at tilføje de nye kolonner her i din .agg funktion!)
-        # Jeg har tilføjet 4 eksempler mere her:
-        truppen_stats = df_all.groupby('VISNINGSNAVN').agg(
-            Pasninger=('EVENT_TYPEID', lambda x: (x == 1).sum()),
-            Stikninger=('EVENT_TYPEID', lambda x: (x == 4).sum()),
-            Afslutninger=('EVENT_TYPEID', lambda x: x.isin([13, 14, 15, 16]).sum()),
-            Mål=('EVENT_TYPEID', lambda x: (x == 16).sum()),
-            Erobringer=('EVENT_TYPEID', lambda x: x.isin([7, 8, 49]).sum()),
-            Driblinger=('EVENT_TYPEID', lambda x: (x == 3).sum()),
-            Chancer_skabt=('EVENT_TYPEID', lambda x: (x == 10, 154, 210, ).sum()), # Eksempel ID
-            Indlæg=('EVENT_TYPEID', lambda x: (x == 2).sum()), # Eksempel ID
-            Key_Passes=('EVENT_TYPEID', lambda x: (x == 11, 210).sum()) # Eksempel ID
-        )
-        
+        # Vi laver en hjælper til at tælle inde i aggregeringen
+        def count_event_with_qual(df_group, eid, qid):
+            return df_group.apply(lambda r: har_qualifier(r['EVENT_TYPEID'], r.get('qual_list', []), eid, qid), axis=1).sum()
+
+        # 1. Beregn stats (Nu med korrekt Opta-logik)
+        truppen_stats = df_all.groupby('VISNINGSNAVN').apply(lambda x: pd.Series({
+            'Pasninger': (x['EVENT_TYPEID'] == 1).sum(),
+            'Stikninger': count_event_with_qual(x, 1, 4),    # Event 1 + Qual 4
+            'Indlæg': count_event_with_qual(x, 1, 2),        # Event 1 + Qual 2
+            'Afslutninger': x['EVENT_TYPEID'].isin([13, 14, 15, 16]).sum(),
+            'Mål': (x['EVENT_TYPEID'] == 16).sum(),
+            'Erobringer': x['EVENT_TYPEID'].isin([7, 8, 12, 49]).sum(),
+            'Driblinger': (x['EVENT_TYPEID'] == 3).sum(),
+            'Chancer_skabt': x.apply(lambda r: '210' in str(r.get('qual_list', '')), axis=1).sum(),
+            'Key_Passes': x.apply(lambda r: '210' in str(r.get('qual_list', '')), axis=1).sum() # Ofte det samme som chancer skabt
+        })).fillna(0)
+
+        # 2. Beregn rank
         ranks = truppen_stats.rank(ascending=False, method='min').astype(int)
         spiller_ranks = ranks.loc[valgt_spiller]
     
