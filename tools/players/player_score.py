@@ -202,30 +202,27 @@ def vis_side():
             df = raw_df.groupby('player_wyid', as_index=False).agg(agg_dict)
             df[score_col] = df[score_col].round(1)
             
+            # Oversæt specifik position med det samme på DataFrame-niveau for at undgå '.map'-fejlen senere
+            df['dk_position'] = df['specific_position'].map(POS_TRANSLATIONS).fillna(df['specific_position'])
+            
             # Sorter efter score (højeste først)
             df_sorteret = df.sort_values(score_col, ascending=False)
             
-            # --- NY LOGIK: TOP 20 + 2 BEDSTE FRA HVIDOVRE ---
-            # 1. Tag de 20 bedste fra ligaen
+            # --- LOGIK: TOP 20 + 2 BEDSTE FRA HVIDOVRE ---
             top_20_liga = df_sorteret.head(20)
-            
-            # 2. Tag de 2 bedste fra Hvidovre IF (team_wyid == 7490)
             hvidovre_spillere = df_sorteret[df_sorteret['team_wyid'] == HVIDOVRE_TEAM_WYID]
             top_2_hvidovre = hvidovre_spillere.head(2)
             
-            # 3. Kombiner dem (og fjern eventuelle dubletter, hvis Hvidovre-spillerne allerede er i top 20)
+            # Kombiner dem uden dubletter
             visnings_df = pd.concat([top_20_liga, top_2_hvidovre]).drop_duplicates(subset=['player_wyid'])
             
             # Sorter til grafen (stigende score, så de bedste er øverst i det liggende søjlediagram)
             visnings_df = visnings_df.sort_values(score_col, ascending=True)
-            
-            # Oversæt position
-            visnings_df['dk_position'] = visnings_df['specific_position'].map(POS_TRANSLATIONS).fillna(visnings_df['specific_position'])
             visnings_df['visningsnavn'] = visnings_df['full_name']
 
-            # Tildel farver (Hvidovre = Blå, andre = Rød)
+            # NY FARVE-MAPPING: Hvidovre = Rød (#c11c2e), Andre klubber = Blå (#1b365d)
             farve_liste = [
-                '#1b365d' if int(row['team_wyid']) == HVIDOVRE_TEAM_WYID else '#c11c2e'
+                '#c11c2e' if int(row['team_wyid']) == HVIDOVRE_TEAM_WYID else '#1b365d'
                 for _, row in visnings_df.iterrows()
             ]
 
@@ -264,7 +261,7 @@ def vis_side():
                 )
                 st.plotly_chart(fig, use_container_width=True)
 
-            # RUDE 2 (HØJRE): Spiller-vælger (bruger det fulde datasæt df, så man stadig kan søge på alle spillere)
+            # RUDE 2 (HØJRE): Spiller-vælger
             with rude_hoejre:
                 st.subheader("Søg Spiller")
                 
@@ -279,7 +276,7 @@ def vis_side():
                             <div class="pos-title">{spiller_data['full_name']}</div>
                             <div style="font-size: 14px; color: #555; line-height: 1.5;">
                                 Klub: <b>{spiller_data['team_name']}</b><br>
-                                Primær Position: <b>{spiller_data['specific_position'].map(POS_TRANSLATIONS).fillna(spiller_data['specific_position'])}</b><br>
+                                Primær Position: <b>{spiller_data['dk_position']}</b><br>
                                 Spillede minutter (2025/2026): <b>{int(spiller_data['total_minutes'])} min.</b><br>
                                 Samlet Score ({valgt_profil}): <b>{spiller_data[score_col]}</b>
                             </div>
