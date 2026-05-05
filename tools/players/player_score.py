@@ -118,9 +118,8 @@ def vis_side():
 
     # --- 2. DATAFETCH ---
     with st.spinner("Henter og beregner Wyscout-data..."):
-        sql = f"""
-        WITH player_minutes AS (
-            -- Finder minutter i den valgte liga ELLER for spillere, der AKTUELT tilhører Hvidovre
+        # Første SQL: Trækker de faktiske, rene minutter ud for hver spiller fuldstændig isoleret
+        sql_minutter = f"""
             SELECT 
                 t_stats.PLAYER_WYID,
                 SUM(t_stats.MINUTESONFIELD) as total_minutes
@@ -129,8 +128,11 @@ def vis_side():
             WHERE (t_stats.COMPETITION_WYID = {valgt_liga} OR p.CURRENTTEAM_WYID = {HVIDOVRE_TEAM_WYID})
             GROUP BY t_stats.PLAYER_WYID
             HAVING SUM(t_stats.MINUTESONFIELD) >= 150
-        ),
-        most_played_position AS (
+        """
+        
+        # Anden SQL: Trækker de gennemsnitlige stats ud for spillerne
+        sql_stats = f"""
+        WITH most_played_position AS (
             SELECT 
                 b_stats.PLAYER_WYID,
                 b_stats.POSITION1NAME as MATCH_POS_NAME,
@@ -148,8 +150,7 @@ def vis_side():
                 p.SHORTNAME
             ) as FULL_NAME, 
             t.OFFICIALNAME as TEAM_NAME,
-            p.CURRENTTEAM_WYID as CURRENT_TEAM_WYID, -- Vi hiver fat i den aktuelle klub her!
-            pm.total_minutes,
+            p.CURRENTTEAM_WYID as CURRENT_TEAM_WYID,
             COALESCE(p.ROLENAME, mpp.MATCH_POS_NAME, 'Ukendt Position') as SPECIFIC_POSITION,
             AVG(s.GOALS) as GOALS,
             AVG(s.XGSHOT) AS XG,
@@ -172,7 +173,6 @@ def vis_side():
         JOIN {DB}.WYSCOUT_PLAYERS p ON s.PLAYER_WYID = p.PLAYER_WYID
         JOIN {DB}.WYSCOUT_TEAMS t ON p.CURRENTTEAM_WYID = t.TEAM_WYID
         JOIN {DB}.WYSCOUT_SEASONS seas ON s.SEASON_WYID = seas.SEASON_WYID
-        JOIN player_minutes pm ON p.PLAYER_WYID = pm.PLAYER_WYID
         LEFT JOIN most_played_position mpp ON p.PLAYER_WYID = mpp.PLAYER_WYID AND mpp.rnk = 1
         JOIN {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_BASE b_stats 
           ON s.PLAYER_WYID = b_stats.PLAYER_WYID 
@@ -180,13 +180,18 @@ def vis_side():
         WHERE (s.COMPETITION_WYID = {valgt_liga} OR p.CURRENTTEAM_WYID = {HVIDOVRE_TEAM_WYID})
           AND seas.SEASONNAME = '{SOGT_SAESON}'
           AND (p.ROLECODE3 = '{role_code}' OR (COALESCE(p.ROLECODE3, '') = '' AND {pos_fallback_filter}))
-        GROUP BY p.PLAYER_WYID, p.FIRSTNAME, p.LASTNAME, p.SHORTNAME, t.OFFICIALNAME, p.CURRENTTEAM_WYID, pm.total_minutes, p.ROLENAME, mpp.MATCH_POS_NAME, p.ROLECODE3
+        GROUP BY p.PLAYER_WYID, p.FIRSTNAME, p.LASTNAME, p.SHORTNAME, t.OFFICIALNAME, p.CURRENTTEAM_WYID, p.ROLENAME, mpp.MATCH_POS_NAME, p.ROLECODE3
         """
         
-        raw_df = conn.query(sql)
+        df_minutter = conn.query(sql_minutter)
+        df_stats = conn.query(sql_stats)
         
-        if raw_df is not None and not raw_df.empty:
-            raw_df.columns = raw_df.columns.str.lower()
+        if df_minutter is not None and df_stats is not None and not df_stats.empty:
+            df_minutter.columns = df_minutter.columns.str.lower()
+            df_stats.columns = df_stats.columns.str.lower()
+            
+            # Kobling af minutterne til spillerne i Python (Garanterer 100% korrekte, ikke-duplikerede minutter!)
+            raw_df = pd.merge(df_stats, df_minutter, on='player_wyid', how='inner')
             
             # --- 3. BEREGNING AF PASNINGSPROCENT ---
             raw_df['pass_pct'] = (raw_df['successfulpasses'] / raw_df['passes'].replace(0, 1)) * 100
@@ -204,7 +209,7 @@ def vis_side():
             agg_dict = {
                 'full_name': 'first',
                 'team_name': 'first',
-                'current_team_wyid': 'first', # Sørger for at holde styr på den aktuelle klub
+                'current_team_wyid': 'first',
                 'total_minutes': 'first',
                 'specific_position': 'first',
                 score_col: 'first'
@@ -220,7 +225,6 @@ def vis_side():
             df_sorteret = df.sort_values(score_col, ascending=False)
             
             # --- 5. LOGIK: TOP 20 FRA LIGAEN + 2 BEDSTE FRA NUVÆRENDE HVIDOVRE ---
-            # Vi bruger nu konsekvent 'current_team_wyid' i stedet for historisk 'team_wyid'
             liga_spillere = df_sorteret[df_sorteret['player_wyid'].isin(
                 raw_df[raw_df['current_team_wyid'] != HVIDOVRE_TEAM_WYID]['player_wyid']
             ) | (df_sorteret['current_team_wyid'] == HVIDOVRE_TEAM_WYID)]
@@ -231,11 +235,9 @@ def vis_side():
             
             visnings_df = pd.concat([top_20_liga, top_2_hvidovre]).drop_duplicates(subset=['player_wyid'])
             
-            # Sorter så de bedste spillere lægges i toppen af det liggende søjlediagram
             visnings_df = visnings_df.sort_values(score_col, ascending=True)
             visnings_df['visningsnavn'] = visnings_df['full_name']
 
-            # Hvidovre = Rød (#c11c2e), Andre klubber = Blå (#1b365d) - baseret på AKTUEl klub
             farve_liste = [
                 '#c11c2e' if int(row['current_team_wyid']) == HVIDOVRE_TEAM_WYID else '#1b365d'
                 for _, row in visnings_df.iterrows()
@@ -289,7 +291,6 @@ def vis_side():
                     klikket_navn = valgt_klik["selection"]["points"][0]["y"]
                     valgt_spiller_data = df[df['full_name'] == klikket_navn].iloc[0]
                 else:
-                    # Standard: Vis den bedst rangerede spiller fra visnings_df
                     bedste_spiller_id = visnings_df.sort_values(score_col, ascending=False).iloc[0]['player_wyid']
                     valgt_spiller_data = df[df['player_wyid'] == bedste_spiller_id].iloc[0]
 
