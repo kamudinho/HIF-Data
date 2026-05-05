@@ -32,7 +32,7 @@ def vis_side():
         </style>
     """, unsafe_allow_html=True)
 
-    st.caption("Spilleranalyse | Performance Score")
+    st.title("🎯 Spilleranalyse | Performance Score (Wyscout)")
     st.caption("Sammenligning af spillere baseret på positions-vægtede Wyscout P90-metrics for sæsonen 2025/2026.")
 
     conn = _get_snowflake_conn()
@@ -121,7 +121,7 @@ def vis_side():
         JOIN {DB}.WYSCOUT_SEASONS seas ON s.SEASON_WYID = seas.SEASON_WYID
         WHERE s.COMPETITION_WYID = {valgt_liga}
           AND seas.SEASONNAME = '{SOGT_SAESON}'
-        GROUP BY p.PLAYER_WYID, p.SHORTNAME, t.OFFICIALNAME, p.CURRENTTEAM_WYID
+        GROUP BY p.PLAYER_WYID, p.SHORTNAME, t.OFFICIALNAME
         """
         
         raw_df = conn.query(sql)
@@ -135,28 +135,29 @@ def vis_side():
             # Find den valgte profilkonfiguration
             config = POS_CONFIG[valgt_pos]
             
-            # BEREGN PERFORMANCE SCORE INDEN GRUPPERING
+            # Beregn performance score pr. række
             score_col = 'pos_score'
             raw_df[score_col] = 0.0
             for i, m_name in enumerate(config['metrics']):
                 weight = config['weights'][i]
                 raw_df[score_col] += raw_df[m_name] * weight
             
-            # --- 5. DET SIKRE PANDAS GRUPPERINGS-FILTER (SLÅR DUBLETTER HELT IHJEL) ---
-            # Vi grupperer hårdt på spiller-ID i Python for at garantere kun ÉN række pr. spiller i Plotly.
+            # --- 5. ULTRA-RENT PANDAS GROUPBY (Tvinger 1 række pr. spiller) ---
+            # Vi grupperer UDELUKKENDE på player_wyid, så der kun kan eksistere ét unikt ID i vores visualisering.
             agg_dict = {
-                'full_name': 'first',
-                'team_name': 'first',
-                score_col: 'mean'
+                'full_name': 'first', # Tag første navn hvis der er dubletter
+                'team_name': 'first', # Tag første holdnavn
+                score_col: 'first'    # Da tallene er ens pr. spiller, tager vi bare den første værdi
             }
-            # Tilføj de underliggende metrics til aggregeringen, så de også er unikke
+            
+            # Tilføj metrics
             for m_name in config['metrics']:
-                agg_dict[m_name] = 'mean'
+                agg_dict[m_name] = 'first'
                 
             df = raw_df.groupby('player_wyid', as_index=False).agg(agg_dict)
             df[score_col] = df[score_col].round(1)
             
-            # Forkort navne til visning
+            # Generer visningsnavne efter aggregeringen
             df['visningsnavn'] = df['full_name'].apply(forkort_navn)
             
             # Sorter alle spillere opad til barchart
@@ -165,11 +166,11 @@ def vis_side():
             # --- 6. SPLIT-SCREEN LAYOUT ---
             rude_venstre, rude_hoejre = st.columns([1.1, 0.9])
 
-            # RUDE 1 (VENSTRE): Rent og professionelt barchart (Kun 1 værdi pr. spiller!)
+            # RUDE 1 (VENSTRE): Rent og professionelt barchart (Kun 1 række pr. spiller!)
             with rude_venstre:
                 st.subheader(f"{valgt_pos} Scoreboard")
                 
-                # Dynamisk højde baseret på det unikke antal af spillere
+                # Dynamisk højde baseret på antallet af spillere (25px pr. spiller)
                 hoejde_graf = max(500, len(df_alle) * 26)
                 
                 fig = px.bar(
