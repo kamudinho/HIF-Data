@@ -117,7 +117,7 @@ def vis_side():
         JOIN {DB}.WYSCOUT_SEASONS seas ON s.SEASON_WYID = seas.SEASON_WYID
         WHERE s.COMPETITION_WYID = {valgt_liga}
           AND seas.SEASONNAME = '{SOGT_SAESON}'
-          AND s.MINUTESPLAYED >= 270
+          AND s.MINUTESTAGGED >= 270
         GROUP BY p.PLAYER_WYID, p.FIRSTNAME, p.LASTNAME, p.SHORTNAME, t.OFFICIALNAME, p.CURRENTTEAM_WYID
         """
         
