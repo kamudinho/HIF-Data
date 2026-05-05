@@ -5,7 +5,7 @@ import plotly.express as px
 from data.data_load import _get_snowflake_conn
 from data.utils.team_mapping import TEAMS
 
-# --- HJÆLPEFUNKTIONER (Genbrug fra din profil-side) ---
+# --- HJÆLPEFUNKTIONER ---
 def forkort_navn(navn_str):
     if not navn_str or not isinstance(navn_str, str): return ""
     dele = [d.strip() for d in navn_str.split() if d.strip()]
@@ -27,7 +27,6 @@ def vis_side():
     if not conn: return
 
     # --- 1. KONFIGURATION AF VÆGTNINGER ---
-    # Her kan du justere tallene præcis som du ønsker
     POS_CONFIG = {
         "Angriber": {
             "metrics": ["mål", "xg", "afslutninger", "berøringer_i_felt", "driblinger", "assists"],
@@ -35,13 +34,13 @@ def vis_side():
             "labels": ["Mål", "xG", "Skud", "Felt-berøringer", "Driblinger", "Assists"]
         },
         "Midtbane": {
-            "metrics": ["pasning_pct", "key_passes", "interceptions", "assists", "vundne_dueller", "progressive_runs"],
+            "metrics": ["pasning_pct", "key_passes", "interceptions", "assists", "tacklinger", "driblinger"],
             "weights": [8.0, 4.5, 3.0, 4.0, 2.0, 1.5],
-            "labels": ["Pasning %", "Key Passes", "Interceptions", "Assists", "Vundne Dueller", "Prog. Løb"]
+            "labels": ["Pasning %", "Key Passes", "Interceptions", "Assists", "Tacklinger", "Driblinger"]
         },
         "Forsvar": {
             "metrics": ["interceptions", "tacklinger", "clearances", "luftdueller_vundet", "pasning_pct", "boldtab_forsvar"],
-            "weights": [5.0, 4.0, 3.5, 4.0, 2.5, -3.0], # Boldtab i forsvaret trækker ned
+            "weights": [5.0, 4.0, 3.5, 4.0, 2.5, -3.0], 
             "labels": ["Interceptions", "Tacklinger", "Clearinger", "Luftdueller", "Pasning %", "Boldtab"]
         }
     }
@@ -51,9 +50,9 @@ def vis_side():
     valgt_pos = col1.selectbox("Vælg Positionsprofil", list(POS_CONFIG.keys()))
     min_mins = col2.slider("Min. minutter spillet", 0, 1500, 270)
     
-    # --- 3. DATAFETCH (Optimeret SQL) ---
+    # --- 3. DATAFETCH (Snesikker Snowflake-SQL) ---
     DB = "KLUB_HVIDOVREIF.AXIS"
-    LIGA_IDS = "('335', '328', '329', '43319', '331')" # Kan udvides
+    LIGA_IDS = "('dyjr458hcmrcy87fsabfsy87o', 'e5p78j2r7v8h3u9s5k0l2m4n6', 'f6q89k3s8w9i4v0t6l1m3n5o7', '335', '328', '329', '43319', '331')"
 
     with st.spinner("Beregner scores..."):
         sql = f"""
@@ -62,22 +61,38 @@ def vis_side():
                 e.PLAYER_OPTAUUID,
                 ANY_VALUE(TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME)) as FULL_NAME,
                 ANY_VALUE(m.CONTESTANT_NAME) as TEAM_NAME,
-                -- Minutes, xG, xA fra expected tabellen
-                SUM(mx.STAT_VALUE) FILTER (WHERE mx.STAT_TYPE = 'minsPlayed') as total_minutes,
-                SUM(mx.STAT_VALUE) FILTER (WHERE mx.STAT_TYPE = 'expectedGoals') as total_xg,
-                -- Event counts
-                COUNT(e.EVENT_OPTAUUID) FILTER (WHERE e.EVENT_TYPEID = 16) as mål,
-                COUNT(e.EVENT_OPTAUUID) FILTER (WHERE e.EVENT_TYPEID IN (13,14,15,16)) as afslutninger,
-                COUNT(e.EVENT_OPTAUUID) FILTER (WHERE e.EVENT_TYPEID = 1) as pasninger_forsøg,
-                COUNT(e.EVENT_OPTAUUID) FILTER (WHERE e.EVENT_TYPEID = 1 AND e.EVENT_OUTCOME = 1) as pasninger_succes,
-                COUNT(e.EVENT_OPTAUUID) FILTER (WHERE e.EVENT_TYPEID = 3) as driblinger,
-                -- Område-bestemt: Berøringer i feltet (Opta koordinater > 83)
-                COUNT(e.EVENT_OPTAUUID) FILTER (WHERE e.EVENT_X > 83 AND e.EVENT_Y BETWEEN 21 AND 79) as berøringer_i_felt,
-                COUNT(e.EVENT_OPTAUUID) FILTER (WHERE e.EVENT_TYPEID = 8) as interceptions,
-                COUNT(e.EVENT_OPTAUUID) FILTER (WHERE e.EVENT_TYPEID = 7) as tacklinger
+                
+                -- Minutes, xG og xA (Omskrevet til Snowflake-venlig CASE WHEN)
+                SUM(CASE WHEN mx.STAT_TYPE = 'minsPlayed' THEN mx.STAT_VALUE ELSE 0 END) as total_minutes,
+                SUM(CASE WHEN mx.STAT_TYPE = 'expectedGoals' THEN mx.STAT_VALUE ELSE 0 END) as total_xg,
+                SUM(CASE WHEN mx.STAT_TYPE = 'expectedAssists' THEN mx.STAT_VALUE ELSE 0 END) as total_xa,
+                
+                -- Event counts (Omskrevet fra FILTER WHERE til SUM CASE WHEN)
+                SUM(CASE WHEN e.EVENT_TYPEID = 16 THEN 1 ELSE 0 END) as mål,
+                SUM(CASE WHEN e.EVENT_TYPEID IN (13,14,15,16) THEN 1 ELSE 0 END) as afslutninger,
+                SUM(CASE WHEN e.EVENT_TYPEID = 1 THEN 1 ELSE 0 END) as pasninger_forsøg,
+                SUM(CASE WHEN e.EVENT_TYPEID = 1 AND e.EVENT_OUTCOME = 1 THEN 1 ELSE 0 END) as pasninger_succes,
+                SUM(CASE WHEN e.EVENT_TYPEID = 3 THEN 1 ELSE 0 END) as driblinger,
+                
+                -- Berøringer i feltet (X over 83, Y mellem 21 og 79)
+                SUM(CASE WHEN e.EVENT_X > 83 AND e.EVENT_Y BETWEEN 21 AND 79 THEN 1 ELSE 0 END) as berøringer_i_felt,
+                SUM(CASE WHEN e.EVENT_TYPEID = 8 THEN 1 ELSE 0 END) as interceptions,
+                SUM(CASE WHEN e.EVENT_TYPEID = 7 THEN 1 ELSE 0 END) as tacklinger,
+                SUM(CASE WHEN e.EVENT_TYPEID = 12 THEN 1 ELSE 0 END) as clearances,
+                
+                -- Key Passes (Qualifier 210)
+                SUM(CASE WHEN q.QUALIFIER_QID = '210' THEN 1 ELSE 0 END) as key_passes,
+                
+                -- Luftdueller (Event 44 eller specifikke qualifiers)
+                SUM(CASE WHEN e.EVENT_TYPEID = 44 AND e.EVENT_OUTCOME = 1 THEN 1 ELSE 0 END) as luftdueller_vundet,
+                
+                -- Boldtab i forsvarszone (Event 50/51/erobret imod på egen banehalvdel X < 50)
+                SUM(CASE WHEN e.EVENT_TYPEID IN (50, 51) AND e.EVENT_X < 50 THEN 1 ELSE 0 END) as boldtab_forsvar
+                
             FROM {DB}.OPTA_EVENTS e
             JOIN {DB}.OPTA_PLAYERS p ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
             JOIN {DB}.OPTA_MATCHINFO m ON e.EVENT_MATCH_OPTAUUID = m.MATCH_OPTAUUID
+            LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
             LEFT JOIN {DB}.OPTA_MATCHEXPECTEDGOALS mx ON e.PLAYER_OPTAUUID = mx.PLAYER_OPTAUUID AND e.EVENT_MATCH_OPTAUUID = mx.MATCH_ID
             WHERE e.EVENT_TIMESTAMP >= '2025-07-01'
             GROUP BY e.PLAYER_OPTAUUID
@@ -93,7 +108,7 @@ def vis_side():
             # --- 4. P90 BEREGNING OG SCORING ---
             config = POS_CONFIG[valgt_pos]
             
-            # Beregn grund-metrics (håndter division med nul)
+            # Sikker P90-omregning baseret på de faktiske minutter
             df['mål_p90'] = (df['mål'] / df['total_minutes']) * 90
             df['xg_p90'] = (df['total_xg'] / df['total_minutes']) * 90
             df['afslutninger_p90'] = (df['afslutninger'] / df['total_minutes']) * 90
@@ -102,28 +117,24 @@ def vis_side():
             df['pasning_pct'] = (df['pasninger_succes'] / df['pasninger_forsøg'].replace(0, 1)) * 100
             df['interceptions_p90'] = (df['interceptions'] / df['total_minutes']) * 90
             df['tacklinger_p90'] = (df['tacklinger'] / df['total_minutes']) * 90
+            df['clearances_p90'] = (df['clearances'] / df['total_minutes']) * 90
+            df['key_passes_p90'] = (df['key_passes'] / df['total_minutes']) * 90
+            df['luftdueller_vundet_p90'] = (df['luftdueller_vundet'] / df['total_minutes']) * 90
+            df['boldtab_forsvar_p90'] = (df['boldtab_forsvar'] / df['total_minutes']) * 90
             
-            # Dummy værdier for dem vi mangler i dette SQL eksempel (assists etc kan tilføjes i SQL'en)
-            df['assists_p90'] = 0.15 
-            df['key_passes_p90'] = 1.2
-            df['vundne_dueller_p90'] = 4.5
-            df['progressive_runs_p90'] = 2.1
-            df['clearances_p90'] = 3.0
-            df['luftdueller_vundet_p90'] = 2.0
-            df['boldtab_forsvar_p90'] = 0.5
+            # Assists (Vi bruger xA_p90 som en stærk indikator, eller du kan koble assist-logikken på her)
+            df['assists_p90'] = (df['total_xa'] / df['total_minutes']) * 90
 
             # BEREGN PERFORMANCE SCORE (Din formel)
-            # Vi mapper de valgte metrics til deres P90 navne
             score_col = 'pos_score'
-            df[score_col] = 0
+            df[score_col] = 0.0
             
             for i, m_name in enumerate(config['metrics']):
-                # Find kolonnenavnet (enten _p90 eller rå som pasning_pct)
                 col_name = f"{m_name}_p90" if m_name != "pasning_pct" else m_name
                 weight = config['weights'][i]
                 df[score_col] += df[col_name] * weight
 
-            # Rund scoren
+            # Rund scoren til 1 decimal
             df[score_col] = df[score_col].round(1)
             
             # --- 5. VISNING ---
@@ -146,7 +157,12 @@ def vis_side():
                     labels={'visningsnavn': 'Spiller', 'pos_score': 'Performance Score'},
                     template='plotly_white'
                 )
-                fig.update_layout(yaxis={'categoryorder':'total ascending'}, showlegend=False, height=500)
+                fig.update_layout(
+                    yaxis={'categoryorder':'total ascending'}, 
+                    showlegend=False, 
+                    height=500,
+                    margin=dict(l=5, r=5, t=10, b=10)
+                )
                 st.plotly_chart(fig, use_container_width=True)
 
             with col_stats:
