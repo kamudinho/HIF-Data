@@ -230,12 +230,14 @@ def vis_side(dp=None):
             'Afslutninger': x['EVENT_TYPEID'].isin([13, 14, 15, 16]).sum(),
             'Mål': (x['EVENT_TYPEID'] == 16).sum(),
             
+            # REEL ASSIST-LOGIK (Målgivende assist):
+            # Kigger udelukkende efter de officielle Opta assist-koder: '29' (Assisted) eller '154' (Bevidst assist)
             'Assists': x.apply(lambda r: any(q in r.get('qual_list', []) for q in ['29', '154']), axis=1).sum(),
             
             'Erobringer': x['EVENT_TYPEID'].isin([7, 8, 12, 49]).sum(),
             'Driblinger': (x['EVENT_TYPEID'] == 3).sum(),
             
-            # CHANCER SKABT / KEY PASSES (Altid kode '210'):
+            # CHANCER SKABT / KEY PASSES (Altid kode '210' uanset om der scores):
             'Chancer_skabt': x.apply(lambda r: '210' in r.get('qual_list', []), axis=1).sum(),
             'Key_Passes': x.apply(lambda r: '210' in r.get('qual_list', []), axis=1).sum()
         })).reset_index().set_index('PLAYER_OPTAUUID')
