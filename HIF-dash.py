@@ -223,7 +223,7 @@ try:
             import utils.ordbog as ob
             ob.vis_side()
         elif sel == "Spiller-score":
-            import players.player_score as pscore
+            import tools.players.player_score as pscore
             pscore.vis_side()
 
 
