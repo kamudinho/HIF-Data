@@ -120,14 +120,15 @@ def vis_side():
     with st.spinner("Henter og beregner Wyscout-data..."):
         sql = f"""
         WITH player_minutes AS (
-            -- Isoleret og unik opsummering for at undgå Cartesian Product-duplikering af minutter
+            -- Finder minutter i den valgte liga ELLER for spillere, der AKTUELT tilhører Hvidovre
             SELECT 
-                PLAYER_WYID,
-                SUM(MINUTESONFIELD) as total_minutes
-            FROM {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_TOTAL
-            WHERE COMPETITION_WYID = {valgt_liga}
-            GROUP BY PLAYER_WYID
-            HAVING SUM(MINUTESONFIELD) >= 150
+                t_stats.PLAYER_WYID,
+                SUM(t_stats.MINUTESONFIELD) as total_minutes
+            FROM {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_TOTAL t_stats
+            JOIN {DB}.WYSCOUT_PLAYERS p ON t_stats.PLAYER_WYID = p.PLAYER_WYID
+            WHERE (t_stats.COMPETITION_WYID = {valgt_liga} OR p.CURRENTTEAM_WYID = {HVIDOVRE_TEAM_WYID})
+            GROUP BY t_stats.PLAYER_WYID
+            HAVING SUM(t_stats.MINUTESONFIELD) >= 150
         ),
         most_played_position AS (
             SELECT 
@@ -147,7 +148,7 @@ def vis_side():
                 p.SHORTNAME
             ) as FULL_NAME, 
             t.OFFICIALNAME as TEAM_NAME,
-            p.CURRENTTEAM_WYID as TEAM_WYID,
+            p.CURRENTTEAM_WYID as CURRENT_TEAM_WYID, -- Vi hiver fat i den aktuelle klub her!
             pm.total_minutes,
             COALESCE(p.ROLENAME, mpp.MATCH_POS_NAME, 'Ukendt Position') as SPECIFIC_POSITION,
             AVG(s.GOALS) as GOALS,
@@ -203,7 +204,7 @@ def vis_side():
             agg_dict = {
                 'full_name': 'first',
                 'team_name': 'first',
-                'team_wyid': 'first',
+                'current_team_wyid': 'first', # Sørger for at holde styr på den aktuelle klub
                 'total_minutes': 'first',
                 'specific_position': 'first',
                 score_col: 'first'
@@ -218,13 +219,14 @@ def vis_side():
             df['dk_position'] = df['specific_position'].map(POS_TRANSLATIONS).fillna(df['specific_position'])
             df_sorteret = df.sort_values(score_col, ascending=False)
             
-            # --- 5. LOGIK: TOP 20 FRA LIGAEN + 2 BEDSTE FRA HVIDOVRE ---
+            # --- 5. LOGIK: TOP 20 FRA LIGAEN + 2 BEDSTE FRA NUVÆRENDE HVIDOVRE ---
+            # Vi bruger nu konsekvent 'current_team_wyid' i stedet for historisk 'team_wyid'
             liga_spillere = df_sorteret[df_sorteret['player_wyid'].isin(
-                raw_df[raw_df['team_wyid'] != HVIDOVRE_TEAM_WYID]['player_wyid']
-            ) | (df_sorteret['team_wyid'] == HVIDOVRE_TEAM_WYID)]
+                raw_df[raw_df['current_team_wyid'] != HVIDOVRE_TEAM_WYID]['player_wyid']
+            ) | (df_sorteret['current_team_wyid'] == HVIDOVRE_TEAM_WYID)]
             
-            top_20_liga = liga_spillere[liga_spillere['team_wyid'] != HVIDOVRE_TEAM_WYID].head(20)
-            hvidovre_spillere = df_sorteret[df_sorteret['team_wyid'] == HVIDOVRE_TEAM_WYID]
+            top_20_liga = liga_spillere[liga_spillere['current_team_wyid'] != HVIDOVRE_TEAM_WYID].head(20)
+            hvidovre_spillere = df_sorteret[df_sorteret['current_team_wyid'] == HVIDOVRE_TEAM_WYID]
             top_2_hvidovre = hvidovre_spillere.head(2)
             
             visnings_df = pd.concat([top_20_liga, top_2_hvidovre]).drop_duplicates(subset=['player_wyid'])
@@ -233,9 +235,9 @@ def vis_side():
             visnings_df = visnings_df.sort_values(score_col, ascending=True)
             visnings_df['visningsnavn'] = visnings_df['full_name']
 
-            # Hvidovre = Rød (#c11c2e), Andre klubber = Blå (#1b365d)
+            # Hvidovre = Rød (#c11c2e), Andre klubber = Blå (#1b365d) - baseret på AKTUEl klub
             farve_liste = [
-                '#c11c2e' if int(row['team_wyid']) == HVIDOVRE_TEAM_WYID else '#1b365d'
+                '#c11c2e' if int(row['current_team_wyid']) == HVIDOVRE_TEAM_WYID else '#1b365d'
                 for _, row in visnings_df.iterrows()
             ]
 
