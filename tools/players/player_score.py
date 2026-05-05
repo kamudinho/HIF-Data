@@ -33,7 +33,7 @@ def vis_side():
     SOGT_SAESON = "2025/2026"
     HVIDOVRE_TEAM_WYID = 7490  # Hvidovre IF ID
 
-    # --- 1. RENE WYSCOUT POSITIONER & OVERSÆTTELSER ---
+    # --- 1. OFFICIELLE WYSCOUT POSITIONER & OVERSÆTTELSER ---
     POS_MAPPING = {
         "Forsvar": [
             "Center Back", "Left Back", "Right Back", 
@@ -124,7 +124,6 @@ def vis_side():
         format_func=lambda x: LIGA_MAP.get(x, f"Liga ID: {x}")
     )
 
-    # Forberedelse af SQL WHERE-betingelse
     if valgt_specifik_eng == "Alle":
         sogte_positioner = POS_MAPPING[valgt_profil]
     else:
@@ -134,8 +133,8 @@ def vis_side():
 
     # --- 4. DATAFETCH ---
     with st.spinner("Henter og beregner Wyscout-data..."):
-        # SQL-FORBEDRING: Vi trækker spillerens primære position direkte fra spillerens grundlæggende Wyscout-profil (PASSPORTAREA_NAME),
-        # som er 100% stabil og altid udfyldt med Wyscouts officielle positionsnavne.
+        # SQL-OPGRADERING: Vi trækker spillerens primære position stabilt fra p.ROLE_NAME 
+        # (Wyscouts officielle tabelkolonne for spillerens stam-position)
         sql = f"""
         WITH player_minutes AS (
             SELECT 
@@ -160,6 +159,7 @@ def vis_side():
             t.OFFICIALNAME as TEAM_NAME,
             p.CURRENTTEAM_WYID as TEAM_WYID,
             pm.total_minutes,
+            COALESCE(p.ROLE_NAME, 'Ukendt Position') as SPECIFIC_POSITION,
             AVG(s.GOALS) as GOALS,
             AVG(s.XGSHOT) AS XG,
             AVG(s.SHOTS) as SHOTS,
@@ -184,7 +184,8 @@ def vis_side():
         JOIN player_minutes pm ON p.PLAYER_WYID = pm.PLAYER_WYID
         WHERE s.COMPETITION_WYID = {valgt_liga}
           AND seas.SEASONNAME = '{SOGT_SAESON}'
-        GROUP BY p.PLAYER_WYID, p.FIRSTNAME, p.LASTNAME, p.SHORTNAME, t.OFFICIALNAME, p.CURRENTTEAM_WYID, pm.total_minutes
+          AND p.ROLE_NAME IN ({tilladte_wyscout_positioner})
+        GROUP BY p.PLAYER_WYID, p.FIRSTNAME, p.LASTNAME, p.SHORTNAME, t.OFFICIALNAME, p.CURRENTTEAM_WYID, pm.total_minutes, p.ROLE_NAME
         """
         
         raw_df = conn.query(sql)
@@ -195,10 +196,10 @@ def vis_side():
             # --- 5. BEREGNING AF PASNINGSPROCENT ---
             raw_df['pass_pct'] = (raw_df['successfulpasses'] / raw_df['passes'].replace(0, 1)) * 100
 
-            # Hent den valgte profilkonfiguration
+            # Hent konfigurationen
             config = POS_CONFIG[valgt_profil]
             
-            # Beregn performance score pr. række
+            # Beregn score
             score_col = 'pos_score'
             raw_df[score_col] = 0.0
             for i, m_name in enumerate(config['metrics']):
@@ -221,13 +222,12 @@ def vis_side():
             df = raw_df.groupby('player_wyid', as_index=False).agg(agg_dict)
             df[score_col] = df[score_col].round(1)
             
-            # Oversæt den specifikke position til dansk
+            # Oversæt position til dansk
             df['dk_position'] = df['specific_position'].map(POS_TRANSLATIONS).fillna(df['specific_position'])
             
             df['visningsnavn'] = df['full_name']
             df_alle = df.sort_values(score_col, ascending=True)
 
-            # Tildel farver (Hvidovre = Blå, andre = Rød)
             farve_liste = [
                 '#1b365d' if int(row['team_wyid']) == HVIDOVRE_TEAM_WYID else '#c11c2e'
                 for _, row in df_alle.iterrows()
@@ -269,7 +269,7 @@ def vis_side():
                 )
                 st.plotly_chart(fig, use_container_width=True)
 
-            # RUDE 2 (HØJRE): Spiller-vælger og detaljerede metrics
+            # RUDE 2 (HØJRE): Spiller-vælger
             with rude_hoejre:
                 st.subheader("Søg Spiller")
                 
