@@ -52,7 +52,7 @@ def vis_side():
     COMPETITION_WYID = 328 # NordicBet Liga (eller 1305 for U19 jf. dit seneste udtræk)
 
     # Mulighed for at skifte liga for test (f.eks. hvis du vil se U19 data i din test)
-    valgt_liga = col2.selectbox("Vælg Liga", [328, 1305], format_func=lambda x: "NordicBet Liga" if x == 328 else "U19 Ligaen")
+    valgt_liga = col2.selectbox("Vælg Liga", [328, 1305], format_func=lambda x: "Betinia Ligaen" if x == 328 else "U19 Ligaen")
 
     # --- 3. DATAFETCH (Optimeret til din præcise Wyscout struktur) ---
     DB = "KLUB_HVIDOVREIF.AXIS"
