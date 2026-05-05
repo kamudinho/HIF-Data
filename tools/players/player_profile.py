@@ -219,9 +219,6 @@ def vis_side(dp=None):
             return df_group.apply(lambda r: har_qualifier(r['EVENT_TYPEID'], r.get('qual_list', []), eid, qids), axis=1).sum()
 
         # 1. Beregn stats for ALLE spillere fra event-data.
-        # Vi inkluderer PLAYER_OPTAUUID (som as_index=False eller bevarer den i kolonnen), 
-        # så vi kan joine præcist på ID efterfølgende.
-        # 1. Beregn stats for ALLE spillere fra event-data.
         event_stats = df_all.groupby(['VISNINGSNAVN', 'PLAYER_OPTAUUID']).apply(lambda x: pd.Series({
             'Gule_kort': count_event_with_qual(x, 17, 31),
             'Roede_kort': count_event_with_qual(x, 17, 33),
@@ -233,15 +230,12 @@ def vis_side(dp=None):
             'Afslutninger': x['EVENT_TYPEID'].isin([13, 14, 15, 16]).sum(),
             'Mål': (x['EVENT_TYPEID'] == 16).sum(),
             
-            # NY ASSIST-LOGIK: 
-            # Vi tæller afleveringer/hændelser, som har qualifier '29' (Direkte mål-assist) 
-            # eller '210' kombineret med at have resulteret i et mål.
-            'Assists': x.apply(lambda r: '210' in r.get('qual_list', []), axis=1).sum(),
+            'Assists': x.apply(lambda r: any(q in r.get('qual_list', []) for q in ['29', '154']), axis=1).sum(),
             
             'Erobringer': x['EVENT_TYPEID'].isin([7, 8, 12, 49]).sum(),
             'Driblinger': (x['EVENT_TYPEID'] == 3).sum(),
             
-            # Key Passes / Chancer skabt (Aflevering der fører til skud, dvs. qualifier '210')
+            # CHANCER SKABT / KEY PASSES (Altid kode '210'):
             'Chancer_skabt': x.apply(lambda r: '210' in r.get('qual_list', []), axis=1).sum(),
             'Key_Passes': x.apply(lambda r: '210' in r.get('qual_list', []), axis=1).sum()
         })).reset_index().set_index('PLAYER_OPTAUUID')
