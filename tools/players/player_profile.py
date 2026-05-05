@@ -197,10 +197,10 @@ def vis_side(dp=None):
         """
         df_expected = conn.query(sql_expected)
 
-        # --- SQL 3: KORRIGERET OG OPTIMERET MÅL & ASSISTS-QUERY ---
+        # --- SQL 3: KORRIGERET OG DRIFTSIKKER MÅL & ASSISTS-QUERY ---
         sql_db_stats = f"""
             WITH EventQualifiers AS (
-                -- Trin 1: Gruppér qualifiers pr. event for at undgå nestede window-funktioner
+                -- Trin 1: Saml qualifiers pr. event
                 SELECT 
                     e.EVENT_OPTAUUID,
                     e.PLAYER_OPTAUUID,
@@ -217,41 +217,51 @@ def vis_side(dp=None):
                 GROUP BY e.EVENT_OPTAUUID, e.PLAYER_OPTAUUID, e.EVENT_TYPEID, e.EVENT_TIMESTAMP, e.MATCH_OPTAUUID, p.FIRST_NAME, p.LAST_NAME
             ),
             SortedEvents AS (
-                -- Trin 2: Udfør LAG-operationer på de flade data
+                -- Trin 2: Hent forrige hændelses data med LAG for at finde assists
                 SELECT 
                     PLAYER_OPTAUUID,
                     VISNINGSNAVN,
                     EVENT_TYPEID,
-                    EVENT_TIMESTAMP,
                     MATCH_OPTAUUID,
                     QUALIFIERS,
                     LAG(PLAYER_OPTAUUID) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_TIMESTAMP) AS ASSIST_PLAYER_UUID,
-                    LAG(VISNINGSNAVN) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_TIMESTAMP) AS ASSIST_PLAYER_NAME,
                     LAG(EVENT_TYPEID) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_TIMESTAMP) AS PREV_EVENT_TYPEID,
                     LAG(QUALIFIERS) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_TIMESTAMP) AS PREV_QUALIFIERS
                 FROM EventQualifiers
+            ),
+            PlayerGoals AS (
+                -- Trin 3a: Beregn mål pr. spiller
+                SELECT 
+                    PLAYER_OPTAUUID,
+                    VISNINGSNAVN,
+                    SUM(CASE WHEN EVENT_TYPEID = 16 THEN 1 ELSE 0 END) AS GOALS
+                FROM SortedEvents
+                GROUP BY PLAYER_OPTAUUID, VISNINGSNAVN
+            ),
+            PlayerAssists AS (
+                -- Trin 3b: Beregn assists baseret på hvem der lavede den næstsidste aktion før målet
+                SELECT 
+                    ASSIST_PLAYER_UUID AS PLAYER_OPTAUUID,
+                    COUNT(*) AS ASSISTS
+                FROM SortedEvents
+                WHERE EVENT_TYPEID = 16 
+                  AND ASSIST_PLAYER_UUID IS NOT NULL
+                  AND ASSIST_PLAYER_UUID != PLAYER_OPTAUUID -- Undgå selv-afleveringer (selvmål/soloture)
+                  AND (
+                      QUALIFIERS LIKE '%29%'             -- Målet er markeret som "Assisted"
+                      OR PREV_EVENT_TYPEID = 'AS'        -- Forrige hændelse er en direkte assist-hændelse
+                      OR PREV_QUALIFIERS LIKE '%210%'    -- Forrige hændelse var en Key Pass/Chanceskabende aflevering
+                  )
+                GROUP BY ASSIST_PLAYER_UUID
             )
-            -- Trin 3: Beregn mål og assists uden konflikter
+            -- Trin 4: Kombiner mål og assists
             SELECT 
-                PLAYER_OPTAUUID,
-                VISNINGSNAVN,
-                SUM(CASE WHEN EVENT_TYPEID = 16 THEN 1 ELSE 0 END) AS GOALS,
-                COALESCE(
-                    (
-                        SELECT COUNT(*) 
-                        FROM SortedEvents sub 
-                        WHERE sub.EVENT_TYPEID = 16 
-                          AND sub.ASSIST_PLAYER_UUID = SortedEvents.PLAYER_OPTAUUID 
-                          AND sub.ASSIST_PLAYER_UUID != sub.PLAYER_OPTAUUID 
-                          AND (
-                              sub.QUALIFIERS LIKE '%29%' 
-                              OR sub.PREV_EVENT_TYPEID = 'AS' 
-                              OR sub.PREV_QUALIFIERS LIKE '%210%'
-                          )
-                    ), 0
-                ) AS ASSISTS
-            FROM SortedEvents
-            GROUP BY PLAYER_OPTAUUID, VISNINGSNAVN
+                g.PLAYER_OPTAUUID,
+                g.VISNINGSNAVN,
+                g.GOALS,
+                COALESCE(a.ASSISTS, 0) AS ASSISTS
+            FROM PlayerGoals g
+            LEFT JOIN PlayerAssists a ON g.PLAYER_OPTAUUID = a.PLAYER_OPTAUUID
         """
         df_db_stats = conn.query(sql_db_stats)
         
