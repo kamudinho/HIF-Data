@@ -118,7 +118,7 @@ def vis_side(dp=None):
         [data-testid="stMetricValue"] { font-size: 16px !important; text-align: center; font-weight: bold !important; width: 100%; }
         [data-testid="stMetricLabel"] { font-size: 10px !important; text-align: center; width: 100%; }
         [data-testid="stMetric"] { display: flex; flex-direction: column; align-items: center; }
-        .player-header { font-size: 20px; font-weight: bold; margin-bottom: 10px; color: #1E1E1E; }
+        .player-header { font-size: 12px; font-weight: bold; margin-bottom: 10px; color: #1E1E1E; }
         </style>
         """, unsafe_allow_html=True)
 
