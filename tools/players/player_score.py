@@ -116,6 +116,7 @@ def vis_side():
 
     # --- 4. DATAFETCH ---
     with st.spinner("Henter og beregner Wyscout-data..."):
+        # SQL-FORBEDRING: Spiller-minutter tælles for den valgte liga ELLER hvis det er en Hvidovre-spiller (uanset liga)
         sql = f"""
         WITH player_minutes AS (
             SELECT 
@@ -125,11 +126,12 @@ def vis_side():
             JOIN {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_BASE b_stats 
               ON t_stats.MATCH_WYID = b_stats.MATCH_WYID 
              AND t_stats.PLAYER_WYID = b_stats.PLAYER_WYID
+            JOIN {DB}.WYSCOUT_PLAYERS p ON t_stats.PLAYER_WYID = p.PLAYER_WYID
             JOIN {DB}.WYSCOUT_SEASONS seas ON b_stats.SEASON_WYID = seas.SEASON_WYID
-            WHERE t_stats.COMPETITION_WYID = {valgt_liga}
+            WHERE (t_stats.COMPETITION_WYID = {valgt_liga} OR p.CURRENTTEAM_WYID = {HVIDOVRE_TEAM_WYID})
               AND seas.SEASONNAME = '{SOGT_SAESON}'
             GROUP BY t_stats.PLAYER_WYID
-            HAVING SUM(t_stats.MINUTESONFIELD) >= 270
+            HAVING SUM(t_stats.MINUTESONFIELD) >= 150  -- Sænket en smule for at sikre, at unge/nye Hvidovre-spillere også kommer med
         )
         SELECT 
             p.PLAYER_WYID,
@@ -163,7 +165,7 @@ def vis_side():
         JOIN {DB}.WYSCOUT_TEAMS t ON p.CURRENTTEAM_WYID = t.TEAM_WYID
         JOIN {DB}.WYSCOUT_SEASONS seas ON s.SEASON_WYID = seas.SEASON_WYID
         JOIN player_minutes pm ON p.PLAYER_WYID = pm.PLAYER_WYID
-        WHERE s.COMPETITION_WYID = {valgt_liga}
+        WHERE (s.COMPETITION_WYID = {valgt_liga} OR p.CURRENTTEAM_WYID = {HVIDOVRE_TEAM_WYID})
           AND seas.SEASONNAME = '{SOGT_SAESON}'
           AND p.ROLECODE3 = '{sogt_role_code}'
         GROUP BY p.PLAYER_WYID, p.FIRSTNAME, p.LASTNAME, p.SHORTNAME, t.OFFICIALNAME, p.CURRENTTEAM_WYID, pm.total_minutes, p.ROLENAME, p.ROLECODE3
@@ -202,14 +204,21 @@ def vis_side():
             df = raw_df.groupby('player_wyid', as_index=False).agg(agg_dict)
             df[score_col] = df[score_col].round(1)
             
-            # Oversæt specifik position med det samme på DataFrame-niveau for at undgå '.map'-fejlen senere
+            # Oversæt specifik position på DataFrame-niveau
             df['dk_position'] = df['specific_position'].map(POS_TRANSLATIONS).fillna(df['specific_position'])
             
             # Sorter efter score (højeste først)
             df_sorteret = df.sort_values(score_col, ascending=False)
             
-            # --- LOGIK: TOP 20 + 2 BEDSTE FRA HVIDOVRE ---
-            top_20_liga = df_sorteret.head(20)
+            # --- LOGIK: TOP 20 FRA LIGAEN + 2 BEDSTE FRA HVIDOVRE ---
+            # 1. Hent spillere, der faktisk har spillet i den valgte liga
+            liga_spillere = df_sorteret[df_sorteret['player_wyid'].isin(
+                raw_df[raw_df['team_wyid'] != HVIDOVRE_TEAM_WYID]['player_wyid']
+            ) | (df_sorteret['team_wyid'] == HVIDOVRE_TEAM_WYID)]
+            
+            top_20_liga = liga_spillere[liga_spillere['team_wyid'] != HVIDOVRE_TEAM_WYID].head(20)
+            
+            # 2. Hent Hvidovre-spillerne specifikt
             hvidovre_spillere = df_sorteret[df_sorteret['team_wyid'] == HVIDOVRE_TEAM_WYID]
             top_2_hvidovre = hvidovre_spillere.head(2)
             
@@ -220,7 +229,7 @@ def vis_side():
             visnings_df = visnings_df.sort_values(score_col, ascending=True)
             visnings_df['visningsnavn'] = visnings_df['full_name']
 
-            # NY FARVE-MAPPING: Hvidovre = Rød (#c11c2e), Andre klubber = Blå (#1b365d)
+            # OPPDATERET FARVE-MAPPING: Hvidovre = Rød (#c11c2e), Andre klubber = Blå (#1b365d)
             farve_liste = [
                 '#c11c2e' if int(row['team_wyid']) == HVIDOVRE_TEAM_WYID else '#1b365d'
                 for _, row in visnings_df.iterrows()
@@ -300,7 +309,7 @@ def vis_side():
                         """, unsafe_allow_html=True)
 
         else:
-            st.info(f"Ingen spillere med over 270 minutter fundet med rollen '{valgt_profil}' i den valgte liga for sæsonen {SOGT_SAESON}.")
+            st.info(f"Ingen spillere med over 150 minutter fundet med rollen '{valgt_profil}' i den valgte liga for sæsonen {SOGT_SAESON}.")
 
 if __name__ == "__main__":
     vis_side()
