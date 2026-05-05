@@ -204,11 +204,21 @@ def vis_side(dp=None):
 
         # 1. Beregn stats for ALLE spillere (Korrekt Opta-logik)
         truppen_stats = df_all.groupby('VISNINGSNAVN').apply(lambda x: pd.Series({
+            # --- NYE GRUNDLÆGGENDE KAMPDATA ---
+            'Kampe': x['GAME_ID'].nunique() if 'GAME_ID' in x.columns else 0,
+            'Minutter': x['MINUTTER'].sum() if 'MINUTTER' in x.columns else 0,
+            'Gule_kort': (x['EVENT_TYPEID'] == 'YC').sum(),
+            'Roede_kort': (x['EVENT_TYPEID'] == 'RC').sum(),
+            'Indskiftet': (x['EVENT_TYPEID'] == '19').sum(),
+            'Udskiftet': (x['EVENT_TYPEID'] == '18').sum(),
+            
+            # --- EKSISTERENDE STATS ---
             'Pasninger': (x['EVENT_TYPEID'] == 1).sum(),
             'Stikninger': count_event_with_qual(x, 1, 4),    # Event 1 + Qual 4
             'Indlæg': count_event_with_qual(x, 1, [2, 155]), # Event 1 + Qual 2 (eller 155: Chip)
             'Afslutninger': x['EVENT_TYPEID'].isin([13, 14, 15, 16]).sum(),
             'Mål': (x['EVENT_TYPEID'] == 16).sum(),
+            'Assists': x.apply(lambda r: '210' in str(r.get('qual_list', '')) and str(r['EVENT_TYPEID']) == '16', axis=1).sum(), # Event 16 + Qual 210
             'Erobringer': x['EVENT_TYPEID'].isin([7, 8, 12, 49]).sum(),
             'Driblinger': (x['EVENT_TYPEID'] == 3).sum(),
             'Chancer_skabt': x.apply(lambda r: '210' in str(r.get('qual_list', '')), axis=1).sum(),
@@ -219,10 +229,13 @@ def vis_side(dp=None):
         ranks = truppen_stats.rank(ascending=False, method='min').astype(int)
         spiller_ranks = ranks.loc[valgt_spiller]
         
+        # Hent den valgte spillers rå tal ud til infoboksen
+        s_data = truppen_stats.loc[valgt_spiller]
+        
         # 3. Definer layout-kolonner for top-rækken (Spillerinfo til venstre, 4 charts til højre)
         col_info, col_charts_top = st.columns([1.3, 4])
         
-        # Spillerinfo (Venstre side)
+        # Spillerinfo & Kampdata (Venstre side)
         with col_info:
             logo_html = ""
             if hold_logo is not None:
@@ -238,6 +251,39 @@ def vis_side(dp=None):
                     {logo_html}
                     <div class="player-header" style="margin: 0; line-height: 1.2; font-size: 18px; font-weight: bold;">
                         {valgt_spiller}
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+            
+            st.markdown("<hr style='margin: 10px 0; opacity: 0.5;'>", unsafe_allow_html=True)
+            
+            # --- REN INFOBOKS UDEN IKONER ---
+            st.markdown(f"""
+                <div style="background-color: #f8f9fa; padding: 12px; border-radius: 8px; border: 1px solid #e9ecef;">
+                    <h4 style="margin: 0 0 10px 0; font-size: 14px; color: #333; text-transform: uppercase; letter-spacing: 0.5px; font-weight: bold;">Kampdata</h4>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 13px;">
+                        <span><b>Kampe:</b></span> <span>{int(s_data['Kampe'])}</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 13px;">
+                        <span><b>Minutter:</b></span> <span>{int(s_data['Minutter'])}'</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 13px;">
+                        <span><b>Mål:</b></span> <span>{int(s_data['Mål'])}</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 13px;">
+                        <span><b>Assists:</b></span> <span>{int(s_data['Assists'])}</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 13px;">
+                        <span><b>Gule kort:</b></span> <span>{int(s_data['Gule_kort'])}</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 13px;">
+                        <span><b>Røde kort:</b></span> <span>{int(s_data['Roede_kort'])}</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 13px;">
+                        <span><b>Indskiftet:</b></span> <span>{int(s_data['Indskiftet'])}</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 13px;">
+                        <span><b>Udskiftet:</b></span> <span>{int(s_data['Udskiftet'])}</span>
                     </div>
                 </div>
             """, unsafe_allow_html=True)
@@ -288,7 +334,7 @@ def vis_side(dp=None):
                         # Generer plot
                         fig = create_relative_donut(aktuel_val, maks_val, label, rank_val)
                         
-                        # RETTELSE: Vi tilføjer en unik key baseret på kategoriens ID (f.eks. key="chart_Pasninger")
+                        # Vi tilføjer en unik key baseret på kategoriens ID
                         st.plotly_chart(
                             fig, 
                             use_container_width=True, 
