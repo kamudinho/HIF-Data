@@ -187,11 +187,11 @@ def vis_side(dp=None):
             Stikninger=('EVENT_TYPEID', lambda x: (x == 4).sum()),
             Afslutninger=('EVENT_TYPEID', lambda x: x.isin([13, 14, 15, 16]).sum()),
             Mål=('EVENT_TYPEID', lambda x: (x == 16).sum()),
-            Erobringer=('EVENT_TYPEID', lambda x: x.isin([7, 8, 12, 49]).sum()),
+            Erobringer=('EVENT_TYPEID', lambda x: x.isin([7, 8, 49]).sum()),
             Driblinger=('EVENT_TYPEID', lambda x: (x == 3).sum()),
-            Chancer_skabt=('EVENT_TYPEID', lambda x: (x == 10).sum()), # Eksempel ID
+            Chancer_skabt=('EVENT_TYPEID', lambda x: (x == 10, 154, 210, ).sum()), # Eksempel ID
             Indlæg=('EVENT_TYPEID', lambda x: (x == 2).sum()), # Eksempel ID
-            Key_Passes=('EVENT_TYPEID', lambda x: (x == 11).sum()) # Eksempel ID
+            Key_Passes=('EVENT_TYPEID', lambda x: (x == 11, 210).sum()) # Eksempel ID
         )
         
         ranks = truppen_stats.rank(ascending=False, method='min').astype(int)
