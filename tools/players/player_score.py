@@ -63,9 +63,8 @@ def vis_side():
             p.PLAYER_WYID,
             p.SHORTNAME as FULL_NAME,
             t.OFFICIALNAME as TEAM_NAME,
-            -- Hent alle metrics direkte fra Wyscout Average tabellen
             s.GOALS,
-            s.XG,
+            s.XGSHOT AS XG,
             s.SHOTS,
             s.TOUCHINBOX,
             s.DRIBBLES,
