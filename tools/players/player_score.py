@@ -118,28 +118,27 @@ def vis_side():
 
     # --- 2. DATAFETCH ---
     with st.spinner("Henter og beregner Wyscout-data..."):
-        # SQL til minutter med det nye filter: Spilleren SKAL have spillet for Hvidovre i 2026,
-        # hvis han skal kategoriseres som Hvidovre-spiller.
+        # Fuldstændig clean og fejlsikret SQL til minutter og 2026-aktivitet
         sql_minutter = f"""
             WITH hvidovre_2026_spillere AS (
-                -- Finder spillere, der faktisk har optrådt på banen for Hvidovre i 2026
-                SELECT DISTINCT t_stats.PLAYER_WYID
-                FROM {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_TOTAL t_stats
-                JOIN {DB}.WYSCOUT_MATCHES m ON t_stats.MATCH_WYID = m.MATCH_WYID
-                WHERE t_stats.TEAM_WYID = {HVIDOVRE_TEAM_WYID}
+                -- Find spillere, der har spillet for Hvidovre (7490) i en kamp i 2026
+                SELECT DISTINCT mat_total.PLAYER_WYID
+                FROM {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_TOTAL mat_total
+                JOIN {DB}.WYSCOUT_MATCHES m ON mat_total.MATCH_WYID = m.MATCH_WYID
+                WHERE mat_total.TEAM_WYID = {HVIDOVRE_TEAM_WYID}
                   AND m.DATE >= '2026-01-01'
             )
             SELECT 
-                t_stats.PLAYER_WYID,
-                SUM(t_stats.MINUTESONFIELD) as total_minutes,
-                -- Flag, der markerer om spilleren er en reel Hvidovre-spiller i 2026
-                CASE WHEN h26.PLAYER_WYID IS NOT NULL THEN 1 ELSE 0 END as is_active_hvidovre
-            FROM {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_TOTAL t_stats
-            JOIN {DB}.WYSCOUT_PLAYERS p ON t_stats.PLAYER_WYID = p.PLAYER_WYID
-            LEFT JOIN hvidovre_2026_spillere h26 ON t_stats.PLAYER_WYID = h26.PLAYER_WYID
-            WHERE (t_stats.COMPETITION_WYID = {valgt_liga} OR h26.PLAYER_WYID IS NOT NULL)
-            GROUP BY t_stats.PLAYER_WYID, h26.PLAYER_WYID
-            HAVING SUM(t_stats.MINUTESONFIELD) >= 150
+                m_total.PLAYER_WYID,
+                SUM(m_total.MINUTESONFIELD) as total_minutes,
+                -- Returnerer 1 hvis spilleren er aktiv i Hvidovre i 2026, ellers 0
+                MAX(CASE WHEN h26.PLAYER_WYID IS NOT NULL THEN 1 ELSE 0 END) as is_active_hvidovre
+            FROM {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_TOTAL m_total
+            JOIN {DB}.WYSCOUT_PLAYERS p ON m_total.PLAYER_WYID = p.PLAYER_WYID
+            LEFT JOIN hvidovre_2026_spillere h26 ON m_total.PLAYER_WYID = h26.PLAYER_WYID
+            WHERE (m_total.COMPETITION_WYID = {valgt_liga} OR h26.PLAYER_WYID IS NOT NULL)
+            GROUP BY m_total.PLAYER_WYID
+            HAVING SUM(m_total.MINUTESONFIELD) >= 150
         """
         
         sql_stats = f"""
