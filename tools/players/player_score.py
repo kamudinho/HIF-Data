@@ -4,12 +4,6 @@ import numpy as np
 import plotly.express as px
 from data.data_load import _get_snowflake_conn
 
-def forkort_navn(navn_str):
-    if not navn_str or not isinstance(navn_str, str): return ""
-    dele = [d.strip() for d in navn_str.split() if d.strip()]
-    if len(dele) <= 2: return " ".join(dele)
-    return f"{dele[0]} {dele[-1]}"
-
 def vis_side():
     # CSS styling af metrics-bokse og overskrifter
     st.markdown("""
@@ -32,6 +26,7 @@ def vis_side():
         </style>
     """, unsafe_allow_html=True)
 
+    st.title("🎯 Spilleranalyse | Performance Score (Wyscout)")
     st.caption("Sammenligning af spillere baseret på positions-vægtede Wyscout P90-metrics for sæsonen 2025/2026.")
 
     conn = _get_snowflake_conn()
@@ -93,11 +88,12 @@ def vis_side():
 
     # --- 3. DATAFETCH ---
     with st.spinner("Henter og beregner Wyscout-data..."):
-        # Vi henter p.CURRENTTEAM_WYID med ud, så vi kan identificere Hvidovre-spillere
+        # SQL-FORBEDRING: Vi henter SHORTNAME (som FULL_NAME) for at få navnet råt ind
+        # TIP: Hvis din tabel understøtter p.PASSPORTNAME, kan du ændre "p.SHORTNAME" til "p.PASSPORTNAME" herunder for det fulde officielle navn
         sql = f"""
         SELECT 
             p.PLAYER_WYID,
-            p.SHORTNAME as FULL_NAME,
+            p.SHORTNAME as FULL_NAME, 
             t.OFFICIALNAME as TEAM_NAME,
             p.CURRENTTEAM_WYID as TEAM_WYID,
             AVG(s.GOALS) as GOALS,
@@ -144,11 +140,11 @@ def vis_side():
                 weight = config['weights'][i]
                 raw_df[score_col] += raw_df[m_name] * weight
             
-            # --- 5. ULTRA-RENT PANDAS GROUPBY (Kun 1 række pr. spiller) ---
+            # --- 5. CLEAN PANDAS GROUPBY ---
             agg_dict = {
                 'full_name': 'first',
                 'team_name': 'first',
-                'team_wyid': 'first', # Gem holdets ID til farve-tjekket
+                'team_wyid': 'first',
                 score_col: 'first'
             }
             
@@ -158,20 +154,21 @@ def vis_side():
             df = raw_df.groupby('player_wyid', as_index=False).agg(agg_dict)
             df[score_col] = df[score_col].round(1)
             
-            df['visningsnavn'] = df['full_name'].apply(forkort_navn)
+            # HER ER ÆNDRINGEN: Vi gemmer navnet direkte uden nogen form for afkortning!
+            df['visningsnavn'] = df['full_name']
+            
             df_alle = df.sort_values(score_col, ascending=True)
 
-            # --- NYT: Tildel farver baseret på om spilleren er fra Hvidovre ---
-            # Hvis hold-ID er 7490, får de den mørkeblå farve (#1b365d) - ellers rød (#c11c2e)
+            # Tildel farver baseret på om det er Hvidovre IF (ID 7490)
             farve_liste = [
-                '#c11c2e' if int(row['team_wyid']) == HVIDOVRE_TEAM_WYID else '#1b365d'
+                '#1b365d' if int(row['team_wyid']) == HVIDOVRE_TEAM_WYID else '#c11c2e'
                 for _, row in df_alle.iterrows()
             ]
 
             # --- 6. SPLIT-SCREEN LAYOUT ---
             rude_venstre, rude_hoejre = st.columns([1.1, 0.9])
 
-            # RUDE 1 (VENSTRE): Scoreboard med Hvidovre markeret i blå
+            # RUDE 1 (VENSTRE): Scoreboard
             with rude_venstre:
                 st.subheader(f"{valgt_pos} Scoreboard")
                 
@@ -187,7 +184,7 @@ def vis_side():
                 )
                 
                 fig.update_traces(
-                    marker_color=farve_liste, # Sætter den dynamiske farveliste på bjælkerne
+                    marker_color=farve_liste, 
                     textposition='inside',   
                     textfont=dict(color='white', size=11, family="Arial"), 
                     insidetextanchor='end',  
