@@ -269,7 +269,23 @@ def vis_side(dp=None):
         c_stats_side, c_buffer, c_pitch_side = st.columns([1, 0.05, 2.2])
 
         with c_stats_side:
-            st.markdown(f'<div class="player-header" style="margin: 0; line-height: 1;">{valgt_spiller}</div>', unsafe_allow_html=True)
+            logo_html = ""
+            if hold_logo is not None:
+                # Omdan PIL-billedet til base64
+                buffered = io.BytesIO()
+                hold_logo.save(buffered, format="PNG")
+                img_str = base64.b64encode(buffered.getvalue()).decode()
+                logo_html = f'<img src="data:image/png;base64,{img_str}" style="height: 35px; margin-right: 12px; object-fit: contain;">'
+
+            # HTML Flexbox sørger for, at de står på samme linje og er centreret lodret
+            st.markdown(f"""
+                <div style="display: flex; align-items: center; margin-bottom: 10px;">
+                    {logo_html}
+                    <div class="player-header" style="margin: 0; line-height: 1.2; font-size: 18px; font-weight: bold;">
+                        {valgt_spiller}
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
             st.markdown("<hr style='margin: 15px 0; opacity: 0.5;'>", unsafe_allow_html=True)
             total_akt = len(df_spiller)
             pas_df = df_spiller[df_spiller['EVENT_TYPEID'] == 1]
