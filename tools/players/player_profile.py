@@ -214,22 +214,56 @@ def vis_side(dp=None):
     t_profile, t_pitch, t_phys, t_stats, t_compare = st.tabs(["Spillerprofil", "Spilleraktioner", "Fysisk data", "Statistik", "Sammenligning"])
 
     with t_profile:
-        # Vores interne hjælper til at tælle (kigger på både EVENT_TYPEID og qual_list)
-        # 1. Forbered data til sekvens-analyse (kronologisk sortering pr. kamp)
-        # Dette sikrer, at vi kan parre målgivende afleveringer direkte med målet (16)
+        # 1. Forbered data kronologisk
         df_all_sorted = df_all.sort_values(by=['EVENT_TIMESTAMP']).copy()
         
-        # Vi finder det næste event_typeid for hver hændelse i samme kamp
-        # (Svarer til LEAD(EVENT_TYPEID) OVER (PARTITION BY MATCH_ID ORDER BY EVENT_TIMESTAMP))
-        # Da din SQL-query ikke trækker match_id ud i df_all, sorterer vi blot kronologisk pr. spiller/timestamp
+        # Hent den efterfølgende hændelses værdier (svarer til LEAD i SQL)
         df_all_sorted['NEXT_EVENT_TYPEID'] = df_all_sorted['EVENT_TYPEID'].shift(-1)
         df_all_sorted['NEXT_PLAYER'] = df_all_sorted['VISNINGSNAVN'].shift(-1)
+        df_all_sorted['NEXT_QUALIFIERS'] = df_all_sorted['QUALIFIERS'].shift(-1).fillna('')
 
-        # Vores interne hjælper til at tælle (kigger på både EVENT_TYPEID og qual_list)
+        # Vores interne hjælper til generelle events
         def count_event_with_qual(df_group, eid, qids):
             return df_group.apply(lambda r: har_qualifier(r['EVENT_TYPEID'], r.get('qual_list', []), eid, qids), axis=1).sum()
 
-        # Beregn stats for ALLE spillere fra event-data.
+        # En dedikeret, fejlsikker funktion til at tælle assists pr. spiller-gruppe
+        def beregn_opta_assists(spiller_events):
+            assist_count = 0
+            
+            for _, r in spiller_events.iterrows():
+                # Hent og ensart værdier
+                ev_type = str(r['EVENT_TYPEID']).strip() if pd.notna(r['EVENT_TYPEID']) else ""
+                next_ev_type = str(r['NEXT_EVENT_TYPEID']).strip() if pd.notna(r['NEXT_EVENT_TYPEID']) else ""
+                
+                # Konverter qual_list til et sæt af tekst-strenge for nem og fejlfri søgning
+                quals = {str(q).strip() for q in r.get('qual_list', []) if pd.notna(q)} if isinstance(r.get('qual_list'), list) else set()
+                next_quals = {str(q).strip() for q in str(r['NEXT_QUALIFIERS']).split(',') if q.strip()}
+
+                # --- SIKKERHEDS-TJEK FOR ASSISTS ---
+                
+                # Betingelse A: Det er en decideret assist-hændelse ('AS')
+                if ev_type == 'AS':
+                    assist_count += 1
+                    continue
+                
+                # Betingelse B: Det er en aflevering (1) stemplet med assist-qualifier (210)
+                if ev_type == '1' and '210' in quals:
+                    assist_count += 1
+                    continue
+                    
+                # Betingelse C: Det er en aflevering (1) efterfulgt af et mål (16) markeret som 'Assisted' (29)
+                # modtaget og scoret af en holdkammerat (ikke spilleren selv)
+                if (ev_type == '1' and 
+                    next_ev_type == '16' and 
+                    '29' in next_quals and 
+                    r['NEXT_PLAYER'] != r['VISNINGSNAVN']):
+                    
+                    assist_count += 1
+                    continue
+            
+            return assist_count
+
+        # 2. Beregn stats for ALLE spillere fra event-data.
         event_stats = df_all_sorted.groupby(['VISNINGSNAVN', 'PLAYER_OPTAUUID']).apply(lambda x: pd.Series({
             'Gule_kort': count_event_with_qual(x, 17, 31),
             'Roede_kort': count_event_with_qual(x, 17, 33),
@@ -241,36 +275,11 @@ def vis_side(dp=None):
             'Afslutninger': x['EVENT_TYPEID'].isin([13, 14, 15, 16]).sum(),
             'Mål': (x['EVENT_TYPEID'] == 16).sum(),
             
-            # --- SKUDSIKKER OPTA-ASSIST LOGIK ---
-            # Vi tæller en assist, hvis én af de tre Opta-betingelser er opfyldt:
-            'Assists': x.apply(
-                lambda r: (
-                    # 1. OPTA_DECODE_QUALIFIER: 210 (Aflevering med direkte assist-stempel)
-                    (str(r['EVENT_TYPEID']) == '1' and '210' in r.get('qual_list', []))
-                    
-                    or
-                    
-                    # 2. OPTA_DECODE_EVENTTYPE: 'AS' (Står alene som eventtype i dine rådata)
-                    (str(r['EVENT_TYPEID']) == 'AS')
-                    
-                    or
-                    
-                    # 3. OPTA_DECODE_QUALIFIER: 29 (Målet er markeret som 'Assisted')
-                    # Hvis det NÆSTE event er et mål (16) med qualifier 29, så skal denne aflevering have assisten!
-                    (
-                        str(r['EVENT_TYPEID']) == '1' and 
-                        str(r['NEXT_EVENT_TYPEID']) == '16' and 
-                        '29' in str(r.get('NEXT_QUALIFIERS', '')).split(',') and
-                        r['NEXT_PLAYER'] != r['VISNINGSNAVN']
-                    )
-                ), 
-                axis=1
-            ).sum(),
+            # --- Vores nye fejlsikre beregning ---
+            'Assists': beregn_opta_assists(x),
             
             'Erobringer': x['EVENT_TYPEID'].isin([7, 8, 12, 49]).sum(),
             'Driblinger': (x['EVENT_TYPEID'] == 3).sum(),
-            
-            # CHANCER SKABT / KEY PASSES (Altid kode '210' uanset om der scores):
             'Chancer_skabt': x.apply(lambda r: '210' in r.get('qual_list', []), axis=1).sum(),
             'Key_Passes': x.apply(lambda r: '210' in r.get('qual_list', []), axis=1).sum()
         })).reset_index().set_index('PLAYER_OPTAUUID')
