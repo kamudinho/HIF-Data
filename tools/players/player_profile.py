@@ -232,7 +232,13 @@ def vis_side(dp=None):
             
             # REEL ASSIST-LOGIK (Målgivende assist):
             # Kigger udelukkende efter de officielle Opta assist-koder: '29' (Assisted) eller '154' (Bevidst assist)
-            'Assists': x.apply(lambda r: any(q in r.get('qual_list', []) for q in ['29', '154']), axis=1).sum(),
+            'Assists': x.apply(
+            lambda r: (
+                str(r['EVENT_TYPEID']) == '89' or 
+                (str(r['EVENT_TYPEID']) == '1' and '210' in r.get('qual_list', []))
+            ), 
+            axis=1
+        ).sum(),
             
             'Erobringer': x['EVENT_TYPEID'].isin([7, 8, 12, 49]).sum(),
             'Driblinger': (x['EVENT_TYPEID'] == 3).sum(),
