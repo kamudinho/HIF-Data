@@ -15,6 +15,9 @@ def vis_side():
         <style>
         .score-card { background-color: #f8f9fa; padding: 20px; border-radius: 10px; border-left: 5px solid #df003b; margin-bottom: 20px; }
         .pos-title { font-size: 24px; font-weight: bold; color: #1E1E1E; margin-bottom: 5px; }
+        .stat-box { background-color: #ffffff; padding: 10px; border: 1px solid #e0e0e0; border-radius: 5px; text-align: center; }
+        .stat-val { font-size: 20px; font-weight: bold; color: #df003b; }
+        .stat-lbl { font-size: 12px; color: #666; }
         </style>
     """, unsafe_allow_html=True)
 
@@ -27,7 +30,7 @@ def vis_side():
     DB = "KLUB_HVIDOVREIF.AXIS"
     SOGT_SAESON = "2025/2026"
 
-    # --- 1. HENT LIGAER DYNAMISK FOR DEN VALGTE SÆSON ---
+    # --- 1. HENT LIGAER DYNAMISK ---
     try:
         liga_data = conn.query(f"""
             SELECT DISTINCT s.COMPETITION_WYID 
@@ -49,7 +52,7 @@ def vis_side():
         1305: "U19 Ligaen (1305)"
     }
 
-    # --- 2. BRUGERGRÆNSEFLADE ---
+    # --- 2. BRUGERGRÆNSEFLADE (Filtre) ---
     col1, col2 = st.columns(2)
     
     POS_CONFIG = {
@@ -77,7 +80,7 @@ def vis_side():
         format_func=lambda x: LIGA_MAP.get(x, f"Liga ID: {x}")
     )
 
-    # --- 3. DATAFETCH MED ENTYDIG CURRENTTEAM JOIN ---
+    # --- 3. DATAFETCH ---
     with st.spinner("Henter og beregner Wyscout-data..."):
         sql = f"""
         SELECT 
@@ -98,12 +101,12 @@ def vis_side():
             AVG(s.PROGRESSIVERUN) as PROGRESSIVERUN,
             AVG(s.DEFENSIVEDUELSWON) as DEFENSIVEDUELSWON,
             AVG(s.CLEARANCES) as CLEARANCES,
-            AVG(s.AERIALDUELS) AS AERIALDUELSWON,
+            AVG(s.AERIALDUELSWON) AS AERIALDUELSWON,
             AVG(s.DANGEROUSOWNHALFLOSSES) as DANGEROUSOWNHALFLOSSES,
             AVG(s.ASSISTS) as ASSISTS
         FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_AVERAGE s
         JOIN {DB}.WYSCOUT_PLAYERS p ON s.PLAYER_WYID = p.PLAYER_WYID
-        JOIN {DB}.WYSCOUT_TEAMS t ON p.CURRENTTEAM_WYID = t.TEAM_WYID -- Koblet direkte på CURRENTTEAM_WYID
+        JOIN {DB}.WYSCOUT_TEAMS t ON p.CURRENTTEAM_WYID = t.TEAM_WYID
         JOIN {DB}.WYSCOUT_SEASONS seas ON s.SEASON_WYID = seas.SEASON_WYID
         WHERE s.COMPETITION_WYID = {valgt_liga}
           AND seas.SEASONNAME = '{SOGT_SAESON}'
@@ -132,53 +135,70 @@ def vis_side():
 
             df[score_col] = df[score_col].round(1)
             
-            # Sorter efter højeste score og tag top 10
-            top_10 = df.sort_values(score_col, ascending=False).head(10)
+            # Sortér alle spillere efter højeste score til barchart
+            df_alle = df.sort_values(score_col, ascending=True)
 
-            # --- 5. VISNING ---
-            col_main, col_stats = st.columns([2, 1])
+            # Dynamisk højde på grafen baseret på antal spillere
+            hoejde_graf = max(400, len(df_alle) * 20)
 
-            with col_main:
-                st.subheader(f"Top 10: {valgt_pos}")
+            # --- 5. VISNING AF ALLE SPILLERE (BARCHART) ---
+            st.subheader(f"Performance Score for alle spillere: {valgt_pos}")
+            
+            fig = px.bar(
+                df_alle, 
+                x=score_col, 
+                y='visningsnavn', 
+                orientation='h',
+                text=score_col,
+                color=score_col,
+                color_continuous_scale='Reds',
+                labels={'visningsnavn': 'Spiller', 'pos_score': 'Performance Score'},
+                template='plotly_white'
+            )
+            fig.update_layout(
+                yaxis={'categoryorder':'total ascending'}, 
+                showlegend=False, 
+                height=hoejde_graf,
+                margin=dict(l=10, r=10, t=10, b=10)
+            )
+            st.plotly_chart(fig, use_container_width=True)
+
+            # --- 6. INTERAKTIV SPILLERSØGNING OG INDIVIDUELLE TAL ---
+            st.markdown("<hr>", unsafe_allow_html=True)
+            st.subheader("🔍 Find specifik spiller og se detaljerede tal")
+            
+            # Sorterede navne til dropdown-menuen
+            spillere_liste = sorted(df['full_name'].dropna().unique())
+            valgt_spiller_navn = st.selectbox("Søg efter eller vælg en spiller", spillere_liste)
+            
+            if valgt_spiller_navn:
+                spiller_data = df[df['full_name'] == valgt_spiller_navn].iloc[0]
                 
-                fig = px.bar(
-                    top_10, 
-                    x=score_col, 
-                    y='visningsnavn', 
-                    orientation='h',
-                    text=score_col,
-                    color=score_col,
-                    color_continuous_scale='Reds',
-                    labels={'visningsnavn': 'Spiller', 'pos_score': 'Performance Score'},
-                    template='plotly_white'
-                )
-                fig.update_layout(
-                    yaxis={'categoryorder':'total ascending'}, 
-                    showlegend=False, 
-                    height=500,
-                    margin=dict(l=5, r=5, t=10, b=10)
-                )
-                st.plotly_chart(fig, use_container_width=True)
-
-            with col_stats:
-                st.subheader("Data Tabel")
-                st.dataframe(
-                    top_10[['visningsnavn', 'team_name', score_col]],
-                    column_config={
-                        "visningsnavn": "Spiller",
-                        "team_name": "Hold",
-                        "pos_score": "Score"
-                    },
-                    hide_index=True,
-                    use_container_width=True
-                )
-
-            # --- 6. METODEFORKLARING ---
-            with st.expander("Se beregnings-metode"):
-                st.write(f"**Formel for {valgt_pos}:**")
-                formula_text = " + ".join([f"({config['labels'][i]} * {config['weights'][i]})" for i in range(len(config['metrics']))])
-                st.code(f"Score = {formula_text}")
-                st.caption(f"Data leveres direkte som gennemsnit pr. 90 minutter (P90) fra Wyscout API'et for sæsonen {SOGT_SAESON}.")
+                # Præsentation af spilleren
+                st.markdown(f"""
+                    <div class="score-card">
+                        <div class="pos-title">{spiller_data['full_name']}</div>
+                        <div style="font-size: 16px; color: #555;">Klub: <b>{spiller_data['team_name']}</b> | Samlet Performance Score ({valgt_pos}): <b>{spiller_data[score_col]}</b></div>
+                    </div>
+                """, unsafe_allow_html=True)
+                
+                # Visning af de individuelle metrics der indgår i scoren
+                st.write(f"**Underliggende P90-metrics for {valgt_pos}-profilen:**")
+                cols = st.columns(len(config['metrics']))
+                
+                for idx, m_name in enumerate(config['metrics']):
+                    metric_vaerdi = spiller_data[m_name]
+                    # Formatér procenter pænt
+                    visnings_vaerdi = f"{metric_vaerdi:.1f}%" if "pct" in m_name else f"{metric_vaerdi:.2f}"
+                    
+                    with cols[idx]:
+                        st.markdown(f"""
+                            <div class="stat-box">
+                                <div class="stat-val">{visnings_vaerdi}</div>
+                                <div class="stat-lbl">{config['labels'][idx]}</div>
+                                <div style="font-size:10px; color:#999; margin-top:2px;">Vægt: {config['weights'][idx]}</div>
+                            </div>
+                        """, unsafe_allow_html=True)
 
         else:
             st.info(f"Ingen spillere fundet i systemet med de angivne kriterier for sæsonen {SOGT_SAESON}.")
