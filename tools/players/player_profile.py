@@ -198,7 +198,7 @@ def vis_side(dp=None):
         truppen_stats = df_all.groupby('VISNINGSNAVN').apply(lambda x: pd.Series({
             'Pasninger': (x['EVENT_TYPEID'] == 1).sum(),
             'Stikninger': count_event_with_qual(x, 1, 4),    # Event 1 + Qual 4
-            'Indlæg': count_event_with_qual(x, 1, 2),        # Event 1 + Qual 2
+            'Indlæg': count_event_with_qual(x, 1, 2, 155),        # Event 1 + Qual 2
             'Afslutninger': x['EVENT_TYPEID'].isin([13, 14, 15, 16]).sum(),
             'Mål': (x['EVENT_TYPEID'] == 16).sum(),
             'Erobringer': x['EVENT_TYPEID'].isin([7, 8, 12, 49]).sum(),
