@@ -255,7 +255,7 @@ def vis_side(dp=None):
                     OR
                     
                     # 2. OPTA_DECODE_EVENTTYPE: 'AS' (eller '89' - den direkte assist-hændelse)
-                    (str(r['EVENT_TYPEID']) in ['AS'])
+                    (str(r['EVENT_TYPEID']) in ['AS', ])
                     
                     OR
                     
