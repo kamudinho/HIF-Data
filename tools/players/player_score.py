@@ -33,21 +33,14 @@ def vis_side():
     SOGT_SAESON = "2025/2026"
     HVIDOVRE_TEAM_WYID = 7490  # Hvidovre IF ID
 
-    # --- 1. OFFICIELLE WYSCOUT POSITIONER & OVERSÆTTELSER ---
-    POS_MAPPING = {
-        "Forsvar": [
-            "Center Back", "Left Back", "Right Back", 
-            "Left Wing Back", "Right Wing Back"
-        ],
-        "Midtbane": [
-            "Defensive Midfielder", "Central Midfielder", "Attacking Midfielder", 
-            "Left Midfielder", "Right Midfielder"
-        ],
-        "Angriber": [
-            "Striker", "Left Winger", "Right Winger", "Second Striker"
-        ]
+    # --- 1. MAPPING MOD DE OFFICIELLE KOLONNER (ROLECODE3 & ROLENAME) ---
+    ROLE_MAPPING = {
+        "Forsvar": "DEF",
+        "Midtbane": "MID",
+        "Angriber": "FWD"
     }
 
+    # Oversættelse af de specifikke ROLENAME-værdier fra Wyscout til dansk
     POS_TRANSLATIONS = {
         "Center Back": "Midterforsvarer",
         "Left Back": "Venstre Back",
@@ -63,7 +56,11 @@ def vis_side():
         "Left Winger": "Venstre Winger",
         "Right Winger": "Højre Winger",
         "Second Striker": "Hængende Angriber",
-        "Ukendt Position": "Ukendt Position"
+        "Ukendt Position": "Ukendt Position",
+        # Fallbacks til overordnede koder
+        "DEF": "Forsvarer",
+        "MID": "Midtbanespiller",
+        "FWD": "Angrebsspiller"
     }
 
     # --- 2. HENT LIGAER DYNAMISK ---
@@ -89,7 +86,7 @@ def vis_side():
     }
 
     # --- 3. FILTRE ---
-    col1, col2, col3 = st.columns(3)
+    col1, col2 = st.columns(2)
     
     POS_CONFIG = {
         "Angriber": {
@@ -111,30 +108,18 @@ def vis_side():
     
     valgt_profil = col1.selectbox("Vælg Kategori", list(POS_CONFIG.keys()))
     
-    specifikke_optioner = ["Alle"] + POS_MAPPING[valgt_profil]
-    valgt_specifik_eng = col2.selectbox(
-        "Vælg Specifik Position", 
-        specifikke_optioner,
-        format_func=lambda x: "Alle" if x == "Alle" else POS_TRANSLATIONS.get(x, x)
-    )
-    
-    valgt_liga = col3.selectbox(
+    valgt_liga = col2.selectbox(
         "Vælg Liga", 
         ligaer, 
         format_func=lambda x: LIGA_MAP.get(x, f"Liga ID: {x}")
     )
 
-    if valgt_specifik_eng == "Alle":
-        sogte_positioner = POS_MAPPING[valgt_profil]
-    else:
-        sogte_positioner = [valgt_specifik_eng]
-
-    tilladte_wyscout_positioner = ", ".join([f"'{p}'" for p in sogte_positioner])
+    # Identificer den søgte Wyscout-rolle (DEF, MID, FWD)
+    sogt_role_code = ROLE_MAPPING[valgt_profil]
 
     # --- 4. DATAFETCH ---
     with st.spinner("Henter og beregner Wyscout-data..."):
-        # SQL-OPGRADERING: Vi trækker spillerens primære position stabilt fra p.ROLE_NAME 
-        # (Wyscouts officielle tabelkolonne for spillerens stam-position)
+        # SQL-KORREKTION: Bruger ROLECODE3 og ROLENAME direkte fra WYSCOUT_PLAYERS
         sql = f"""
         WITH player_minutes AS (
             SELECT 
@@ -159,7 +144,7 @@ def vis_side():
             t.OFFICIALNAME as TEAM_NAME,
             p.CURRENTTEAM_WYID as TEAM_WYID,
             pm.total_minutes,
-            COALESCE(p.ROLE_NAME, 'Ukendt Position') as SPECIFIC_POSITION,
+            COALESCE(p.ROLENAME, p.ROLECODE3) as SPECIFIC_POSITION,
             AVG(s.GOALS) as GOALS,
             AVG(s.XGSHOT) AS XG,
             AVG(s.SHOTS) as SHOTS,
@@ -184,8 +169,8 @@ def vis_side():
         JOIN player_minutes pm ON p.PLAYER_WYID = pm.PLAYER_WYID
         WHERE s.COMPETITION_WYID = {valgt_liga}
           AND seas.SEASONNAME = '{SOGT_SAESON}'
-          AND p.ROLE_NAME IN ({tilladte_wyscout_positioner})
-        GROUP BY p.PLAYER_WYID, p.FIRSTNAME, p.LASTNAME, p.SHORTNAME, t.OFFICIALNAME, p.CURRENTTEAM_WYID, pm.total_minutes, p.ROLE_NAME
+          AND p.ROLECODE3 = '{sogt_role_code}'
+        GROUP BY p.PLAYER_WYID, p.FIRSTNAME, p.LASTNAME, p.SHORTNAME, t.OFFICIALNAME, p.CURRENTTEAM_WYID, pm.total_minutes, p.ROLENAME, p.ROLECODE3
         """
         
         raw_df = conn.query(sql)
@@ -238,8 +223,7 @@ def vis_side():
 
             # RUDE 1 (VENSTRE): Scoreboard
             with rude_venstre:
-                titel_position = POS_TRANSLATIONS.get(valgt_specifik_eng, valgt_profil)
-                st.subheader(f"Scoreboard: {titel_position}")
+                st.subheader(f"Scoreboard: {valgt_profil}")
                 
                 hoejde_graf = max(500, len(df_alle) * 26)
                 
@@ -284,7 +268,7 @@ def vis_side():
                             <div class="pos-title">{spiller_data['full_name']}</div>
                             <div style="font-size: 14px; color: #555; line-height: 1.5;">
                                 Klub: <b>{spiller_data['team_name']}</b><br>
-                                Detaljeret Position: <b>{spiller_data['dk_position']}</b><br>
+                                Primær Position: <b>{spiller_data['dk_position']}</b><br>
                                 Spillede minutter (2025/2026): <b>{int(spiller_data['total_minutes'])} min.</b><br>
                                 Samlet Score ({valgt_profil}): <b>{spiller_data[score_col]}</b>
                             </div>
@@ -308,8 +292,7 @@ def vis_side():
                         """, unsafe_allow_html=True)
 
         else:
-            valgt_pos_dk = POS_TRANSLATIONS.get(valgt_specifik_eng, valgt_profil)
-            st.info(f"Ingen spillere med over 270 minutter fundet på positionen '{valgt_pos_dk}' i den valgte liga for sæsonen {SOGT_SAESON}.")
+            st.info(f"Ingen spillere med over 270 minutter fundet med rollen '{valgt_profil}' i den valgte liga for sæsonen {SOGT_SAESON}.")
 
 if __name__ == "__main__":
     vis_side()
