@@ -32,7 +32,7 @@ def vis_side():
         </style>
     """, unsafe_allow_html=True)
 
-    st.title("🎯 Spilleranalyse | Performance Score (Wyscout)")
+    st.caption("Spilleranalyse | Performance Score")
     st.caption("Sammenligning af spillere baseret på positions-vægtede Wyscout P90-metrics for sæsonen 2025/2026.")
 
     conn = _get_snowflake_conn()
