@@ -82,7 +82,6 @@ def create_relative_donut(player_val, max_val, label, rank_text, color="#df003b"
     fig.update_layout(
         showlegend=False, margin=dict(t=0, b=0, l=0, r=0), height=110, width=130,
         annotations=[dict(
-            # Her viser vi nu rank_text i stedet for procent
             text=f"<b>{player_val}</b><br><span style='font-size:12px; color:#df003b; font-weight:bold;'>{rank_text}</span>", 
             x=0.5, y=0.5, font_size=16, showarrow=False, font_family="Arial"
         )]
@@ -111,7 +110,7 @@ def get_physical_data(player_name, player_opta_uuid, valgt_hold_navn, db_conn):
     sql = f"""
         SELECT 
             p.MATCH_DATE,
-            ANY_VALUE(p.MATCH_TEAMS) as MATCH_TEAMS,
+            any_value(p.MATCH_TEAMS) as MATCH_TEAMS,
             MAX(p.MINUTES) as MINUTES,
             SUM(p.DISTANCE) as DISTANCE,
             SUM(p."HIGH SPEED RUNNING") as HSR,
@@ -164,7 +163,8 @@ def vis_side(dp=None):
 
     # 2. HENT DATA
     with st.spinner("Henter spillerdata..."):
-        sql = f"""
+        # SQL 1: Hent hændelser fra OPTA_EVENTS
+        sql_events = f"""
             SELECT 
                 e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, 
                 TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME) as VISNINGSNAVN, 
@@ -179,7 +179,24 @@ def vis_side(dp=None):
             AND e.EVENT_TIMESTAMP >= '2025-07-01'
             GROUP BY 1, 2, 3, 4, 5, 6, 7
         """
-        df_all = conn.query(sql)
+        df_all = conn.query(sql_events)
+
+        # SQL 2: Hent minutter, xG og xA fra OPTA_MATCHEXPECTEDGOALS
+        sql_expected = f"""
+            SELECT 
+                MATCH_ID,
+                PLAYER_OPTAUUID,
+                PLAYER_NAME,
+                MAX(CASE WHEN STAT_TYPE = 'expectedGoals' THEN STAT_VALUE ELSE 0 END) AS xG,
+                MAX(CASE WHEN STAT_TYPE = 'expectedAssists' THEN STAT_VALUE ELSE 0 END) AS xA,
+                MAX(CASE WHEN STAT_TYPE = 'minsPlayed' THEN STAT_VALUE ELSE 0 END) AS Minutes
+            FROM {DB}.OPTA_MATCHEXPECTEDGOALS
+            WHERE TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS}
+              AND MATCH_STATUS = 'Played'
+              AND CONTESTANT_OPTAUUID = '{valgt_uuid_hold}'
+            GROUP BY MATCH_ID, PLAYER_OPTAUUID, PLAYER_NAME
+        """
+        df_expected = conn.query(sql_expected)
         
     if df_all is None or df_all.empty:
         st.warning("Ingen hændelsesdata fundet.")
@@ -199,50 +216,55 @@ def vis_side(dp=None):
 
     with t_profile:
         # Vores interne hjælper til at tælle (kigger på både EVENT_TYPEID og qual_list)
-        # Vi konverterer nu internt til strenge under sammenligningen for at sikre, at '17' matcher 17.
         def count_event_with_qual(df_group, eid, qids):
             return df_group.apply(lambda r: har_qualifier(r['EVENT_TYPEID'], r.get('qual_list', []), eid, qids), axis=1).sum()
 
-        # 1. Beregn stats for ALLE spillere (Fejlsikker Opta-logik)
-        truppen_stats = df_all.groupby('VISNINGSNAVN').apply(lambda x: pd.Series({
-            # --- GRUNDLÆGGENDE KAMPDATA ---
-            'Kampe': x['MATCH_DATE'].nunique() if 'MATCH_DATE' in x.columns else (x['match_date'].nunique() if 'match_date' in x.columns else x['match_id'].nunique() if 'match_id' in x.columns else 0),
-            
-            # Da vi ikke kan summe EVENT_TIMEMIN direkte, tæller vi minutter, hvis du har en dedikeret kolonne til det
-            'Minutter': x['MINUTTER'].sum() if 'MINUTTER' in x.columns else (x['minutter'].sum() if 'minutter' in x.columns else x['minutes'].sum() if 'minutes' in x.columns else 0),
-            
-            # Gule kort: Event 17 + Qualifier 31
+        # 1. Beregn stats for ALLE spillere fra event-data
+        event_stats = df_all.groupby('VISNINGSNAVN').apply(lambda x: pd.Series({
             'Gule_kort': count_event_with_qual(x, 17, 31),
-            
-            # Røde kort: Event 17 + Qualifier 33
             'Roede_kort': count_event_with_qual(x, 17, 33),
-            
-            # Indskiftet (Event 19) og Udskiftet (Event 18) som rene tal (uden ' ')
             'Indskiftet': (x['EVENT_TYPEID'] == 19).sum(),
             'Udskiftet': (x['EVENT_TYPEID'] == 18).sum(),
-            
-            # --- AKTIONER / DONUTS ---
             'Pasninger': (x['EVENT_TYPEID'] == 1).sum(),
             'Stikninger': count_event_with_qual(x, 1, 4),    # Event 1 + Qual 4
             'Indlæg': count_event_with_qual(x, 1, [2, 155]), # Event 1 + Qual 2 (eller 155: Chip)
             'Afslutninger': x['EVENT_TYPEID'].isin([13, 14, 15, 16]).sum(),
             'Mål': (x['EVENT_TYPEID'] == 16).sum(),
-            
-            # Assists i Opta: Pasning (Event 1) der har Qualifier 210 (Key Pass) OG som førte til et mål (Event 16)
             'Assists': x.apply(lambda r: '210' in str(r.get('qual_list', '')) and r['EVENT_TYPEID'] == 16, axis=1).sum(),
-            
             'Erobringer': x['EVENT_TYPEID'].isin([7, 8, 12, 49]).sum(),
             'Driblinger': (x['EVENT_TYPEID'] == 3).sum(),
             'Chancer_skabt': x.apply(lambda r: '210' in str(r.get('qual_list', '')), axis=1).sum(),
             'Key_Passes': x.apply(lambda r: '210' in str(r.get('qual_list', '')), axis=1).sum()
         })).fillna(0)
 
-        # 2. Beregn rank (Højeste tal giver 1st plads)
+        # 2. Beregn og join kamp-baserede stats fra OPTA_MATCHEXPECTEDGOALS
+        if df_expected is not None and not df_expected.empty:
+            # Opta navne kan have overskydende mellemrum i databasen, så vi renser dem for et præcist match
+            df_expected['MATCH_PLAYER_CLEAN'] = df_expected['PLAYER_NAME'].str.strip()
+            
+            match_stats = df_expected.groupby('MATCH_PLAYER_CLEAN').apply(lambda x: pd.Series({
+                'Kampe': x['MATCH_ID'].nunique(),
+                'Minutter': x['MINUTES'].sum() if 'MINUTES' in x.columns else x['Minutes'].sum(),
+                'xG': x['XG'].sum() if 'XG' in x.columns else x['xG'].sum(),
+                'xA': x['XA'].sum() if 'XA' in x.columns else x['xA'].sum()
+            })).fillna(0)
+            
+            # Kobbel event- og matchstats sammen
+            truppen_stats = event_stats.join(match_stats, how='left').fillna(0)
+        else:
+            # Sikker fallback hvis tabellen er tom eller ikke kan loades
+            truppen_stats = event_stats.copy()
+            truppen_stats['Kampe'] = 0
+            truppen_stats['Minutter'] = 0
+            truppen_stats['xG'] = 0.0
+            truppen_stats['xA'] = 0.0
+
+        # 3. Beregn holdets interne ranking (Højeste værdi giver 1st plads)
         ranks = truppen_stats.rank(ascending=False, method='min').astype(int)
         spiller_ranks = ranks.loc[valgt_spiller]
         s_data = truppen_stats.loc[valgt_spiller]
 
-        # 3. Layout: Vi skaber hovedstrukturen
+        # 4. Layout: Vi skaber hovedstrukturen med fastlåste spalter
         main_col_left, main_col_right = st.columns([1.3, 4])
 
         # VENSTRE SIDE: Spillerinfo og Kampdata
@@ -257,14 +279,14 @@ def vis_side(dp=None):
             st.markdown(f'<div style="display: flex; align-items: center; margin-bottom: 10px;">{logo_html}<div style="font-size: 18px; font-weight: bold;">{valgt_spiller}</div></div>', unsafe_allow_html=True)
             st.markdown("<hr style='margin: 10px 0; opacity: 0.5;'>", unsafe_allow_html=True)
 
-            # Kampdata boks (Helt renset for ikoner og emojis)
+            # Kampdata boks, som nu inkluderer xG og xA
             st.markdown(f"""
                 <div style="background-color: #f8f9fa; padding: 12px; border-radius: 8px; border: 1px solid #e9ecef;">
                     <h4 style="margin: 0 0 10px 0; font-size: 14px; text-transform: uppercase; font-weight: bold;">Kampdata</h4>
                     <div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 13px;"><span><b>Kampe:</b></span><span>{int(s_data['Kampe'])}</span></div>
                     <div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 13px;"><span><b>Minutter:</b></span><span>{int(s_data['Minutter'])}'</span></div>
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 13px;"><span><b>Mål:</b></span><span>{int(s_data['Mål'])}</span></div>
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 13px;"><span><b>Assists:</b></span><span>{int(s_data['Assists'])}</span></div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 13px;"><span><b>Mål (xG):</b></span><span>{int(s_data['Mål'])} ({round(s_data['xG'], 2)})</span></div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 13px;"><span><b>Assists (xA):</b></span><span>{int(s_data['Assists'])} ({round(s_data['xA'], 2)})</span></div>
                     <div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 13px;"><span><b>Gule kort:</b></span><span>{int(s_data['Gule_kort'])}</span></div>
                     <div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 13px;"><span><b>Røde kort:</b></span><span>{int(s_data['Roede_kort'])}</span></div>
                     <div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 13px;"><span><b>Indskiftet:</b></span><span>{int(s_data['Indskiftet'])}</span></div>
@@ -275,7 +297,7 @@ def vis_side(dp=None):
             st.markdown("<hr style='margin: 15px 0; opacity: 0.5;'>", unsafe_allow_html=True)
             st.caption("Sammenlignet med holdets bedste.")
 
-        # HØJRE SIDE: Alle Donuts (uafhængig af venstre sides højde)
+        # HØJRE SIDE: Alle Donuts (Layoutmæssigt helt uafhængige af venstre side)
         with main_col_right:
             kat_liste = [
                 ("PASNINGER", "Pasninger"), ("STIKNINGER", "Stikninger"), 
@@ -285,7 +307,6 @@ def vis_side(dp=None):
                 ("KEY PASSES", "Key_Passes")
             ]
             
-            # Loop igennem alle kategorier i rækker af 4
             for i in range(0, len(kat_liste), 4):
                 cols = st.columns(4)
                 for j, (label, k_id) in enumerate(kat_liste[i:i+4]):
@@ -313,13 +334,11 @@ def vis_side(dp=None):
         with c_stats_side:
             logo_html = ""
             if hold_logo is not None:
-                # Omdan PIL-billedet til base64
                 buffered = io.BytesIO()
                 hold_logo.save(buffered, format="PNG")
                 img_str = base64.b64encode(buffered.getvalue()).decode()
                 logo_html = f'<img src="data:image/png;base64,{img_str}" style="height: 35px; margin-right: 12px; object-fit: contain;">'
 
-            # HTML Flexbox sørger for, at de står på samme linje og er centreret lodret
             st.markdown(f"""
                 <div style="display: flex; align-items: center; margin-bottom: 10px;">
                     {logo_html}
