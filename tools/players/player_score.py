@@ -25,24 +25,21 @@ def vis_side():
     if not conn: return
 
     DB = "KLUB_HVIDOVREIF.AXIS"
+    SOGT_SAESON = "2025/2026"
 
-    # --- 1. SÆSON-LÅS (Altid 2025/2026) ---
-    SEASON_WYID = 189030  # Låst til din faste 2025/2026 sæson
-
-    # --- 2. HENT LIGAER DYNAMISK ---
+    # --- 1. HENT LIGAER DYNAMISK FOR DEN VALGTE SÆSON ---
     try:
-        # Vi henter kun de liga-ID'er der rent faktisk har data i din valgte sæson
         liga_data = conn.query(f"""
-            SELECT DISTINCT COMPETITION_WYID 
-            FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_AVERAGE 
-            WHERE SEASON_WYID = {SEASON_WYID}
+            SELECT DISTINCT s.COMPETITION_WYID 
+            FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_AVERAGE s
+            JOIN {DB}.WYSCOUT_SEASONS seas ON s.SEASON_WYID = seas.SEASON_WYID
+            WHERE seas.SEASONNAME = '{SOGT_SAESON}'
         """)
-        ligaer = sorted([int(x) for x in liga_data['COMPETITION_WYID'].dropna().tolist()]) if liga_data is not None else [328, 1305]
+        ligaer = sorted([int(x) for x in liga_data['COMPETITION_WYID'].dropna().tolist()]) if liga_data is not None and not liga_data.empty else [328, 1305]
     except Exception as e:
         st.warning(f"Kunne ikke hente dynamiske ligaer (bruger standard): {e}")
         ligaer = [328, 1305]
 
-    # Navne-mapping til ligaer
     LIGA_MAP = {
         328: "NordicBet Liga (328)",
         335: "Superliga (335)",
@@ -52,7 +49,7 @@ def vis_side():
         1305: "U19 Ligaen (1305)"
     }
 
-    # --- 3. BRUGERGRÆNSEFLADE ---
+    # --- 2. BRUGERGRÆNSEFLADE ---
     col1, col2 = st.columns(2)
     
     POS_CONFIG = {
@@ -80,9 +77,8 @@ def vis_side():
         format_func=lambda x: LIGA_MAP.get(x, f"Liga ID: {x}")
     )
 
-    # --- 4. DATAFETCH (Unik gruppering pr. spiller) ---
+    # --- 3. DATAFETCH MED ENTYDIG CURRENTTEAM JOIN ---
     with st.spinner("Henter og beregner Wyscout-data..."):
-        # Ved at bruge AVG() og GROUP BY sikrer vi os, at hver spiller kun optræder én gang!
         sql = f"""
         SELECT 
             p.PLAYER_WYID,
@@ -107,10 +103,11 @@ def vis_side():
             AVG(s.ASSISTS) as ASSISTS
         FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_AVERAGE s
         JOIN {DB}.WYSCOUT_PLAYERS p ON s.PLAYER_WYID = p.PLAYER_WYID
-        JOIN {DB}.WYSCOUT_TEAMS t ON p.CURRENTTEAM_WYID = t.TEAM_WYID
+        JOIN {DB}.WYSCOUT_TEAMS t ON p.CURRENTTEAM_WYID = t.TEAM_WYID -- Koblet direkte på CURRENTTEAM_WYID
+        JOIN {DB}.WYSCOUT_SEASONS seas ON s.SEASON_WYID = seas.SEASON_WYID
         WHERE s.COMPETITION_WYID = {valgt_liga}
-          AND s.SEASON_WYID = {SEASON_WYID}
-        GROUP BY p.PLAYER_WYID, p.SHORTNAME, t.OFFICIALNAME
+          AND seas.SEASONNAME = '{SOGT_SAESON}'
+        GROUP BY p.PLAYER_WYID, p.SHORTNAME, t.OFFICIALNAME, p.CURRENTTEAM_WYID
         """
         
         df = conn.query(sql)
@@ -119,7 +116,7 @@ def vis_side():
             df.columns = df.columns.str.lower()
             df['visningsnavn'] = df['full_name'].apply(forkort_navn)
             
-            # --- 5. BEREGNING AF PASNINGSPROCENT ---
+            # --- 4. BEREGNING AF PASNINGSPROCENT ---
             df['pass_pct'] = (df['successfulpasses'] / df['passes'].replace(0, 1)) * 100
 
             # Find den valgte profilkonfiguration
@@ -135,10 +132,10 @@ def vis_side():
 
             df[score_col] = df[score_col].round(1)
             
-            # Sorter efter højeste score og tag de 10 bedste UNIKKE spillere
+            # Sorter efter højeste score og tag top 10
             top_10 = df.sort_values(score_col, ascending=False).head(10)
 
-            # --- 6. VISNING ---
+            # --- 5. VISNING ---
             col_main, col_stats = st.columns([2, 1])
 
             with col_main:
@@ -176,15 +173,15 @@ def vis_side():
                     use_container_width=True
                 )
 
-            # --- 7. METODEFORKLARING ---
+            # --- 6. METODEFORKLARING ---
             with st.expander("Se beregnings-metode"):
                 st.write(f"**Formel for {valgt_pos}:**")
                 formula_text = " + ".join([f"({config['labels'][i]} * {config['weights'][i]})" for i in range(len(config['metrics']))])
                 st.code(f"Score = {formula_text}")
-                st.caption("Data leveres direkte som gennemsnit pr. 90 minutter (P90) fra Wyscout API'et.")
+                st.caption(f"Data leveres direkte som gennemsnit pr. 90 minutter (P90) fra Wyscout API'et for sæsonen {SOGT_SAESON}.")
 
         else:
-            st.info("Ingen spillere fundet i systemet med de angivne kriterier for sæsonen 2025/2026.")
+            st.info(f"Ingen spillere fundet i systemet med de angivne kriterier for sæsonen {SOGT_SAESON}.")
 
 if __name__ == "__main__":
     vis_side()
