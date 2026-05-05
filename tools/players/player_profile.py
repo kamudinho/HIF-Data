@@ -184,6 +184,7 @@ def vis_side(dp=None):
         # Jeg har tilføjet 4 eksempler mere her:
         truppen_stats = df_all.groupby('VISNINGSNAVN').agg(
             Pasninger=('EVENT_TYPEID', lambda x: (x == 1).sum()),
+            Stikninger=('EVENT_TYPEID', lambda x: (x == 4).sum()),
             Afslutninger=('EVENT_TYPEID', lambda x: x.isin([13, 14, 15, 16]).sum()),
             Mål=('EVENT_TYPEID', lambda x: (x == 16).sum()),
             Erobringer=('EVENT_TYPEID', lambda x: x.isin([7, 8, 12, 49]).sum()),
@@ -223,7 +224,7 @@ def vis_side(dp=None):
     
         # Listen med de 8 kategorier
         kat_liste = [
-            ("PASNINGER", "Pasninger"), ("AFSLUTNINGER", "Afslutninger"), 
+            ("PASNINGER", "Pasninger"), ("STIKNINGER", "Stikninger"), ("AFSLUTNINGER", "Afslutninger"), 
             ("MÅL", "Mål"), ("EROBRINGER", "Erobringer"),
             ("DRIBLINGER", "Driblinger"), ("CHANCER SKABT", "Chancer_skabt"),
             ("INDLÆG", "Indlæg"), ("KEY PASSES", "Key_Passes")
