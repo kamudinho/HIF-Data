@@ -185,8 +185,7 @@ def vis_side():
         JOIN player_minutes pm ON p.PLAYER_WYID = pm.PLAYER_WYID
         WHERE s.COMPETITION_WYID = {valgt_liga}
           AND seas.SEASONNAME = '{SOGT_SAESON}'
-          AND p.PASSPORTAREA_NAME IN ({tilladte_wyscout_positioner})
-        GROUP BY p.PLAYER_WYID, p.FIRSTNAME, p.LASTNAME, p.SHORTNAME, t.OFFICIALNAME, p.CURRENTTEAM_WYID, pm.total_minutes, p.PASSPORTAREA_NAME
+        GROUP BY p.PLAYER_WYID, p.FIRSTNAME, p.LASTNAME, p.SHORTNAME, t.OFFICIALNAME, p.CURRENTTEAM_WYID, pm.total_minutes
         """
         
         raw_df = conn.query(sql)
