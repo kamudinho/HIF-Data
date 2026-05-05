@@ -19,28 +19,30 @@ def vis_side():
     """, unsafe_allow_html=True)
 
     st.title("🎯 Spilleranalyse | Performance Score (Wyscout)")
-    st.caption("Sammenligning af spillere baseret på positions-vægtede Wyscout P90-metrics.")
+    st.caption("Sammenligning af spillere baseret på positions-vægtede Wyscout P90-metrics for sæsonen 2025/2026.")
 
     conn = _get_snowflake_conn()
     if not conn: return
 
     DB = "KLUB_HVIDOVREIF.AXIS"
 
-    # --- 1. DYNAMISKE FILTRE (Hent direkte fra DB) ---
-    try:
-        # Hent unikke liga-ID'er der faktisk har data i din tabel
-        liga_data = conn.query(f"SELECT DISTINCT COMPETITION_WYID FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_AVERAGE")
-        ligaer = sorted([int(x) for x in liga_data['COMPETITION_WYID'].dropna().tolist()]) if liga_data is not None else [328, 1305]
-        
-        # Hent unikke sæson-ID'er der faktisk har data i din tabel
-        saeson_data = conn.query(f"SELECT DISTINCT SEASON_WYID FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_AVERAGE")
-        saesoner = sorted([int(x) for x in saeson_data['SEASON_WYID'].dropna().tolist()], reverse=True) if saeson_data is not None else [189030]
-    except Exception as e:
-        st.warning(f"Kunne ikke hente dynamiske filtre (bruger standardværdier): {e}")
-        ligaer = [328, 1305]
-        saesoner = [189030]
+    # --- 1. SÆSON-LÅS (Altid 2025/2026) ---
+    SEASON_WYID = 189030  # Låst til din faste 2025/2026 sæson
 
-    # Navne-mapping til de mest gængse ligaer i dit system
+    # --- 2. HENT LIGAER DYNAMISK ---
+    try:
+        # Vi henter kun de liga-ID'er der rent faktisk har data i din valgte sæson
+        liga_data = conn.query(f"""
+            SELECT DISTINCT COMPETITION_WYID 
+            FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_AVERAGE 
+            WHERE SEASON_WYID = {SEASON_WYID}
+        """)
+        ligaer = sorted([int(x) for x in liga_data['COMPETITION_WYID'].dropna().tolist()]) if liga_data is not None else [328, 1305]
+    except Exception as e:
+        st.warning(f"Kunne ikke hente dynamiske ligaer (bruger standard): {e}")
+        ligaer = [328, 1305]
+
+    # Navne-mapping til ligaer
     LIGA_MAP = {
         328: "NordicBet Liga (328)",
         335: "Superliga (335)",
@@ -50,9 +52,9 @@ def vis_side():
         1305: "U19 Ligaen (1305)"
     }
 
-    col1, col2, col3 = st.columns(3)
+    # --- 3. BRUGERGRÆNSEFLADE ---
+    col1, col2 = st.columns(2)
     
-    # 1. Vælg positionsprofil
     POS_CONFIG = {
         "Angriber": {
             "metrics": ["goals", "xg", "shots", "touchinbox", "dribbles", "assists"],
@@ -72,49 +74,43 @@ def vis_side():
     }
     valgt_pos = col1.selectbox("Vælg Positionsprofil", list(POS_CONFIG.keys()))
     
-    # 2. Vælg liga (Dynamisk)
     valgt_liga = col2.selectbox(
         "Vælg Liga", 
         ligaer, 
         format_func=lambda x: LIGA_MAP.get(x, f"Liga ID: {x}")
     )
-    
-    # 3. Vælg Sæson (Dynamisk)
-    valgt_saeson = col3.selectbox(
-        "Vælg Sæson ID", 
-        saesoner,
-        format_func=lambda x: f"Sæson: {x} (2025/2026)" if x == 189030 else f"Sæson ID: {x}"
-    )
 
-    # --- 2. DATAFETCH ---
+    # --- 4. DATAFETCH (Unik gruppering pr. spiller) ---
     with st.spinner("Henter og beregner Wyscout-data..."):
+        # Ved at bruge AVG() og GROUP BY sikrer vi os, at hver spiller kun optræder én gang!
         sql = f"""
         SELECT 
             p.PLAYER_WYID,
             p.SHORTNAME as FULL_NAME,
             t.OFFICIALNAME as TEAM_NAME,
-            s.GOALS,
-            s.XGSHOT AS XG,
-            s.SHOTS,
-            s.TOUCHINBOX,
-            s.DRIBBLES,
-            s.PASSES,
-            s.SUCCESSFULPASSES,
-            s.KEYPASSES,
-            s.INTERCEPTIONS,
-            s.XGASSIST,
-            s.SLIDINGTACKLES,
-            s.PROGRESSIVERUN,
-            s.DEFENSIVEDUELSWON,
-            s.CLEARANCES,
-            s.AERIALDUELS AS AERIALDUELS, -- Rettet stavning
-            s.DANGEROUSOWNHALFLOSSES,
-            s.ASSISTS
+            AVG(s.GOALS) as GOALS,
+            AVG(s.XGSHOT) AS XG,
+            AVG(s.SHOTS) as SHOTS,
+            AVG(s.TOUCHINBOX) as TOUCHINBOX,
+            AVG(s.DRIBBLES) as DRIBBLES,
+            AVG(s.PASSES) as PASSES,
+            AVG(s.SUCCESSFULPASSES) as SUCCESSFULPASSES,
+            AVG(s.KEYPASSES) as KEYPASSES,
+            AVG(s.INTERCEPTIONS) as INTERCEPTIONS,
+            AVG(s.XGASSIST) as XGASSIST,
+            AVG(s.SLIDINGTACKLES) as SLIDINGTACKLES,
+            AVG(s.PROGRESSIVERUN) as PROGRESSIVERUN,
+            AVG(s.DEFENSIVEDUELSWON) as DEFENSIVEDUELSWON,
+            AVG(s.CLEARANCES) as CLEARANCES,
+            AVG(s.ARIALDUELSWON) AS AERIALDUELSWON,
+            AVG(s.DANGEROUSOWNHALFLOSSES) as DANGEROUSOWNHALFLOSSES,
+            AVG(s.ASSISTS) as ASSISTS
         FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_AVERAGE s
         JOIN {DB}.WYSCOUT_PLAYERS p ON s.PLAYER_WYID = p.PLAYER_WYID
         JOIN {DB}.WYSCOUT_TEAMS t ON p.CURRENTTEAM_WYID = t.TEAM_WYID
         WHERE s.COMPETITION_WYID = {valgt_liga}
-          AND s.SEASON_WYID = {valgt_saeson}
+          AND s.SEASON_WYID = {SEASON_WYID}
+        GROUP BY p.PLAYER_WYID, p.SHORTNAME, t.OFFICIALNAME
         """
         
         df = conn.query(sql)
@@ -123,13 +119,13 @@ def vis_side():
             df.columns = df.columns.str.lower()
             df['visningsnavn'] = df['full_name'].apply(forkort_navn)
             
-            # --- 3. BEREGNING AF PASNINGSPROCENT ---
+            # --- 5. BEREGNING AF PASNINGSPROCENT ---
             df['pass_pct'] = (df['successfulpasses'] / df['passes'].replace(0, 1)) * 100
 
             # Find den valgte profilkonfiguration
             config = POS_CONFIG[valgt_pos]
             
-            # BEREGN DIN POS-SCORE
+            # BEREGN PERFORMANCE SCORE
             score_col = 'pos_score'
             df[score_col] = 0.0
             
@@ -139,10 +135,10 @@ def vis_side():
 
             df[score_col] = df[score_col].round(1)
             
-            # Sorter efter højeste score
+            # Sorter efter højeste score og tag de 10 bedste UNIKKE spillere
             top_10 = df.sort_values(score_col, ascending=False).head(10)
 
-            # --- 4. VISNING ---
+            # --- 6. VISNING ---
             col_main, col_stats = st.columns([2, 1])
 
             with col_main:
@@ -180,7 +176,7 @@ def vis_side():
                     use_container_width=True
                 )
 
-            # --- 5. METODEFORKLARING ---
+            # --- 7. METODEFORKLARING ---
             with st.expander("Se beregnings-metode"):
                 st.write(f"**Formel for {valgt_pos}:**")
                 formula_text = " + ".join([f"({config['labels'][i]} * {config['weights'][i]})" for i in range(len(config['metrics']))])
@@ -188,7 +184,7 @@ def vis_side():
                 st.caption("Data leveres direkte som gennemsnit pr. 90 minutter (P90) fra Wyscout API'et.")
 
         else:
-            st.info("Ingen spillere fundet i systemet med de angivne kriterier. Prøv at skifte liga eller sæson i dropdown-menuerne.")
+            st.info("Ingen spillere fundet i systemet med de angivne kriterier for sæsonen 2025/2026.")
 
 if __name__ == "__main__":
     vis_side()
