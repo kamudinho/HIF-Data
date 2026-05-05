@@ -245,12 +245,28 @@ def vis_side(dp=None):
             # Vi tæller kun en assist, hvis:
             # Spilleren laver en aflevering (1) med assist-stempel ('210') 
             # OG den efterfølgende hændelse i kampen er et mål (16) scoret af en anden spiller.
+            # --- SKUDSIKKER OPTA-ASSIST LOGIK ---
+            # Vi tæller en assist, hvis én af følgende tre Opta-betingelser er opfyldt:
             'Assists': x.apply(
                 lambda r: (
-                    str(r['EVENT_TYPEID']) == '1' and 
-                    '210' in r.get('qual_list', []) and 
-                    str(r['NEXT_EVENT_TYPEID']) == '16' and 
-                    r['NEXT_PLAYER'] != r['VISNINGSNAVN']
+                    # 1. OPTA_DECODE_QUALIFIER: 210 (Aflevering med direkte assist-stempel)
+                    (str(r['EVENT_TYPEID']) == '1' and '210' in r.get('qual_list', []))
+                    
+                    OR
+                    
+                    # 2. OPTA_DECODE_EVENTTYPE: 'AS' (eller '89' - den direkte assist-hændelse)
+                    (str(r['EVENT_TYPEID']) in ['AS'])
+                    
+                    OR
+                    
+                    # 3. OPTA_DECODE_QUALIFIER: 29 (Målet er markeret som 'Assisted')
+                    # Hvis det NÆSTE event er et mål (16) med qualifier 29, så skal denne aflevering have assisten!
+                    (
+                        str(r['EVENT_TYPEID']) == '1' and 
+                        str(r['NEXT_EVENT_TYPEID']) == '16' and 
+                        '29' in str(r.get('NEXT_QUALIFIERS', '')).split(',') and
+                        r['NEXT_PLAYER'] != r['VISNINGSNAVN']
+                    )
                 ), 
                 axis=1
             ).sum(),
