@@ -215,11 +215,22 @@ def vis_side(dp=None):
 
     with t_profile:
         # Vores interne hjælper til at tælle (kigger på både EVENT_TYPEID og qual_list)
+        # 1. Forbered data til sekvens-analyse (kronologisk sortering pr. kamp)
+        # Dette sikrer, at vi kan parre målgivende afleveringer direkte med målet (16)
+        df_all_sorted = df_all.sort_values(by=['EVENT_TIMESTAMP']).copy()
+        
+        # Vi finder det næste event_typeid for hver hændelse i samme kamp
+        # (Svarer til LEAD(EVENT_TYPEID) OVER (PARTITION BY MATCH_ID ORDER BY EVENT_TIMESTAMP))
+        # Da din SQL-query ikke trækker match_id ud i df_all, sorterer vi blot kronologisk pr. spiller/timestamp
+        df_all_sorted['NEXT_EVENT_TYPEID'] = df_all_sorted['EVENT_TYPEID'].shift(-1)
+        df_all_sorted['NEXT_PLAYER'] = df_all_sorted['VISNINGSNAVN'].shift(-1)
+
+        # Vores interne hjælper til at tælle (kigger på både EVENT_TYPEID og qual_list)
         def count_event_with_qual(df_group, eid, qids):
             return df_group.apply(lambda r: har_qualifier(r['EVENT_TYPEID'], r.get('qual_list', []), eid, qids), axis=1).sum()
 
-        # 1. Beregn stats for ALLE spillere fra event-data.
-        event_stats = df_all.groupby(['VISNINGSNAVN', 'PLAYER_OPTAUUID']).apply(lambda x: pd.Series({
+        # Beregn stats for ALLE spillere fra event-data.
+        event_stats = df_all_sorted.groupby(['VISNINGSNAVN', 'PLAYER_OPTAUUID']).apply(lambda x: pd.Series({
             'Gule_kort': count_event_with_qual(x, 17, 31),
             'Roede_kort': count_event_with_qual(x, 17, 33),
             'Indskiftet': (x['EVENT_TYPEID'] == 19).sum(),
@@ -230,15 +241,19 @@ def vis_side(dp=None):
             'Afslutninger': x['EVENT_TYPEID'].isin([13, 14, 15, 16]).sum(),
             'Mål': (x['EVENT_TYPEID'] == 16).sum(),
             
-            # REEL ASSIST-LOGIK (Målgivende assist):
-            # Kigger udelukkende efter de officielle Opta assist-koder: '29' (Assisted) eller '154' (Bevidst assist)
+            # --- SEKVENSERET ASSIST-LOGIK ---
+            # Vi tæller kun en assist, hvis:
+            # Spilleren laver en aflevering (1) med assist-stempel ('210') 
+            # OG den efterfølgende hændelse i kampen er et mål (16) scoret af en anden spiller.
             'Assists': x.apply(
-            lambda r: (
-                str(r['EVENT_TYPEID']) == '89' or 
-                (str(r['EVENT_TYPEID']) == '1' and '210' in r.get('qual_list', []))
-            ), 
-            axis=1
-        ).sum(),
+                lambda r: (
+                    str(r['EVENT_TYPEID']) == '1' and 
+                    '210' in r.get('qual_list', []) and 
+                    str(r['NEXT_EVENT_TYPEID']) == '16' and 
+                    r['NEXT_PLAYER'] != r['VISNINGSNAVN']
+                ), 
+                axis=1
+            ).sum(),
             
             'Erobringer': x['EVENT_TYPEID'].isin([7, 8, 12, 49]).sum(),
             'Driblinger': (x['EVENT_TYPEID'] == 3).sum(),
