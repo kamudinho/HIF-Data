@@ -146,7 +146,7 @@ def vis_side():
 
     LIGA_VALGMULIGHEDER = {
         "alle": "Alle turneringer", 328: "NordicBet Liga", 335: "Superliga",
-        329: "2. division", 43319: "3. division", 331: "Oddset Pokalen", 1305: "U19 Ligaen"
+        329: "2. division", 43319: "3. division"
     }
     valgt_liga_nøgle = col3.selectbox("Vælg Turnering", list(LIGA_VALGMULIGHEDER.keys()), format_func=lambda x: LIGA_VALGMULIGHEDER[x], key="liga_select")
 
@@ -193,7 +193,7 @@ def vis_side():
                     AVG(s.KEYPASSES) as KEYPASSES, AVG(s.INTERCEPTIONS) as INTERCEPTIONS,
                     AVG(s.XGASSIST) as XGASSIST, AVG(s.SLIDINGTACKLES) as SLIDINGTACKLES,
                     AVG(s.PROGRESSIVERUN) as PROGRESSIVERUN, AVG(s.DEFENSIVEDUELSWON) as DEFENSIVEDUELSWON,
-                    AVG(s.CLEARANCES) as CLEARANCES, AVG(s.AERIALDUELSWON) AS AERIALDUELSWON,
+                    AVG(s.CLEARANCES) as CLEARANCES, AVG(s.AERIALDUELS) AS AERIALDUELS,
                     AVG(s.DANGEROUSOWNHALFLOSSES) as DANGEROUSOWNHALFLOSSES, AVG(s.ASSISTS) as ASSISTS
                 FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_AVERAGE s
                 JOIN {DB}.WYSCOUT_PLAYERS p ON s.PLAYER_WYID = p.PLAYER_WYID
