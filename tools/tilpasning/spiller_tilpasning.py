@@ -60,12 +60,37 @@ def vis_side():
     for col in ['NAVN', 'KLUB', 'POSITION']:
         df[col] = df[col].apply(rens_specialtegn)
 
-    # --- 2. SØGEFELT (Taster live) ---
-    # Vi bruger 'key' direkte. Streamlit vil køre scriptet igen ved hvert tastetryk, når værdien ændres.
+    # --- 2. SØGEFELT (Taster live med JavaScript-trigger) ---
+    # Vi giver søgefeltet en fast label, som vores JavaScript kan finde
     soegning = st.text_input(
-        "Søg på navn, position eller klub:", 
+        "Søg på navn, position eller klub (søgningen starter efter 2 tegn):", 
         key="live_search_field"
     ).strip().lower()
+
+    # --- JAVASCRIPT HACK FOR LIVE TAST-OPDATERING ---
+    # Dette stykke kode finder inputfeltet i browseren og tvinger en opdatering igennem ved hvert tastetryk, uden at du skal trykke Enter.
+    st.components.v1.html(
+        """
+        <script>
+        const doc = window.parent.document;
+        // Find det inputfelt, der hører til vores søgebar
+        const inputs = doc.querySelectorAll('input[type="text"]');
+        inputs.forEach(input => {
+            if (input.getAttribute('aria-label') && input.getAttribute('aria-label').includes('Søg på navn')) {
+                // Fjern eventuelle gamle listeners for at undgå loops
+                if (!input.dataset.hasLiveListener) {
+                    input.addEventListener('input', (e) => {
+                        // Simuler at der trykkes uden for feltet eller trykkes Enter for at tvinge Streamlit til at køre
+                        input.dispatchEvent(new Event('change', { bubbles: true }));
+                    });
+                    input.dataset.hasLiveListener = "true";
+                }
+            }
+        });
+        </script>
+        """,
+        height=0, # Vi holder den usynlig på siden
+    )
 
     # Vi filtrerer dataene til visning
     if len(soegning) >= 2:
@@ -79,7 +104,6 @@ def vis_side():
         visnings_df = df.copy()
 
     # --- 3. DEN INTERAKTIVE DATA_EDITOR ---
-    # Vi lader editoren køre på visnings_df og gemmer ændringerne direkte via key-state koblingen
     redigeret_df = st.data_editor(
         visnings_df,
         height=600,
@@ -129,29 +153,20 @@ def vis_side():
     )
 
     # --- 4. GEM DET REDIGEREDE DATAFRAME ---
-    # Hvis der er lavet en ændring i editoren
     if not redigeret_df.equals(visnings_df):
         try:
-            # Vi tager det originale fulde dataframe 'df' og opdaterer de rækker, 
-            # der har ændret sig i det filtrerede 'redigeret_df', matchet på PLAYER_WYID
             df.set_index('PLAYER_WYID', inplace=True)
             redigeret_df.set_index('PLAYER_WYID', inplace=True)
             
-            # Opdaterer værdierne for de matchende spillere
             df.update(redigeret_df)
-            
-            # Genskab indexet til kolonne før vi gemmer
             df.reset_index(inplace=True)
             
-            # Sørg for at holde kolonne-rækkefølgen intakt
             kolonner_rækkefølge = ['NAVN', 'POSITION', 'KLUB', 'PLAYER_WYID', 'PLAYER_OPTAUUID', 'COMPETITION_WYID', 'COMPETITION_OPTAUUID']
             df = df[kolonner_rækkefølge]
 
-            # Gemmer direkte til CSV'en med UTF-8 encoding
             df.to_csv(overskriv_sti, index=False, encoding='utf-8-sig')
             st.success("Ændringer gemt og specialtegn ryddet op! 💾")
             
-            # Ryd cache og genindlæs siden helt
             st.cache_data.clear()
             st.rerun()
         except Exception as e:
