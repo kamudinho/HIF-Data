@@ -241,8 +241,11 @@ def vis_side():
             df = raw_df.groupby('player_wyid', as_index=False).agg(agg_dict)
             df[score_col] = df[score_col].round(1)
             
-            # --- NYT/OPDATERET: HARD-FILTRERING MOD DIN CSV-FIL ---
-            overskriv_sti = os.path.abspath(os.path.join(os.path.dirname(__file__), 'players', 'spiller_overskrivning.csv'))
+            # --- NYT/OPDATERET: HARD-FILTRERING MOD DIN CSV-FIL (Med rettet sti) ---
+            # Vi finder projektets rod (ét niveau op fra 'data' mappen, da denne fil ligger i 'data')
+            projekt_rod = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+            overskriv_sti = os.path.join(projekt_rod, 'data', 'players', 'spiller_overskrivning.csv')
+            
             if os.path.exists(overskriv_sti):
                 try:
                     df_overskriv = pd.read_csv(overskriv_sti)
