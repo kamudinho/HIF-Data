@@ -266,7 +266,7 @@ def vis_side():
                     AVG(s.KEYPASSES) as KEYPASSES, AVG(s.INTERCEPTIONS) as INTERCEPTIONS,
                     AVG(s.XGASSIST) as XGASSIST, AVG(s.SLIDINGTACKLES) as SLIDINGTACKLES,
                     AVG(s.PROGRESSIVERUN) as PROGRESSIVERUN, AVG(s.DEFENSIVEDUELSWON) as DEFENSIVEDUELSWON,
-                    AVG(s.CLEARANCES) as CLEARANCES, AVG(s.AERIALDUELS) AS AERIALDUELS,
+                    AVG(s.CLEARANCES) as CLEARANCES, AVG(s.AERIALDUELS_WON) AS AERIALDUELSWON,
                     AVG(s.DANGEROUSOWNHALFLOSSES) as DANGEROUSOWNHALFLOSSES, AVG(s.ASSISTS) as ASSISTS
                 FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_AVERAGE s
                 JOIN {DB}.WYSCOUT_PLAYERS p ON s.PLAYER_WYID = p.PLAYER_WYID
@@ -292,7 +292,7 @@ def vis_side():
                     AVG(s.KEYPASSES) as KEYPASSES, AVG(s.INTERCEPTIONS) as INTERCEPTIONS,
                     AVG(s.XGASSIST) as XGASSIST, AVG(s.SLIDINGTACKLES) as SLIDINGTACKLES,
                     AVG(s.PROGRESSIVERUN) as PROGRESSIVERUN, AVG(s.DEFENSIVEDUELSWON) as DEFENSIVEDUELSWON,
-                    AVG(s.CLEARANCES) as CLEARANCES, AVG(s.AERIALDUELS) AS AERIALDUELS,
+                    AVG(s.CLEARANCES) as CLEARANCES, AVG(s.AERIALDUELS_WON) AS AERIALDUELSWON,
                     AVG(s.DANGEROUSOWNHALFLOSSES) as DANGEROUSOWNHALFLOSSES, AVG(s.ASSISTS) as ASSISTS
                 FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_AVERAGE s
                 JOIN {DB}.WYSCOUT_PLAYERS p ON s.PLAYER_WYID = p.PLAYER_WYID
@@ -361,7 +361,44 @@ def vis_side():
                 for _, row in visnings_df.iterrows()
             ]
 
+            # --- Definer variablen i toppen, så den ALTID eksisterer ---
+            valgt_klik = None
+
             rude_venstre, rude_hoejre = st.columns([1.1, 0.9])
+
+            with rude_venstre:
+                st.subheader("Performance Scoreboard")
+                hoejde_graf = max(500, len(visnings_df) * 26)
+                
+                fig = px.bar(
+                    visnings_df, 
+                    x=score_col, 
+                    y='visningsnavn', 
+                    orientation='h',
+                    text=score_col,
+                    template='plotly_white',
+                    custom_data=['player_wyid'] # ID sendes med her
+                )
+                
+                fig.update_traces(
+                    marker_color=farve_liste, 
+                    textposition='inside',   
+                    textfont=dict(color='white', size=11, family="Arial"), 
+                    insidetextanchor='end',  
+                    cliponaxis=False
+                )
+                
+                fig.update_layout(
+                    yaxis={'categoryorder':'total ascending', 'title': None}, 
+                    xaxis={'title': f"{valgt_hovedkategori} Performance Score", 'showgrid': False},
+                    showlegend=False, 
+                    height=hoejde_graf,
+                    margin=dict(l=10, r=10, t=10, b=10),
+                    clickmode='event+select'
+                )
+                
+                # Tegn grafen og opret 'valgt_klik'
+                valgt_klik = st.plotly_chart(fig, use_container_width=True, on_select="rerun")
 
             with rude_hoejre:
                 # 1. Hent det aktuelle klik direkte fra Plotly-diagrammet
