@@ -64,12 +64,24 @@ def vis_side():
     for col in ['NAVN', 'KLUB', 'POSITION']:
         df[col] = df[col].apply(rens_specialtegn)
 
-    # --- 2. SØGEFELT (Placeret over tabellen) ---
-    soegning = st.text_input("Søg på navn, position eller klub:", "").strip().lower()
+    # Vi opretter en callback-funktion, der tvinger Streamlit til at køre koden igen ved hvert tastetryk
+    if 'soeg_input' not in st.session_state:
+        st.session_state.soeg_input = ""
 
-    # Søgningen aktiveres kun, hvis der er indtastet 2 eller flere tegn
+    def opdater_soegning():
+        # Denne tomme funktion tvinger Streamlit til at genindlæse siden med det nye input med det samme
+        pass
+
+    # --- 2. SØGEFELT (Søger live mens du skriver) ---
+    soegning = st.text_input(
+        "Søg på navn, position eller klub:", 
+        value=st.session_state.soeg_input,
+        key="soeg_input",
+        on_change=opdater_soegning
+    ).strip().lower()
+
+    # Søgningen aktiveres med det samme, når der er indtastet mindst 2 tegn
     if len(soegning) >= 2:
-        # Filtrerer tabellen på tværs af de tre redigerbare felter
         mask = (
             df['NAVN'].astype(str).str.lower().str.contains(soegning) |
             df['POSITION'].astype(str).str.lower().str.contains(soegning) |
@@ -77,9 +89,7 @@ def vis_side():
         )
         filtreret_df = df[mask]
     else:
-        # Hvis der er tastet 0 eller 1 tegn, vises alle spillere
         filtreret_df = df
-
     # --- 3. DEN INTERAKTIVE DATA_EDITOR ---
     # Her har vi tilføjet 'height=600' til konfigurationen
     redigeret_filtreret_df = st.data_editor(
