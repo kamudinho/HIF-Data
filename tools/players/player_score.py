@@ -81,7 +81,7 @@ def vis_side():
 
     conn = _get_snowflake_conn()
     if not conn:
-        st.error("Kunne ikke oprette forbindelse til Snowflake-databasen.")
+        st.error("Kunne ikke oprette forbindelse to Snowflake-databasen.")
         return
 
     DB = "KLUB_HVIDOVREIF.AXIS"
@@ -345,12 +345,16 @@ def vis_side():
             st.info(f"Ingen spillere i din CSV-fil matcher de valgte minut-kriterier i denne turnering.")
             return
 
-        # --- REPARATION: STYR KLUB OG HVIDOVRE-STATUS UDELUKKENDE FRA CSV ---
-        # Vi overskriver Snowflake's team_name med 'klub'-feltet direkte fra din CSV
+        # --- REPARATION: STYR KLUB OG HVIDOVRE-STATUS FRA CSV (MED FLEKSIBEL SØGNING) ---
+        # 1. Sæt team_name lig med klubben i CSV-filen
         df['team_name'] = df['klub']
         
-        # En spiller er defineret som en Hvidovre-spiller, hvis 'klub'-kolonnen i CSV'en siger "Hvidovre IF"
-        df['is_active_hvidovre'] = np.where(df['klub'].str.strip().str.lower() == "hvidovre if", 1, 0)
+        # 2. Matcher alt der indeholder "hvidovre" (både "Hvidovre", "Hvidovre IF", "hvidovre if" osv.)
+        df['is_active_hvidovre'] = np.where(
+            df['klub'].str.strip().str.lower().str.contains("hvidovre", na=False), 
+            1, 
+            0
+        )
 
         df['pass_pct'] = (df['successfulpasses'] / df['passes'].replace(0, 1)) * 100
 
