@@ -118,17 +118,17 @@ def vis_side():
         },
         "Forsvarsspiller": {
             "metrics": ["interceptions", "defensiveduelswon", "clearances", "aerialduelswon", "pass_pct", "dangerousownhalflosses"],
-            "weights": [5.0, 4.0, 3.5, 4.0, 2.5, -3.0], 
+            "weights": [4.0, 4.0, 3.5, 4.0, 2.5, -2.0], 
             "labels": ["Interceptions", "Vundne Def. Dueller", "Clearinger", "Vundne Luftdueller", "Pasnings %", "Farlige Boldtab (Egen banehalvdel)"]
         },
         "Midtbanespiller": {
             "metrics": ["pass_pct", "keypasses", "interceptions", "xgassist", "slidingtackles", "progressiverun"],
-            "weights": [8.0, 4.5, 3.0, 4.0, 2.0, 1.5],
+            "weights": [2.2, 4.5, 3.0, 4.0, 2.0, 1.5],
             "labels": ["Pasnings %", "Key Passes", "Interceptions", "xA", "Glidende Tacklinger", "Progressive løb"]
         },
         "Angriber": {
             "metrics": ["goals", "xg", "shots", "touchinbox", "dribbles", "assists"],
-            "weights": [6.0, 4.0, 3.8, 2.4, 1.2, 2.0],
+            "weights": [8.0, 2.0, 3.8, 3.4, 2.2, 6.0],
             "labels": ["Mål", "xG", "Skud", "Berøringer i felt", "Driblinger", "Assists"]
         }
     }
@@ -225,12 +225,10 @@ def vis_side():
 
     LIGA_VALGMULIGHEDER = {
         "alle": "Alle turneringer",
-        328: "Betinia Ligaen",
         335: "Superligaen",
+        328: "Betinia Ligaen",
         329: "2. division",
         43319: "3. division",
-        331: "Oddset Pokalen",
-        1305: "U19 Ligaen"
     }
     valgt_liga_nøgle = col3.selectbox("Vælg Turnering", list(LIGA_VALGMULIGHEDER.keys()), format_func=lambda x: LIGA_VALGMULIGHEDER[x])
 
