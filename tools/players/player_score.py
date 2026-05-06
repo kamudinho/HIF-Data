@@ -32,7 +32,9 @@ def vis_side():
     """, unsafe_allow_html=True)
 
     conn = _get_snowflake_conn()
-    if not conn: return
+    if not conn:
+        st.error("Kunne ikke oprette forbindelse til Snowflake-databasen.")
+        return
 
     DB = "KLUB_HVIDOVREIF.AXIS"
     SOGT_SAESON = "2025/2026"
@@ -145,60 +147,60 @@ def vis_side():
         """
         
         sql_stats = f"""
-        WITH most_played_position AS (
+            WITH most_played_position AS (
+                SELECT 
+                    b_stats.PLAYER_WYID,
+                    b_stats.POSITION1NAME as MATCH_POS_NAME,
+                    b_stats.POSITION1CODE as MATCH_POS_CODE,
+                    ROW_NUMBER() OVER (PARTITION BY b_stats.PLAYER_WYID ORDER BY COUNT(*) DESC) as rnk
+                FROM {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_BASE b_stats
+                JOIN {DB}.WYSCOUT_SEASONS seas ON b_stats.SEASON_WYID = seas.SEASON_WYID
+                WHERE seas.SEASONNAME = '{SOGT_SAESON}'
+                  AND b_stats.POSITION1NAME IS NOT NULL
+                GROUP BY b_stats.PLAYER_WYID, b_stats.POSITION1NAME, b_stats.POSITION1CODE
+            )
             SELECT 
-                b_stats.PLAYER_WYID,
-                b_stats.POSITION1NAME as MATCH_POS_NAME,
-                b_stats.POSITION1CODE as MATCH_POS_CODE,
-                ROW_NUMBER() OVER (PARTITION BY b_stats.PLAYER_WYID ORDER BY COUNT(*) DESC) as rnk
-            FROM {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_BASE b_stats
-            JOIN {DB}.WYSCOUT_SEASONS seas ON b_stats.SEASON_WYID = seas.SEASON_WYID
-            WHERE seas.SEASONNAME = '{SOGT_SAESON}'
-              AND b_stats.POSITION1NAME IS NOT NULL
-            GROUP BY b_stats.PLAYER_WYID, b_stats.POSITION1NAME, b_stats.POSITION1CODE
-        )
-        SELECT 
-            p.PLAYER_WYID,
-            COALESCE(
-                NULLIF(TRIM(p.FIRSTNAME || ' ' || p.LASTNAME), ''), 
-                p.SHORTNAME
-            ) as FULL_NAME, 
-            COALESCE(t.OFFICIALNAME, 'Ukendt Klub') as TEAM_NAME,
-            p.CURRENTTEAM_WYID as CURRENT_TEAM_WYID,
-            COALESCE(mpp.MATCH_POS_NAME, p.ROLENAME, 'Ukendt Position') as SPECIFIC_POSITION,
-            AVG(s.GOALS) as GOALS,
-            AVG(s.XGSHOT) AS XG,
-            AVG(s.SHOTS) as SHOTS,
-            AVG(s.TOUCHINBOX) as TOUCHINBOX,
-            AVG(s.DRIBBLES) as DRIBBLES,
-            AVG(s.PASSES) as PASSES,
-            AVG(s.SUCCESSFULPASSES) as SUCCESSFULPASSES,
-            AVG(s.KEYPASSES) as KEYPASSES,
-            AVG(s.INTERCEPTIONS) as INTERCEPTIONS,
-            AVG(s.XGASSIST) as XGASSIST,
-            AVG(s.SLIDINGTACKLES) as SLIDINGTACKLES,
-            AVG(s.PROGRESSIVERUN) as PROGRESSIVERUN,
-            AVG(s.DEFENSIVEDUELSWON) as DEFENSIVEDUELSWON,
-            AVG(s.CLEARANCES) as CLEARANCES,
-            AVG(s.AERIALDUELS) AS AERIALDUELSWON,
-            AVG(s.DANGEROUSOWNHALFLOSSES) as DANGEROUSOWNHALFLOSSES,
-            AVG(s.ASSISTS) as ASSISTS
-        FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_AVERAGE s
-        JOIN {DB}.WYSCOUT_PLAYERS p ON s.PLAYER_WYID = p.PLAYER_WYID
-        LEFT JOIN {DB}.WYSCOUT_TEAMS t ON p.CURRENTTEAM_WYID = t.TEAM_WYID
-        JOIN {DB}.WYSCOUT_SEASONS seas ON s.SEASON_WYID = seas.SEASON_WYID
-        LEFT JOIN most_played_position mpp ON p.PLAYER_WYID = mpp.PLAYER_WYID AND mpp.rnk = 1
-        JOIN {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_BASE b_stats 
-          ON s.PLAYER_WYID = b_stats.PLAYER_WYID 
-         AND s.SEASON_WYID = b_stats.SEASON_WYID
-        WHERE (s.COMPETITION_WYID = {valgt_liga} OR COALESCE(p.CURRENTTEAM_WYID, 0) = {HVIDOVRE_TEAM_WYID})
-          AND seas.SEASONNAME = '{SOGT_SAESON}'
-          AND (
-               mpp.MATCH_POS_CODE IN {pos_match_codes} 
-               OR p.ROLECODE3 = '{role_code}'
-               OR (COALESCE(p.ROLECODE3, '') IN ('', 'Ukendt') AND b_stats.POSITION1CODE IN {pos_match_codes})
-          )
-        GROUP BY p.PLAYER_WYID, p.FIRSTNAME, p.LASTNAME, p.SHORTNAME, t.OFFICIALNAME, p.CURRENTTEAM_WYID, p.ROLENAME, mpp.MATCH_POS_NAME, p.ROLECODE3
+                p.PLAYER_WYID,
+                COALESCE(
+                    NULLIF(TRIM(p.FIRSTNAME || ' ' || p.LASTNAME), ''), 
+                    p.SHORTNAME
+                ) as FULL_NAME, 
+                COALESCE(t.OFFICIALNAME, 'Ukendt Klub') as TEAM_NAME,
+                p.CURRENTTEAM_WYID as CURRENT_TEAM_WYID,
+                COALESCE(mpp.MATCH_POS_NAME, p.ROLENAME, 'Ukendt Position') as SPECIFIC_POSITION,
+                AVG(s.GOALS) as GOALS,
+                AVG(s.XGSHOT) AS XG,
+                AVG(s.SHOTS) as SHOTS,
+                AVG(s.TOUCHINBOX) as TOUCHINBOX,
+                AVG(s.DRIBBLES) as DRIBBLES,
+                AVG(s.PASSES) as PASSES,
+                AVG(s.SUCCESSFULPASSES) as SUCCESSFULPASSES,
+                AVG(s.KEYPASSES) as KEYPASSES,
+                AVG(s.INTERCEPTIONS) as INTERCEPTIONS,
+                AVG(s.XGASSIST) as XGASSIST,
+                AVG(s.SLIDINGTACKLES) as SLIDINGTACKLES,
+                AVG(s.PROGRESSIVERUN) as PROGRESSIVERUN,
+                AVG(s.DEFENSIVEDUELSWON) as DEFENSIVEDUELSWON,
+                AVG(s.CLEARANCES) as CLEARANCES,
+                AVG(s.AERIALDUELS) AS AERIALDUELSWON,
+                AVG(s.DANGEROUSOWNHALFLOSSES) as DANGEROUSOWNHALFLOSSES,
+                AVG(s.ASSISTS) as ASSISTS
+            FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_AVERAGE s
+            JOIN {DB}.WYSCOUT_PLAYERS p ON s.PLAYER_WYID = p.PLAYER_WYID
+            LEFT JOIN {DB}.WYSCOUT_TEAMS t ON p.CURRENTTEAM_WYID = t.TEAM_WYID
+            JOIN {DB}.WYSCOUT_SEASONS seas ON s.SEASON_WYID = seas.SEASON_WYID
+            LEFT JOIN most_played_position mpp ON p.PLAYER_WYID = mpp.PLAYER_WYID AND mpp.rnk = 1
+            JOIN {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_BASE b_stats 
+              ON s.PLAYER_WYID = b_stats.PLAYER_WYID 
+             AND s.SEASON_WYID = b_stats.SEASON_WYID
+            WHERE (s.COMPETITION_WYID = {valgt_liga} OR COALESCE(p.CURRENTTEAM_WYID, 0) = {HVIDOVRE_TEAM_WYID})
+              AND seas.SEASONNAME = '{SOGT_SAESON}'
+              AND (
+                   mpp.MATCH_POS_CODE IN {pos_match_codes} 
+                   OR p.ROLECODE3 = '{role_code}'
+                   OR (COALESCE(p.ROLECODE3, '') IN ('', 'Ukendt') AND b_stats.POSITION1CODE IN {pos_match_codes})
+              )
+            GROUP BY p.PLAYER_WYID, p.FIRSTNAME, p.LASTNAME, p.SHORTNAME, t.OFFICIALNAME, p.CURRENTTEAM_WYID, p.ROLENAME, mpp.MATCH_POS_NAME, p.ROLECODE3
         """
         
         df_minutter = conn.query(sql_minutter)
@@ -240,7 +242,6 @@ def vis_side():
             df[score_col] = df[score_col].round(1)
             
             # --- NYT: MANUEL RETTELSE VIA CSV (spiller_overskrivning.csv) ---
-            # Vi forventer kolonnerne: player_wyid, full_name, team_name, is_active_hvidovre, specific_position
             overskriv_sti = os.path.abspath(os.path.join(os.path.dirname(__file__), 'players', 'spiller_overskrivning.csv'))
             if os.path.exists(overskriv_sti):
                 try:
@@ -248,11 +249,9 @@ def vis_side():
                     df_overskriv.columns = df_overskriv.columns.str.lower().str.strip()
                     
                     if 'player_wyid' in df_overskriv.columns:
-                        # Sæt player_wyid som indeks på begge for nem opdatering
                         df.set_index('player_wyid', inplace=True)
                         df_overskriv.set_index('player_wyid', inplace=True)
                         
-                        # Opdater kun de kolonner, der rent faktisk findes i din CSV
                         kolonner_til_opdatering = [col for col in df_overskriv.columns if col in df.columns]
                         if kolonner_til_opdatering:
                             df.update(df_overskriv[kolonner_til_opdatering])
