@@ -150,20 +150,24 @@ def vis_side():
     for enc in ['utf-8-sig', 'latin-1', 'utf-8', 'cp1252']:
         try:
             df_csv = pd.read_csv(overskriv_sti, encoding=enc)
-            if not df_csv.empty and not df_csv.iloc[:,1].astype(str).str.contains('√').any():
+            # Stopper hvis indlæsningen lykkes
+            if not df_csv.empty:
                 break
         except Exception:
             continue
 
-    if df_csv is None:
+    if df_csv is None or df_csv.empty:
         st.error("Kunne ikke indlæse CSV-filen korrekt.")
         return
 
+    # Ensretter kolonnenavne til små bogstaver
     df_csv.columns = df_csv.columns.str.lower().str.strip()
+    
+    # Omdøber specifikt dine kolonner så de passer til koden bagefter
     df_csv = df_csv.rename(columns={
-        'wyid': 'player_wyid',
         'navn': 'full_name',
-        'position': 'specific_position'
+        'position': 'specific_position',
+        'player_wyid': 'player_wyid' # Allerede korrekt i din CSV, men for en sikkerheds skyld
     })
     
     # Rens og standardiser værdier
@@ -274,7 +278,6 @@ def vis_side():
                 WHERE m_tot.COMPETITION_WYID IN {TILLADTE_LIGAER}
                   AND m_tot.MINUTESONFIELD > 0
                   AND m.DATE >= '2026-01-01'
-                  -- RETTET HELT: Ingen WINNER eller LOSER herover overhovedet.
                   AND (m.HOMETEAM_WYID = {HVIDOVRE_TEAM_WYID} OR m.AWAYTEAM_WYID = {HVIDOVRE_TEAM_WYID} OR m_tot.PLAYER_WYID IN (
                       SELECT DISTINCT PLAYER_WYID 
                       FROM {DB}.WYSCOUT_PLAYERCAREER 
@@ -347,6 +350,7 @@ def vis_side():
             if 'team_name' in df_raw.columns:
                 df_raw = df_raw.drop(columns=['team_name'])
 
+            # Fletter Snowflake-data og CSV data på 'player_wyid'
             df = pd.merge(df_csv, df_raw, on='player_wyid', how='inner')
 
             if df.empty:
@@ -358,13 +362,17 @@ def vis_side():
                 axis=1
             )
 
+            # Beregner pasningsprocenten til målmand/forsvar/midtbanespillere
             df['pass_pct'] = (df['successfulpasses'] / df['passes'].replace(0, 1)) * 100
 
+            # --- DYNAMISK PERFORMANCE SCORE BEREGNING ---
             config = POS_CONFIG[valgt_hovedkategori]
             score_col = 'pos_score'
             df[score_col] = 0.0
+            
             for i, m_name in enumerate(config['metrics']):
                 weight = config['weights'][i]
+                # Hent værdien hvis den findes i datarammen, ellers brug 0
                 val = df[m_name] if m_name in df.columns else 0
                 df[score_col] += val * weight
             
