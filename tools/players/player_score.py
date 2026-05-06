@@ -363,58 +363,34 @@ def vis_side():
 
             rude_venstre, rude_hoejre = st.columns([1.1, 0.9])
 
-            with rude_venstre:
-                st.subheader("Performance Scoreboard")
-                hoejde_graf = max(500, len(visnings_df) * 26)
-                
-                fig = px.bar(
-                    visnings_df, 
-                    x=score_col, 
-                    y='visningsnavn', 
-                    orientation='h',
-                    text=score_col,
-                    template='plotly_white',
-                    custom_data=['player_wyid'] # ID sendes med i grafen her!
-                )
-                
-                fig.update_traces(
-                    marker_color=farve_liste, 
-                    textposition='inside',   
-                    textfont=dict(color='white', size=11, family="Arial"), 
-                    insidetextanchor='end',  
-                    cliponaxis=False
-                )
-                
-                fig.update_layout(
-                    yaxis={'categoryorder':'total ascending', 'title': None}, 
-                    xaxis={'title': f"{valgt_hovedkategori} Performance Score", 'showgrid': False},
-                    showlegend=False, 
-                    height=hoejde_graf,
-                    margin=dict(l=10, r=10, t=10, b=10),
-                    clickmode='event+select'
-                )
-                
-                # Hvis brugeren klikker på en bjælke, returneres det her
-                valgt_klik = st.plotly_chart(fig, use_container_width=True, on_select="rerun")
-
             with rude_hoejre:
+                # 1. Hent det aktuelle klik direkte fra Plotly-diagrammet
+                aktuelt_klik_id = None
+                if valgt_klik and "selection" in valgt_klik and valgt_klik["selection"]["points"]:
+                    try:
+                        # Vi trækker player_wyid direkte ud fra custom_data på den klikkede bjælke
+                        aktuelt_klik_id = int(valgt_klik["selection"]["points"][0]["customdata"][0])
+                    except Exception:
+                        aktuelt_klik_id = None
+
+                # 2. Match det mod vores DataFrame
                 valgt_spiller_data = None
+                if aktuelt_klik_id is not None:
+                    match = df[df['player_wyid'] == aktuelt_klik_id]
+                    if not match.empty:
+                        valgt_spiller_data = match.iloc[0]
 
-                # Her fanger vi klikket sikkert ved hjælp af ID'et
-                try:
-                    if valgt_klik and "selection" in valgt_klik and valgt_klik["selection"]["points"]:
-                        # Vi trækker 'player_wyid' direkte ud af custom_data i stedet for navnet
-                        klikket_id = int(valgt_klik["selection"]["points"][0]["customdata"][0])
-                        valgt_spiller_data = df[df['player_wyid'] == klikket_id].iloc[0]
-                except Exception:
-                    # Hvis noget fejler i klikket, lader vi bare appen køre videre uden at crashe
-                    valgt_spiller_data = None
-
-                # Hvis der ikke er klikket på noget endnu (eller klikket fejlede), viser vi den bedste spiller som default
+                # 3. Hvis der ikke er klikket på noget aktivt, viser vi automatisk den bedste spiller på listen
                 if valgt_spiller_data is None and not visnings_df.empty:
-                    bedste_spiller_id = visnings_df.sort_values(score_col, ascending=False).iloc[0]['player_wyid']
-                    valgt_spiller_data = df[df['player_wyid'] == bedste_spiller_id].iloc[0]
+                    # Sorterer visnings_df for at finde spilleren med den absolut højeste score
+                    bedste_spiller = visnings_df.sort_values(score_col, ascending=False).iloc[0]
+                    bedste_spiller_id = bedste_spiller['player_wyid']
+                    
+                    match_bedste = df[df['player_wyid'] == bedste_spiller_id]
+                    if not match_bedste.empty:
+                        valgt_spiller_data = match_bedste.iloc[0]
 
+                # 4. Tegn spillerkortet og P90-værdierne, hvis vi har en spiller
                 if valgt_spiller_data is not None:
                     st.markdown(f"""
                         <div class="score-card">
