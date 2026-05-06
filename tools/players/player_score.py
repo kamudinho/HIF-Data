@@ -90,7 +90,7 @@ def vis_side():
     
     TILLADTE_LIGAER = (335, 328, 329, 43319, 331, 1305)
 
-    # Dine specifikke oversættelser
+    # De præcise, godkendte oversættelser
     POS_TRANSLATIONS = {
         "Center Back": "Midterforsvarer",
         "Left Back": "Venstre Back",
@@ -106,7 +106,6 @@ def vis_side():
         "Left Winger": "Venstre kant",
         "Right Winger": "Højre kant",
         "Goalkeeper": "Målmand",
-        # De brede positioner oversættes også pænt, når de vises på spillerkortet
         "Defender": "Forsvarsspiller",
         "Midfielder": "Midtbanespiller"
     }
@@ -182,15 +181,15 @@ def vis_side():
     
     df_csv_hoved = df_csv[df_csv['hovedkategori'] == valgt_hovedkategori]
     
-    # Ekskluder disse overordnede/brede betegnelser fra den specifikke dropdown-menu
+    # Her sikrer vi, at alt er konsekvent lowercase, så filtreringen virker 100%
     ekskluder_fra_dropdown = {
-        "Målmand", "goalkeeper", "keeper", "gk",
-        "Forsvarsspiller", "defender", "def",
-        "Midtbanespiller", "midfielder", "mid",
-        "Angriber", "forward", "striker", "fwd"
+        "målmand", "goalkeeper", "keeper", "gk",
+        "forsvarsspiller", "defender", "def",
+        "midtbanespiller", "midfielder", "mid",
+        "angriber", "forward", "striker", "fwd"
     }
     
-    # Hent kun de reelle, specifikke positioner til dropdown-menuen
+    # Hent kun de specifikke positioner til dropdown-menuen
     specifikke_muligheder = sorted([
         pos for pos in df_csv_hoved['specific_position'].dropna().unique().tolist()
         if pos.strip().lower() not in ekskluder_fra_dropdown and pos.strip() != ""
@@ -198,8 +197,17 @@ def vis_side():
     
     visnings_positioner_map = {pos: POS_TRANSLATIONS.get(pos, pos) for pos in specifikke_muligheder}
     
-    # Generer "Alle"-teksten
-    alle_tekst = f"Alle {valgt_hovedkategori}e" if valgt_hovedkategori != "Målmand" else "Alle Målmænd"
+    # Kontrollerer den korrekte bøjning og store/små bogstaver helt præcist
+    if valgt_hovedkategori == "Målmand":
+        alle_tekst = "Alle målmænd"
+    elif valgt_hovedkategori == "Forsvarsspiller":
+        alle_tekst = "Alle forsvarsspillere"
+    elif valgt_hovedkategori == "Midtbanespiller":
+        alle_tekst = "Alle midtbanespillere"
+    elif valgt_hovedkategori == "Angriber":
+        alle_tekst = "Alle angribere"
+    else:
+        alle_tekst = f"Alle {valgt_hovedkategori.lower()}e"
     
     valgt_specifik_visning = col2.selectbox(
         "Vælg Specifik Position", 
@@ -226,8 +234,6 @@ def vis_side():
     valgt_liga_nøgle = col3.selectbox("Vælg Turnering", list(LIGA_VALGMULIGHEDER.keys()), format_func=lambda x: LIGA_VALGMULIGHEDER[x])
 
     # --- 3. FILTER LOGIK ---
-    # Hvis man vælger den specifikke underkategori (f.eks. "Venstre Back"), henter vi kun dem.
-    # Hvis man vælger den brede "Alle Forsvarsspillere", tager vi hele 'df_csv_hoved' (hvilket inkluderer "Defender", "Forsvarsspiller" osv.)
     if faktisk_specifik_valg:
         target_wyids = df_csv_hoved[df_csv_hoved['specific_position'] == faktisk_specifik_valg]['player_wyid'].tolist()
     else:
