@@ -267,18 +267,17 @@ def vis_side():
                 GROUP BY pc.PLAYER_WYID
             ),
             hvidovre_spillere_2026 AS (
-                SELECT DISTINCT p.PLAYER_WYID
-                FROM {DB}.WYSCOUT_PLAYERS p
-                JOIN {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_TOTAL m_tot ON p.PLAYER_WYID = m_tot.PLAYER_WYID
+                SELECT DISTINCT m_tot.PLAYER_WYID
+                FROM {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_TOTAL m_tot
                 JOIN {DB}.WYSCOUT_MATCHES m ON m_tot.MATCH_WYID = m.MATCH_WYID
-                WHERE p.CURRENTTEAM_WYID = {HVIDOVRE_TEAM_WYID}
+                WHERE m_tot.TEAM_WYID = {HVIDOVRE_TEAM_WYID}
                   AND m.DATE >= '2026-01-01'
                   AND m_tot.MINUTESONFIELD > 0
             ),
             hvidovre_stats AS (
                 SELECT 
                     p.PLAYER_WYID,
-                    COALESCE(t.OFFICIALNAME, 'Hvidovre IF') as TEAM_NAME,
+                    'Hvidovre IF' as TEAM_NAME,
                     COALESCE(m_calc.total_minutes_all_ligas, 0) as total_minutes,
                     1 as is_active_hvidovre,
                     AVG(s.GOALS) as GOALS, AVG(s.XGSHOT) AS XG, AVG(s.SHOTS) as SHOTS,
@@ -291,14 +290,13 @@ def vis_side():
                     AVG(s.DANGEROUSOWNHALFLOSSES) as DANGEROUSOWNHALFLOSSES, AVG(s.ASSISTS) as ASSISTS
                 FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_AVERAGE s
                 JOIN {DB}.WYSCOUT_PLAYERS p ON s.PLAYER_WYID = p.PLAYER_WYID
-                LEFT JOIN {DB}.WYSCOUT_TEAMS t ON p.CURRENTTEAM_WYID = t.TEAM_WYID
                 JOIN {DB}.WYSCOUT_SEASONS seas ON s.SEASON_WYID = seas.SEASON_WYID
                 LEFT JOIN minut_kilde m_calc ON p.PLAYER_WYID = m_calc.PLAYER_WYID
                 WHERE p.PLAYER_WYID IN {sql_ids_str}
                   AND p.PLAYER_WYID IN (SELECT PLAYER_WYID FROM hvidovre_spillere_2026)
                   AND seas.SEASONNAME = '{SOGT_SAESON}'
                   AND s.COMPETITION_WYID IN {TILLADTE_LIGAER}
-                GROUP BY p.PLAYER_WYID, t.OFFICIALNAME, m_calc.total_minutes_all_ligas
+                GROUP BY p.PLAYER_WYID, m_calc.total_minutes_all_ligas
                 HAVING COALESCE(m_calc.total_minutes_all_ligas, 0) >= 150
             ),
             liga_stats AS (
