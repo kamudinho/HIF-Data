@@ -125,8 +125,8 @@ def vis_side():
     df_csv['klub'] = df_csv['klub'].fillna("").astype(str).apply(rens_specialtegn)
     df_csv['hovedkategori'] = df_csv['specific_position'].apply(map_til_hovedkategori)
 
-    # --- SIKKER HOLD-GODKENDELSE ---
-    # Vi identificerer spillere baseret på CSV-filens definerede klub.
+    # --- SIKKER KLUB-GODKENDELSE ---
+    # Vi identificerer Hvidovre-spillere udelukkende ud fra CSV-filens definerede klub.
     df_csv['is_active_hvidovre'] = np.where(
         df_csv['klub'].str.strip().str.lower().isin(["hvidovre", "hvidovre if"]), 
         1, 
@@ -165,8 +165,7 @@ def vis_side():
 
     sql_ids_str = f"({', '.join(map(str, alle_wyids_i_kategori))})"
 
-    # --- 4. OPTIMERET SQL QUERY ---
-    # Vi henter minutter og gennemsnitlige stats for hele den matchende pulje i ét kald.
+    # --- 4. DATA-HENTNING ---
     liga_betingelse_stats = f"s.COMPETITION_WYID IN {TILLADTE_LIGAER}" if valgt_liga_nøgle == "alle" else f"s.COMPETITION_WYID = {valgt_liga_nøgle}"
 
     with st.spinner("Henter og beregner live-data..."):
@@ -174,9 +173,7 @@ def vis_side():
             WITH minut_kilde AS (
                 SELECT 
                     pc.PLAYER_WYID,
-                    -- Minutter for den specifikke valgte liga (til eksterne spillere)
                     SUM(CASE WHEN pc.COMPETITION_WYID = {valgt_liga_nøgle if valgt_liga_nøgle != 'alle' else 'pc.COMPETITION_WYID'} THEN pc.MINUTESPLAYED ELSE 0 END) as total_minutes_selected_liga,
-                    -- Minutter i alt på tværs af tilladte turneringer (bruges til Hvidovre-spillere)
                     SUM(pc.MINUTESPLAYED) as total_minutes_all_ligas
                 FROM {DB}.WYSCOUT_PLAYERCAREER pc
                 JOIN {DB}.WYSCOUT_SEASONS s ON pc.SEASON_WYID = s.SEASON_WYID
@@ -188,14 +185,14 @@ def vis_side():
                 p.PLAYER_WYID,
                 COALESCE(m_calc.total_minutes_all_ligas, 0) as total_minutes_all_ligas,
                 COALESCE(m_calc.total_minutes_selected_liga, 0) as total_minutes_selected_liga,
-                AVG(s.GOALS) as GOALS, AVG(s.XGSHOT) AS XG, AVG(s.SHOTS) as SHOTS,
-                AVG(s.TOUCHINBOX) as TOUCHINBOX, AVG(s.DRIBBLES) as DRIBBLES,
-                AVG(s.PASSES) as PASSES, AVG(s.SUCCESSFULPASSES) as SUCCESSFULPASSES,
-                AVG(s.KEYPASSES) as KEYPASSES, AVG(s.INTERCEPTIONS) as INTERCEPTIONS,
-                AVG(s.XGASSIST) as XGASSIST, AVG(s.SLIDINGTACKLES) as SLIDINGTACKLES,
-                AVG(s.PROGRESSIVERUN) as PROGRESSIVERUN, AVG(s.DEFENSIVEDUELSWON) as DEFENSIVEDUELSWON,
-                AVG(s.CLEARANCES) as CLEARANCES, AVG(s.AERIALDUELSWON) AS AERIALDUELSWON,
-                AVG(s.DANGEROUSOWNHALFLOSSES) as DANGEROUSOWNHALFLOSSES, AVG(s.ASSISTS) as ASSISTS
+                COALESCE(AVG(s.GOALS), 0) as GOALS, COALESCE(AVG(s.XGSHOT), 0) AS XG, COALESCE(AVG(s.SHOTS), 0) as SHOTS,
+                COALESCE(AVG(s.TOUCHINBOX), 0) as TOUCHINBOX, COALESCE(AVG(s.DRIBBLES), 0) as DRIBBLES,
+                COALESCE(AVG(s.PASSES), 0) as PASSES, COALESCE(AVG(s.SUCCESSFULPASSES), 0) as SUCCESSFULPASSES,
+                COALESCE(AVG(s.KEYPASSES), 0) as KEYPASSES, COALESCE(AVG(s.INTERCEPTIONS), 0) as INTERCEPTIONS,
+                COALESCE(AVG(s.XGASSIST), 0) as XGASSIST, COALESCE(AVG(s.SLIDINGTACKLES), 0) as SLIDINGTACKLES,
+                COALESCE(AVG(s.PROGRESSIVERUN), 0) as PROGRESSIVERUN, COALESCE(AVG(s.DEFENSIVEDUELSWON), 0) as DEFENSIVEDUELSWON,
+                COALESCE(AVG(s.CLEARANCES), 0) as CLEARANCES, COALESCE(AVG(s.AERIALDUELSWON), 0) AS AERIALDUELSWON,
+                COALESCE(AVG(s.DANGEROUSOWNHALFLOSSES), 0) as DANGEROUSOWNHALFLOSSES, COALESCE(AVG(s.ASSISTS), 0) as ASSISTS
             FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_AVERAGE s
             JOIN {DB}.WYSCOUT_PLAYERS p ON s.PLAYER_WYID = p.PLAYER_WYID
             JOIN {DB}.WYSCOUT_SEASONS seas ON s.SEASON_WYID = seas.SEASON_WYID
@@ -209,25 +206,22 @@ def vis_side():
         try:
             df_raw = conn.query(sql_samlet)
         except Exception as e:
-            st.error(f"Fejl ved SQL query: {e}")
+            st.error(f"Fejl ved SQL: {e}")
             return
         
         if df_raw is not None and not df_raw.empty:
             df_raw.columns = df_raw.columns.str.lower()
             df_raw['player_wyid'] = df_raw['player_wyid'].astype(int)
 
-            # Vi fletter her CSV'en sammen med databaseresultaterne
             df = pd.merge(df_csv, df_raw, on='player_wyid', how='inner')
 
             if df.empty:
                 st.info("Ingen spillere matcher kriterierne i denne turnering.")
                 return
 
-            # Bestem minutter og holdsnavn ud fra din CSV holds-status
             df['total_minutes'] = np.where(df['is_active_hvidovre'] == 1, df['total_minutes_all_ligas'], df['total_minutes_selected_liga'])
             df['team_name'] = np.where(df['is_active_hvidovre'] == 1, "Hvidovre IF", df['klub'])
             
-            # Filtrér spilletid (Minimum 150 minutter)
             df = df[df['total_minutes'] >= 150]
             
             if df.empty:
@@ -236,7 +230,7 @@ def vis_side():
 
             df['pass_pct'] = (df['successfulpasses'] / df['passes'].replace(0, 1)) * 100
 
-            # --- PERFORMANCE SCORE BEREGNING ---
+            # --- PERFORMANCE SCORE ---
             config = POS_CONFIG[valgt_hovedkategori]
             score_col = 'pos_score'
             df[score_col] = 0.0
@@ -247,7 +241,6 @@ def vis_side():
             df[score_col] = df[score_col].round(1)
             df['dk_position'] = df['specific_position'].map(POS_TRANSLATIONS).fillna(df['specific_position'])
 
-            # --- DYNAMISK FILTRERING PÅ SPECIFIK POSITION ---
             if faktisk_specifik_valg:
                 df_filtreret = df[df['specific_position'] == faktisk_specifik_valg]
             else:
@@ -259,52 +252,65 @@ def vis_side():
 
             df_sorteret = df_filtreret.sort_values(score_col, ascending=False)
             
-            # Opdel i Hvidovre vs. Liga baseret på det korrekte CSV-tjek
             hvidovre_spillere = df_sorteret[df_sorteret['is_active_hvidovre'] == 1]
             liga_spillere = df_sorteret[df_sorteret['is_active_hvidovre'] == 0]
             
-            # Top 20 eksterne spillere + Top 2 Hvidovre-spillere
-            visnings_df = pd.concat([liga_spillere.head(20), hvidovre_spillere.head(2)]).drop_duplicates(subset=['player_wyid'])
+            visnings_df = pd.concat([liga_spillere.head(20), hvidovre_spillere.head(10)]).drop_duplicates(subset=['player_wyid'])
             visnings_df = visnings_df.sort_values(score_col, ascending=True)
             visnings_df['visningsnavn'] = visnings_df['full_name']
 
-            farve_liste = ['#c11c2e' if active == 1 else '#1b365d' for active in visnings_df['is_active_hvidovre']]
+            # Tilføjer tekst kolonne, der bestemmer farvningen eksplicit i Plotly
+            visnings_df['status_farve'] = np.where(visnings_df['is_active_hvidovre'] == 1, "Hvidovre IF", "Liga Rivaler")
 
             rude_venstre, rude_hoejre = st.columns([1.1, 0.9])
 
             with rude_venstre:
                 st.subheader("Performance Scoreboard")
-                hoejde_graf = max(500, len(visnings_df) * 26)
+                hoejde_graf = max(450, len(visnings_df) * 28)
                 
+                # px.bar bruger nu status_farve-kolonnen og en explicit farveskala
                 fig = px.bar(
-                    visnings_df, x=score_col, y='visningsnavn', orientation='h',
-                    text=score_col, template='plotly_white', custom_data=['player_wyid']
+                    visnings_df, 
+                    x=score_col, 
+                    y='visningsnavn', 
+                    orientation='h',
+                    color='status_farve',
+                    color_discrete_map={"Hvidovre IF": "#df003b", "Liga Rivaler": "#1b365d"},
+                    text=score_col, 
+                    template='plotly_white', 
+                    custom_data=['player_wyid']
                 )
+                
                 fig.update_traces(
-                    marker_color=farve_liste, textposition='inside',   
+                    textposition='inside',   
                     textfont=dict(color='white', size=11, family="Arial"), 
-                    insidetextanchor='end', cliponaxis=False
+                    insidetextanchor='end', 
+                    cliponaxis=False
                 )
+                
                 fig.update_layout(
                     yaxis={'categoryorder':'total ascending', 'title': None}, 
                     xaxis={'title': f"{valgt_hovedkategori} Performance Score", 'showgrid': False},
-                    showlegend=False, height=hoejde_graf, margin=dict(l=10, r=10, t=10, b=10),
+                    showlegend=True, 
+                    legend=dict(title=None, orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                    height=hoejde_graf, 
+                    margin=dict(l=10, r=10, t=10, b=10),
                     clickmode='event+select'
                 )
+                
                 valgt_klik = st.plotly_chart(fig, use_container_width=True, on_select="rerun")
 
             with rude_hoejre:
                 valgt_spiller_data = None
                 
-                # REKONSTRUKTION AF KLIK: Løser fejlen ved klik på en bar på grafen
+                # Rigtig detektering af det valgte klik:
                 if valgt_klik and "selection" in valgt_klik and valgt_klik["selection"]["points"]:
                     klikket_wyid = valgt_klik["selection"]["points"][0]["customdata"][0]
-                    # Vi finder spilleren i hele df_filtreret baseret på hans wyid
-                    match = df_filtreret[df_filtreret['player_wyid'] == klikket_wyid]
+                    match = df_filtreret[df_filtreret['player_wyid'] == int(klikket_wyid)]
                     if not match.empty:
                         valgt_spiller_data = match.iloc[0]
                 
-                # Hvis intet er klikket endnu, vælges den højest rangerede spiller på grafen som standard
+                # Default til bedste spiller, hvis der ikke er trykket på noget endnu
                 if valgt_spiller_data is None and not visnings_df.empty:
                     bedste_spiller_id = visnings_df.sort_values(score_col, ascending=False).iloc[0]['player_wyid']
                     valgt_spiller_data = df_filtreret[df_filtreret['player_wyid'] == bedste_spiller_id].iloc[0]
@@ -328,7 +334,7 @@ def vis_side():
                             metric_vaerdi = valgt_spiller_data[m_name]
                             visnings_vaerdi = f"{metric_vaerdi:.1f}%" if "pct" in m_name else f"{metric_vaerdi:.2f}"
                         else:
-                            visnings_vaerdi = "N/A"
+                            visnings_vaerdi = "0.00"
                         
                         st.markdown(f"""
                             <div class="metric-row">
