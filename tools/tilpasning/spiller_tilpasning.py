@@ -64,10 +64,11 @@ def vis_side():
     for col in ['NAVN', 'KLUB', 'POSITION']:
         df[col] = df[col].apply(rens_specialtegn)
 
-    # --- 2. SØGEFELT (PLaceret over tabellen) ---
-    soegning = st.text_input("🔍 Søg efter spiller, position eller klub:", "").strip().lower()
+    # --- 2. SØGEFELT (Placeret over tabellen) ---
+    soegning = st.text_input("Søg på navn, position eller klub:", "").strip().lower()
 
-    if soegning:
+    # Søgningen aktiveres kun, hvis der er indtastet 2 eller flere tegn
+    if len(soegning) >= 2:
         # Filtrerer tabellen på tværs af de tre redigerbare felter
         mask = (
             df['NAVN'].astype(str).str.lower().str.contains(soegning) |
@@ -76,6 +77,7 @@ def vis_side():
         )
         filtreret_df = df[mask]
     else:
+        # Hvis der er tastet 0 eller 1 tegn, vises alle spillere
         filtreret_df = df
 
     # --- 3. DEN INTERAKTIVE DATA_EDITOR ---
