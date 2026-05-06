@@ -93,10 +93,10 @@ def save_to_github(df):
         )
         
         if r.status_code in [200, 201]:
-            st.toast("Rettelserne er gemt direkte på GitHub! 💾", icon="✅")
+            st.toast("Data gemt", icon="✅")
             return True
         else:
-            st.error(f"Fejl ved gem til GitHub (Status {r.status_code}): {r.text}")
+            st.error(f"Fejl ved opdatering af data! (Status {r.status_code}): {r.text}")
     except Exception as e:
         st.error(f"Fejl ved automatisk gem: {e}")
     return False
