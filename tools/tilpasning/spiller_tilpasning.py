@@ -3,7 +3,6 @@ import pandas as pd
 import os
 
 def vis_side():
-    st.subheader("Rediger Spiller-overskrivninger")
     st.write(
         "Her kan du rette navn, position og klub direkte i tabellen. "
         "De tekniske ID-kolonner (Wyscout, Opta og turneringer) er låst for at beskytte dataforbindelsen."
@@ -50,11 +49,11 @@ def vis_side():
                 "Position",
                 help="Vælg position",
                 options=[
-                    "Goalkeeper", "Center Back", "Left Back", "Right Back",
-                    "Left Wing Back", "Right Wing Back", "Defensive Midfielder",
-                    "Central Midfielder", "Attacking Midfielder", "Left Midfielder",
-                    "Right Midfielder", "Striker", "Left Winger", "Right Winger",
-                    "Second Striker", "Defender", "Midfielder", "Forward"
+                    "Målmand", "Stopper", "Venstre back", "Højre Back",
+                    "Venstre Wingback", "Højre Wingback", "Defensiv midtbane",
+                    "Central midtbane", "Offensiv midtbane", "Venstre midtbane",
+                    "Højre midtbane", "Angriber", "Venstre kant", "Højre kant",
+                    "Forsvarsspiller", "Midtbanespiller"
                 ],
                 required=True
             ),
@@ -65,18 +64,18 @@ def vis_side():
             ),
             # Låste kolonner formateres pænt som tekst/tal uden tusindtals-separator:
             "PLAYER_WYID": st.column_config.NumberColumn(
-                "Wyscout ID",
+                "PLAYER_WYID",
                 format="%d"
             ),
             "PLAYER_OPTAUUID": st.column_config.TextColumn(
-                "Opta UUID"
+                "PLAYER-UUID"
             ),
             "COMPETITION_WYID": st.column_config.NumberColumn(
-                "Turnering ID (Wy)",
+                "Turnering-WYID",
                 format="%d"
             ),
             "COMPETITION_OPTAUUID": st.column_config.TextColumn(
-                "Turnering UUID (Opta)"
+                "Turnering-UUID"
             )
         }
     )
@@ -86,7 +85,7 @@ def vis_side():
         try:
             # Gemmer direkte til CSV'en med uændret kolonnestruktur og UTF-8 encoding
             redigeret_df.to_csv(overskriv_sti, index=False, encoding='utf-8-sig')
-            st.success("Filen blev gemt succesfuldt! 💾")
+            st.success("Data blev gemt succesfuldt!")
             
             # Ryd cache og genindlæs siden
             st.cache_data.clear()
