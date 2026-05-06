@@ -90,7 +90,6 @@ def vis_side():
     
     TILLADTE_LIGAER = (335, 328, 329, 43319, 331, 1305)
 
-    # De præcise, godkendte oversættelser
     POS_TRANSLATIONS = {
         "Center Back": "Midterforsvarer",
         "Left Back": "Venstre Back",
@@ -181,7 +180,6 @@ def vis_side():
     
     df_csv_hoved = df_csv[df_csv['hovedkategori'] == valgt_hovedkategori]
     
-    # Her sikrer vi, at alt er konsekvent lowercase, så filtreringen virker 100%
     eksluder_fra_dropdown = {
         "målmand", "goalkeeper", "keeper", "gk",
         "forsvarsspiller", "defender", "def",
@@ -189,7 +187,6 @@ def vis_side():
         "angriber", "forward", "striker", "fwd"
     }
     
-    # Hent kun de specifikke positioner til dropdown-menuen
     specifikke_muligheder = sorted([
         pos for pos in df_csv_hoved['specific_position'].dropna().unique().tolist()
         if pos.strip().lower() not in eksluder_fra_dropdown and pos.strip() != ""
@@ -197,7 +194,6 @@ def vis_side():
     
     visnings_positioner_map = {pos: POS_TRANSLATIONS.get(pos, pos) for pos in specifikke_muligheder}
     
-    # Kontrollerer den korrekte bøjning og store/små bogstaver helt præcist
     if valgt_hovedkategori == "Målmand":
         alle_tekst = "Alle målmænd"
     elif valgt_hovedkategori == "Forsvarsspiller":
@@ -214,7 +210,6 @@ def vis_side():
         [alle_tekst] + list(visnings_positioner_map.values())
     )
     
-    # Find den underliggende position i databasen baseret på dropdown-valget
     faktisk_specifik_valg = None
     if valgt_specifik_visning != alle_tekst:
         for eng_pos, dk_pos in visnings_positioner_map.items():
@@ -254,6 +249,8 @@ def vis_side():
         liga_betingelse_stats = f"s.COMPETITION_WYID = {valgt_liga_nøgle}"
 
     with st.spinner("Henter og beregner live-data..."):
+        # RETTELSE: Vi benytter nu WYSCOUT_MATCHADVANCEDPLAYERSTATS_TOTAL (som bekræftet indeholder MINUTESONFIELD)
+        # samt joiner med MATCHES for at hente dato-betingelsen '>= 2026-01-01'
         sql_avanceret = f"""
             WITH minut_kilde AS (
                 SELECT 
@@ -270,9 +267,16 @@ def vis_side():
                 SELECT DISTINCT m_tot.PLAYER_WYID
                 FROM {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_TOTAL m_tot
                 JOIN {DB}.WYSCOUT_MATCHES m ON m_tot.MATCH_WYID = m.MATCH_WYID
-                WHERE m_tot.TEAM_WYID = {HVIDOVRE_TEAM_WYID}
-                  AND m.DATE >= '2026-01-01'
+                WHERE m_tot.COMPETITION_WYID IN {TILLADTE_LIGAER}
                   AND m_tot.MINUTESONFIELD > 0
+                  AND m.DATE >= '2026-01-01'
+                  -- Vi isolerer spillere, der har spillet for Hvidovre (eller i Hvidovre-kampe som hjemme/ude hold)
+                  AND (m.WINNER = {HVIDOVRE_TEAM_WYID} OR m.LOSER = {HVIDOVRE_TEAM_WYID} OR m_tot.PLAYER_WYID IN (
+                      SELECT DISTINCT PLAYER_WYID 
+                      FROM {DB}.WYSCOUT_PLAYERCAREER 
+                      WHERE TEAM_WYID = {HVIDOVRE_TEAM_WYID} 
+                        AND SEASON_WYID IN (SELECT SEASON_WYID FROM {DB}.WYSCOUT_SEASONS WHERE SEASONNAME = '{SOGT_SAESON}')
+                  ))
             ),
             hvidovre_stats AS (
                 SELECT 
@@ -336,7 +340,6 @@ def vis_side():
             df_raw.columns = df_raw.columns.str.lower()
             df_raw['player_wyid'] = df_raw['player_wyid'].astype(int)
 
-            # Drop eventuelle overflødige/gamle 'team_name'-kolonner fra SQL, før vi samler med CSV
             if 'team_name' in df_raw.columns:
                 df_raw = df_raw.drop(columns=['team_name'])
 
@@ -346,9 +349,6 @@ def vis_side():
                 st.info(f"Ingen spillere i din CSV-fil matcher de valgte minut-kriterier i denne turnering.")
                 return
 
-            # --- SIKRER AT MANUEL CSV-KLUB HAR FØRSTEPRIORITET ---
-            # Hvis spilleren er aktiv Hvidovre-spiller, tvinges holdet til Hvidovre IF.
-            # Ellers bruges holdet direkte fra din CSV ('klub'), så du har fuld kontrol over klubskifter.
             df['team_name'] = df.apply(
                 lambda row: "Hvidovre IF" if row.get('is_active_hvidovre') == 1 else row['klub'], 
                 axis=1
@@ -366,7 +366,6 @@ def vis_side():
             
             df[score_col] = df[score_col].round(1)
 
-            # Sikrer pæn dansk visning af både specifikke og brede positioner i spillerkortet
             df['dk_position'] = df['specific_position'].map(POS_TRANSLATIONS).fillna(df['specific_position'])
             df_sorteret = df.sort_values(score_col, ascending=False)
             
