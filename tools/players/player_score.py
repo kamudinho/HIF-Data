@@ -91,7 +91,7 @@ def vis_side():
             "metrics": ["pass_pct", "clearances"],
             "weights": [5.0, 5.0],
             "labels": ["Pasnings %", "Clearinger"]
-        }
+        },
         "Forsvarsspiller": {
             "metrics": ["interceptions", "defensiveduelswon", "clearances", "aerialduelswon", "pass_pct", "dangerousownhalflosses"],
             "weights": [5.0, 4.0, 3.5, 4.0, 2.5, -3.0], 
