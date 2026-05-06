@@ -46,28 +46,37 @@ def get_github_file(path):
 
 def save_to_github(df):
     try:
+        # Den NØJAGTIGE rækkefølge og stavning af kolonnerne fra din rå CSV-fil
         original_cols = [
-            'PLAYER_WYID','DATO','NAVN','KLUB','POSITION','RATING_AVG','STATUS',
-            'POTENTIALE','STYRKER','UDVIKLING','VURDERING','BESLUTSOMHED','FART',
-            'AGGRESIVITET','ATTITUDE','UDHOLDENHED','LEDEREGENSKABER','TEKNIK',
-            'SPILINTELLIGENS','SCOUT','KONTRAKT','PRIORITET','FORVENTNING',
-            'POS_PRIORITET','POS','LON','SKYGGEHOLD','KOMMENTAR','ER_EMNE','ER_AKADEMI',
-            'TRANSFER_VINDUE','POS_343','POS_433','POS_352','BIRTHDATE', 'START_11_26_27'
+            'PLAYER_WYID', 'DATO', 'NAVN', 'KLUB', 'POSITION', 'RATING_AVG', 'STATUS', 
+            'POTENTIALE', 'STYRKER', 'UDVIKLING', 'VURDERING', 'BESLUTSOMHED', 'FART', 
+            'AGGRESIVITET', 'ATTITUDE', 'UDHOLDENHED', 'LEDEREGENSKABER', 'TEKNIK', 
+            'SPILINTELLIGENS', 'SCOUT', 'KONTRAKT', 'PRIORITET', 'FORVENTNING', 
+            'POS_PRIORITET', 'POS', 'LON', 'SKYGGEHOLD', 'KOMMENTAR', 'ER_EMNE', 
+            'ER_AKADEMI', 'TRANSFER_VINDUE', 'POS_343', 'POS_433', 'POS_352', 
+            'BIRTHDATE', 'START_11_26_27'
         ]
+        
         _, sha = get_github_file(SCOUT_DB_PATH)
         export_df = df.copy()
         
-        # Sikr at alle nødvendige kolonner eksisterer
+        # Sikr, at alle kolonner findes i DataFrame inden eksport
         for col in original_cols:
-            if col not in export_df.columns: 
+            # Vi tjekker både for STORE og små bogstaver
+            col_upper = col.upper()
+            if col_upper in export_df.columns and col not in export_df.columns:
+                export_df[col] = export_df[col_upper]
+            elif col not in export_df.columns:
                 export_df[col] = ""
         
-        # Sørg for at fjerne eventuel '.0' fra ID'er
+        # Sørg for at fjerne decimaler (.0) fra ID-numre, så de forbliver rene heltal
         export_df['PLAYER_WYID'] = export_df['PLAYER_WYID'].astype(str).replace(r'\.0$', '', regex=True)
         
+        # Tving csv-eksporten til KUN at bruge de præcise kolonner i den HELT rigtige rækkefølge
         csv_content = export_df[original_cols].to_csv(index=False)
+        
         payload = {
-            "message": "Auto-update scouting data", 
+            "message": "Auto-update scouting data (Fixed column ordering)", 
             "content": base64.b64encode(csv_content.encode('utf-8')).decode('utf-8'), 
             "sha": sha
         }
@@ -77,9 +86,9 @@ def save_to_github(df):
                          headers=headers, json=payload)
         
         if r.status_code in [200, 201]:
-            st.toast("Databasen er gemt og opdateret på GitHub!", icon="✅")
+            st.toast("Databasen er gemt i den korrekte rækkefølge på GitHub!", icon="✅")
         else:
-            st.error(f"Fejl ved gem til GitHub (Status {r.status_code}): {r.text}")
+            st.error(f"Fejl ved gem (Status {r.status_code}): {r.text}")
             
     except Exception as e:
         st.error(f"Fejl ved automatisk gem: {e}")
