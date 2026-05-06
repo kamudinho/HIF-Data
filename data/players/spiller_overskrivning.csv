@@ -1,611 +1,78 @@
-PLAYER_WYID;PLAYER_OPTAUUID;NAVN;POSITION;KLUB
-1150951;;Abdou Aziz Ndiaye;Midfielder;FC Midtjylland
-1210116;8w7eh1ukicd4p0vp7kqqrzu38;Abdoulaye Camara;Forward;Vejle Boldklub
-930661;;Abdoulaye Gouba;Midfielder;Horsens
-620381;;Abdul Hakim Sulemana;Forward;Hillerød
-625251;39f0bq9uk4etkf75uzu6qyrmy;Abdul Malik Abubakari;Forward;Lyngby
-1100439;eh5vcpzxaze0ru5xdi1wbhoq2;Abdul Moro;Midfielder;Horsens
-577577;;Abdul Samad Shahzad Arshad;Forward;Kolding
-659984;4csz412vb3lquessbnf999ct0;Adam Ahmad;Midfielder;B 93
-252417;dsn7m5pm574argz1d7ofgjmj9;Adam Andersson;Defender;AaB
-632999;1lxsyoos06fqbsi6skcm974a2;Adam Danko;Goalkeeper;Kolding
-668034;bidudbkachfl6126lhlr254wk;Adam Gabriel;Defender;FC Midtjylland
-615955;9dh7cnu4uzbraeck0t5iqlj4k;Adam Herdonsson;Defender;Horsens
-624703;xd4gm9uiq807dri1gs3ltclw;Adam Nygaard Andersen;Defender;FC Fredericia
-449761;ewh6t7yo6clfewu89uznll9uc;Adam Sørensen;Defender;OB
-733745;;Adam Wikman;Midfielder;Silkeborg IF
-511743;8mswl5vzza12hylodrrsq3zvu;Adrian Kappenberger;Goalkeeper;Hillerød
-338129;;Adrian Rúnason Justinussen;Forward;Horsens
-347369;8e6zj6d817geh9g8f94ig99m1;Agon Muçolli;Forward;FC Fredericia
-449782;6otr0cifkk9jbmxc2ew2spka;Ahmed Daghim;Midfielder;B 93
-483429;bfvdr7ckiersz26ya2kq9f1g4;Ahmed Iljazovski;Defender;Hvidovre
-729780;7353ysa16qgg30b9z5qiagys4;Alagie Saine;Defender;Horsens
-817954;;Alamara Viriato Djabi;Midfielder;FC Midtjylland
-679227;8aawjsdwpfdzqhtj8jjyz8hlg;Albert Heyde;Forward;Hobro
-450069;8ewvm6ux4yvpwgrzjkc1chqwa;Albert Nørager;Defender;Kolding
-962525;d4emkl168o7w0fy7shqdp6t5g;Albert Rrahmani;Midfielder;SønderjyskE
-520760;8xim1ji9vq8lwkgkg10du2zje;Alexander Ammitzbøll;Forward;Esbjerg
-632597;;Alexander Illum Simmelhack;Forward;Silkeborg IF
-764636;dz8s1baxo3lpznfol2rlfdmhg;Alexander Johansen;Defender;Hvidovre
-750363;5y2mfgruizah0ylcz7q1abw9g;Alexander Lien Håpnes;Midfielder;AaB
-523107;;Alexander Lucas Lind Rasmussen;Forward;FC Nordsjælland
-191024;6vr9xr91fr4g6ayzga5vn9w5;Alexander Ludwig;Defender;Horsens
-622042;lioz4hr2umpne2bwar18qa96;Alexander Lyng;Forward;SønderjyskE
-577998;;Alexander Magnus Busch;Defender;Silkeborg IF
-814415;beu3ypladd5dexnm9x946kjkk;Alexander Nathan;Midfielder;Hobro
-624791;;Alexander Priesborg Madsen;Defender;Silkeborg IF
-545274;f5idhghs2f6otps9n9jxzp9be;Alexi Pitu;Forward;Vejle Boldklub
-901665;d2ukggo2v5jsw4pctznmaijo4;Alfred Gøthler;Forward;HB Køge
-679420;ezi8426ran0bffeyfvloc2ihg;Amar Diagne;Forward;AaB
-808834;2iwpx1vz8t3boh0aauel1bok4;Amin Al Hamawi;Forward;Randers FC
-56086f;5do9kh6590dwx2732iak0edx;Anders Bak Holvad;Forward;Aarhus Fremad
-624824;;Anders Bergholt Pedersen;Midfielder;SønderjyskE
-523101;f3h1bxnw3fq8m10ck132bic4p;Anders Dahl;Defender;FC Fredericia
-57114a;pnkoe9xl3fbnxbj2zx1horh0;Anders Kvindebjerg Jacobsen;Forward;Vejle Boldklub
-644794;3c7oy1stwyquawdfzzom13xn8;Anders Noshe;Forward;AaB
-580507;;Anders Nørbo Hoff Nielsen;Goalkeeper;Horsens
-680209;;Anders Raffnsøe Hoeg;Midfielder;SønderjyskE
-680719;;Anders Ravn Olsen;Goalkeeper;Hvidovre
-638043;ajk0mbprro09pccglih9y740k;Anders Sønderskov;Defender;Esbjerg
-684432;;Andreas Maarup Hansen;Midfielder;Aaap
-399566;dj2f6zk2cd8u9lt6odoei9cdl;Andreas Bruus;Defender;Horsens
-1351508;gdfn7j6xac9p4jh94hk40jdg;Andreas Cornelius;Forward;FC København
-624732;ekbi29eljngvxgx9scbzwygwk;Andreas Frederik Dithmer;Goalkeeper;Hillerød
-562225;;Andreas Gülstorff Pedersen;Goalkeeper;FC Nordsjælland
-224154;e0rgqk3gxzs005m9ok9hvp1ck;Andreas Hansen;Goalkeeper;FC Nordsjælland
-424254;;Andreas Heimer Hansen;Midfielder;B 93
-562923;3361cs2j60yxzy9mir80byqc5;Andreas Oggesen;Midfielder;SønderjyskE
-567466;;Andreas Pisani Laugesen;Midfielder;Aarhus Fremad
-399558;eiibjx7o37olpgktw996r8set;Andreas Poulsen;Defender;Silkeborg IF
-544933;;Andreas Pyndt Andersen;Midfielder;FC Fredericia
-535634;ate1ymumg2iwzn8uyyf3ts222;Andreas Sejr Lausen;Midfielder;Esbjerg
-562692;e7ee1vpnnt68l3bv2vlre1z6y;Andreas Smed;Forward;Hvidovre
-544922;;Andreas Söndergaard;Goalkeeper;Hobro
-534982;8bi1tlz62rjwyak4pnnzgp562;Andres Jasson;Forward;AaB
-1351131;d2fpmtdglpqwyhnc657n77it;Andrew Hjulsager;Midfielder;Vejle Boldklub
-212662;;André Römer;Midfielder;Randers FC
-476411;;Anssi Tapio Suhonen;Midfielder;OB
-685609;55qsxtqivxajkxmpdeyccus5w;Anton Mayland;Goalkeeper;Lyngby
-476350;;Anton Skipper Hendriksen;Defender;Esbjerg
-375596;dqssvdpt2iwg8qn9wto3miind;Ari Leifsson;Defender;Kolding
-279693;9y3vs6l0mjj38z0kw062jlh3p;Aris Vaporakis;Goalkeeper;B 93
-789272;;Arlet Junior Zé;Forward;FC Midtjylland
-607738;aszp26w7k6ycpwmcpvfteov84;Asbjørn Bøndergaard;Forward;Lyngby
-624770;;Aske Leth Andresen;Goalkeeper;Silkeborg IF
-579416;;Asker Beck Jensen;Midfielder;Viborg FF
-679843;izewe5fthjad6hv14xgpm3v8;August Bryld;Midfielder;Hobro
-284718;;Aurélio Gabriel Ulineia Buta;Defender;FC København
-224185;a7eramyy1bd8msxmg84ctc8ut;Ayo Simon Okosun;Midfielder;Hvidovre
-626392;2wwpfsducpmryacr17y8k70iy;Baptiste Rolland;Defender;Aarhus Fremad
-387566;;Bartosz Slisz;Midfielder;Brøndby IF
-707005;6orujbbswf771s9rv0dcd8kd0;Basem Alkhoudari;Midfielder;HB Køge
-682958;g2cgdv428rmpmb0om40ldses;Bastian Lykkegaard Holm;Goalkeeper;Silkeborg IF
-12379;;Ben Godfrey;Defender;Brøndby IF
-577587;9zx0qi6gbfnvt6wwpkgprhy50;Benicio Christian Pená;Goalkeeper;SønderjyskE
-434294;4yyiv4t6irqpeayug5qgvmkmh;Benjamin Hvidt;Midfielder;Esbjerg
-675998;d2itdjj8bx0aztqggfgv7amay;Benjamin Tahirović;Midfielder;Brøndby IF
-258617;;Benjamin Tiedemann Hansen;Defender;AaB
-449390;amfro1vgaqpdg569xjk2h28ve;Benjamin Zjajo;Midfielder;Middelfart
-615566;;Benjamin Örn;Defender;Randers FC
-639557;dqqswfn9s1tdxjoslts8ks6xg;Berkant Bayrak;Goalkeeper;HB Køge
-746626;;Bertil Magne Grønkjær Pedersen;Goalkeeper;AaB
-815332;bpldj4qdzfdm1n739atcadbmc;Berzan Kücükylidiz;Midfielder;Hillerød
-708579;1gvxmoo1twyf8isqq9ekrj6ga;Bilal Brahimi;Forward;Viborg FF
-301028;;Birger Solberg Meling;Defender;FC København
-927175;4nzauesd85d6utkwdc1s1a1as;Bismark Edjeodji;Midfielder;Vejle Boldklub
-521378;8vi3l756ez0e96k7muvg4ekbu;Bjarne Pudel;Defender;AaB
-56297;dqtarwrqvkopmzbt2ovp2dln9;Bjørn Paulsen;Defender;OB
-945200;;Bojang Yaya;Defender;OB
-835759;6lxkawhg9z2jyh7u8d6hp3g15;Breki Baldursson;Midfielder;Esbjerg
-562511;acmsp1ulfijcrryff1qibdud;Bror Blume;Midfielder;Lyngby
-1053585;;Caleb Marfo Yirenkyi;Midfielder;FC Nordsjælland
-404162;349g9rdismqpb1aarjp011bd;Callum McCowatt;Midfielder;Silkeborg IF
-382384;x3ad9hfxts6jpfugy3kvq9d5;Carl Björk;Forward;B 93
-707024;dgcbjg2ymgi70yv1n8ugkv02c;Carl Carøe Nygaard;Midfielder;Aarhus Fremad
-519681;vrzye4jqrafujmjw3wakjpxw;Casper Jørgensen;Midfielder;Kolding
-551993;;Casper Kaarsbo Winther;Midfielder;Lyngby
-561218;i16xur310p25unjt0zjrluj9;Casper Radza;Goalkeeper;Middelfart
-623240;;Charly Nouck Horneman;Forward;Viborg FF
-598959;7sbdudf1vycn8hinw0giakpyi;Chidiebube Gideon Duru;Defender;SønderjyskE
-603240;ou0gnms7vf5ff66o508nowoa;Cho Gue-Sung;Forward;FC Midtjylland
-1026869;;Christ Tape;Defender;Horsens
-769069;dwjmdwzgy2d1ofh19tk4hgvtg;Christian Storch;Defender;AGF
-399556;2qedb8t85t1ieeed9613c9crt;Christian Enemark;Defender;Hobro
-569843;7g5mtjc5bxy2oxtmghn85az9w;Christian Gammelgaard;Forward;Vejle Boldklub
-56143;ewh6t7yo6clfewu89uznll9uc;Christian Nikolaj Sørensen;Defender;Vejle Boldklub
-738329;2s4umgp3yqnb2hubfoaxhwr2s;Christian Tcacenco;Defender;AaB
-400359;74m58jsznzu8l89b8h7rkh1bd;Christian Tue Jensen;Midfielder;HB Køge
-450067;f58yr2jmfp8kpgprfxbokt1t6;Christian Vestergaard;Defender;Horsens
-433983;;Christoffer Felix Cornelius Petersen;Goalkeeper;FC Fredericia
-624674;9nafz0c0x2qvmo5ldm0djmcq1;Clemens Astrup;Midfielder;Vejle Boldklub
-577967;81gka3mi69fh8gyehyy8xo9as;Cornelius Allen;Defender;Hillerød
-678663;iy1cjnu69o7xy605cmaysy6s;Cornelius Axel Olsson;Defender;AaB
-1173779;;Cyril Edudzi;Forward;Randers FC
-556414;5q4p56lg1vjsqo824aql0e1d6;Dalton Wilkins;Defender;SønderjyskE
-2402956;ylzm57bvpufg3cenadtv7qhh;Damian van Bruggen;Defender;Vejle Boldklub
-436881;4n3t1p3zn5yzjv4w0clo3xvjd;Daniel Anyembe;Defender;Viborg FF
-579396;;Daniel Bisgaard Haarbo;Midfielder;FC Fredericia
-774207;;Daniel Freyr Kristjansson;Defender;FC Fredericia
-56124e;ffgiwtme6eu08o1ninlnqqqd;Daniel Mathias Høegh;Defender;Randers FC
-56017a;30gduuv9d1s4pkthgu2jhyol;Daniel Stenderup;Defender;Hvidovre
-26652e;tz3rjq7chhaomst5u28nnff9;Daniel Wass;Midfielder;Brøndby IF
-57429c;zpstoiy12awqpasz573ckp91;Daníel Leó Grétarsson;Defender;SønderjyskE
-714791;;Darío Esteban Osorio Osorio;Midfielder;FC Midtjylland
-643940;;Denil Daniel Castillo Preciado;Midfielder;FC Midtjylland
-433009;5yba82zd6d308j4r85swaurjd;Dennis Smarsch;Goalkeeper;Horsens
-1094075;1ayq3kfm2hc6xq9q9lzridnh0;Diallo Sanoussi;Midfielder;FC Nordsjælland
-283942;6my743on19jmzmlq0crx3mq51;Django Warmerdam;Defender;Lyngby
-471107;4zrsiizdbzwwkmit3ta0f0dbe;Doguhan Aral Şimşir;Forward;FC Midtjylland
-423152;c5h1yhzg9ouq6ru7oi24cfe21;Dominik Kotarski;Goalkeeper;FC København
-710744;;Dorian Junior Hanza Meha;Forward;Viborg FF
-924798;2lc9bt5639t572il73e9y044;Dulat Talyspaev;Goalkeeper;HB Køge
-505811;bcscjb9jdgu4ims9n3vwuj5k9;Edward Chilufya;Forward;FC Midtjylland
-700514;;Elias Caspersen Egerton;Forward;Aarhus Fremad
-624743;ewh6t7yo6clfewu89uznll9uc;Elias Hansborg-Sørensen;Forward;FC Fredericia
-682037;xd4gm9uiq807dri1gs3ltclw;Elias Valentin Andersen;Midfielder;Middelfart
-677678;d1j2a0az2datf1l2efdzne7vu;Elies Mahmoud;Midfielder;Randers FC
-776258;697f50qoetodmfe8ybcuey2ac;Elison Makolli;Defender;AaB
-476093;d1ozyon1o7dj04eaiwvpg3rah;Elías Rafn Ólafsson;Goalkeeper;FC Midtjylland
-766591;hs41rtcymn2opk4ban2pxh5g;Emil Larsen;Defender;Esbjerg
-340893;ewncq8niyuy1y332aqzsbedck;Emil Nørmark Christensen;Defender;B 93
-612339;;Emil Rosberg Møller;Defender;B 93
-372290;;Emil Søgård Jensen;Defender;Hobro
-738377;18g25rcpd99fe1gvr48uoqmtw;Emil Villumsen;Defender;HB Køge
-527511;5rgwuoboh1keb2gf21wcw5dqt;Emilio Simonsen;Midfielder;FC Fredericia
-748624;;Emmanuel Delmas Yaby Aby;Defender;Hvidovre
-444152;;Emmanuel Bonaventure Dennis;Forward;Brøndby IF
-633197;cgkvw4q8ddcjl0po181upzwx6;Eric Kahl;Defender;AGF
-576890;5d57rssywlhqtf3a70gh2ra7e;Eric Voufack;Defender;Kolding
-441926;ecavckbyx6xmni5tglua8o25l;Erik Nissen;Defender;Aarhus Fremad
-705604;8qzac8nxm8nxbckdaisnooutw;Erkan Semovski;Forward;HB Køge
-561595;;Eskild Munk Dall;Forward;FC Fredericia
-546850;ebddkdhm6fhar2ir2h7azhslw;Etienne Green;Goalkeeper;FC Fredericia
-831058;;Eugene Ampofoh Amankwah;Defender;AaB
-629166;ohjn9tgx28c0qssvrdvzr5zo;Fallou Sene;Forward;Horsens
-347591;aswmi1pnkzkvkexp8ngief6j9;Felix Beijmo;Midfielder;AGF
-449755;;Felix Vrede Winther;Midfielder;FC Fredericia
-609365;;Filip Bundgaard Kristensen;Forward;Brøndby IF
-241854;3q6uah3ucqhk39bymyfma9xp1;Filip Lesniak;Midfielder;Kolding
-471964;d9hh01mit4geyadol3gmzco9;Filip Đukić;Goalkeeper;Viborg FF
-579401;86mx27krl6c613x6e3t9g3cic;Fisnik Isaki;Forward;B 93
-752487;;Franculino Gluda Djú;Forward;FC Midtjylland
-519629;;Frederik Alves Ibsen;Defender;Brøndby IF
-786374;95nyhb9eanuobgbkdccyrwob8;Frederik Damkjer;Midfielder;Viborg FF
-570798;;Frederik Thykær Rieper;Defender;FC Fredericia
-335707;ca1b5707pdpx0ucug40ggnahh;Frederik Brandhof;Midfielder;Horsens
-621798;ebd3uvtt54wkdsahc2127j02c;Frederik Dietz;Defender;Hobro
-577565;;Frederik Emil Hedegaard Heiselberg;Forward;Hillerød
-765120;76av5tb8cxhmr0yh3pbmk8npw;Frederik Emmery;Forward;AGF
-450283;186mdd3akww1wyxdc9ouw6kno;Frederik Grube;Midfielder;Aarhus Fremad
-224165;deyq3zqd0vwc821ngqldxqor9;Frederik Gytkjær;Forward;Lyngby
-462085;;Frederik Høgh Jensen;Forward;Hvidovre
-471965;7k2c7wgoywy7boesjer5578q1;Frederik Ibsen;Goalkeeper;B 93
-380839;o7nooyu95nab78ys541e3uuh;Frederik Lauenborg;Midfielder;Randers FC
-331196;;Frederik Lindbøg Børsting;Midfielder;AaB
-484721;eas91my7qw7etoha5plxfk9yi;Frederik Mortensen;Midfielder;Hobro
-625645;tmcnw2lx5r40x2n1jgk198us;Frederik Møller;Forward;Kolding
-289668;6my7s0ezr6jldotm1w6nk7b9x;Frederik Tingager;Defender;AGF
-367924;dm6xpphbyyooqriwaambi7njd;Fredrik Krogstad;Midfielder;Hvidovre
-772504;8ilf7i6y4c9ezpgddh5h3ohlg;Friday Ubi Etim;Forward;FC Fredericia
-762322;hs41rtcymn2opk4ban2pxh5g;Gabriel Larsen;Midfielder;HB Køge
-625186;;Gabriel Pereira Magalhães dos Santos;Defender;FC København
-478750;1icurh5jrnw1e6jdgqxjnhdnu;Gabriël Çulhacı;Defender;HB Køge
-679087;844k9wmnxkk24xsjd4fdb4rca;Gavin Beavers;Goalkeeper;Brøndby IF
-443851;4vmgmzg2004twoc39sk7zkzqh;Gift Links;Midfielder;AGF
-771159;d1uqdyoqq6vyafeqbnsi6xo2cG;Giorgi Tabatadze;Defender;Vejle Boldklub
-510674;5i6n6yne6fh410vk7p7kkokmi;Gregers Arndal-Lauritzen;Defender;Hillerød
-590104;braldrfw3y7g030lctguuuol;Gudlaugur Victor Pálsson;Defender;Horsens
-682103;8uqsrzfe8mnhs8v3ii2v7b2tw;Gustav Bjerge;Defender;Hobro
-552464;;Gustav Grubbe Madsen;Defender;OB
-624710;87kc5hjp3ry2z624wty5h7g4q;Gustav Leone Fraulo;Midfielder;Lyngby
-679284;;Gustav Nørregaard Knudsen;Goalkeeper;Vejle Boldklub
-347368;ayxi2m0g0pm6rl1ba5pto66z9;Gustav Ølsted Marcussen;Forward;FC Fredericia
-619520;4h35dzyugo35y8h99m3cx0wlw;Haki Bedzeti;Defender;Hvidovre
-628391;c3sp1x0shf2b24rl5ike6v0iy;Han-Beom Lee;Defender;FC Midtjylland
-569844;7apuo8j6dbzbr264gwsckrr4k;Hans Høllsberg;Midfielder;Kolding
-56394e;9lrzsiy94y46h62rnawi3sgl;Henrik Dalsgaard;Defender;AGF
-764508;65lxzmpw2gtuo0kb0nuwa7j10;Henriksen Christoffer;Defender;B 93
-679430;ds1wjqejslhsbcvzaufxubey2;Hjalte Bidstrup;Defender;Viborg FF
-701647;e2157naqwp1qdsgaxre307cb8;Hjalte Toftegaard;Midfielder;Hillerød
-612632;en3g297ppcr1ae679nk6gp9lh;Ibrahim Adel Ali Mohamed Hassan;Midfielder;FC Nordsjælland
-345805;;Igor Vekič;Goalkeeper;Vejle Boldklub
-561153;6bajck5osvj7trnwt2a5mc3dg;Isak Frederik Tånnander;Midfielder;Kolding
-477601;9cg2dx19fx5be3zewtmx97e95;Ivan Miličević;Defender;Horsens
-504117;xd4gm9uiq807dri1gs3ltclw;Jacob Andersen;Midfielder;AGF
-769201;caoahimfnw46l1vnpsp6vf9qs;Jacob Brochner Ambæk;Forward;Brøndby IF
-517851;;Jacob Dyrborg Linnet;Defender;Middelfart
-444298;;Jakob Bonde Jensen;Midfielder;OB
-55974;;Jakob Busk Jensen;Goalkeeper;FC Nordsjælland
-678645;8xrxx9axw4h44imjh28su6z9w;Jakob Jessen;Defender;FC Fredericia
-584581;;Jakub Trefil;Goalkeeper;Kolding
-618112;ev2s21ogvpjtata4fndi868ve;James Gomez;Defender;OB
-491365;56rxae8dp79um72eq07d9tzis;Jann-Fiete Arp;Forward;OB
-367624;esasiq4j83g377zb8zi0bgpnt;Janni Serra;Forward;AGF
-56094d;wjmdwzgy2d1ofh19tk4hgvtg;Jannich Storch;Goalkeeper;Randers FC
-622990;29y19vqfjkvlc8s9gr5v5atqs;Jashar Beluli;Forward;Aarhus Fremad
-365445;5vwzliaibdlhfm38g8v5z0r8p;Jay-Roy Grot;Forward;OB
-497351;bitixkzgt5p65rlo2bnllcf6x;Jean-Manuel Mbom;Midfielder;Viborg FF
-612342;1cumsropo1r0msfzxxteml1w;Jeffrey Papayaw Adjei-Broni;Forward;Kolding
-448662;f1jk2tqumutelh2ym21v5beuh;Jelle Duin;Forward;Vejle Boldklub
-234375;4qqaok0kamm887gckta83gv6d;Jens Jakob Thomasen;Midfielder;Lyngby
-258614;7h39w16zvj1lbfb0rqr7kvt1x;Jens Martin Gammelby;Defender;Silkeborg IF
-56633;;Jeppe Andrup Andersen;Midfielder;Silkeborg IF
-56334d;n8qd3thtswisleeesyk0oxrd;Jeppe Grønning;Midfielder;Viborg FF
-577942;;Jeppe Sten Kudsk Pedersen;Defender;FC Fredericia
-762382;1id5av4i7p6tmhf1vuigvlmvo;Jerailly Wielzen;Defender;Middelfart
-56092e;0rgqk3gxzs005m9ok9hvp1ck;Jesper Hansen;Goalkeeper;AGF
-4924;;Jesús Alfaro Ligero;Forward;Kolding
-1088050;r7imm9mbdhqsepdyrk065mac;John Batigi;Midfielder;Horsens
-493666;6uj3c69lgu6boblkjiuhoy6eh;John Björkengren;Midfielder;Randers FC
-755424;6s3lkxgo7i5lktx7ultybs3ys;Jona Niemiec;Forward;OB
-484061;9yxhg70gpwi3e9s84c8qwg0yx;Jonas Dakir;Goalkeeper;Hobro
-525650;3l3v5wj4c7vtqqwu05b526590;Jonas Jensen-Abbew;Defender;AGF
-560384;1ii5y9ebz5e3xhaif9kc8qmt;Jonas Lössl;Goalkeeper;FC Midtjylland
-560833;b8zmft8guvxlwfl1ystmjzkl;Jonas Thorsen;Defender;Aarhus Fremad
-682507;3yt6hqo1ayr093vpohg4kwufo;Jonas Villemoes;Forward;Middelfart
-123933;170o0ov66mbihi7ay4rdqx43px;Jonas Østergaard;Forward;Aarhus Fremad
-624683;23sc7wc7my7wes6cuaxw1v0no;Jonatan Holm Lindekilde;Midfielder;FC Fredericia
-547119;9pnirb3qt48zeui3su8cvu1ka;Jonathan Amon;Forward;Vejle Boldklub
-748640;;Jonathan Christensen Moalem;Midfielder;FC København
-844402;;Jonathan Filho Lind Rasmussen;Forward;Hobro
-603795;c6wip4rfbv5a932cilwjssup6;Jonathan Hutters;Goalkeeper;Middelfart
-500251;;Jonathan Risbjerg Ægidius;Goalkeeper;Lyngby
-623256;qer4hblafo04av0aajfecclx;Jonathan Roland Foss;Defender;Esbjerg
-508329;5z7y55t2o577r8ki3i5855as;Jonathan Witt;Defender;Hillerød
-338639;aahyom322jdc6f21960ycuzth;Jordan Larsson;Forward;FC København
-240050;56sjqxlsf5iitgww0hogez8ph;Jordi Vanlerberghe;Defender;Brøndby IF
-866190;;Joseph Kinful;Defender;B 93
-512607;;José Francisco dos Santos Júnior;Forward;FC Midtjylland
-568766;4sgxth7onhb5mu29bgyupby3u;Jubril Adedeji;Forward;AaB
-778888;;Juho Väinö Valtteri Lähteenmäki;Forward;FC Nordsjælland
-679238;;Julius Berthel Askou Harvey;Defender;OB
-577566;eso2tbbpnxu9qvx6zy07m5jx0;Julius Madsen;Midfielder;Horsens
-679239;mp4e2knxubc5sncgd6p4j4lw;Julius Nielsen;Midfielder;Silkeborg IF
-767230;;Julius Søndergaard Lucena;Forward;Esbjerg
-619472;e0rgqk3gxzs005m9ok9hvp1ck;Julius Voldby Rosenberg Hansen;Forward;B 93
-810118;bdcpptlf4dznvgwq5st8hxwyc;Junnosuke Suzuki;Defender;FC København
-769436;d0ozf1itum1cvg6704dch7uac;Kanga Liam Aaron Akalé;Forward;Middelfart
-685728;dfxs5u8rdcxhzp33aks3acdn8;Karlo Lusavec;Midfielder;Horsens
-481951;xd4gm9uiq807dri1gs3ltclw;Kasper Nygaard Andersen;Midfielder;Aarhus Fremad
-383090;khqldwfq14b7giakss24l9t5;Kasper Enghardt;Defender;Hillerød
-679868;;Kasper Hartly Kiilerich;Goalkeeper;Aarhus Fremad
-483956;;Kasper Lunding Jakobsen;Forward;Aarhus Fremad
-547331;;Kasper Thiesson Kristensen;Goalkeeper;Esbjerg
-568923;xctg7y5ks41cjjnerqkia38p;Kelvin Pius John;Forward;AaB
-897690;;Kenay Myrie Reyes;Defender;FC København
-559154;asfu3i70ss0wqmdenqpx37p7u;Kevin Enkido Yakob;Midfielder;AGF
-166730;fwu0bja02waqct7l682s5mfp;Kevin Mbabu;Defender;FC Midtjylland
-519472;;Kornelius Normann Hansen;Forward;AaB
-775933;3u184ybkonoa5ubxjzoy06ntg;Kristaps Grabovskis;Forward;B 93
-627921;;Kristian Fredrik Malt Arnstad;Midfielder;AGF
-562564;xyt0wq20toh97811t65vu4no;Kristian Kirkegaard;Midfielder;Horsens
-335719;f239q43hdwrm7u7mu5jqyk91x;Kristian Pedersen;Defender;FC Fredericia
-850228;ae86fel4p9nioy219v3lg62hg;Kyrylo Shushman;Goalkeeper;Kolding
-135111;;Lasse Vigen Christensen;Midfielder;Esbjerg
-523100;;Lasse Bak Laursen;Defender;Kolding
-624657;;Lasse Flø Borregaard;Defender;Vejle Boldklub
-56382;mp4e2knxubc5sncgd6p4j4lw;Lasse Nielsen;Defender;Vejle Boldklub
-752258;;Lasse Risager Kristensen;Defender;Middelfart
-271763;dqp8e2et9fm9r6zo47u1njq50;Lasse Thomsen;Midfielder;Middelfart
-593779;6d0lxiep13vdv32bdb0xwyrys;Lauge Sandgrav;Midfielder;Lyngby
-516375;;Laurits Bust Sørensen;Defender;HB Køge
-678992;;Laurits Raun Pedersen;Midfielder;Randers FC
-257044;e42jh6bbwn4aybdnysonrvutx;Leeroy Owusu;Defender;OB
-928556;e6o453qk2k6tl2gnapjvq776c;Liam West;Midfielder;FC København
-449407;3ejggtt1du1cui3wc1f8oqx62;Lirim Qamili;Forward;SønderjyskE
-562503;;Louka Daniel Prip Andreasen;Midfielder;Hvidovre
-449507;elsygne5tjybbxrqgehtovnro;Lucas Bøje-Larsen;Defender;Hillerød
-169008;eps93ehgmx8ft3kjo4zvy63o4;Lucas Jensen;Forward;Middelfart
-561757;5is9bcj143orulo4biogwxzl6;Lucas Lissens;Defender;Randers FC
-538640;;Lucas Lund Pedersen;Goalkeeper;Viborg FF
-484165;83dz531y2o2365ozs4c5drb6y;Lucas Skjoldborg From;Midfielder;Esbjerg
-738409;;Lucas Thorst Riisgaard;Forward;Aarhus Fremad
-449789;afh0mk2xmpn1f2fiq5jac0pg5;Ludvig Henriksen;Defender;B 93
-494716;8l12vx57ou6ho0vptjh22r5yh;Luis Binks;Defender;Brøndby IF
-685731;;Luka Callø Carstensen;Defender;Aarhus Fremad
-655356;;Luka Latsabidze;Defender;Vejle Boldklub
-679881;xyt0wq20toh97811t65vu4no;Lukas Emil Kirkegaard;Defender;Viborg FF
-449370;;Lukas Sparre Klitten;Defender;Hobro
-743408;;Lulian Jakupi;Forward;B 93
-374129;;Mads Bech Sørensen;Defender;FC Midtjylland
-451410;eso2tbbpnxu9qvx6zy07m5jx0;Mads Emil Madsen;Midfielder;FC København
-619567;5al9uyujlrlb17o4r5sapkkk4;Mads Enggård;Midfielder;Vejle Boldklub
-579791;cty7nsrs5yn785m330c2gbwq2;Mads Eriksen;Goalkeeper;FC Fredericia
-621802;cuufy3ioo1kio56er2cfn0mqc;Mads Freundlich;Midfielder;Silkeborg IF
-449175;13z6jj0jpv4z3c3uh9t7bz9m2;Mads Frøkjær-Jensen;Midfielder;Brøndby IF
-56504e;f7l91pb4w6yk7lijxjxlievp;Mads Greve;Defender;Middelfart
-496679;;Mads Hedenstad Christiansen;Goalkeeper;AGF
-450175;;Mads Hjalmar Hansen;Midfielder;Middelfart
-450207;3bf4r3xgrs0ttlhgzb93as5t6;Mads Høyer Julø;Defender;Hillerød
-535637;hs41rtcymn2opk4ban2pxh5g;Mads Larsen;Midfielder;Silkeborg IF
-741008;;Mads Schütt Rasmussen;Midfielder;HB Køge
-519618;;Mads Søndergaard Clausen;Midfielder;Viborg FF
-521067;7al9w77ailhli8g487tkl32tw;Mads Westergren;Defender;HB Køge
-678651;xd4gm9uiq807dri1gs3ltclw;Magnus Andersen;Forward;OB
-627720;ditbnaezwo4x10717bf53uwb8;Magnus Døj;Defender;Kolding
-527103;;Magnus Elkjær Mattsson;Midfielder;FC København
-562500;45dqseup0cmujyl4nprr29y0a;Magnus Fredslund;Defender;Hvidovre
-336214;eps93ehgmx8ft3kjo4zvy63o4;Magnus Jensen;Defender;SønderjyskE
-476355;;Magnus Kaastrup Larsen;Forward;Aarhus Fremad
-453319;7zb57r5m7lmvj3xlf9y1ldez8;Magnus Kirchheiner;Midfielder;Aarhus Fremad
-604144;;Magnus Nordengen Knudsen;Midfielder;AGF
-698259;ebddkdhm6fhar2ir2h7azhslw;Magnus Rosengreen;Forward;Hobro
-552251;4231hv4unq5vvnp7kecv6wp3is;Magnus Saaby;Midfielder;Kolding
-506857;diwrq7ulrey4juxk4dafct0q1;Magnus Warming;Forward;Lyngby
-370269;;Malte Kiilerich Hansen;Defender;Hvidovre
-325958;lmrff8mviimc33yyrpjzr2tw;Malthe Boesen;Forward;Middelfart
-624463;emi8qy4aaxle4m9n9e32d7wno;Malthe Boy Kristensen;Defender;Middelfart
-679215;dv0suyzy1i57u7x1l1rm94bv8;Malthe Kjølby;Defender;Aarhus Fremad
-846772;;Malthe Riis Ladefoged;Defender;FC Fredericia
-930449;;Mamadou Lamine Sadio;Midfielder;FC Nordsjælland
-1287478;12zwn31nggts055s0o7g2kpnt;Mansour Mouhamadou Samb;Forward;Horsens
-563514;mp4e2knxubc5sncgd6p4j4lw;Marc Nielsen;Defender;AaB
-56373e;wh6t7yo6clfewu89uznll9uc;Marc Rochester Sørensen;Midfielder;HB Køge
-563655;733iw16239m83syv5dm8huj9;Marcel Rømer;Midfielder;HB Køge
-610500;;Marco Bruhn;Forward;Hobro
-562489;8r9iqig43yjty7l1oq6yg73mc;Marco Brylov;Goalkeeper;Hvidovre
-432007;;Marcos Johan López Lanfranco;Defender;FC København
-760812;e9o7q10wnhex4e8eo47mobbvt;Marcus Bonde;Midfielder;AaB
-607030;;Marcus Bundgaard Sørensen;Goalkeeper;SønderjyskE
-449686;;Marcus De Claville Berthelsen;Forward;Aarhus Fremad
-766307;95fom1kf7552hn2sjrjj7pnh0;Marcus Eskildsen;Goalkeeper;OB
-519591;e0rgqk3gxzs005m9ok9hvp1ck;Marcus Hansen;Forward;Esbjerg
-562683;7zb57r5m7lmvj3xlf9y1ldez8;Marcus Kirchheiner;Defender;Aarhus Fremad
-624752;8f1mw21tbkct0slelpdznf7dg;Marcus McCoy;Defender;OB
-682962;;Marcus Ryberg;Midfielder;Aarhus Fremad
-1219197;9f468stxb2709elq74wr5y6fo;Marcus Voigt;Midfielder;Hillerød
-562789;2tcdx5rp7vujnlid4oqqxdogk;Marinus Due Grandt;Midfielder;Hillerød
-606324;apnkoe9xl3fbnxbj2zx1horh0;Marius Jacobsen;Defender;Hobro
-505392;;Marius Elvius Kolind-Jørgensen;Defender;Hvidovre
-1230962;cxky7y1btlq0bf99zrjn59rtg;Marius Løkke;Midfielder;Aarhus Fremad
-347364;;Mark Brink Christensen;Midfielder;FC Nordsjælland
-510447;2tthm6h5o033dz440e476rhbe;Marko Divković;Defender;Brøndby IF
-696286;;Markus Andersen Walker;Defender;FC Nordsjælland
-472140;e0j0uakuzduvis9wqsocngwrt;Markus André Kaasa;Midfielder;AaB
-414015;eyq4y2syfou2qo5a795rmjhpm;Markus Solbakken;Midfielder;AGF
-609861;9w1wpf3tocn27ed1oaaoe5zsa;Martin Agnarsson;Defender;Aarhus Fremad
-677787;;Martin André Sjølstad;Defender;Randers FC
-364637;e5fnoxb8f2hycjx4gnmce2wvd;Martin Erlić;Defender;FC Midtjylland
-56068e;0rgqk3gxzs005m9ok9hvp1ck;Martin Hansen;Goalkeeper;OB
-639334;876cmwkx9p9wsqgdddfzmipzo;Martin Staghøj Huldahl;Forward;Hobro
-269701;bdrv87m159inpxjitngzthj9x;Marvin Egho;Forward;Hvidovre
-823618;uhv14rin2znrr0wqgvcc2f2t;Matej Delač;Goalkeeper;Horsens
-510676;6t6k24gn6zwxz1g6c3n4ph0q;Mathias Haarup;Defender;Hobro
-328537;;Mathias Hebo Rasmussen;Midfielder;Lyngby
-55979;;Mathias Jattah-Njie Jørgensen;Defender;FC København
-625215;eps93ehgmx8ft3kjo4zvy63o4;Mathias Jensen;Midfielder;Brøndby IF
-684698;4be1c2qp4tcftgdqxz36e32ms;Mathias Kaarsbo;Midfielder;Lyngby
-450111;;Mathias Nordestgaard Kubel;Midfielder;AaB
-334043;;Mathias Peter Greve Petersen;Forward;Randers FC
-367623;8wb6zb0imo0295asm428cur55;Mats Köhlert;Defender;Brøndby IF
-510272;9ki0zmbky1zluxnz63008ozmy;Matthew Hoppe;Forward;SønderjyskE
-450100;;Matthias Præst Nielsen;Midfielder;Middelfart
-562224;hm7w2b4a6j0q3bprq118r5uy;Mattias Jakobsen;Defender;HB Køge
-678661;;Max Albæk Andersen;Midfielder;Randers FC
-620931;2z8u8kyv91shp0la8alkn6kus;Max Isaac Ejdum;Midfielder;OB
-475944;6rd849oap6uh93wdwjk8590q1;Maxime Soulas;Defender;SønderjyskE
-678015;;Mayckel Lahdo;Forward;Brøndby IF
-478106;8o13oyr0lqkr5sw7j9ekdan6x;Mees Hoedemakers;Midfielder;Viborg FF
-136993;eio7c1yr3ax6phyvlfbxb0k45;Meinhard Egilsson Olsen;Forward;Kolding
-678561;e1bv2thyqvdioucqmw496e6z9;Melker Jonsson;Defender;Silkeborg IF
-1056679;;Mert Demirci Nijmeijer;Goalkeeper;Randers FC
-746790;;Michael Amir Richardson;Midfielder;FC København
-536823;eq15hjcxpdrl5vca2q7s4tr3e;Mihajlo Ivančević;Defender;Lyngby
-145683;;Mikael Norø Ingebrigtsen;Forward;Kolding
-257943;4n1cxz0r683n51w4xewc8km39;Mikael Uhre;Forward;FC Midtjylland
-643095;;Mikail Maden;Midfielder;Esbjerg
-56023;;Mike Lindemann Jensen;Midfielder;HB Køge
-562451;;Mike Løhde Vestergård;Midfielder;Vejle Boldklub
-768773;;Mike Themsen Kofod;Midfielder;Randers FC
-679428;;Mikel Johan Gogorza Krüger-Johnsen;Forward;FC Midtjylland
-766866;5jyv1dctfxa6335l1mlifwavo;Mikkel Boye;Forward;Hobro
-361096;5qvy65ckiigykkowpyco05zv9;Mikkel Duelund;Midfielder;Vejle Boldklub
-284613;a6ymx4wkrn260rtpb360nsiqd;Mikkel Kallesøe;Defender;AaB
-684689;;Mikkel Kannegaard Kristensen;Defender;Hobro
-374025;;Mikkel Mejlstrup Pedersen;Midfielder;Hobro
-494823;ezbixgm2km8iapnsl57bn4wkp;Mikkel Mouritz;Midfielder;Hillerød
-621854;;Mikkel Rosleff Fischer;Defender;Lyngby
-678652;;Mikkel Søfeldt Nielsen;Forward;Middelfart
-165292;e8vt8711wb40afht2v13omket;Mikkel Wohlgemuth;Midfielder;B 93
-760859;9kjdw81u1rprgi5j8f92afaqc;Mikkel Øxenberg;Midfielder;Silkeborg IF
-508946;;Mohamad Fakhri Al-Naser;Forward;HB Køge
-548966;tckvu2rw7ns18dq7dim0sout;Mohamed Amine Elyounoussi;Forward;FC København
-593207;ssluj1c3ft94nkfs58dc8cq2;Mohamed Elias Achouri;Forward;FC København
-135115;;Morten Knudsen Brander;Midfielder;Hvidovre
-443690;4m3slt6iikaxklqd12i719rl5;Moses Opondo;Midfielder;FC Fredericia
-544940;4krwgfspxdgpq1pli11b04iga;Muamer Brajanac;Forward;Esbjerg
-779828;;Muhammad Khan Huzaifa;Defender;B 93
-692485;blsrzo4x32a14issswlkqpp90;Musa Toure;Forward;Randers FC
-679398;5jv4a1295xd5oonpj9w9fy61g;Mustafa Salah;Midfielder;HB Køge
-434177;f3xbdt2opb6n1y13cqvug6zft;Nebiyou Perry;Forward;Kolding
-882803;;Neil Pierre;Defender;Lyngby
-422352;e0ufk65mqc1url5qznskeamzt;Nemanja Nedić;Defender;Kolding
-562610;etv86c76faputyvch964nju38;Nicklas Bjerre Schmidt;Midfielder;Hillerød
-56396r;v6r0bwbl75er38wklyfpsr9;Nicklas Helenius;Forward;AaB
-284615;eyvv6b94feknnp1uew6n0ytat;Nicklas Mouritsen;Defender;Lyngby
-347370;drzdo6ouxi5n4jafhfajpor85;Nicklas Røjkjær;Midfielder;FC Nordsjælland
-660886;ayjuukbjjzrldkn4d4shfnggk;Nicolai Blicher;Defender;Esbjerg
-690948;dvnd5025v01tme7xzayw6jhn8;Nicolai Bossen;Midfielder;Kolding
-417657;6dzg820946z4848whaa6ny2nd;Nicolai Clausen;Defender;Hvidovre
-224158;;Nicolai Flø Jepsen;Goalkeeper;SønderjyskE
-56378;hs41rtcymn2opk4ban2pxh5g;Nicolai Larsen;Goalkeeper;Silkeborg IF
-190470;eiibjx7o37olpgktw996r8set;Nicolai Poulsen;Midfielder;AGF
-562633;chteizjcvxpvze9p77gcttcoa;Nicolai Vallys;Midfielder;Brøndby IF
-579393;3pk6hii2s8tbv2zux8mvbapec;Nicolaj Jungvig;Defender;Hvidovre
-334056;auk14ut8cwaqop549u2zmfgt1;Nicolas Bürgy;Defender;OB
-449136;5u9zrgsm6wycfcbk04m64wd1w;Niels Morberg;Midfielder;Kolding
-679399;hm7w2b4a6j0q3bprq118r5uy;Niklas Jakobsen;Forward;HB Køge
-814097;2phxlmsssvyihji7tzi36ijo4;Niklas Wilmerskov;Forward;Hillerød
-685762;6eg3kxxg5aneckolraz03xzpw;Nikolaj Juul-Sandberg;Midfielder;Middelfart
-475116;;Nikolas Langberg Dyhr;Defender;Randers FC
-524770;49m6v23y89mzt0tfccsamswoa;Noah Ganaus;Forward;OB
-766643;v5l81gxg2i8p5imhugkqiexg;Noah Barholt Rasmussen;Defender;Middelfart
-639591;bwxxfcjd31gykfbpomwr1od90;Noah Emil SømmergaardGoalkeeper;HB Køge
-684703;;Noah Hessellund Markmann;Defender;FC Nordsjælland
-679654;mp4e2knxubc5sncgd6p4j4lw;Noah Kretzschmar Nielsen;Forward;Hillerød
-679271;;Noah Strandby Oliver;Forward;Esbjerg
-660853;;Nóel Atli Arnórsson;Midfielder;AaB
-370748;eyq4y2syfou2qo5a795rmjhpm;Ola Solbakken;Forward;FC Nordsjælland
-845285;a5alop4wg4qwwu812pfskfjtg;Olafur Hjaltason;Midfielder;Aarhus Fremad
-1021693;;Olalere Oluwatobi Oluwasegun;Defender;Aarhus Fremad
-544671;;Ole Martin Lekven Kolskogen;Defender;Horsens
-449421;;Oliver Bundgaard Kristensen;Defender;Viborg FF
-449603;;Oliver Friis Dorph;Defender;Hobro
-679431;8jyfsal0lbf0ia92axymn2l1w;Oliver Højer;Midfielder;FC København
-435879;cl4xl80n4gew1ox03r3ooshrd;Oliver Kjærgaard;Forward;Hvidovre
-619642;6zrmxstgcv5es4i93ihdcv3ai;Oliver Ross;Forward;Silkeborg IF
-680618;oywgthoxa153nf48la1j8v10;Oliver Sejer Lauritsen;Defender;Hillerød
-449367;;Oliver Sparre Klitten;Midfielder;Hobro
-544941;bxx5rebv553opcpvc2x70g6sq;Oliver Villadsen;Defender;Brøndby IF
-684327;a48bpdpt0siemxqtr3rubwbu;Olti Hyseni;Forward;SønderjyskE
-860179;djm3hebvv79jo679zzd2b71g4;Oluwatomiwa John Kolawole;Midfielder;Esbjerg
-374982;y4dl1rer075c9wz6zhx7skbt;Oscar Buch;Forward;FC Fredericia
-624706;4dmz3u7j1eoz4ofr1o8tbxedw;Oscar Meedom;Forward;Hobro
-347358;8822s8ns7oyvjqade4oaxzg0l;Oskar Buur;Defender;Lyngby
-399554;;Oskar Snorre Olsen;Goalkeeper;Lyngby
-602506;;Osman Abdulkadir Addo;Forward;Viborg FF
-892582;ddl5g7raihnc9s4u3wetz8v10;Ousmane Diao;Defender;FC Midtjylland
-837095;;Ousmane Sow;Forward;Brøndby IF
-1192465;e5tz5hfcjfbyupnsvu031j9xw;Ousseynou Fall Seck;Midfielder;Randers FC
-569584;bewwsztrqoqdp5ttkxry0i1yi;Ovie Ejeheri;Goalkeeper;FC Midtjylland
-766716;;Pachanga Cassoma Kristensen;Defender;SønderjyskE
-302233;ayqy2vql1oumokqly9ahfrnx1;Pantelis Hatzidiakos;Defender;FC København
-584073;57g4wlxt2sdykfwtb8u0ghqwa;Pascal Estrada;Defender;Kolding
-56031e;io7c1yr3ax6phyvlfbxb0k45;Patrick Haakon Olsen;Midfielder;Horsens
-535642;;Patrick Hessellund Egelund;Forward;FC Fredericia
-56273e;as91my7qw7etoha5plxfk9yi;Patrick Mortensen;Forward;AGF
-269698;4ilnnpfgjfz35lni9ppzd93v9;Patrick Pentz;Goalkeeper;Brøndby IF
-535622;8nav5b7f3g14uh4iethwpirit;Patrick Tjørnelund;Defender;Esbjerg
-61497d;mxzug2enscx331w5vmdzn2s5;Paul Izzo;Goalkeeper;Randers FC
-296672;66pbso11kjgviygzsufo0nzrp;Paulo Victor da Silva;Defender;FC Midtjylland
-643882;;Pedro Antonio Bravo Landazuri;Midfielder;FC Midtjylland
-496629;;Pedro Luís Machado Ganchas;Defender;Silkeborg IF
-566257;cpkykvmy8ujrahzdz7ksk2c5;Peter Ankersen;Defender;FC Nordsjælland
-495421;6m4anciafmzc24s44xszymbc9;Peter Bjur;Midfielder;Esbjerg
-690016;;Peter Elliott Matiebel;Defender;Middelfart
-303357;33cny48k38nlo8pcx3i24ldqt;Philip Billing;Midfielder;FC Midtjylland
-621856;f044eq5rxmsnz0gun55t9kqy2;Pontus Texel;Defender;Kolding
-609868;9vdj7ooa6z62r1cfi1f44haay;Poul Kallsberg;Forward;Hillerød
-921888;tjwcwnzx8w0rv41nr6ebhxck;Prince junior Amoako;Forward;FC Nordsjælland
-345907;;Pætur Joensson Petersen;Forward;Hillerød
-603153;ejv587h08dn1hgxhfgib3reqy;Rami Al Hajj;Midfielder;Silkeborg IF
-832331;;Rasmus Blæsild;Midfielder;Hvidovre
-568373;14mwsmzsrmev2646t2gg22has;Rasmus Brodersen;Defender;HB Køge
-449482;an7okg1fciccqu6300k8phisq;Rasmus Carstensen;Defender;AGF
-56145;;Rasmus Falk Jensen;Midfielder;OB
-502943;5j9d1plbsd5ic01r3ggziutwp;Rasmus Hjorth Vinderslev;Midfielder;SønderjyskE
-849689;;Rasmus Koch Groth Pedersen;Midfielder;Middelfart
-372289;;Rasmus Steensbæk Lauritsen;Defender;Brøndby IF
-764658;;Renzo Tytens;Defender;Lyngby
-281253;;Rezan Corlu;Midfielder;Hillerød
-1051708;efubck8twu1elbhlomltnjjtg;Richmond Gyamfi;Forward;Esbjerg
-282279;coo9pdc5uiiypv0e92i29ipxx;Robby McCrorie;Goalkeeper;Esbjerg
-408230;8pit4oud8sym57oc8m0f3j8ix;Robert Kakeeto;Midfielder;Middelfart
-837029;;Robert Vinicius Rodrigues Silva;Forward;FC København
-521016;;Robin Dahl Østrøm;Defender;Silkeborg IF
-574320;;Rodrigo Jhossel Huescas Hurtado;Defender;FC København
-497703;asg0277qek5q1z0m43bs8y415;Roko Baturina;Forward;Horsens
-449251;7h02v4ymnko5fh01iylbh34es;Roni Arabaci;Forward;B 93
-544678;cusl60g16iljr4f8gzfryvh1w;Runar Hauge;Forward;Hobro
-686766;;Runar Robinsønn Norheim;Midfielder;FC Nordsjælland
-135174;quh8tfvwi106toymoh38tbrp;Rúnar Alex Rúnarsson;Goalkeeper;FC København
-513739;agn71kap290gs92nelbv2rey2;Rúnar Thór Sigurgeirsson;Defender;SønderjyskE
-743409;e0rgqk3gxzs005m9ok9hvp1ck;Sabil Osman Hansen;Defender;Randers FC
-680616;e0u730to91qqtvvx16uhajz10;Saman Jalaei;Forward;Hillerød
-822495;ekx0wotp433tuaw4g93nybjmc;Sami Jalal;Forward;Viborg FF
-544672;f5gja2wqjlm60rideia16jpm2;Sander Eng Strand;Defender;Esbjerg
-750681;kztt8qd2m1vuracefqqsjkh6;Sander Ravn;Midfielder;Vejle Boldklub
-268785;6anvl82jyio52wo87cbxdp4np;Sean Klaiber;Defender;Brøndby IF
-443718;8viazilbghyogmhd7w3lg2six;Sebastian Koch;Forward;Hvidovre
-619657;hs41rtcymn2opk4ban2pxh5g;Sebastian Larsen;Defender;Hillerød
-476349;;Sebastian Lund Hausner;Defender;Horsens
-494548;;Sebastian Vinther Jørgensen;Forward;AGF
-604019;5x8064b3yr7txk0czddfjtffu;Sefer Emini;Midfielder;SønderjyskE
-892204;6qko3f8w2ap9ynbuq2g55i5n8;Seniko Doua;Defender;Horsens
-677038;31dub58tesepe34xkspyxsrca;Sho Fukuda;Midfielder;Brøndby IF
-1082850;;Sidi Mohamed Cherif Haidara;Midfielder;SønderjyskE
-738376;67p0s4o54xcmiustgy8k5gljo;Silas Hald;Defender;HB Køge
-742117;;Simon Fynbo Stüker;Defender;Silkeborg IF
-518890;5o1k2hd9rdooxpjgbnabuh94a;Simon Bækgård;Midfielder;Aarhus Fremad
-676941;dglnk6pm8tm5cvb9dgqlz6kus;Simon Sylvest Wæver;Defender;SønderjyskE
-540168;8npu0cbqjrhwv5km1w29kh016;Simon Willem Colyn;Forward;Lyngby
-572445;;Sofus Berger Brix;Midfielder;Silkeborg IF
-682117;;Sofus Østergaard Grandjean Johannesen;Midfielder;FC Fredericia
-610104;58o5ram4bf58357786j9jr7kk;Solomon Opoku;Midfielder;Hillerød
-930576;1d4r2fhndmqb5gpj7sze62l90;Souleymane Alio;Forward;FC Nordsjælland
-631559;eq7tnnzwq0g9q4eac0o9t9xey;Srdjan Kuzmić;Defender;Viborg FF
-239259;1ykl08k2c2kwxukw0gvslf6qd;Stefan Velkov;Defender;Vejle Boldklub
-847880;3fxf2je8r5tx5bax9ircvr95g;Stefen Erwan Tchamche;Forward;AGF
-1094072;c1s6vw84nupd8c0mbj8gov5lg;Stephen Acquah;Defender;FC Nordsjælland
-579706;9ircna8pbskreztmy1wiqwx9m;Sterling Yatéké;Forward;Kolding
-504384;bp2ellllifbtxgf0p8qlbm1nt;Stipe Radić;Defender;Viborg FF
-747959;;Sven Bech Leschly;Midfielder;B 93
-1351047;k0sb5soj07swyodfhdpo1ysq;Svenn Crone;Defender;FC Fredericia
-380832;f4xi0azga0op4wlag9gs0khlg;Søren Andreasen;Forward;Hobro
-794604;f239q43hdwrm7u7mu5jqyk91x;Søren Eg Pedersen;Defender;Middelfart
-565704;bkqvwlmbwul0s8lbbq6mifp;Søren Reese;Defender;Middelfart
-625592;;Theo Nicolini Sander;Goalkeeper;OB
-624730;;Theo Puggaard Ekié Hansen;Midfielder;Hobro
-564107;;Thibault Klidjé;Forward;Randers FC
-559904;gqnyyx3i92fayq6cxvekqwut;Thomas Delaney;Midfielder;FC København
-544932;;Thomas Gundelund Nielsen;Defender;Vejle Boldklub
-624764;vrzye4jqrafujmjw3wakjpxw;Thomas Jørgensen;Midfielder;Viborg FF
-56223;;Thomas Korsgaard Mikkelsen;Goalkeeper;Brøndby IF
-565889;4jve632xnmqujh4ioaxpaovai;Tim Freriks;Forward;Viborg FF
-766104;7yme46ytobpuvow7hf4xcmlg4;Tobias Bach;Midfielder;Vejle Boldklub
-511987;5i6n6yne6fh410vk7p7kkokmi;Tobias Arndal;Midfielder;Hillerød
-454213;;Tobias Bech Kristensen;Forward;AGF
-578577;;Tobias Haahr Jakobsen;Goalkeeper;Vejle Boldklub
-449750;;Tobias Klysner Breuner;Midfielder;SønderjyskE
-603772;oywgthoxa153nf48la1j8v10;Tobias Lauritsen;Midfielder;Vejle Boldklub
-516196;;Tobias Mølgaard Henriksen;Defender;AGF
-288618;;Tobias Salquist Nielsen;Defender;FC Nordsjælland
-450163;;Tobias Sommer Sørensen;Midfielder;SønderjyskE
-594473;4bstdc3zla1sn85ev3bcmw1lg;Tobias Storm;Midfielder;Lyngby
-56374;dqp8e2et9fm9r6zo47u1njq50;Tobias Thomsen;Forward;HB Køge
-814404;dja68kdmhtsm9x5zqzgtpqas4;Tobias Vedel Blidegn;Midfielder;B 93
-14702;wha77a8wm7jyn32743y0w79x;Tom Trybull;Midfielder;OB
-576284;n2annzbap7hll02zo2v0ccgk;Tonni Adamsen;Forward;Silkeborg IF
-827362;ay9j8i8y82h9h23blxqwzisyc;Tómas Óli Kristjánsson;Forward;AGF
-449432;;Valdemar Birksø Thorsen;Goalkeeper;FC Fredericia
-681607;;Valdemar Byskov Andreasen;Midfielder;FC Midtjylland
-579409;;Valdemar Lund Jensen;Defender;Vejle Boldklub
-578590;9fwkh5u6rr16g3us2x02frtp0;Valdemar Manley Kwasniak;Midfielder;Middelfart
-760810;;Valdemar Møller Damgaard;Midfielder;AaB
-1291268;;Vianney Geovanni;Forward;FC København
-577573;8mn8apr6n7t7s6lx4d4vvdnca;Victor Bak Jensen;Defender;FC Midtjylland
-743568;;Victor Laursen Hegelund;Defender;Middelfart
-872302;9yvanqi097mgyaqvdyhkyb9ck;Viktor Bjarki Daðason;Forward;FC København
-511448;g4r9maz4invihjmdzpfxy0np;Viktor Claesson;Midfielder;FC København
-620139;f2hab1q8nrvah7j2k5ci0edxw;Viktor Højbjerg;Goalkeeper;Aarhus Fremad
-680621;ewh6t7yo6clfewu89uznll9uc;Viktor Løvgren Sørensen;Midfielder;HB Køge
-281452;;Viljar Røsholt Myhra;Goalkeeper;OB
-620140;8h3cyhuw5049gcxrsld3rw1ec;Villads Westh;Midfielder;Silkeborg IF
-520616;a2l4ep71txn2edtjjcgewai5m;Vincent Müller;Goalkeeper;AaB
-789919;;Vinicius Falconi Degn Pedersen;Defender;HB Køge
-56210;e3n8xatusmgu7ttqpfdjanp3p;Vito Hammershøy-Mistrati;Midfielder;B 93
-743525;ejlaev7fw1ha8sa2y4rso9wr8;Vitus Friis;Midfielder;OB
-607760;eh5vcpzxaze0ru5xdi1wbhoq2;Vladislav Morozov;Forward;Kolding
-543966;eipzf207j297k8bojxzkhnn6c;Wahid Faghir;Forward;Vejle Boldklub
-721966;b9etqcvi0eueu0bh49roth638;Wandepanga Ismahila Ouédraogo;Midfielder;OB
-366810;;Warren Caddy;Forward;Randers FC
-776764;840m8epnbm3hz70ppuzxhwnx0;Waylon Ramon Renecke;Defender;Esbjerg
-289123;8cox96ikk1k4c24f0y5ef45x;Wessel Dammers;Defender;Randers FC
-739232;dd9o9mk9pzx9t2dbe2hzf8xec;Wilhelm Nilsson;Defender;B 93
-765755;;William Borring Nyborg;Goalkeeper;Middelfart
-739991;dkh9515ex80tnypgme1shx4ic;William Christian Martin;Forward;OB
-612346;ftw3io63hk5vuoa3lyfgowes;William Clem;Midfielder;FC København
-679418;;William Glintvad;Defender;Hillerød
-519688;eso2tbbpnxu9qvx6zy07m5jx0;William Madsen;Midfielder;FC Fredericia
-705613;9kxm9u9x44fkygeh5xpag7pqs;William Oliver Steindorsson;Midfielder;Lyngby
-1100458;7hso2bszmf4qal560jhrg2904;Yamirou Ouorou;Forward;Horsens
-766724;52xeb867n93p1wftf42wxu1w4;Yasin Belhadj;Forward;B 93
-633913;c9kn2pfftaimeqknbu9p8neok;Yonis Njoh;Forward;Viborg FF
-450212;bb8q9cgqzw9n2tmkl8s3bth0q;Younes Bakiz;Forward;Silkeborg IF
-522301;eguzzwxdm0fwocax6srpck48a;Youssoufa Moukoko;Forward;FC København
-1264014;dyd57gulyn7kzp1ion05fsmxg;Yusuf ABDULLAHI;Midfielder;Aarhus Fremad
-620821;aajgld24isoem1ycoysyxxp1w;Zamir Aliji;Midfielder;Hvidovre
-545849;b0yv1pcxifawqx6r1cfqq3otm;Zander Hyltoft;Midfielder;Hobro
-586911;agn71kap290gs92nelbv2rey2;Ísak Andri Sigurgeirsson;Forward;Viborg FF
-519468;5k2hgogp2g5ivgdnq99ejp27e;Ísak Snaer Þorvaldsson;Forward;Lyngby
-399607;6ja2xnbktah4mog04g3kmjgmh;Žan Zaletel;Defender;Viborg FF
+NAVN,POSITION,KLUB,PLAYER_WYID,PLAYER_OPTAUUID,COMPETITION_WYID,COMPETITION_OPTAUUID
+Abdou Aziz Ndiaye,Midfielder,FC Midtjylland,1150951,33529actv1ohj8r10kd9hu0jnb0n,,
+Abdoulaye Camara,Forward,Vejle Boldklub,1210116,8w7eh1ukicd4p0vp7kqqrzu38,335,29actv1ohj8r10kd9hu0jnb0n
+Abdoulaye Gouba,Midfielder,Horsens,930661,328dyjr458hcmrcy87fsabfsy87o,,
+Abdul Hakim Sulemana,Forward,Hillerød,620381,33529actv1ohj8r10kd9hu0jnb0n,,
+Abdul Malik Abubakari,Forward,Lyngby,625251,39f0bq9uk4etkf75uzu6qyrmy,335,29actv1ohj8r10kd9hu0jnb0n
+Abdul Moro,Midfielder,Horsens,1100439,eh5vcpzxaze0ru5xdi1wbhoq2,1305,
+Abdul Samad Shahzad Arshad,Forward,Kolding,577577,43319,,,
+Adam Ahmad,Midfielder,B 93,659984,4csz412vb3lquessbnf999ct0,3134,
+Adam Andersson,Defender,AaB,252417,dsn7m5pm574argz1d7ofgjmj9,335,29actv1ohj8r10kd9hu0jnb0n
+Adam Danko,Goalkeeper,Kolding,632999,1lxsyoos06fqbsi6skcm974a2,328,dyjr458hcmrcy87fsabfsy87o
+Adam Gabriel,Defender,FC Midtjylland,668034,bidudbkachfl6126lhlr254wk,335,29actv1ohj8r10kd9hu0jnb0n
+Adam Herdonsson,Defender,Horsens,615955,9dh7cnu4uzbraeck0t5iqlj4k,328,dyjr458hcmrcy87fsabfsy87o
+Adam Nygaard Andersen,Defender,FC Fredericia,624703,xd4gm9uiq807dri1gs3ltclw,335,29actv1ohj8r10kd9hu0jnb0n
+Adam Sørensen,Defender,OB,449761,ewh6t7yo6clfewu89uznll9uc,1305,
+Adam Wikman,Midfielder,Silkeborg IF,733745,33529actv1ohj8r10kd9hu0jnb0n,,
+Adrian Kappenberger,Goalkeeper,Hillerød,511743,8mswl5vzza12hylodrrsq3zvu,335,29actv1ohj8r10kd9hu0jnb0n
+Adrian Rúnason Justinussen,Forward,Horsens,338129,328dyjr458hcmrcy87fsabfsy87o,,
+Agon Muçolli,Forward,FC Fredericia,347369,8e6zj6d817geh9g8f94ig99m1,335,29actv1ohj8r10kd9hu0jnb0n
+Ahmed Daghim,Midfielder,B 93,449782,6otr0cifkk9jbmxc2ew2spka,329,
+Ahmed Iljazovski,Defender,Hvidovre,483429,bfvdr7ckiersz26ya2kq9f1g4,335,29actv1ohj8r10kd9hu0jnb0n
+Alagie Saine,Defender,Horsens,729780,7353ysa16qgg30b9z5qiagys4,335,29actv1ohj8r10kd9hu0jnb0n
+Alamara Viriato Djabi,Midfielder,FC Midtjylland,817954,33529actv1ohj8r10kd9hu0jnb0n,,
+Albert Heyde,Forward,Hobro,679227,8aawjsdwpfdzqhtj8jjyz8hlg,3134,
+Albert Nørager,Defender,Kolding,450069,8ewvm6ux4yvpwgrzjkc1chqwa,3134,
+Albert Rrahmani,Midfielder,SønderjyskE,962525,d4emkl168o7w0fy7shqdp6t5g1,1570,
+Alexander Ammitzbøll,Forward,Esbjerg,520760,8xim1ji9vq8lwkgkg10du2zje,335,29actv1ohj8r10kd9hu0jnb0n
+Alexander Illum Simmelhack,Midfielder,Silkeborg IF,632597,3135,,,
+Alexander Johansen,Midfielder,Hvidovre,764636,dz8s1baxo3lpznfol2rlfdmhg,3134,
+Alexander Lien Håpnes,Midfielder,AaB,750363,5y2mfgruizah0ylcz7q1abw9g,328,dyjr458hcmrcy87fsabfsy87o
+Alexander Lind Rasmussen,Forward,FC Nordsjælland,523107,1305,,,
+Alexander Ludwig,Defender,Horsens,191024,61vr9xr91fr4g6ayzga5vn9w5,335,29actv1ohj8r10kd9hu0jnb0n
+Alexander Lyng,Forward,SønderjyskE,622042,lioz4hr2umpne2bwar18qa96,335,29actv1ohj8r10kd9hu0jnb0n
+Alexander Magnus Busch,Defender,Silkeborg IF,577998,33529actv1ohj8r10kd9hu0jnb0n,,
+Alexander Nathan,Midfielder,Hobro,814415,beu3ypladd5dexnm9x946kjkk,3134,
+Alexander Priesborg Madsen,Defender,Silkeborg IF,624791,43149,,,
+Alexi Pitu,Forward,Vejle Boldklub,545274,f5idhghs2f6otps9n9jxzp9be,335,29actv1ohj8r10kd9hu0jnb0n
+Alfred Gøthler,Forward,HB Køge,901665,d2ukggo2v5jsw4pctznmaijo4,3135,
+Amar Diagne,Forward,AaB,679420,ezi8426ran0bffeyfvloc2ihg,1305,
+Amin Al Hamawi,Forward,Randers FC,808834,2iwpx1vz8t3boh0aauel1bok4,335,29actv1ohj8r10kd9hu0jnb0n
+Anders Bak Holvad,Forward,Aarhus Fremad,56086,f5do9kh6590dwx2732iak0edx,328,dyjr458hcmrcy87fsabfsy87o
+Anders Bergholt Pedersen,Midfielder,SønderjyskE,624824,1570,,,
+Anders Dahl,Midfielder,FC Fredericia,523101,f3h1bxnw3fq8m10ck132bic4p,1305,
+Anders Kvindebjerg Jacobsen,Forward,Vejle Boldklub,57114,apnkoe9xl3fbnxbj2zx1horh0,328,dyjr458hcmrcy87fsabfsy87o
+Anders Noshe,Forward,AaB,644794,3c7oy1stwyquawdfzzom13xn8,1570,
+Anders Nørbo Hoff Nielsen,Goalkeeper,Horsens,580507,3135,,,
+Anders Raffnsøe Hoeg,Midfielder,SønderjyskE,680209,33529actv1ohj8r10kd9hu0jnb0n,,
+Anders Ravn Olsen,Goalkeeper,Hvidovre,680719,328dyjr458hcmrcy87fsabfsy87o,,
+Anders Sønderskov,Defender,Esbjerg,638043,ajk0mbprro09pccglih9y740k,328,dyjr458hcmrcy87fsabfsy87o
+Andreas Maarup Hansen,Midfielder,AaB,684432,329,,,
+Andreas Bruus,Defender,Horsens,399566,dj2f6zk2cd8u9lt6odoei9cdl,1305,
+Andreas Cornelius,Forward,FC København,135150,8gdfn7j6xac9p4jh94hk40jdg,335,29actv1ohj8r10kd9hu0jnb0n
+Andreas Frederik Dithmer,Goalkeeper,Hillerød,624732,ekbi29eljngvxgx9scbzwygwk,328,dyjr458hcmrcy87fsabfsy87o
+Andreas Gülstorff Pedersen,Goalkeeper,FC Nordsjælland,562225,33529actv1ohj8r10kd9hu0jnb0n,,
+Andreas Hansen,Goalkeeper,FC Nordsjælland,224154,e0rgqk3gxzs005m9ok9hvp1ck,328,dyjr458hcmrcy87fsabfsy87o
+Andreas Heimer Hansen,Defender,B 93,424254,328dyjr458hcmrcy87fsabfsy87o,,
+Andreas Oggesen,Midfielder,SønderjyskE,56292,3361cs2j60yxzy9mir80byqc5,335,29actv1ohj8r10kd9hu0jnb0n
+Andreas Pisani Laugesen,Midfielder,Aarhus Fremad,567466,329,,,
+Andreas Poulsen,Defender,Silkeborg IF,399558,eiibjx7o37olpgktw996r8set,335,29actv1ohj8r10kd9hu0jnb0n
+Andreas Pyndt Andersen,Midfielder,FC Fredericia,544933,33529actv1ohj8r10kd9hu0jnb0n,,
+Andreas Sejr Lausen,Midfielder,Esbjerg,535634,ate1ymumg2iwzn8uyyf3ts222,329,
+Andreas Smed,Forward,Hvidovre,562692,e7ee1vpnnt68l3bv2vlre1z6y,329,
+Andreas Söndergaard,Goalkeeper,Hobro,544922,1570,,,
+Andres Jasson,Forward,AaB,534982,8bi1tlz62rjwyak4pnnzgp562,328,dyjr458hcmrcy87fsabfsy87o
+Andrew Hjulsager,Midfielder,Vejle Boldklub,135113,1d2fpmtdglpqwyhnc657n77it,335,29actv1ohj8r10kd9hu0jnb0n
+André Römer,Midfielder,Randers FC,212662,33529actv1ohj8r10kd9hu0jnb0n,,
+Anssi Tapio Suhonen,Midfielder,OB,476411,33529actv1ohj8r10kd9hu0jnb0n,,
+Anton Mayland,Goalkeeper,Lyngby,685609,55qsxtqivxajkxmpdeyccus5w,335,29actv1ohj8r10kd9hu0jnb0n
+Anton Skipper Hendriksen,Defender,Esbjerg,476350,1570,,,
+Ari Leifsson,Defender,Kolding,375596,dqssvdpt2iwg8qn9wto3miind,328,dyjr458hcmrcy87fsabfsy87o
+Aris Vaporakis,Goalkeeper,B 93,279693,9y3vs6l0mjj38z0kw062jlh3p,329,
+Arlet Junior Zé,Forward,FC Midtjylland,789272,33529actv1ohj8r10kd9hu0jnb0n,,
+Asbjørn Bøndergaard,Forward,Lyngby,607738,aszp26w7k6ycpwmcpvfteov84,1570,
+Aske Leth Andresen,Goalkeeper,Silkeborg IF,624770,1570,,,
+Asker Beck Jensen,Midfielder,Viborg FF,579416,328dyjr458hcmrcy87fsabfsy87o,,
+August Bryld,Midfielder,Hobro,679843,izewe5fthjad6hv14xgpm3v8,3135,
+Aurélio Gabriel Ulineia Buta,Defender,FC København,284718,33529actv1ohj8r10kd9hu0jnb0n,,
+Ayo Simon Okosun,Midfielder,Hvidovre,224185,a7eramyy1bd8msxmg84ctc8ut,328,dyjr458hcmrcy87fsabfsy87o
