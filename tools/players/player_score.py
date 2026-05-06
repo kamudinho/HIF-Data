@@ -182,7 +182,7 @@ def vis_side():
     df_csv_hoved = df_csv[df_csv['hovedkategori'] == valgt_hovedkategori]
     
     # Her sikrer vi, at alt er konsekvent lowercase, så filtreringen virker 100%
-    ekskluder_fra_dropdown = {
+    eksluder_fra_dropdown = {
         "målmand", "goalkeeper", "keeper", "gk",
         "forsvarsspiller", "defender", "def",
         "midtbanespiller", "midfielder", "mid",
@@ -192,7 +192,7 @@ def vis_side():
     # Hent kun de specifikke positioner til dropdown-menuen
     specifikke_muligheder = sorted([
         pos for pos in df_csv_hoved['specific_position'].dropna().unique().tolist()
-        if pos.strip().lower() not in ekskluder_fra_dropdown and pos.strip() != ""
+        if pos.strip().lower() not in eksluder_fra_dropdown and pos.strip() != ""
     ])
     
     visnings_positioner_map = {pos: POS_TRANSLATIONS.get(pos, pos) for pos in specifikke_muligheder}
@@ -336,14 +336,23 @@ def vis_side():
             df_raw.columns = df_raw.columns.str.lower()
             df_raw['player_wyid'] = df_raw['player_wyid'].astype(int)
 
+            # Drop eventuelle overflødige/gamle 'team_name'-kolonner fra SQL, før vi samler med CSV
+            if 'team_name' in df_raw.columns:
+                df_raw = df_raw.drop(columns=['team_name'])
+
             df = pd.merge(df_csv, df_raw, on='player_wyid', how='inner')
 
             if df.empty:
                 st.info(f"Ingen spillere i din CSV-fil matcher de valgte minut-kriterier i denne turnering.")
                 return
 
-            if 'is_active_hvidovre' in df.columns:
-                df.loc[df['is_active_hvidovre'] == 1, 'team_name'] = "Hvidovre IF"
+            # --- SIKRER AT MANUEL CSV-KLUB HAR FØRSTEPRIORITET ---
+            # Hvis spilleren er aktiv Hvidovre-spiller, tvinges holdet til Hvidovre IF.
+            # Ellers bruges holdet direkte fra din CSV ('klub'), så du har fuld kontrol over klubskifter.
+            df['team_name'] = df.apply(
+                lambda row: "Hvidovre IF" if row.get('is_active_hvidovre') == 1 else row['klub'], 
+                axis=1
+            )
 
             df['pass_pct'] = (df['successfulpasses'] / df['passes'].replace(0, 1)) * 100
 
