@@ -131,7 +131,7 @@ with st.sidebar:
         sel = option_menu(None, options=filtrer_menu(["Scoutrapport", "Database", "Emnedatabase", "Sammenligning"]))
     elif hoved_omraade == "TILPASNING":
         # TILFØJET: "Spiller-score" er nu placeret heri
-        sel = option_menu(None, options=filtrer_menu(["Tilpasning", "Spiller-score"]))
+        sel = option_menu(None, options=filtrer_menu(["Spillerdata", "Spiller-score"]))
     elif hoved_omraade == "ADMIN":
         # REMOVED: "Spiller-score" er fjernet herfra
         sel = option_menu(None, options=filtrer_menu(["System Log", "Profil", "Datakatalog", "Konklusion", "Fysisk profil", "Hold: Fysisk profil", "Intern analyse", "Top 5: Spillere", "Ordbog"]))
