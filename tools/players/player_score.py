@@ -241,7 +241,7 @@ def vis_side():
             df = raw_df.groupby('player_wyid', as_index=False).agg(agg_dict)
             df[score_col] = df[score_col].round(1)
             
-            # --- NYT: MANUEL RETTELSE VIA CSV (spiller_overskrivning.csv) ---
+            # --- NYT/OPDATERET: HARD-FILTRERING MOD DIN CSV-FIL ---
             overskriv_sti = os.path.abspath(os.path.join(os.path.dirname(__file__), 'players', 'spiller_overskrivning.csv'))
             if os.path.exists(overskriv_sti):
                 try:
@@ -249,6 +249,14 @@ def vis_side():
                     df_overskriv.columns = df_overskriv.columns.str.lower().str.strip()
                     
                     if 'player_wyid' in df_overskriv.columns:
+                        # 1. Konverter kolonnen til samme type (int) for at sikre præcist match
+                        df['player_wyid'] = df['player_wyid'].astype(int)
+                        df_overskriv['player_wyid'] = df_overskriv['player_wyid'].astype(int)
+                        
+                        # 2. Hard filtrering: Vi beholder KUN spillere, der findes i CSV-filens player_wyid
+                        df = df[df['player_wyid'].isin(df_overskriv['player_wyid'])]
+                        
+                        # 3. Kør overskrivningen/opdateringen af værdierne for de godkendte spillere
                         df.set_index('player_wyid', inplace=True)
                         df_overskriv.set_index('player_wyid', inplace=True)
                         
@@ -258,12 +266,15 @@ def vis_side():
                             
                         df.reset_index(inplace=True)
                 except Exception as csv_err:
-                    st.warning(f"Kunne ikke indlæse spiller-overskrivninger fra CSV: {csv_err}")
+                    st.warning(f"Kunne ikke filtrere og opdatere ud fra CSV: {csv_err}")
+            else:
+                st.error(f"Kritisk fejl: Spiller-filen kunne ikke findes på stien: {overskriv_sti}")
+                return
 
             df['dk_position'] = df['specific_position'].map(POS_TRANSLATIONS).fillna(df['specific_position'])
             df_sorteret = df.sort_values(score_col, ascending=False)
             
-            # --- 5. LOGIK: TOP 20 LIGA + 2 BEDSTE REELLE HVIDOVRE ---
+            # --- 5. LOGIK: TOP 20 LIGA + 2 BEDSTE REELLE HVIDOVRE (Blandt de godkendte fra din CSV) ---
             liga_spillere = df_sorteret[df_sorteret['is_active_hvidovre'] == 0]
             hvidovre_spillere = df_sorteret[df_sorteret['is_active_hvidovre'] == 1]
             
@@ -328,7 +339,7 @@ def vis_side():
                 if valgt_klik and "selection" in valgt_klik and valgt_klik["selection"]["points"]:
                     klikket_navn = valgt_klik["selection"]["points"][0]["y"]
                     valgt_spiller_data = df[df['full_name'] == klikket_navn].iloc[0]
-                else:
+                elif not visnings_df.empty:
                     bedste_spiller_id = visnings_df.sort_values(score_col, ascending=False).iloc[0]['player_wyid']
                     valgt_spiller_data = df[df['player_wyid'] == bedste_spiller_id].iloc[0]
 
@@ -362,7 +373,7 @@ def vis_side():
                         """, unsafe_allow_html=True)
 
         else:
-            st.info(f"Ingen spillere med over 150 minutter fundet med rollen '{valgt_profil}' i den valgte liga for sæsonen {SOGT_SAESON}.")
+            st.info(f"Ingen spillere fundet fra din CSV-fil med over 150 minutter i den valgte liga ({valgt_profil}).")
 
 if __name__ == "__main__":
     vis_side()
