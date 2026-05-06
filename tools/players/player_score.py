@@ -176,7 +176,7 @@ def vis_side():
 
     # --- 2. DYNAMISKE FILTRE ---
     col1, col2, col3 = st.columns(3)
-    valgt_hovedkategori = col1.selectbox("Vælg Kategori", list(POS_CONFIG.keys()))
+    valgt_hovedkategori = col1.selectbox("Vælg Kategori", list(POS_CONFIG.keys()), key="cat_select")
     
     df_csv_hoved = df_csv[df_csv['hovedkategori'] == valgt_hovedkategori]
     
@@ -207,7 +207,8 @@ def vis_side():
     
     valgt_specifik_visning = col2.selectbox(
         "Vælg Specifik Position", 
-        [alle_tekst] + list(visnings_positioner_map.values())
+        [alle_tekst] + list(visnings_positioner_map.values()),
+        key="spec_pos_select"
     )
     
     faktisk_specifik_valg = None
@@ -219,14 +220,19 @@ def vis_side():
 
     LIGA_VALGMULIGHEDER = {
         "alle": "Alle turneringer",
-        328: "Betinia Ligaen",
-        335: "Superligaen",
+        328: "NordicBet Liga",  # Tilpasset dit COMP_MAP
+        335: "Superliga",
         329: "2. division",
         43319: "3. division",
         331: "Oddset Pokalen",
         1305: "U19 Ligaen"
     }
-    valgt_liga_nøgle = col3.selectbox("Vælg Turnering", list(LIGA_VALGMULIGHEDER.keys()), format_func=lambda x: LIGA_VALGMULIGHEDER[x])
+    valgt_liga_nøgle = col3.selectbox(
+        "Vælg Turnering", 
+        list(LIGA_VALGMULIGHEDER.keys()), 
+        format_func=lambda x: LIGA_VALGMULIGHEDER[x],
+        key="liga_select"
+    )
 
     # --- 3. FILTER LOGIK ---
     if faktisk_specifik_valg:
@@ -249,8 +255,6 @@ def vis_side():
         liga_betingelse_stats = f"s.COMPETITION_WYID = {valgt_liga_nøgle}"
 
     with st.spinner("Henter og beregner live-data..."):
-        # RETTELSE: Vi benytter nu WYSCOUT_MATCHADVANCEDPLAYERSTATS_TOTAL (som bekræftet indeholder MINUTESONFIELD)
-        # samt joiner med MATCHES for at hente dato-betingelsen '>= 2026-01-01'
         sql_avanceret = f"""
             WITH minut_kilde AS (
                 SELECT 
@@ -270,7 +274,6 @@ def vis_side():
                 WHERE m_tot.COMPETITION_WYID IN {TILLADTE_LIGAER}
                   AND m_tot.MINUTESONFIELD > 0
                   AND m.DATE >= '2026-01-01'
-                  -- Vi isolerer spillere, der har spillet for Hvidovre (eller i Hvidovre-kampe som hjemme/ude hold)
                   AND (m.WINNER = {HVIDOVRE_TEAM_WYID} OR m.LOSER = {HVIDOVRE_TEAM_WYID} OR m_tot.PLAYER_WYID IN (
                       SELECT DISTINCT PLAYER_WYID 
                       FROM {DB}.WYSCOUT_PLAYERCAREER 
@@ -290,7 +293,7 @@ def vis_side():
                     AVG(s.KEYPASSES) as KEYPASSES, AVG(s.INTERCEPTIONS) as INTERCEPTIONS,
                     AVG(s.XGASSIST) as XGASSIST, AVG(s.SLIDINGTACKLES) as SLIDINGTACKLES,
                     AVG(s.PROGRESSIVERUN) as PROGRESSIVERUN, AVG(s.DEFENSIVEDUELSWON) as DEFENSIVEDUELSWON,
-                    AVG(s.CLEARANCES) as CLEARANCES, AVG(s.AERIALDUELS) AS AERIALDUELSWON,
+                    AVG(s.CLEARANCES) as CLEARANCES, AVG(s.AERIALDUELSWON) AS AERIALDUELSWON,
                     AVG(s.DANGEROUSOWNHALFLOSSES) as DANGEROUSOWNHALFLOSSES, AVG(s.ASSISTS) as ASSISTS
                 FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_AVERAGE s
                 JOIN {DB}.WYSCOUT_PLAYERS p ON s.PLAYER_WYID = p.PLAYER_WYID
@@ -315,7 +318,7 @@ def vis_side():
                     AVG(s.KEYPASSES) as KEYPASSES, AVG(s.INTERCEPTIONS) as INTERCEPTIONS,
                     AVG(s.XGASSIST) as XGASSIST, AVG(s.SLIDINGTACKLES) as SLIDINGTACKLES,
                     AVG(s.PROGRESSIVERUN) as PROGRESSIVERUN, AVG(s.DEFENSIVEDUELSWON) as DEFENSIVEDUELSWON,
-                    AVG(s.CLEARANCES) as CLEARANCES, AVG(s.AERIALDUELS) AS AERIALDUELSWON,
+                    AVG(s.CLEARANCES) as CLEARANCES, AVG(s.AERIALDUELSWON) AS AERIALDUELSWON,
                     AVG(s.DANGEROUSOWNHALFLOSSES) as DANGEROUSOWNHALFLOSSES, AVG(s.ASSISTS) as ASSISTS
                 FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_AVERAGE s
                 JOIN {DB}.WYSCOUT_PLAYERS p ON s.PLAYER_WYID = p.PLAYER_WYID
@@ -427,9 +430,10 @@ def vis_side():
             with rude_hoejre:
                 valgt_spiller_data = None
                 
+                # Robust match ved brug af WYID i stedet for rå tekst/navne
                 if valgt_klik and "selection" in valgt_klik and valgt_klik["selection"]["points"]:
-                    klikket_navn = valgt_klik["selection"]["points"][0]["y"]
-                    valgt_spiller_data = df[df['full_name'] == klikket_navn].iloc[0]
+                    klikket_wyid = valgt_klik["selection"]["points"][0]["customdata"][0]
+                    valgt_spiller_data = df[df['player_wyid'] == klikket_wyid].iloc[0]
                 elif not visnings_df.empty:
                     bedste_spiller_id = visnings_df.sort_values(score_col, ascending=False).iloc[0]['player_wyid']
                     valgt_spiller_data = df[df['player_wyid'] == bedste_spiller_id].iloc[0]
