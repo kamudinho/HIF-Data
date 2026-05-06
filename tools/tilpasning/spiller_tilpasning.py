@@ -10,6 +10,26 @@ REPO = "Kamudinho/HIF-data"
 OVERWRITE_DB_PATH = "data/players/spiller_overskrivning.csv"
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 
+# De præcise, godkendte oversættelser (sikrer at rå engelske værdier bliver til pænt dansk)
+POS_TRANSLATIONS = {
+    "Center Back": "Midterforsvarer",
+    "Left Back": "Venstre Back",
+    "Right Back": "Højre Back",
+    "Left Wing Back": "Venstre Wingback",
+    "Right Wing Back": "Højre Wingback",
+    "Defensive Midfielder": "Defensiv Midtbane",
+    "Central Midfielder": "Central Midtbane",
+    "Attacking Midfielder": "Offensiv Midtbane",
+    "Left Midfielder": "Venstre Midtbane",
+    "Right Midfielder": "Højre Midtbane",
+    "Forward": "Angriber",
+    "Left Winger": "Venstre kant",
+    "Right Winger": "Højre kant",
+    "Goalkeeper": "Målmand",
+    "Defender": "Forsvarsspiller",
+    "Midfielder": "Midtbanespiller"
+}
+
 def rens_specialtegn(val):
     """
     Oversætter ødelagte UTF-8/ANSI tegn (danske og baltiske/østlige tegn) 
@@ -125,6 +145,7 @@ def handle_auto_save():
             if not idx_in_full.empty:
                 has_changed = True
                 for col, val in updated_cols.items():
+                    # Hvis vi gemmer en ændret position, gemmer vi den som valgt
                     full_df.at[idx_in_full[0], col] = val
 
         if has_changed:
@@ -153,6 +174,9 @@ def vis_side():
         
         df = pd.read_csv(StringIO(content), encoding='utf-8-sig')
         
+        # Standardiser kolonner til UPPERCASE
+        df.columns = df.columns.str.upper().str.strip()
+        
         # Standardiser kolonner
         for col in ['NAVN', 'POSITION', 'KLUB', 'PLAYER_WYID', 'PLAYER_OPTAUUID', 'COMPETITION_WYID', 'COMPETITION_OPTAUUID']:
             if col not in df.columns:
@@ -160,7 +184,10 @@ def vis_side():
                 
         # Rens specialtegn i hukommelsen
         for col in ['NAVN', 'KLUB', 'POSITION']:
-            df[col] = df[col].fillna("").astype(str).apply(rens_specialtegn)
+            df[col] = df[col].fillna("").astype(str).apply(rens_specialtegn).str.strip()
+            
+        # OVERSÆT MANDATORISK: Gør rå engelske ord til pæne danske værdier i editoren
+        df['POSITION'] = df['POSITION'].replace(POS_TRANSLATIONS)
             
         st.session_state['full_df_editor'] = df.copy()
     else:
@@ -207,6 +234,16 @@ def vis_side():
     st.session_state['visnings_df_editor'] = visnings_df.copy()
 
     # --- 4. DATA_EDITOR MED AUTO-SAVE-CALLBACK ---
+    # Vi sammensætter en skudsikker liste af tilladte positionsværdier, inkl. de engelske termer hvis de optræder.
+    options_liste = [
+        "Målmand", "Goalkeeper",
+        "Forsvarsspiller", "Defender", "Stopper", "Center Back", "Left Back", "Right Back", "Venstre back", "Højre Back",
+        "Venstre Wingback", "Left Wing Back", "Højre Wingback", "Right Wing Back",
+        "Midtbanespiller", "Midfielder", "Defensiv midtbane", "Defensive Midfielder", "Central midtbane", "Central Midfielder", 
+        "Offensiv midtbane", "Attacking Midfielder", "Venstre midtbane", "Left Midfielder", "Højre midtbane", "Right Midfielder",
+        "Angriber", "Forward", "Venstre kant", "Left Winger", "Højre kant", "Right Winger"
+    ]
+
     st.data_editor(
         visnings_df,
         height=600,
@@ -225,13 +262,7 @@ def vis_side():
             "POSITION": st.column_config.SelectboxColumn(
                 "Position",
                 help="Vælg position",
-                options=[
-                    "Målmand", "Stopper", "Venstre back", "Højre Back",
-                    "Venstre Wingback", "Højre Wingback", "Defensiv midtbane",
-                    "Central midtbane", "Offensiv midtbane", "Venstre midtbane",
-                    "Højre midtbane", "Angriber", "Venstre kant", "Højre kant",
-                    "Forsvarsspiller", "Midtbanespiller"
-                ],
+                options=options_liste,
                 required=True
             ),
             "KLUB": st.column_config.TextColumn(
