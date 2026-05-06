@@ -241,9 +241,17 @@ def vis_side():
             df = raw_df.groupby('player_wyid', as_index=False).agg(agg_dict)
             df[score_col] = df[score_col].round(1)
             
-            # --- NYT/OPDATERET: HARD-FILTRERING MOD DIN CSV-FIL (Med rettet sti) ---
-            # Vi finder projektets rod (ét niveau op fra 'data' mappen, da denne fil ligger i 'data')
-            projekt_rod = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+            # --- 4. NYT/OPDATERET: HARD-FILTRERING MOD DIN CSV-FIL (ROBUST STI-SØGNING) ---
+            # Vi finder projektets reelle rodmappe (hif-data) ved at kravle opad
+            aktuel_fil_sti = os.path.abspath(__file__)
+            projekt_rod = os.path.dirname(aktuel_fil_sti)
+            
+            # Kravl op i hierarkiet indtil vi rammer den mappe, der indeholder 'data'-undermappen
+            for _ in range(5):  # Søg op til 5 niveauer op
+                if os.path.exists(os.path.join(projekt_rod, 'data')):
+                    break
+                projekt_rod = os.path.dirname(projekt_rod)
+                
             overskriv_sti = os.path.join(projekt_rod, 'data', 'players', 'spiller_overskrivning.csv')
             
             if os.path.exists(overskriv_sti):
@@ -273,9 +281,6 @@ def vis_side():
             else:
                 st.error(f"Kritisk fejl: Spiller-filen kunne ikke findes på stien: {overskriv_sti}")
                 return
-
-            df['dk_position'] = df['specific_position'].map(POS_TRANSLATIONS).fillna(df['specific_position'])
-            df_sorteret = df.sort_values(score_col, ascending=False)
             
             # --- 5. LOGIK: TOP 20 LIGA + 2 BEDSTE REELLE HVIDOVRE (Blandt de godkendte fra din CSV) ---
             liga_spillere = df_sorteret[df_sorteret['is_active_hvidovre'] == 0]
