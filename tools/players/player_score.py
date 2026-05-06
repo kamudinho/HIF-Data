@@ -58,7 +58,6 @@ def vis_side():
 
     DB = "KLUB_HVIDOVREIF.AXIS"
     SOGT_SAESON = "2025/2026"
-    HVIDOVRE_TEAM_WYID = 7490
     TILLADTE_LIGAER = (335, 328, 329, 43319, 331, 1305)
 
     POS_TRANSLATIONS = {
@@ -78,7 +77,7 @@ def vis_side():
             "labels": ["Pasnings %", "Clearinger"]
         },
         "Forsvarsspiller": {
-            "metrics": ["interceptions", "defensiveduelswon", "clearances", "aerialduels", "pass_pct", "dangerousownhalflosses"],
+            "metrics": ["interceptions", "defensiveduelswon", "clearances", "aerialduelswon", "pass_pct", "dangerousownhalflosses"],
             "weights": [5.0, 4.0, 3.5, 4.0, 2.5, -3.0], 
             "labels": ["Interceptions", "Vundne Def. Dueller", "Clearinger", "Vundne Luftdueller", "Pasnings %", "Farlige Boldtab (Egen banehalvdel)"]
         },
@@ -126,8 +125,13 @@ def vis_side():
     df_csv['klub'] = df_csv['klub'].fillna("").astype(str).apply(rens_specialtegn)
     df_csv['hovedkategori'] = df_csv['specific_position'].apply(map_til_hovedkategori)
 
-    # --- NY IDENTIFIKATION: Er spilleren Hvidovre-spiller i vores CSV? ---
-    df_csv['is_active_hvidovre'] = np.where(df_csv['klub'].str.strip() == "Hvidovre IF", 1, 0)
+    # --- SIKKER HOLD-GODKENDELSE ---
+    # Vi identificerer spillere baseret på CSV-filens definerede klub.
+    df_csv['is_active_hvidovre'] = np.where(
+        df_csv['klub'].str.strip().str.lower().isin(["hvidovre", "hvidovre if"]), 
+        1, 
+        0
+    )
 
     # --- 2. DYNAMISKE FILTRE ---
     col1, col2, col3 = st.columns(3)
@@ -144,7 +148,6 @@ def vis_side():
     alle_tekst = f"Alle {valgt_hovedkategori.lower()}e" if valgt_hovedkategori != "Målmand" else "Alle målmænd"
     
     valgt_specifik_visning = col2.selectbox("Vælg Specifik Position", [alle_tekst] + list(visnings_positioner_map.values()), key="spec_pos_select")
-    
     faktisk_specifik_valg = next((eng for eng, dk in visnings_positioner_map.items() if dk == valgt_specifik_visning), None)
 
     LIGA_VALGMULIGHEDER = {
@@ -154,18 +157,16 @@ def vis_side():
     valgt_liga_nøgle = col3.selectbox("Vælg Turnering", list(LIGA_VALGMULIGHEDER.keys()), format_func=lambda x: LIGA_VALGMULIGHEDER[x], key="liga_select")
 
     # --- 3. FILTER LOGIK ---
-    # Vi identificerer, hvilke spillere der skal hentes fra Snowflake ud fra CSV'ens is_active_hvidovre-opdeling
-    hvidovre_wyids = df_csv_hoved[df_csv_hoved['is_active_hvidovre'] == 1]['player_wyid'].tolist()
-    liga_wyids = df_csv_hoved[df_csv_hoved['is_active_hvidovre'] == 0]['player_wyid'].tolist()
+    alle_wyids_i_kategori = df_csv_hoved['player_wyid'].tolist()
 
-    if not hvidovre_wyids and not liga_wyids:
-        st.warning("Ingen spillere matcher de valgte filtre.")
+    if not alle_wyids_i_kategori:
+        st.warning("Ingen spillere matcher de valgte filtre i CSV-filen.")
         return
 
-    sql_hvidovre_ids = f"({', '.join(map(str, hvidovre_wyids))})" if hvidovre_wyids else "(-1)"
-    sql_liga_ids = f"({', '.join(map(str, liga_wyids))})" if liga_wyids else "(-1)"
+    sql_ids_str = f"({', '.join(map(str, alle_wyids_i_kategori))})"
 
-    # --- 4. DUAL SQL QUERY (HVIDOVRE VS LIGA) ---
+    # --- 4. OPTIMERET SQL QUERY ---
+    # Vi henter minutter og gennemsnitlige stats for hele den matchende pulje i ét kald.
     liga_betingelse_stats = f"s.COMPETITION_WYID IN {TILLADTE_LIGAER}" if valgt_liga_nøgle == "alle" else f"s.COMPETITION_WYID = {valgt_liga_nøgle}"
 
     with st.spinner("Henter og beregner live-data..."):
@@ -175,80 +176,64 @@ def vis_side():
                     pc.PLAYER_WYID,
                     -- Minutter for den specifikke valgte liga (til eksterne spillere)
                     SUM(CASE WHEN pc.COMPETITION_WYID = {valgt_liga_nøgle if valgt_liga_nøgle != 'alle' else 'pc.COMPETITION_WYID'} THEN pc.MINUTESPLAYED ELSE 0 END) as total_minutes_selected_liga,
-                    -- Minutter i alt for Hvidovre-spillere
+                    -- Minutter i alt på tværs af tilladte turneringer (bruges til Hvidovre-spillere)
                     SUM(pc.MINUTESPLAYED) as total_minutes_all_ligas
                 FROM {DB}.WYSCOUT_PLAYERCAREER pc
                 JOIN {DB}.WYSCOUT_SEASONS s ON pc.SEASON_WYID = s.SEASON_WYID
                 WHERE s.SEASONNAME = '{SOGT_SAESON}'
                   AND pc.COMPETITION_WYID IN {TILLADTE_LIGAER}
                 GROUP BY pc.PLAYER_WYID
-            ),
-            hvidovre_pulje AS (
-                SELECT 
-                    p.PLAYER_WYID,
-                    COALESCE(m_calc.total_minutes_all_ligas, 0) as total_minutes,
-                    1 as is_active_hvidovre,
-                    AVG(s.GOALS) as GOALS, AVG(s.XGSHOT) AS XG, AVG(s.SHOTS) as SHOTS,
-                    AVG(s.TOUCHINBOX) as TOUCHINBOX, AVG(s.DRIBBLES) as DRIBBLES,
-                    AVG(s.PASSES) as PASSES, AVG(s.SUCCESSFULPASSES) as SUCCESSFULPASSES,
-                    AVG(s.KEYPASSES) as KEYPASSES, AVG(s.INTERCEPTIONS) as INTERCEPTIONS,
-                    AVG(s.XGASSIST) as XGASSIST, AVG(s.SLIDINGTACKLES) as SLIDINGTACKLES,
-                    AVG(s.PROGRESSIVERUN) as PROGRESSIVERUN, AVG(s.DEFENSIVEDUELSWON) as DEFENSIVEDUELSWON,
-                    AVG(s.CLEARANCES) as CLEARANCES, AVG(s.AERIALDUELS) AS AERIALDUELS,
-                    AVG(s.DANGEROUSOWNHALFLOSSES) as DANGEROUSOWNHALFLOSSES, AVG(s.ASSISTS) as ASSISTS
-                FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_AVERAGE s
-                JOIN {DB}.WYSCOUT_PLAYERS p ON s.PLAYER_WYID = p.PLAYER_WYID
-                JOIN {DB}.WYSCOUT_SEASONS seas ON s.SEASON_WYID = seas.SEASON_WYID
-                JOIN minut_kilde m_calc ON p.PLAYER_WYID = m_calc.PLAYER_WYID
-                WHERE p.PLAYER_WYID IN {sql_hvidovre_ids}
-                  AND seas.SEASONNAME = '{SOGT_SAESON}'
-                  AND s.COMPETITION_WYID IN {TILLADTE_LIGAER}
-                GROUP BY p.PLAYER_WYID, m_calc.total_minutes_all_ligas
-                HAVING COALESCE(m_calc.total_minutes_all_ligas, 0) >= 150
-            ),
-            liga_pulje AS (
-                SELECT 
-                    p.PLAYER_WYID,
-                    COALESCE(m_calc.total_minutes_selected_liga, 0) as total_minutes,
-                    0 as is_active_hvidovre,
-                    AVG(s.GOALS) as GOALS, AVG(s.XGSHOT) AS XG, AVG(s.SHOTS) as SHOTS,
-                    AVG(s.TOUCHINBOX) as TOUCHINBOX, AVG(s.DRIBBLES) as DRIBBLES,
-                    AVG(s.PASSES) as PASSES, AVG(s.SUCCESSFULPASSES) as SUCCESSFULPASSES,
-                    AVG(s.KEYPASSES) as KEYPASSES, AVG(s.INTERCEPTIONS) as INTERCEPTIONS,
-                    AVG(s.XGASSIST) as XGASSIST, AVG(s.SLIDINGTACKLES) as SLIDINGTACKLES,
-                    AVG(s.PROGRESSIVERUN) as PROGRESSIVERUN, AVG(s.DEFENSIVEDUELSWON) as DEFENSIVEDUELSWON,
-                    AVG(s.CLEARANCES) as CLEARANCES, AVG(s.AERIALDUELS) AS AERIALDUELS,
-                    AVG(s.DANGEROUSOWNHALFLOSSES) as DANGEROUSOWNHALFLOSSES, AVG(s.ASSISTS) as ASSISTS
-                FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_AVERAGE s
-                JOIN {DB}.WYSCOUT_PLAYERS p ON s.PLAYER_WYID = p.PLAYER_WYID
-                JOIN {DB}.WYSCOUT_SEASONS seas ON s.SEASON_WYID = seas.SEASON_WYID
-                JOIN minut_kilde m_calc ON p.PLAYER_WYID = m_calc.PLAYER_WYID
-                WHERE p.PLAYER_WYID IN {sql_liga_ids}
-                  AND seas.SEASONNAME = '{SOGT_SAESON}'
-                  AND {liga_betingelse_stats}
-                GROUP BY p.PLAYER_WYID, m_calc.total_minutes_selected_liga
-                HAVING COALESCE(m_calc.total_minutes_selected_liga, 0) >= 150
             )
-            SELECT * FROM hvidovre_pulje
-            UNION ALL
-            SELECT * FROM liga_pulje
+            SELECT 
+                p.PLAYER_WYID,
+                COALESCE(m_calc.total_minutes_all_ligas, 0) as total_minutes_all_ligas,
+                COALESCE(m_calc.total_minutes_selected_liga, 0) as total_minutes_selected_liga,
+                AVG(s.GOALS) as GOALS, AVG(s.XGSHOT) AS XG, AVG(s.SHOTS) as SHOTS,
+                AVG(s.TOUCHINBOX) as TOUCHINBOX, AVG(s.DRIBBLES) as DRIBBLES,
+                AVG(s.PASSES) as PASSES, AVG(s.SUCCESSFULPASSES) as SUCCESSFULPASSES,
+                AVG(s.KEYPASSES) as KEYPASSES, AVG(s.INTERCEPTIONS) as INTERCEPTIONS,
+                AVG(s.XGASSIST) as XGASSIST, AVG(s.SLIDINGTACKLES) as SLIDINGTACKLES,
+                AVG(s.PROGRESSIVERUN) as PROGRESSIVERUN, AVG(s.DEFENSIVEDUELSWON) as DEFENSIVEDUELSWON,
+                AVG(s.CLEARANCES) as CLEARANCES, AVG(s.AERIALDUELSWON) AS AERIALDUELSWON,
+                AVG(s.DANGEROUSOWNHALFLOSSES) as DANGEROUSOWNHALFLOSSES, AVG(s.ASSISTS) as ASSISTS
+            FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_AVERAGE s
+            JOIN {DB}.WYSCOUT_PLAYERS p ON s.PLAYER_WYID = p.PLAYER_WYID
+            JOIN {DB}.WYSCOUT_SEASONS seas ON s.SEASON_WYID = seas.SEASON_WYID
+            LEFT JOIN minut_kilde m_calc ON p.PLAYER_WYID = m_calc.PLAYER_WYID
+            WHERE p.PLAYER_WYID IN {sql_ids_str}
+              AND seas.SEASONNAME = '{SOGT_SAESON}'
+              AND {liga_betingelse_stats}
+            GROUP BY p.PLAYER_WYID, m_calc.total_minutes_all_ligas, m_calc.total_minutes_selected_liga
         """
         
-        df_raw = conn.query(sql_samlet)
+        try:
+            df_raw = conn.query(sql_samlet)
+        except Exception as e:
+            st.error(f"Fejl ved SQL query: {e}")
+            return
         
         if df_raw is not None and not df_raw.empty:
             df_raw.columns = df_raw.columns.str.lower()
             df_raw['player_wyid'] = df_raw['player_wyid'].astype(int)
 
-            # Vi fletter data sammen (bemærk: vi dropper csv'ens is_active_hvidovre midlertidigt for at undgå kolonnekonflikt)
-            df_csv_clean = df_csv.drop(columns=['is_active_hvidovre'])
-            df = pd.merge(df_csv_clean, df_raw, on='player_wyid', how='inner')
+            # Vi fletter her CSV'en sammen med databaseresultaterne
+            df = pd.merge(df_csv, df_raw, on='player_wyid', how='inner')
 
             if df.empty:
-                st.caption("Ingen spillere matcher spilletidskriterierne (min. 150 min.) i denne turnering.")
+                st.info("Ingen spillere matcher kriterierne i denne turnering.")
                 return
 
+            # Bestem minutter og holdsnavn ud fra din CSV holds-status
+            df['total_minutes'] = np.where(df['is_active_hvidovre'] == 1, df['total_minutes_all_ligas'], df['total_minutes_selected_liga'])
             df['team_name'] = np.where(df['is_active_hvidovre'] == 1, "Hvidovre IF", df['klub'])
+            
+            # Filtrér spilletid (Minimum 150 minutter)
+            df = df[df['total_minutes'] >= 150]
+            
+            if df.empty:
+                st.info("Ingen spillere i kategorien har over 150 minutters spilletid.")
+                return
+
             df['pass_pct'] = (df['successfulpasses'] / df['passes'].replace(0, 1)) * 100
 
             # --- PERFORMANCE SCORE BEREGNING ---
@@ -274,13 +259,12 @@ def vis_side():
 
             df_sorteret = df_filtreret.sort_values(score_col, ascending=False)
             
-            # Opdel på baggrund af den korrekte CSV klub-værdi
+            # Opdel i Hvidovre vs. Liga baseret på det korrekte CSV-tjek
             hvidovre_spillere = df_sorteret[df_sorteret['is_active_hvidovre'] == 1]
             liga_spillere = df_sorteret[df_sorteret['is_active_hvidovre'] == 0]
             
-            # Flet de 20 bedste liga-spillere med de 2 bedste Hvidovre-spillere
+            # Top 20 eksterne spillere + Top 2 Hvidovre-spillere
             visnings_df = pd.concat([liga_spillere.head(20), hvidovre_spillere.head(2)]).drop_duplicates(subset=['player_wyid'])
-            
             visnings_df = visnings_df.sort_values(score_col, ascending=True)
             visnings_df['visningsnavn'] = visnings_df['full_name']
 
@@ -311,10 +295,17 @@ def vis_side():
 
             with rude_hoejre:
                 valgt_spiller_data = None
+                
+                # REKONSTRUKTION AF KLIK: Løser fejlen ved klik på en bar på grafen
                 if valgt_klik and "selection" in valgt_klik and valgt_klik["selection"]["points"]:
                     klikket_wyid = valgt_klik["selection"]["points"][0]["customdata"][0]
-                    valgt_spiller_data = df_filtreret[df_filtreret['player_wyid'] == klikket_wyid].iloc[0]
-                elif not visnings_df.empty:
+                    # Vi finder spilleren i hele df_filtreret baseret på hans wyid
+                    match = df_filtreret[df_filtreret['player_wyid'] == klikket_wyid]
+                    if not match.empty:
+                        valgt_spiller_data = match.iloc[0]
+                
+                # Hvis intet er klikket endnu, vælges den højest rangerede spiller på grafen som standard
+                if valgt_spiller_data is None and not visnings_df.empty:
                     bedste_spiller_id = visnings_df.sort_values(score_col, ascending=False).iloc[0]['player_wyid']
                     valgt_spiller_data = df_filtreret[df_filtreret['player_wyid'] == bedste_spiller_id].iloc[0]
 
