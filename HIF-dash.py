@@ -105,8 +105,8 @@ if not st.session_state["logged_in"]:
 
 # --- 3. SIDEBAR NAVIGATION ---
 with st.sidebar:
-    # Definer hovedområder
-    alle_omraader = ["HVIDOVRE IF", "HOLDANALYSE", "SPILLERANALYSE", "SCOUTING", "ADMIN"]
+    # TILFØJET: "TILPASNING" er nu en del af hovedområderne
+    alle_omraader = ["HVIDOVRE IF", "HOLDANALYSE", "SPILLERANALYSE", "SCOUTING", "TILPASNING", "ADMIN"]
     
     # Hent brugerinfo og tjek for restriktioner
     user_info = USER_DB.get(st.session_state["user"], {})
@@ -129,18 +129,22 @@ with st.sidebar:
         sel = option_menu(None, options=["Spillerprofil", "Charts"])
     elif hoved_omraade == "SCOUTING":
         sel = option_menu(None, options=filtrer_menu(["Scoutrapport", "Database", "Emnedatabase", "Sammenligning"]))
+    elif hoved_omraade == "TILPASNING":
+        # TILFØJET: "Spiller-score" er nu placeret heri
+        sel = option_menu(None, options=filtrer_menu(["Spiller-score"]))
     elif hoved_omraade == "ADMIN":
-        sel = option_menu(None, options=filtrer_menu(["System Log", "Profil", "Spiller-score", "Datakatalog", "Konklusion", "Fysisk profil", "Hold: Fysisk profil", "Intern analyse", "Top 5: Spillere", "Ordbog"]))
+        # REMOVED: "Spiller-score" er fjernet herfra
+        sel = option_menu(None, options=filtrer_menu(["System Log", "Profil", "Datakatalog", "Konklusion", "Fysisk profil", "Hold: Fysisk profil", "Intern analyse", "Top 5: Spillere", "Ordbog"]))
 
-    # --- DISKRET CACHE-RYDDER (Placeret nederst i sidebaren) ---
-    st.markdown("<br>" * 4, unsafe_allow_html=True) # Skubber knappen ned i bunden    
-    # Vi bruger en kolonne-struktur for at centrere knappen i sidebaren
+    # --- DISKRET CACHE-RYDDER ---
+    st.markdown("<br>" * 4, unsafe_allow_html=True)  
     side_col1, side_col2, side_col3 = st.columns([1, 5, 1])
     with side_col2:
         if st.button("Clear Cache", use_container_width=True, help="Hvis appen driller eller viser fejl, så tryk her for at nulstille data"):
             st.cache_data.clear()
             st.cache_resource.clear()
             st.rerun()
+
 # --- 4. DATA LOADING & RENDERING ---
 render_hif_header(f"{hoved_omraade}  |  {sel.upper()}")
 
@@ -194,6 +198,12 @@ try:
             import tools.ligaen.modstanderanalyse as ma
             ma.vis_side()
 
+    elif hoved_omraade == "TILPASNING":
+        # TILFØJET: Render logikken for Spiller-score under Tilpasning
+        if sel == "Spiller-score":
+            import tools.players.player_score as pscore
+            pscore.vis_side()
+
     elif hoved_omraade == "ADMIN":
         if sel == "System Log":
             import tools.admin_page.admin as admin
@@ -222,10 +232,6 @@ try:
         elif sel == "Ordbog":
             import utils.ordbog as ob
             ob.vis_side()
-        elif sel == "Spiller-score":
-            import tools.players.player_score as pscore
-            pscore.vis_side()
-
 
 except Exception as e:
     st.error(f"Fejl ved indlæsning af {sel}: {e}")
