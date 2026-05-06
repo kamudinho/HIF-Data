@@ -2,6 +2,35 @@ import streamlit as st
 import pandas as pd
 import os
 
+def rens_specialtegn(val):
+    """
+    Oversætter ødelagte UTF-8/ANSI tegn (danske og baltiske/østlige tegn) 
+    til deres rigtige bogstaver.
+    """
+    if not isinstance(val, str):
+        return val
+        
+    # Ordbog over typiske encoding-fejl (Mojibake)
+    tegn_map = {
+        # Danske tegn
+        '√∏': 'ø', '√ò': 'Ø',
+        '√¶': 'æ', '√Ü': 'Æ',
+        '√•': 'å', '√Ö': 'Å',
+        # Baltiske, polske og østeuropæiske specialtegn
+        '≈°': 'š', '≈†': 'Š',
+        '≈æ': 'ž', '≈Ω': 'Ž',
+        'ƒÖ': 'ą', 'ƒÜ': 'ć', 'ƒô': 'ę', '≈Ç': 'ł', '≈Ñ': 'ń', '√≥': 'ó', '≈ö': 'ś', '≈∫': 'ź', '≈º': 'ż',
+        'ƒÖ': 'Ą', 'ƒÜ': 'Ć', 'ƒò': 'Ę', '≈Detailed': 'Ł', '≈É': 'Ń', '√ì': 'Ó', '≈ö': 'Ś', '≈π': 'Ź', '≈ª': 'Ż',
+        'ƒç': 'č', 'ƒé': 'Č',
+        'ƒô': 'ē', 'ƒ™': 'ī', '≈´': 'ū', 'ƒÅ': 'ā', 'ƒº': 'ū',
+        # Generelle accenter
+        '√©': 'é', '√®': 'è', '√¢': 'â', '√º': 'ü', '√∂': 'ö', '√§': 'ä'
+    }
+    
+    for grimt, godt in tegn_map.items():
+        val = val.replace(grimt, godt)
+    return val
+
 def vis_side():
     st.write(
         "Her kan du rette navn, position og klub direkte i tabellen. "
@@ -25,17 +54,36 @@ def vis_side():
         st.error(f"Fejl ved indlæsning af CSV: {e}")
         return
 
-    # Sørg for at kolonnenavnene matcher præcis (så vi ikke får problemer med store/små bogstaver)
+    # Sørg for at kolonnenavnene matcher præcis
     for col in ['NAVN', 'POSITION', 'KLUB', 'PLAYER_WYID', 'PLAYER_OPTAUUID', 'COMPETITION_WYID', 'COMPETITION_OPTAUUID']:
         if col not in df.columns:
-            # Hvis filen er tom eller mangler kolonner, opretter vi dem
             df[col] = None
 
-    # --- 2. DEN INTERAKTIVE DATA_EDITOR ---
-    # Vi bruger 'disabled' til at låse de sidste 4 kolonner
-    redigeret_df = st.data_editor(
-        df,
-        num_rows="fixed", # Sæt til "dynamic" hvis du vil have mulighed for at tilføje/slette rækker helt
+    # --- AUTOMATISK OPRENSNING AF TEGN ---
+    # Vi kører rensningen på de tekstfelter, hvor fejlene typisk opstår
+    for col in ['NAVN', 'KLUB', 'POSITION']:
+        df[col] = df[col].apply(rens_specialtegn)
+
+    # --- 2. SØGEFELT (PLaceret over tabellen) ---
+    soegning = st.text_input("🔍 Søg efter spiller, position eller klub:", "").strip().lower()
+
+    if soegning:
+        # Filtrerer tabellen på tværs af de tre redigerbare felter
+        mask = (
+            df['NAVN'].astype(str).str.lower().str.contains(soegning) |
+            df['POSITION'].astype(str).str.lower().str.contains(soegning) |
+            df['KLUB'].astype(str).str.lower().str.contains(soegning)
+        )
+        filtreret_df = df[mask]
+    else:
+        filtreret_df = df
+
+    # --- 3. DEN INTERAKTIVE DATA_EDITOR ---
+    # Her har vi tilføjet 'height=600' til konfigurationen
+    redigeret_filtreret_df = st.data_editor(
+        filtreret_df,
+        height=600,
+        num_rows="fixed",
         use_container_width=True,
         hide_index=True,
         disabled=["PLAYER_WYID", "PLAYER_OPTAUUID", "COMPETITION_WYID", "COMPETITION_OPTAUUID"],
@@ -62,7 +110,6 @@ def vis_side():
                 help="Rediger spillerens nuværende klub",
                 required=True
             ),
-            # Låste kolonner formateres pænt som tekst/tal uden tusindtals-separator:
             "PLAYER_WYID": st.column_config.NumberColumn(
                 "PLAYER_WYID",
                 format="%d"
@@ -80,12 +127,16 @@ def vis_side():
         }
     )
 
-    # --- 3. GEM DET REDIGEREDE DATAFRAME DIREKTE TIL FILEN ---
-    if not redigeret_df.equals(df):
+    # --- 4. GEM RELEVANTE RETTELSER TILBAGE I FILEN ---
+    # Vi overfører ændringerne fra den filtrerede tabel tilbage til det oprindelige fulde 'df'
+    if not redigeret_filtreret_df.equals(filtreret_df):
         try:
+            # Opdater det oprindelige dataframe med de rækker der lige er blevet ændret i editoren
+            df.update(redigeret_filtreret_df)
+            
             # Gemmer direkte til CSV'en med uændret kolonnestruktur og UTF-8 encoding
-            redigeret_df.to_csv(overskriv_sti, index=False, encoding='utf-8-sig')
-            st.success("Data blev gemt succesfuldt!")
+            df.to_csv(overskriv_sti, index=False, encoding='utf-8-sig')
+            st.success("Ændringer gemt og specialtegn ryddet op! 💾")
             
             # Ryd cache og genindlæs siden
             st.cache_data.clear()
