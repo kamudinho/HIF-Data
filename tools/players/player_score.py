@@ -81,7 +81,7 @@ def vis_side():
 
     conn = _get_snowflake_conn()
     if not conn:
-        st.error("Kunne ikke oprette forbindelse til Snowflake-databasen.")
+        st.error("Kunne ikke oprette forbindelse to Snowflake-databasen.")
         return
 
     DB = "KLUB_HVIDOVREIF.AXIS"
@@ -161,17 +161,21 @@ def vis_side():
         return
 
     df_csv.columns = df_csv.columns.str.lower().str.strip()
+    
+    # Her omdøber vi 'klub' til 'team_name' med det samme. 
+    # Det sikrer, at CSV-klubben overskriver holdnavnet fra databasen i vores merge!
     df_csv = df_csv.rename(columns={
         'wyid': 'player_wyid',
         'navn': 'full_name',
-        'position': 'specific_position'
+        'position': 'specific_position',
+        'klub': 'team_name'
     })
     
     # Rens og standardiser værdier
     df_csv['player_wyid'] = df_csv['player_wyid'].astype(int)
     df_csv['specific_position'] = df_csv['specific_position'].fillna("").astype(str).apply(rens_specialtegn)
     df_csv['full_name'] = df_csv['full_name'].fillna("").astype(str).apply(rens_specialtegn)
-    df_csv['klub'] = df_csv['klub'].fillna("").astype(str).apply(rens_specialtegn)
+    df_csv['team_name'] = df_csv['team_name'].fillna("").astype(str).apply(rens_specialtegn)
     
     df_csv['hovedkategori'] = df_csv['specific_position'].apply(map_til_hovedkategori)
 
@@ -254,6 +258,8 @@ def vis_side():
         liga_betingelse_stats = f"s.COMPETITION_WYID = {valgt_liga_nøgle}"
 
     with st.spinner("Henter og beregner live-data..."):
+        # RETTET SQL: hvidovre_spillere_2026 tjekker nu på, om kampminutterne 
+        # rent faktisk er spillet FOR Hvidovre (m_tot.TEAM_WYID), i stedet for blot spillerens kontraktstatus.
         sql_avanceret = f"""
             WITH minut_kilde AS (
                 SELECT 
@@ -267,11 +273,10 @@ def vis_side():
                 GROUP BY pc.PLAYER_WYID
             ),
             hvidovre_spillere_2026 AS (
-                SELECT DISTINCT p.PLAYER_WYID
-                FROM {DB}.WYSCOUT_PLAYERS p
-                JOIN {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_TOTAL m_tot ON p.PLAYER_WYID = m_tot.PLAYER_WYID
+                SELECT DISTINCT m_tot.PLAYER_WYID
+                FROM {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_TOTAL m_tot
                 JOIN {DB}.WYSCOUT_MATCHES m ON m_tot.MATCH_WYID = m.MATCH_WYID
-                WHERE p.CURRENTTEAM_WYID = {HVIDOVRE_TEAM_WYID}
+                WHERE m_tot.TEAM_WYID = {HVIDOVRE_TEAM_WYID}
                   AND m.DATE >= '2026-01-01'
                   AND m_tot.MINUTESONFIELD > 0
             ),
@@ -338,14 +343,20 @@ def vis_side():
             df_raw.columns = df_raw.columns.str.lower()
             df_raw['player_wyid'] = df_raw['player_wyid'].astype(int)
 
+            # Når vi merger her, vil 'team_name' fra df_csv (som er din tilpassede klub-kolonne) 
+            # automatisk overskrive 'team_name' fra databasen, fordi vi omdøbte den i trin 1.
+            # Vi dropper 'team_name' fra databasen før merge for at undgå 'team_name_x' og 'team_name_y'.
+            if 'team_name' in df_raw.columns:
+                df_raw = df_raw.drop(columns=['team_name'])
+
             df = pd.merge(df_csv, df_raw, on='player_wyid', how='inner')
 
             if df.empty:
                 st.info(f"Ingen spillere i din CSV-fil matcher de valgte minut-kriterier i denne turnering.")
                 return
 
-            if 'is_active_hvidovre' in df.columns:
-                df.loc[df['is_active_hvidovre'] == 1, 'team_name'] = "Hvidovre IF"
+            # RETTET: Linjen, der overskrev alle aktive Hvidovre-spilleres klub til "Hvidovre IF", er fjernet!
+            # Nu vil Elias Rusborg have den klub, du har skrevet i din CSV ("FA2000").
 
             df['pass_pct'] = (df['successfulpasses'] / df['passes'].replace(0, 1)) * 100
 
