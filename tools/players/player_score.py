@@ -184,10 +184,10 @@ def vis_side():
     
     # Ekskluder disse overordnede/brede betegnelser fra den specifikke dropdown-menu
     ekskluder_fra_dropdown = {
-        "målmand", "goalkeeper", "keeper", "gk",
-        "forsvarsspiller", "defender", "def",
-        "midtbanespiller", "midfielder", "mid",
-        "angriber", "forward", "striker", "fwd"
+        "Målmand", "goalkeeper", "keeper", "gk",
+        "Forsvarsspiller", "defender", "def",
+        "Midtbanespiller", "midfielder", "mid",
+        "Angriber", "forward", "striker", "fwd"
     }
     
     # Hent kun de reelle, specifikke positioner til dropdown-menuen
