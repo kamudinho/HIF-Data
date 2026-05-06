@@ -20,7 +20,7 @@ Adam Ejler Hansen,Defender,Holbæk Bold - & Idrætsforening,621840,e0rgqk3gxzs00
 Adam Fuglsang,Midfielder,AGF Under 19,769093,e8ncg8zfaq9njkv7owyqh9yzu,1305,
 Adam Gabriel,Defender,FC Midtjylland,668034,bidudbkachfl6126lhlr254wk,335,29actv1ohj8r10kd9hu0jnb0n
 Adam Herdonsson,Defender,Horsens,615955,9dh7cnu4uzbraeck0t5iqlj4k,328,dyjr458hcmrcy87fsabfsy87o
-Adam Ingi Benediktsson,Goalkeeper,Akademisk Boldklub,599989,,329,
+Adam Ingi Benediktsson,Målmand,Akademisk Boldklub,599989,,329,
 Adam Kleis-Kristoffersen,Forward,79539,932132,2pbwkka0p76s6mh0yaoyvrdw4,335,29actv1ohj8r10kd9hu0jnb0n
 Adam Larsson,Forward,4793,570652,aahyom322jdc6f21960ycuzth,328,dyjr458hcmrcy87fsabfsy87o
 Adam Nygaard  Andersen,Defender,FC Fredericia,624703,xd4gm9uiq807dri1gs3ltclw,335,29actv1ohj8r10kd9hu0jnb0n
@@ -120,7 +120,7 @@ Anders Ravn Olsen,Goalkeeper,Hvidovre,680719,,328,dyjr458hcmrcy87fsabfsy87o
 Anders Skjødt Sønderby,Defender,Vejgaard Boldspilklub,449494,bhcx6eefe79v1anvvhsed910q,328,dyjr458hcmrcy87fsabfsy87o
 Anders Sønderskov,Defender,Esbjerg,638043,ajk0mbprro09pccglih9y740k,1305,
 Andrass Johansen,Midfielder,BK Fremad Amager,538578,dz8s1baxo3lpznfol2rlfdmhg,329,
-Andreas  Bahne,Stopper,Næsby BK U19,897263,,43319,
+Andreas  Bahne,Defender,Næsby BK U19,897263,,43319,
 Andreas  Maarup Hansen,Midfielder,AaB,684432,,43319,
 Andreas  Rise Kristiansen,Midfielder,Vendsyssel FF,1069758,9vbxe5gvruap8h546efz3nx1w,329,
 Andreas  Søndenbroe,Goalkeeper,7475,769262,,1305,
@@ -153,7 +153,7 @@ Andreas Rasmussen,Goalkeeper,SfB-Oure FA Under 19,849678,v5l81gxg2i8p5imhugkqiex
 Andreas Sejr Lausen,Midfielder,Esbjerg,535634,ate1ymumg2iwzn8uyyf3ts222,1305,
 Andreas Smed,Forward,Hvidovre,562692,e7ee1vpnnt68l3bv2vlre1z6y,335,29actv1ohj8r10kd9hu0jnb0n
 Andreas Söndergaard,Goalkeeper,Hobro,544922,,335,29actv1ohj8r10kd9hu0jnb0n
-Andreas Tomasseli,Stopper,Næsby BK,624729,,43319,
+Andreas Tomasseli,Defender,Næsby BK,624729,,43319,
 Andreas Troelsen,Defender,6725,551696,bmkwmf5f2ssnw2cq7uga7yd5g,1305,
 Andreas Uhre Kristensen,Midfielder,23735,767229,,328,dyjr458hcmrcy87fsabfsy87o
 Andreas Vilberg,Forward,BK Frem 1886,872527,,43319,
@@ -268,7 +268,7 @@ Bojang Yaya,Defender,OB,945200,,1305,
 Brandt Helmer Emil,Midfielder,Boldklubben af 1893 Under 17,1085213,,328,dyjr458hcmrcy87fsabfsy87o
 Breki Baldursson,Midfielder,Esbjerg,835759,6lxkawhg9z2jyh7u8d6hp3g15,1305,
 Bror Blume,Midfielder,Lyngby,56251,1acmsp1ulfijcrryff1qibdud,328,dyjr458hcmrcy87fsabfsy87o
-Buster Stage,Målmand,Næsby BK,678942,14fw7p4fzaxprndgxnx0gxgbt,43319,
+Buster Stage,Goalkeeper,Næsby BK,678942,14fw7p4fzaxprndgxnx0gxgbt,43319,
 Caleb Marfo Yirenkyi,Midfielder,FC Nordsjælland,1053585,,1305,
 Caleb Sweeney,Midfielder,23734,1131296,,1305,
 Calle Mogensen,Goalkeeper,,1100417,,329,
@@ -401,7 +401,7 @@ Diouf Ameth,Midfielder,FC Helsingør,1140832,,329,
 Ditlev Gade,Midfielder,Silkeborg IF Under 17,768977,7fkc01xxyl1trj3uav134ehyi,1305,
 Django Warmerdam,Defender,Lyngby,283942,6my743on19jmzmlq0crx3mq51,328,dyjr458hcmrcy87fsabfsy87o
 Doguhan Aral ≈ûim≈üir,Forward,FC Midtjylland,471107,4zrsiizdbzwwkmit3ta0f0dbe,335,29actv1ohj8r10kd9hu0jnb0n
-Dominik Kotarski,Målmand,FC København,423152,c5h1yhzg9ouq6ru7oi24cfe21,335,29actv1ohj8r10kd9hu0jnb0n
+Dominik Kotarski,Goalkeeper,FC København,423152,c5h1yhzg9ouq6ru7oi24cfe21,335,29actv1ohj8r10kd9hu0jnb0n
 Dominik Sarapata,Midfielder,13508,821996,bj9h8gkbj71nz1wjgpqz2plas,335,29actv1ohj8r10kd9hu0jnb0n
 Donart Bedjeti,Forward,Frederiksberg Alliancen 2000,908553,bhsfahebxovo3dr1nz5nzqn10,328,dyjr458hcmrcy87fsabfsy87o
 Donavan Kafo Bagou,Forward,Hellerup IK,607033,1hlx5mvl8th7y82gocnuxacd0,43319,
@@ -635,7 +635,7 @@ Hjalte Dalsgaard,Goalkeeper,BK Fremad Amager,620792,e9lrzsiy94y46h62rnawi3sgl,32
 Hjalte Damgaard Nielsen,Goalkeeper,Hørsholm-Usserød IK,832390,mp4e2knxubc5sncgd6p4j4lw,43319,
 Hjalte Froholdt,Defender,Lyngby Boldklub Under 19,769178,c9u2w9ikckbrra8vln2ucbf9w,1305,
 Hjalte Gitz Christensen,Defender,23733,813418,,335,29actv1ohj8r10kd9hu0jnb0n
-Hjalte Hemmingsen,Central midtbane,Næsby BK,624728,,43319,
+Hjalte Hemmingsen,Midfielder,Næsby BK,624728,,43319,
 Hjalte Mølholt Dahl,Midfielder,Hobro IK Under 19,963500,f3h1bxnw3fq8m10ck132bic4p,328,dyjr458hcmrcy87fsabfsy87o
 Hjalte Rødebæk Petersen Kropp,Forward,Lyngby Boldklub Under 19,898801,,1305,
 Hjalte Søborg Petersen,Goalkeeper,FC Helsingør,523115,f0zavvz5xl62afoulc9ho019m,329,
@@ -681,7 +681,7 @@ Jacob Michelsen,Goalkeeper,,626961,a6ssvevqrfq20ysr9seq8486i,328,dyjr458hcmrcy87
 Jacob Vetter Laursen,Defender,,433469,,328,dyjr458hcmrcy87fsabfsy87o
 Jagvir Singh Sidhu,Midfielder,FC Helsingør,521237,,328,dyjr458hcmrcy87fsabfsy87o
 Jakob   Truelsen,Forward,Odder IGF,576672,,43319,
-Jakob  Tonnesen,Central midtbane,Næsby BK,1214084,,43319,
+Jakob  Tonnesen,Midfielder,Næsby BK,1214084,,43319,
 Jakob Ankersen,Midfielder,,55960,7cpkykvmy8ujrahzdz7ksk2c5,335,29actv1ohj8r10kd9hu0jnb0n
 Jakob Bonde Jensen,Midfielder,OB,444298,,335,29actv1ohj8r10kd9hu0jnb0n
 Jakob Busk Jensen,Goalkeeper,FC Nordsjælland,55974,,335,29actv1ohj8r10kd9hu0jnb0n
@@ -765,7 +765,7 @@ Jona Niemiec,Forward,OB,755424,6s3lkxgo7i5lktx7ultybs3ys,335,29actv1ohj8r10kd9hu
 Jonas  Monefeldt Petersen,Goalkeeper,,1269300,,43319,
 Jonas Berwald,Midfielder,Brabrand IF,762304,,329,
 Jonas Bjørn-Jensen,Goalkeeper,Vejgaard Boldspilklub,679223,,43319,
-Jonas Christensen,Central midtbane,Næsby BK,769941,ewncq8niyuy1y332aqzsbedck,43319,
+Jonas Christensen,Midfielder,Næsby BK,769941,ewncq8niyuy1y332aqzsbedck,43319,
 Jonas Dakir,Goalkeeper,Hobro,484061,9yxhg70gpwi3e9s84c8qwg0yx,335,29actv1ohj8r10kd9hu0jnb0n
 Jonas El-Beltagi,Goalkeeper,Næstved BK,449054,,329,
 Jonas Gemmer,Midfielder,FC Helsingør,234373,4oxf446ya7jwulq6hxlp8r36d,328,dyjr458hcmrcy87fsabfsy87o
@@ -818,7 +818,7 @@ Juho Väinö Valtteri Lähteenmäki,Forward,FC Nordsjælland,778888,,335,29actv1
 Julian Pedersen Vitus,Forward,Odense BK Under 19,782515,,1305,
 Julius Berthel Askou Harvey,Defender,OB,679238,,328,dyjr458hcmrcy87fsabfsy87o
 Julius Emefile,Forward,FC Midtjylland Under 19,748632,,335,29actv1ohj8r10kd9hu0jnb0n
-Julius Fechtenburg,Højre kant,Næsby BK,449176,,1305,
+Julius Fechtenburg,Midfielder,Næsby BK,449176,,1305,
 Julius Hamburger-Toft,Midfielder,Vanløse IF,602439,,1305,
 Julius Luca Sonnenborg,Midfielder,27146,1108505,,1305,
 Julius Madsen,Midfielder,Horsens,577566,eso2tbbpnxu9qvx6zy07m5jx0,329,
@@ -848,7 +848,7 @@ Kasper Enghardt,Defender,Hillerød,383090,khqldwfq14b7giakss24l9t5,335,29actv1oh
 Kasper Hartly Kiilerich,Goalkeeper,Aarhus Fremad,679868,,329,
 Kasper Heerfordt,Defender,Brønshøj BK,619680,3wx08y3aabvejd8phcglis3dg,43319,
 Kasper Holm Rod,Goalkeeper,Vejle Boldklub Under 19,959716,,1305,
-Kasper Høst,Angriber,Næsby BK,562588,17zahtopt5x8nvrrv5g6ool49,329,
+Kasper Høst,Forward,Næsby BK,562588,17zahtopt5x8nvrrv5g6ool49,329,
 Kasper Jensen,Defender,Nykøbing FC,270141,eps93ehgmx8ft3kjo4zvy63o4,328,dyjr458hcmrcy87fsabfsy87o
 Kasper Jørgensen,Forward,VSK Århus,1325979,vrzye4jqrafujmjw3wakjpxw,329,
 Kasper Kjellingbro,Defender,Vejgaard Boldspilklub,1074519,9hrk925snetyt0a5hpw3em6tw,43319,
@@ -866,7 +866,7 @@ Kasper Yde Hedegaard,Forward,VSK Århus,449678,,329,
 Kean Tran,Defender,Vanløse IF,625217,f5gja2wqjlm60rideia16jpm2,1305,
 Keita Lansseyni,Defender,FC Midtjylland Under 19,1166172,,1305,
 Kelvin Pius John,Forward,AaB,568923,xctg7y5ks41cjjnerqkia38p,335,29actv1ohj8r10kd9hu0jnb0n
-Kenay Myrie Reyes,Højre Back,FC København,897690,,335,29actv1ohj8r10kd9hu0jnb0n
+Kenay Myrie Reyes,Defender,FC København,897690,,335,29actv1ohj8r10kd9hu0jnb0n
 Kenneth Albin Dahrup Zohorè,Forward,BK Fremad Amager,56002,,335,29actv1ohj8r10kd9hu0jnb0n
 Kerim Sejdic,Forward,27141,868445,,1305,
 Kevin Baek Knudsen,Forward,23736,787635,,1305,
@@ -888,7 +888,7 @@ Kristian Fredrik Malt Arnstad,Forward,AGF,627921,,335,29actv1ohj8r10kd9hu0jnb0n
 Kristian Jasovic,Forward,Lyngby Boldklub Under 19,766801,,1305,
 Kristian Kirkegaard,Midfielder,Horsens,562564,xyt0wq20toh97811t65vu4no,328,dyjr458hcmrcy87fsabfsy87o
 Kristian Pedersen,Defender,FC Fredericia,335719,f239q43hdwrm7u7mu5jqyk91x,335,29actv1ohj8r10kd9hu0jnb0n
-Kristian Tonnisen,Angriber,Næsby BK,738328,,43319,
+Kristian Tonnisen,Forward,Næsby BK,738328,,43319,
 Kristoffer Holt Andersen,Defender,Ishøj IF,624778,,43319,
 Kristoffer Søgaard,Goalkeeper,27145,1098977,cflwegqpzch8y30pb3dhigqnd,1305,
 Kyrylo Shushman,Goalkeeper,Kolding,850228,ae86fel4p9nioy219v3lg62hg,43319,
@@ -905,7 +905,7 @@ Lasse Lysemose,Forward,Vanløse IF,1215232,,43319,
 Lasse Mandal Andersen,Midfielder,23738,705904,,335,29actv1ohj8r10kd9hu0jnb0n
 Lasse Nielsen,Defender,Vejle Boldklub,56382,mp4e2knxubc5sncgd6p4j4lw,335,29actv1ohj8r10kd9hu0jnb0n
 Lasse Overgaard Nielsen,Midfielder,Skive IK,639696,,329,
-Lasse Petersen,Målmand,Næsby BK,522579,f0zavvz5xl62afoulc9ho019m,329,
+Lasse Petersen,Goalkeeper,Næsby BK,522579,f0zavvz5xl62afoulc9ho019m,329,
 Lasse Riggelsen,Defender,SønderjyskE Under 19,766691,,1305,
 Lasse Risager Kristensen,Defender,Middelfart,752258,,1305,
 Lasse Schulz,Goalkeeper,Vendsyssel FF,686891,64vlnkuqfh7rnymg8qku8amwa,328,dyjr458hcmrcy87fsabfsy87o
@@ -918,7 +918,7 @@ Laurits  Jensen,Forward,Nykøbing FC,769404,eps93ehgmx8ft3kjo4zvy63o4,43319,
 Laurits Bust Sørensen,Defender,HB Køge,516375,,329,
 Laurits Engmark,Defender,Vejle Boldklub Under 19,814387,,1305,
 Laurits Raun Pedersen,Midfielder,Randers FC,678992,,1305,
-Lauritz Dauerhøj,Venstre back,Næsby BK,678944,,43319,
+Lauritz Dauerhøj,Defender,Næsby BK,678944,,43319,
 Laus Østervig Nielsen,Defender,Thisted FC,516199,,328,dyjr458hcmrcy87fsabfsy87o
 Leeroy Owusu,Defender,OB,257044,e42jh6bbwn4aybdnysonrvutx,328,dyjr458hcmrcy87fsabfsy87o
 Lennart Moser,Goalkeeper,12864,508908,6sdv4s8oz558wfhx72vwlpvu2,328,dyjr458hcmrcy87fsabfsy87o
@@ -935,7 +935,7 @@ Lirim Qamili,Forward,SønderjyskE,449407,3ejggtt1du1cui3wc1f8oqx62,328,dyjr458hc
 Loris Osmani,Forward,AC Horsens Under 19,751267,,1305,
 Louie Tinggaard Helmi,Midfielder,Hørsholm-Usserød IK,1215300,,43319,
 Louis Keita,Defender,,764651,4dswyr2m0bxs6rkf56y21mz85,329,
-Louis Larsen,Venstre kant,Næsby BK,449310,hs41rtcymn2opk4ban2pxh5g,43319,
+Louis Larsen,Midfielder,Næsby BK,449310,hs41rtcymn2opk4ban2pxh5g,43319,
 Louis Pe√±a Christophersen,Midfielder,Frederiksberg Alliancen 2000,577969,,328,dyjr458hcmrcy87fsabfsy87o
 Louka Daniel Prip Andreasen,Midfielder,Hvidovre,562503,,329,
 Luca Kold Benjamin,Midfielder,Næstved BK,619684,,335,29actv1ohj8r10kd9hu0jnb0n
@@ -991,7 +991,7 @@ Mads Bech Sørensen,Defender,FC Midtjylland,374129,,328,dyjr458hcmrcy87fsabfsy87
 Mads Beyer Pasternak,Midfielder,Ishøj IF,629040,,1305,
 Mads Bo Ottesen,Defender,SønderjyskE Under 19,752773,c9hljxf219ewhn7vz4fa3eoyx,1305,
 Mads Bomholt,Midfielder,7091,625600,ejixz16616b7krftxyzv9yiac,1305,
-Mads Bonde Haar,Stopper,Næsby BK U19,765998,,1305,
+Mads Bonde Haar,Midfielder,Næsby BK U19,765998,,1305,
 Mads Carlson,Midfielder,FC Roskilde,400357,b5r9e8cyb3ds82vcy387j717t,1305,
 Mads Emil Madsen,Midfielder,FC København,451410,eso2tbbpnxu9qvx6zy07m5jx0,328,dyjr458hcmrcy87fsabfsy87o
 Mads Enggård,Midfielder,Vejle Boldklub,619567,5al9uyujlrlb17o4r5sapkkk4,1305,
@@ -1066,7 +1066,7 @@ Magnus Rasmussen,Defender,23727,769274,v5l81gxg2i8p5imhugkqiexg,1305,
 Magnus Ravn Thøfner,Defender,,577971,,328,dyjr458hcmrcy87fsabfsy87o
 Magnus Rosengreen,Forward,Hobro,698259,ebddkdhm6fhar2ir2h7azhslw,1305,
 Magnus Saaby,Central midtbane,Kolding,552251,423hv4unq5vvnp7kecv6wp3is,328,dyjr458hcmrcy87fsabfsy87o
-Magnus Schou Jørgensen,Højre kant,Næsby BK,449169,,329,
+Magnus Schou Jørgensen,Forward,Næsby BK,449169,,329,
 Magnus Tornøe  Dalager,Defender,69331,911325,,1305,
 Magnus Wang Schaldemose,Goalkeeper,Odder IGF,562721,,43319,
 Magnus Warming,Forward,Lyngby,506857,diwrq7ulrey4juxk4dafct0q1,335,29actv1ohj8r10kd9hu0jnb0n
@@ -1078,7 +1078,7 @@ Malde Serup,Midfielder,Skive IK,1266798,,329,
 Malek Bakhit,Defender,Brønshøj BK,625204,,1305,
 Malik Larsen,Defender,Vejgaard Boldspilklub,619572,hs41rtcymn2opk4ban2pxh5g,43319,
 Malik Razak Engholm Pimpong,Forward,FC Midtjylland Under 19,769261,,1305,
-Malte Jürgensen,Central midtbane,Næsby BK,400348,,43319,
+Malte Jürgensen,Defender,Næsby BK,400348,,43319,
 Malte Kiilerich Hansen,Defender,Hvidovre,370269,,335,29actv1ohj8r10kd9hu0jnb0n
 Malte Musenene Christensen,Midfielder,66870,1100244,,1305,
 Malte Sjørslev,Forward,Holbæk Bold - & Idrætsforening,455959,,328,dyjr458hcmrcy87fsabfsy87o
@@ -1130,7 +1130,7 @@ Marcus De Claville Berthelsen,Forward,Aarhus Fremad,449686,,329,
 Marcus Eskildsen,Goalkeeper,OB,766307,95fom1kf7552hn2sjrjj7pnh0,328,dyjr458hcmrcy87fsabfsy87o
 Marcus Hansen,Forward,Esbjerg,519591,e0rgqk3gxzs005m9ok9hvp1ck,328,dyjr458hcmrcy87fsabfsy87o
 Marcus Immersen,Forward,Akademisk Boldklub,1055842,,329,
-Marcus Jensen,Offensiv midtbane,Næsby BK U19,1233226,eps93ehgmx8ft3kjo4zvy63o4,43319,
+Marcus Jensen,Forward,Næsby BK U19,1233226,eps93ehgmx8ft3kjo4zvy63o4,43319,
 Marcus Kirchheiner,Defender,Aarhus Fremad,562683,7zb57r5m7lmvj3xlf9y1ldez8,329,
 Marcus Kristensen,Midfielder,BK Fremad Amager,579433,emi8qy4aaxle4m9n9e32d7wno,1305,
 Marcus Lynge Bøgh Nielsen,Defender,IF Lyseng Under 19,765199,,1305,
@@ -1201,7 +1201,7 @@ Mathias Fryd Schou,Forward,27146,911556,bgd377c7d3jfjd3yo3e02f0iy,1305,
 Mathias Glud Laursen,Defender,VSK Århus,762300,etwawuknprhxhmjk1tyq38e6t,329,
 Mathias Haarup,Defender,Hobro,510676,6t6k24gn6zwxz1g6c3n4ph0q,329,
 Mathias Hebo Rasmussen,Midfielder,Lyngby,328537,,328,dyjr458hcmrcy87fsabfsy87o
-Mathias Hell,Angriber,Næsby BK,765994,dscxmjy6wkbqvt4ba27i0vbx0,43319,
+Mathias Hell,Forward,Næsby BK,765994,dscxmjy6wkbqvt4ba27i0vbx0,43319,
 Mathias Høst,Defender,Næstved BK,472499,17zahtopt5x8nvrrv5g6ool49,328,dyjr458hcmrcy87fsabfsy87o
 Mathias Jattah-Njie Jørgensen,Defender,FC København,55979,,335,29actv1ohj8r10kd9hu0jnb0n
 Mathias Jensby,Forward,Brønshøj BK,1056282,,43319,
@@ -1226,7 +1226,7 @@ Mats Köhlert,Defender,Brøndby IF,367623,8wb6zb0imo0295asm428cur55,335,29actv1o
 Mats Pedersen,Midfielder,4777,760367,f239q43hdwrm7u7mu5jqyk91x,328,dyjr458hcmrcy87fsabfsy87o
 Matthew Aidam,Goalkeeper,Silkeborg IF Under 19,769226,,1305,
 Matthew Hoppe,Forward,SønderjyskE,510272,9ki0zmbky1zluxnz63008ozmy,335,29actv1ohj8r10kd9hu0jnb0n
-Matthias Frederiksen,Højre kant,Næsby BK,942455,cty7nsrs5yn785m330c2gbwq2,43319,
+Matthias Frederiksen,Midfielder,Næsby BK,942455,cty7nsrs5yn785m330c2gbwq2,43319,
 Matthias Præst Nielsen,Midfielder,Middelfart,450100,,1305,
 Matti Bøge Olsen,Defender,7471,330539,,335,29actv1ohj8r10kd9hu0jnb0n
 Mattias He√∞insson Lamhauge,Goalkeeper,7111,423425,,335,29actv1ohj8r10kd9hu0jnb0n
@@ -1248,7 +1248,7 @@ Melker Jonsson,Defender,Silkeborg IF,678561,e1bv2thyqvdioucqmw496e6z9,335,29actv
 Menan Velic,Forward,Esbjerg fB Under 19,1055517,,1305,
 Mert Demirci Nijmeijer,Goalkeeper,Randers FC,1056679,,335,29actv1ohj8r10kd9hu0jnb0n
 Mican Atici,Forward,Frederiksberg Alliancen 2000,521027,,329,
-Michael Amir Richardson,Central midtbane,FC København,746790,,335,29actv1ohj8r10kd9hu0jnb0n
+Michael Amir Richardson,Midfielder,FC København,746790,,335,29actv1ohj8r10kd9hu0jnb0n
 Michael Chiadi Nnamani,Defender,Hørsholm-Usserød IK,739755,,43319,
 Michael Gregoritsch,Forward,2481,65180,7c6034wb3zsuq9nhxxiahiuol,335,29actv1ohj8r10kd9hu0jnb0n
 Michael Kærgaard Pedersen,Defender,Brabrand IF,517847,f239q43hdwrm7u7mu5jqyk91x,328,dyjr458hcmrcy87fsabfsy87o
@@ -1264,7 +1264,7 @@ Mike Løhde Vestergård,Midfielder,Vejle Boldklub,562451,,335,29actv1ohj8r10kd9h
 Mike Themsen Kofod,Forward,Randers FC,768773,,1305,
 Mikel Johan Gogorza Krüger-Johnsen,Forward,FC Midtjylland,679428,,335,29actv1ohj8r10kd9hu0jnb0n
 Mikka Jr Basse Heller,Defender,FC Helsingør,739691,,328,dyjr458hcmrcy87fsabfsy87o
-Mikkel  Kunnerup Jensen,Central midtbane,Næsby BK,1214085,,43319,
+Mikkel  Kunnerup Jensen,Midfielder,Næsby BK,1214085,,43319,
 Mikkel  Lynge,Midfielder,Brønshøj BK,697953,lioz4hr2umpne2bwar18qa96,43319,
 Mikkel  Sonne,Forward,Vanløse IF,1027572,,43319,
 Mikkel Bach Løndal,Forward,Viborg FF Under 19,684216,ehjqrbqo7ewbztia7k2mrzx90,335,29actv1ohj8r10kd9hu0jnb0n
@@ -1292,7 +1292,7 @@ Mikkel Rosenlund,Defender,Hørsholm-Usserød IK,1215284,,43319,
 Mikkel Rosleff Fischer,Defender,Lyngby,621854,,328,dyjr458hcmrcy87fsabfsy87o
 Mikkel Rytter,Defender,VSK Århus,622981,,1305,
 Mikkel S. Hallberg Nielsen,Defender,Nykøbing FC,498083,mp4e2knxubc5sncgd6p4j4lw,328,dyjr458hcmrcy87fsabfsy87o
-Mikkel Stangerup,Central midtbane,Næsby BK,522595,,329,
+Mikkel Stangerup,Midfielder,Næsby BK,522595,,329,
 Mikkel Søfeldt Nielsen,Forward,Middelfart,678652,,328,dyjr458hcmrcy87fsabfsy87o
 Mikkel Toftgaard Frandsen,Defender,Brabrand IF,496177,3upu0b0m02octu0g5vr99urys,43319,
 Mikkel Vernon,Defender,Lyngby Boldklub Under 19,769191,,328,dyjr458hcmrcy87fsabfsy87o
@@ -1460,7 +1460,7 @@ Oliver Drost,Forward,,443694,1n4t6k5k2on5iihoc59brxi3t,328,dyjr458hcmrcy87fsabfs
 Oliver Elliott Karlsen,Forward,Sundby BK,1085419,,43319,
 Oliver Engberg,Defender,HB Køge Under 19,941423,,328,dyjr458hcmrcy87fsabfsy87o
 Oliver Friis Dorph,Defender,Hobro,449603,,328,dyjr458hcmrcy87fsabfsy87o
-Oliver Gaarn,Højre Back,Næsby BK,623254,,43319,
+Oliver Gaarn,Defender,Næsby BK,623254,,43319,
 Oliver Harbo Overgaard,Midfielder,Thisted FC,522673,1f510mbuc4i1mmshqlgim5u6s,1305,
 Oliver Hummelshøj,Defender,Aalborg BK Under 19,769188,,1305,
 Oliver Højer,Midfielder,FC København,679431,8jyfsal0lbf0ia92axymn2l1w,335,29actv1ohj8r10kd9hu0jnb0n
@@ -1468,7 +1468,7 @@ Oliver Kaastrup Østergaard,Defender,Skive IK,674245,,329,
 Oliver Kjærgaard,Midfielder,Hvidovre,435879,cl4xl80n4gew1ox03r3ooshrd,328,dyjr458hcmrcy87fsabfsy87o
 Oliver Klang,Midfielder,20156,769277,,1305,
 Oliver Klemensen Brendstrup Bødker,Defender,11209,679647,,1305,
-Oliver Koertz,Angriber,Næsby BK,678972,,43319,
+Oliver Koertz,Midfielder,Næsby BK,678972,,43319,
 Oliver Konstantin Thomassen,Midfielder,,751752,a8ccmy6j1xj2yvx324vws81lg,328,dyjr458hcmrcy87fsabfsy87o
 Oliver Kræmer Jessen,Goalkeeper,Sønderjyske Under 19,832295,8xrxx9axw4h44imjh28su6z9w,1305,
 Oliver Lang Rasmussen,Defender,Vanløse IF,500524,,329,
@@ -1543,7 +1543,7 @@ Oussama Djafer-Bey,Forward,BK Frem 1886,618538,,329,
 Ousseynou Fall Seck,Midfielder,Randers FC,1192465,e5tz5hfcjfbyupnsvu031j9xw,1305,
 Ovie Ejeheri,Goalkeeper,FC Midtjylland,569584,bewwsztrqoqdp5ttkxry0i1yi,335,29actv1ohj8r10kd9hu0jnb0n
 Pachanga Cassoma Kristensen,Defender,SønderjyskE,766716,,1305,
-Pantelis Hatzidiakos,Stopper,FC København,302233,ayqy2vql1oumokqly9ahfrnx1,335,29actv1ohj8r10kd9hu0jnb0n
+Pantelis Hatzidiakos,Defender,FC København,302233,ayqy2vql1oumokqly9ahfrnx1,335,29actv1ohj8r10kd9hu0jnb0n
 Pape Malick Fall,,FC Midtjylland Under 19,1326847,,1305,
 Pascal Estrada,Defender,Kolding,584073,57g4wlxt2sdykfwtb8u0ghqwa,328,dyjr458hcmrcy87fsabfsy87o
 Patrick Allentoft,Forward,Vanløse IF,625208,3iwqwfxwk3h00rztyn7xhaw44,43319,
@@ -1575,7 +1575,7 @@ Philip Alexander Buck,Defender,,846690,,43319,
 Philip Berendt Søndergaard,Defender,33,742110,,1305,
 Philip Billing,Midfielder,FC Midtjylland,303357,33cny48k38nlo8pcx3i24ldqt,335,29actv1ohj8r10kd9hu0jnb0n
 Philip Blichfeldt,Defender,IF Lyseng,824823,,43319,
-Philip Hallundbæk,Offensiv midtbane,Næsby BK,766653,,43319,
+Philip Hallundbæk,Midfielder,Næsby BK,766653,,43319,
 Philip Nzeyimana Oslev,Defender,BK Frem 1886,562601,24reh2z3geldmrcv5guswszfu,43319,
 Philippos Chapipis,Forward,AC Horsens Under 19,962771,,1305,
 Phillip Allentoft,Midfielder,23737,978714,3iwqwfxwk3h00rztyn7xhaw44,1305,
@@ -1603,7 +1603,7 @@ Rasmus Brodersen,Defender,HB Køge,568373,14mwsmzsrmev2646t2gg22has,329,
 Rasmus Carstensen,Defender,AGF,449482,an7okg1fciccqu6300k8phisq,1305,
 Rasmus Dupont Linden,Forward,15264,622046,,329,
 Rasmus Düring,Defender,IF Lyseng,696293,,1305,
-Rasmus Espersen,Stopper,Næsby BK,449720,7nt9il7b9vvtgfco15bdpfpx,329,
+Rasmus Espersen,Defender,Næsby BK,449720,7nt9il7b9vvtgfco15bdpfpx,329,
 Rasmus Falk Jensen,Midfielder,OB,56145,,335,29actv1ohj8r10kd9hu0jnb0n
 Rasmus Faurholt Flügge,Midfielder,Lyngby Boldklub Under 19,765139,,1305,
 Rasmus Fink Hansen,Midfielder,BK Frem 1886,449230,,329,
@@ -1611,7 +1611,7 @@ Rasmus From,Goalkeeper,VSK Århus,449488,83dz531y2o2365ozs4c5drb6y,335,29actv1oh
 Rasmus Helmer Nielsen,Forward,7679,817108,,43319,
 Rasmus Hjorth Vinderslev,Midfielder,SønderjyskE,502943,5j9d1plbsd5ic01r3ggziutwp,328,dyjr458hcmrcy87fsabfsy87o
 Rasmus Jepsen-Jacob,Goalkeeper,VSK Århus,522660,,329,
-Rasmus Juel Knudsen,Højre Back,Næsby BK,522590,,43319,
+Rasmus Juel Knudsen,Defender,Næsby BK,522590,,43319,
 Rasmus Juul Pedersen,Midfielder,Brabrand IF,562746,,329,
 Rasmus Kirkegaard Jensen,Defender,Brabrand IF,544227,,329,
 Rasmus Koch Groth Pedersen,Midfielder,Middelfart,849689,,328,dyjr458hcmrcy87fsabfsy87o
@@ -1650,7 +1650,7 @@ Rodrigo Jhossel Huescas Hurtado,Defender,FC København,574320,,335,29actv1ohj8r1
 Roko Baturina,Forward,Horsens,497703,asg0277qek5q1z0m43bs8y415,328,dyjr458hcmrcy87fsabfsy87o
 Romeo Carøe Ib,Goalkeeper,Odder IGF,845259,,43319,
 Roni Arabaci,Forward,B 93,449251,7h02v4ymnko5fh01iylbh34es,1305,
-Ronny Larsen,Venstre kant,Næsby BK,604181,hs41rtcymn2opk4ban2pxh5g,43319,
+Ronny Larsen,Forward,Næsby BK,604181,hs41rtcymn2opk4ban2pxh5g,43319,
 Rory O''Driscoll,Midfielder,Nykøbing FC,523687,,43319,
 Ruben Stabell Minerba,Midfielder,Frederiksberg Alliancen 2000,660888,,43319,
 Runar Hauge,Forward,Hobro,544678,cusl60g16iljr4f8gzfryvh1w,328,dyjr458hcmrcy87fsabfsy87o
@@ -1674,7 +1674,7 @@ Sander Lauesen,Forward,Hørsholm-Usserød IK,1221484,,43319,
 Sander Ravn,Midfielder,Vejle Boldklub,750681,kztt8qd2m1vuracefqqsjkh6,335,29actv1ohj8r10kd9hu0jnb0n
 Sean  Fetterlein,Midfielder,FC København Under 19,769005,,1305,
 Sean Klaiber,Defender,Brøndby IF,268785,6anvl82jyio52wo87cbxdp4np,335,29actv1ohj8r10kd9hu0jnb0n
-Sebastian  Vollerup,Central midtbane,Næsby BK,1307341,,43319,
+Sebastian  Vollerup,,Næsby BK,1307341,,43319,
 Sebastian Biller Mikkelsen,Forward,7112,679250,,1305,
 Sebastian Birkemos Brodersen,Midfielder,Ishøj IF,577609,14mwsmzsrmev2646t2gg22has,329,
 Sebastian Blynov,,,1271367,,43319,
@@ -1707,7 +1707,7 @@ Sebastian Willum Høj Jensen,Midfielder,Aalborg BK Under 19,1098635,,1305,
 Sebastian Yabsera Haaning Christensen,Forward,23732,768989,,1305,
 Sefer Emini,Midfielder,SønderjyskE,604019,5x8064b3yr7txk0czddfjtffu,328,dyjr458hcmrcy87fsabfsy87o
 Selim Baskaya,Midfielder,FC Roskilde,619924,1el3mu4rgcx8tebrawgfvynf8,43319,
-Semih Sevik,Central midtbane,Næsby BK U19,846919,,43319,
+Semih Sevik,Midfielder,Næsby BK U19,846919,,43319,
 Seniko  Doua,Defender,Horsens,892204,6qko3f8w2ap9ynbuq2g55i5n8,328,dyjr458hcmrcy87fsabfsy87o
 Sheikh Jaw,Forward,FC København Under 19,1302834,3bf5pz8kkkmkwnltubnrr7ggk,1305,
 Sho Fukuda,Midfielder,Brøndby IF,677038,31dub58tesepe34xkspyxsrca,335,29actv1ohj8r10kd9hu0jnb0n
@@ -1781,7 +1781,7 @@ Theo Puggaard Ekié Hansen,Midfielder,Hobro,624730,,1305,
 Theodor Felix Hoffmeyer Beck,Defender,Odder IGF,612335,,1305,
 Thibault Klidjé,Forward,Randers FC,564107,,335,29actv1ohj8r10kd9hu0jnb0n
 Thomas Basbøll Nielsen,Forward,Næstved BK,680659,,328,dyjr458hcmrcy87fsabfsy87o
-Thomas Delaney,Central midtbane,FC København,55990,4gqnyyx3i92fayq6cxvekqwut,335,29actv1ohj8r10kd9hu0jnb0n
+Thomas Delaney,Midfielder,FC København,55990,4gqnyyx3i92fayq6cxvekqwut,335,29actv1ohj8r10kd9hu0jnb0n
 Thomas Faaborg Uhlig,Defender,Vejgaard Boldspilklub,521073,,43319,
 Thomas Gundelund Nielsen,Defender,Vejle Boldklub,544932,,328,dyjr458hcmrcy87fsabfsy87o
 Thomas Hummelshøj,,Vejgaard Boldspilklub,1312100,,43319,
@@ -1855,7 +1855,7 @@ Valdemar Møller Damgaard,Midfielder,AaB,760810,,328,dyjr458hcmrcy87fsabfsy87o
 Valdemar Overby-Poulsen,,Frederiksberg Alliancen 2000,786553,,329,
 Valdemar Rubæk Vestergaard,Forward,Aalborg BK Under 19,769292,,1305,
 Vedad  Halilovic,Midfielder,Hobro IK Under 19,769295,,328,dyjr458hcmrcy87fsabfsy87o
-Vianney Geovanni,Angriber,FC København,1291268,,335,29actv1ohj8r10kd9hu0jnb0n
+Vianney Geovanni,Forward,FC København,1291268,,335,29actv1ohj8r10kd9hu0jnb0n
 Victor  Holmstrøm,Defender,23730,769293,,1305,
 Victor Alexander Friis Enggaard,Defender,Hellerup IK,563184,,329,
 Victor Bak Jensen,Defender,FC Midtjylland,577573,8mn8apr6n7t7s6lx4d4vvdnca,328,dyjr458hcmrcy87fsabfsy87o
@@ -1872,8 +1872,8 @@ Victor Rosendahl Dedes,Defender,7111,579410,,328,dyjr458hcmrcy87fsabfsy87o
 Victor Schönewolf-Greulich,Goalkeeper,BK Fremad Amager,680658,,329,
 Victor Stroyer,Goalkeeper,Vejle Boldklub Under 17,855987,,1305,
 Victor Svensson,Midfielder,Brønshøj BK,680547,c9e54hwefvwos94ri459uylbe,43319,
-Victor Thomsen,Målmand,Næsby BK,779819,dqp8e2et9fm9r6zo47u1njq50,43319,
-Victor Vestby,Stopper,Næsby BK,766313,,43319,
+Victor Thomsen,Goalkeeper,Næsby BK,779819,dqp8e2et9fm9r6zo47u1njq50,43319,
+Victor Vestby,Defender,Næsby BK,766313,,43319,
 Victor Øberg,Goalkeeper,20156,766783,,1305,
 Viggo Barth,Midfielder,Lyngby Boldklub Under 19,842580,,1305,
 Viggo Nordestgaard Frost,Forward,AGF Under 19,765217,,1305,
@@ -1923,7 +1923,7 @@ William Borring Nyborg,Goalkeeper,Middelfart,765755,,43319,
 William Brink Frederiksen,Forward,Lyngby Boldklub Under 19,769215,,1305,
 William Buchhave Knudsen,Midfielder,Hørsholm-Usserød IK,961184,,43319,
 William Christian Martin,Forward,OB,739991,dkh9515ex80tnypgme1shx4ic,335,29actv1ohj8r10kd9hu0jnb0n
-William Clem,Central midtbane,FC København,612346,ftw3io63hk5vuoa3lyfgowes,335,29actv1ohj8r10kd9hu0jnb0n
+William Clem,Midfielder,FC København,612346,ftw3io63hk5vuoa3lyfgowes,335,29actv1ohj8r10kd9hu0jnb0n
 William Dam,Midfielder,7475,974308,n2annzbap7hll02zo2v0ccgk,329,
 William Damgaard,Goalkeeper,27141,1086700,88zcbxfsb78wfp9s7f11zsesp,1305,
 William Emil Krarup Sonne Schmidt,Goalkeeper,Brøndby IF Under 19,766619,,1305,
