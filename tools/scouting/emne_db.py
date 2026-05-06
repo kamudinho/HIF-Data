@@ -34,14 +34,26 @@ POS_OPTS = ["", "1", "2", "3", "3.5", "4", "5", "6", "7", "8", "9", "10", "11"]
 # --- 2. GITHUB & DATA LOGIK ---
 def get_github_file(path):
     try:
-        url = f"https://api.github.com/repos/{REPO}/contents/{path}?t={int(time.time())}"
-        headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+        # Vi tilføjer tidsstempel direkte til URL'en for at snyde GitHubs cache
+        import time
+        timestamp = int(time.time())
+        url = f"https://api.github.com/repos/{REPO}/contents/{path}?t={timestamp}"
+        
+        # Vi fortæller også GitHubs servere via headers, at vi IKKE vil have cachet data
+        headers = {
+            "Authorization": f"token {GITHUB_TOKEN}",
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache",
+            "Expires": "0"
+        }
+        
         r = requests.get(url, headers=headers)
         if r.status_code == 200:
             data = r.json()
             content = base64.b64decode(data['content']).decode('utf-8', errors='replace')
             return content, data['sha']
-    except: pass
+    except Exception as e:
+        st.error(f"Fejl ved live-hentning: {e}")
     return None, None
 
 def save_to_github(df):
