@@ -56,34 +56,73 @@ def save_to_github(df):
         ]
         _, sha = get_github_file(SCOUT_DB_PATH)
         export_df = df.copy()
+        
+        # Sikr at alle nødvendige kolonner eksisterer
         for col in original_cols:
-            if col not in export_df.columns: export_df[col] = ""
+            if col not in export_df.columns: 
+                export_df[col] = ""
+        
+        # Formater eksport-dataframes kolonner til korrekte CSV-typer (især fjerne .0 fra tal/WYID)
+        export_df['PLAYER_WYID'] = export_df['PLAYER_WYID'].astype(str).replace(r'\.0$', '', regex=True)
+        
         csv_content = export_df[original_cols].to_csv(index=False)
         payload = {
             "message": "Auto-update scouting data", 
             "content": base64.b64encode(csv_content.encode('utf-8')).decode('utf-8'), 
             "sha": sha
         }
-        requests.put(f"https://api.github.com/repos/{REPO}/contents/{SCOUT_DB_PATH}", 
-                     headers={"Authorization": f"token {GITHUB_TOKEN}"}, json=payload)
-        st.toast("Databasen er opdateret!", icon="✅")
+        
+        headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+        r = requests.put(f"https://api.github.com/repos/{REPO}/contents/{SCOUT_DB_PATH}", 
+                         headers=headers, json=payload)
+        
+        if r.status_code in [200, 201]:
+            st.toast("Databasen er opdateret på GitHub!", icon="✅")
+        else:
+            st.error(f"Fejl ved gem til GitHub (Status {r.status_code}): {r.text}")
+            
     except Exception as e:
         st.error(f"Fejl ved automatisk gem: {e}")
-
+        
 def handle_auto_save(key, df_display, source_df):
     state_key = f"editable_{key}"
     if st.session_state.get(state_key) and st.session_state[state_key].get("edited_rows"):
         changes = st.session_state[state_key]["edited_rows"]
         full_db = st.session_state['full_db']
+        
         for idx_str, updated_cols in changes.items():
-            wyid = source_df.iloc[int(idx_str)]['PLAYER_WYID']
+            # Find den korrekte række i den kilde-dataframe, der faktisk blev vist i editoren
+            row_idx = int(idx_str)
+            wyid = source_df.iloc[row_idx]['PLAYER_WYID']
+            
+            # Find matchende række i den fulde database baseret på PLAYER_WYID
             matching_rows = full_db[full_db['PLAYER_WYID'] == wyid].sort_values('DATO', ascending=False)
+            
             if not matching_rows.empty:
                 idx_in_full = matching_rows.index[0]
                 for col, val in updated_cols.items():
-                    full_db.at[idx_in_full, col.upper()] = val
+                    col_upper = col.upper()
+                    
+                    # Særlig håndtering af KONTRAKT_DT -> KONTRAKT
+                    if col_upper == "KONTRAKT_DT":
+                        col_upper = "KONTRAKT"
+                        # Konverter datetime tilbage til streng-format, hvis nødvendigt
+                        if pd.notna(val):
+                            val = pd.to_datetime(val).strftime('%Y-%m-%d')
+                    
+                    full_db.at[idx_in_full, col_upper] = val
+        
+        # VIGTIGT: Opdater session state, så ændringerne huskes med det samme på siden!
+        st.session_state['full_db'] = full_db
+        
+        # Gem til GitHub
         save_to_github(full_db)
+        
+        # Nulstil ændringer i editoren så vi ikke gemmer i loop
         st.session_state[state_key]["edited_rows"] = {}
+        
+        # Tving Streamlit til at genindlæse og vise de nye data
+        st.rerun()
 
 def clean_pos_val(val):
     if pd.isna(val) or val == "" or str(val).lower() == "nan": return ""
