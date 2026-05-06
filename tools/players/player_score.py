@@ -9,6 +9,35 @@ import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from data.data_load import _get_snowflake_conn
 
+def map_til_hovedkategori(position_str):
+    """
+    Tager en vilkårlig positionstekst fra dit eget ark og mapper den til en 
+    af de 4 hovedkategorier: 'Målmand', 'Forsvar', 'Midtbane' eller 'Angriber'.
+    """
+    if not isinstance(position_str, str):
+        return "Ukendt"
+    
+    pos = position_str.strip().lower()
+    
+    # 1. MÅLMAND
+    if any(x in pos for x in ["målmand", "goalkeeper", "keeper", "gk"]):
+        return "Målmand"
+        
+    # 2. FORSVAR
+    if any(x in pos for x in ["forsvar", "defender", "cb", "lb", "rb", "lwb", "rwb", "stopper", "back", "midtstopper", "def"]):
+        return "Forsvar"
+        
+    # 3. ANGRIBER
+    # Vi tjekker angriber før midtbane, da f.eks. "kantangriber" indeholder både "kant" og "angriber"
+    if any(x in pos for x in ["angriber", "forward", "striker", "cf", "wf", "cf", "ss", "9'er", "fwd", "frontløber"]):
+        return "Angriber"
+        
+    # 4. MIDTBANE
+    if any(x in pos for x in ["midtbane", "midfielder", "dmf", "cmf", "amf", "lm", "rm", "kant", "winger", "mid", "6'er", "8'er", "10'er", "playmaker"]):
+        return "Midtbane"
+        
+    return "Ukendt"
+
 def vis_side():
     # CSS styling af metrics-bokse og overskrifter
     st.markdown("""
@@ -55,10 +84,10 @@ def vis_side():
         "Left Winger": "Venstre Winger",
         "Right Winger": "Højre Winger",
         "Second Striker": "Hængende Angriber",
-        "Ukendt Position": "Ukendt Position",
-        "DEF": "Forsvarer",
-        "MID": "Midtbanespiller",
-        "FWD": "Angrebsspiller"
+        "Goalkeeper": "Målmand",
+        "Defender": "Forsvarsspiller",
+        "Midfielder": "Midtbanespiller",
+        "Forward": "Angrebsspiller"
     }
 
     # --- 1. FILTRE OG KONFIGURATION ---
@@ -68,21 +97,23 @@ def vis_side():
         "Angriber": {
             "metrics": ["goals", "xg", "shots", "touchinbox", "dribbles", "assists"],
             "weights": [6.0, 4.0, 3.8, 2.4, 1.2, 2.0],
-            "labels": ["Mål", "xG", "Skud", "Berøringer i felt", "Driblinger", "Assists"],
-            # Matcher de positioner, du har skrevet i dit eget ark til denne kategori
-            "csv_positions": ["Striker", "Left Winger", "Right Winger", "Second Striker", "FWD"]
+            "labels": ["Mål", "xG", "Skud", "Berøringer i felt", "Driblinger", "Assists"]
         },
         "Midtbane": {
             "metrics": ["pass_pct", "keypasses", "interceptions", "xgassist", "slidingtackles", "progressiverun"],
             "weights": [8.0, 4.5, 3.0, 4.0, 2.0, 1.5],
-            "labels": ["Pasnings %", "Key Passes", "Interceptions", "xA", "Glidende Tacklinger", "Progressive løb"],
-            "csv_positions": ["Defensive Midfielder", "Central Midfielder", "Attacking Midfielder", "Left Midfielder", "Right Midfielder", "MID"]
+            "labels": ["Pasnings %", "Key Passes", "Interceptions", "xA", "Glidende Tacklinger", "Progressive løb"]
         },
         "Forsvar": {
             "metrics": ["interceptions", "defensiveduelswon", "clearances", "aerialduelswon", "pass_pct", "dangerousownhalflosses"],
             "weights": [5.0, 4.0, 3.5, 4.0, 2.5, -3.0], 
-            "labels": ["Interceptions", "Vundne Def. Dueller", "Clearinger", "Vundne Luftdueller", "Pasnings %", "Farlige Boldtab (Egen banehalvdel)"],
-            "csv_positions": ["Center Back", "Left Back", "Right Back", "Left Wing Back", "Right Wing Back", "DEF"]
+            "labels": ["Interceptions", "Vundne Def. Dueller", "Clearinger", "Vundne Luftdueller", "Pasnings %", "Farlige Boldtab (Egen banehalvdel)"]
+        },
+        "Målmand": {
+            # Standard metrics til målmænd (tilpas efter behov)
+            "metrics": ["pass_pct", "clearances"],
+            "weights": [5.0, 5.0],
+            "labels": ["Pasnings %", "Clearinger"]
         }
     }
     
@@ -149,10 +180,11 @@ def vis_side():
             
         df_csv['player_wyid'] = df_csv['player_wyid'].astype(int)
         
-        # Filtrer med det samme CSV'en lokalt til kun at indeholde de spillere, der har den valgte kategori i arket!
-        godkendte_positioner = POS_CONFIG[valgt_profil]["csv_positions"]
-        df_csv_filtreret = df_csv[df_csv['specific_position'].isin(godkendte_positioner)].copy()
+        # --- NYT: MAPPING AF CSV POSITION TIL HOVEDKATEGORI ---
+        df_csv['hovedkategori'] = df_csv['specific_position'].apply(map_til_hovedkategori)
         
+        # Filtrer lokalt på den valgte kategori
+        df_csv_filtreret = df_csv[df_csv['hovedkategori'] == valgt_profil].copy()
         csv_spiller_ids = df_csv_filtreret['player_wyid'].tolist()
         
     except Exception as e:
@@ -160,7 +192,7 @@ def vis_side():
         return
 
     if not csv_spiller_ids:
-        st.warning(f"Ingen spillere i din CSV-fil er registreret med en '{valgt_profil}'-position.")
+        st.warning(f"Ingen spillere i din CSV-fil matcher kategorien '{valgt_profil}' ud fra positionerne i dit ark.")
         return
 
     sql_player_ids_str = f"({', '.join(map(str, csv_spiller_ids))})"
@@ -232,11 +264,11 @@ def vis_side():
             db_df = pd.merge(df_stats, df_minutter, on='player_wyid', how='inner')
             db_df['player_wyid'] = db_df['player_wyid'].astype(int)
             
-            # Flet over på vores filtrerede CSV (det er udelukkende CSV'ens Navne og Positioner som overlever)
+            # Flet over på vores filtrerede CSV (kun CSV'ens Navne og specifikke positioner overlever)
             df = pd.merge(df_csv_filtreret, db_df, on='player_wyid', how='inner')
             
             if df.empty:
-                st.info(f"Ingen spillere fra din CSV ({valgt_profil}) har spillet over 150 minutter i den valgte liga.")
+                st.info(f"Ingen spillere i kategorien '{valgt_profil}' (fra din CSV) har spillet over 150 minutter i den valgte liga.")
                 return
 
             # Beregn live procenter og performance score
@@ -247,11 +279,13 @@ def vis_side():
             df[score_col] = 0.0
             for i, m_name in enumerate(config['metrics']):
                 weight = config['weights'][i]
-                df[score_col] += df[m_name] * weight
+                # Hvis en kolonne mod forventning mangler i databasen, fald tilbage på 0
+                val = df[m_name] if m_name in df.columns else 0
+                df[score_col] += val * weight
             
             df[score_col] = df[score_col].round(1)
 
-            # Oversættelse af din egen position fra arket
+            # Oversættelse af din egen specifikke position fra arket
             df['dk_position'] = df['specific_position'].map(POS_TRANSLATIONS).fillna(df['specific_position'])
             df_sorteret = df.sort_values(score_col, ascending=False)
             
@@ -339,8 +373,11 @@ def vis_side():
                     st.write(f"**Underliggende P90-værdier ({valgt_profil}):**")
                     
                     for idx, m_name in enumerate(config['metrics']):
-                        metric_vaerdi = valgt_spiller_data[m_name]
-                        visnings_vaerdi = f"{metric_vaerdi:.1f}%" if "pct" in m_name else f"{metric_vaerdi:.2f}"
+                        if m_name in valgt_spiller_data:
+                            metric_vaerdi = valgt_spiller_data[m_name]
+                            visnings_vaerdi = f"{metric_vaerdi:.1f}%" if "pct" in m_name else f"{metric_vaerdi:.2f}"
+                        else:
+                            visnings_vaerdi = "N/A"
                         
                         st.markdown(f"""
                             <div class="metric-row">
