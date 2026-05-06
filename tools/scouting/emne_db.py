@@ -62,7 +62,7 @@ def save_to_github(df):
             if col not in export_df.columns: 
                 export_df[col] = ""
         
-        # Formater eksport-dataframes kolonner til korrekte CSV-typer (især fjerne .0 fra tal/WYID)
+        # Sørg for at fjerne eventuel '.0' fra ID'er
         export_df['PLAYER_WYID'] = export_df['PLAYER_WYID'].astype(str).replace(r'\.0$', '', regex=True)
         
         csv_content = export_df[original_cols].to_csv(index=False)
@@ -77,25 +77,25 @@ def save_to_github(df):
                          headers=headers, json=payload)
         
         if r.status_code in [200, 201]:
-            st.toast("Databasen er opdateret på GitHub!", icon="✅")
+            st.toast("Databasen er gemt og opdateret på GitHub!", icon="✅")
         else:
             st.error(f"Fejl ved gem til GitHub (Status {r.status_code}): {r.text}")
             
     except Exception as e:
         st.error(f"Fejl ved automatisk gem: {e}")
-        
+
 def handle_auto_save(key, df_display, source_df):
     state_key = f"editable_{key}"
     if st.session_state.get(state_key) and st.session_state[state_key].get("edited_rows"):
         changes = st.session_state[state_key]["edited_rows"]
-        full_db = st.session_state['full_db']
+        full_db = st.session_state['full_db'].copy()
         
         for idx_str, updated_cols in changes.items():
-            # Find den korrekte række i den kilde-dataframe, der faktisk blev vist i editoren
             row_idx = int(idx_str)
+            # Find den korrekte spiller i den specifikke tabel, som brugeren redigerede i
             wyid = source_df.iloc[row_idx]['PLAYER_WYID']
             
-            # Find matchende række i den fulde database baseret på PLAYER_WYID
+            # Find spillerens nyeste rapport-række i databasen
             matching_rows = full_db[full_db['PLAYER_WYID'] == wyid].sort_values('DATO', ascending=False)
             
             if not matching_rows.empty:
@@ -103,25 +103,26 @@ def handle_auto_save(key, df_display, source_df):
                 for col, val in updated_cols.items():
                     col_upper = col.upper()
                     
-                    # Særlig håndtering af KONTRAKT_DT -> KONTRAKT
+                    # Konverter datoer rigtigt tilbage til tekst-format i KONTRAKT kolonnen
                     if col_upper == "KONTRAKT_DT":
                         col_upper = "KONTRAKT"
-                        # Konverter datetime tilbage til streng-format, hvis nødvendigt
-                        if pd.notna(val):
+                        if pd.notna(val) and val != "":
                             val = pd.to_datetime(val).strftime('%Y-%m-%d')
+                        else:
+                            val = ""
                     
                     full_db.at[idx_in_full, col_upper] = val
         
-        # VIGTIGT: Opdater session state, så ændringerne huskes med det samme på siden!
+        # Opdater den lokale session state med det samme
         st.session_state['full_db'] = full_db
         
-        # Gem til GitHub
+        # Skub ændringerne op til din GitHub CSV-fil
         save_to_github(full_db)
         
-        # Nulstil ændringer i editoren så vi ikke gemmer i loop
+        # Ryd redigeringshistorikken for at undgå gemme-loops
         st.session_state[state_key]["edited_rows"] = {}
         
-        # Tving Streamlit til at genindlæse og vise de nye data
+        # Tving Streamlit til at køre scriptet igennem og hente de opdaterede data lokalt
         st.rerun()
 
 def clean_pos_val(val):
@@ -149,7 +150,13 @@ def prepare_df(content):
         if col not in df.columns: df[col] = ""
     df['DATO_DT'] = pd.to_datetime(df['DATO'], errors='coerce')
     df = df.sort_values(by='DATO_DT', ascending=False)
+    
+    # Gemmer den rå og fulde database i session state
     st.session_state['full_db'] = df.copy()
+    
+    return process_display_df(df)
+
+def process_display_df(df):
     df_display = df.drop_duplicates(subset=['PLAYER_WYID'], keep='first').copy()
     
     # Sørg for at POS_PRIORITET er streng-baseret så vi kan sortere A, B, C
@@ -177,9 +184,16 @@ def vis_side():
 
     if 'form_skygge' not in st.session_state: st.session_state.form_skygge = "3-4-3"
 
-    content, _ = get_github_file(SCOUT_DB_PATH)
-    if content is None: return
-    df_display = prepare_df(content)
+    # --- SIKKER DATALÆSNING (Cache-beskyttelse) ---
+    if 'full_db' not in st.session_state:
+        content, _ = get_github_file(SCOUT_DB_PATH)
+        if content is None: 
+            st.error("Kunne ikke hente data fra databasen.")
+            return
+        df_display = prepare_df(content)
+    else:
+        # Hvis vi har lokale opdateringer i hukommelsen, bruger vi dem direkte
+        df_display = process_display_df(st.session_state['full_db'])
 
     tabs_to_show = []
     if "emnedatabase" not in res: tabs_to_show.append("Emneliste")
@@ -204,19 +218,19 @@ def vis_side():
 
     if "Emneliste" in tab_map:
         with tabs_obj[tab_map["Emneliste"]]:
-            source_t1 = df_display[~df_display['IS_HIF']].copy()
+            source_t1 = df_display[~df_display['IS_HIF']].copy().reset_index(drop=True)
             st.data_editor(source_t1[['NAVN', 'KLUB', 'POS', 'KONTRAKT_DT', 'TRANSFER_VINDUE', 'ER_EMNE', 'SKYGGEHOLD', 'PLAYER_WYID']],
                             column_config=cfg, use_container_width=True, height=600, key="editable_t1", on_change=handle_auto_save, args=("t1", df_display, source_t1))
 
     if "Hvidovre IF" in tab_map:
         with tabs_obj[tab_map["Hvidovre IF"]]:
-            source_t2 = df_display[df_display['IS_HIF']].reset_index(drop=True)
+            source_t2 = df_display[df_display['IS_HIF']].copy().reset_index(drop=True)
             st.data_editor(source_t2[['NAVN', 'KLUB', 'POS', 'KONTRAKT_DT', 'ER_AKADEMI', 'ER_EMNE', 'SKYGGEHOLD', 'PLAYER_WYID']],
                             column_config=cfg, use_container_width=True, height=600, key="editable_t2", on_change=handle_auto_save, args=("t2", df_display, source_t2))
 
     if "Skyggeliste" in tab_map:
         with tabs_obj[tab_map["Skyggeliste"]]:
-            source_t3 = df_display[df_display['SKYGGEHOLD'] == True].reset_index(drop=True)
+            source_t3 = df_display[df_display['SKYGGEHOLD'] == True].copy().reset_index(drop=True)
             st.data_editor(source_t3[['NAVN', 'KLUB', 'POS', 'POS_343', 'POS_433', 'POS_352', 'POS_PRIORITET', 'START_11_26_27', 'PLAYER_WYID']],
                             column_config=cfg, use_container_width=True, height=600, key="editable_t3", on_change=handle_auto_save, args=("t3", df_display, source_t3))
 
