@@ -345,8 +345,12 @@ def vis_side():
             st.info(f"Ingen spillere i din CSV-fil matcher de valgte minut-kriterier i denne turnering.")
             return
 
-        if 'is_active_hvidovre' in df.columns:
-            df.loc[df['is_active_hvidovre'] == 1, 'team_name'] = "Hvidovre IF"
+        # --- REPARATION: STYR KLUB OG HVIDOVRE-STATUS UDELUKKENDE FRA CSV ---
+        # Vi overskriver Snowflake's team_name med 'klub'-feltet direkte fra din CSV
+        df['team_name'] = df['klub']
+        
+        # En spiller er defineret som en Hvidovre-spiller, hvis 'klub'-kolonnen i CSV'en siger "Hvidovre IF"
+        df['is_active_hvidovre'] = np.where(df['klub'].str.strip().str.lower() == "hvidovre if", 1, 0)
 
         df['pass_pct'] = (df['successfulpasses'] / df['passes'].replace(0, 1)) * 100
 
@@ -364,6 +368,7 @@ def vis_side():
         df['dk_position'] = df['specific_position'].map(POS_TRANSLATIONS).fillna(df['specific_position'])
         df_sorteret = df.sort_values(score_col, ascending=False)
 
+        # Filtrer nu udelukkende på den nyligt overskrevne CSV-status
         liga_spillere = df_sorteret[df_sorteret['is_active_hvidovre'] == 0]
         hvidovre_spillere = df_sorteret[df_sorteret['is_active_hvidovre'] == 1]
 
@@ -422,16 +427,12 @@ def vis_side():
         with rude_hoejre:
             valgt_spiller_data = None
 
-            # --- SIKKER HÅNDTERING AF KLIK OG FALLBACK ---
             if valgt_klik and "selection" in valgt_klik and valgt_klik["selection"]["points"]:
                 klikket_navn = valgt_klik["selection"]["points"][0]["y"]
-                # Sørger for, at spilleren faktisk eksisterer i det filtrerede DataFrame, før vi slår ham op
                 matchende_spillere = df[df['full_name'] == klikket_navn]
                 if not matchende_spillere.empty:
                     valgt_spiller_data = matchende_spillere.iloc[0]
 
-            # Hvis intet er klikket på grafen, eller hvis den klikkede spiller ikke findes i det nuværende filter,
-            # så vælger vi automatisk spilleren med den højeste score i visnings_df (som er sorteret)
             if valgt_spiller_data is None and not visnings_df.empty:
                 bedste_spiller_id = visnings_df.sort_values(score_col, ascending=False).iloc[0]['player_wyid']
                 matchende_spillere = df[df['player_wyid'] == bedste_spiller_id]
