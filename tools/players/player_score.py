@@ -268,19 +268,28 @@ def vis_side():
                         df = df[df['player_wyid'].isin(df_overskriv['player_wyid'])]
                         
                         # 3. Kør overskrivningen/opdateringen af værdierne for de godkendte spillere
-                        df.set_index('player_wyid', inplace=True)
-                        df_overskriv.set_index('player_wyid', inplace=True)
-                        
-                        kolonner_til_opdatering = [col for col in df_overskriv.columns if col in df.columns]
-                        if kolonner_til_opdatering:
-                            df.update(df_overskriv[kolonner_til_opdatering])
+                        if not df.empty:
+                            df.set_index('player_wyid', inplace=True)
+                            df_overskriv.set_index('player_wyid', inplace=True)
                             
-                        df.reset_index(inplace=True)
+                            kolonner_til_opdatering = [col for col in df_overskriv.columns if col in df.columns]
+                            if kolonner_til_opdatering:
+                                df.update(df_overskriv[kolonner_til_opdatering])
+                                
+                            df.reset_index(inplace=True)
                 except Exception as csv_err:
                     st.warning(f"Kunne ikke filtrere og opdatere ud fra CSV: {csv_err}")
             else:
                 st.error(f"Kritisk fejl: Spiller-filen kunne ikke findes på stien: {overskriv_sti}")
                 return
+            
+            # --- FEJLSIRKING: Stop hvis ingen spillere matcher dine kriterier efter CSV-filteret ---
+            if df.empty:
+                st.info(f"Ingen spillere fundet fra din CSV-fil med over 150 minutter i den valgte liga ({valgt_profil}).")
+                return
+
+            df['dk_position'] = df['specific_position'].map(POS_TRANSLATIONS).fillna(df['specific_position'])
+            df_sorteret = df.sort_values(score_col, ascending=False)
             
             # --- 5. LOGIK: TOP 20 LIGA + 2 BEDSTE REELLE HVIDOVRE (Blandt de godkendte fra din CSV) ---
             liga_spillere = df_sorteret[df_sorteret['is_active_hvidovre'] == 0]
@@ -290,6 +299,10 @@ def vis_side():
             top_2_hvidovre = hvidovre_spillere.head(2)
             
             visnings_df = pd.concat([top_20_liga, top_2_hvidovre]).drop_duplicates(subset=['player_wyid'])
+            
+            if visnings_df.empty:
+                st.info("Ingen spillere kvalificerede sig til top-oversigten ud fra de valgte filtre.")
+                return
             
             visnings_df = visnings_df.sort_values(score_col, ascending=True)
             visnings_df['visningsnavn'] = visnings_df['full_name']
