@@ -109,7 +109,7 @@ def vis_side():
         }
     }
 
-    # --- 1. INDLÆS CSV-FIL MED SIKKER ENCODING (Løser tegnsæt-fejl) ---
+    # --- 1. INDLÆS CSV-FIL ---
     aktuel_fil_sti = os.path.abspath(__file__)
     projekt_rod = os.path.dirname(aktuel_fil_sti)
     for _ in range(5):
@@ -127,7 +127,6 @@ def vis_side():
     for enc in ['utf-8-sig', 'latin-1', 'utf-8', 'cp1252']:
         try:
             df_csv = pd.read_csv(overskriv_sti, encoding=enc)
-            # Hvis indlæsningen lykkes uden de mærkelige tegn, gemmer vi den
             if not df_csv.empty and not df_csv.iloc[:,1].astype(str).str.contains('√').any():
                 break
         except Exception:
@@ -150,7 +149,6 @@ def vis_side():
     col1, col2, col3 = st.columns(3)
     valgt_hovedkategori = col1.selectbox("Vælg Kategori", list(POS_CONFIG.keys()))
     
-    # Her trækker vi udelukkende de positioner, du har defineret i CSV-filen
     df_csv_hoved = df_csv[df_csv['hovedkategori'] == valgt_hovedkategori]
     specifikke_muligheder = sorted(df_csv_hoved['specific_position'].dropna().unique().tolist())
     visnings_positioner_map = {pos: POS_TRANSLATIONS.get(pos, pos) for pos in specifikke_muligheder}
@@ -177,15 +175,14 @@ def vis_side():
     }
     valgt_liga_nøgle = col3.selectbox("Vælg Turnering", list(LIGA_VALGMULIGHEDER.keys()), format_func=lambda x: LIGA_VALGMULIGHEDER[x])
 
-    # --- 3. DYNAMISKE SQL-FORESPØRGSLER UDEN EN ENESTE REFERENCE TIL ROLLENAVN I SYSTEMET ---
+    # --- 3. SQL MED PLAYERCAREER FOR MINUTTAL ---
     if valgt_liga_nøgle == "alle":
-        liga_betingelse_total = f"m_tot.COMPETITION_WYID IN {TILLADTE_LIGAER}"
+        liga_betingelse_career = f"pc.COMPETITION_WYID IN {TILLADTE_LIGAER}"
         liga_betingelse_stats = f"s.COMPETITION_WYID IN {TILLADTE_LIGAER}"
     else:
-        liga_betingelse_total = f"m_tot.COMPETITION_WYID = {valgt_liga_nøgle}"
+        liga_betingelse_career = f"pc.COMPETITION_WYID = {valgt_liga_nøgle}"
         liga_betingelse_stats = f"s.COMPETITION_WYID = {valgt_liga_nøgle}"
 
-    # Vi indsnævrer listen af WyIDs vi overhovedet gider spørge efter til dem, der matcher dit CSV-filter
     if faktisk_specifik_valg:
         target_wyids = df_csv_hoved[df_csv_hoved['specific_position'] == faktisk_specifik_valg]['player_wyid'].tolist()
     else:
@@ -199,15 +196,17 @@ def vis_side():
 
     with st.spinner("Henter og beregner live-data..."):
         sql_avanceret = f"""
-            WITH minut_beregning AS (
-                -- Beregn spilletid isoleret, så vi undgår mangedobling i JOINs
+            WITH minut_kilde AS (
+                -- Hent minutter direkte fra PLAYERSCAREER for sæsonen 2025/2026
                 SELECT 
-                    PLAYER_WYID,
-                    SUM(CASE WHEN {liga_betingelse_total} THEN MINUTESONFIELD ELSE 0 END) as total_minutes_selected_liga,
-                    SUM(MINUTESONFIELD) as total_minutes_all_ligas
-                FROM {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_TOTAL m_tot
-                WHERE m_tot.COMPETITION_WYID IN {TILLADTE_LIGAER}
-                GROUP BY PLAYER_WYID
+                    pc.PLAYER_WYID,
+                    SUM(CASE WHEN {liga_betingelse_career} THEN pc.MINUTESPLAYED ELSE 0 END) as total_minutes_selected_liga,
+                    SUM(pc.MINUTESPLAYED) as total_minutes_all_ligas
+                FROM {DB}.WYSCOUT_PLAYERCAREER pc
+                JOIN {DB}.WYSCOUT_SEASONS s ON pc.SEASON_WYID = s.SEASON_WYID
+                WHERE s.SEASONNAME = '{SOGT_SAESON}'
+                  AND pc.COMPETITION_WYID IN {TILLADTE_LIGAER}
+                GROUP BY pc.PLAYER_WYID
             ),
             hvidovre_spillere_2026 AS (
                 SELECT DISTINCT p.PLAYER_WYID
@@ -236,7 +235,7 @@ def vis_side():
                 JOIN {DB}.WYSCOUT_PLAYERS p ON s.PLAYER_WYID = p.PLAYER_WYID
                 LEFT JOIN {DB}.WYSCOUT_TEAMS t ON p.CURRENTTEAM_WYID = t.TEAM_WYID
                 JOIN {DB}.WYSCOUT_SEASONS seas ON s.SEASON_WYID = seas.SEASON_WYID
-                LEFT JOIN minut_beregning m_calc ON p.PLAYER_WYID = m_calc.PLAYER_WYID
+                LEFT JOIN minut_kilde m_calc ON p.PLAYER_WYID = m_calc.PLAYER_WYID
                 WHERE p.PLAYER_WYID IN {sql_ids_str}
                   AND p.PLAYER_WYID IN (SELECT PLAYER_WYID FROM hvidovre_spillere_2026)
                   AND seas.SEASONNAME = '{SOGT_SAESON}'
@@ -262,7 +261,7 @@ def vis_side():
                 JOIN {DB}.WYSCOUT_PLAYERS p ON s.PLAYER_WYID = p.PLAYER_WYID
                 LEFT JOIN {DB}.WYSCOUT_TEAMS t ON p.CURRENTTEAM_WYID = t.TEAM_WYID
                 JOIN {DB}.WYSCOUT_SEASONS seas ON s.SEASON_WYID = seas.SEASON_WYID
-                LEFT JOIN minut_beregning m_calc ON p.PLAYER_WYID = m_calc.PLAYER_WYID
+                LEFT JOIN minut_kilde m_calc ON p.PLAYER_WYID = m_calc.PLAYER_WYID
                 WHERE p.PLAYER_WYID IN {sql_ids_str}
                   AND p.PLAYER_WYID NOT IN (SELECT PLAYER_WYID FROM hvidovre_spillere_2026)
                   AND seas.SEASONNAME = '{SOGT_SAESON}'
@@ -281,18 +280,16 @@ def vis_side():
             df_raw.columns = df_raw.columns.str.lower()
             df_raw['player_wyid'] = df_raw['player_wyid'].astype(int)
 
-            # --- 4. MAP DATA DIREKTE MOD DIN CSV-FIL (Vores sandhedskilde) ---
-            # Vi merger udelukkende med dit CSV-ark, så vi kun viser de spillere, du vil have vist
+            # Map data sammen med din CSV-fil
             df = pd.merge(df_csv, df_raw, on='player_wyid', how='inner')
 
             if df.empty:
                 st.info(f"Ingen spillere i din CSV-fil matcher de valgte minut-kriterier i denne turnering.")
                 return
 
-            # Sørg for at Hvidovre-spillerne altid står som Hvidovre IF som holdnavn
+            # Hvidovre IF klubnavns-sikring
             df.loc[df['is_active_hvidovre'] == 1, 'team_name'] = "Hvidovre IF"
 
-            # Beregn live procenter og performance score
             df['pass_pct'] = (df['successfulpasses'] / df['passes'].replace(0, 1)) * 100
 
             config = POS_CONFIG[valgt_hovedkategori]
@@ -308,7 +305,7 @@ def vis_side():
             df['dk_position'] = df['specific_position'].map(POS_TRANSLATIONS).fillna(df['specific_position'])
             df_sorteret = df.sort_values(score_col, ascending=False)
             
-            # --- 5. SAML TOPLISTE (Sikrer op til 20 liga-spillere samt Hvidovre-spillere) ---
+            # Saml toplisten
             liga_spillere = df_sorteret[df_sorteret['is_active_hvidovre'] == 0]
             hvidovre_spillere = df_sorteret[df_sorteret['is_active_hvidovre'] == 1]
             
@@ -329,7 +326,7 @@ def vis_side():
                 for _, row in visnings_df.iterrows()
             ]
 
-            # --- 6. SPLIT-SCREEN VISNING ---
+            # Split-screen visning
             rude_venstre, rude_hoejre = st.columns([1.1, 0.9])
 
             with rude_venstre:
