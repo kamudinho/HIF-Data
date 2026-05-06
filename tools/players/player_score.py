@@ -90,23 +90,13 @@ def vis_side():
     
     TILLADTE_LIGAER = (335, 328, 329, 43319, 331, 1305)
 
-    # De præcise, godkendte oversættelser
     POS_TRANSLATIONS = {
-        "Center Back": "Midterforsvarer",
-        "Left Back": "Venstre Back",
-        "Right Back": "Højre Back",
-        "Left Wing Back": "Venstre Wingback",
-        "Right Wing Back": "Højre Wingback",
-        "Defensive Midfielder": "Defensiv Midtbane",
-        "Central Midfielder": "Central Midtbane",
-        "Attacking Midfielder": "Offensiv Midtbane",
-        "Left Midfielder": "Venstre Midtbane",
-        "Right Midfielder": "Højre Midtbane",
-        "Forward": "Angriber",
-        "Left Winger": "Venstre kant",
-        "Right Winger": "Højre kant",
-        "Goalkeeper": "Målmand",
-        "Defender": "Forsvarsspiller",
+        "Center Back": "Midterforsvarer", "Left Back": "Venstre Back", "Right Back": "Højre Back",
+        "Left Wing Back": "Venstre Wingback", "Right Wing Back": "Højre Wingback",
+        "Defensive Midfielder": "Defensiv Midtbane", "Central Midfielder": "Central Midtbane",
+        "Attacking Midfielder": "Offensiv Midtbane", "Left Midfielder": "Venstre Midtbane",
+        "Right Midfielder": "Højre Midtbane", "Forward": "Angriber", "Left Winger": "Venstre kant",
+        "Right Winger": "Højre kant", "Goalkeeper": "Målmand", "Defender": "Forsvarsspiller",
         "Midfielder": "Midtbanespiller"
     }
 
@@ -167,37 +157,23 @@ def vis_side():
         'position': 'specific_position'
     })
     
-    # Rens og standardiser værdier
     df_csv['player_wyid'] = df_csv['player_wyid'].astype(int)
     df_csv['specific_position'] = df_csv['specific_position'].fillna("").astype(str).apply(rens_specialtegn)
     df_csv['full_name'] = df_csv['full_name'].fillna("").astype(str).apply(rens_specialtegn)
     df_csv['klub'] = df_csv['klub'].fillna("").astype(str).apply(rens_specialtegn)
-    
     df_csv['hovedkategori'] = df_csv['specific_position'].apply(map_til_hovedkategori)
-
-    # --- NULSTIL VALGTE SPILLER VED KATEGORISKIFT ---
-    if "forrige_kategori" not in st.session_state:
-        st.session_state.forrige_kategori = None
 
     # --- 2. DYNAMISKE FILTRE ---
     col1, col2, col3 = st.columns(3)
-    valgt_hovedkategori = col1.selectbox("Vælg Kategori", list(POS_CONFIG.keys()), key="cat_select")
-    
-    # Nulstiller det gemte klik, hvis du skifter hovedkategori
-    if st.session_state.forrige_kategori != valgt_hovedkategori:
-        st.session_state.valgt_spiller_id = None
-        st.session_state.forrige_kategori = valgt_hovedkategori
+    valgt_hovedkategori = col1.selectbox("Vælg Kategori", list(POS_CONFIG.keys()))
     
     df_csv_hoved = df_csv[df_csv['hovedkategori'] == valgt_hovedkategori]
     
     ekskluder_fra_dropdown = {
-        "målmand", "goalkeeper", "keeper", "gk",
-        "forsvarsspiller", "defender", "def",
-        "midtbanespiller", "midfielder", "mid",
-        "angriber", "forward", "striker", "fwd"
+        "målmand", "goalkeeper", "keeper", "gk", "forsvarsspiller", "defender", "def",
+        "midtbanespiller", "midfielder", "mid", "angriber", "forward", "striker", "fwd"
     }
     
-    # Hent kun de specifikke positioner til dropdown-menuen
     specifikke_muligheder = sorted([
         pos for pos in df_csv_hoved['specific_position'].dropna().unique().tolist()
         if pos.strip().lower() not in ekskluder_fra_dropdown and pos.strip() != ""
@@ -216,13 +192,8 @@ def vis_side():
     else:
         alle_tekst = f"Alle {valgt_hovedkategori.lower()}e"
     
-    valgt_specifik_visning = col2.selectbox(
-        "Vælg Specifik Position", 
-        [alle_tekst] + list(visnings_positioner_map.values()),
-        key="spec_pos_select"
-    )
+    valgt_specifik_visning = col2.selectbox("Vælg Specifik Position", [alle_tekst] + list(visnings_positioner_map.values()))
     
-    # Find den underliggende position i databasen baseret på dropdown-valget
     faktisk_specifik_valg = None
     if valgt_specifik_visning != alle_tekst:
         for eng_pos, dk_pos in visnings_positioner_map.items():
@@ -232,14 +203,14 @@ def vis_side():
 
     LIGA_VALGMULIGHEDER = {
         "alle": "Alle turneringer",
-        328: "NordicBet Liga",  # Tilpasset din gemte information
+        328: "Betinia Ligaen",
         335: "Superligaen",
         329: "2. division",
         43319: "3. division",
         331: "Oddset Pokalen",
         1305: "U19 Ligaen"
     }
-    valgt_liga_nøgle = col3.selectbox("Vælg Turnering", list(LIGA_VALGMULIGHEDER.keys()), format_func=lambda x: LIGA_VALGMULIGHEDER[x], key="liga_select")
+    valgt_liga_nøgle = col3.selectbox("Vælg Turnering", list(LIGA_VALGMULIGHEDER.keys()), format_func=lambda x: LIGA_VALGMULIGHEDER[x])
 
     # --- 3. FILTER LOGIK ---
     if faktisk_specifik_valg:
@@ -295,7 +266,7 @@ def vis_side():
                     AVG(s.KEYPASSES) as KEYPASSES, AVG(s.INTERCEPTIONS) as INTERCEPTIONS,
                     AVG(s.XGASSIST) as XGASSIST, AVG(s.SLIDINGTACKLES) as SLIDINGTACKLES,
                     AVG(s.PROGRESSIVERUN) as PROGRESSIVERUN, AVG(s.DEFENSIVEDUELSWON) as DEFENSIVEDUELSWON,
-                    AVG(s.CLEARANCES) as CLEARANCES, AVG(s.AERIALDUELS) AS AERIALDUELS, -- Rettet her til _WON
+                    AVG(s.CLEARANCES) as CLEARANCES, AVG(s.AERIALDUELS) AS AERIALDUELS,
                     AVG(s.DANGEROUSOWNHALFLOSSES) as DANGEROUSOWNHALFLOSSES, AVG(s.ASSISTS) as ASSISTS
                 FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_AVERAGE s
                 JOIN {DB}.WYSCOUT_PLAYERS p ON s.PLAYER_WYID = p.PLAYER_WYID
@@ -321,7 +292,7 @@ def vis_side():
                     AVG(s.KEYPASSES) as KEYPASSES, AVG(s.INTERCEPTIONS) as INTERCEPTIONS,
                     AVG(s.XGASSIST) as XGASSIST, AVG(s.SLIDINGTACKLES) as SLIDINGTACKLES,
                     AVG(s.PROGRESSIVERUN) as PROGRESSIVERUN, AVG(s.DEFENSIVEDUELSWON) as DEFENSIVEDUELSWON,
-                    AVG(s.CLEARANCES) as CLEARANCES, AVG(s.AERIALDUELS) AS AERIALDUELS, -- Rettet her til _WON
+                    AVG(s.CLEARANCES) as CLEARANCES, AVG(s.AERIALDUELS) AS AERIALDUELS,
                     AVG(s.DANGEROUSOWNHALFLOSSES) as DANGEROUSOWNHALFLOSSES, AVG(s.ASSISTS) as ASSISTS
                 FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_AVERAGE s
                 JOIN {DB}.WYSCOUT_PLAYERS p ON s.PLAYER_WYID = p.PLAYER_WYID
@@ -403,7 +374,7 @@ def vis_side():
                     orientation='h',
                     text=score_col,
                     template='plotly_white',
-                    custom_data=['player_wyid']  # Giver os ID direkte med ind i diagrammet
+                    custom_data=['player_wyid'] # ID sendes med i grafen her!
                 )
                 
                 fig.update_traces(
@@ -423,32 +394,27 @@ def vis_side():
                     clickmode='event+select'
                 )
                 
+                # Hvis brugeren klikker på en bjælke, returneres det her
                 valgt_klik = st.plotly_chart(fig, use_container_width=True, on_select="rerun")
 
             with rude_hoejre:
-                # --- KLIK-LOGIK VIA SESSION_STATE ---
-                if "valgt_spiller_id" not in st.session_state:
-                    st.session_state.valgt_spiller_id = None
-
-                # Hvis en spiller er klikket i diagrammet, gemmer vi dennes wyid
-                if valgt_klik and "selection" in valgt_klik and valgt_klik["selection"]["points"]:
-                    klikket_wyid = int(valgt_klik["selection"]["points"][0]["customdata"][0])
-                    st.session_state.valgt_spiller_id = klikket_wyid
-
-                # Match ID'et mod vores DataFrame
                 valgt_spiller_data = None
-                if st.session_state.valgt_spiller_id is not None:
-                    match = df[df['player_wyid'] == st.session_state.valgt_spiller_id]
-                    if not match.empty:
-                        valgt_spiller_data = match.iloc[0]
 
-                # Hvis intet er klikket endnu, vælges den bedste som standard
+                # Her fanger vi klikket sikkert ved hjælp af ID'et
+                try:
+                    if valgt_klik and "selection" in valgt_klik and valgt_klik["selection"]["points"]:
+                        # Vi trækker 'player_wyid' direkte ud af custom_data i stedet for navnet
+                        klikket_id = int(valgt_klik["selection"]["points"][0]["customdata"][0])
+                        valgt_spiller_data = df[df['player_wyid'] == klikket_id].iloc[0]
+                except Exception:
+                    # Hvis noget fejler i klikket, lader vi bare appen køre videre uden at crashe
+                    valgt_spiller_data = None
+
+                # Hvis der ikke er klikket på noget endnu (eller klikket fejlede), viser vi den bedste spiller som default
                 if valgt_spiller_data is None and not visnings_df.empty:
-                    bedste_spiller_data = visnings_df.sort_values(score_col, ascending=False).iloc[0]
-                    st.session_state.valgt_spiller_id = int(bedste_spiller_data['player_wyid'])
-                    valgt_spiller_data = bedste_spiller_data
+                    bedste_spiller_id = visnings_df.sort_values(score_col, ascending=False).iloc[0]['player_wyid']
+                    valgt_spiller_data = df[df['player_wyid'] == bedste_spiller_id].iloc[0]
 
-                # --- TEGN DET DETALJEREDE SPILLERKORT ---
                 if valgt_spiller_data is not None:
                     st.markdown(f"""
                         <div class="score-card">
@@ -469,7 +435,7 @@ def vis_side():
                             metric_vaerdi = valgt_spiller_data[m_name]
                             visnings_vaerdi = f"{metric_vaerdi:.1f}%" if "pct" in m_name else f"{metric_vaerdi:.2f}"
                         else:
-                            visnings_vaerdi = "N/A"
+                            visnings_vaerdi = "0.00"
                         
                         st.markdown(f"""
                             <div class="metric-row">
@@ -482,6 +448,3 @@ def vis_side():
                         """, unsafe_allow_html=True)
         else:
             st.info(f"Fandt ingen aktive stats eller minutter for de valgte turneringer.")
-
-if __name__ == "__main__":
-    vis_side()
