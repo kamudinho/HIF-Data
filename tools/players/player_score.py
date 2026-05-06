@@ -126,6 +126,9 @@ def vis_side():
     df_csv['klub'] = df_csv['klub'].fillna("").astype(str).apply(rens_specialtegn)
     df_csv['hovedkategori'] = df_csv['specific_position'].apply(map_til_hovedkategori)
 
+    # --- NY IDENTIFIKATION: Er spilleren Hvidovre-spiller i vores CSV? ---
+    df_csv['is_active_hvidovre'] = np.where(df_csv['klub'].str.strip() == "Hvidovre IF", 1, 0)
+
     # --- 2. DYNAMISKE FILTRE ---
     col1, col2, col3 = st.columns(3)
     valgt_hovedkategori = col1.selectbox("Vælg Kategori", list(POS_CONFIG.keys()), key="cat_select")
@@ -151,19 +154,18 @@ def vis_side():
     valgt_liga_nøgle = col3.selectbox("Vælg Turnering", list(LIGA_VALGMULIGHEDER.keys()), format_func=lambda x: LIGA_VALGMULIGHEDER[x], key="liga_select")
 
     # --- 3. FILTER LOGIK ---
-    # Vi henter ALTID alle spillere fra CSV'en for hovedkategorien ned fra Snowflake, 
-    # så vi kan filtrere dem dynamisk i Python (både Hvidovre- og liga-spillere)
-    alle_wyids_i_kategori = df_csv_hoved['player_wyid'].tolist()
+    # Vi identificerer, hvilke spillere der skal hentes fra Snowflake ud fra CSV'ens is_active_hvidovre-opdeling
+    hvidovre_wyids = df_csv_hoved[df_csv_hoved['is_active_hvidovre'] == 1]['player_wyid'].tolist()
+    liga_wyids = df_csv_hoved[df_csv_hoved['is_active_hvidovre'] == 0]['player_wyid'].tolist()
 
-    if not alle_wyids_i_kategori:
+    if not hvidovre_wyids and not liga_wyids:
         st.warning("Ingen spillere matcher de valgte filtre.")
         return
 
-    sql_ids_str = f"({', '.join(map(str, alle_wyids_i_kategori))})"
+    sql_hvidovre_ids = f"({', '.join(map(str, hvidovre_wyids))})" if hvidovre_wyids else "(-1)"
+    sql_liga_ids = f"({', '.join(map(str, liga_wyids))})" if liga_wyids else "(-1)"
 
     # --- 4. DUAL SQL QUERY (HVIDOVRE VS LIGA) ---
-    # Hvidovre-spillere læses på tværs af alle tilladte ligaer (så de altid kommer med uanset dit filter)
-    # Liga-spillere læses KUN for den valgte turnering i dropdownen
     liga_betingelse_stats = f"s.COMPETITION_WYID IN {TILLADTE_LIGAER}" if valgt_liga_nøgle == "alle" else f"s.COMPETITION_WYID = {valgt_liga_nøgle}"
 
     with st.spinner("Henter og beregner live-data..."):
@@ -171,7 +173,6 @@ def vis_side():
             WITH minut_kilde AS (
                 SELECT 
                     pc.PLAYER_WYID,
-                    MAX(CASE WHEN pc.TEAM_WYID = {HVIDOVRE_TEAM_WYID} THEN 1 ELSE 0 END) as is_active_hvidovre,
                     -- Minutter for den specifikke valgte liga (til eksterne spillere)
                     SUM(CASE WHEN pc.COMPETITION_WYID = {valgt_liga_nøgle if valgt_liga_nøgle != 'alle' else 'pc.COMPETITION_WYID'} THEN pc.MINUTESPLAYED ELSE 0 END) as total_minutes_selected_liga,
                     -- Minutter i alt for Hvidovre-spillere
@@ -199,10 +200,9 @@ def vis_side():
                 JOIN {DB}.WYSCOUT_PLAYERS p ON s.PLAYER_WYID = p.PLAYER_WYID
                 JOIN {DB}.WYSCOUT_SEASONS seas ON s.SEASON_WYID = seas.SEASON_WYID
                 JOIN minut_kilde m_calc ON p.PLAYER_WYID = m_calc.PLAYER_WYID
-                WHERE p.PLAYER_WYID IN {sql_ids_str}
-                  AND m_calc.is_active_hvidovre = 1
+                WHERE p.PLAYER_WYID IN {sql_hvidovre_ids}
                   AND seas.SEASONNAME = '{SOGT_SAESON}'
-                  AND s.COMPETITION_WYID IN {TILLADTE_LIGAER} -- Hvidovre data hentes altid på tværs af tilladte ligaer
+                  AND s.COMPETITION_WYID IN {TILLADTE_LIGAER}
                 GROUP BY p.PLAYER_WYID, m_calc.total_minutes_all_ligas
                 HAVING COALESCE(m_calc.total_minutes_all_ligas, 0) >= 150
             ),
@@ -223,10 +223,9 @@ def vis_side():
                 JOIN {DB}.WYSCOUT_PLAYERS p ON s.PLAYER_WYID = p.PLAYER_WYID
                 JOIN {DB}.WYSCOUT_SEASONS seas ON s.SEASON_WYID = seas.SEASON_WYID
                 JOIN minut_kilde m_calc ON p.PLAYER_WYID = m_calc.PLAYER_WYID
-                WHERE p.PLAYER_WYID IN {sql_ids_str}
-                  AND m_calc.is_active_hvidovre = 0
+                WHERE p.PLAYER_WYID IN {sql_liga_ids}
                   AND seas.SEASONNAME = '{SOGT_SAESON}'
-                  AND {liga_betingelse_stats} -- Eksterne spillere filtreres på den valgte turnering
+                  AND {liga_betingelse_stats}
                 GROUP BY p.PLAYER_WYID, m_calc.total_minutes_selected_liga
                 HAVING COALESCE(m_calc.total_minutes_selected_liga, 0) >= 150
             )
@@ -241,13 +240,14 @@ def vis_side():
             df_raw.columns = df_raw.columns.str.lower()
             df_raw['player_wyid'] = df_raw['player_wyid'].astype(int)
 
-            df = pd.merge(df_csv, df_raw, on='player_wyid', how='inner')
+            # Vi fletter data sammen (bemærk: vi dropper csv'ens is_active_hvidovre midlertidigt for at undgå kolonnekonflikt)
+            df_csv_clean = df_csv.drop(columns=['is_active_hvidovre'])
+            df = pd.merge(df_csv_clean, df_raw, on='player_wyid', how='inner')
 
             if df.empty:
-                st.info("Ingen spillere matcher spilletidskriterierne (min. 150 min.) i denne turnering.")
+                st.caption("Ingen spillere matcher spilletidskriterierne (min. 150 min.) i denne turnering.")
                 return
 
-            # Sætter klubnavnet dynamisk baseret på is_active_hvidovre-status
             df['team_name'] = np.where(df['is_active_hvidovre'] == 1, "Hvidovre IF", df['klub'])
             df['pass_pct'] = (df['successfulpasses'] / df['passes'].replace(0, 1)) * 100
 
@@ -263,7 +263,6 @@ def vis_side():
             df['dk_position'] = df['specific_position'].map(POS_TRANSLATIONS).fillna(df['specific_position'])
 
             # --- DYNAMISK FILTRERING PÅ SPECIFIK POSITION ---
-            # Vi filtrerer datarammen her, så både Hvidovre- og eksterne spillere følger det valgte positionsfilter!
             if faktisk_specifik_valg:
                 df_filtreret = df[df['specific_position'] == faktisk_specifik_valg]
             else:
@@ -275,14 +274,13 @@ def vis_side():
 
             df_sorteret = df_filtreret.sort_values(score_col, ascending=False)
             
-            # Opdel i Hvidovre og Liga for at lave top 20 + top 2 reglen
+            # Opdel på baggrund af den korrekte CSV klub-værdi
             hvidovre_spillere = df_sorteret[df_sorteret['is_active_hvidovre'] == 1]
             liga_spillere = df_sorteret[df_sorteret['is_active_hvidovre'] == 0]
             
-            # Nu tager vi de 20 bedste liga-spillere og fletter dem med de 2 bedste Hvidovre-spillere på den valgte position
+            # Flet de 20 bedste liga-spillere med de 2 bedste Hvidovre-spillere
             visnings_df = pd.concat([liga_spillere.head(20), hvidovre_spillere.head(2)]).drop_duplicates(subset=['player_wyid'])
             
-            # Sorter til grafen (stigende, så den højeste score lander øverst i Plotly horisontal bar)
             visnings_df = visnings_df.sort_values(score_col, ascending=True)
             visnings_df['visningsnavn'] = visnings_df['full_name']
 
@@ -317,7 +315,6 @@ def vis_side():
                     klikket_wyid = valgt_klik["selection"]["points"][0]["customdata"][0]
                     valgt_spiller_data = df_filtreret[df_filtreret['player_wyid'] == klikket_wyid].iloc[0]
                 elif not visnings_df.empty:
-                    # Default til den bedste spiller overhovedet på listen
                     bedste_spiller_id = visnings_df.sort_values(score_col, ascending=False).iloc[0]['player_wyid']
                     valgt_spiller_data = df_filtreret[df_filtreret['player_wyid'] == bedste_spiller_id].iloc[0]
 
