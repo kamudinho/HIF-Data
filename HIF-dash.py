@@ -200,7 +200,10 @@ try:
 
     elif hoved_omraade == "TILPASNING":
         # TILFØJET: Render logikken for Spiller-score under Tilpasning
-        if sel == "Spiller-score":
+        if sel == "Spillerdata":
+            import tools.tilpasning.spiller_tilpasning as tilpasning
+            tilpasning.vis_side()
+        elif sel == "Spiller-score":
             import tools.players.player_score as pscore
             pscore.vis_side()
 
