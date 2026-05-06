@@ -76,37 +76,38 @@ def vis_side():
         "Attacking Midfielder": "Offensiv Midtbane",
         "Left Midfielder": "Venstre Midtbane",
         "Right Midfielder": "Højre Midtbane",
-        "Striker": "Angriber / Centerforward",
+        "Striker": "Angriber",
         "Left Winger": "Venstre Winger",
         "Right Winger": "Højre Winger",
         "Second Striker": "Hængende Angriber",
         "Goalkeeper": "Målmand",
         "Defender": "Forsvarsspiller",
         "Midfielder": "Midtbanespiller",
-        "Forward": "Angrebsspiller"
+        "Forward": "Angriber"
     }
 
     POS_CONFIG = {
-        "Angriber": {
-            "metrics": ["goals", "xg", "shots", "touchinbox", "dribbles", "assists"],
-            "weights": [6.0, 4.0, 3.8, 2.4, 1.2, 2.0],
-            "labels": ["Mål", "xG", "Skud", "Berøringer i felt", "Driblinger", "Assists"]
+        "Målmand": {
+            "metrics": ["pass_pct", "clearances"],
+            "weights": [5.0, 5.0],
+            "labels": ["Pasnings %", "Clearinger"]
+        }
+        "Forsvarsspiller": {
+            "metrics": ["interceptions", "defensiveduelswon", "clearances", "aerialduelswon", "pass_pct", "dangerousownhalflosses"],
+            "weights": [5.0, 4.0, 3.5, 4.0, 2.5, -3.0], 
+            "labels": ["Interceptions", "Vundne Def. Dueller", "Clearinger", "Vundne Luftdueller", "Pasnings %", "Farlige Boldtab (Egen banehalvdel)"]
         },
         "Midtbanespiller": {
             "metrics": ["pass_pct", "keypasses", "interceptions", "xgassist", "slidingtackles", "progressiverun"],
             "weights": [8.0, 4.5, 3.0, 4.0, 2.0, 1.5],
             "labels": ["Pasnings %", "Key Passes", "Interceptions", "xA", "Glidende Tacklinger", "Progressive løb"]
         },
-        "Forsvarsspiller": {
-            "metrics": ["interceptions", "defensiveduelswon", "clearances", "aerialduelswon", "pass_pct", "dangerousownhalflosses"],
-            "weights": [5.0, 4.0, 3.5, 4.0, 2.5, -3.0], 
-            "labels": ["Interceptions", "Vundne Def. Dueller", "Clearinger", "Vundne Luftdueller", "Pasnings %", "Farlige Boldtab (Egen banehalvdel)"]
-        },
-        "Målmand": {
-            "metrics": ["pass_pct", "clearances"],
-            "weights": [5.0, 5.0],
-            "labels": ["Pasnings %", "Clearinger"]
-        }
+        "Angriber": {
+            "metrics": ["goals", "xg", "shots", "touchinbox", "dribbles", "assists"],
+            "weights": [6.0, 4.0, 3.8, 2.4, 1.2, 2.0],
+            "labels": ["Mål", "xG", "Skud", "Berøringer i felt", "Driblinger", "Assists"]
+        }, 
+        
     }
 
     # --- 1. INDLÆS CSV-FIL ---
@@ -363,7 +364,6 @@ def vis_side():
                 valgt_klik = st.plotly_chart(fig, use_container_width=True, on_select="rerun")
 
             with rude_hoejre:
-                st.subheader("Spiller-detaljer")
                 valgt_spiller_data = None
                 
                 if valgt_klik and "selection" in valgt_klik and valgt_klik["selection"]["points"]:
@@ -379,9 +379,9 @@ def vis_side():
                             <div class="pos-title">{valgt_spiller_data['full_name']}</div>
                             <div style="font-size: 14px; color: #555; line-height: 1.5;">
                                 Klub: <b>{valgt_spiller_data['team_name']}</b><br>
-                                Position (Fra dit ark): <b>{valgt_spiller_data['dk_position']}</b><br>
-                                Spillede minutter: <b>{int(valgt_spiller_data['total_minutes'])} min.</b><br>
-                                Samlet Score ({valgt_hovedkategori}): <b>{valgt_spiller_data[score_col]}</b>
+                                Position: <b>{valgt_spiller_data['dk_position']}</b><br>
+                                Minutter: <b>{int(valgt_spiller_data['total_minutes'])} min.</b><br>
+                                Samlet score ({valgt_hovedkategori}): <b>{valgt_spiller_data[score_col]}</b>
                             </div>
                         </div>
                     """, unsafe_allow_html=True)
