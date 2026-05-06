@@ -61,7 +61,7 @@ def vis_side():
 
     conn = _get_snowflake_conn()
     if not conn:
-        st.error("Kunne ikke oprette forbindelse to Snowflake-databasen.")
+        st.error("Kunne ikke oprette forbindelse til Snowflake-databasen.")
         return
 
     DB = "KLUB_HVIDOVREIF.AXIS"
@@ -205,7 +205,6 @@ def vis_side():
     sql_player_ids_str = f"({', '.join(map(str, csv_spiller_ids))})"
 
     # --- 3. DYNAMISK SQL GENERERING BASERET PÅ LIGAVALG ---
-    # Definerer liga-betingelsen til SQL'en
     if valgt_liga_nøgle == "alle":
         liga_betingelse_total = f"m_total.COMPETITION_WYID IN {TILLADTE_LIGAER}"
         liga_betingelse_stats = f"s.COMPETITION_WYID IN {TILLADTE_LIGAER}"
@@ -214,14 +213,14 @@ def vis_side():
         liga_betingelse_stats = f"s.COMPETITION_WYID = {valgt_liga_nøgle}"
 
     with st.spinner("Henter og beregner live-data..."):
-        # SQL til minutter (Hvidovre-aktiv-status kører altid på tværs af alt spillet efter 2026-01-01)
+        # SQL til minutter 
+        # RETTELSE: Vi sikrer her at hvidovre_2026_spillere tjekker, at m_tot.TEAM_WYID = 7490 (altså at de faktisk spillede kampspecifikke minutter FOR Hvidovre)
         sql_minutter = f"""
             WITH hvidovre_2026_spillere AS (
                 SELECT DISTINCT m_tot.PLAYER_WYID
                 FROM {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_TOTAL m_tot
                 JOIN {DB}.WYSCOUT_MATCHES m ON m_tot.MATCH_WYID = m.MATCH_WYID
-                JOIN {DB}.WYSCOUT_PLAYERS p ON m_tot.PLAYER_WYID = p.PLAYER_WYID
-                WHERE p.CURRENTTEAM_WYID = {HVIDOVRE_TEAM_WYID}
+                WHERE m_tot.TEAM_WYID = {HVIDOVRE_TEAM_WYID}
                   AND m.DATE >= '2026-01-01'
                   AND m_tot.MINUTESONFIELD > 0
             )
@@ -236,7 +235,7 @@ def vis_side():
             HAVING SUM(CASE WHEN {liga_betingelse_total} THEN m_total.MINUTESONFIELD ELSE 0 END) >= 150
         """
         
-        # SQL til gennemsnitsstatistikker (Filtrerer på den valgte liga-betingelse)
+        # SQL til gennemsnitsstatistikker
         sql_stats = f"""
             SELECT 
                 p.PLAYER_WYID,
