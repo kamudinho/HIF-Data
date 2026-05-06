@@ -9,6 +9,31 @@ import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from data.data_load import _get_snowflake_conn
 
+def rens_specialtegn(val):
+    """
+    Oversætter ødelagte UTF-8/ANSI tegn (danske og baltiske/østlige tegn) 
+    til deres rigtige bogstaver.
+    """
+    if not isinstance(val, str):
+        return val
+        
+    tegn_map = {
+        '√∏': 'ø', '√ò': 'Ø',
+        '√¶': 'æ', '√Ü': 'Æ',
+        '√•': 'å', '√Ö': 'Å',
+        '√†': 'å',
+        '√∫': 'ú',
+        '≈°': 'š', '≈†': 'Š',
+        '≈æ': 'ž', '≈Ω': 'Ž',
+        '√≥': 'ó',
+        '√©': 'é', '√®': 'è', '√¢': 'â', '√º': 'ü', '√∂': 'ö', '√§': 'ä'
+    }
+    
+    for grimt, godt in tegn_map.items():
+        val = val.replace(grimt, godt)
+        
+    return val
+
 def map_til_hovedkategori(position_str):
     if not isinstance(position_str, str):
         return "Ukendt"
@@ -106,8 +131,7 @@ def vis_side():
             "metrics": ["goals", "xg", "shots", "touchinbox", "dribbles", "assists"],
             "weights": [6.0, 4.0, 3.8, 2.4, 1.2, 2.0],
             "labels": ["Mål", "xG", "Skud", "Berøringer i felt", "Driblinger", "Assists"]
-        }, 
-        
+        }
     }
 
     # --- 1. INDLÆS CSV-FIL ---
@@ -143,27 +167,45 @@ def vis_side():
         'navn': 'full_name',
         'position': 'specific_position'
     })
+    
+    # Rens og standardiser værdier
     df_csv['player_wyid'] = df_csv['player_wyid'].astype(int)
+    df_csv['specific_position'] = df_csv['specific_position'].fillna("").astype(str).apply(rens_specialtegn)
+    df_csv['full_name'] = df_csv['full_name'].fillna("").astype(str).apply(rens_specialtegn)
+    df_csv['klub'] = df_csv['klub'].fillna("").astype(str).apply(rens_specialtegn)
+    
     df_csv['hovedkategori'] = df_csv['specific_position'].apply(map_til_hovedkategori)
 
-    # --- 2. DYNAMISKE FILTRE ---
+    # --- 2. DYNAMISKE FILTRE (MED FJERNELSE AF DUBLETTER) ---
     col1, col2, col3 = st.columns(3)
     valgt_hovedkategori = col1.selectbox("Vælg Kategori", list(POS_CONFIG.keys()))
     
     df_csv_hoved = df_csv[df_csv['hovedkategori'] == valgt_hovedkategori]
-    specifikke_muligheder = sorted(df_csv_hoved['specific_position'].dropna().unique().tolist())
+    
+    # Vi filtrerer de rå kategorier fra de specifikke muligheder (f.eks. "Forsvarsspiller", "Midtbanespiller" osv.)
+    groft_filter = ["målmand", "forsvarsspiller", "midtbanespiller", "angriber", "ukendt"]
+    specifikke_muligheder = sorted([
+        pos for pos in df_csv_hoved['specific_position'].dropna().unique().tolist()
+        if pos.strip().lower() not in groft_filter
+    ])
+    
     visnings_positioner_map = {pos: POS_TRANSLATIONS.get(pos, pos) for pos in specifikke_muligheder}
+    
+    # Generer den samlede "Alle"-tekst dynamisk
+    alle_tekst = f"Alle {valgt_hovedkategori}e" if valgt_hovedkategori != "Målmand" else "Alle Målmænd"
     
     valgt_specifik_visning = col2.selectbox(
         "Vælg Specifik Position", 
-        [f"Alle {valgt_hovedkategori}e" if valgt_hovedkategori != "Målmand" else "Alle Målmænd"] + list(visnings_positioner_map.values())
+        [alle_tekst] + list(visnings_positioner_map.values())
     )
     
+    # Find ud af, om der er valgt en specifik position eller "Alle"
     faktisk_specifik_valg = None
-    for eng_pos, dk_pos in visnings_positioner_map.items():
-        if dk_pos == valgt_specifik_visning:
-            faktisk_specifik_valg = eng_pos
-            break
+    if valgt_specifik_visning != alle_tekst:
+        for eng_pos, dk_pos in visnings_positioner_map.items():
+            if dk_pos == valgt_specifik_visning:
+                faktisk_specifik_valg = eng_pos
+                break
 
     LIGA_VALGMULIGHEDER = {
         "alle": "Alle turneringer",
@@ -184,6 +226,8 @@ def vis_side():
         liga_betingelse_career = f"pc.COMPETITION_WYID = {valgt_liga_nøgle}"
         liga_betingelse_stats = f"s.COMPETITION_WYID = {valgt_liga_nøgle}"
 
+    # Hvis der er valgt en specifik detaljeret position, filtrerer vi på den.
+    # Hvis der er valgt "Alle", tager vi alle spillere der hører under den valgte hovedkategori.
     if faktisk_specifik_valg:
         target_wyids = df_csv_hoved[df_csv_hoved['specific_position'] == faktisk_specifik_valg]['player_wyid'].tolist()
     else:
