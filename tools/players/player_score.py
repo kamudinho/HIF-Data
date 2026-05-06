@@ -59,7 +59,7 @@ def vis_side():
     DB = "KLUB_HVIDOVREIF.AXIS"
     SOGT_SAESON = "2025/2026"
     HVIDOVRE_TEAM_WYID = 7490
-    TILLADTE_LIGAER = (335, 328, 329, 43319, 331, 1305)
+    TILLADTE_LIGAER = (335, 328, 329, 43319)
 
     POS_TRANSLATIONS = {
         "Center Back": "Midterforsvarer", "Left Back": "Venstre Back", "Right Back": "Højre Back",
