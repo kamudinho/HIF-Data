@@ -129,10 +129,27 @@ def clean_pos_val(val):
     if pd.isna(val) or val == "" or str(val).lower() == "nan": return ""
     return str(val).replace('.0', '').strip()
 
+def robust_date_parser(val):
+    if pd.isna(val) or str(val).strip() == "":
+        return pd.NaT
+    val_str = str(val).strip()
+    # Prøv at erstatte punkter med bindestreger hvis europæisk format (f.eks. 11.10.1996 -> 11-10-1996)
+    if "." in val_str:
+        val_str = val_str.replace(".", "-")
+    
+    # Prøv forskellige formater
+    for fmt in ('%Y-%m-%d', '%d-%m-%Y', '%d-%m-%y'):
+        try:
+            return pd.to_datetime(val_str, format=fmt)
+        except ValueError:
+            continue
+    # Falder tilbage til generisk parsing hvis alt andet fejler
+    return pd.to_datetime(val_str, errors='coerce')
+
 def get_status_color(val, ref_date=None):
     if ref_date is None: ref_date = datetime.now()
     try:
-        dt = pd.to_datetime(val, dayfirst=True, errors='coerce')
+        dt = robust_date_parser(val)
         if pd.isna(dt): return None
         days = (dt - ref_date).days
         if days < 0: return "#444444" 
@@ -166,13 +183,16 @@ def process_display_df(df):
         df_display[c] = df_display[c].apply(clean_pos_val)
         if c != 'POS':
             df_display[c] = df_display.apply(lambda r: r['POS'] if r[c] == "" else r[c], axis=1)
+            
+    # Robust dato-parsing af kontraktkolonnen
     if 'KONTRAKT' in df_display.columns:
-        df_display['KONTRAKT_DT'] = pd.to_datetime(df_display['KONTRAKT'], dayfirst=True, errors='coerce')
+        df_display['KONTRAKT_DT'] = df_display['KONTRAKT'].apply(robust_date_parser)
     
     for c in ['ER_EMNE', 'SKYGGEHOLD', 'START_11_26_27', 'ER_AKADEMI']:
         df_display[c] = df_display[c].map({True:True, False:False, 'True':True, 'False':False, 1:True, 0:False, '1':True, '0':False}).fillna(False)
     
-    df_display['IS_HIF'] = df_display['KLUB'].str.contains("Hvidovre", case=False, na=False)
+    # Optimeret HIF-tjek der dækker både "Hvidovre", "Hvidovre IF" og "HIF"
+    df_display['IS_HIF'] = df_display['KLUB'].str.contains("Hvidovre|HIF", case=False, na=False)
     return df_display
 
 # --- 4. UI ---
