@@ -126,16 +126,23 @@ def vis_side():
     df_csv['hovedkategori'] = df_csv['specific_position'].apply(map_til_hovedkategori)
 
     # --- SIKKER KLUB-GODKENDELSE ---
-    # Vi identificerer Hvidovre-spillere udelukkende ud fra CSV-filens definerede klub.
     df_csv['is_active_hvidovre'] = np.where(
         df_csv['klub'].str.strip().str.lower().isin(["hvidovre", "hvidovre if"]), 
         1, 
         0
     )
 
-    # --- 2. DYNAMISKE FILTRE ---
+    # --- NULSTIL VALGTE SPILLER HVIS KATEGORIEN SKIFTES ---
+    if "forrige_kategori" not in st.session_state:
+        st.session_state.forrige_kategori = None
+
     col1, col2, col3 = st.columns(3)
     valgt_hovedkategori = col1.selectbox("Vælg Kategori", list(POS_CONFIG.keys()), key="cat_select")
+    
+    # Hvis brugeren skifter fx fra "Midtbane" til "Angriber", nulstiller vi det gemte klik
+    if st.session_state.forrige_kategori != valgt_hovedkategori:
+        st.session_state.valgt_spiller_id = None
+        st.session_state.forrige_kategori = valgt_hovedkategori
     
     df_csv_hoved = df_csv[df_csv['hovedkategori'] == valgt_hovedkategori]
     
@@ -191,7 +198,8 @@ def vis_side():
                 COALESCE(AVG(s.KEYPASSES), 0) as KEYPASSES, COALESCE(AVG(s.INTERCEPTIONS), 0) as INTERCEPTIONS,
                 COALESCE(AVG(s.XGASSIST), 0) as XGASSIST, COALESCE(AVG(s.SLIDINGTACKLES), 0) as SLIDINGTACKLES,
                 COALESCE(AVG(s.PROGRESSIVERUN), 0) as PROGRESSIVERUN, COALESCE(AVG(s.DEFENSIVEDUELSWON), 0) as DEFENSIVEDUELSWON,
-                COALESCE(AVG(s.CLEARANCES), 0) as CLEARANCES, COALESCE(AVG(s.AERIALDUELS), 0) AS AERIALDUELS,
+                COALESCE(AVG(s.CLEARANCES), 0) as CLEARANCES, 
+                COALESCE(AVG(s.AERIALDUELS), 0) AS AERIALDUELS,
                 COALESCE(AVG(s.DANGEROUSOWNHALFLOSSES), 0) as DANGEROUSOWNHALFLOSSES, COALESCE(AVG(s.ASSISTS), 0) as ASSISTS
             FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_AVERAGE s
             JOIN {DB}.WYSCOUT_PLAYERS p ON s.PLAYER_WYID = p.PLAYER_WYID
@@ -206,7 +214,7 @@ def vis_side():
         try:
             df_raw = conn.query(sql_samlet)
         except Exception as e:
-            st.error(f"Fejl ved SQL: {e}")
+            st.error(f"Fejl ved SQL-indlæsning: {e}")
             return
         
         if df_raw is not None and not df_raw.empty:
@@ -225,7 +233,7 @@ def vis_side():
             df = df[df['total_minutes'] >= 150]
             
             if df.empty:
-                st.info("Ingen spillere i kategorien har over 150 minutters spilletid.")
+                st.info("Ingen spillere i denne kategori har over 150 minutters spilletid.")
                 return
 
             df['pass_pct'] = (df['successfulpasses'] / df['passes'].replace(0, 1)) * 100
@@ -259,7 +267,6 @@ def vis_side():
             visnings_df = visnings_df.sort_values(score_col, ascending=True)
             visnings_df['visningsnavn'] = visnings_df['full_name']
 
-            # Tilføjer tekst kolonne, der bestemmer farvningen eksplicit i Plotly
             visnings_df['status_farve'] = np.where(visnings_df['is_active_hvidovre'] == 1, "Hvidovre IF", "Liga Rivaler")
 
             rude_venstre, rude_hoejre = st.columns([1.1, 0.9])
@@ -268,7 +275,6 @@ def vis_side():
                 st.subheader("Performance Scoreboard")
                 hoejde_graf = max(450, len(visnings_df) * 28)
                 
-                # px.bar bruger nu status_farve-kolonnen og en explicit farveskala
                 fig = px.bar(
                     visnings_df, 
                     x=score_col, 
@@ -298,23 +304,34 @@ def vis_side():
                     clickmode='event+select'
                 )
                 
+                # Her fanger vi streamlit plotly diagrammets events stabiliseret
                 valgt_klik = st.plotly_chart(fig, use_container_width=True, on_select="rerun")
 
             with rude_hoejre:
-                valgt_spiller_data = None
-                
-                # Rigtig detektering af det valgte klik:
+                # --- KLIK LOGIK STABILISERET VIA SESSION_STATE ---
+                if "valgt_spiller_id" not in st.session_state:
+                    st.session_state.valgt_spiller_id = None
+
+                # Hvis brugeren klikker på et nyt punkt, gemmer vi det i session_state
                 if valgt_klik and "selection" in valgt_klik and valgt_klik["selection"]["points"]:
-                    klikket_wyid = valgt_klik["selection"]["points"][0]["customdata"][0]
-                    match = df_filtreret[df_filtreret['player_wyid'] == int(klikket_wyid)]
+                    klikket_wyid = int(valgt_klik["selection"]["points"][0]["customdata"][0])
+                    st.session_state.valgt_spiller_id = klikket_wyid
+
+                # Find data på den valgte spiller i st.session_state
+                valgt_spiller_data = None
+                if st.session_state.valgt_spiller_id is not None:
+                    match = df_filtreret[df_filtreret['player_wyid'] == st.session_state.valgt_spiller_id]
                     if not match.empty:
                         valgt_spiller_data = match.iloc[0]
                 
-                # Default til bedste spiller, hvis der ikke er trykket på noget endnu
+                # Hvis der ikke er valgt noget endnu (eller spilleren ikke findes i det nuværende filter), 
+                # vælges den bedste spiller på listen automatisk som standard
                 if valgt_spiller_data is None and not visnings_df.empty:
-                    bedste_spiller_id = visnings_df.sort_values(score_col, ascending=False).iloc[0]['player_wyid']
-                    valgt_spiller_data = df_filtreret[df_filtreret['player_wyid'] == bedste_spiller_id].iloc[0]
+                    bedste_spiller_data = visnings_df.sort_values(score_col, ascending=False).iloc[0]
+                    st.session_state.valgt_spiller_id = int(bedste_spiller_data['player_wyid'])
+                    valgt_spiller_data = bedste_spiller_data
 
+                # --- VIS DATA I HØJRE PANEL ---
                 if valgt_spiller_data is not None:
                     st.markdown(f"""
                         <div class="score-card">
