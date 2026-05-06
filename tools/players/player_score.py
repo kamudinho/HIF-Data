@@ -192,7 +192,6 @@ def vis_side():
     sql_player_ids_str = f"({', '.join(map(str, csv_spiller_ids))})"
 
     # --- 3. DYNAMISK SQL GENERERING ---
-    # Her bruger vi konsekvent aliaset 'm_tot' til liga-betingelserne, da det matcher navnet i FROM-clausulerne
     if valgt_liga_nøgle == "alle":
         liga_betingelse_total = f"m_tot.COMPETITION_WYID IN {TILLADTE_LIGAER}"
         liga_betingelse_stats = f"s.COMPETITION_WYID IN {TILLADTE_LIGAER}"
@@ -276,11 +275,11 @@ def vis_side():
             df_raw.columns = df_raw.columns.str.lower()
             df_raw['player_wyid'] = df_raw['player_wyid'].astype(int)
             
-            # Flet over på vores filtrerede CSV (Sikrer rigtig position fra dit eget ark)
+            # Flet over på vores filtrerede CSV
             df = pd.merge(df_csv_filtreret, df_raw, on='player_wyid', how='inner')
             
             if df.empty:
-                st.info(f"Ingen spillere matcher kriterierne.")
+                st.info(f"Ingen spillere matcher de valgte kriterier i øjeblikket.")
                 return
 
             # Beregn live procenter og performance score
@@ -300,6 +299,7 @@ def vis_side():
             df_sorteret = df.sort_values(score_col, ascending=False)
             
             # --- 4. TOP LISTE ---
+            # Vi splitter op og fletter igen for at sikre, at Hvidovre-spillerne altid tages med uanset ligaens minutbetingelser
             liga_spillere = df_sorteret[df_sorteret['is_active_hvidovre'] == 0]
             hvidovre_spillere = df_sorteret[df_sorteret['is_active_hvidovre'] == 1]
             
@@ -313,6 +313,7 @@ def vis_side():
                 st.info("Ingen spillere opfylder kriterierne for visning.")
                 return
             
+            # Sortering efter score (så Plotly tegner dem rigtigt)
             visnings_df = visnings_df.sort_values(score_col, ascending=True)
             visnings_df['visningsnavn'] = visnings_df['full_name']
 
