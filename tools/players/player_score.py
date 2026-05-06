@@ -145,8 +145,8 @@ def vis_side():
     faktisk_specifik_valg = next((eng for eng, dk in visnings_positioner_map.items() if dk == valgt_specifik_visning), None)
 
     LIGA_VALGMULIGHEDER = {
-        "alle": "Alle turneringer", 328: "NordicBet Liga", 335: "Superliga",
-        329: "2. division", 43319: "3. division", 331: "Oddset Pokalen", 1305: "U19 Ligaen"
+        "alle": "Alle turneringer", 335: "Superliga", 328: "NordicBet Liga",
+        329: "2. division", 43319: "3. division"
     }
     valgt_liga_nøgle = col3.selectbox("Vælg Turnering", list(LIGA_VALGMULIGHEDER.keys()), format_func=lambda x: LIGA_VALGMULIGHEDER[x], key="liga_select")
 
@@ -252,7 +252,7 @@ def vis_side():
             liga_spillere = df_sorteret[df_sorteret['is_active_hvidovre'] == 0]
             
             # Vis op til 20 liga-spillere og altid Hvidovre-spillerne (så vi kan sammenligne os med dem)
-            visnings_df = pd.concat([liga_spillere.head(20), hvidovre_spillere.head(5)]).drop_duplicates(subset=['player_wyid'])
+            visnings_df = pd.concat([liga_spillere.head(20), hvidovre_spillere.head(2)]).drop_duplicates(subset=['player_wyid'])
             
             if visnings_df.empty:
                 st.info("Ingen spillere opfylder kriterierne for visning.")
