@@ -11,30 +11,30 @@ from data.data_load import _get_snowflake_conn
 
 def map_til_hovedkategori(position_str):
     """
-    Tager en vilkårlig positionstekst fra dit eget ark og mapper den til en 
-    af de 4 hovedkategorier: 'Målmand', 'Forsvar', 'Midtbane' eller 'Angriber'.
+    Kategoriserer enhver tekst fra dit ark i en af de fire overordnede grupper.
+    Dette sikrer, at brede betegnelser som 'Defender' eller 'Forward' lander det rigtige sted.
     """
     if not isinstance(position_str, str):
         return "Ukendt"
     
     pos = position_str.strip().lower()
     
-    # 1. MÅLMAND
+    # MÅLMAND
     if any(x in pos for x in ["målmand", "goalkeeper", "keeper", "gk"]):
         return "Målmand"
         
-    # 2. FORSVAR
-    if any(x in pos for x in ["forsvar", "defender", "cb", "lb", "rb", "lwb", "rwb", "stopper", "back", "midtstopper", "def"]):
-        return "Forsvar"
+    # FORSVARSSPILLER (Fanger f.eks. 'Defender', 'Center Back', 'Stopper', 'Højre back')
+    if any(x in pos for x in ["forsvar", "defender", "cb", "lb", "rb", "lwb", "rwb", "stopper", "back", "def"]):
+        return "Forsvarsspiller"
         
-    # 3. ANGRIBER
+    # ANGRIBER (Fanger f.eks. 'Forward', 'Striker', 'Kantangriber', 'Winger', 'fwd')
     # Vi tjekker angriber før midtbane, da f.eks. "kantangriber" indeholder både "kant" og "angriber"
-    if any(x in pos for x in ["angriber", "forward", "striker", "cf", "wf", "cf", "ss", "9'er", "fwd", "frontløber"]):
+    if any(x in pos for x in ["angriber", "forward", "striker", "cf", "wf", "ss", "9'er", "fwd", "frontløber", "winger", "wing"]):
         return "Angriber"
         
-    # 4. MIDTBANE
-    if any(x in pos for x in ["midtbane", "midfielder", "dmf", "cmf", "amf", "lm", "rm", "kant", "winger", "mid", "6'er", "8'er", "10'er", "playmaker"]):
-        return "Midtbane"
+    # MIDTBANESPILLER (Fanger f.eks. 'Midfielder', 'Central Midfielder', 'Kant', 'mid')
+    if any(x in pos for x in ["midtbane", "midfielder", "dmf", "cmf", "amf", "lm", "rm", "kant", "mid", "6'er", "8'er", "10'er"]):
+        return "Midtbanespiller"
         
     return "Ukendt"
 
@@ -90,64 +90,31 @@ def vis_side():
         "Forward": "Angrebsspiller"
     }
 
-    # --- 1. FILTRE OG KONFIGURATION ---
-    col1, col2 = st.columns(2)
-    
+    # Definer de statistikker og vægte, der skal bruges pr. overordnet kategori
     POS_CONFIG = {
         "Angriber": {
             "metrics": ["goals", "xg", "shots", "touchinbox", "dribbles", "assists"],
             "weights": [6.0, 4.0, 3.8, 2.4, 1.2, 2.0],
             "labels": ["Mål", "xG", "Skud", "Berøringer i felt", "Driblinger", "Assists"]
         },
-        "Midtbane": {
+        "Midtbanespiller": {
             "metrics": ["pass_pct", "keypasses", "interceptions", "xgassist", "slidingtackles", "progressiverun"],
             "weights": [8.0, 4.5, 3.0, 4.0, 2.0, 1.5],
             "labels": ["Pasnings %", "Key Passes", "Interceptions", "xA", "Glidende Tacklinger", "Progressive løb"]
         },
-        "Forsvar": {
+        "Forsvarsspiller": {
             "metrics": ["interceptions", "defensiveduelswon", "clearances", "aerialduelswon", "pass_pct", "dangerousownhalflosses"],
             "weights": [5.0, 4.0, 3.5, 4.0, 2.5, -3.0], 
             "labels": ["Interceptions", "Vundne Def. Dueller", "Clearinger", "Vundne Luftdueller", "Pasnings %", "Farlige Boldtab (Egen banehalvdel)"]
         },
         "Målmand": {
-            # Standard metrics til målmænd (tilpas efter behov)
             "metrics": ["pass_pct", "clearances"],
             "weights": [5.0, 5.0],
             "labels": ["Pasnings %", "Clearinger"]
         }
     }
-    
-    valgt_profil = col1.selectbox("Vælg Kategori", list(POS_CONFIG.keys()))
-    
-    # Hent ligaer
-    try:
-        liga_data = conn.query(f"""
-            SELECT DISTINCT s.COMPETITION_WYID 
-            FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_AVERAGE s
-            JOIN {DB}.WYSCOUT_SEASONS seas ON s.SEASON_WYID = seas.SEASON_WYID
-            WHERE seas.SEASONNAME = '{SOGT_SAESON}'
-        """)
-        ligaer = sorted([int(x) for x in liga_data['COMPETITION_WYID'].dropna().tolist()]) if liga_data is not None and not liga_data.empty else [328, 1305]
-    except Exception as e:
-        st.warning(f"Kunne ikke hente dynamiske ligaer (bruger standard): {e}")
-        ligaer = [328, 1305]
 
-    LIGA_MAP = {
-        328: "NordicBet Liga (328)",
-        335: "Superliga (335)",
-        329: "2. division (329)",
-        43319: "3. division (43319)",
-        331: "Oddset Pokalen (331)",
-        1305: "U19 Ligaen (1305)"
-    }
-    
-    valgt_liga = col2.selectbox(
-        "Vælg Liga", 
-        ligaer, 
-        format_func=lambda x: LIGA_MAP.get(x, f"Liga ID: {x}")
-    )
-
-    # --- 2. INDLÆS CSV-FIL (VORES GROUND TRUTH) ---
+    # --- 1. INDLÆS CSV-FIL (VORES GROUND TRUTH) ---
     aktuel_fil_sti = os.path.abspath(__file__)
     projekt_rod = os.path.dirname(aktuel_fil_sti)
     
@@ -180,24 +147,82 @@ def vis_side():
             
         df_csv['player_wyid'] = df_csv['player_wyid'].astype(int)
         
-        # --- NYT: MAPPING AF CSV POSITION TIL HOVEDKATEGORI ---
+        # Opret den overordnede kategori på baggrund af den specifikke position fra dit ark
         df_csv['hovedkategori'] = df_csv['specific_position'].apply(map_til_hovedkategori)
-        
-        # Filtrer lokalt på den valgte kategori
-        df_csv_filtreret = df_csv[df_csv['hovedkategori'] == valgt_profil].copy()
-        csv_spiller_ids = df_csv_filtreret['player_wyid'].tolist()
         
     except Exception as e:
         st.error(f"Fejl ved indlæsning af spillernes CSV-fil: {e}")
         return
 
+    # --- 2. FILTRE OG TRINVIS DROPDOWN ---
+    col1, col2, col3 = st.columns(3)
+    
+    # 1. Hovedkategori (Målmand, Forsvarsspiller, Midtbanespiller, Angriber)
+    valgt_hovedkategori = col1.selectbox("Vælg Kategori", list(POS_CONFIG.keys()))
+    
+    # Find de specifikke positioner i dit ark, der hører under denne hovedkategori
+    df_csv_hoved = df_csv[df_csv['hovedkategori'] == valgt_hovedkategori]
+    specifikke_muligheder = sorted(df_csv_hoved['specific_position'].dropna().unique().tolist())
+    
+    # Opret pænere navne til dropdown for de specifikke positioner
+    visnings_positioner_map = {pos: POS_TRANSLATIONS.get(pos, pos) for pos in specifikke_muligheder}
+    
+    # 2. Specifik position (Dynamisk baseret på ovenstående)
+    valgt_specifik_visning = col2.selectbox(
+        "Vælg Specifik Position", 
+        [f"Alle {valgt_hovedkategori}e" if valgt_hovedkategori != "Målmand" else "Alle Målmænd"] + list(visnings_positioner_map.values())
+    )
+    
+    # Find den faktiske engelske/rå værdi fra CSV'en baseret på det valgte danske navn
+    faktisk_specifik_valg = None
+    for eng_pos, dk_pos in visnings_positioner_map.items():
+        if dk_pos == valgt_specifik_visning:
+            faktisk_specifik_valg = eng_pos
+            break
+            
+    # Filtrer CSV-data lokalt
+    if faktisk_specifik_valg:
+        df_csv_filtreret = df_csv_hoved[df_csv_hoved['specific_position'] == faktisk_specifik_valg].copy()
+    else:
+        df_csv_filtreret = df_csv_hoved.copy()
+        
+    csv_spiller_ids = df_csv_filtreret['player_wyid'].tolist()
+
+    # Hent ligaer
+    try:
+        liga_data = conn.query(f"""
+            SELECT DISTINCT s.COMPETITION_WYID 
+            FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_AVERAGE s
+            JOIN {DB}.WYSCOUT_SEASONS seas ON s.SEASON_WYID = seas.SEASON_WYID
+            WHERE seas.SEASONNAME = '{SOGT_SAESON}'
+        """)
+        ligaer = sorted([int(x) for x in liga_data['COMPETITION_WYID'].dropna().tolist()]) if liga_data is not None and not liga_data.empty else [328, 1305]
+    except Exception as e:
+        st.warning(f"Kunne ikke hente dynamiske ligaer (bruger standard): {e}")
+        ligaer = [328, 1305]
+
+    LIGA_MAP = {
+        328: "NordicBet Liga (328)",
+        335: "Superliga (335)",
+        329: "2. division (329)",
+        43319: "3. division (43319)",
+        331: "Oddset Pokalen (331)",
+        1305: "U19 Ligaen (1305)"
+    }
+    
+    valgt_liga = col3.selectbox(
+        "Vælg Liga", 
+        ligaer, 
+        format_func=lambda x: LIGA_MAP.get(x, f"Liga ID: {x}")
+    )
+
     if not csv_spiller_ids:
-        st.warning(f"Ingen spillere i din CSV-fil matcher kategorien '{valgt_profil}' ud fra positionerne i dit ark.")
+        st.warning(f"Ingen spillere i din CSV-fil matcher de valgte kriterier.")
         return
 
     sql_player_ids_str = f"({', '.join(map(str, csv_spiller_ids))})"
 
-    # --- 3. SQL DATAFETCH (KUN FOR DE RELEVANTE SPILLERE FRA CSV) ---
+    # --- 3. SQL DATAFETCH (KUN FOR DE SKÆREDE SPILLERE) ---
     with st.spinner("Henter og beregner live-data..."):
         # SQL henter rå minutter og tjekker om de er aktive i Hvidovre i 2026
         sql_minutter = f"""
@@ -264,28 +289,27 @@ def vis_side():
             db_df = pd.merge(df_stats, df_minutter, on='player_wyid', how='inner')
             db_df['player_wyid'] = db_df['player_wyid'].astype(int)
             
-            # Flet over på vores filtrerede CSV (kun CSV'ens Navne og specifikke positioner overlever)
+            # Flet over på vores filtrerede CSV
             df = pd.merge(df_csv_filtreret, db_df, on='player_wyid', how='inner')
             
             if df.empty:
-                st.info(f"Ingen spillere i kategorien '{valgt_profil}' (fra din CSV) har spillet over 150 minutter i den valgte liga.")
+                st.info(f"Ingen spillere i den valgte kategori har spillet over 150 minutter i denne liga.")
                 return
 
             # Beregn live procenter og performance score
             df['pass_pct'] = (df['successfulpasses'] / df['passes'].replace(0, 1)) * 100
 
-            config = POS_CONFIG[valgt_profil]
+            config = POS_CONFIG[valgt_hovedkategori]
             score_col = 'pos_score'
             df[score_col] = 0.0
             for i, m_name in enumerate(config['metrics']):
                 weight = config['weights'][i]
-                # Hvis en kolonne mod forventning mangler i databasen, fald tilbage på 0
                 val = df[m_name] if m_name in df.columns else 0
                 df[score_col] += val * weight
             
             df[score_col] = df[score_col].round(1)
 
-            # Oversættelse af din egen specifikke position fra arket
+            # Oversættelse af din egen specifikke position til dansk visning
             df['dk_position'] = df['specific_position'].map(POS_TRANSLATIONS).fillna(df['specific_position'])
             df_sorteret = df.sort_values(score_col, ascending=False)
             
@@ -337,7 +361,7 @@ def vis_side():
                 
                 fig.update_layout(
                     yaxis={'categoryorder':'total ascending', 'title': None}, 
-                    xaxis={'title': f"{valgt_profil} Performance Score", 'showgrid': False},
+                    xaxis={'title': f"{valgt_hovedkategori} Performance Score", 'showgrid': False},
                     showlegend=False, 
                     height=hoejde_graf,
                     margin=dict(l=10, r=10, t=10, b=10),
@@ -365,12 +389,12 @@ def vis_side():
                                 Klub: <b>{valgt_spiller_data['team_name']}</b><br>
                                 Position (Fra dit ark): <b>{valgt_spiller_data['dk_position']}</b><br>
                                 Spillede minutter (i ligaen): <b>{int(valgt_spiller_data['total_minutes'])} min.</b><br>
-                                Samlet Score ({valgt_profil}): <b>{valgt_spiller_data[score_col]}</b>
+                                Samlet Score ({valgt_hovedkategori}): <b>{valgt_spiller_data[score_col]}</b>
                             </div>
                         </div>
                     """, unsafe_allow_html=True)
                     
-                    st.write(f"**Underliggende P90-værdier ({valgt_profil}):**")
+                    st.write(f"**Underliggende P90-værdier ({valgt_hovedkategori}):**")
                     
                     for idx, m_name in enumerate(config['metrics']):
                         if m_name in valgt_spiller_data:
@@ -389,7 +413,7 @@ def vis_side():
                             </div>
                         """, unsafe_allow_html=True)
         else:
-            st.info(f"Fandt ingen aktive stats eller minutter for de spillere, der er defineret i din CSV-fil ({valgt_profil}).")
+            st.info(f"Fandt ingen aktive stats eller minutter for de spillere, der er defineret i din CSV-fil med den valgte position.")
 
 if __name__ == "__main__":
     vis_side()
