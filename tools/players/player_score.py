@@ -220,7 +220,7 @@ def vis_side():
 
     LIGA_VALGMULIGHEDER = {
         "alle": "Alle turneringer",
-        328: "NordicBet Liga",  # Tilpasset dit COMP_MAP
+        328: "NordicBet Liga",
         335: "Superliga",
         329: "2. division",
         43319: "3. division",
@@ -274,7 +274,8 @@ def vis_side():
                 WHERE m_tot.COMPETITION_WYID IN {TILLADTE_LIGAER}
                   AND m_tot.MINUTESONFIELD > 0
                   AND m.DATE >= '2026-01-01'
-                  AND (m.WINNER = {HVIDOVRE_TEAM_WYID} OR m.LOSER = {HVIDOVRE_TEAM_WYID} OR m_tot.PLAYER_WYID IN (
+                  -- RETTET: Bruger HOMETEAM_WYID og AWAYTEAM_WYID i stedet for WINNER/LOSER
+                  AND (m.HOMETEAM_WYID = {HVIDOVRE_TEAM_WYID} OR m.AWAYTEAM_WYID = {HVIDOVRE_TEAM_WYID} OR m_tot.PLAYER_WYID IN (
                       SELECT DISTINCT PLAYER_WYID 
                       FROM {DB}.WYSCOUT_PLAYERCAREER 
                       WHERE TEAM_WYID = {HVIDOVRE_TEAM_WYID} 
@@ -430,7 +431,6 @@ def vis_side():
             with rude_hoejre:
                 valgt_spiller_data = None
                 
-                # Robust match ved brug af WYID i stedet for rå tekst/navne
                 if valgt_klik and "selection" in valgt_klik and valgt_klik["selection"]["points"]:
                     klikket_wyid = valgt_klik["selection"]["points"][0]["customdata"][0]
                     valgt_spiller_data = df[df['player_wyid'] == klikket_wyid].iloc[0]
