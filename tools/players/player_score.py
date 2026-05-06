@@ -181,7 +181,7 @@ def vis_side():
         
     csv_spiller_ids = df_csv_filtreret['player_wyid'].tolist()
 
-    # Dropdown 3: Ligaer (med de nye navne)
+    # Dropdown 3: Ligaer
     LIGA_VALGMULIGHEDER = {
         "alle": "Alle turneringer",
         328: "Betinia Ligaen",
@@ -213,14 +213,16 @@ def vis_side():
         liga_betingelse_stats = f"s.COMPETITION_WYID = {valgt_liga_nøgle}"
 
     with st.spinner("Henter og beregner live-data..."):
-        # SQL til minutter 
-        # RETTELSE: Vi sikrer her at hvidovre_2026_spillere tjekker, at m_tot.TEAM_WYID = 7490 (altså at de faktisk spillede kampspecifikke minutter FOR Hvidovre)
+        # SQL til minutter
+        # Her går vi tilbage til den sikre tabelstruktur uden at gætte på holdkolonnen i match_total-tabellen.
+        # Vi fanger i stedet om spilleren i dag er registreret til hold 7490.
         sql_minutter = f"""
             WITH hvidovre_2026_spillere AS (
-                SELECT DISTINCT m_tot.PLAYER_WYID
-                FROM {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_TOTAL m_tot
+                SELECT DISTINCT p.PLAYER_WYID
+                FROM {DB}.WYSCOUT_PLAYERS p
+                JOIN {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_TOTAL m_tot ON p.PLAYER_WYID = m_tot.PLAYER_WYID
                 JOIN {DB}.WYSCOUT_MATCHES m ON m_tot.MATCH_WYID = m.MATCH_WYID
-                WHERE m_tot.TEAM_WYID = {HVIDOVRE_TEAM_WYID}
+                WHERE p.CURRENTTEAM_WYID = {HVIDOVRE_TEAM_WYID}
                   AND m.DATE >= '2026-01-01'
                   AND m_tot.MINUTESONFIELD > 0
             )
@@ -285,6 +287,12 @@ def vis_side():
             if df.empty:
                 st.info(f"Ingen spillere har spillet over 150 minutter i den valgte turnering.")
                 return
+
+            # EKSTRA SIKRING FOR ELIAS RUSBORG FEJLEN:
+            # Vi overskriver 'is_active_hvidovre' til 0, hvis spillerens CURRENT_TEAM_WYID 
+            # i databasen ikke længere er Hvidovre (7490). 
+            # Det forhindrer spillere der har skiftet klub i at blive vist med rød bar.
+            df.loc[df['current_team_wyid'] != HVIDOVRE_TEAM_WYID, 'is_active_hvidovre'] = 0
 
             # Beregn live procenter og performance score
             df['pass_pct'] = (df['successfulpasses'] / df['passes'].replace(0, 1)) * 100
