@@ -61,7 +61,7 @@ def vis_side():
         "FWD": "Angrebsspiller"
     }
 
-    # --- 1. FILTRE ---
+    # --- 1. FILTRE OG KONFIGURATION ---
     col1, col2 = st.columns(2)
     
     POS_CONFIG = {
@@ -112,19 +112,57 @@ def vis_side():
         format_func=lambda x: LIGA_MAP.get(x, f"Liga ID: {x}")
     )
 
-    # Definer de kampspecifikke koder for de 3 kategorier
-    if valgt_profil == "Forsvar":
-        pos_match_codes = "('CB', 'LB', 'RB', 'LWB', 'RWB')"
-        role_code = "DEF"
-    elif valgt_profil == "Midtbane":
-        pos_match_codes = "('DMF', 'CMF', 'AMF', 'LM', 'RM')"
-        role_code = "MID"
-    else:  # Angriber
-        pos_match_codes = "('CF', 'LWF', 'RWF', 'SS')"
-        role_code = "FWD"
+    # --- 2. INDLÆS OG VALIDER CSV-FILEN FØRST (GROUND TRUTH) ---
+    aktuel_fil_sti = os.path.abspath(__file__)
+    projekt_rod = os.path.dirname(aktuel_fil_sti)
+    
+    # Kravl op i hierarkiet for at finde rodmappen med data-undermappen
+    for _ in range(5):
+        if os.path.exists(os.path.join(projekt_rod, 'data')):
+            break
+        projekt_rod = os.path.dirname(projekt_rod)
+        
+    overskriv_sti = os.path.join(projekt_rod, 'data', 'players', 'spiller_overskrivning.csv')
+    
+    if not os.path.exists(overskriv_sti):
+        st.error(f"Kritisk fejl: CSV-filen med spillere kunne ikke findes på stien: {overskriv_sti}")
+        return
 
-    # --- 2. DATAFETCH ---
-    with st.spinner("Henter og beregner Wyscout-data..."):
+    try:
+        df_csv = pd.read_csv(overskriv_sti)
+        df_csv.columns = df_csv.columns.str.lower().str.strip()
+        
+        # Sørg for at de nødvendige kolonner findes i din CSV
+        # Understøtter både 'player_wyid' / 'wyid' og 'full_name' / 'navn' samt 'specific_position' / 'position'
+        df_csv = df_csv.rename(columns={
+            'wyid': 'player_wyid',
+            'navn': 'full_name',
+            'position': 'specific_position'
+        })
+        
+        nødvendige_kolonner = ['player_wyid', 'full_name', 'specific_position']
+        if not all(col in df_csv.columns for col in nødvendige_kolonner):
+            st.error(f"CSV-filen skal indeholde kolonnerne: {nødvendige_kolonner}")
+            return
+            
+        # Typecast ID'er og fjern dubletter
+        df_csv['player_wyid'] = df_csv['player_wyid'].astype(int)
+        csv_spiller_ids = df_csv['player_wyid'].tolist()
+        
+    except Exception as e:
+        st.error(f"Fejl ved indlæsning af spillernes CSV-fil: {e}")
+        return
+
+    if not csv_spiller_ids:
+        st.warning("CSV-filen er tom eller indeholder ingen gyldige spiller-ID'er.")
+        return
+
+    # Omdan ID'erne til SQL-venlig tuple/liste
+    sql_player_ids_str = f"({', '.join(map(str, csv_spiller_ids))})"
+
+    # --- 3. SQL DATAFETCH (KUN FOR SPILLERE I CSV-FILEN) ---
+    with st.spinner("Henter og beregner live-data fra Snowflake..."):
+        # Hent minutter og tjek om spilleren er aktiv i Hvidovre i 2026
         sql_minutter = f"""
             WITH hvidovre_2026_spillere AS (
                 SELECT DISTINCT m_tot.PLAYER_WYID
@@ -141,33 +179,17 @@ def vis_side():
                 MAX(CASE WHEN h26.PLAYER_WYID IS NOT NULL THEN 1 ELSE 0 END) as is_active_hvidovre
             FROM {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_TOTAL m_total
             LEFT JOIN hvidovre_2026_spillere h26 ON m_total.PLAYER_WYID = h26.PLAYER_WYID
-            WHERE m_total.COMPETITION_WYID = {valgt_liga} OR h26.PLAYER_WYID IS NOT NULL
+            WHERE m_total.PLAYER_WYID IN {sql_player_ids_str}
             GROUP BY m_total.PLAYER_WYID
             HAVING SUM(CASE WHEN m_total.COMPETITION_WYID = {valgt_liga} THEN m_total.MINUTESONFIELD ELSE 0 END) >= 150
         """
         
+        # Hent P90 statistikker samt klubnavne
         sql_stats = f"""
-            WITH most_played_position AS (
-                SELECT 
-                    b_stats.PLAYER_WYID,
-                    b_stats.POSITION1NAME as MATCH_POS_NAME,
-                    b_stats.POSITION1CODE as MATCH_POS_CODE,
-                    ROW_NUMBER() OVER (PARTITION BY b_stats.PLAYER_WYID ORDER BY COUNT(*) DESC) as rnk
-                FROM {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_BASE b_stats
-                JOIN {DB}.WYSCOUT_SEASONS seas ON b_stats.SEASON_WYID = seas.SEASON_WYID
-                WHERE seas.SEASONNAME = '{SOGT_SAESON}'
-                  AND b_stats.POSITION1NAME IS NOT NULL
-                GROUP BY b_stats.PLAYER_WYID, b_stats.POSITION1NAME, b_stats.POSITION1CODE
-            )
             SELECT 
                 p.PLAYER_WYID,
-                COALESCE(
-                    NULLIF(TRIM(p.FIRSTNAME || ' ' || p.LASTNAME), ''), 
-                    p.SHORTNAME
-                ) as FULL_NAME, 
                 COALESCE(t.OFFICIALNAME, 'Ukendt Klub') as TEAM_NAME,
                 p.CURRENTTEAM_WYID as CURRENT_TEAM_WYID,
-                COALESCE(mpp.MATCH_POS_NAME, p.ROLENAME, 'Ukendt Position') as SPECIFIC_POSITION,
                 AVG(s.GOALS) as GOALS,
                 AVG(s.XGSHOT) AS XG,
                 AVG(s.SHOTS) as SHOTS,
@@ -189,109 +211,49 @@ def vis_side():
             JOIN {DB}.WYSCOUT_PLAYERS p ON s.PLAYER_WYID = p.PLAYER_WYID
             LEFT JOIN {DB}.WYSCOUT_TEAMS t ON p.CURRENTTEAM_WYID = t.TEAM_WYID
             JOIN {DB}.WYSCOUT_SEASONS seas ON s.SEASON_WYID = seas.SEASON_WYID
-            LEFT JOIN most_played_position mpp ON p.PLAYER_WYID = mpp.PLAYER_WYID AND mpp.rnk = 1
-            JOIN {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_BASE b_stats 
-              ON s.PLAYER_WYID = b_stats.PLAYER_WYID 
-             AND s.SEASON_WYID = b_stats.SEASON_WYID
-            WHERE (s.COMPETITION_WYID = {valgt_liga} OR COALESCE(p.CURRENTTEAM_WYID, 0) = {HVIDOVRE_TEAM_WYID})
+            WHERE p.PLAYER_WYID IN {sql_player_ids_str}
               AND seas.SEASONNAME = '{SOGT_SAESON}'
-              AND (
-                   mpp.MATCH_POS_CODE IN {pos_match_codes} 
-                   OR p.ROLECODE3 = '{role_code}'
-                   OR (COALESCE(p.ROLECODE3, '') IN ('', 'Ukendt') AND b_stats.POSITION1CODE IN {pos_match_codes})
-              )
-            GROUP BY p.PLAYER_WYID, p.FIRSTNAME, p.LASTNAME, p.SHORTNAME, t.OFFICIALNAME, p.CURRENTTEAM_WYID, p.ROLENAME, mpp.MATCH_POS_NAME, p.ROLECODE3
+            GROUP BY p.PLAYER_WYID, t.OFFICIALNAME, p.CURRENTTEAM_WYID
         """
         
         df_minutter = conn.query(sql_minutter)
         df_stats = conn.query(sql_stats)
         
-        if df_minutter is not None and df_stats is not None and not df_stats.empty:
+        if df_minutter is not None and df_stats is not None and not df_stats.empty and not df_minutter.empty:
             df_minutter.columns = df_minutter.columns.str.lower()
             df_stats.columns = df_stats.columns.str.lower()
             
-            raw_df = pd.merge(df_stats, df_minutter, on='player_wyid', how='inner')
+            # Splejs databasens stats og minutter sammen
+            db_df = pd.merge(df_stats, df_minutter, on='player_wyid', how='inner')
+            db_df['player_wyid'] = db_df['player_wyid'].astype(int)
             
-            # --- 3. BEREGNING AF PASNINGSPROCENT ---
-            raw_df['pass_pct'] = (raw_df['successfulpasses'] / raw_df['passes'].replace(0, 1)) * 100
+            # --- 4. SAMMENKOBLING MED CSV (STUERS NAVN OG POSITION HERFRA) ---
+            # Vi fletter vores database-stats over på listen fra CSV, så CSV'ens data har førsteprioritet
+            df = pd.merge(df_csv, db_df, on='player_wyid', how='inner')
+            
+            if df.empty:
+                st.info(f"Ingen spillere fra CSV-filen har opnået over 150 minutter i den valgte liga.")
+                return
+
+            # Beregn pasningsprocent live
+            df['pass_pct'] = (df['successfulpasses'] / df['passes'].replace(0, 1)) * 100
 
             config = POS_CONFIG[valgt_profil]
             
             # Beregn performance score
             score_col = 'pos_score'
-            raw_df[score_col] = 0.0
+            df[score_col] = 0.0
             for i, m_name in enumerate(config['metrics']):
                 weight = config['weights'][i]
-                raw_df[score_col] += raw_df[m_name] * weight
+                df[score_col] += df[m_name] * weight
             
-            # --- 4. CLEAN PANDAS GROUPBY ---
-            agg_dict = {
-                'full_name': 'first',
-                'team_name': 'first',
-                'current_team_wyid': 'first',
-                'is_active_hvidovre': 'first',
-                'total_minutes': 'first',
-                'specific_position': 'first',
-                score_col: 'first'
-            }
-            
-            for m_name in config['metrics']:
-                agg_dict[m_name] = 'first'
-                
-            df = raw_df.groupby('player_wyid', as_index=False).agg(agg_dict)
             df[score_col] = df[score_col].round(1)
-            
-            # --- 4. NYT/OPDATERET: HARD-FILTRERING MOD DIN CSV-FIL (ROBUST STI-SØGNING) ---
-            # Vi finder projektets reelle rodmappe (hif-data) ved at kravle opad
-            aktuel_fil_sti = os.path.abspath(__file__)
-            projekt_rod = os.path.dirname(aktuel_fil_sti)
-            
-            # Kravl op i hierarkiet indtil vi rammer den mappe, der indeholder 'data'-undermappen
-            for _ in range(5):  # Søg op til 5 niveauer op
-                if os.path.exists(os.path.join(projekt_rod, 'data')):
-                    break
-                projekt_rod = os.path.dirname(projekt_rod)
-                
-            overskriv_sti = os.path.join(projekt_rod, 'data', 'players', 'spiller_overskrivning.csv')
-            
-            if os.path.exists(overskriv_sti):
-                try:
-                    df_overskriv = pd.read_csv(overskriv_sti)
-                    df_overskriv.columns = df_overskriv.columns.str.lower().str.strip()
-                    
-                    if 'player_wyid' in df_overskriv.columns:
-                        # 1. Konverter kolonnen til samme type (int) for at sikre præcist match
-                        df['player_wyid'] = df['player_wyid'].astype(int)
-                        df_overskriv['player_wyid'] = df_overskriv['player_wyid'].astype(int)
-                        
-                        # 2. Hard filtrering: Vi beholder KUN spillere, der findes i CSV-filens player_wyid
-                        df = df[df['player_wyid'].isin(df_overskriv['player_wyid'])]
-                        
-                        # 3. Kør overskrivningen/opdateringen af værdierne for de godkendte spillere
-                        if not df.empty:
-                            df.set_index('player_wyid', inplace=True)
-                            df_overskriv.set_index('player_wyid', inplace=True)
-                            
-                            kolonner_til_opdatering = [col for col in df_overskriv.columns if col in df.columns]
-                            if kolonner_til_opdatering:
-                                df.update(df_overskriv[kolonner_til_opdatering])
-                                
-                            df.reset_index(inplace=True)
-                except Exception as csv_err:
-                    st.warning(f"Kunne ikke filtrere og opdatere ud fra CSV: {csv_err}")
-            else:
-                st.error(f"Kritisk fejl: Spiller-filen kunne ikke findes på stien: {overskriv_sti}")
-                return
-            
-            # --- FEJLSIRKING: Stop hvis ingen spillere matcher dine kriterier efter CSV-filteret ---
-            if df.empty:
-                st.info(f"Ingen spillere fundet fra din CSV-fil med over 150 minutter i den valgte liga ({valgt_profil}).")
-                return
 
+            # Oversæt positionen taget direkte fra din CSV
             df['dk_position'] = df['specific_position'].map(POS_TRANSLATIONS).fillna(df['specific_position'])
             df_sorteret = df.sort_values(score_col, ascending=False)
             
-            # --- 5. LOGIK: TOP 20 LIGA + 2 BEDSTE REELLE HVIDOVRE (Blandt de godkendte fra din CSV) ---
+            # --- 5. LOGIK: TOP 20 LIGA + 2 BEDSTE REELLE HVIDOVRE ---
             liga_spillere = df_sorteret[df_sorteret['is_active_hvidovre'] == 0]
             hvidovre_spillere = df_sorteret[df_sorteret['is_active_hvidovre'] == 1]
             
@@ -307,7 +269,7 @@ def vis_side():
             visnings_df = visnings_df.sort_values(score_col, ascending=True)
             visnings_df['visningsnavn'] = visnings_df['full_name']
 
-            # Farve efter om de er aktive Hvidovre-spillere i 2026
+            # Farve efter om de er aktive Hvidovre-spillere
             farve_liste = [
                 '#c11c2e' if row['is_active_hvidovre'] == 1 else '#1b365d'
                 for _, row in visnings_df.iterrows()
@@ -370,7 +332,7 @@ def vis_side():
                             <div class="pos-title">{valgt_spiller_data['full_name']}</div>
                             <div style="font-size: 14px; color: #555; line-height: 1.5;">
                                 Klub: <b>{valgt_spiller_data['team_name']}</b><br>
-                                Position (Wyscout / Kamp-data): <b>{valgt_spiller_data['dk_position']}</b><br>
+                                Position (Fra din CSV): <b>{valgt_spiller_data['dk_position']}</b><br>
                                 Spillede minutter (i ligaen): <b>{int(valgt_spiller_data['total_minutes'])} min.</b><br>
                                 Samlet Score ({valgt_profil}): <b>{valgt_spiller_data[score_col]}</b>
                             </div>
@@ -394,7 +356,7 @@ def vis_side():
                         """, unsafe_allow_html=True)
 
         else:
-            st.info(f"Ingen spillere fundet fra din CSV-fil med over 150 minutter i den valgte liga ({valgt_profil}).")
+            st.info(f"Fandt ingen aktive stats eller minutter for de spillere, der er defineret i din CSV-fil ({valgt_profil}).")
 
 if __name__ == "__main__":
     vis_side()
