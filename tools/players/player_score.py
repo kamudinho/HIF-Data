@@ -274,7 +274,7 @@ def vis_side():
                 WHERE m_tot.COMPETITION_WYID IN {TILLADTE_LIGAER}
                   AND m_tot.MINUTESONFIELD > 0
                   AND m.DATE >= '2026-01-01'
-                  -- RETTET: Bruger HOMETEAM_WYID og AWAYTEAM_WYID i stedet for WINNER/LOSER
+                  -- RETTET HELT: Ingen WINNER eller LOSER herover overhovedet.
                   AND (m.HOMETEAM_WYID = {HVIDOVRE_TEAM_WYID} OR m.AWAYTEAM_WYID = {HVIDOVRE_TEAM_WYID} OR m_tot.PLAYER_WYID IN (
                       SELECT DISTINCT PLAYER_WYID 
                       FROM {DB}.WYSCOUT_PLAYERCAREER 
