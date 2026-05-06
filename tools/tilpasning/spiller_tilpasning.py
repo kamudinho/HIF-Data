@@ -3,7 +3,7 @@ import pandas as pd
 import os
 
 def vis_side():
-    st.subheader("📝 Rediger Spiller-overskrivninger")
+    st.subheader("Rediger Spiller-overskrivninger")
     st.write(
         "Her kan du rette navn, position og klub direkte i tabellen. "
         "De tekniske ID-kolonner (Wyscout, Opta og turneringer) er låst for at beskytte dataforbindelsen."
