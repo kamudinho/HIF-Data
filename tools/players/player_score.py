@@ -2,6 +2,11 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
+import sys
+import os
+
+# Sikrer at Python kan finde data_load, selvom denne fil ligger i 'data'-mappen
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from data.data_load import _get_snowflake_conn
 
 def vis_side():
@@ -105,23 +110,21 @@ def vis_side():
         format_func=lambda x: LIGA_MAP.get(x, f"Liga ID: {x}")
     )
 
-    # Backup-mapping til kampspecifikke positioner
+    # Definer de kampspecifikke koder for de 3 kategorier
     if valgt_profil == "Forsvar":
-        pos_fallback_filter = "b_stats.POSITION1CODE IN ('CB', 'LB', 'RB', 'LWB', 'RWB')"
+        pos_match_codes = "('CB', 'LB', 'RB', 'LWB', 'RWB')"
         role_code = "DEF"
     elif valgt_profil == "Midtbane":
-        pos_fallback_filter = "b_stats.POSITION1CODE IN ('DMF', 'CMF', 'AMF', 'LM', 'RM')"
+        pos_match_codes = "('DMF', 'CMF', 'AMF', 'LM', 'RM')"
         role_code = "MID"
     else:  # Angriber
-        pos_fallback_filter = "b_stats.POSITION1CODE IN ('CF', 'LWF', 'RWF', 'SS')"
+        pos_match_codes = "('CF', 'LWF', 'RWF', 'SS')"
         role_code = "FWD"
 
     # --- 2. DATAFETCH ---
     with st.spinner("Henter og beregner Wyscout-data..."):
-        # SQL der isolerer minutterne stramt til den valgte liga OG tjekker reel 2026-aktivitet
         sql_minutter = f"""
             WITH hvidovre_2026_spillere AS (
-                -- Finder spillere, som beviseligt har spillet for Hvidovre i 2026
                 SELECT DISTINCT m_tot.PLAYER_WYID
                 FROM {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_TOTAL m_tot
                 JOIN {DB}.WYSCOUT_MATCHES m ON m_tot.MATCH_WYID = m.MATCH_WYID
@@ -132,16 +135,12 @@ def vis_side():
             )
             SELECT 
                 m_total.PLAYER_WYID,
-                -- Vi summerer udelukkende minutter fra den præcist VALGTE liga
                 SUM(CASE WHEN m_total.COMPETITION_WYID = {valgt_liga} THEN m_total.MINUTESONFIELD ELSE 0 END) as total_minutes,
-                -- Marker om spilleren har spillet kampe for Hvidovre efter 1. januar 2026
                 MAX(CASE WHEN h26.PLAYER_WYID IS NOT NULL THEN 1 ELSE 0 END) as is_active_hvidovre
             FROM {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_TOTAL m_total
             LEFT JOIN hvidovre_2026_spillere h26 ON m_total.PLAYER_WYID = h26.PLAYER_WYID
-            -- Vi medtager kun spillere, som enten har minutter i ligaen, ELLER som er aktive Hvidovre-spillere
             WHERE m_total.COMPETITION_WYID = {valgt_liga} OR h26.PLAYER_WYID IS NOT NULL
             GROUP BY m_total.PLAYER_WYID
-            -- Spilleren skal have spillet mindst 150 minutter i den specifikke liga for at være med
             HAVING SUM(CASE WHEN m_total.COMPETITION_WYID = {valgt_liga} THEN m_total.MINUTESONFIELD ELSE 0 END) >= 150
         """
         
@@ -150,12 +149,13 @@ def vis_side():
             SELECT 
                 b_stats.PLAYER_WYID,
                 b_stats.POSITION1NAME as MATCH_POS_NAME,
+                b_stats.POSITION1CODE as MATCH_POS_CODE,
                 ROW_NUMBER() OVER (PARTITION BY b_stats.PLAYER_WYID ORDER BY COUNT(*) DESC) as rnk
             FROM {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_BASE b_stats
             JOIN {DB}.WYSCOUT_SEASONS seas ON b_stats.SEASON_WYID = seas.SEASON_WYID
             WHERE seas.SEASONNAME = '{SOGT_SAESON}'
               AND b_stats.POSITION1NAME IS NOT NULL
-            GROUP BY b_stats.PLAYER_WYID, b_stats.POSITION1NAME
+            GROUP BY b_stats.PLAYER_WYID, b_stats.POSITION1NAME, b_stats.POSITION1CODE
         )
         SELECT 
             p.PLAYER_WYID,
@@ -163,9 +163,9 @@ def vis_side():
                 NULLIF(TRIM(p.FIRSTNAME || ' ' || p.LASTNAME), ''), 
                 p.SHORTNAME
             ) as FULL_NAME, 
-            t.OFFICIALNAME as TEAM_NAME,
+            COALESCE(t.OFFICIALNAME, 'Ukendt Klub') as TEAM_NAME,
             p.CURRENTTEAM_WYID as CURRENT_TEAM_WYID,
-            COALESCE(p.ROLENAME, mpp.MATCH_POS_NAME, 'Ukendt Position') as SPECIFIC_POSITION,
+            COALESCE(mpp.MATCH_POS_NAME, p.ROLENAME, 'Ukendt Position') as SPECIFIC_POSITION,
             AVG(s.GOALS) as GOALS,
             AVG(s.XGSHOT) AS XG,
             AVG(s.SHOTS) as SHOTS,
@@ -185,15 +185,19 @@ def vis_side():
             AVG(s.ASSISTS) as ASSISTS
         FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_AVERAGE s
         JOIN {DB}.WYSCOUT_PLAYERS p ON s.PLAYER_WYID = p.PLAYER_WYID
-        JOIN {DB}.WYSCOUT_TEAMS t ON p.CURRENTTEAM_WYID = t.TEAM_WYID
+        LEFT JOIN {DB}.WYSCOUT_TEAMS t ON p.CURRENTTEAM_WYID = t.TEAM_WYID
         JOIN {DB}.WYSCOUT_SEASONS seas ON s.SEASON_WYID = seas.SEASON_WYID
         LEFT JOIN most_played_position mpp ON p.PLAYER_WYID = mpp.PLAYER_WYID AND mpp.rnk = 1
         JOIN {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_BASE b_stats 
           ON s.PLAYER_WYID = b_stats.PLAYER_WYID 
          AND s.SEASON_WYID = b_stats.SEASON_WYID
-        WHERE (s.COMPETITION_WYID = {valgt_liga} OR p.CURRENTTEAM_WYID = {HVIDOVRE_TEAM_WYID})
+        WHERE (s.COMPETITION_WYID = {valgt_liga} OR COALESCE(p.CURRENTTEAM_WYID, 0) = {HVIDOVRE_TEAM_WYID})
           AND seas.SEASONNAME = '{SOGT_SAESON}'
-          AND (p.ROLECODE3 = '{role_code}' OR (COALESCE(p.ROLECODE3, '') = '' AND {pos_fallback_filter}))
+          AND (
+               mpp.MATCH_POS_CODE IN {pos_match_codes} 
+               OR p.ROLECODE3 = '{role_code}'
+               OR (COALESCE(p.ROLECODE3, '') IN ('', 'Ukendt') AND b_stats.POSITION1CODE IN {pos_match_codes})
+          )
         GROUP BY p.PLAYER_WYID, p.FIRSTNAME, p.LASTNAME, p.SHORTNAME, t.OFFICIALNAME, p.CURRENTTEAM_WYID, p.ROLENAME, mpp.MATCH_POS_NAME, p.ROLECODE3
         """
         
@@ -204,7 +208,6 @@ def vis_side():
             df_minutter.columns = df_minutter.columns.str.lower()
             df_stats.columns = df_stats.columns.str.lower()
             
-            # Kobling af korrekte ligaminutter og Hvidovre-aktivitetsstatus i Python
             raw_df = pd.merge(df_stats, df_minutter, on='player_wyid', how='inner')
             
             # --- 3. BEREGNING AF PASNINGSPROCENT ---
@@ -236,6 +239,28 @@ def vis_side():
             df = raw_df.groupby('player_wyid', as_index=False).agg(agg_dict)
             df[score_col] = df[score_col].round(1)
             
+            # --- NYT: MANUEL RETTELSE VIA CSV (spiller_overskrivning.csv) ---
+            # Vi forventer kolonnerne: player_wyid, full_name, team_name, is_active_hvidovre, specific_position
+            overskriv_sti = os.path.abspath(os.path.join(os.path.dirname(__file__), 'players', 'spiller_overskrivning.csv'))
+            if os.path.exists(overskriv_sti):
+                try:
+                    df_overskriv = pd.read_csv(overskriv_sti)
+                    df_overskriv.columns = df_overskriv.columns.str.lower().str.strip()
+                    
+                    if 'player_wyid' in df_overskriv.columns:
+                        # Sæt player_wyid som indeks på begge for nem opdatering
+                        df.set_index('player_wyid', inplace=True)
+                        df_overskriv.set_index('player_wyid', inplace=True)
+                        
+                        # Opdater kun de kolonner, der rent faktisk findes i din CSV
+                        kolonner_til_opdatering = [col for col in df_overskriv.columns if col in df.columns]
+                        if kolonner_til_opdatering:
+                            df.update(df_overskriv[kolonner_til_opdatering])
+                            
+                        df.reset_index(inplace=True)
+                except Exception as csv_err:
+                    st.warning(f"Kunne ikke indlæse spiller-overskrivninger fra CSV: {csv_err}")
+
             df['dk_position'] = df['specific_position'].map(POS_TRANSLATIONS).fillna(df['specific_position'])
             df_sorteret = df.sort_values(score_col, ascending=False)
             
