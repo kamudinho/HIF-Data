@@ -81,7 +81,7 @@ def vis_side():
 
     conn = _get_snowflake_conn()
     if not conn:
-        st.error("Kunne ikke oprette forbindelse to Snowflake-databasen.")
+        st.error("Kunne ikke oprette forbindelse til Snowflake-databasen.")
         return
 
     DB = "KLUB_HVIDOVREIF.AXIS"
@@ -171,7 +171,7 @@ def vis_side():
     df_csv['player_wyid'] = df_csv['player_wyid'].astype(int)
     df_csv['specific_position'] = df_csv['specific_position'].fillna("").astype(str).apply(rens_specialtegn)
     df_csv['full_name'] = df_csv['full_name'].fillna("").astype(str).apply(rens_specialtegn)
-    df_csv['klub'] = df_csv['klub'].fillna("").astype(str).apply(rens_specialtegn)
+    df_csv['klub'] = df_csv['klub'].fillna("Ukendt Klub").astype(str).apply(rens_specialtegn).str.strip()
 
     df_csv['hovedkategori'] = df_csv['specific_position'].apply(map_til_hovedkategori)
 
@@ -339,17 +339,20 @@ def vis_side():
         df_raw.columns = df_raw.columns.str.lower()
         df_raw['player_wyid'] = df_raw['player_wyid'].astype(int)
 
-        df = pd.merge(df_csv, df_raw, on='player_wyid', how='inner')
+        # Drop potentielle overlap i kolonner inden merge, undtagen join-nøglen
+        df_raw_clean = df_raw.drop(columns=[col for col in ['team_name'] if col in df_raw.columns and col in df_csv.columns])
+        
+        df = pd.merge(df_csv, df_raw_clean, on='player_wyid', how='inner')
 
         if df.empty:
             st.info(f"Ingen spillere i din CSV-fil matcher de valgte minut-kriterier i denne turnering.")
             return
 
-        # --- REPARATION: STYR KLUB OG HVIDOVRE-STATUS FRA CSV (MED FLEKSIBEL SØGNING) ---
-        # 1. Sæt team_name lig med klubben i CSV-filen
+        # --- REPARATION: TVING KLUB FRA CSV TIL AT GÆLDE OVERALT ---
+        # 1. Sæt team_name udelukkende lig med 'klub' fra CSV-filen
         df['team_name'] = df['klub']
         
-        # 2. Matcher alt der indeholder "hvidovre" (både "Hvidovre", "Hvidovre IF", "hvidovre if" osv.)
+        # 2. Matcher alt der indeholder "hvidovre" (uanset stavemåde i CSV'en f.eks. "Hvidovre", "Hvidovre IF")
         df['is_active_hvidovre'] = np.where(
             df['klub'].str.strip().str.lower().str.contains("hvidovre", na=False), 
             1, 
