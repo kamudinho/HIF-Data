@@ -32,7 +32,7 @@ def rens_specialtegn(val):
     return val
 
 def vis_side():
-    st.write(
+    st.caption(
         "Her kan du rette navn, position og klub direkte i tabellen. "
         "De tekniske ID-kolonner (Wyscout, Opta og turneringer) er låst for at beskytte dataforbindelsen."
     )
