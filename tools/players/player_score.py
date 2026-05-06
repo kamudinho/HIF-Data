@@ -16,7 +16,7 @@ def rens_specialtegn(val):
     """
     if not isinstance(val, str):
         return val
-        
+
     tegn_map = {
         '√∏': 'ø', '√ò': 'Ø',
         '√¶': 'æ', '√Ü': 'Æ',
@@ -28,34 +28,34 @@ def rens_specialtegn(val):
         '√≥': 'ó',
         '√©': 'é', '√®': 'è', '√¢': 'â', '√º': 'ü', '√∂': 'ö', '√§': 'ä'
     }
-    
+
     for grimt, godt in tegn_map.items():
         val = val.replace(grimt, godt)
-        
+
     return val
 
 def map_til_hovedkategori(position_str):
     if not isinstance(position_str, str):
         return "Ukendt"
-    
+
     pos = position_str.strip().lower()
-    
+
     # MÅLMAND
     if any(x in pos for x in ["målmand", "goalkeeper", "keeper", "gk"]):
         return "Målmand"
-        
+
     # FORSVARSSPILLER
     if any(x in pos for x in ["forsvar", "defender", "cb", "lb", "rb", "lwb", "rwb", "stopper", "back", "def"]):
         return "Forsvarsspiller"
-        
+
     # ANGRIBER
     if any(x in pos for x in ["angriber", "forward", "striker", "cf", "wf", "ss", "9'er", "fwd", "frontløber", "winger", "wing", "kant"]):
         return "Angriber"
-        
+
     # MIDTBANESPILLER
     if any(x in pos for x in ["midtbane", "midfielder", "dmf", "cmf", "amf", "lm", "rm", "mid", "6'er", "8'er", "10'er"]):
         return "Midtbanespiller"
-        
+
     return "Ukendt"
 
 def vis_side():
@@ -87,16 +87,26 @@ def vis_side():
     DB = "KLUB_HVIDOVREIF.AXIS"
     SOGT_SAESON = "2025/2026"
     HVIDOVRE_TEAM_WYID = 7490
-    
+
     TILLADTE_LIGAER = (335, 328, 329, 43319, 331, 1305)
 
+    # De præcise, godkendte oversættelser
     POS_TRANSLATIONS = {
-        "Center Back": "Midterforsvarer", "Left Back": "Venstre Back", "Right Back": "Højre Back",
-        "Left Wing Back": "Venstre Wingback", "Right Wing Back": "Højre Wingback",
-        "Defensive Midfielder": "Defensiv Midtbane", "Central Midfielder": "Central Midtbane",
-        "Attacking Midfielder": "Offensiv Midtbane", "Left Midfielder": "Venstre Midtbane",
-        "Right Midfielder": "Højre Midtbane", "Forward": "Angriber", "Left Winger": "Venstre kant",
-        "Right Winger": "Højre kant", "Goalkeeper": "Målmand", "Defender": "Forsvarsspiller",
+        "Center Back": "Midterforsvarer",
+        "Left Back": "Venstre Back",
+        "Right Back": "Højre Back",
+        "Left Wing Back": "Venstre Wingback",
+        "Right Wing Back": "Højre Wingback",
+        "Defensive Midfielder": "Defensiv Midtbane",
+        "Central Midfielder": "Central Midtbane",
+        "Attacking Midfielder": "Offensiv Midtbane",
+        "Left Midfielder": "Venstre Midtbane",
+        "Right Midfielder": "Højre Midtbane",
+        "Forward": "Angriber",
+        "Left Winger": "Venstre kant",
+        "Right Winger": "Højre kant",
+        "Goalkeeper": "Målmand",
+        "Defender": "Forsvarsspiller",
         "Midfielder": "Midtbanespiller"
     }
 
@@ -130,9 +140,9 @@ def vis_side():
         if os.path.exists(os.path.join(projekt_rod, 'data')):
             break
         projekt_rod = os.path.dirname(projekt_rod)
-        
+
     overskriv_sti = os.path.join(projekt_rod, 'data', 'players', 'spiller_overskrivning.csv')
-    
+
     if not os.path.exists(overskriv_sti):
         st.error(f"Kritisk fejl: CSV-filen kunne ikke findes på stien: {overskriv_sti}")
         return
@@ -156,31 +166,40 @@ def vis_side():
         'navn': 'full_name',
         'position': 'specific_position'
     })
-    
+
+    # Rens og standardiser værdier
     df_csv['player_wyid'] = df_csv['player_wyid'].astype(int)
     df_csv['specific_position'] = df_csv['specific_position'].fillna("").astype(str).apply(rens_specialtegn)
     df_csv['full_name'] = df_csv['full_name'].fillna("").astype(str).apply(rens_specialtegn)
     df_csv['klub'] = df_csv['klub'].fillna("").astype(str).apply(rens_specialtegn)
+
     df_csv['hovedkategori'] = df_csv['specific_position'].apply(map_til_hovedkategori)
 
     # --- 2. DYNAMISKE FILTRE ---
     col1, col2, col3 = st.columns(3)
     valgt_hovedkategori = col1.selectbox("Vælg Kategori", list(POS_CONFIG.keys()))
-    
+
     df_csv_hoved = df_csv[df_csv['hovedkategori'] == valgt_hovedkategori]
-    
+
     ekskluder_fra_dropdown = {
-        "målmand", "goalkeeper", "keeper", "gk", "forsvarsspiller", "defender", "def",
-        "midtbanespiller", "midfielder", "mid", "angriber", "forward", "striker", "fwd"
+        "Målmand", "goalkeeper", "keeper", "gk",
+        "Forsvarsspiller", "defender", "def",
+        "Midtbanespiller", "midfielder", "mid",
+        "Angriber", "forward", "striker", "fwd",
+        "målmand", "goalkeeper", "keeper", "gk",
+        "forsvarsspiller", "defender", "def",
+        "midtbanespiller", "midfielder", "mid",
+        "angriber", "forward", "striker", "fwd"
     }
-    
+
     specifikke_muligheder = sorted([
         pos for pos in df_csv_hoved['specific_position'].dropna().unique().tolist()
         if pos.strip().lower() not in ekskluder_fra_dropdown and pos.strip() != ""
     ])
-    
+
     visnings_positioner_map = {pos: POS_TRANSLATIONS.get(pos, pos) for pos in specifikke_muligheder}
-    
+
+    # Generer "Alle"-teksten
     if valgt_hovedkategori == "Målmand":
         alle_tekst = "Alle målmænd"
     elif valgt_hovedkategori == "Forsvarsspiller":
@@ -191,9 +210,12 @@ def vis_side():
         alle_tekst = "Alle angribere"
     else:
         alle_tekst = f"Alle {valgt_hovedkategori.lower()}e"
-    
-    valgt_specifik_visning = col2.selectbox("Vælg Specifik Position", [alle_tekst] + list(visnings_positioner_map.values()))
-    
+
+    valgt_specifik_visning = col2.selectbox(
+        "Vælg Specifik Position", 
+        [alle_tekst] + list(visnings_positioner_map.values())
+    )
+
     faktisk_specifik_valg = None
     if valgt_specifik_visning != alle_tekst:
         for eng_pos, dk_pos in visnings_positioner_map.items():
@@ -266,7 +288,7 @@ def vis_side():
                     AVG(s.KEYPASSES) as KEYPASSES, AVG(s.INTERCEPTIONS) as INTERCEPTIONS,
                     AVG(s.XGASSIST) as XGASSIST, AVG(s.SLIDINGTACKLES) as SLIDINGTACKLES,
                     AVG(s.PROGRESSIVERUN) as PROGRESSIVERUN, AVG(s.DEFENSIVEDUELSWON) as DEFENSIVEDUELSWON,
-                    AVG(s.CLEARANCES) as CLEARANCES, AVG(s.AERIALDUELS) AS AERIALDUELS,
+                    AVG(s.CLEARANCES) as CLEARANCES, AVG(s.AERIALDUELS) AS AERIALDUELSWON,
                     AVG(s.DANGEROUSOWNHALFLOSSES) as DANGEROUSOWNHALFLOSSES, AVG(s.ASSISTS) as ASSISTS
                 FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_AVERAGE s
                 JOIN {DB}.WYSCOUT_PLAYERS p ON s.PLAYER_WYID = p.PLAYER_WYID
@@ -292,7 +314,7 @@ def vis_side():
                     AVG(s.KEYPASSES) as KEYPASSES, AVG(s.INTERCEPTIONS) as INTERCEPTIONS,
                     AVG(s.XGASSIST) as XGASSIST, AVG(s.SLIDINGTACKLES) as SLIDINGTACKLES,
                     AVG(s.PROGRESSIVERUN) as PROGRESSIVERUN, AVG(s.DEFENSIVEDUELSWON) as DEFENSIVEDUELSWON,
-                    AVG(s.CLEARANCES) as CLEARANCES, AVG(s.AERIALDUELS) AS AERIALDUELS,
+                    AVG(s.CLEARANCES) as CLEARANCES, AVG(s.AERIALDUELS) AS AERIALDUELSWON,
                     AVG(s.DANGEROUSOWNHALFLOSSES) as DANGEROUSOWNHALFLOSSES, AVG(s.ASSISTS) as ASSISTS
                 FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_AVERAGE s
                 JOIN {DB}.WYSCOUT_PLAYERS p ON s.PLAYER_WYID = p.PLAYER_WYID
@@ -310,154 +332,145 @@ def vis_side():
             UNION ALL
             SELECT * FROM liga_stats
         """
-        
+
         df_raw = conn.query(sql_avanceret)
-        
-        if df_raw is not None and not df_raw.empty:
-            df_raw.columns = df_raw.columns.str.lower()
-            df_raw['player_wyid'] = df_raw['player_wyid'].astype(int)
 
-            df = pd.merge(df_csv, df_raw, on='player_wyid', how='inner')
+    if df_raw is not None and not df_raw.empty:
+        df_raw.columns = df_raw.columns.str.lower()
+        df_raw['player_wyid'] = df_raw['player_wyid'].astype(int)
 
-            if df.empty:
-                st.info(f"Ingen spillere i din CSV-fil matcher de valgte minut-kriterier i denne turnering.")
-                return
+        df = pd.merge(df_csv, df_raw, on='player_wyid', how='inner')
 
-            if 'is_active_hvidovre' in df.columns:
-                df.loc[df['is_active_hvidovre'] == 1, 'team_name'] = "Hvidovre IF"
+        if df.empty:
+            st.info(f"Ingen spillere i din CSV-fil matcher de valgte minut-kriterier i denne turnering.")
+            return
 
-            df['pass_pct'] = (df['successfulpasses'] / df['passes'].replace(0, 1)) * 100
+        if 'is_active_hvidovre' in df.columns:
+            df.loc[df['is_active_hvidovre'] == 1, 'team_name'] = "Hvidovre IF"
 
-            config = POS_CONFIG[valgt_hovedkategori]
-            score_col = 'pos_score'
-            df[score_col] = 0.0
-            for i, m_name in enumerate(config['metrics']):
-                weight = config['weights'][i]
-                val = df[m_name] if m_name in df.columns else 0
-                df[score_col] += val * weight
-            
-            df[score_col] = df[score_col].round(1)
+        df['pass_pct'] = (df['successfulpasses'] / df['passes'].replace(0, 1)) * 100
 
-            df['dk_position'] = df['specific_position'].map(POS_TRANSLATIONS).fillna(df['specific_position'])
-            df_sorteret = df.sort_values(score_col, ascending=False)
-            
-            liga_spillere = df_sorteret[df_sorteret['is_active_hvidovre'] == 0]
-            hvidovre_spillere = df_sorteret[df_sorteret['is_active_hvidovre'] == 1]
-            
-            top_20_liga = liga_spillere.head(20)
-            top_2_hvidovre = hvidovre_spillere.head(2)
-            
-            visnings_df = pd.concat([top_20_liga, top_2_hvidovre]).drop_duplicates(subset=['player_wyid'])
-            
-            if visnings_df.empty:
-                st.info("Ingen spillere opfylder kriterierne for visning.")
-                return
-            
-            visnings_df = visnings_df.sort_values(score_col, ascending=True)
-            visnings_df['visningsnavn'] = visnings_df['full_name']
+        config = POS_CONFIG[valgt_hovedkategori]
+        score_col = 'pos_score'
+        df[score_col] = 0.0
+        for i, m_name in enumerate(config['metrics']):
+            weight = config['weights'][i]
+            val = df[m_name] if m_name in df.columns else 0
+            df[score_col] += val * weight
 
-            farve_liste = [
-                '#c11c2e' if row['is_active_hvidovre'] == 1 else '#1b365d'
-                for _, row in visnings_df.iterrows()
-            ]
+        df[score_col] = df[score_col].round(1)
 
-            # --- Definer variablen i toppen, så den ALTID eksisterer ---
-            valgt_klik = None
+        # Sikrer pæn dansk visning af både specifikke og brede positioner i spillerkortet
+        df['dk_position'] = df['specific_position'].map(POS_TRANSLATIONS).fillna(df['specific_position'])
+        df_sorteret = df.sort_values(score_col, ascending=False)
 
-            rude_venstre, rude_hoejre = st.columns([1.1, 0.9])
+        liga_spillere = df_sorteret[df_sorteret['is_active_hvidovre'] == 0]
+        hvidovre_spillere = df_sorteret[df_sorteret['is_active_hvidovre'] == 1]
 
-            with rude_venstre:
-                st.subheader("Performance Scoreboard")
-                hoejde_graf = max(500, len(visnings_df) * 26)
-                
-                fig = px.bar(
-                    visnings_df, 
-                    x=score_col, 
-                    y='visningsnavn', 
-                    orientation='h',
-                    text=score_col,
-                    template='plotly_white',
-                    custom_data=['player_wyid'] # ID sendes med her
-                )
-                
-                fig.update_traces(
-                    marker_color=farve_liste, 
-                    textposition='inside',   
-                    textfont=dict(color='white', size=11, family="Arial"), 
-                    insidetextanchor='end',  
-                    cliponaxis=False
-                )
-                
-                fig.update_layout(
-                    yaxis={'categoryorder':'total ascending', 'title': None}, 
-                    xaxis={'title': f"{valgt_hovedkategori} Performance Score", 'showgrid': False},
-                    showlegend=False, 
-                    height=hoejde_graf,
-                    margin=dict(l=10, r=10, t=10, b=10),
-                    clickmode='event+select'
-                )
-                
-                # Tegn grafen og opret 'valgt_klik'
-                valgt_klik = st.plotly_chart(fig, use_container_width=True, on_select="rerun")
+        top_20_liga = liga_spillere.head(20)
+        top_2_hvidovre = hvidovre_spillere.head(2)
 
-            with rude_hoejre:
-                # 1. Hent det aktuelle klik direkte fra Plotly-diagrammet
-                aktuelt_klik_id = None
-                if valgt_klik and "selection" in valgt_klik and valgt_klik["selection"]["points"]:
-                    try:
-                        # Vi trækker player_wyid direkte ud fra custom_data på den klikkede bjælke
-                        aktuelt_klik_id = int(valgt_klik["selection"]["points"][0]["customdata"][0])
-                    except Exception:
-                        aktuelt_klik_id = None
+        visnings_df = pd.concat([top_20_liga, top_2_hvidovre]).drop_duplicates(subset=['player_wyid'])
 
-                # 2. Match det mod vores DataFrame
-                valgt_spiller_data = None
-                if aktuelt_klik_id is not None:
-                    match = df[df['player_wyid'] == aktuelt_klik_id]
-                    if not match.empty:
-                        valgt_spiller_data = match.iloc[0]
+        if visnings_df.empty:
+            st.info("Ingen spillere opfylder kriterierne for visning.")
+            return
 
-                # 3. Hvis der ikke er klikket på noget aktivt, viser vi automatisk den bedste spiller på listen
-                if valgt_spiller_data is None and not visnings_df.empty:
-                    # Sorterer visnings_df for at finde spilleren med den absolut højeste score
-                    bedste_spiller = visnings_df.sort_values(score_col, ascending=False).iloc[0]
-                    bedste_spiller_id = bedste_spiller['player_wyid']
-                    
-                    match_bedste = df[df['player_wyid'] == bedste_spiller_id]
-                    if not match_bedste.empty:
-                        valgt_spiller_data = match_bedste.iloc[0]
+        visnings_df = visnings_df.sort_values(score_col, ascending=True)
+        visnings_df['visningsnavn'] = visnings_df['full_name']
 
-                # 4. Tegn spillerkortet og P90-værdierne, hvis vi har en spiller
-                if valgt_spiller_data is not None:
+        farve_liste = [
+            '#c11c2e' if row['is_active_hvidovre'] == 1 else '#1b365d'
+            for _, row in visnings_df.iterrows()
+        ]
+
+        rude_venstre, rude_hoejre = st.columns([1.1, 0.9])
+
+        with rude_venstre:
+            st.subheader("Performance Scoreboard")
+            hoejde_graf = max(500, len(visnings_df) * 26)
+
+            fig = px.bar(
+                visnings_df, 
+                x=score_col, 
+                y='visningsnavn', 
+                orientation='h',
+                text=score_col,
+                template='plotly_white',
+                custom_data=['player_wyid']
+            )
+
+            fig.update_traces(
+                marker_color=farve_liste, 
+                textposition='inside',   
+                textfont=dict(color='white', size=11, family="Arial"), 
+                insidetextanchor='end',  
+                cliponaxis=False
+            )
+
+            fig.update_layout(
+                yaxis={'categoryorder':'total ascending', 'title': None}, 
+                xaxis={'title': f"{valgt_hovedkategori} Performance Score", 'showgrid': False},
+                showlegend=False, 
+                height=hoejde_graf,
+                margin=dict(l=10, r=10, t=10, b=10),
+                clickmode='event+select'
+            )
+
+            valgt_klik = st.plotly_chart(fig, use_container_width=True, on_select="rerun")
+
+        with rude_hoejre:
+            valgt_spiller_data = None
+
+            # --- SIKKER HÅNDTERING AF KLIK OG FALLBACK ---
+            if valgt_klik and "selection" in valgt_klik and valgt_klik["selection"]["points"]:
+                klikket_navn = valgt_klik["selection"]["points"][0]["y"]
+                # Sørger for, at spilleren faktisk eksisterer i det filtrerede DataFrame, før vi slår ham op
+                matchende_spillere = df[df['full_name'] == klikket_navn]
+                if not matchende_spillere.empty:
+                    valgt_spiller_data = matchende_spillere.iloc[0]
+
+            # Hvis intet er klikket på grafen, eller hvis den klikkede spiller ikke findes i det nuværende filter,
+            # så vælger vi automatisk spilleren med den højeste score i visnings_df (som er sorteret)
+            if valgt_spiller_data is None and not visnings_df.empty:
+                bedste_spiller_id = visnings_df.sort_values(score_col, ascending=False).iloc[0]['player_wyid']
+                matchende_spillere = df[df['player_wyid'] == bedste_spiller_id]
+                if not matchende_spillere.empty:
+                    valgt_spiller_data = matchende_spillere.iloc[0]
+
+            if valgt_spiller_data is not None:
+                st.markdown(f"""
+                    <div class="score-card">
+                        <div class="pos-title">{valgt_spiller_data['full_name']}</div>
+                        <div style="font-size: 14px; color: #555; line-height: 1.5;">
+                            Klub: <b>{valgt_spiller_data['team_name']}</b><br>
+                            Position: <b>{valgt_spiller_data['dk_position']}</b><br>
+                            Minutter: <b>{int(valgt_spiller_data['total_minutes'])} min.</b><br>
+                            Samlet score ({valgt_hovedkategori}): <b>{valgt_spiller_data[score_col]}</b>
+                        </div>
+                    </div>
+                """, unsafe_allow_html=True)
+
+                st.write(f"**Underliggende P90-værdier ({valgt_hovedkategori}):**")
+
+                for idx, m_name in enumerate(config['metrics']):
+                    if m_name in valgt_spiller_data:
+                        metric_vaerdi = valgt_spiller_data[m_name]
+                        visnings_vaerdi = f"{metric_vaerdi:.1f}%" if "pct" in m_name else f"{metric_vaerdi:.2f}"
+                    else:
+                        visnings_vaerdi = "0.00"
+
                     st.markdown(f"""
-                        <div class="score-card">
-                            <div class="pos-title">{valgt_spiller_data['full_name']}</div>
-                            <div style="font-size: 14px; color: #555; line-height: 1.5;">
-                                Klub: <b>{valgt_spiller_data['team_name']}</b><br>
-                                Position: <b>{valgt_spiller_data['dk_position']}</b><br>
-                                Minutter: <b>{int(valgt_spiller_data['total_minutes'])} min.</b><br>
-                                Samlet score ({valgt_hovedkategori}): <b>{valgt_spiller_data[score_col]}</b>
+                        <div class="metric-row">
+                            <div>
+                                <span class="metric-label">{config['labels'][idx]}</span>
+                                <span class="metric-weight">(Vægt: {config['weights'][idx]})</span>
                             </div>
+                            <div class="metric-value">{visnings_vaerdi}</div>
                         </div>
                     """, unsafe_allow_html=True)
-                    
-                    st.write(f"**Underliggende P90-værdier ({valgt_hovedkategori}):**")
-                    
-                    for idx, m_name in enumerate(config['metrics']):
-                        if m_name in valgt_spiller_data:
-                            metric_vaerdi = valgt_spiller_data[m_name]
-                            visnings_vaerdi = f"{metric_vaerdi:.1f}%" if "pct" in m_name else f"{metric_vaerdi:.2f}"
-                        else:
-                            visnings_vaerdi = "0.00"
-                        
-                        st.markdown(f"""
-                            <div class="metric-row">
-                                <div>
-                                    <span class="metric-label">{config['labels'][idx]}</span>
-                                    <span class="metric-weight">(Vægt: {config['weights'][idx]})</span>
-                                </div>
-                                <div class="metric-value">{visnings_vaerdi}</div>
-                            </div>
-                        """, unsafe_allow_html=True)
-        else:
-            st.info(f"Fandt ingen aktive stats eller minutter for de valgte turneringer.")
+            else:
+                st.info(f"Fandt ingen aktive stats eller minutter for de valgte turneringer.")
+
+if __name__ == "__main__":
+    vis_side()
