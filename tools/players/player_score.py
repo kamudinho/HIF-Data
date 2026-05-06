@@ -78,7 +78,7 @@ def vis_side():
             "labels": ["Pasnings %", "Clearinger"]
         },
         "Forsvarsspiller": {
-            "metrics": ["interceptions", "defensiveduelswon", "clearances", "aerialduelswon", "pass_pct", "dangerousownhalflosses"],
+            "metrics": ["interceptions", "defensiveduelswon", "clearances", "aerialduels", "pass_pct", "dangerousownhalflosses"],
             "weights": [5.0, 4.0, 3.5, 4.0, 2.5, -3.0], 
             "labels": ["Interceptions", "Vundne Def. Dueller", "Clearinger", "Vundne Luftdueller", "Pasnings %", "Farlige Boldtab (Egen banehalvdel)"]
         },
@@ -217,7 +217,7 @@ def vis_side():
                     AVG(s.KEYPASSES) as KEYPASSES, AVG(s.INTERCEPTIONS) as INTERCEPTIONS,
                     AVG(s.XGASSIST) as XGASSIST, AVG(s.SLIDINGTACKLES) as SLIDINGTACKLES,
                     AVG(s.PROGRESSIVERUN) as PROGRESSIVERUN, AVG(s.DEFENSIVEDUELSWON) as DEFENSIVEDUELSWON,
-                    AVG(s.CLEARANCES) as CLEARANCES, AVG(s.AERIALDUELSWON) AS AERIALDUELSWON,
+                    AVG(s.CLEARANCES) as CLEARANCES, AVG(s.AERIALDUELS) AS AERIALDUELS,
                     AVG(s.DANGEROUSOWNHALFLOSSES) as DANGEROUSOWNHALFLOSSES, AVG(s.ASSISTS) as ASSISTS
                 FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_AVERAGE s
                 JOIN {DB}.WYSCOUT_PLAYERS p ON s.PLAYER_WYID = p.PLAYER_WYID
