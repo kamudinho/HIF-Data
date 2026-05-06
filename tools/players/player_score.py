@@ -192,19 +192,15 @@ def vis_side():
     sql_player_ids_str = f"({', '.join(map(str, csv_spiller_ids))})"
 
     # --- 3. DYNAMISK SQL GENERERING ---
-    # Vi definerer liga-betingelsen for reference-ligaen
+    # Her bruger vi konsekvent aliaset 'm_tot' til liga-betingelserne, da det matcher navnet i FROM-clausulerne
     if valgt_liga_nøgle == "alle":
-        liga_betingelse_total = f"m_total.COMPETITION_WYID IN {TILLADTE_LIGAER}"
+        liga_betingelse_total = f"m_tot.COMPETITION_WYID IN {TILLADTE_LIGAER}"
         liga_betingelse_stats = f"s.COMPETITION_WYID IN {TILLADTE_LIGAER}"
     else:
-        liga_betingelse_total = f"m_total.COMPETITION_WYID = {valgt_liga_nøgle}"
+        liga_betingelse_total = f"m_tot.COMPETITION_WYID = {valgt_liga_nøgle}"
         liga_betingelse_stats = f"s.COMPETITION_WYID = {valgt_liga_nøgle}"
 
     with st.spinner("Henter og beregner live-data..."):
-        # SQL LOGIK:
-        # 1. 'hvidovre_base' henter spillere, som er registreret i Hvidovre (7490) og har spillet minutter i 2026.
-        # 2. 'hvidovre_stats' henter gennemsnitlige stats for disse Hvidovre-spillere på tværs af ALLE deres turneringer.
-        # 3. 'liga_stats' henter spillere fra den VALGTE liga.
         sql_avanceret = f"""
             WITH hvidovre_spillere_2026 AS (
                 SELECT DISTINCT p.PLAYER_WYID
@@ -304,7 +300,6 @@ def vis_side():
             df_sorteret = df.sort_values(score_col, ascending=False)
             
             # --- 4. TOP LISTE ---
-            # Del op igen, så vi altid fanger top 20 fra ligaen samt de 2 bedste fra Hvidovre
             liga_spillere = df_sorteret[df_sorteret['is_active_hvidovre'] == 0]
             hvidovre_spillere = df_sorteret[df_sorteret['is_active_hvidovre'] == 1]
             
