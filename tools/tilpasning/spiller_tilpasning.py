@@ -10,7 +10,6 @@ def rens_specialtegn(val):
     if not isinstance(val, str):
         return val
         
-    # Ordbog over typiske encoding-fejl (Mojibake)
     tegn_map = {
         # Danske tegn
         '√∏': 'ø', '√ò': 'Ø',
@@ -39,7 +38,6 @@ def vis_side():
 
     # --- 1. FIND OG INDLÆS CSV-FILEN ---
     aktuel_fil_sti = os.path.abspath(__file__)
-    # Går 2 niveauer op (tilpas hvis din fil-struktur kræver flere/færre os.path.dirname)
     projekt_rod = os.path.dirname(os.path.dirname(os.path.dirname(aktuel_fil_sti)))
     overskriv_sti = os.path.join(projekt_rod, 'data', 'players', 'spiller_overskrivning.csv')
 
@@ -48,7 +46,6 @@ def vis_side():
         return
 
     try:
-        # Indlæser med utf-8-sig for at håndtere specialtegn som f.eks. 'æ', 'ø', 'å'
         df = pd.read_csv(overskriv_sti, encoding='utf-8-sig')
     except Exception as e:
         st.error(f"Fejl ved indlæsning af CSV: {e}")
@@ -60,45 +57,37 @@ def vis_side():
             df[col] = None
 
     # --- AUTOMATISK OPRENSNING AF TEGN ---
-    # Vi kører rensningen på de tekstfelter, hvor fejlene typisk opstår
     for col in ['NAVN', 'KLUB', 'POSITION']:
         df[col] = df[col].apply(rens_specialtegn)
 
-    # Vi opretter en callback-funktion, der tvinger Streamlit til at køre koden igen ved hvert tastetryk
-    if 'soeg_input' not in st.session_state:
-        st.session_state.soeg_input = ""
-
-    def opdater_soegning():
-        # Denne tomme funktion tvinger Streamlit til at genindlæse siden med det nye input med det samme
-        pass
-
-    # --- 2. SØGEFELT (Søger live mens du skriver) ---
+    # --- 2. SØGEFELT (Taster live) ---
+    # Vi bruger 'key' direkte. Streamlit vil køre scriptet igen ved hvert tastetryk, når værdien ændres.
     soegning = st.text_input(
         "Søg på navn, position eller klub:", 
-        value=st.session_state.soeg_input,
-        key="soeg_input",
-        on_change=opdater_soegning
+        key="live_search_field"
     ).strip().lower()
 
-    # Søgningen aktiveres med det samme, når der er indtastet mindst 2 tegn
+    # Vi filtrerer dataene til visning
     if len(soegning) >= 2:
         mask = (
             df['NAVN'].astype(str).str.lower().str.contains(soegning) |
             df['POSITION'].astype(str).str.lower().str.contains(soegning) |
             df['KLUB'].astype(str).str.lower().str.contains(soegning)
         )
-        filtreret_df = df[mask]
+        visnings_df = df[mask].copy()
     else:
-        filtreret_df = df
+        visnings_df = df.copy()
+
     # --- 3. DEN INTERAKTIVE DATA_EDITOR ---
-    # Her har vi tilføjet 'height=600' til konfigurationen
-    redigeret_filtreret_df = st.data_editor(
-        filtreret_df,
+    # Vi lader editoren køre på visnings_df og gemmer ændringerne direkte via key-state koblingen
+    redigeret_df = st.data_editor(
+        visnings_df,
         height=600,
         num_rows="fixed",
         use_container_width=True,
         hide_index=True,
         disabled=["PLAYER_WYID", "PLAYER_OPTAUUID", "COMPETITION_WYID", "COMPETITION_OPTAUUID"],
+        key="spiller_editor",
         column_config={
             "NAVN": st.column_config.TextColumn(
                 "Navn",
@@ -139,18 +128,30 @@ def vis_side():
         }
     )
 
-    # --- 4. GEM RELEVANTE RETTELSER TILBAGE I FILEN ---
-    # Vi overfører ændringerne fra den filtrerede tabel tilbage til det oprindelige fulde 'df'
-    if not redigeret_filtreret_df.equals(filtreret_df):
+    # --- 4. GEM DET REDIGEREDE DATAFRAME ---
+    # Hvis der er lavet en ændring i editoren
+    if not redigeret_df.equals(visnings_df):
         try:
-            # Opdater det oprindelige dataframe med de rækker der lige er blevet ændret i editoren
-            df.update(redigeret_filtreret_df)
+            # Vi tager det originale fulde dataframe 'df' og opdaterer de rækker, 
+            # der har ændret sig i det filtrerede 'redigeret_df', matchet på PLAYER_WYID
+            df.set_index('PLAYER_WYID', inplace=True)
+            redigeret_df.set_index('PLAYER_WYID', inplace=True)
             
-            # Gemmer direkte til CSV'en med uændret kolonnestruktur og UTF-8 encoding
+            # Opdaterer værdierne for de matchende spillere
+            df.update(redigeret_df)
+            
+            # Genskab indexet til kolonne før vi gemmer
+            df.reset_index(inplace=True)
+            
+            # Sørg for at holde kolonne-rækkefølgen intakt
+            kolonner_rækkefølge = ['NAVN', 'POSITION', 'KLUB', 'PLAYER_WYID', 'PLAYER_OPTAUUID', 'COMPETITION_WYID', 'COMPETITION_OPTAUUID']
+            df = df[kolonner_rækkefølge]
+
+            # Gemmer direkte til CSV'en med UTF-8 encoding
             df.to_csv(overskriv_sti, index=False, encoding='utf-8-sig')
             st.success("Ændringer gemt og specialtegn ryddet op! 💾")
             
-            # Ryd cache og genindlæs siden
+            # Ryd cache og genindlæs siden helt
             st.cache_data.clear()
             st.rerun()
         except Exception as e:
