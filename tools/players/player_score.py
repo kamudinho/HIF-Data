@@ -4,6 +4,7 @@ import numpy as np
 import plotly.express as px
 import sys
 import os
+import plotly.graph_objects as go
 
 # Sikrer at Python kan finde data_load, selvom denne fil ligger i 'data'-mappen
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -432,6 +433,7 @@ def vis_side():
         with rude_hoejre:
             valgt_spiller_data = None
 
+            # 1. FIND DEN VALGTE SPILLER
             if valgt_klik and "selection" in valgt_klik and valgt_klik["selection"]["points"]:
                 klikket_navn = valgt_klik["selection"]["points"][0]["y"]
                 matchende_spillere = df[df['full_name'] == klikket_navn]
@@ -439,12 +441,14 @@ def vis_side():
                     valgt_spiller_data = matchende_spillere.iloc[0]
 
             if valgt_spiller_data is None and not visnings_df.empty:
+                # Default til nr. 1 på listen
                 bedste_spiller_id = visnings_df.sort_values(score_col, ascending=False).iloc[0]['player_wyid']
                 matchende_spillere = df[df['player_wyid'] == bedste_spiller_id]
                 if not matchende_spillere.empty:
                     valgt_spiller_data = matchende_spillere.iloc[0]
 
             if valgt_spiller_data is not None:
+                # --- INFO KORT ---
                 st.markdown(f"""
                     <div class="score-card">
                         <div class="pos-title">{valgt_spiller_data['full_name']}</div>
@@ -452,31 +456,78 @@ def vis_side():
                             Klub: <b>{valgt_spiller_data['team_name']}</b><br>
                             Position: <b>{valgt_spiller_data['dk_position']}</b><br>
                             Minutter: <b>{int(valgt_spiller_data['total_minutes'])} min.</b><br>
-                            Samlet score ({valgt_hovedkategori}): <b>{valgt_spiller_data[score_col]}</b>
+                            Score: <b>{valgt_spiller_data[score_col]}</b>
                         </div>
                     </div>
                 """, unsafe_allow_html=True)
 
-                st.write(f"**Underliggende P90-værdier ({valgt_hovedkategori}):**")
+                # --- RADAR CHART LOGIK ---
+                metrics = config['metrics']
+                labels = config['labels']
+                
+                # Beregn gennemsnit for den valgte gruppe (ligagennemsnit)
+                liga_avg = [df[m].mean() for m in metrics]
+                spiller_vals = [valgt_spiller_data[m] for m in metrics]
 
-                for idx, m_name in enumerate(config['metrics']):
-                    if m_name in valgt_spiller_data:
-                        metric_vaerdi = valgt_spiller_data[m_name]
-                        visnings_vaerdi = f"{metric_vaerdi:.1f}%" if "pct" in m_name else f"{metric_vaerdi:.2f}"
-                    else:
-                        visnings_vaerdi = "0.00"
+                # Normalisering: Vi viser værdien relativt til den bedste i datasættet (0-100%)
+                # Dette sikrer at radaren ikke bliver skæv pga. forskellige skalaer (f.eks. mål vs pasnings-%)
+                max_vals = [df[m].max() if df[m].max() != 0 else 1 for m in metrics]
+                
+                spiller_norm = [(v / m) * 100 for v, m in zip(spiller_vals, max_vals)]
+                liga_norm = [(v / m) * 100 for v, m in zip(liga_avg, max_vals)]
 
-                    st.markdown(f"""
-                        <div class="metric-row">
-                            <div>
-                                <span class="metric-label">{config['labels'][idx]}</span>
-                                <span class="metric-weight">(Vægt: {config['weights'][idx]})</span>
-                            </div>
-                            <div class="metric-value">{visnings_vaerdi}</div>
-                        </div>
-                    """, unsafe_allow_html=True)
+                # Plotly kræver at man "lukker cirklen" ved at gentage første værdi
+                spiller_norm += [spiller_norm[0]]
+                liga_norm += [liga_norm[0]]
+                radar_labels = labels + [labels[0]]
+
+                # Bestem farve
+                main_color = '#df003b' if valgt_spiller_data['is_active_hvidovre'] == 1 else '#1b365d'
+                
+                fig_radar = go.Figure()
+
+                # Gennemsnits-arealet (Grå)
+                fig_radar.add_trace(go.Scatterpolar(
+                    r=liga_norm,
+                    theta=radar_labels,
+                    fill='toself',
+                    name='Liga Gennemsnit',
+                    line=dict(color='rgba(150, 150, 150, 0.5)', width=1),
+                    fillcolor='rgba(200, 200, 200, 0.3)'
+                ))
+
+                # Spillerens areal (Rød/Blå)
+                fig_radar.add_trace(go.Scatterpolar(
+                    r=spiller_norm,
+                    theta=radar_labels,
+                    fill='toself',
+                    name=valgt_spiller_data['full_name'],
+                    line=dict(color=main_color, width=3),
+                    fillcolor=main_color.replace('#', 'rgba(') + ', 0.3)'.replace('rgba(', 'rgba(223, 0, 59' if main_color == '#df003b' else 'rgba(27, 54, 93')
+                ))
+
+                fig_radar.update_layout(
+                    polar=dict(
+                        radialaxis=dict(visible=True, range=[0, 100], showticklabels=False),
+                        angularaxis=dict(tickfont=dict(size=10))
+                    ),
+                    showlegend=True,
+                    legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5),
+                    height=450,
+                    margin=dict(l=40, r=40, t=20, b=20)
+                )
+
+                st.plotly_chart(fig_radar, use_container_width=True)
+
+                # --- LILLE TABEL MED RÅ DATA ---
+                st.write("**Rå P90-værdier:**")
+                cols = st.columns(len(metrics))
+                for i, m in enumerate(metrics):
+                    val = valgt_spiller_data[m]
+                    vis_val = f"{val:.1f}%" if "pct" in m else f"{val:.2f}"
+                    cols[i % 3].metric(labels[i], vis_val) # Fordeler over kolonner for at spare plads
             else:
-                st.info(f"Fandt ingen aktive stats eller minutter for de valgte turneringer.")
-
+                st.info("Vælg en spiller på grafen til venstre for at se detaljer.")
+                
 if __name__ == "__main__":
     vis_side()
