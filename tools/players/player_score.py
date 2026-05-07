@@ -473,28 +473,31 @@ def vis_side():
 
                 # --- RADAR CHART LOGIK ---
                 metrics = config['metrics']
-                labels_wrapped = [wrap_label(l) for l in config['labels']]
-             
-                liga_avg = [df[m].mean() for m in metrics]
                 spiller_vals = [valgt_spiller_data[m] for m in metrics]
 
+                # 1. Formatér værdier (f.eks. "85.2%" eller "4.12")
+                formatted_vals = [f"{v:.1f}%" if "pct" in metrics[i] else f"{v:.2f}" for i, v in enumerate(spiller_vals)]
+                
+                # 2. Kombiner label og værdi (f.eks. "Pasnings %: 85.2%")
+                # Vi bruger wrap_label her også
+                combined_labels = [wrap_label(f"{l}: {formatted_vals[i]}") for i, l in enumerate(config['labels'])]
+
+                # 3. Beregn gennemsnit og normalisering
+                liga_avg = [df[m].mean() for m in metrics]
                 max_vals = [df[m].max() if df[m].max() != 0 else 1 for m in metrics]
                 spiller_norm = [(v / m) * 100 for v, m in zip(spiller_vals, max_vals)]
                 liga_norm = [(v / m) * 100 for v, m in zip(liga_avg, max_vals)]
 
-                val_text = [f"{v:.1f}%" if "pct" in metrics[i] else f"{v:.2f}" for i, v in enumerate(spiller_vals)]
-
                 # Luk cirklen
                 spiller_norm += [spiller_norm[0]]
                 liga_norm += [liga_norm[0]]
-                radar_labels = labels_wrapped + [labels_wrapped[0]]
-                val_text += [val_text[0]]
+                radar_labels = combined_labels + [combined_labels[0]]
 
                 main_line_color = '#df003b' if valgt_spiller_data['is_active_hvidovre'] == 1 else '#1b365d'
                 
                 fig_radar = go.Figure()
 
-                # 1. LIGA GENNEMSNIT (Udfyldt)
+                # LIGA GENNEMSNIT (Baggrund)
                 fig_radar.add_trace(go.Scatterpolar(
                     r=liga_norm,
                     theta=radar_labels,
@@ -505,33 +508,28 @@ def vis_side():
                     hoverinfo='skip'
                 ))
 
-                # 2. SPILLEREN (Kun tyk linje)
+                # SPILLEREN (Kun linje + punkter)
                 fig_radar.add_trace(go.Scatterpolar(
                     r=spiller_norm,
                     theta=radar_labels,
-                    mode='lines+markers+text',
-                    text=val_text,
-                    textposition="top center",
-                    textfont=dict(size=10, color=main_line_color, weight='bold'),
-                    fill=None,
+                    mode='lines+markers', # Fjernet 'text' herfra da det nu er i labels
                     name=valgt_spiller_data['full_name'],
                     line=dict(color=main_line_color, width=4),
-                    marker=dict(size=6)
+                    marker=dict(size=8)
                 ))
 
                 fig_radar.update_layout(
                     polar=dict(
-                        # 'domain' tvinger cirklen ind på midten (0.15 til 0.85)
-                        # Dette giver 15% friplads i hver side til labels
-                        domain=dict(x=[0.15, 0.85], y=[0, 0.8]), 
+                        gridshape='linear', # GØR RADAREN KANTET
+                        domain=dict(x=[0.15, 0.85], y=[0, 0.8]),
                         radialaxis=dict(
                             visible=True, 
-                            range=[0, 130], # Buffer så værdier ikke rammer teksten
+                            range=[0, 110], # Mindre range da teksten nu er udenfor
                             showticklabels=False,
                             gridcolor='rgba(200, 200, 200, 0.2)'
                         ),
                         angularaxis=dict(
-                            tickfont=dict(size=9, color="#333"),
+                            tickfont=dict(size=10, color="#333", weight='bold'),
                             rotation=90,
                             direction="clockwise"
                         ),
@@ -540,14 +538,13 @@ def vis_side():
                     showlegend=True,
                     legend=dict(
                         orientation="h",
-                        itemwidth=30,      # Gør hvert element i legend smallere
                         yanchor="top",
-                        y=1.15,            # Flytter den højere op
+                        y=1.15,
                         xanchor="center",
                         x=0.5
                     ),
                     height=600,
-                    margin=dict(l=10, r=10, t=20, b=10), # Vi behøver ikke store margins nu pga. domain
+                    margin=dict(l=10, r=10, t=20, b=10)
                 )
 
                 st.plotly_chart(fig_radar, use_container_width=True)
