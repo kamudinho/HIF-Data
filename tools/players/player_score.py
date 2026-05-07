@@ -465,72 +465,84 @@ def vis_side():
                 metrics = config['metrics']
                 labels = config['labels']
                 
-                # Beregn gennemsnit for den valgte gruppe
+                # Beregn gennemsnit og spillerens værdier
                 liga_avg = [df[m].mean() for m in metrics]
                 spiller_vals = [valgt_spiller_data[m] for m in metrics]
 
-                # Normalisering (0-100%)
+                # Normalisering (0-100%) for visualisering
                 max_vals = [df[m].max() if df[m].max() != 0 else 1 for m in metrics]
                 spiller_norm = [(v / m) * 100 for v, m in zip(spiller_vals, max_vals)]
                 liga_norm = [(v / m) * 100 for v, m in zip(liga_avg, max_vals)]
+
+                # Formatér værdier til visning på grafen
+                val_text = [f"{v:.1f}%" if "pct" in metrics[i] else f"{v:.2f}" for i, v in enumerate(spiller_vals)]
 
                 # Luk cirklen
                 spiller_norm += [spiller_norm[0]]
                 liga_norm += [liga_norm[0]]
                 radar_labels = labels + [labels[0]]
+                val_text += [val_text[0]] # Luk også tekst-rækken
 
-                # Bestem linjefarve baseret på klub (uden fill)
+                # Bestem linjefarve
                 main_line_color = '#df003b' if valgt_spiller_data['is_active_hvidovre'] == 1 else '#1b365d'
                 
                 fig_radar = go.Figure()
 
-                # 1. LIGA GENNEMSNIT (Udfyldt baggrund - Grå)
+                # 1. LIGA GENNEMSNIT (Udfyldt baggrund)
                 fig_radar.add_trace(go.Scatterpolar(
                     r=liga_norm,
                     theta=radar_labels,
-                    fill='toself', # Her beholder vi udfyldningen
+                    fill='toself',
                     name='Liga Gennemsnit',
                     line=dict(color='rgba(180, 180, 180, 0.4)', width=1),
-                    fillcolor='rgba(200, 200, 200, 0.4)'
+                    fillcolor='rgba(200, 200, 200, 0.4)',
+                    hoverinfo='skip'
                 ))
 
-                # 2. SPILLEREN (Kun tyk linje - Ingen udfyldning)
+                # 2. SPILLEREN (Tyk linje med værdier)
                 fig_radar.add_trace(go.Scatterpolar(
                     r=spiller_norm,
                     theta=radar_labels,
-                    fill=None, # Vi fjerner udfyldningen her
+                    mode='lines+markers+text', # Tilføjer både punkter og tekst
+                    text=val_text,
+                    textposition="top center",
+                    textfont=dict(size=10, color=main_line_color, font=dict(weight='bold')),
+                    fill=None,
                     name=valgt_spiller_data['full_name'],
-                    line=dict(color=main_line_color, width=4) # Ekstra tyk linje (width=4)
+                    line=dict(color=main_line_color, width=4),
+                    marker=dict(size=6)
                 ))
 
                 fig_radar.update_layout(
                     polar=dict(
                         radialaxis=dict(
                             visible=True, 
-                            range=[0, 100], 
+                            range=[0, 115], # Øget til 115 så tekst i toppen ikke skæres af
                             showticklabels=False,
                             gridcolor='rgba(200, 200, 200, 0.2)'
                         ),
                         angularaxis=dict(
-                            tickfont=dict(size=11, color="#444"),
-                            rotation=90, # Starter grafen i toppen
+                            tickfont=dict(size=10, color="#333"),
+                            rotation=90,
                             direction="clockwise"
                         ),
                         bgcolor='white'
                     ),
                     showlegend=True,
+                    # Flytter legend til toppen
                     legend=dict(
-                        orientation="h", 
-                        yanchor="bottom", 
-                        y=-0.15, 
-                        xanchor="center", 
+                        orientation="h",
+                        yanchor="bottom",
+                        y=1.1, 
+                        xanchor="center",
                         x=0.5
                     ),
-                    height=480,
-                    margin=dict(l=50, r=50, t=30, b=30)
+                    height=550, # Øget højde for at give plads til legend og tekst
+                    margin=dict(l=80, r=80, t=100, b=40) # Store margins sikrer at labels ikke klippes
                 )
 
                 st.plotly_chart(fig_radar, use_container_width=True)
+                
                 # --- LILLE TABEL MED RÅ DATA ---
                 st.write("**Rå P90-værdier:**")
                 cols = st.columns(len(metrics))
