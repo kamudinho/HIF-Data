@@ -10,6 +10,16 @@ import plotly.graph_objects as go
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from data.data_load import _get_snowflake_conn
 
+ # --- HJÆLPEFUNKTION TIL TEKST-OMBRYDNING ---
+def wrap_label(label, width=15):
+    # Indsætter <br> hvis en label er for lang
+    if len(label) > width and " " in label:
+        parts = label.split(" ")
+        # Forsøg at dele den nogenlunde på midten
+        mid = len(parts) // 2
+        return " ".join(parts[:mid]) + "<br>" + " ".join(parts[mid:])
+    return label
+
 def rens_specialtegn(val):
     """
     Oversætter ødelagte UTF-8/ANSI tegn (danske og baltiske/østlige tegn) 
@@ -463,24 +473,22 @@ def vis_side():
 
                 # --- RADAR CHART LOGIK ---
                 metrics = config['metrics']
-                labels = config['labels']
+                # Anvend ombrydning på labels
+                labels_wrapped = [wrap_label(l) for l in config['labels']]
                 
-                # Beregn gennemsnit og spillerens værdier
                 liga_avg = [df[m].mean() for m in metrics]
                 spiller_vals = [valgt_spiller_data[m] for m in metrics]
 
-                # Normalisering (0-100%)
                 max_vals = [df[m].max() if df[m].max() != 0 else 1 for m in metrics]
                 spiller_norm = [(v / m) * 100 for v, m in zip(spiller_vals, max_vals)]
                 liga_norm = [(v / m) * 100 for v, m in zip(liga_avg, max_vals)]
 
-                # Formatér værdier til visning på grafen
                 val_text = [f"{v:.1f}%" if "pct" in metrics[i] else f"{v:.2f}" for i, v in enumerate(spiller_vals)]
 
                 # Luk cirklen
                 spiller_norm += [spiller_norm[0]]
                 liga_norm += [liga_norm[0]]
-                radar_labels = labels + [labels[0]]
+                radar_labels = labels_wrapped + [labels_wrapped[0]]
                 val_text += [val_text[0]]
 
                 main_line_color = '#df003b' if valgt_spiller_data['is_active_hvidovre'] == 1 else '#1b365d'
@@ -498,18 +506,14 @@ def vis_side():
                     hoverinfo='skip'
                 ))
 
-                # 2. SPILLEREN (Rettet textfont struktur)
+                # 2. SPILLEREN
                 fig_radar.add_trace(go.Scatterpolar(
                     r=spiller_norm,
                     theta=radar_labels,
                     mode='lines+markers+text',
                     text=val_text,
                     textposition="top center",
-                    textfont=dict(
-                        size=11, 
-                        color=main_line_color, 
-                        weight='bold'  # Placeret korrekt her
-                    ),
+                    textfont=dict(size=11, color=main_line_color, weight='bold'),
                     fill=None,
                     name=valgt_spiller_data['full_name'],
                     line=dict(color=main_line_color, width=4),
@@ -520,12 +524,12 @@ def vis_side():
                     polar=dict(
                         radialaxis=dict(
                             visible=True, 
-                            range=[0, 120], # Sat op til 120 for at sikre plads til labels/tal i toppen
+                            range=[0, 125], # Mere luft til tekst i yderkanten
                             showticklabels=False,
                             gridcolor='rgba(200, 200, 200, 0.2)'
                         ),
                         angularaxis=dict(
-                            tickfont=dict(size=11, color="#333"),
+                            tickfont=dict(size=10, color="#333"),
                             rotation=90,
                             direction="clockwise"
                         ),
@@ -533,14 +537,15 @@ def vis_side():
                     ),
                     showlegend=True,
                     legend=dict(
-                        orientation="h",
+                        orientation="h",       # Tvinger legends på én linje
+                        entrywidthmode="pixels", # Sikrer at de ikke wrapper uventet
                         yanchor="bottom",
-                        y=1.15, # Lidt højere op
+                        y=1.1,                 # Placering over chartet
                         xanchor="center",
                         x=0.5
                     ),
-                    height=600, # Øget højde for at undgå overlap
-                    margin=dict(l=100, r=100, t=120, b=60) # Massive margins så intet klippes
+                    height=650, # Øget højde for at sikre plads
+                    margin=dict(l=100, r=100, t=100, b=80), # Store margins for at undgå klipning
                 )
 
                 st.plotly_chart(fig_radar, use_container_width=True)
