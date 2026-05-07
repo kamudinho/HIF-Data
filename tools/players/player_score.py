@@ -479,49 +479,58 @@ def vis_side():
                 liga_norm += [liga_norm[0]]
                 radar_labels = labels + [labels[0]]
 
-                # --- SIKKER FARVE-LOGIK ---
-                if valgt_spiller_data['is_active_hvidovre'] == 1:
-                    main_line = '#df003b'      # Hvidovre Rød
-                    main_fill = 'rgba(223, 0, 59, 0.3)'
-                else:
-                    main_line = '#1b365d'      # Anden Klub Blå
-                    main_fill = 'rgba(27, 54, 93, 0.3)'
+                # Bestem linjefarve baseret på klub (uden fill)
+                main_line_color = '#df003b' if valgt_spiller_data['is_active_hvidovre'] == 1 else '#1b365d'
                 
                 fig_radar = go.Figure()
 
-                # Gennemsnits-arealet (Grå)
+                # 1. LIGA GENNEMSNIT (Udfyldt baggrund - Grå)
                 fig_radar.add_trace(go.Scatterpolar(
                     r=liga_norm,
                     theta=radar_labels,
-                    fill='toself',
+                    fill='toself', # Her beholder vi udfyldningen
                     name='Liga Gennemsnit',
-                    line=dict(color='rgba(150, 150, 150, 0.5)', width=1),
-                    fillcolor='rgba(200, 200, 200, 0.3)'
+                    line=dict(color='rgba(180, 180, 180, 0.4)', width=1),
+                    fillcolor='rgba(200, 200, 200, 0.4)'
                 ))
 
-                # Spillerens areal (Rød eller Blå)
+                # 2. SPILLEREN (Kun tyk linje - Ingen udfyldning)
                 fig_radar.add_trace(go.Scatterpolar(
                     r=spiller_norm,
                     theta=radar_labels,
-                    fill='toself',
+                    fill=None, # Vi fjerner udfyldningen her
                     name=valgt_spiller_data['full_name'],
-                    line=dict(color=main_line, width=3),
-                    fillcolor=main_fill
+                    line=dict(color=main_line_color, width=4) # Ekstra tyk linje (width=4)
                 ))
 
                 fig_radar.update_layout(
                     polar=dict(
-                        radialaxis=dict(visible=True, range=[0, 100], showticklabels=False),
-                        angularaxis=dict(tickfont=dict(size=10))
+                        radialaxis=dict(
+                            visible=True, 
+                            range=[0, 100], 
+                            showticklabels=False,
+                            gridcolor='rgba(200, 200, 200, 0.2)'
+                        ),
+                        angularaxis=dict(
+                            tickfont=dict(size=11, color="#444"),
+                            rotation=90, # Starter grafen i toppen
+                            direction="clockwise"
+                        ),
+                        bgcolor='white'
                     ),
                     showlegend=True,
-                    legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5),
-                    height=450,
-                    margin=dict(l=40, r=40, t=20, b=20)
+                    legend=dict(
+                        orientation="h", 
+                        yanchor="bottom", 
+                        y=-0.15, 
+                        xanchor="center", 
+                        x=0.5
+                    ),
+                    height=480,
+                    margin=dict(l=50, r=50, t=30, b=30)
                 )
 
                 st.plotly_chart(fig_radar, use_container_width=True)
-
                 # --- LILLE TABEL MED RÅ DATA ---
                 st.write("**Rå P90-værdier:**")
                 cols = st.columns(len(metrics))
