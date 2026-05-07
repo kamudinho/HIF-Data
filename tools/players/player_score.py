@@ -465,24 +465,27 @@ def vis_side():
                 metrics = config['metrics']
                 labels = config['labels']
                 
-                # Beregn gennemsnit for den valgte gruppe (ligagennemsnit)
+                # Beregn gennemsnit for den valgte gruppe
                 liga_avg = [df[m].mean() for m in metrics]
                 spiller_vals = [valgt_spiller_data[m] for m in metrics]
 
-                # Normalisering: Vi viser værdien relativt til den bedste i datasættet (0-100%)
-                # Dette sikrer at radaren ikke bliver skæv pga. forskellige skalaer (f.eks. mål vs pasnings-%)
+                # Normalisering (0-100%)
                 max_vals = [df[m].max() if df[m].max() != 0 else 1 for m in metrics]
-                
                 spiller_norm = [(v / m) * 100 for v, m in zip(spiller_vals, max_vals)]
                 liga_norm = [(v / m) * 100 for v, m in zip(liga_avg, max_vals)]
 
-                # Plotly kræver at man "lukker cirklen" ved at gentage første værdi
+                # Luk cirklen
                 spiller_norm += [spiller_norm[0]]
                 liga_norm += [liga_norm[0]]
                 radar_labels = labels + [labels[0]]
 
-                # Bestem farve
-                main_color = '#df003b' if valgt_spiller_data['is_active_hvidovre'] == 1 else '#1b365d'
+                # --- SIKKER FARVE-LOGIK ---
+                if valgt_spiller_data['is_active_hvidovre'] == 1:
+                    main_line = '#df003b'      # Hvidovre Rød
+                    main_fill = 'rgba(223, 0, 59, 0.3)'
+                else:
+                    main_line = '#1b365d'      # Anden Klub Blå
+                    main_fill = 'rgba(27, 54, 93, 0.3)'
                 
                 fig_radar = go.Figure()
 
@@ -496,14 +499,14 @@ def vis_side():
                     fillcolor='rgba(200, 200, 200, 0.3)'
                 ))
 
-                # Spillerens areal (Rød/Blå)
+                # Spillerens areal (Rød eller Blå)
                 fig_radar.add_trace(go.Scatterpolar(
                     r=spiller_norm,
                     theta=radar_labels,
                     fill='toself',
                     name=valgt_spiller_data['full_name'],
-                    line=dict(color=main_color, width=3),
-                    fillcolor=main_color.replace('#', 'rgba(') + ', 0.3)'.replace('rgba(', 'rgba(223, 0, 59' if main_color == '#df003b' else 'rgba(27, 54, 93')
+                    line=dict(color=main_line, width=3),
+                    fillcolor=main_fill
                 ))
 
                 fig_radar.update_layout(
