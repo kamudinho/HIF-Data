@@ -469,7 +469,7 @@ def vis_side():
                 liga_avg = [df[m].mean() for m in metrics]
                 spiller_vals = [valgt_spiller_data[m] for m in metrics]
 
-                # Normalisering (0-100%) for visualisering
+                # Normalisering (0-100%)
                 max_vals = [df[m].max() if df[m].max() != 0 else 1 for m in metrics]
                 spiller_norm = [(v / m) * 100 for v, m in zip(spiller_vals, max_vals)]
                 liga_norm = [(v / m) * 100 for v, m in zip(liga_avg, max_vals)]
@@ -481,14 +481,13 @@ def vis_side():
                 spiller_norm += [spiller_norm[0]]
                 liga_norm += [liga_norm[0]]
                 radar_labels = labels + [labels[0]]
-                val_text += [val_text[0]] # Luk også tekst-rækken
+                val_text += [val_text[0]]
 
-                # Bestem linjefarve
                 main_line_color = '#df003b' if valgt_spiller_data['is_active_hvidovre'] == 1 else '#1b365d'
                 
                 fig_radar = go.Figure()
 
-                # 1. LIGA GENNEMSNIT (Udfyldt baggrund)
+                # 1. LIGA GENNEMSNIT
                 fig_radar.add_trace(go.Scatterpolar(
                     r=liga_norm,
                     theta=radar_labels,
@@ -499,46 +498,49 @@ def vis_side():
                     hoverinfo='skip'
                 ))
 
-                # 2. SPILLEREN (Tyk linje med værdier)
+                # 2. SPILLEREN (Rettet textfont struktur)
                 fig_radar.add_trace(go.Scatterpolar(
                     r=spiller_norm,
                     theta=radar_labels,
-                    mode='lines+markers+text', # Tilføjer både punkter og tekst
+                    mode='lines+markers+text',
                     text=val_text,
                     textposition="top center",
-                    textfont=dict(size=10, color=main_line_color, font=dict(weight='bold')),
+                    textfont=dict(
+                        size=11, 
+                        color=main_line_color, 
+                        weight='bold'  # Placeret korrekt her
+                    ),
                     fill=None,
                     name=valgt_spiller_data['full_name'],
                     line=dict(color=main_line_color, width=4),
-                    marker=dict(size=6)
+                    marker=dict(size=8)
                 ))
 
                 fig_radar.update_layout(
                     polar=dict(
                         radialaxis=dict(
                             visible=True, 
-                            range=[0, 115], # Øget til 115 så tekst i toppen ikke skæres af
+                            range=[0, 120], # Sat op til 120 for at sikre plads til labels/tal i toppen
                             showticklabels=False,
                             gridcolor='rgba(200, 200, 200, 0.2)'
                         ),
                         angularaxis=dict(
-                            tickfont=dict(size=10, color="#333"),
+                            tickfont=dict(size=11, color="#333"),
                             rotation=90,
                             direction="clockwise"
                         ),
                         bgcolor='white'
                     ),
                     showlegend=True,
-                    # Flytter legend til toppen
                     legend=dict(
                         orientation="h",
                         yanchor="bottom",
-                        y=1.1, 
+                        y=1.15, # Lidt højere op
                         xanchor="center",
                         x=0.5
                     ),
-                    height=550, # Øget højde for at give plads til legend og tekst
-                    margin=dict(l=80, r=80, t=100, b=40) # Store margins sikrer at labels ikke klippes
+                    height=600, # Øget højde for at undgå overlap
+                    margin=dict(l=100, r=100, t=120, b=60) # Massive margins så intet klippes
                 )
 
                 st.plotly_chart(fig_radar, use_container_width=True)
