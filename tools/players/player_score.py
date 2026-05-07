@@ -543,7 +543,7 @@ def vis_side():
                         xanchor="center",
                         x=0.5
                     ),
-                    height=600,
+                    height=400,
                     margin=dict(l=10, r=10, t=20, b=10)
                 )
 
