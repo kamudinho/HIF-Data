@@ -11,13 +11,13 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from data.data_load import _get_snowflake_conn
 
  # --- HJÆLPEFUNKTION TIL TEKST-OMBRYDNING ---
-def wrap_label(label, width=15):
-    # Indsætter <br> hvis en label er for lang
-    if len(label) > width and " " in label:
-        parts = label.split(" ")
-        # Forsøg at dele den nogenlunde på midten
-        mid = len(parts) // 2
-        return " ".join(parts[:mid]) + "<br>" + " ".join(parts[mid:])
+def wrap_label(label, width=10):
+    if not isinstance(label, str): return label
+    if len(label) <= width: return label
+    words = label.split(" ")
+    if len(words) > 1:
+        mid = len(words) // 2
+        return "<br>".join([" ".join(words[:mid]), " ".join(words[mid:])])
     return label
 
 def rens_specialtegn(val):
@@ -473,9 +473,8 @@ def vis_side():
 
                 # --- RADAR CHART LOGIK ---
                 metrics = config['metrics']
-                # Anvend ombrydning på labels
                 labels_wrapped = [wrap_label(l) for l in config['labels']]
-                
+             
                 liga_avg = [df[m].mean() for m in metrics]
                 spiller_vals = [valgt_spiller_data[m] for m in metrics]
 
@@ -495,41 +494,44 @@ def vis_side():
                 
                 fig_radar = go.Figure()
 
-                # 1. LIGA GENNEMSNIT
+                # 1. LIGA GENNEMSNIT (Udfyldt)
                 fig_radar.add_trace(go.Scatterpolar(
                     r=liga_norm,
                     theta=radar_labels,
                     fill='toself',
                     name='Liga Gennemsnit',
-                    line=dict(color='rgba(180, 180, 180, 0.4)', width=1),
-                    fillcolor='rgba(200, 200, 200, 0.4)',
+                    line=dict(color='rgba(150, 150, 150, 0.4)', width=1),
+                    fillcolor='rgba(200, 200, 200, 0.3)',
                     hoverinfo='skip'
                 ))
 
-                # 2. SPILLEREN
+                # 2. SPILLEREN (Kun tyk linje)
                 fig_radar.add_trace(go.Scatterpolar(
                     r=spiller_norm,
                     theta=radar_labels,
                     mode='lines+markers+text',
                     text=val_text,
                     textposition="top center",
-                    textfont=dict(size=11, color=main_line_color, weight='bold'),
+                    textfont=dict(size=10, color=main_line_color, weight='bold'),
                     fill=None,
                     name=valgt_spiller_data['full_name'],
                     line=dict(color=main_line_color, width=4),
-                    marker=dict(size=8)
+                    marker=dict(size=6)
                 ))
 
                 fig_radar.update_layout(
                     polar=dict(
+                        # 'domain' tvinger cirklen ind på midten (0.15 til 0.85)
+                        # Dette giver 15% friplads i hver side til labels
+                        domain=dict(x=[0.15, 0.85], y=[0, 0.8]), 
                         radialaxis=dict(
                             visible=True, 
-                            range=[0, 125], # Mere luft til tekst i yderkanten
+                            range=[0, 130], # Buffer så værdier ikke rammer teksten
                             showticklabels=False,
                             gridcolor='rgba(200, 200, 200, 0.2)'
                         ),
                         angularaxis=dict(
-                            tickfont=dict(size=10, color="#333"),
+                            tickfont=dict(size=9, color="#333"),
                             rotation=90,
                             direction="clockwise"
                         ),
@@ -537,15 +539,15 @@ def vis_side():
                     ),
                     showlegend=True,
                     legend=dict(
-                        orientation="h",       # Tvinger legends på én linje
-                        entrywidthmode="pixels", # Sikrer at de ikke wrapper uventet
-                        yanchor="bottom",
-                        y=1.1,                 # Placering over chartet
+                        orientation="h",
+                        itemwidth=30,      # Gør hvert element i legend smallere
+                        yanchor="top",
+                        y=1.15,            # Flytter den højere op
                         xanchor="center",
                         x=0.5
                     ),
-                    height=650, # Øget højde for at sikre plads
-                    margin=dict(l=100, r=100, t=100, b=80), # Store margins for at undgå klipning
+                    height=600,
+                    margin=dict(l=10, r=10, t=20, b=10), # Vi behøver ikke store margins nu pga. domain
                 )
 
                 st.plotly_chart(fig_radar, use_container_width=True)
