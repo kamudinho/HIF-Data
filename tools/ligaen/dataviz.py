@@ -2,10 +2,24 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
+import requests
+import base64
 from data.utils.team_mapping import TEAMS, TEAM_COLORS
 from data.data_load import _get_snowflake_conn
 
-# --- 1. DATA LOADING ---
+# --- 1. HJÆLPEFUNKTIONER ---
+
+@st.cache_data(ttl=86400)
+def get_base64_image(url):
+    """Konverterer URL til Base64 så logoer kan eksporteres i PNG."""
+    try:
+        response = requests.get(url, timeout=5)
+        if response.status_code == 200:
+            encoded_str = base64.b64encode(response.content).decode("utf-8")
+            return f"data:image/png;base64,{encoded_str}"
+    except Exception:
+        return url
+    return url
 
 @st.cache_data(ttl=3600)
 def load_data():
@@ -35,12 +49,12 @@ def load_data():
 
 def draw_position_performance_chart(df_merged, metric, label):
     if df_merged is None or df_merged.empty:
-        st.warning(f"Ingen data tilgængelig")
+        st.warning("Ingen data tilgængelig.")
         return
 
     fig = go.Figure()
 
-    # Type-cast til float (løser Decimal-fejl fra Snowflake)
+    # Type-cast til float for at undgå Decimal-fejl
     df_merged[metric] = df_merged[metric].apply(lambda x: float(x) if x is not None else np.nan)
     
     y_vals = df_merged[metric].dropna()
@@ -52,20 +66,23 @@ def draw_position_performance_chart(df_merged, metric, label):
     is_ppda = "PPDA" in label.upper()
 
     for _, row in df_merged.iterrows():
-        # Hent logo direkte fra din TEAMS mapping
         logo_url = row.get('LOGO_URL', "")
         
         if logo_url:
+            # Konverter til Base64 for at sikre at logoet kommer med ved "Save as PNG"
+            b64_logo = get_base64_image(logo_url)
+            
             fig.add_layout_image(dict(
-                source=logo_url, xref="x", yref="y",
+                source=b64_logo, xref="x", yref="y",
                 x=row['#'], y=row[metric],
                 sizex=0.5, 
-                sizey=y_span * 0.3,
+                sizey=y_span * 0.35,
                 xanchor="center", 
+                # Ankerpunkt skifter baseret på om aksen er vendt
                 yanchor="bottom" if not is_ppda else "top"
             ))
 
-    # Hover-lag
+    # Hover-lag (usynligt scatter)
     fig.add_trace(go.Scatter(
         x=df_merged['#'], y=df_merged[metric],
         mode='markers', 
@@ -75,12 +92,26 @@ def draw_position_performance_chart(df_merged, metric, label):
     ))
 
     fig.update_layout(
-        height=600, margin=dict(t=30, b=60, l=60, r=40),
-        xaxis=dict(title="<b>Placering</b>", tickmode='linear', range=[0.4, 12.6], gridcolor="#f0f0f0", linecolor='black'),
-        yaxis=dict(title=f"<b>{label}</b>", gridcolor="#f0f0f0", autorange="reversed" if is_ppda else True, linecolor='black'),
+        height=650, 
+        margin=dict(t=30, b=60, l=60, r=40),
+        xaxis=dict(
+            title="<b>Placering</b>", 
+            tickmode='linear', 
+            range=[0.4, 12.6],
+            gridcolor="#f0f0f0",
+            linecolor='black',
+            zeroline=False
+        ),
+        yaxis=dict(
+            title=f"<b>{label}</b>", 
+            gridcolor="#f0f0f0",
+            autorange="reversed" if is_ppda else True,
+            zeroline=False,
+            linecolor='black'
+        ),
         plot_bgcolor='white'
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True, config={'displaylogo': False})
 
 # --- 3. HOVEDFUNKTION ---
 
@@ -105,24 +136,22 @@ def vis_side():
             elif a_g > h_g: stats[a_uuid]['P'] += 3
             else: stats[h_uuid]['P'] += 1; stats[a_uuid]['P'] += 1
 
-    # Lav tabel-dataframe
     df_liga = pd.DataFrame.from_dict(stats, orient='index').reset_index()
     df_liga.rename(columns={'index': 'OPTA_UUID'}, inplace=True)
     df_liga = df_liga.sort_values(['P', 'MD'], ascending=False).reset_index(drop=True)
     df_liga['#'] = df_liga.index + 1
 
-    # --- DEN MAGISKE MERGE VIA DIN TEAM_MAPPING ---
+    # Merge performance data via TEAMS mapping
     final_data = []
     for _, row in df_liga.iterrows():
         opt_uuid = row['OPTA_UUID']
         
-        # 1. Find info i din TEAMS fil via Opta UUID
+        # Find team i mapping
         team_info = next((info for name, info in TEAMS.items() if info.get('opta_uuid') == opt_uuid), None)
         team_display_name = next((name for name, info in TEAMS.items() if info.get('opta_uuid') == opt_uuid), "Ukendt")
         
         if team_info:
             wy_id = team_info.get('team_wyid')
-            # 2. Hent performance fra Wyscout data vha. det præcise ID
             perf = df_wy[df_wy['TEAM_WYID'] == wy_id]
             
             entry = {
@@ -139,13 +168,19 @@ def vis_side():
 
     df_final = pd.DataFrame(final_data)
 
-    # UI
+    # --- TOPBAR LAYOUT ---
     col1, col2 = st.columns([3, 1])
     with col1:
         st.markdown("<br>", unsafe_allow_html=True)
         st.caption("Betinia Ligaen: Placering vs. Performance")
     with col2:
-        metric_map = {"xG": "XG", "Mål": "GOALS", "Skud": "SHOTS", "Pres (PPDA)": "PPDA", "Afleveringer": "PASSES"}
+        metric_map = {
+            "xG (Expected Goals)": "XG", 
+            "Mål": "GOALS", 
+            "Skud": "SHOTS", 
+            "Pres (PPDA)": "PPDA", 
+            "Afleveringer": "PASSES"
+        }
         sel_metric = st.selectbox("", list(metric_map.keys()), label_visibility="collapsed")
     
     draw_position_performance_chart(df_final, metric_map[sel_metric], sel_metric)
