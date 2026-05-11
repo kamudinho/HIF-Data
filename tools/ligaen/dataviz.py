@@ -48,7 +48,7 @@ def draw_position_performance_chart(df_merged, metric, label):
     
     y_min, y_max = y_vals.min(), y_vals.max()
     # Vi sætter bunden til f.eks. 15% under den laveste værdi for at sikre hele logoet vises
-    y_bottom = y_min - (y_max - y_min) * 0.45 if y_max != y_min else y_min * 0.8
+    y_bottom = y_min - (y_max - y_min) * 0.45 if y_max != y_min else y_min * 0.1
 
     for _, row in df_merged.iterrows():
         team_name = str(row['HOLD'])
