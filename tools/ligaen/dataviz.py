@@ -93,7 +93,7 @@ def draw_position_performance_chart(df_merged, metric, label):
             title=f"<b>{label}</b>", 
             gridcolor="#f0f0f0",
             # Vi sikrer at aksen starter ved y_bottom, så de laveste logoer har "gulv" under sig
-            range=[y_bottom, y_max * 1.15],
+            range=[y_bottom, y_max * 2.15],
             zeroline=False
         ),
         plot_bgcolor='white'
