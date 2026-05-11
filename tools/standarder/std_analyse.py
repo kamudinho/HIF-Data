@@ -21,24 +21,40 @@ def load_setpiece_data():
     
     match_sql = f"SELECT DISTINCT MATCH_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'"
     
-    # Vi henter events og bruger Qualifiers til at identificere Set Pieces
-    # QID 2 = Corner, QID 5 = Free kick, QID 107 = Throw-in
+    # Rettet SQL: Bruger CTEs til at hente ENDX (QID 140) og ENDY (QID 141)
     sql = f"""
+        WITH END_X AS (
+            SELECT EVENT_OPTAUUID, QUALIFIER_VALUE as ENDX FROM {DB}.OPTA_QUALIFIERS WHERE QUALIFIER_QID = 140
+        ),
+        END_Y AS (
+            SELECT EVENT_OPTAUUID, QUALIFIER_VALUE as ENDY FROM {DB}.OPTA_QUALIFIERS WHERE QUALIFIER_QID = 141
+        ),
+        SET_PIECE_EVENTS AS (
+            SELECT e.EVENT_OPTAUUID, e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, 
+                   e.EVENT_CONTESTANT_OPTAUUID, e.PLAYER_OPTAUUID, q.QUALIFIER_QID, e.MATCH_OPTAUUID
+            FROM {DB}.OPTA_EVENTS e
+            JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
+            WHERE q.QUALIFIER_QID IN (2, 5, 107, 124)
+            AND e.MATCH_OPTAUUID IN ({match_sql})
+        )
         SELECT 
-            e.EVENT_OPTAUUID, e.EVENT_X, e.EVENT_Y, e.EVENT_ENDX, e.EVENT_ENDY, 
-            e.EVENT_TYPEID, e.EVENT_CONTESTANT_OPTAUUID, e.PLAYER_OPTAUUID,
-            q.QUALIFIER_QID,
+            s.*,
+            ex.ENDX as EVENT_ENDX,
+            ey.ENDY as EVENT_ENDY,
             TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME) as PLAYER_NAME
-        FROM {DB}.OPTA_EVENTS e
-        JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
-        LEFT JOIN {DB}.OPTA_PLAYERS p ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
-        WHERE q.QUALIFIER_QID IN (2, 5, 107, 124) -- Corner, Free Kick, Throw-in, Corner Taken
-        AND e.MATCH_OPTAUUID IN ({match_sql})
+        FROM SET_PIECE_EVENTS s
+        LEFT JOIN END_X ex ON s.EVENT_OPTAUUID = ex.EVENT_OPTAUUID
+        LEFT JOIN END_Y ey ON s.EVENT_OPTAUUID = ey.EVENT_OPTAUUID
+        LEFT JOIN {DB}.OPTA_PLAYERS p ON s.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
     """
     df = conn.query(sql)
     df.columns = [c.upper() for c in df.columns]
     
-    # Map Qualifier til tekst
+    # Konverter koordinater til floats
+    for col in ['EVENT_X', 'EVENT_Y', 'EVENT_ENDX', 'EVENT_ENDY']:
+        df[col] = pd.to_numeric(df[col], errors='coerce')
+        
+    # Mapping af typer
     type_map = {2: "Hjørnespark", 124: "Hjørnespark", 5: "Frispark", 107: "Indkast"}
     df['SET_PIECE_TYPE'] = df['QUALIFIER_QID'].map(type_map)
     
@@ -58,7 +74,7 @@ def vis_side():
 
     df_all = load_setpiece_data()
     if df_all.empty:
-        st.warning("Ingen data fundet for standardsituationer.")
+        st.warning("Ingen data fundet. Tjek om ligaens UUID og Snowflake-forbindelsen er korrekt.")
         return
 
     # Team Mapping
@@ -66,7 +82,7 @@ def vis_side():
     df_all['KLUB_NAVN'] = df_all['EVENT_CONTESTANT_OPTAUUID'].str.upper().map(uuid_to_name)
     teams = sorted([n for n in df_all['KLUB_NAVN'].unique() if pd.notna(n)])
 
-    # Topbar
+    # Kontrolpanel
     c_h1, c_h2, c_h3 = st.columns([1, 1, 1])
     with c_h1:
         t_sel = st.selectbox("Hold", teams, index=teams.index("Hvidovre") if "Hvidovre" in teams else 0)
@@ -75,16 +91,16 @@ def vis_side():
     with c_h3:
         side_sel = st.selectbox("Side", ["Begge", "Venstre", "Højre"])
 
-    # Filtrering
+    # Data behandling
     df_team = df_all[(df_all['KLUB_NAVN'] == t_sel) & (df_all['SET_PIECE_TYPE'] == sp_type)].copy()
     
-    # Skalér til meter
+    # Skalering
     df_team['X_M'] = df_team['EVENT_X'].apply(lambda x: to_metric(x, 105))
     df_team['Y_M'] = df_team['EVENT_Y'].apply(lambda y: to_metric(y, 68))
     df_team['ENDX_M'] = df_team['EVENT_ENDX'].apply(lambda x: to_metric(x, 105))
     df_team['ENDY_M'] = df_team['EVENT_ENDY'].apply(lambda y: to_metric(y, 68))
 
-    # Filtrer på side (baseret på Y-koordinat, da vi ser banen vertikalt)
+    # Filtrering på side
     if side_sel == "Venstre":
         df_team = df_team[df_team['Y_M'] < 34]
     elif side_sel == "Højre":
@@ -92,47 +108,41 @@ def vis_side():
 
     t_color = TEAM_COLORS.get(t_sel, {}).get('primary', HIF_RED)
     
-    # Layout
     col_plot, col_stats = st.columns([2, 1])
 
     with col_plot:
+        # Vi bruger VerticalPitch til at vise angrebsretning opad
         pitch = VerticalPitch(half=True, pitch_type='custom', pitch_length=105, pitch_width=68, line_color='#cccccc')
         fig, ax = pitch.draw(figsize=(10, 12))
-        ax.set_ylim(50, 105) # Fokus på den angribende halvdel
+        ax.set_ylim(50, 105) 
 
-        if not df_team.empty:
-            # Tegn pile for hver aktion
+        if not df_team.dropna(subset=['ENDX_M', 'ENDY_M']).empty:
+            # Tegn pile
             pitch.arrows(df_team.X_M, df_team.Y_M, df_team.ENDX_M, df_team.ENDY_M, 
-                         width=2, headwidth=3, headlength=3, color=t_color, ax=ax, alpha=0.4, label=sp_type)
+                         width=2, headwidth=4, headlength=4, color=t_color, ax=ax, alpha=0.5)
             
-            # Marker slutpunkterne
-            pitch.scatter(df_team.ENDX_M, df_team.ENDY_M, s=60, edgecolors=t_color, c='white', linewidth=1, alpha=0.6, ax=ax)
+            # Marker hvor de lander
+            pitch.scatter(df_team.ENDX_M, df_team.ENDY_M, s=80, edgecolors='black', c=t_color, linewidth=1, alpha=0.8, ax=ax)
+        else:
+            st.info("Ingen slut-koordinater tilgængelige for dette valg.")
 
         st.pyplot(fig)
 
     with col_stats:
-        st.subheader("Analyse")
+        st.subheader("Data-udtræk")
         total = len(df_team)
-        st.metric(f"Total {sp_type}", total)
+        st.metric(f"Antal {sp_type}", total)
 
         if total > 0:
-            # Beregn gennemsnitlig længde
-            dist = np.sqrt((df_team.ENDX_M - df_team.X_M)**2 + (df_team.ENDY_M - df_team.Y_M)**2)
-            st.write(f"**Gns. længde:** {dist.mean():.1f}m")
+            # Top spillere (dem der tager sparket/kastet)
+            st.write("**Udført af:**")
+            st.table(df_team['PLAYER_NAME'].value_counts().head(5))
 
-            # Top eksekutører
-            st.write("**Top eksekutører:**")
-            p_counts = df_team['PLAYER_NAME'].value_counts().head(5)
-            st.dataframe(p_counts, use_container_width=True)
-
-            # Zone-analyse (Ender den i feltet?)
-            in_box = df_team[(df_team.ENDX_M >= 88.5) & (df_team.ENDY_M >= 13.84) & (df_team.ENDY_M <= 54.16)]
-            box_pct = (len(in_box) / total) * 100
-            st.write(f"**Rammer feltet:** {box_pct:.1f}%")
-            
-            # Tendens
-            fremad = len(df_team[df_team.ENDX_M > df_team.X_M])
-            st.write(f"**Søger fremad:** {(fremad/total*100):.1f}%")
+            # Simpel logik: Er bolden kastet/sparket ind i feltet?
+            # Feltet er ca. fra x=88.5 til 105 og y=13.84 til 54.16
+            in_box = df_team[(df_team.ENDX_M >= 88.5) & (df_team.ENDY_M >= 13.8) & (df_team.ENDY_M <= 54.2)]
+            box_pct = (len(in_box) / total) * 100 if total > 0 else 0
+            st.metric("Rammer feltet (%)", f"{box_pct:.1f}%")
 
 if __name__ == "__main__":
     vis_side()
