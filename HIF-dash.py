@@ -106,7 +106,7 @@ if not st.session_state["logged_in"]:
 # --- 3. SIDEBAR NAVIGATION ---
 with st.sidebar:
     # TILFØJET: "TILPASNING" er nu en del af hovedområderne
-    alle_omraader = ["HVIDOVRE IF", "HOLDANALYSE", "SPILLERANALYSE", "SCOUTING", "TILPASNING", "ADMIN"]
+    alle_omraader = ["HVIDOVRE IF", "HOLDANALYSE", "SPILLERANALYSE", "SCOUTING", "TILPASNING", "TESTSIDE", "ADMIN"]
     
     # Hent brugerinfo og tjek for restriktioner
     user_info = USER_DB.get(st.session_state["user"], {})
@@ -132,6 +132,9 @@ with st.sidebar:
     elif hoved_omraade == "TILPASNING":
         # TILFØJET: "Spiller-score" er nu placeret heri
         sel = option_menu(None, options=filtrer_menu(["Spillerdata", "Spiller-score"]))
+    elif hoved_omraade == "TESTSIDE":
+        # TILFØJET: "Spiller-score" er nu placeret heri
+        sel = option_menu(None, options=filtrer_menu(["Grafer"]))
     elif hoved_omraade == "ADMIN":
         # REMOVED: "Spiller-score" er fjernet herfra
         sel = option_menu(None, options=filtrer_menu(["System Log", "Profil", "Datakatalog", "Konklusion", "Fysisk profil", "Hold: Fysisk profil", "Intern analyse", "Top 5: Spillere", "Ordbog"]))
@@ -201,6 +204,15 @@ try:
     elif hoved_omraade == "TILPASNING":
         # TILFØJET: Render logikken for Spiller-score under Tilpasning
         if sel == "Spillerdata":
+            import tools.tilpasning.spiller_tilpasning as tilpasning
+            tilpasning.vis_side()
+        elif sel == "Spiller-score":
+            import tools.players.player_score as pscore
+            pscore.vis_side()
+
+    elif hoved_omraade == "TESTSIDE":
+        # TILFØJET: Render logikken for Spiller-score under Tilpasning
+        if sel == "Grafer":
             import tools.tilpasning.spiller_tilpasning as tilpasning
             tilpasning.vis_side()
         elif sel == "Spiller-score":
