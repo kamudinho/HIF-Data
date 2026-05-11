@@ -7,7 +7,7 @@ import base64
 from data.utils.team_mapping import TEAMS
 from data.data_load import _get_snowflake_conn
 
-# --- 1. DATA LOADING (OPDATERET TIL SS) ---
+# --- 1. HJÆLPEFUNKTIONER ---
 
 @st.cache_data(ttl=86400)
 def get_base64_image(url):
@@ -24,14 +24,30 @@ def load_data():
     conn = _get_snowflake_conn()
     db = "KLUB_HVIDOVREIF.AXIS"
     
-    # A. Opta Matchinfo (Tabel)
+    # A. Opta Matchinfo
     df_opta = conn.query(f"SELECT * FROM {db}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = 'dyjr458hcmrcy87fsabfsy87o'")
     
-    # B. Wyscout (Performance)
-    df_wy = conn.query(f"SELECT TEAM_WYID, AVG(XG) as XG, AVG(PPDA) as PPDA FROM {db}.WYSCOUT_TEAMMATCHES tm LEFT JOIN {db}.WYSCOUT_MATCHADVANCEDSTATS_GENERAL adv ON tm.MATCH_WYID = adv.MATCH_WYID AND tm.TEAM_WYID = adv.TEAM_WYID LEFT JOIN {db}.WYSCOUT_MATCHADVANCEDSTATS_DEFENCE md ON tm.MATCH_WYID = md.MATCH_WYID AND tm.TEAM_WYID = md.TEAM_WYID WHERE tm.COMPETITION_WYID = 328 GROUP BY TEAM_WYID")
+    # B. Wyscout (Performance) - Nu med alle dine oprindelige metrics
+    df_wy = conn.query(f"""
+        SELECT 
+            tm.TEAM_WYID, 
+            AVG(adv.XG) as XG, 
+            AVG(adv.SHOTS) as SHOTS, 
+            AVG(adv.GOALS) as GOALS,
+            AVG(md.PPDA) as PPDA, 
+            AVG(mp.PASSES) as PASSES
+        FROM {db}.WYSCOUT_TEAMMATCHES tm 
+        LEFT JOIN {db}.WYSCOUT_MATCHADVANCEDSTATS_GENERAL adv 
+            ON tm.MATCH_WYID = adv.MATCH_WYID AND tm.TEAM_WYID = adv.TEAM_WYID 
+        LEFT JOIN {db}.WYSCOUT_MATCHADVANCEDSTATS_DEFENCE md 
+            ON tm.MATCH_WYID = md.MATCH_WYID AND tm.TEAM_WYID = md.TEAM_WYID 
+        LEFT JOIN {db}.WYSCOUT_MATCHADVANCEDSTATS_PASSES mp 
+            ON tm.MATCH_WYID = mp.MATCH_WYID AND tm.TEAM_WYID = mp.TEAM_WYID
+        WHERE tm.COMPETITION_WYID = 328 
+        GROUP BY tm.TEAM_WYID
+    """)
     
-    # C. Second Spectrum (Fysisk - Hold gennemsnit)
-    # Vi henter AVG per hold for at kunne plotte det i liga-grafen
+    # C. Second Spectrum (Fysisk)
     df_ss = conn.query(f"""
         SELECT 
             "optaId" as OPTA_ID, 
@@ -57,17 +73,20 @@ def draw_position_performance_chart(df_merged, metric, label):
     y_vals = df_merged[metric].dropna()
     if y_vals.empty: return
     
-    y_span = y_vals.max() - y_vals.min() if y_vals.max() != y_vals.min() else 1
+    y_min, y_max = y_vals.min(), y_vals.max()
+    y_span = y_max - y_min if y_max != y_min else 1
     is_ppda = "PPDA" in label.upper()
 
     for _, row in df_merged.iterrows():
-        if row.get('LOGO_URL'):
-            b64_logo = get_base64_image(row['LOGO_URL'])
+        logo_url = row.get('LOGO_URL')
+        if logo_url:
+            b64_logo = get_base64_image(logo_url)
             fig.add_layout_image(dict(
                 source=b64_logo, xref="x", yref="y",
                 x=row['#'], y=row[metric],
                 sizex=0.5, sizey=y_span * 0.35,
-                xanchor="center", yanchor="bottom" if not is_ppda else "top"
+                xanchor="center", 
+                yanchor="bottom" if not is_ppda else "top"
             ))
 
     fig.add_trace(go.Scatter(
@@ -79,7 +98,7 @@ def draw_position_performance_chart(df_merged, metric, label):
 
     fig.update_layout(
         height=600, margin=dict(t=30, b=60, l=60, r=40),
-        xaxis=dict(title="<b>Placering</b>", tickmode='linear', range=[0.4, 12.6], gridcolor="#f0f0f0", linecolor='black'),
+        xaxis=dict(title="<b>Tabelplacering</b>", tickmode='linear', range=[0.4, 12.6], gridcolor="#f0f0f0", linecolor='black'),
         yaxis=dict(title=f"<b>{label}</b>", gridcolor="#f0f0f0", autorange="reversed" if is_ppda else True, linecolor='black'),
         plot_bgcolor='white'
     )
@@ -120,9 +139,7 @@ def vis_side():
         team_name = next((name for name, info in TEAMS.items() if info.get('opta_uuid') == opt_uuid), "Ukendt")
         
         if team_info:
-            # Matcher Wyscout via team_wyid
             perf = df_wy[df_wy['TEAM_WYID'] == team_info.get('team_wyid')]
-            # Matcher Second Spectrum via opta_id (fra din mapping)
             fysisk = df_ss[df_ss['OPTA_ID'].astype(str) == str(team_info.get('opta_id'))]
             
             final_data.append({
@@ -130,6 +147,9 @@ def vis_side():
                 'HOLD_NAVN': team_name,
                 'LOGO_URL': team_info.get('logo'),
                 'XG': perf['XG'].iloc[0] if not perf.empty else np.nan,
+                'SHOTS': perf['SHOTS'].iloc[0] if not perf.empty else np.nan,
+                'GOALS': perf['GOALS'].iloc[0] if not perf.empty else np.nan,
+                'PASSES': perf['PASSES'].iloc[0] if not perf.empty else np.nan,
                 'PPDA': perf['PPDA'].iloc[0] if not perf.empty else np.nan,
                 'DIST': fysisk['DIST_KM'].iloc[0] if not fysisk.empty else np.nan,
                 'HSR': fysisk['HSR'].iloc[0] if not fysisk.empty else np.nan
@@ -138,13 +158,16 @@ def vis_side():
     df_final = pd.DataFrame(final_data)
 
     # UI Topbar
-    col1, col2 = st.columns([3, 1])
+    col1, col2 = st.columns([2.5, 1.5])
     with col1:
         st.markdown("<br>", unsafe_allow_html=True)
-        st.caption("Betinia Ligaen: Tabel vs. Performance")
+        st.caption("NordicBet Liga: Tabel vs. Performance & Fysisk")
     with col2:
         metric_map = {
-            "xG (Wyscout)": "XG", 
+            "xG (Expected Goals)": "XG",
+            "Mål": "GOALS",
+            "Skud": "SHOTS",
+            "Afleveringer": "PASSES",
             "Pres (PPDA)": "PPDA", 
             "Distance (km)": "DIST", 
             "High Speed Running (m)": "HSR"
