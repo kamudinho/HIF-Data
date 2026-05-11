@@ -9,7 +9,7 @@ from data.data_load import _get_snowflake_conn
 @st.cache_data(ttl=3600)
 def get_team_viz_data():
     conn = _get_snowflake_conn()
-    # Henter gennemsnitlige hold-metrics
+    # Vi filtrerer specifikt på NordicBet Liga (328)
     query = """
         SELECT t.TEAMNAME, t.TEAM_WYID,
                AVG(adv.SHOTS) as SHOTS, AVG(adv.GOALS) as GOALS, AVG(adv.XG) as XG,
@@ -24,12 +24,12 @@ def get_team_viz_data():
         GROUP BY t.TEAMNAME, t.TEAM_WYID
     """
     df = conn.query(query)
-    # Tving kolonnenavne til upper for konsistens
-    df.columns = [c.upper() for c in df.columns]
+    if df is not None:
+        df.columns = [c.upper() for c in df.columns]
     return df
 
 def get_logo_url_by_name(team_name):
-    # Matcher navnet mod din TEAMS dictionary
+    # Matcher navnet mod din TEAMS dictionary for at få URL til logo
     for name, info in TEAMS.items():
         if name.lower() in team_name.lower() or team_name.lower() in name.lower():
             return info.get('logo', "")
@@ -41,32 +41,30 @@ def vis_side():
     df = get_team_viz_data()
     
     if df is None or df.empty:
-        st.error("Kunne ikke hente data til visualiseringen.")
+        st.error("Kunne ikke hente data for 1. division.")
         return
 
-    # --- FILTRE ---
-    col1, col2 = st.columns([1, 1])
+    # --- DROP-DOWN FILTRERING ---
+    metric_map = {
+        'Expected Goals (xG)': 'XG',
+        'Mål': 'GOALS',
+        'Skud': 'SHOTS',
+        'Interceptions': 'INTERCEPTIONS',
+        'Tacklinger': 'TACKLES',
+        'Afleveringer': 'PASSES',
+        'Progressive Afleveringer': 'PROGRESSIVEPASSES'
+    }
     
-    with col1:
-        metric_map = {
-            'Mål': 'GOALS',
-            'Expected Goals (xG)': 'XG',
-            'Skud': 'SHOTS',
-            'Interceptions': 'INTERCEPTIONS',
-            'Tacklinger': 'TACKLES',
-            'Afleveringer': 'PASSES',
-            'Progressive Afleveringer': 'PROGRESSIVEPASSES'
-        }
-        selected_label = st.selectbox("Vælg Kategori", list(metric_map.keys()))
-        selected_col = metric_map[selected_label]
+    selected_label = st.selectbox("Vælg Metric", list(metric_map.keys()))
+    selected_col = metric_map[selected_label]
 
-    # Sortering så det bedste hold er øverst
+    # Sortering (Lavest til højest for horisontal bar chart)
     df_plot = df.sort_values(selected_col, ascending=True)
 
-    # --- PLOTLY SETUP ---
+    # --- PLOTLY GRAF ---
     fig = go.Figure()
 
-    # Søjler
+    # Søjlerne
     fig.add_trace(go.Bar(
         x=df_plot[selected_col],
         y=df_plot['TEAMNAME'],
@@ -78,7 +76,7 @@ def vis_side():
         cliponaxis=False
     ))
 
-    # Tilføj Logoer som layout images på y-aksen
+    # Tilføj Logoer på Y-aksen
     for i, row in df_plot.iterrows():
         url = get_logo_url_by_name(row['TEAMNAME'])
         if url:
@@ -87,14 +85,15 @@ def vis_side():
                     source=url,
                     xref="paper", yref="y",
                     x=-0.01, y=row['TEAMNAME'],
-                    sizex=0.8, sizey=0.8,
+                    sizex=0.8, sizey=0.8, # Juster størrelsen her
                     xanchor="right", yanchor="middle"
                 )
             )
 
     fig.update_layout(
+        title=dict(text=f"1. Division - {selected_label}", font=dict(size=20)),
         height=700,
-        margin=dict(l=160, r=60, t=40, b=40),
+        margin=dict(l=160, r=60, t=60, b=40),
         plot_bgcolor='white',
         xaxis=dict(
             title=selected_label,
