@@ -58,7 +58,7 @@ def draw_position_performance_chart(df_merged, metric, label):
             fig.add_layout_image(dict(
                 source=logo_url, xref="x", yref="y",
                 x=row['#'], y=row[metric],
-                sizex=0.5, sizey=0.15 * (y_max - y_bottom), # Skalerer logo-størrelsen
+                sizex=0.5, sizey=0.40 * (y_max - y_bottom), # Skalerer logo-størrelsen
                 xanchor="center", yanchor="middle"
             ))
 
