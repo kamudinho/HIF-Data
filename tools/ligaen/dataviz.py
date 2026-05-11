@@ -162,7 +162,7 @@ def vis_side():
             # Match Second Spectrum (Solid konvertering til int)
             try:
                 m_id = int(team_info.get('opta_id'))
-                fysisk = df_ss[df_ss['TEAM_ID'].astype(float).astype(int) == m_id]
+                fysisk = df_ss[df_ss['TEAM_ID'].astype(str) == str(m_id)]
             except:
                 fysisk = pd.DataFrame()
             
