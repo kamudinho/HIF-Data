@@ -42,34 +42,33 @@ def draw_position_performance_chart(df_merged, metric, label):
 
     fig = go.Figure()
 
-    # 1. Beregn statistikker for y-aksen
+    # 1. Find det reelle spænd i data
     y_vals = df_merged[metric].dropna()
     if y_vals.empty: return
     
     y_min, y_max = y_vals.min(), y_vals.max()
     y_span = y_max - y_min if y_max != y_min else 1
 
-    # 2. KRITISK: Vi tvinger y-aksen til at starte MEGET lavere (60% af spændet under min)
-    # Dette sikrer plads til logoer der ligger helt i bunden
-    y_bottom = y_min - (y_span * 0.6)
+    # 2. Definer en buffer til top og bund (20% af spændet)
+    y_buffer = y_span * 0.2
+    y_range_min = y_min - y_buffer
+    y_range_max = y_max + y_buffer
 
     for _, row in df_merged.iterrows():
         team_name = str(row['HOLD'])
         logo_url = next((info['logo'] for name, info in TEAMS.items() if name.lower() in team_name.lower() or team_name.lower() in name.lower()), "")
         
         if logo_url:
-            # Vi bruger en fast størrelse baseret på det samlede y-spænd
-            # for at undgå at logoer bliver strukket hvis dataen ændrer sig
             fig.add_layout_image(dict(
                 source=logo_url, xref="x", yref="y",
                 x=row['#'], y=row[metric],
                 sizex=0.5, 
-                sizey=y_span * 0.35, # Justeret størrelse
+                sizey=y_span * 0.25, # Justeret logo-størrelse
                 xanchor="center", 
-                yanchor="middle"
+                yanchor="bottom" # SKIFTET FRA MIDDLE TIL BOTTOM: Logoet står nu ovenpå punktet
             ))
 
-    # 3. Scatter-lag med større markers for bedre hover-ramme
+    # 3. Usynlige punkter til hover
     fig.add_trace(go.Scatter(
         x=df_merged['#'], y=df_merged[metric],
         mode='markers', 
@@ -78,23 +77,28 @@ def draw_position_performance_chart(df_merged, metric, label):
         hovertemplate="<b>%{hovertext}</b><br>Placering: %{x}<br>"+label+": %{y:.2f}<extra></extra>"
     ))
 
-    # 4. Layout opdatering
+    # 4. Layout: Her tvinger vi faste rammer
     fig.update_layout(
         height=600, 
-        margin=dict(t=30, b=60, l=50, r=30),
+        margin=dict(t=50, b=80, l=60, r=40),
         xaxis=dict(
             title="<b>Tabelplacering</b>", 
             tickmode='linear', 
-            range=[0.4, 12.6], # Giver lidt luft i siderne
+            range=[0.4, 12.6],
             gridcolor="#f0f0f0",
-            zeroline=False
+            showline=True,
+            linewidth=1,
+            linecolor='black'
         ),
         yaxis=dict(
             title=f"<b>{label}</b>", 
             gridcolor="#f0f0f0",
-            # Vi sikrer at aksen starter ved y_bottom, så de laveste logoer har "gulv" under sig
-            range=[y_bottom * -2.1, y_max * 1.15],
-            zeroline=False
+            # Vi tvinger aksen til at bruge vores beregnede range uden at autoscale til 0
+            range=[y_range_min, y_range_max],
+            zeroline=False,
+            showline=True,
+            linewidth=1,
+            linecolor='black'
         ),
         plot_bgcolor='white'
     )
