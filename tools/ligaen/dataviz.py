@@ -15,7 +15,7 @@ def load_data():
     # Opta Data
     df_opta = conn.query(f"SELECT * FROM {db}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = 'dyjr458hcmrcy87fsabfsy87o'")
     
-    # Wyscout Data - Vi bruger SEASONNAME fra din info
+    # Wyscout Data
     df_wy = conn.query(f"""
         SELECT t.TEAMNAME, t.TEAM_WYID,
                AVG(adv.XG) as XG, AVG(adv.SHOTS) as SHOTS, AVG(adv.GOALS) as GOALS, 
@@ -31,9 +31,7 @@ def load_data():
     """)
     return df_opta, df_wy
 
-# --- 2. CHART FUNKTION (MED FEJLSIKRING) ---
-
-# --- OPDATERET CHART FUNKTION ---
+# --- 2. CHART FUNKTION ---
 
 def draw_position_performance_chart(df_merged, metric, label):
     if df_merged is None or df_merged.empty:
@@ -42,8 +40,7 @@ def draw_position_performance_chart(df_merged, metric, label):
 
     fig = go.Figure()
 
-    # 1. Konverter til float for at undgå Decimal-fejl og find spænd
-    # Vi sikrer os at alle tal er float her:
+    # Konverter til float for at undgå 'decimal.Decimal' fejl
     df_merged[metric] = df_merged[metric].apply(lambda x: float(x) if x is not None else np.nan)
     
     y_vals = df_merged[metric].dropna()
@@ -52,10 +49,8 @@ def draw_position_performance_chart(df_merged, metric, label):
     y_min, y_max = y_vals.min(), y_vals.max()
     y_span = y_max - y_min if y_max != y_min else 1
     
-    # Dynamisk buffer
-    y_buffer = y_span * 0.25
-    y_range_min = y_min - y_buffer
-    y_range_max = y_max + y_buffer
+    # Skal aksen vendes? (Lav PPDA er bedre = højere placering)
+    is_ppda = "PPDA" in label.upper()
 
     for _, row in df_merged.iterrows():
         team_name = str(row['HOLD'])
@@ -66,38 +61,36 @@ def draw_position_performance_chart(df_merged, metric, label):
                 source=logo_url, xref="x", yref="y",
                 x=row['#'], y=row[metric],
                 sizex=0.5, 
-                sizey=y_span * 0.3, 
+                sizey=y_span * 0.35, # Giver logoet en god størrelse relativt til spændet
                 xanchor="center", 
-                yanchor="middle"
+                # Ankerpunktet skifter afhængigt af om aksen er vendt for at undgå overlap med x-aksen
+                yanchor="bottom" if not is_ppda else "top"
             ))
 
-    # Scatter-lag til hover
+    # Scatter-lag til hover (usynligt)
     fig.add_trace(go.Scatter(
         x=df_merged['#'], y=df_merged[metric],
         mode='markers', 
-        marker=dict(size=40, opacity=0), 
+        marker=dict(size=45, opacity=0), 
         hovertext=df_merged['HOLD'],
         hovertemplate="<b>%{hovertext}</b><br>Placering: %{x}<br>"+label+": %{y:.2f}<extra></extra>"
     ))
 
-    # Skal aksen vendes? (Lav PPDA er bedre = højere placering på grafen)
-    is_ppda = "PPDA" in label.upper()
-
     fig.update_layout(
         height=600, 
-        margin=dict(t=50, b=80, l=60, r=40),
+        margin=dict(t=30, b=60, l=60, r=40),
         xaxis=dict(
             title="<b>Tabelplacering</b>", 
             tickmode='linear', 
             range=[0.4, 12.6],
             gridcolor="#f0f0f0",
-            linecolor='black'
+            linecolor='black',
+            zeroline=False
         ),
         yaxis=dict(
-            title=f"<b>{label} {'(Omvendt)' if is_ppda else ''}</b>", 
+            title=f"<b>{label}</b>", 
             gridcolor="#f0f0f0",
-            range=[y_range_min, y_range_max],
-            autorange="reversed" if is_ppda else True, # VENDER AKSEN FOR PPDA
+            autorange="reversed" if is_ppda else True,
             zeroline=False,
             linecolor='black'
         ),
@@ -105,7 +98,7 @@ def draw_position_performance_chart(df_merged, metric, label):
     )
     st.plotly_chart(fig, use_container_width=True)
 
-# --- HOVEDFUNKTION (Radio-buttons fjernet) ---
+# --- 3. HOVEDFUNKTION ---
 
 def vis_side():
     df_opta, df_wy = load_data()
@@ -132,7 +125,7 @@ def vis_side():
     df_liga = pd.DataFrame(stats.values()).sort_values(['P', 'MD'], ascending=False).reset_index(drop=True)
     df_liga['#'] = df_liga.index + 1
 
-    # Merge performance
+    # Merge performance data
     performance_list = []
     for _, row in df_liga.iterrows():
         name = row['HOLD'].lower()
@@ -144,13 +137,24 @@ def vis_side():
 
     df_final = pd.concat([df_liga.reset_index(drop=True), pd.DataFrame(performance_list).reset_index(drop=True)], axis=1)
 
-    # UI setup
-    st.caption("NordicBet Liga: Tabel vs. Performance")
+    # --- TOPBAR: CAPTION OG DROPDOWN ---
+    col1, col2 = st.columns([3, 1])
     
-    metric_map = {"xG": "XG", "Mål": "GOALS", "Skud": "SHOTS", "Pres (PPDA)": "PPDA", "Afleveringer": "PASSES"}
-    sel_metric = st.selectbox("Vælg Y-akse (Performance)", list(metric_map.keys()))
+    with col1:
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.caption("NordicBet Liga: Tabelplacering vs. Underliggende Performance (2025/2026)")
     
-    # Vi tegner nu altid for hele ligaen (12 hold) uden radio-buttons
+    with col2:
+        metric_map = {
+            "xG (Expected Goals)": "XG", 
+            "Mål": "GOALS", 
+            "Skud": "SHOTS", 
+            "Pres (PPDA)": "PPDA", 
+            "Afleveringer": "PASSES"
+        }
+        sel_metric = st.selectbox("", list(metric_map.keys()), label_visibility="collapsed")
+    
+    # Tegn grafen
     draw_position_performance_chart(df_final, metric_map[sel_metric], sel_metric)
 
 if __name__ == "__main__":
