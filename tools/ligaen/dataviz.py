@@ -5,166 +5,116 @@ import plotly.graph_objects as go
 from data.utils.team_mapping import TEAMS, TEAM_COLORS
 from data.data_load import _get_snowflake_conn
 
-# --- 1. HJÆLPEFUNKTIONER ---
-
-def get_logo_url(opta_uuid):
-    return next((info['logo'] for name, info in TEAMS.items() if info.get('opta_uuid') == opta_uuid), "")
-
-def get_logo_html(uuid):
-    url = get_logo_url(uuid)
-    return f'<img src="{url}" width="20">' if url else ""
-
-def style_form(f):
-    if not f: return ""
-    res = ""
-    for char in f[-5:]:
-        color = "#28a745" if char == 'V' else "#dc3545" if char == 'T' else "#ffc107"
-        res += f'<span style="color:{color}; font-weight:bold; margin-right:3px;">{char}</span>'
-    return res
-
-# --- 2. DATA LOADING (OPDATERET TIL AT HÅNDTERE SPLIT) ---
+# --- 1. DATA LOADING (DIN SPECIFIKKE SQL) ---
 
 @st.cache_data(ttl=3600)
-def load_liga_data():
+def get_hvidovre_performance():
     conn = _get_snowflake_conn()
     db = "KLUB_HVIDOVREIF.AXIS"
-    # Henter alle kampe for sæsonen
+    # Din query optimeret til Snowflake i Streamlit
     query = f"""
-        SELECT *, 
-        CASE 
-            WHEN ROUND <= 22 THEN 'Grundspil'
-            ELSE 'Slutspil'
-        END as PHASE
-        FROM {db}.OPTA_MATCHINFO 
-        WHERE TOURNAMENTCALENDAR_OPTAUUID = 'dyjr458hcmrcy87fsabfsy87o'
-        ORDER BY ROUND ASC, MATCH_DATE_FULL ASC
-    """
-    return conn.query(query)
-
-@st.cache_data(ttl=3600)
-def get_wyscout_stats():
-    conn = _get_snowflake_conn()
-    db = "KLUB_HVIDOVREIF.AXIS"
-    # Vi sikrer os at vi henter data for den nuværende NordicBet Liga sæson
-    query = f"""
-        SELECT t.TEAMNAME, 
-               AVG(adv.XG) as XG, AVG(adv.SHOTS) as SHOTS, AVG(adv.GOALS) as GOALS, 
-               AVG(md.INTERCEPTIONS) as INTERCEPTIONS, AVG(md.PPDA) as PPDA, 
-               AVG(mp.PASSES) as PASSES, AVG(mp.MATCHTEMPO) as MATCHTEMPO
-        FROM {db}.WYSCOUT_TEAMMATCHES tm 
-        JOIN {db}.WYSCOUT_TEAMS t ON tm.TEAM_WYID = t.TEAM_WYID 
-        LEFT JOIN {db}.WYSCOUT_MATCHADVANCEDSTATS_GENERAL adv ON tm.MATCH_WYID = adv.MATCH_WYID AND tm.TEAM_WYID = adv.TEAM_WYID 
-        LEFT JOIN {db}.WYSCOUT_MATCHADVANCEDSTATS_DEFENCE md ON tm.MATCH_WYID = md.MATCH_WYID AND tm.TEAM_WYID = md.TEAM_WYID 
-        LEFT JOIN {db}.WYSCOUT_MATCHADVANCEDSTATS_PASSES mp ON tm.MATCH_WYID = mp.MATCH_WYID AND tm.TEAM_WYID = mp.TEAM_WYID 
+        SELECT 
+            m.MATCHLABEL, tm.SEASON_WYID, tm.TEAM_WYID, tm.MATCH_WYID, 
+            tm.DATE, tm.STATUS, tm.COMPETITION_WYID, tm.GAMEWEEK,
+            c.COMPETITIONNAME AS COMPETITION_NAME, 
+            adv.XG, adv.GOALS, adv.SHOTS, adv.XGPERSHOT
+        FROM {db}.WYSCOUT_TEAMMATCHES tm
+        LEFT JOIN {db}.WYSCOUT_MATCHADVANCEDSTATS_GENERAL adv 
+            ON tm.MATCH_WYID = adv.MATCH_WYID AND tm.TEAM_WYID = adv.TEAM_WYID
+        JOIN {db}.WYSCOUT_MATCHES m ON tm.MATCH_WYID = m.MATCH_WYID
+        JOIN {db}.WYSCOUT_SEASONS s ON m.SEASON_WYID = s.SEASON_WYID
+        JOIN {db}.WYSCOUT_COMPETITIONS c ON tm.COMPETITION_WYID = c.COMPETITION_WYID
         WHERE tm.COMPETITION_WYID = 328
-        GROUP BY t.TEAMNAME
+            AND s.SEASONNAME = '2025/2026'
+        ORDER BY tm.GAMEWEEK ASC
     """
     return conn.query(query)
 
-# --- 3. CHART FUNKTION ---
+# --- 2. LOGO POSITION CHART FUNKTION ---
 
-def draw_logo_position_chart(df_wy, metric, label, chart_key):
-    m_upper = metric.upper()
-    df_plot = df_wy.dropna(subset=[m_upper]).copy()
-    df_plot = df_plot.sort_values(m_upper).reset_index()
+def draw_gameweek_performance_chart(df, metric, label):
+    """
+    Viser holdenes præstation på x-aksen. 
+    Bruger gennemsnit for de runder der er spillet indtil nu (1-22).
+    """
+    # Gruppér per hold for at få gennemsnitlig præstation i grundspillet
+    df_agg = df[df['GAMEWEEK'] <= 22].groupby('TEAM_WYID').agg({
+        metric: 'mean',
+        'MATCHLABEL': 'last' # Bruges bare til at finde holdnavne via mapping
+    }).reset_index()
+    
+    df_agg = df_agg.sort_values(metric).reset_index()
     
     fig = go.Figure()
-    y_values = np.linspace(0.2, 0.8, len(df_plot))
+    y_values = np.linspace(0.2, 0.8, len(df_agg))
 
-    for i, row in df_plot.iterrows():
-        team_name = row['TEAMNAME']
-        logo_url = next((info['logo'] for t_name, info in TEAMS.items() if t_name.lower() in team_name.lower()), "")
+    for i, row in df_agg.iterrows():
+        # Find logo og info via TEAM_WYID
+        team_id = int(row['TEAM_WYID'])
+        team_info = next((info for name, info in TEAMS.items() if info.get('wyid') == team_id), {})
+        logo_url = team_info.get('logo', "")
         
         if logo_url:
             fig.add_layout_image(dict(
                 source=logo_url, xref="x", yref="y",
-                x=row[m_upper], y=y_values[i],
-                sizex=0.08 * (df_plot[m_upper].max() - df_plot[m_upper].min() if len(df_plot) > 1 else 1), 
-                sizey=0.18, xanchor="center", yanchor="middle"
+                x=row[metric], y=y_values[i],
+                sizex=0.07 * (df_agg[metric].max() - df_agg[metric].min() if len(df_agg) > 1 else 1), 
+                sizey=0.2, xanchor="center", yanchor="middle"
             ))
 
     fig.add_trace(go.Scatter(
-        x=df_plot[m_upper], y=y_values, mode='markers',
-        marker=dict(size=20, opacity=0),
-        hovertext=df_plot['TEAMNAME'],
-        hovertemplate="<b>%{hovertext}</b><br>Værdi: %{x:.2f}<extra></extra>"
+        x=df_agg[metric], y=y_values, mode='markers',
+        marker=dict(size=25, opacity=0),
+        hovertext=[next((name for name, info in TEAMS.items() if info.get('wyid') == int(tid)), "Ukendt") for tid in df_agg['TEAM_WYID']],
+        hovertemplate="<b>%{hovertext}</b><br>Snit (Runde 1-22): %{x:.2f}<extra></extra>"
     ))
 
     fig.update_layout(
-        height=180, margin=dict(t=30, b=30, l=10, r=10),
-        xaxis=dict(showgrid=True, gridcolor="#eee", title=label),
+        height=250, margin=dict(t=40, b=40, l=10, r=10),
+        xaxis=dict(showgrid=True, gridcolor="#eee", title=f"Gennemsnitlig {label} (Grundspil)"),
         yaxis=dict(showticklabels=False, showgrid=False, range=[0, 1]),
         plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)'
     )
-    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False}, key=chart_key)
+    st.plotly_chart(fig, use_container_width=True)
 
-# --- 4. HOVEDFUNKTION ---
+# --- 3. HOVEDFUNKTION ---
 
-def vis_side(dp_unused=None):
-    df_opta = load_liga_data()
-    df_wy = get_wyscout_stats()
-
-    if df_opta is None or df_opta.empty:
-        st.warning("Ingen kampdata fundet."); return
-
-    df_opta.columns = [c.upper() for c in df_opta.columns]
+def vis_side():
+    st.title("Hvidovre IF - Grundspils Performance")
     
-    # --- BEREGN TABEL (MED HENSYN TIL GRUNDSPIL/SLUTSPIL) ---
-    stats = {}
-    for _, row in df_opta.sort_values('ROUND').iterrows():
-        status = str(row.get('MATCH_STATUS', '')).lower()
-        if any(x in status for x in ['played', 'full', 'finish']):
-            h_uuid, a_uuid = row['CONTESTANTHOME_OPTAUUID'], row['CONTESTANTAWAY_OPTAUUID']
-            for uuid, name in [(h_uuid, row['CONTESTANTHOME_NAME']), (a_uuid, row['CONTESTANTAWAY_NAME'])]:
-                if uuid not in stats:
-                    stats[uuid] = {'HOLD': name, 'P': 0, 'MD': 0, 'K': 0, 'FORM': "", 'UUID': uuid}
-            
-            h_g, a_g = int(row['TOTAL_HOME_SCORE']), int(row['TOTAL_AWAY_SCORE'])
-            stats[h_uuid]['K'] += 1; stats[a_uuid]['K'] += 1
-            stats[h_uuid]['MD'] += (h_g - a_g); stats[a_uuid]['MD'] += (a_g - h_g)
-            
-            if h_g > a_g:
-                stats[h_uuid]['P'] += 3; stats[h_uuid]['FORM'] += 'V'; stats[a_uuid]['FORM'] += 'T'
-            elif a_g > h_g:
-                stats[a_uuid]['P'] += 3; stats[a_uuid]['FORM'] += 'V'; stats[h_uuid]['FORM'] += 'T'
-            else:
-                stats[h_uuid]['P'] += 1; stats[a_uuid]['P'] += 1; stats[h_uuid]['FORM'] += 'U'; stats[a_uuid]['FORM'] += 'U'
-
-    df_liga = pd.DataFrame(stats.values()).sort_values(['P', 'MD'], ascending=False).reset_index(drop=True)
+    df_perf = get_hvidovre_performance()
     
-    # Del op i opryknings- og nedrykningsspil (Top 6 / Bund 6)
-    opryk = df_liga.head(6).copy()
-    nedryk = df_liga.tail(6).copy()
+    if df_perf is None or df_perf.empty:
+        st.error("Kunne ikke hente data. Tjek din SQL-forbindelse.")
+        return
 
-    # --- UI ---
-    st.title("NordicBet Liga Performance")
-    
-    t_pos, t_tabel = st.tabs(["Position Performance", "Ligatabel (Split)"])
+    # Tabs til at skifte visning
+    t1, t2 = st.tabs(["Logo Positioner (1-22)", "Runde-for-runde"])
 
-    with t_pos:
-        cat = st.selectbox("Vælg Metric", ["Offensivt", "Defensivt", "Spilopbygning"])
-        if cat == "Offensivt":
-            draw_logo_position_chart(df_wy, 'XG', 'Expected Goals', 'pos_xg')
-            draw_logo_position_chart(df_wy, 'GOALS', 'Mål', 'pos_goals')
-        elif cat == "Defensivt":
-            draw_logo_position_chart(df_wy, 'PPDA', 'PPDA (Pres)', 'pos_ppda')
-            draw_logo_position_chart(df_wy, 'INTERCEPTIONS', 'Erobringer', 'pos_int')
-        else:
-            draw_logo_position_chart(df_wy, 'PASSES', 'Afleveringer', 'pos_pass')
-            draw_logo_position_chart(df_wy, 'MATCHTEMPO', 'Tempo', 'pos_tempo')
+    with t1:
+        st.info("Placering af alle hold baseret på gennemsnit i de første 22 runder.")
+        metric_choice = st.selectbox("Vælg Metric", ["XG", "GOALS", "SHOTS"])
+        draw_gameweek_performance_chart(df_perf, metric_choice, metric_choice)
 
-    with t_tabel:
-        st.subheader("Oprykningsspil (Top 6)")
-        opryk.insert(1, ' ', [get_logo_html(u) for u in opryk['UUID']])
-        opryk['FORM'] = opryk['FORM'].apply(style_form)
-        st.write(opryk[['HOLD', ' ', 'K', 'MD', 'P', 'FORM']].to_html(escape=False, index=False, border=0, classes='league-table'), unsafe_allow_html=True)
+    with t2:
+        # Linjediagram for Hvidovre specifikt gennem runderne
+        hif_df = df_perf[df_perf['TEAM_WYID'] == 7490].copy()
         
-        st.markdown("---")
+        fig_line = go.Figure()
+        fig_line.add_trace(go.Scatter(
+            x=hif_df['GAMEWEEK'], y=hif_df['XG'],
+            mode='lines+markers',
+            name='xG',
+            line=dict(color='#df003b', width=3)
+        ))
         
-        st.subheader("Nedrykningsspil (Bund 6)")
-        nedryk.insert(1, ' ', [get_logo_html(u) for u in nedryk['UUID']])
-        nedryk['FORM'] = nedryk['FORM'].apply(style_form)
-        st.write(nedryk[['HOLD', ' ', 'K', 'MD', 'P', 'FORM']].to_html(escape=False, index=False, border=0, classes='league-table'), unsafe_allow_html=True)
+        fig_line.update_layout(
+            title="Hvidovre xG udvikling (Runde 1-22)",
+            xaxis=dict(title="Gameweek", tickmode='linear', range=[1, 22]),
+            yaxis=dict(title="xG Værdi"),
+            plot_bgcolor='white'
+        )
+        st.plotly_chart(fig_line, use_container_width=True)
 
 if __name__ == "__main__":
     vis_side()
