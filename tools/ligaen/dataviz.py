@@ -131,7 +131,7 @@ def draw_position_performance_chart(df_merged, metric, label):
 
     fig.update_layout(
         height=600, margin=dict(t=30, b=60, l=60, r=40),
-        xaxis=dict(title="<b>Tabelplacering (Slutspil opdelt)</b>", tickmode='linear', range=[0.4, 12.6], gridcolor="#f0f0f0", linecolor='black'),
+        xaxis=dict(title="<b>Placering</b>", tickmode='linear', range=[0.4, 12.6], gridcolor="#f0f0f0", linecolor='black'),
         yaxis=dict(title=f"<b>{label}</b>", gridcolor="#f0f0f0", autorange="reversed" if is_ppda else True, linecolor='black'),
         plot_bgcolor='white'
     )
@@ -180,12 +180,12 @@ def vis_side():
     col1, col2 = st.columns([2.5, 1.5])
     with col1:
         st.markdown("<br>", unsafe_allow_html=True)
-        st.caption("NordicBet Liga: Placering vs. Performance & Fysisk Data")
+        st.caption("Betinia Ligaen: Placering vs. Performance")
     with col2:
         metric_map = {
-            "xG (Wyscout)": "XG", "Mål": "GOALS", "Skud": "SHOTS", 
-            "Afleveringer": "PASSES", "Pres (PPDA)": "PPDA", 
-            "Distance (km) (SS)": "DIST", "High Speed Running (m) (SS)": "HSR"
+            "xG": "XG", "Mål": "GOALS", "Skud": "SHOTS", 
+            "Afleveringer": "PASSES", "PPDA": "PPDA", 
+            "Distance": "DIST", "High Speed Running": "HSR"
         }
         sel_metric = st.selectbox("", list(metric_map.keys()), label_visibility="collapsed")
     
