@@ -5,116 +5,129 @@ import plotly.graph_objects as go
 from data.utils.team_mapping import TEAMS, TEAM_COLORS
 from data.data_load import _get_snowflake_conn
 
-# --- 1. DATA LOADING (DIN SPECIFIKKE SQL) ---
+# --- 1. DATA LOADING & TABEL-BEREGNING ---
 
 @st.cache_data(ttl=3600)
-def get_hvidovre_performance():
+def get_league_data():
     conn = _get_snowflake_conn()
     db = "KLUB_HVIDOVREIF.AXIS"
-    # Din query optimeret til Snowflake i Streamlit
+    
+    # Hent både kampresultater (til tabel) og advanced stats (til performance)
+    # Vi fokuserer på Grundspillet (Runde 1-22)
     query = f"""
         SELECT 
-            m.MATCHLABEL, tm.SEASON_WYID, tm.TEAM_WYID, tm.MATCH_WYID, 
-            tm.DATE, tm.STATUS, tm.COMPETITION_WYID, tm.GAMEWEEK,
-            c.COMPETITIONNAME AS COMPETITION_NAME, 
-            adv.XG, adv.GOALS, adv.SHOTS, adv.XGPERSHOT
+            tm.TEAM_WYID, tm.GAMEWEEK,
+            m.MATCHLABEL,
+            adv.XG, adv.GOALS, adv.SHOTS,
+            -- Beregn point direkte i SQL eller i Pandas efterfølgende
+            CASE 
+                WHEN (tm.TEAM_WYID = m.WINNERID) THEN 3
+                WHEN (m.WINNERID = 0) THEN 1
+                ELSE 0
+            END as POINTS,
+            (adv.GOALS - adv.GOALSAGAINST) as GD
         FROM {db}.WYSCOUT_TEAMMATCHES tm
+        JOIN {db}.WYSCOUT_MATCHES m ON tm.MATCH_WYID = m.MATCH_WYID
         LEFT JOIN {db}.WYSCOUT_MATCHADVANCEDSTATS_GENERAL adv 
             ON tm.MATCH_WYID = adv.MATCH_WYID AND tm.TEAM_WYID = adv.TEAM_WYID
-        JOIN {db}.WYSCOUT_MATCHES m ON tm.MATCH_WYID = m.MATCH_WYID
-        JOIN {db}.WYSCOUT_SEASONS s ON m.SEASON_WYID = s.SEASON_WYID
-        JOIN {db}.WYSCOUT_COMPETITIONS c ON tm.COMPETITION_WYID = c.COMPETITION_WYID
         WHERE tm.COMPETITION_WYID = 328
-            AND s.SEASONNAME = '2025/2026'
-        ORDER BY tm.GAMEWEEK ASC
+          AND tm.GAMEWEEK <= 22
+          AND m.SEASON_WYID = (SELECT SEASON_WYID FROM {db}.WYSCOUT_SEASONS WHERE SEASONNAME = '2025/2026' LIMIT 1)
     """
-    return conn.query(query)
-
-# --- 2. LOGO POSITION CHART FUNKTION ---
-
-def draw_gameweek_performance_chart(df, metric, label):
-    """
-    Viser holdenes præstation på x-aksen. 
-    Bruger gennemsnit for de runder der er spillet indtil nu (1-22).
-    """
-    # Gruppér per hold for at få gennemsnitlig præstation i grundspillet
-    df_agg = df[df['GAMEWEEK'] <= 22].groupby('TEAM_WYID').agg({
-        metric: 'mean',
-        'MATCHLABEL': 'last' # Bruges bare til at finde holdnavne via mapping
-    }).reset_index()
+    df = conn.query(query)
     
-    df_agg = df_agg.sort_values(metric).reset_index()
+    # 1. Beregn Tabellen (X-akse position)
+    tabel = df.groupby('TEAM_WYID').agg({
+        'POINTS': 'sum',
+        'GD': 'sum',
+        'XG': 'mean',
+        'GOALS': 'mean',
+        'SHOTS': 'mean'
+    }).sort_values(['POINTS', 'GD'], ascending=False).reset_index()
     
+    # Tilføj 'RANK' (1 til 12)
+    tabel['RANK'] = tabel.index + 1
+    
+    return tabel
+
+# --- 2. POSITION VIZ FUNKTION ---
+
+def draw_rank_performance_plot(df, metric_col, label):
+    """
+    X-akse: Tabelplacering (1-12)
+    Y-akse: Performance Metric
+    """
     fig = go.Figure()
-    y_values = np.linspace(0.2, 0.8, len(df_agg))
 
-    for i, row in df_agg.iterrows():
-        # Find logo og info via TEAM_WYID
+    # Tilføj logoer
+    for i, row in df.iterrows():
         team_id = int(row['TEAM_WYID'])
         team_info = next((info for name, info in TEAMS.items() if info.get('wyid') == team_id), {})
         logo_url = team_info.get('logo', "")
         
         if logo_url:
-            fig.add_layout_image(dict(
-                source=logo_url, xref="x", yref="y",
-                x=row[metric], y=y_values[i],
-                sizex=0.07 * (df_agg[metric].max() - df_agg[metric].min() if len(df_agg) > 1 else 1), 
-                sizey=0.2, xanchor="center", yanchor="middle"
-            ))
+            fig.add_layout_image(
+                dict(
+                    source=logo_url,
+                    xref="x", yref="y",
+                    x=row['RANK'], y=row[metric_col],
+                    sizex=0.6, sizey=row[metric_col] * 0.1, # Skaleres efter y-værdi
+                    xanchor="center", yanchor="middle"
+                )
+            )
 
+    # Usynlige punkter for interaktivitet
     fig.add_trace(go.Scatter(
-        x=df_agg[metric], y=y_values, mode='markers',
+        x=df['RANK'],
+        y=df[metric_col],
+        mode='markers',
         marker=dict(size=25, opacity=0),
-        hovertext=[next((name for name, info in TEAMS.items() if info.get('wyid') == int(tid)), "Ukendt") for tid in df_agg['TEAM_WYID']],
-        hovertemplate="<b>%{hovertext}</b><br>Snit (Runde 1-22): %{x:.2f}<extra></extra>"
+        hovertext=[next((name for name, info in TEAMS.items() if info.get('wyid') == int(tid)), "Ukendt") for tid in df['TEAM_WYID']],
+        hovertemplate="<b>%{hovertext}</b><br>Placering: %{x}<br>Værdi: %{y:.2f}<extra></extra>"
     ))
 
     fig.update_layout(
-        height=250, margin=dict(t=40, b=40, l=10, r=10),
-        xaxis=dict(showgrid=True, gridcolor="#eee", title=f"Gennemsnitlig {label} (Grundspil)"),
-        yaxis=dict(showticklabels=False, showgrid=False, range=[0, 1]),
-        plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)'
+        title=f"Tabelplacering vs. {label}",
+        xaxis=dict(
+            title="Tabelplacering (1 = Top)",
+            tickmode='linear',
+            range=[0.5, 12.5],
+            autorange="reversed", # Valgfrit: Vend aksen så 1 er til højre, eller behold 1 til venstre
+            gridcolor="#eee"
+        ),
+        yaxis=dict(title=label, gridcolor="#eee"),
+        height=500,
+        plot_bgcolor='white'
     )
+    
     st.plotly_chart(fig, use_container_width=True)
 
-# --- 3. HOVEDFUNKTION ---
+# --- 3. EXECUTION ---
 
 def vis_side():
-    st.title("Hvidovre IF - Grundspils Performance")
+    st.subheader("Performance vs. Tabelplacering (Runde 1-22)")
     
-    df_perf = get_hvidovre_performance()
+    df_liga = get_league_data()
     
-    if df_perf is None or df_perf.empty:
-        st.error("Kunne ikke hente data. Tjek din SQL-forbindelse.")
+    if df_liga.empty:
+        st.error("Ingen data fundet.")
         return
 
-    # Tabs til at skifte visning
-    t1, t2 = st.tabs(["Logo Positioner (1-22)", "Runde-for-runde"])
-
-    with t1:
-        st.info("Placering af alle hold baseret på gennemsnit i de første 22 runder.")
-        metric_choice = st.selectbox("Vælg Metric", ["XG", "GOALS", "SHOTS"])
-        draw_gameweek_performance_chart(df_perf, metric_choice, metric_choice)
-
-    with t2:
-        # Linjediagram for Hvidovre specifikt gennem runderne
-        hif_df = df_perf[df_perf['TEAM_WYID'] == 7490].copy()
-        
-        fig_line = go.Figure()
-        fig_line.add_trace(go.Scatter(
-            x=hif_df['GAMEWEEK'], y=hif_df['XG'],
-            mode='lines+markers',
-            name='xG',
-            line=dict(color='#df003b', width=3)
-        ))
-        
-        fig_line.update_layout(
-            title="Hvidovre xG udvikling (Runde 1-22)",
-            xaxis=dict(title="Gameweek", tickmode='linear', range=[1, 22]),
-            yaxis=dict(title="xG Værdi"),
-            plot_bgcolor='white'
-        )
-        st.plotly_chart(fig_line, use_container_width=True)
+    # Dropdown til Y-aksen
+    metrics = {
+        'Expected Goals (Avg)': 'XG',
+        'Mål (Avg)': 'GOALS',
+        'Skud (Avg)': 'SHOTS'
+    }
+    
+    selected_label = st.selectbox("Vælg performance parameter (Y-akse)", list(metrics.keys()))
+    selected_metric = metrics[selected_label]
+    
+    draw_rank_performance_plot(df_liga, selected_metric, selected_label)
+    
+    # Vis rå tabel underneden for reference
+    with st.expander("Se Tabel-data"):
+        st.dataframe(df_liga[['RANK', 'TEAM_WYID', 'POINTS', 'GD', 'XG']].rename(columns={'TEAM_WYID': 'ID'}))
 
 if __name__ == "__main__":
     vis_side()
