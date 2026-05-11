@@ -16,7 +16,7 @@ def load_setpiece_data_v2():
     conn = _get_snowflake_conn()
     match_sql = f"SELECT DISTINCT MATCH_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'"
     
-    # Vi tilføjer EVENT_ID og MATCH_ID for at kunne tjekke for efterfølgende afslutninger
+    # Rettet SQL: Vi bruger EVENT_OPTAID (Optas sekventielle ID) til at finde næste hændelse
     sql = f"""
         WITH END_COORDS AS (
             SELECT EVENT_OPTAUUID, 
@@ -25,25 +25,28 @@ def load_setpiece_data_v2():
             FROM {DB}.OPTA_QUALIFIERS WHERE QUALIFIER_QID IN (140, 141) GROUP BY 1
         ),
         SHOTS AS (
-            SELECT MATCH_OPTAUUID, EVENT_ID, PLAYER_OPTAUUID 
+            SELECT MATCH_OPTAUUID, EVENT_OPTAID 
             FROM {DB}.OPTA_EVENTS WHERE EVENT_TYPEID IN (13, 14, 15, 16)
         )
         SELECT 
-            e.EVENT_OPTAUUID, e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, e.EVENT_ID,
+            e.EVENT_OPTAUUID, e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, e.EVENT_OPTAID,
             e.EVENT_CONTESTANT_OPTAUUID, e.MATCH_OPTAUUID,
             ec.ENDX, ec.ENDY, q.QUALIFIER_QID,
             TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME) as PLAYER_NAME,
-            CASE WHEN s.EVENT_ID IS NOT NULL THEN 1 ELSE 0 END as LEADS_TO_SHOT
+            CASE WHEN s.EVENT_OPTAID IS NOT NULL THEN 1 ELSE 0 END as LEADS_TO_SHOT
         FROM {DB}.OPTA_EVENTS e
         JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
         LEFT JOIN END_COORDS ec ON e.EVENT_OPTAUUID = ec.EVENT_OPTAUUID
         LEFT JOIN {DB}.OPTA_PLAYERS p ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
-        LEFT JOIN SHOTS s ON e.MATCH_OPTAUUID = s.MATCH_OPTAUUID AND s.EVENT_ID = e.EVENT_ID + 1
+        -- Vi joiner på den næste hændelse (ID + 1) i samme kamp
+        LEFT JOIN SHOTS s ON e.MATCH_OPTAUUID = s.MATCH_OPTAUUID AND s.EVENT_OPTAID = e.EVENT_OPTAID + 1
         WHERE q.QUALIFIER_QID IN (2, 5, 107, 124)
         AND e.MATCH_OPTAUUID IN ({match_sql})
     """
     df = conn.query(sql)
     df.columns = [c.upper() for c in df.columns]
+    
+    # Konverter til numerisk for beregninger
     for col in ['EVENT_X', 'EVENT_Y', 'ENDX', 'ENDY']:
         df[col] = pd.to_numeric(df[col], errors='coerce')
     
