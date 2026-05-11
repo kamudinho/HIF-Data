@@ -76,7 +76,7 @@ def draw_position_performance_chart(df_merged, metric, label):
 
     fig.update_layout(
         height=600, margin=dict(t=30, b=60, l=60, r=40),
-        xaxis=dict(title="<b>Tabelplacering</b>", tickmode='linear', range=[0.4, 12.6], gridcolor="#f0f0f0", linecolor='black'),
+        xaxis=dict(title="<b>Placering</b>", tickmode='linear', range=[0.4, 12.6], gridcolor="#f0f0f0", linecolor='black'),
         yaxis=dict(title=f"<b>{label}</b>", gridcolor="#f0f0f0", autorange="reversed" if is_ppda else True, linecolor='black'),
         plot_bgcolor='white'
     )
@@ -143,7 +143,7 @@ def vis_side():
     col1, col2 = st.columns([3, 1])
     with col1:
         st.markdown("<br>", unsafe_allow_html=True)
-        st.caption("NordicBet Liga: Tabelplacering (Opta) vs. Performance (Wyscout)")
+        st.caption("Betinia Ligaen: Placering vs. Performance")
     with col2:
         metric_map = {"xG": "XG", "Mål": "GOALS", "Skud": "SHOTS", "Pres (PPDA)": "PPDA", "Afleveringer": "PASSES"}
         sel_metric = st.selectbox("", list(metric_map.keys()), label_visibility="collapsed")
