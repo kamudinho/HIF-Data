@@ -42,15 +42,18 @@ def draw_position_performance_chart(df_merged, metric, label):
 
     fig = go.Figure()
 
-    # 1. Find det reelle spænd i data
+    # 1. Konverter til float for at undgå Decimal-fejl og find spænd
+    # Vi sikrer os at alle tal er float her:
+    df_merged[metric] = df_merged[metric].apply(lambda x: float(x) if x is not None else np.nan)
+    
     y_vals = df_merged[metric].dropna()
     if y_vals.empty: return
     
     y_min, y_max = y_vals.min(), y_vals.max()
     y_span = y_max - y_min if y_max != y_min else 1
-
-    # 2. Definer en buffer til top og bund (20% af spændet)
-    y_buffer = y_span * 0.2
+    
+    # Dynamisk buffer
+    y_buffer = y_span * 0.25
     y_range_min = y_min - y_buffer
     y_range_max = y_max + y_buffer
 
@@ -63,12 +66,12 @@ def draw_position_performance_chart(df_merged, metric, label):
                 source=logo_url, xref="x", yref="y",
                 x=row['#'], y=row[metric],
                 sizex=0.5, 
-                sizey=y_span * 0.25, # Justeret logo-størrelse
+                sizey=y_span * 0.3, 
                 xanchor="center", 
-                yanchor="bottom" # SKIFTET FRA MIDDLE TIL BOTTOM: Logoet står nu ovenpå punktet
+                yanchor="middle"
             ))
 
-    # 3. Usynlige punkter til hover
+    # Scatter-lag til hover
     fig.add_trace(go.Scatter(
         x=df_merged['#'], y=df_merged[metric],
         mode='markers', 
@@ -77,7 +80,9 @@ def draw_position_performance_chart(df_merged, metric, label):
         hovertemplate="<b>%{hovertext}</b><br>Placering: %{x}<br>"+label+": %{y:.2f}<extra></extra>"
     ))
 
-    # 4. Layout: Her tvinger vi faste rammer
+    # Skal aksen vendes? (Lav PPDA er bedre = højere placering på grafen)
+    is_ppda = "PPDA" in label.upper()
+
     fig.update_layout(
         height=600, 
         margin=dict(t=50, b=80, l=60, r=40),
@@ -86,18 +91,14 @@ def draw_position_performance_chart(df_merged, metric, label):
             tickmode='linear', 
             range=[0.4, 12.6],
             gridcolor="#f0f0f0",
-            showline=True,
-            linewidth=1,
             linecolor='black'
         ),
         yaxis=dict(
-            title=f"<b>{label}</b>", 
+            title=f"<b>{label} {'(Omvendt)' if is_ppda else ''}</b>", 
             gridcolor="#f0f0f0",
-            # Vi tvinger aksen til at bruge vores beregnede range uden at autoscale til 0
             range=[y_range_min, y_range_max],
+            autorange="reversed" if is_ppda else True, # VENDER AKSEN FOR PPDA
             zeroline=False,
-            showline=True,
-            linewidth=1,
             linecolor='black'
         ),
         plot_bgcolor='white'
