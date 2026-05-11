@@ -107,9 +107,7 @@ def draw_position_performance_chart(df_merged, metric, label):
     y_span = y_vals.max() - y_vals.min() if y_vals.max() != y_vals.min() else 1
     is_ppda = "PPDA" in label.upper()
 
-    # Tilføj en vertikal linje der markerer split mellem Top 6 og Bund 6
-    fig.add_vline(x=6.5, line_width=2, line_dash="dash", line_color="gray", annotation_text="SPLIT")
-
+   
     for _, row in df_merged.iterrows():
         if pd.notnull(row[metric]) and row.get('LOGO_URL'):
             b64_logo = get_base64_image(row['LOGO_URL'])
