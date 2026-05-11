@@ -11,12 +11,14 @@ from data.data_load import _get_snowflake_conn
 
 @st.cache_data(ttl=86400)
 def get_base64_image(url):
+    """Konverterer logo-URL til Base64 for at sikre eksport af billeder."""
     try:
         response = requests.get(url, timeout=5)
         if response.status_code == 200:
             encoded_str = base64.b64encode(response.content).decode("utf-8")
             return f"data:image/png;base64,{encoded_str}"
-    except: return url
+    except:
+        return url
     return url
 
 @st.cache_data(ttl=3600)
@@ -24,10 +26,10 @@ def load_data():
     conn = _get_snowflake_conn()
     db = "KLUB_HVIDOVREIF.AXIS"
     
-    # A. Opta Matchinfo
+    # A. Opta Matchinfo (Tabelgrundlag)
     df_opta = conn.query(f"SELECT * FROM {db}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = 'dyjr458hcmrcy87fsabfsy87o'")
     
-    # B. Wyscout (Performance) - Nu med alle dine oprindelige metrics
+    # B. Wyscout Performance (Performance metrics)
     df_wy = conn.query(f"""
         SELECT 
             tm.TEAM_WYID, 
@@ -47,15 +49,21 @@ def load_data():
         GROUP BY tm.TEAM_WYID
     """)
     
-    # C. Second Spectrum (Fysisk)
+    # C. Second Spectrum (Fysisk - Koblet via Metadata)
     df_ss = conn.query(f"""
+        WITH MATCH_TEAMS AS (
+            SELECT MATCH_SSIID, HOME_OPTAID as TEAM_ID FROM {db}.SECONDSPECTRUM_GAME_METADATA
+            UNION ALL
+            SELECT MATCH_SSIID, AWAY_OPTAID as TEAM_ID FROM {db}.SECONDSPECTRUM_GAME_METADATA
+        )
         SELECT 
-            "optaId" as OPTA_ID, 
-            AVG(DISTANCE) / 1000 as DIST_KM, 
-            AVG("HIGH SPEED RUNNING") as HSR
-        FROM {db}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
-        WHERE MATCH_DATE BETWEEN '2025-07-01' AND '2026-06-30'
-        GROUP BY "optaId"
+            m.TEAM_ID,
+            AVG(ps.DISTANCE) / 1000 as DIST_KM,
+            AVG(ps."HIGH SPEED RUNNING") as HSR
+        FROM {db}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS ps
+        JOIN MATCH_TEAMS m ON ps.MATCH_SSIID = m.MATCH_SSIID
+        WHERE ps.MATCH_DATE >= '2025-07-01'
+        GROUP BY m.TEAM_ID
     """)
     
     return df_opta, df_wy, df_ss
@@ -68,27 +76,33 @@ def draw_position_performance_chart(df_merged, metric, label):
         return
 
     fig = go.Figure()
+
+    # Sikrer korrekt datatyping
     df_merged[metric] = df_merged[metric].apply(lambda x: float(x) if x is not None else np.nan)
-    
     y_vals = df_merged[metric].dropna()
-    if y_vals.empty: return
+    
+    if y_vals.empty:
+        st.info(f"Ingen data fundet for {label}")
+        return
     
     y_min, y_max = y_vals.min(), y_vals.max()
     y_span = y_max - y_min if y_max != y_min else 1
     is_ppda = "PPDA" in label.upper()
 
+    # Tilføj Logoer
     for _, row in df_merged.iterrows():
-        logo_url = row.get('LOGO_URL')
-        if logo_url:
-            b64_logo = get_base64_image(logo_url)
+        if pd.notnull(row[metric]) and row.get('LOGO_URL'):
+            b64_logo = get_base64_image(row['LOGO_URL'])
             fig.add_layout_image(dict(
                 source=b64_logo, xref="x", yref="y",
                 x=row['#'], y=row[metric],
-                sizex=0.5, sizey=y_span * 0.35,
+                sizex=0.5, 
+                sizey=y_span * 0.35,
                 xanchor="center", 
                 yanchor="bottom" if not is_ppda else "top"
             ))
 
+    # Hover-trace
     fig.add_trace(go.Scatter(
         x=df_merged['#'], y=df_merged[metric],
         mode='markers', marker=dict(size=45, opacity=0), 
@@ -97,22 +111,25 @@ def draw_position_performance_chart(df_merged, metric, label):
     ))
 
     fig.update_layout(
-        height=600, margin=dict(t=30, b=60, l=60, r=40),
+        height=650, margin=dict(t=30, b=60, l=60, r=40),
         xaxis=dict(title="<b>Tabelplacering</b>", tickmode='linear', range=[0.4, 12.6], gridcolor="#f0f0f0", linecolor='black'),
         yaxis=dict(title=f"<b>{label}</b>", gridcolor="#f0f0f0", autorange="reversed" if is_ppda else True, linecolor='black'),
         plot_bgcolor='white'
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True, config={'displaylogo': False})
 
 # --- 3. HOVEDFUNKTION ---
 
 def vis_side():
     df_opta, df_wy, df_ss = load_data()
-    if df_opta is None or df_opta.empty: return
+    
+    if df_opta is None or df_opta.empty:
+        st.error("Kunne ikke hente tabeldata.")
+        return
 
     df_opta.columns = [c.upper() for c in df_opta.columns]
 
-    # Beregn Tabel
+    # Beregn Tabelplacering
     stats = {}
     for _, row in df_opta.sort_values('MATCH_DATE_FULL').iterrows():
         status = str(row.get('MATCH_STATUS', '')).lower()
@@ -131,7 +148,7 @@ def vis_side():
     df_liga = df_liga.sort_values(['P', 'MD'], ascending=False).reset_index(drop=True)
     df_liga['#'] = df_liga.index + 1
 
-    # Merge alt data
+    # Merge alt data sammen
     final_data = []
     for _, row in df_liga.iterrows():
         opt_uuid = row['OPTA_UUID']
@@ -139,8 +156,15 @@ def vis_side():
         team_name = next((name for name, info in TEAMS.items() if info.get('opta_uuid') == opt_uuid), "Ukendt")
         
         if team_info:
+            # Match Wyscout
             perf = df_wy[df_wy['TEAM_WYID'] == team_info.get('team_wyid')]
-            fysisk = df_ss[df_ss['OPTA_ID'].astype(str) == str(team_info.get('opta_id'))]
+            
+            # Match Second Spectrum (Solid konvertering til int)
+            try:
+                m_id = int(team_info.get('opta_id'))
+                fysisk = df_ss[df_ss['TEAM_ID'].astype(float).astype(int) == m_id]
+            except:
+                fysisk = pd.DataFrame()
             
             final_data.append({
                 '#': row['#'],
@@ -157,20 +181,20 @@ def vis_side():
 
     df_final = pd.DataFrame(final_data)
 
-    # UI Topbar
+    # UI / Topbar
     col1, col2 = st.columns([2.5, 1.5])
     with col1:
         st.markdown("<br>", unsafe_allow_html=True)
-        st.caption("NordicBet Liga: Tabel vs. Performance & Fysisk")
+        st.caption("NordicBet Liga: Tabelplacering vs. Performance & Fysisk Data")
     with col2:
         metric_map = {
-            "xG (Expected Goals)": "XG",
-            "Mål": "GOALS",
-            "Skud": "SHOTS",
-            "Afleveringer": "PASSES",
+            "xG (Wyscout)": "XG",
+            "Mål (Wyscout)": "GOALS",
+            "Skud (Wyscout)": "SHOTS",
+            "Afleveringer (Wyscout)": "PASSES",
             "Pres (PPDA)": "PPDA", 
-            "Distance (km)": "DIST", 
-            "High Speed Running (m)": "HSR"
+            "Distance (km) (SS)": "DIST", 
+            "High Speed Running (m) (SS)": "HSR"
         }
         sel_metric = st.selectbox("", list(metric_map.keys()), label_visibility="collapsed")
     
