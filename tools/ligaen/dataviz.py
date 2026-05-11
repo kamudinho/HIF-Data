@@ -27,7 +27,7 @@ def load_data():
     # A. Opta Matchinfo
     df_opta = conn.query(f"SELECT * FROM {db}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = 'dyjr458hcmrcy87fsabfsy87o'")
     
-    # B. Wyscout Performance
+    # B. Wyscout Performance (Med aliasser for at undgå ambiguous error)
     df_wy = conn.query(f"""
         SELECT 
             tm.TEAM_WYID, 
@@ -41,7 +41,7 @@ def load_data():
         GROUP BY tm.TEAM_WYID
     """)
     
-    # C. Second Spectrum (Fysisk - Union for hjemme/ude match)
+    # C. Second Spectrum (Fysisk - Koblet via Game Metadata)
     df_ss = conn.query(f"""
         WITH BASE AS (
             SELECT m.HOME_OPTAID as TEAM_ID, ps.DISTANCE, ps."HIGH SPEED RUNNING" as HSR
@@ -61,7 +61,7 @@ def load_data():
     return df_opta, df_wy, df_ss
 
 def calculate_split_table(df_opta):
-    """Beregner tabel med slutspils-logik (Top 6 / Bund 6 split efter runde 22)"""
+    """Beregner tabel med Top 6 / Bund 6 split baseret på runde 22-reglen"""
     def get_points(df):
         stats = {}
         for _, row in df.iterrows():
@@ -77,19 +77,19 @@ def calculate_split_table(df_opta):
 
     df_played = df_opta[df_opta['MATCH_STATUS'].str.contains('Played|Full|Finish', case=False, na=False)].sort_values('MATCH_DATE_FULL')
     
-    # 1. Tabel efter runde 22 (for at finde de to grupper)
-    # Vi antager at hver runde har 6 kampe
-    df_r22 = df_played.head(22 * 6) 
+    # 1. Definer Top 6 og Bund 6 efter 22 runder (132 kampe i en 12-holds liga)
+    df_r22 = df_played.head(132) 
     tabel_r22 = get_points(df_r22).sort_values(['P', 'MD'], ascending=False)
     top_6_uuids = tabel_r22.head(6)['OPTA_UUID'].tolist()
     
-    # 2. Tabel nu (alle kampe)
+    # 2. Beregn point for alle spillede kampe
     tabel_nu = get_points(df_played)
     
-    # Del op og sorter hver for sig
+    # 3. Sorter grupperne hver for sig
     top_6_final = tabel_nu[tabel_nu['OPTA_UUID'].isin(top_6_uuids)].sort_values(['P', 'MD'], ascending=False)
     bund_6_final = tabel_nu[~tabel_nu['OPTA_UUID'].isin(top_6_uuids)].sort_values(['P', 'MD'], ascending=False)
     
+    # 4. Sæt dem sammen igen (Top 1-6 efterfulgt af Bund 7-12)
     final_table = pd.concat([top_6_final, bund_6_final]).reset_index(drop=True)
     final_table['#'] = final_table.index + 1
     return final_table
@@ -97,42 +97,47 @@ def calculate_split_table(df_opta):
 # --- 2. CHART FUNKTION ---
 
 def draw_position_performance_chart(df_merged, metric, label):
-    if df_merged is None or df_merged.empty: return
-    
+    if df_merged is None or df_merged.empty:
+        st.warning("Ingen data tilgængelig.")
+        return
+
     fig = go.Figure()
     df_merged[metric] = pd.to_numeric(df_merged[metric], errors='coerce')
     y_vals = df_merged[metric].dropna()
     if y_vals.empty: return
     
-    y_span = y_vals.max() - y_vals.min() if y_vals.max() != y_vals.min() else 1
+    y_min, y_max = y_vals.min(), y_vals.max()
+    y_span = y_max - y_min if y_max != y_min else 1
     is_ppda = "PPDA" in label.upper()
 
-   
     for _, row in df_merged.iterrows():
         if pd.notnull(row[metric]) and row.get('LOGO_URL'):
             b64_logo = get_base64_image(row['LOGO_URL'])
             fig.add_layout_image(dict(
                 source=b64_logo, xref="x", yref="y",
                 x=row['#'], y=row[metric],
-                sizex=0.5, sizey=y_span * 0.35,
-                xanchor="center", yanchor="bottom" if not is_ppda else "top"
+                sizex=0.5, 
+                sizey=y_span * 0.35,
+                xanchor="center", 
+                yanchor="bottom" if not is_ppda else "top"
             ))
 
     fig.add_trace(go.Scatter(
         x=df_merged['#'], y=df_merged[metric], mode='markers',
-        marker=dict(size=45, opacity=0), hovertext=df_merged['HOLD_NAVN'],
+        marker=dict(size=45, opacity=0), 
+        hovertext=df_merged['HOLD_NAVN'],
         hovertemplate="<b>%{hovertext}</b><br>Placering: %{x}<br>"+label+": %{y:.2f}<extra></extra>"
     ))
 
     fig.update_layout(
         height=600, margin=dict(t=30, b=60, l=60, r=40),
-        xaxis=dict(title="<b>Slutspilsplacering</b>", tickmode='linear', range=[0.4, 12.6], gridcolor="#f0f0f0"),
-        yaxis=dict(title=f"<b>{label}</b>", gridcolor="#f0f0f0", autorange="reversed" if is_ppda else True),
+        xaxis=dict(title="<b>Tabelplacering (Slutspil opdelt)</b>", tickmode='linear', range=[0.4, 12.6], gridcolor="#f0f0f0", linecolor='black'),
+        yaxis=dict(title=f"<b>{label}</b>", gridcolor="#f0f0f0", autorange="reversed" if is_ppda else True, linecolor='black'),
         plot_bgcolor='white'
     )
     st.plotly_chart(fig, use_container_width=True)
 
-# --- 3. VIS SIDE ---
+# --- 3. HOVEDFUNKTION ---
 
 def vis_side():
     df_opta, df_wy, df_ss = load_data()
@@ -149,13 +154,18 @@ def vis_side():
         
         if team_info:
             perf = df_wy[df_wy['TEAM_WYID'] == team_info.get('team_wyid')]
+            
+            # Robust ID matching for fysisk data
             try:
                 m_id = str(team_info.get('opta_id'))
                 fysisk = df_ss[df_ss['TEAM_ID'].astype(str) == m_id]
-            except: fysisk = pd.DataFrame()
+            except:
+                fysisk = pd.DataFrame()
             
             final_data.append({
-                '#': row['#'], 'HOLD_NAVN': team_name, 'LOGO_URL': team_info.get('logo'),
+                '#': row['#'],
+                'HOLD_NAVN': team_name,
+                'LOGO_URL': team_info.get('logo'),
                 'XG': perf['XG'].iloc[0] if not perf.empty else np.nan,
                 'SHOTS': perf['SHOTS'].iloc[0] if not perf.empty else np.nan,
                 'GOALS': perf['GOALS'].iloc[0] if not perf.empty else np.nan,
@@ -170,7 +180,7 @@ def vis_side():
     col1, col2 = st.columns([2.5, 1.5])
     with col1:
         st.markdown("<br>", unsafe_allow_html=True)
-        st.caption("NordicBet Liga: Slutspils-placering vs. Performance")
+        st.caption("NordicBet Liga: Placering vs. Performance & Fysisk Data")
     with col2:
         metric_map = {
             "xG (Wyscout)": "XG", "Mål": "GOALS", "Skud": "SHOTS", 
