@@ -70,7 +70,7 @@ def draw_position_performance_chart(df_merged, metric, label):
     ))
 
     fig.update_layout(
-        height=500, margin=dict(t=20, b=40, l=40, r=40),
+        height=600, margin=dict(t=20, b=40, l=40, r=40),
         xaxis=dict(
             title="Tabelplacering", 
             tickmode='linear', 
@@ -126,7 +126,7 @@ def vis_side():
     df_final = pd.concat([df_liga.reset_index(drop=True), pd.DataFrame(performance_list).reset_index(drop=True)], axis=1)
 
     # UI setup
-    st.title("NordicBet Liga: Tabel vs. Performance")
+    st.caption("NordicBet Liga: Tabel vs. Performance")
     
     metric_map = {"xG": "XG", "Mål": "GOALS", "Skud": "SHOTS", "Pres (PPDA)": "PPDA", "Afleveringer": "PASSES"}
     sel_metric = st.selectbox("Vælg Y-akse (Performance)", list(metric_map.keys()))
