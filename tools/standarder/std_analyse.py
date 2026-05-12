@@ -146,18 +146,34 @@ def vis_side():
                 st.write("**Skru:**")
                 st.write(df_team['SWING_TYPE'].value_counts())
 
+    # --- Denne del indsættes i din eksisterende vis_side() funktion ---
+
     with tab_data:
-        st.subheader(f"Alle registrerede {sp_type}")
-        # Vi viser de vigtigste kolonner for at gøre det overskueligt
-        vis_df = df_team[['PLAYER_NAME', 'SWING_TYPE', 'EVENT_X', 'EVENT_Y', 'EVENT_ENDX', 'EVENT_ENDY']].copy()
-        st.dataframe(vis_df, use_container_width=True)
+        st.subheader(f"Præstationsstatistik: {sp_type}")
         
-        st.download_button(
-            label="Download data som CSV",
-            data=vis_df.to_csv(index=False).encode('utf-8'),
-            file_name=f"{t_sel}_{sp_type}.csv",
-            mime='text/csv',
+        # Gruppér data for at beregne Antal, Succes og Succes %
+        # Vi bruger EVENT_OUTCOME (1 = succes, 0 = ikke succes)
+        stats_df = df_team.groupby('PLAYER_NAME').agg(
+            Antal=('EVENT_OUTCOME', 'count'),
+            Succes=('EVENT_OUTCOME', 'sum')
+        ).reset_index()
+
+        # Beregn procenten
+        stats_df['Succes %'] = (stats_df['Succes'] / stats_df['Antal'] * 100).round(1)
+        
+        # Sorter efter flest aktioner
+        stats_df = stats_df.sort_values(by='Antal', ascending=False)
+
+        # Vis den pæne dataframe
+        st.dataframe(
+            stats_df.style.format({'Succes %': '{:.1f}%'}), 
+            use_container_width=True,
+            hide_index=True
         )
+
+        st.write("---")
+        st.subheader("Rådata hændelsesliste")
+        st.dataframe(df_team[['PLAYER_NAME', 'EVENT_OUTCOME', 'SWING_TYPE', 'EVENT_X', 'EVENT_Y']], use_container_width=True)
 
 if __name__ == "__main__":
     vis_side()
