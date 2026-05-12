@@ -14,7 +14,7 @@ PLAYER_FILE = 'data/players/1div_overskrivning.csv'
 
 @st.cache_data(ttl=3600)
 def load_setpiece_data():
-    # 1. Hent navne fra CSV
+    # 1. Hent navne-mapping fra CSV
     try:
         df_lookup = pd.read_csv(PLAYER_FILE)
         df_lookup['PLAYER_OPTAUUID'] = df_lookup['PLAYER_OPTAUUID'].astype(str).str.strip()
@@ -26,7 +26,7 @@ def load_setpiece_data():
     conn = _get_snowflake_conn()
     if not conn: return pd.DataFrame()
 
-    # 2. SQL - Henter rå-data
+    # 2. SQL - Vi tilføjer et tjek på TEAM_UUID for NEXT_PLAYER_UUID
     sql = f"""
     WITH RAW_EVENTS AS (
         SELECT 
@@ -34,7 +34,12 @@ def load_setpiece_data():
             e.EVENT_CONTESTANT_OPTAUUID as TEAM_UUID, 
             e.MATCH_OPTAUUID,
             TRIM(e.PLAYER_OPTAUUID) as PLAYER_OPTAUUID,
-            LEAD(TRIM(e.PLAYER_OPTAUUID)) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_EVENTID) as NEXT_PLAYER_UUID
+            -- Vi henter kun den næste spiller, HVIS det er samme hold (TEAM_UUID)
+            CASE 
+                WHEN LEAD(e.EVENT_CONTESTANT_OPTAUUID) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_EVENTID) = e.EVENT_CONTESTANT_OPTAUUID 
+                THEN LEAD(TRIM(e.PLAYER_OPTAUUID)) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_EVENTID) 
+                ELSE NULL 
+            END as NEXT_PLAYER_UUID
         FROM {DB}.OPTA_EVENTS e
         WHERE e.MATCH_OPTAUUID IN (
             SELECT MATCH_OPTAUUID FROM {DB}.OPTA_MATCHINFO 
@@ -60,11 +65,10 @@ def load_setpiece_data():
     if df is None or df.empty: return pd.DataFrame()
     df.columns = [c.upper() for c in df.columns]
 
-    # 3. Map navne og filtrer
-    df_team['REAL_SUCCESS'] = (
-    df_team['NEXT_PLAYER_NAME'].notna() & 
-    (df_team['NEXT_PLAYER_UUID'] != df_team['PLAYER_OPTAUUID'])
-)
+    # 3. Map navne og filtrer baseret på din spiller-fil
+    df = df[df['PLAYER_OPTAUUID'].isin(name_map.keys())].copy()
+    df['PLAYER_NAME'] = df['PLAYER_OPTAUUID'].map(name_map)
+    df['NEXT_PLAYER_NAME'] = df['NEXT_PLAYER_UUID'].map(name_map)
 
     def assign_label(row):
         ql = ',' + str(row['QUAL_LIST']) + ','
@@ -104,17 +108,17 @@ def vis_side():
     if side_filter != "Begge":
         df_team = df_team[df_team['ACTUAL_SIDE'] == side_filter]
 
-    # Normalisering: Vi fjerner mask_flip, da Opta altid angriber mod x=100.
+    # Normalisering: Alle aktioner vises mod modstanderens mål (x=100)
     if visning_mode == "Normaliseret (Højre side)":
         mask_mirror = df_team['EVENT_Y'] < 50
         df_team.loc[mask_mirror, 'EVENT_Y'] = 100 - df_team.loc[mask_mirror, 'EVENT_Y']
         df_team.loc[mask_mirror, 'EVENT_ENDY'] = 100 - df_team.loc[mask_mirror, 'EVENT_ENDY']
 
-    # Omregn til meter for VerticalPitch
+    # Omregn til meter
     df_team['X_M'], df_team['Y_M'] = to_metric(df_team['EVENT_X'], 105), to_metric(df_team['EVENT_Y'], 68)
     df_team['ENDX_M'], df_team['ENDY_M'] = to_metric(df_team['EVENT_ENDX'], 105), to_metric(df_team['EVENT_ENDY'], 68)
 
-    # Succes logik
+    # Succes logik: NEXT_PLAYER_UUID er nu filtreret i SQL til kun at være medspillere
     df_team['REAL_SUCCESS'] = (df_team['NEXT_PLAYER_NAME'].notna()) & (df_team['NEXT_PLAYER_UUID'] != df_team['PLAYER_OPTAUUID'])
 
     tab_bane, tab_zone, tab_stats = st.tabs(["Banevisning", "Zoneoversigt", "Statistik"])
@@ -134,7 +138,6 @@ def vis_side():
         pitch = VerticalPitch(half=True, pitch_type='custom', pitch_length=105, pitch_width=68, line_color='#555555')
         fig, ax = pitch.draw(figsize=(8, 10))
         if not valid.empty:
-            # Rettelse til Contour-fejl: Tjekker for nok unikke datapunkter
             if len(valid) > 2 and valid['ENDX_M'].nunique() > 1:
                 try:
                     pitch.kdeplot(valid.ENDX_M, valid.ENDY_M, ax=ax, cmap='Reds', fill=True, alpha=0.5, levels=5)
@@ -145,6 +148,7 @@ def vis_side():
 
     with tab_stats:
         def get_top_receiver(df_sub):
+            # Tæller kun modtagere, der er medspillere
             receivers = df_sub[df_sub['REAL_SUCCESS']]['NEXT_PLAYER_NAME'].dropna()
             if not receivers.empty:
                 counts = receivers.value_counts()
@@ -165,7 +169,7 @@ def vis_side():
             stats_df.sort_values('Antal', ascending=False),
             column_config={
                 "PLAYER_NAME": "Spiller",
-                "Oftest_ramte": "Primær modtager (antal)",
+                "Oftest_ramte": "Primær modtager (antal medspiller)",
                 "Succes %": st.column_config.NumberColumn("Succes % (Ramt medspiller)", format="%.1f %%"),
                 "Effektivitet": st.column_config.ProgressColumn("Effektivitet (Afslutninger)", min_value=0, max_value=1, format="%.2f")
             },
