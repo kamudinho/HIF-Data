@@ -76,7 +76,7 @@ def load_setpiece_data():
 def to_metric(val, total_m): return val * (total_m / 100)
 
 def vis_side():
-    st.title("🎯 Standardsituationer")
+    st.caption("Standardsituationer")
     
     df_all = load_setpiece_data()
     if df_all.empty:
@@ -118,7 +118,7 @@ def vis_side():
         df_team = df_team[df_team['Y_M'] >= 34]
 
     # Tabs
-    tab_bane, tab_stats = st.tabs(["🏟️ Banevisning", "📊 Statistik & Effektivitet"])
+    tab_bane, tab_stats = st.tabs(["Oversigt", "Dataoversigt"])
 
     with tab_bane:
         col_p, col_s = st.columns([2, 1])
@@ -140,7 +140,7 @@ def vis_side():
                 st.write(df_team['SWING_TYPE'].value_counts())
 
     with tab_stats:
-        st.subheader(f"Spillerstatistik for {sp_type}")
+        st.caption(f"Spillerstatistik for {sp_type}")
         
         # Aggregering af stats
         stats_df = df_team.groupby('PLAYER_NAME').agg(
@@ -178,7 +178,7 @@ def vis_side():
         )
         
         st.write("---")
-        st.subheader("Hændelsesliste (Rådata)")
+        st.caption("Hændelser")
         st.dataframe(df_team[['PLAYER_NAME', 'EVENT_OUTCOME', 'IS_CHANCE', 'SWING_TYPE']], use_container_width=True)
 
 if __name__ == "__main__":
