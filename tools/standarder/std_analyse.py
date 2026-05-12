@@ -12,8 +12,7 @@ def load_vasket_data():
     conn = _get_snowflake_conn()
     if not conn: return pd.DataFrame()
     
-    # Vi bruger en Sub-query (CTE) til at samle alle qualifiers for hver unikt EVENT_OPTAUUID.
-    # Dette sikrer, at vi kun har ÉN række pr. aktion.
+    # SQL der sikrer unikke hændelser pr. EVENT_OPTAUUID
     sql = f"""
     WITH UNIQUE_EVENTS AS (
         SELECT 
@@ -23,7 +22,6 @@ def load_vasket_data():
             e.EVENT_OUTCOME,
             e.EVENT_CONTESTANT_OPTAUUID,
             e.PLAYER_OPTAUUID,
-            -- Vi bruger MAX for at se om en egenskab findes uden at skabe nye rækker
             MAX(CASE WHEN q.QUALIFIER_QID = 107 THEN 1 ELSE 0 END) as IS_THROW_IN,
             MAX(CASE WHEN q.QUALIFIER_QID = 6 THEN 1 ELSE 0 END) as IS_CORNER,
             MAX(CASE WHEN q.QUALIFIER_QID IN (5, 26) THEN 1 ELSE 0 END) as IS_FREEKICK,
@@ -46,7 +44,6 @@ def load_vasket_data():
     df = conn.query(sql)
     df.columns = [c.upper() for c in df.columns]
     
-    # Definer typen baseret på de unikke flag
     def get_type(row):
         if row['IS_CORNER'] == 1: return "Hjørnespark"
         if row['IS_THROW_IN'] == 1: return "Indkast"
@@ -55,46 +52,61 @@ def load_vasket_data():
     df['TYPE'] = df.apply(get_type, axis=1)
     return df
 
-def vis_side():
-    st.title("Standardsituationer - Valideret Oversigt")
-    df_all = load_vasket_data()
-    
-    if df_all.empty:
-        st.error("Ingen data fundet.")
-        return
-
-    # Filtrering på hold (Hvidovre som standard)
-    teams = sorted(df_all['EVENT_CONTESTANT_OPTAUUID'].unique())
-    # (Her kan du indsætte din hold-mapping hvis nødvendigt)
-    df_team = df_all.copy() 
-
+def generate_player_stats(df):
+    """Beregner statistik lynhurtigt i Python for hver spiller."""
     stats_list = []
-    for player, p_df in df_team.groupby('PLAYER_NAME'):
-        c_df = p_df[p_df['TYPE'] == "Hjørnespark"]
-        t_df = p_df[p_df['TYPE'] == "Indkast"]
-        f_df = p_df[p_df['TYPE'] == "Frispark"]
+    
+    for player, p_df in df.groupby('PLAYER_NAME'):
+        
+        def get_stat_line(sub_df):
+            """Hjælpefunktion til at pakke Antal / Succes og Procent ud."""
+            a = len(sub_df)
+            # Vi tæller succeser baseret på EVENT_OUTCOME (1 = succes)
+            s = int(sub_df['EVENT_OUTCOME'].sum()) if a > 0 else 0
+            pct = (s / a * 100) if a > 0 else 0
+            return f"{a} / {s}", pct
+
+        # Opdel data i kategorier
+        hj_as, hj_pct = get_stat_line(p_df[p_df['TYPE'] == "Hjørnespark"])
+        ind_as, ind_pct = get_stat_line(p_df[p_df['TYPE'] == "Indkast"])
+        fri_as, fri_pct = get_stat_line(p_df[p_df['TYPE'] == "Frispark"])
         
         stats_list.append({
             'Navn': player,
             'Total': len(p_df),
-            'Hjørne': len(c_df),
-            'Hjørne Succes %': (c_df['IS_ASSIST'].sum() / len(c_df) * 100) if len(c_df) > 0 else 0,
-            'Indkast': len(t_df),
-            'Indkast Succes %': (t_df[t_df['EVENT_OUTCOME'] == 1].shape[0] / len(t_df) * 100) if len(t_df) > 0 else 0,
-            'Frispark': len(f_df),
-            'Frispark Succes %': (f_df['IS_ASSIST'].sum() / len(f_df) * 100) if len(f_df) > 0 else 0
+            'Hjørne (A/S)': hj_as,
+            'Hjørne %': hj_pct,
+            'Indkast (A/S)': ind_as,
+            'Indkast %': ind_pct,
+            'Frispark (A/S)': fri_as,
+            'Frispark %': fri_pct
         })
-        
-    df_stats = pd.DataFrame(stats_list).sort_values("Total", ascending=False)
     
+    return pd.DataFrame(stats_list).sort_values("Total", ascending=False)
+
+def vis_side():
+    st.title("Standardsituationer - Hvidovre IF")
+    
+    # 1. Load data (Vasket via SQL)
+    df_all = load_vasket_data()
+    
+    if df_all.empty:
+        st.warning("Ingen data fundet.")
+        return
+
+    # 2. Beregn statistik (Lynhurtigt i Python)
+    df_stats = generate_player_stats(df_all)
+    
+    # 3. Vis tabel med professionel formatering
     st.dataframe(
         df_stats, 
         use_container_width=True, 
         hide_index=True,
         column_config={
-            "Hjørne Succes %": st.column_config.NumberColumn(format="%.1f%%"),
-            "Indkast Succes %": st.column_config.NumberColumn(format="%.1f%%"),
-            "Frispark Succes %": st.column_config.NumberColumn(format="%.1f%%")
+            "Hjørne %": st.column_config.NumberColumn("Hjørne %", format="%.1f%%"),
+            "Indkast %": st.column_config.NumberColumn("Indkast %", format="%.1f%%"),
+            "Frispark %": st.column_config.NumberColumn("Frispark %", format="%.1f%%"),
+            "Total": st.column_config.NumberColumn("Total aktioner", help="Summen af alle unikke hændelser")
         }
     )
 
