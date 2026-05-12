@@ -28,6 +28,7 @@ def load_setpiece_data():
             e.MATCH_OPTAUUID,
             e.PLAYER_OPTAUUID,
             TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME) as PLAYER_NAME,
+            -- Vi finder navnet på den næste spiller fra samme hold i sekvensen
             LEAD(TRIM(p_next.FIRST_NAME) || ' ' || TRIM(p_next.LAST_NAME)) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_EVENTID) as NEXT_PLAYER_NAME
         FROM {DB}.OPTA_EVENTS e
         LEFT JOIN {DB}.OPTA_PLAYERS p ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
@@ -99,6 +100,7 @@ def vis_side():
     df_team = df_all[(df_all['KLUB_NAVN'] == t_sel) & (df_all['SET_PIECE_TYPE'] == sp_type)].copy()
     df_team = df_team.drop_duplicates(subset=['EVENT_OPTAUUID'])
     
+    # Side-logik og normalisering
     df_team['ACTUAL_SIDE'] = np.where(df_team['EVENT_Y'] < 50, "Venstre", "Højre")
     if side_filter != "Begge":
         df_team = df_team[df_team['ACTUAL_SIDE'] == side_filter]
@@ -137,20 +139,25 @@ def vis_side():
         st.pyplot(fig)
 
     with tab_stats:
-        def get_top_receiver(x):
-            receivers = x[x != "None"].dropna()
+        def get_top_receiver(row):
+            # Filtrer modtageren så det IKKE er skytten selv (for at undgå data-støj)
+            receivers = row[row['NEXT_PLAYER_NAME'] != row['PLAYER_NAME']]
+            receivers = receivers['NEXT_PLAYER_NAME'].replace("None", np.nan).dropna()
+            
             if not receivers.empty:
-                top_player = receivers.value_counts().idxmax()
-                count = receivers.value_counts().max()
+                counts = receivers.value_counts()
+                top_player = counts.idxmax()
+                count = counts.max()
                 return f"{top_player} ({count})"
-            return "Ingen modtager"
+            return "Ingen medspiller ramt"
 
-        stats_df = df_team.groupby('PLAYER_NAME').agg(
-            Antal=('EVENT_OUTCOME', 'count'),
-            Succes=('EVENT_OUTCOME', 'sum'),
-            Afslutninger=('IS_CHANCE', 'sum'),
-            Oftest_ramte=('NEXT_PLAYER_NAME', get_top_receiver)
-        ).reset_index()
+        # Vi laver en aggregering der tager højde for filteret i modtager-beregningen
+        stats_df = df_team.groupby('PLAYER_NAME').apply(lambda x: pd.Series({
+            'Antal': x['EVENT_OUTCOME'].count(),
+            'Succes': x['EVENT_OUTCOME'].sum(),
+            'Afslutninger': x['IS_CHANCE'].sum(),
+            'Oftest_ramte': get_top_receiver(x)
+        })).reset_index()
         
         stats_df['Succes %'] = (stats_df['Succes'] / stats_df['Antal'] * 100).round(1)
         stats_df['Effektivitet'] = stats_df['Afslutninger'] / stats_df['Antal']
