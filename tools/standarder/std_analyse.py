@@ -16,7 +16,7 @@ def load_setpiece_data():
     conn = _get_snowflake_conn()
     if not conn: return pd.DataFrame()
 
-    # SQL der samler Qualifiers i en sub-query for at undgå at mangedoble hændelser
+    # SQL med sub-query for at sikre 1 række pr. hændelse og fange relevante Qualifiers
     sql = f"""
     WITH AGG_QUALS AS (
         SELECT 
@@ -24,6 +24,7 @@ def load_setpiece_data():
             LISTAGG(QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY QUALIFIER_QID) as QUAL_LIST,
             MAX(CASE WHEN QUALIFIER_QID = 140 THEN TRY_TO_DOUBLE(QUALIFIER_VALUE) END) as ENDX,
             MAX(CASE WHEN QUALIFIER_QID = 141 THEN TRY_TO_DOUBLE(QUALIFIER_VALUE) END) as ENDY,
+            MAX(CASE WHEN QUALIFIER_QID IN (214, 154, 111) THEN 1 ELSE 0 END) as IS_CHANCE,
             MAX(CASE WHEN QUALIFIER_QID = 223 THEN 'Inswinger' 
                      WHEN QUALIFIER_QID = 224 THEN 'Outswinger' 
                      WHEN QUALIFIER_QID = 225 THEN 'Straight' ELSE 'Standard' END) as SWING_TYPE
@@ -40,6 +41,7 @@ def load_setpiece_data():
         q.QUAL_LIST,
         q.ENDX as EVENT_ENDX,
         q.ENDY as EVENT_ENDY,
+        q.IS_CHANCE,
         q.SWING_TYPE,
         TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME) as PLAYER_NAME
     FROM {DB}.OPTA_EVENTS e
@@ -78,7 +80,7 @@ def vis_side():
     
     df_all = load_setpiece_data()
     if df_all.empty:
-        st.error("Kunne ikke hente data.")
+        st.error("Kunne ikke hente data fra Snowflake.")
         return
 
     # Team mapping
@@ -89,17 +91,17 @@ def vis_side():
     # Filtre
     col_f1, col_f2, col_f3 = st.columns(3)
     with col_f1:
-        t_sel = st.selectbox("Hold", teams_in_data, index=0)
+        t_sel = st.selectbox("Hold", teams_in_data, index=teams_in_data.index("Hvidovre") if "Hvidovre" in teams_in_data else 0)
     with col_f2:
         sp_type = st.selectbox("Type", ["Hjørnespark", "Indkast", "Frispark"])
     with col_f3:
         side_sel = st.selectbox("Side", ["Begge", "Venstre", "Højre"])
 
-    # Filtrering og dublet-rens
+    # Filtrering og sikring mod dubletter
     df_team = df_all[(df_all['KLUB_NAVN'] == t_sel) & (df_all['SET_PIECE_TYPE'] == sp_type)].copy()
     df_team = df_team.drop_duplicates(subset=['EVENT_OPTAUUID'])
 
-    # Normalisering
+    # Normalisering (Alle angriber "opad")
     mask_flip = df_team['EVENT_X'] < 50
     for col_x, col_y in [('EVENT_X', 'EVENT_Y'), ('EVENT_ENDX', 'EVENT_ENDY')]:
         df_team.loc[mask_flip, col_x] = 100 - df_team.loc[mask_flip, col_x]
@@ -116,7 +118,7 @@ def vis_side():
         df_team = df_team[df_team['Y_M'] >= 34]
 
     # Tabs
-    tab_bane, tab_stats = st.tabs(["🏟️ Banevisning", "📊 Statistik & Dataframe"])
+    tab_bane, tab_stats = st.tabs(["🏟️ Banevisning", "📊 Statistik & Effektivitet"])
 
     with tab_bane:
         col_p, col_s = st.columns([2, 1])
@@ -134,31 +136,50 @@ def vis_side():
             st.subheader("Overblik")
             st.metric(f"Total {sp_type}", len(df_team))
             if sp_type == "Hjørnespark":
-                st.write("**Skru:**")
+                st.write("**Skru-fordeling:**")
                 st.write(df_team['SWING_TYPE'].value_counts())
 
     with tab_stats:
-        st.subheader(f"Præstation: {sp_type}")
+        st.subheader(f"Spillerstatistik for {sp_type}")
         
-        # Beregning af tabel: Antal, Succes, Succes %
+        # Aggregering af stats
         stats_df = df_team.groupby('PLAYER_NAME').agg(
             Antal=('EVENT_OUTCOME', 'count'),
-            Succes=('EVENT_OUTCOME', 'sum')
+            Succes=('EVENT_OUTCOME', 'sum'),
+            Afslutninger=('IS_CHANCE', 'sum')
         ).reset_index()
         
         stats_df['Succes %'] = (stats_df['Succes'] / stats_df['Antal'] * 100).round(1)
+        # Ratio til Progress Bar (0.0 - 1.0)
+        stats_df['Afslutnings Rate'] = stats_df['Afslutninger'] / stats_df['Antal']
+        
         stats_df = stats_df.sort_values(by='Antal', ascending=False)
 
-        # Formatering til visning
-        st.dataframe(
-            stats_df.style.format({'Succes %': '{:.1f}%'}), 
+        # Konfiguration af den interaktive tabel med Progress Bar
+        st.data_editor(
+            stats_df,
+            column_config={
+                "PLAYER_NAME": "Spiller",
+                "Antal": st.column_config.NumberColumn("Antal", help="Antal udførte"),
+                "Succes": "Succesfulde",
+                "Succes %": st.column_config.NumberColumn("Succes %", format="%.1f%%"),
+                "Afslutninger": "Ført til afslutning",
+                "Afslutnings Rate": st.column_config.ProgressColumn(
+                    "Effektivitet (Afslutninger)",
+                    help="Hvor ofte fører sparket til en chance/afslutning?",
+                    format="%.2f",
+                    min_value=0,
+                    max_value=1
+                ),
+            },
+            hide_index=True,
             use_container_width=True,
-            hide_index=True
+            key="setpiece_efficiency_table"
         )
         
         st.write("---")
-        st.subheader("Hændelsesliste")
-        st.dataframe(df_team[['PLAYER_NAME', 'EVENT_OUTCOME', 'SWING_TYPE', 'EVENT_X', 'EVENT_Y']], use_container_width=True)
+        st.subheader("Hændelsesliste (Rådata)")
+        st.dataframe(df_team[['PLAYER_NAME', 'EVENT_OUTCOME', 'IS_CHANCE', 'SWING_TYPE']], use_container_width=True)
 
 if __name__ == "__main__":
     vis_side()
