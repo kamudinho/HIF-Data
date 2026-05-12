@@ -2,12 +2,14 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from mplsoccer import VerticalPitch
+import matplotlib.pyplot as plt
 from data.utils.team_mapping import TEAMS, TEAM_COLORS
 from data.data_load import _get_snowflake_conn
 
 # --- KONFIGURATION ---
 HIF_RED = '#cc0000'
 DB = "KLUB_HVIDOVREIF.AXIS"
+# Opdateret til din aktuelle sæson UUID
 LIGA_UUID = "dyjr458hcmrcy87fsabfsy87o" 
 
 @st.cache_data(ttl=3600)
@@ -15,8 +17,7 @@ def load_setpiece_data():
     conn = _get_snowflake_conn()
     if not conn: return pd.DataFrame()
 
-    # SQL der bruger en Sub-query til at aggregere Qualifiers FØRST
-    # Dette sikrer 1:1 forhold mellem Event og Qualifiers
+    # SQL der samler Qualifiers i en sub-query for at undgå at mangedoble hændelser
     sql = f"""
     WITH AGG_QUALS AS (
         SELECT 
@@ -48,7 +49,7 @@ def load_setpiece_data():
         SELECT MATCH_OPTAUUID FROM {DB}.OPTA_MATCHINFO 
         WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
     )
-    AND e.EVENT_TYPEID = 1 -- Kun pasninger/igangsætninger
+    AND e.EVENT_TYPEID = 1 
     AND (
         ',' || q.QUAL_LIST || ',' LIKE '%,6,%' OR 
         ',' || q.QUAL_LIST || ',' LIKE '%,107,%' OR 
@@ -60,7 +61,6 @@ def load_setpiece_data():
     if df is None or df.empty: return pd.DataFrame()
     df.columns = [c.upper() for c in df.columns]
 
-    # Type labeling
     def assign_label(row):
         ql = ',' + str(row['QUAL_LIST']) + ','
         if ',6,' in ql: return "Hjørnespark"
@@ -69,40 +69,37 @@ def load_setpiece_data():
         return "Andet"
     
     df['SET_PIECE_TYPE'] = df.apply(assign_label, axis=1)
-    return df
+    return df[df['SET_PIECE_TYPE'] != "Andet"]
 
 def to_metric(val, total_m): return val * (total_m / 100)
 
 def vis_side():
-    st.title("🎯 Standardsituationer (Præcis tælling)")
+    st.title("🎯 Standardsituationer")
     
     df_all = load_setpiece_data()
     if df_all.empty:
-        st.warning("Ingen data fundet.")
+        st.error("Kunne ikke hente data fra databasen.")
         return
 
-    # Team mapping
+    # Team mapping og metadata
     uuid_to_name = {v['opta_uuid'].upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
     df_all['KLUB_NAVN'] = df_all['TEAM_UUID'].str.upper().map(uuid_to_name)
-    
     teams_in_data = sorted([n for n in df_all['KLUB_NAVN'].unique() if pd.notna(n)])
 
-    col_f1, col_f2 = st.columns(2)
+    # Filtre i toppen
+    col_f1, col_f2, col_f3 = st.columns(3)
     with col_f1:
-        t_sel = st.selectbox("Vælg hold", teams_in_data)
+        t_sel = st.selectbox("Hold", teams_in_data, index=teams_in_data.index("Hvidovre") if "Hvidovre" in teams_in_data else 0)
     with col_f2:
         sp_type = st.selectbox("Type", ["Hjørnespark", "Indkast", "Frispark"])
+    with col_f3:
+        side_sel = st.selectbox("Side", ["Begge", "Venstre", "Højre"])
 
-    # Filtrering
+    # Filtrering og dublet-tjek (vigtigt!)
     df_team = df_all[(df_all['KLUB_NAVN'] == t_sel) & (df_all['SET_PIECE_TYPE'] == sp_type)].copy()
-
-    # Fjern dubletter for en sikkerheds skyld (hvis SQL'en mod forventning stadig spytter dem ud)
     df_team = df_team.drop_duplicates(subset=['EVENT_OPTAUUID'])
 
-    # --- RESTEN AF DIN VISUALISERING ---
-    # (Beregninger af X_M, Y_M og Pitch tegning herfra er uændret)
-    
-    # Skalering
+    # Normalisering
     mask_flip = df_team['EVENT_X'] < 50
     for col_x, col_y in [('EVENT_X', 'EVENT_Y'), ('EVENT_ENDX', 'EVENT_ENDY')]:
         df_team.loc[mask_flip, col_x] = 100 - df_team.loc[mask_flip, col_x]
@@ -113,11 +110,54 @@ def vis_side():
     df_team['ENDX_M'] = df_team['EVENT_ENDX'].apply(lambda x: to_metric(x, 105))
     df_team['ENDY_M'] = df_team['EVENT_ENDY'].apply(lambda y: to_metric(y, 68))
 
-    st.metric(f"Antal unikke {sp_type}", len(df_team))
-    
-    # Vis statistikken som i "Skærmbillede 2026-05-12 kl. 12.49.41.png"
-    st.write("**Top udførere:**")
-    st.dataframe(df_team['PLAYER_NAME'].value_counts())
+    if side_sel == "Venstre":
+        df_team = df_team[df_team['Y_M'] < 34]
+    elif side_sel == "Højre":
+        df_team = df_team[df_team['Y_M'] >= 34]
+
+    # Tabs til de forskellige visninger
+    tab_bane, tab_data = st.tabs(["🏟️ Banevisning", "📊 Rådata & Statistik"])
+
+    with tab_bane:
+        col_p, col_s = st.columns([2, 1])
+        
+        with col_p:
+            pitch = VerticalPitch(half=True, pitch_type='custom', pitch_length=105, pitch_width=68, line_color='#cccccc')
+            fig, ax = pitch.draw(figsize=(10, 12))
+            ax.set_ylim(50, 105) 
+            
+            t_color = TEAM_COLORS.get(t_sel, {}).get('primary', HIF_RED)
+            valid = df_team.dropna(subset=['ENDX_M', 'ENDY_M'])
+            
+            if not valid.empty:
+                pitch.arrows(valid.X_M, valid.Y_M, valid.ENDX_M, valid.ENDY_M, color=t_color, ax=ax, alpha=0.4, width=2)
+                pitch.scatter(valid.ENDX_M, valid.ENDY_M, s=60, edgecolors='white', c=t_color, ax=ax, zorder=3)
+            else:
+                st.info("Ingen slutpositioner at vise.")
+            st.pyplot(fig)
+
+        with col_s:
+            st.subheader("Overblik")
+            st.metric(f"Total {sp_type}", len(df_team))
+            st.write("**Top skytter:**")
+            st.write(df_team['PLAYER_NAME'].value_counts().head(5))
+            
+            if sp_type == "Hjørnespark":
+                st.write("**Skru:**")
+                st.write(df_team['SWING_TYPE'].value_counts())
+
+    with tab_data:
+        st.subheader(f"Alle registrerede {sp_type}")
+        # Vi viser de vigtigste kolonner for at gøre det overskueligt
+        vis_df = df_team[['PLAYER_NAME', 'SWING_TYPE', 'EVENT_X', 'EVENT_Y', 'EVENT_ENDX', 'EVENT_ENDY']].copy()
+        st.dataframe(vis_df, use_container_width=True)
+        
+        st.download_button(
+            label="Download data som CSV",
+            data=vis_df.to_csv(index=False).encode('utf-8'),
+            file_name=f"{t_sel}_{sp_type}.csv",
+            mime='text/csv',
+        )
 
 if __name__ == "__main__":
     vis_side()
