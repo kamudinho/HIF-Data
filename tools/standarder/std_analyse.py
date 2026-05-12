@@ -16,9 +16,27 @@ def load_setpiece_data():
     conn = _get_snowflake_conn()
     if not conn: return pd.DataFrame()
 
-    # SQL der henter events, qualifiers og navnet på den næste spiller (modtageren)
+    # SQL bruger nu LEAD() til at finde modtageren af bolden uden at bruge EVENT_ID + 1
     sql = f"""
-    WITH AGG_QUALS AS (
+    WITH RAW_EVENTS AS (
+        SELECT 
+            e.EVENT_OPTAUUID, 
+            e.EVENT_X, 
+            e.EVENT_Y, 
+            e.EVENT_OUTCOME,
+            e.EVENT_CONTESTANT_OPTAUUID as TEAM_UUID, 
+            e.MATCH_OPTAUUID,
+            e.PLAYER_OPTAUUID,
+            TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME) as PLAYER_NAME,
+            LEAD(TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME)) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_ID_SORT) as NEXT_PLAYER_NAME
+        FROM {DB}.OPTA_EVENTS e
+        LEFT JOIN {DB}.OPTA_PLAYERS p ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
+        WHERE e.MATCH_OPTAUUID IN (
+            SELECT MATCH_OPTAUUID FROM {DB}.OPTA_MATCHINFO 
+            WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
+        )
+    ),
+    AGG_QUALS AS (
         SELECT 
             EVENT_OPTAUUID,
             LISTAGG(QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY QUALIFIER_QID) as QUAL_LIST,
@@ -30,33 +48,17 @@ def load_setpiece_data():
                      WHEN QUALIFIER_QID = 225 THEN 'Straight' ELSE 'Standard' END) as SWING_TYPE
         FROM {DB}.OPTA_QUALIFIERS
         GROUP BY EVENT_OPTAUUID
-    ),
-    NEXT_PLAYER AS (
-        SELECT 
-            e.EVENT_OPTAUUID,
-            TRIM(p_next.FIRST_NAME) || ' ' || TRIM(p_next.LAST_NAME) as RECEIVER_NAME
-        FROM {DB}.OPTA_EVENTS e
-        LEFT JOIN {DB}.OPTA_EVENTS e_next ON e.MATCH_OPTAUUID = e_next.MATCH_OPTAUUID 
-            AND e.EVENT_ID + 1 = e_next.EVENT_ID
-        LEFT JOIN {DB}.OPTA_PLAYERS p_next ON e_next.PLAYER_OPTAUUID = p_next.PLAYER_OPTAUUID
-        WHERE e.EVENT_OUTCOME = 1
     )
     SELECT 
-        e.EVENT_OPTAUUID, e.EVENT_X, e.EVENT_Y, e.EVENT_OUTCOME,
-        e.EVENT_CONTESTANT_OPTAUUID as TEAM_UUID, 
-        TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME) as PLAYER_NAME,
-        q.QUAL_LIST, q.ENDX as EVENT_ENDX, q.ENDY as EVENT_ENDY, q.IS_CHANCE, q.SWING_TYPE,
-        np.RECEIVER_NAME
-    FROM {DB}.OPTA_EVENTS e
-    INNER JOIN AGG_QUALS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
-    LEFT JOIN NEXT_PLAYER np ON e.EVENT_OPTAUUID = np.EVENT_OPTAUUID
-    LEFT JOIN {DB}.OPTA_PLAYERS p ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
-    WHERE e.MATCH_OPTAUUID IN (
-        SELECT MATCH_OPTAUUID FROM {DB}.OPTA_MATCHINFO 
-        WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
+        r.*,
+        q.QUAL_LIST, q.ENDX as EVENT_ENDX, q.ENDY as EVENT_ENDY, q.IS_CHANCE, q.SWING_TYPE
+    FROM RAW_EVENTS r
+    INNER JOIN AGG_QUALS q ON r.EVENT_OPTAUUID = q.EVENT_OPTAUUID
+    AND (
+        ',' || q.QUAL_LIST || ',' LIKE '%,6,%' OR 
+        ',' || q.QUAL_LIST || ',' LIKE '%,107,%' OR 
+        ',' || q.QUAL_LIST || ',' LIKE '%,5,%'
     )
-    AND e.EVENT_TYPEID = 1 
-    AND (',' || q.QUAL_LIST || ',' LIKE '%,6,%' OR ',' || q.QUAL_LIST || ',' LIKE '%,107,%' OR ',' || q.QUAL_LIST || ',' LIKE '%,5,%')
     """
     df = conn.query(sql)
     if df is None or df.empty: return pd.DataFrame()
@@ -75,33 +77,30 @@ def load_setpiece_data():
 def to_metric(val, total_m): return val * (total_m / 100)
 
 def vis_side():
-    st.title("🎯 Standard-Analyse")
+    st.title("Standard-Analyse")
     
     df_all = load_setpiece_data()
     if df_all.empty:
         st.error("Ingen data fundet.")
         return
 
-    # Team mapping
     uuid_to_name = {v['opta_uuid'].upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
     df_all['KLUB_NAVN'] = df_all['TEAM_UUID'].str.upper().map(uuid_to_name)
     teams_in_data = sorted([n for n in df_all['KLUB_NAVN'].unique() if pd.notna(n)])
 
-    # Filtre
     c1, c2, c3, c4 = st.columns(4)
     with c1: t_sel = st.selectbox("Hold", teams_in_data, index=0)
     with c2: sp_type = st.selectbox("Type", ["Hjørnespark", "Indkast", "Frispark"])
     with c3: side_filter = st.selectbox("Side i kampen", ["Begge", "Venstre", "Højre"])
     with c4: visning_mode = st.selectbox("Bane-mode", ["Normaliseret (Højre side)", "Faktisk position"])
 
-    # Filtrering og dublet-rens
     df_team = df_all[(df_all['KLUB_NAVN'] == t_sel) & (df_all['SET_PIECE_TYPE'] == sp_type)].copy()
     df_team = df_team.drop_duplicates(subset=['EVENT_OPTAUUID'])
+    
     df_team['ACTUAL_SIDE'] = np.where(df_team['EVENT_Y'] < 50, "Venstre", "Højre")
     if side_filter != "Begge":
         df_team = df_team[df_team['ACTUAL_SIDE'] == side_filter]
 
-    # Normalisering
     mask_flip = df_team['EVENT_X'] < 50
     for col in ['EVENT_X', 'EVENT_Y', 'EVENT_ENDX', 'EVENT_ENDY']:
         df_team.loc[mask_flip, col] = 100 - df_team.loc[mask_flip, col]
@@ -114,7 +113,7 @@ def vis_side():
     df_team['X_M'], df_team['Y_M'] = to_metric(df_team['EVENT_X'], 105), to_metric(df_team['EVENT_Y'], 68)
     df_team['ENDX_M'], df_team['ENDY_M'] = to_metric(df_team['EVENT_ENDX'], 105), to_metric(df_team['EVENT_ENDY'], 68)
 
-    tab_bane, tab_zone, tab_stats = st.tabs(["🏟️ Banevisning", "📍 Zoneoversigt", "📊 Statistik"])
+    tab_bane, tab_zone, tab_stats = st.tabs(["Banevisning", "Zoneoversigt", "Statistik"])
 
     with tab_bane:
         pitch = VerticalPitch(half=True, pitch_type='custom', pitch_length=105, pitch_width=68, line_color='#cccccc')
@@ -127,27 +126,25 @@ def vis_side():
         st.pyplot(fig)
 
     with tab_zone:
-        st.subheader("Hvor lander bolden?")
+        st.subheader("Landingszoner")
         pitch = VerticalPitch(half=True, pitch_type='custom', pitch_length=105, pitch_width=68, line_color='#555555')
         fig, ax = pitch.draw(figsize=(8, 10))
-        # Tegn zoner (f.eks. det lille felt og 5-meteren)
-        plt.axhline(99.2, color='yellow', linestyle='--', alpha=0.5) # Forreste område
         if not valid.empty:
             pitch.kdeplot(valid.ENDX_M, valid.ENDY_M, ax=ax, cmap='Reds', fill=True, alpha=0.5, levels=10)
             pitch.scatter(valid.ENDX_M, valid.ENDY_M, s=20, color='black', ax=ax, alpha=0.3)
         st.pyplot(fig)
 
     with tab_stats:
-        # Find primær modtager pr. spiller
         def get_top_receiver(x):
-            receivers = x.dropna()
-            return receivers.value_counts().idxmax() if not receivers.empty else "Ingen data"
+            receivers = x[x != "None"]
+            receivers = receivers.dropna()
+            return receivers.value_counts().idxmax() if not receivers.empty else "Ingen modtager"
 
         stats_df = df_team.groupby('PLAYER_NAME').agg(
             Antal=('EVENT_OUTCOME', 'count'),
             Succes=('EVENT_OUTCOME', 'sum'),
             Afslutninger=('IS_CHANCE', 'sum'),
-            Oftest_ramte=('RECEIVER_NAME', get_top_receiver)
+            Oftest_ramte=('NEXT_PLAYER_NAME', get_top_receiver)
         ).reset_index()
         
         stats_df['Succes %'] = (stats_df['Succes'] / stats_df['Antal'] * 100).round(1)
@@ -156,6 +153,7 @@ def vis_side():
         st.data_editor(
             stats_df.sort_values('Antal', ascending=False),
             column_config={
+                "PLAYER_NAME": "Spiller",
                 "Oftest_ramte": "Primær modtager",
                 "Effektivitet": st.column_config.ProgressColumn("Effektivitet (Afslutninger)", min_value=0, max_value=1, format="%.2f")
             },
