@@ -61,9 +61,10 @@ def load_setpiece_data():
     df.columns = [c.upper() for c in df.columns]
 
     # 3. Map navne og filtrer
-    df = df[df['PLAYER_OPTAUUID'].isin(name_map.keys())].copy()
-    df['PLAYER_NAME'] = df['PLAYER_OPTAUUID'].map(name_map)
-    df['NEXT_PLAYER_NAME'] = df['NEXT_PLAYER_UUID'].map(name_map)
+    df_team['REAL_SUCCESS'] = (
+    df_team['NEXT_PLAYER_NAME'].notna() & 
+    (df_team['NEXT_PLAYER_UUID'] != df_team['PLAYER_OPTAUUID'])
+)
 
     def assign_label(row):
         ql = ',' + str(row['QUAL_LIST']) + ','
