@@ -20,10 +20,10 @@ def load_setpiece_data():
     if not conn: 
         return pd.DataFrame()
 
-    # Vi definerer sub-queryen her
+    # Sub-query til at finde kampe i den valgte sæson
     match_sql = f"SELECT DISTINCT MATCH_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'"
 
-    # SQL stringen er nu rettet så alle parenteser lukkes korrekt
+    # SQL der henter hændelser og deres slut-koordinater (QID 140/141)
     sql = f"""
     WITH END_X AS (
         SELECT EVENT_OPTAUUID, QUALIFIER_VALUE as ENDX FROM {DB}.OPTA_QUALIFIERS WHERE QUALIFIER_QID = 140
@@ -57,11 +57,12 @@ def load_setpiece_data():
     for col in ['EVENT_X', 'EVENT_Y', 'EVENT_ENDX', 'EVENT_ENDY']:
         df[col] = pd.to_numeric(df[col], errors='coerce')
 
-    # Mapping af typer
+    # Mapping af typer baseret på Opta Qualifiers
     type_map = {2: "Hjørnespark", 124: "Hjørnespark", 5: "Frispark", 107: "Indkast"}
     df['SET_PIECE_TYPE'] = df['QUALIFIER_QID'].map(type_map)
 
     return df
+
 def to_metric(val, total_m):
     return val * (total_m / 100)
 
@@ -74,23 +75,79 @@ def vis_side():
         st.warning("Ingen data fundet. Tjek om ligaens UUID og Snowflake-forbindelsen er korrekt.")
         return
 
-    # Team Mapping
+    # Team Mapping fra din utils
     uuid_to_name = {v['opta_uuid'].upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
     df_all['KLUB_NAVN'] = df_all['EVENT_CONTESTANT_OPTAUUID'].str.upper().map(uuid_to_name)
-    teams = sorted([n for n in df_all['KLUB_NAVN'].unique() if pd.notna(n)])
+    
+    # Hent liste over hold til dropdown
+    teams_in_data = sorted([n for n in df_all['KLUB_NAVN'].unique() if pd.notna(n)])
 
-    # Filtre
+    # Filtre i toppen
     col_f1, col_f2, col_f3 = st.columns(3)
     with col_f1:
-        t_sel = st.selectbox("Hold", teams, index=teams.index("Hvidovre") if "Hvidovre" in teams else 0)
+        t_sel = st.selectbox("Hold", teams_in_data, index=teams_in_data.index("Hvidovre") if "Hvidovre" in teams_in_data else 0)
     with col_f2:
         sp_type = st.selectbox("Type", ["Hjørnespark", "Indkast", "Frispark"])
     with col_f3:
         side_sel = st.selectbox("Side", ["Begge", "Venstre", "Højre"])
 
-    # Data filter
+    # Filtrering af data baseret på valg
     df_team = df_all[(df_all['KLUB_NAVN'] == t_sel) & (df_all['SET_PIECE_TYPE'] == sp_type)].copy()
 
-    # Skalering til meter
+    # Skalering til banens mål (meter)
     df_team['X_M'] = df_team['EVENT_X'].apply(lambda x: to_metric(x, 105))
-    df_team['Y_M'] = df_team['EVENT_Y'].apply(lambda y: to_
+    df_team['Y_M'] = df_team['EVENT_Y'].apply(lambda y: to_metric(y, 68))
+    df_team['ENDX_M'] = df_team['EVENT_ENDX'].apply(lambda x: to_metric(x, 105))
+    df_team['ENDY_M'] = df_team['EVENT_ENDY'].apply(lambda y: to_metric(y, 68))
+
+    # Filtrering på side (Venstre/Højre)
+    if side_sel == "Venstre":
+        df_team = df_team[df_team['Y_M'] < 34]
+    elif side_sel == "Højre":
+        df_team = df_team[df_team['Y_M'] >= 34]
+
+    t_color = TEAM_COLORS.get(t_sel, {}).get('primary', HIF_RED)
+
+    # Layout med bane og statistik
+    col_p, col_s = st.columns([2, 1])
+    
+    with col_p:
+        # Vi viser kun den øverste halvdel af banen (half=True)
+        pitch = VerticalPitch(half=True, pitch_type='custom', pitch_length=105, pitch_width=68, line_color='#cccccc')
+        fig, ax = pitch.draw(figsize=(10, 12))
+        ax.set_ylim(50, 105) # Zoom ind på modstanderens banehalvdel
+
+        if not df_team.dropna(subset=['ENDX_M', 'ENDY_M']).empty:
+            # Tegn pile for bevægelse
+            pitch.arrows(df_team.X_M, df_team.Y_M, df_team.ENDX_M, df_team.ENDY_M, 
+                         width=2, headwidth=4, headlength=4, color=t_color, ax=ax, alpha=0.5)
+
+            # Scatter slutpunkter (hvor bolden lander)
+            pitch.scatter(df_team.ENDX_M, df_team.ENDY_M, s=80, edgecolors='black', 
+                          c=t_color, linewidth=1, alpha=0.8, ax=ax, zorder=3)
+        else:
+            st.info("Ingen slut-koordinater tilgængelige for dette valg.")
+        
+        st.pyplot(fig)
+
+    with col_s:
+        st.subheader("Statistik")
+        total = len(df_team)
+        st.metric("Antal aktioner", total)
+        
+        if total > 0:
+            st.write("**Top udførere:**")
+            st.dataframe(df_team['PLAYER_NAME'].value_counts().head(5), use_container_width=True)
+
+            # Beregn hvor mange der rammer "feltet" (zone-estimat)
+            in_box = df_team[(df_team.ENDX_M >= 88.5) & (df_team.ENDY_M >= 13.8) & (df_team.ENDY_M <= 54.2)]
+            box_pct = (len(in_box) / total) * 100 if total > 0 else 0
+            st.metric("Rammer feltet (%)", f"{box_pct:.1f}%")
+            
+            # Beregn tendens (aktioner der flytter bolden mindst 5 meter fremad)
+            fremad = len(df_team[df_team.ENDX_M > df_team.X_M + 5])
+            fremad_pct = (fremad / total) * 100 if total > 0 else 0
+            st.write(f"**Søger fremad/feltet:** {int(fremad_pct)}%")
+
+if __name__ == "__main__":
+    vis_side()
