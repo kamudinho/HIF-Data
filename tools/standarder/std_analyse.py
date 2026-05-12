@@ -13,7 +13,7 @@ PLAYER_FILE = 'data/players/1div_overskrivning.csv'
 
 @st.cache_data(ttl=3600)
 def load_setpiece_data():
-    # 1. Hent navne-mapping fra din fil
+    # 1. Hent navne-mapping fra din overskrivningsfil
     try:
         df_lookup = pd.read_csv(PLAYER_FILE)
         df_lookup['PLAYER_OPTAUUID'] = df_lookup['PLAYER_OPTAUUID'].astype(str).str.strip()
@@ -25,7 +25,7 @@ def load_setpiece_data():
     conn = _get_snowflake_conn()
     if not conn: return pd.DataFrame()
 
-    # 2. Din SQL-logik optimeret til Snowflake & Python
+    # 2. SQL - Håndterer tager, modtager og type-oversættelse
     sql = f"""
     WITH OrderedEvents AS (
         SELECT
@@ -33,45 +33,51 @@ def load_setpiece_data():
             e.MATCH_OPTAUUID,
             e.EVENT_TIMESTAMP,
             e.EVENT_EVENTID,
-            TRIM(e.PLAYER_OPTAUUID) as PLAYER_OPTAUUID,
-            e.EVENT_CONTESTANT_OPTAUUID as TEAM_UUID,
-            e.EVENT_X, e.EVENT_Y, e.EVENT_OUTCOME,
-            -- Find næste spiller og deres hold (for at tjekke succesfuld modtagelse)
-            LEAD(TRIM(e.PLAYER_OPTAUUID)) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_EVENTID) as NEXT_PLAYER_UUID,
-            LEAD(e.EVENT_CONTESTANT_OPTAUUID) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_EVENTID) as NEXT_TEAM_UUID,
-            -- Hent slut-koordinater og typer fra Qualifiers
-            MAX(CASE WHEN q.QUALIFIER_QID = 140 THEN TRY_TO_DOUBLE(q.QUALIFIER_VALUE) END) as END_X,
-            MAX(CASE WHEN q.QUALIFIER_QID = 141 THEN TRY_TO_DOUBLE(q.QUALIFIER_VALUE) END) as END_Y,
-            MAX(CASE WHEN q.QUALIFIER_QID = 6 THEN 'Hjørnespark'
-                     WHEN q.QUALIFIER_QID = 107 THEN 'Indkast'
-                     WHEN q.QUALIFIER_QID = 5 THEN 'Frispark'
-                END) as EVENT_TYPE_NAVN,
-            MAX(CASE WHEN q.QUALIFIER_QID IN (214, 154, 111) THEN 1 ELSE 0 END) as IS_CHANCE
+            e.EVENT_CONTESTANT_OPTAUUID AS TEAM_UUID,
+            TRIM(e.PLAYER_OPTAUUID) AS TAGER_UUID,
+            e.EVENT_X AS START_X,
+            e.EVENT_Y AS START_Y,
+            e.EVENT_OUTCOME,
+            -- Kigger fremad efter næste spiller og deres hold
+            LEAD(TRIM(e.PLAYER_OPTAUUID)) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_EVENTID) AS MODTAGER_UUID,
+            LEAD(e.EVENT_CONTESTANT_OPTAUUID) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_EVENTID) AS NEXT_TEAM_UUID
         FROM {DB}.OPTA_EVENTS e
-        LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
         WHERE e.TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
-        GROUP BY 1,2,3,4,5,6,7,8,9
+    ),
+    QualifiersMapped AS (
+        SELECT 
+            EVENT_OPTAUUID,
+            -- Oversættelse direkte i SQL
+            MAX(CASE 
+                WHEN QUALIFIER_QID = 6 THEN 'Hjørnespark'
+                WHEN QUALIFIER_QID = 107 THEN 'Indkast'
+                WHEN QUALIFIER_QID = 5 THEN 'Frispark'
+            END) AS TYPE_NAVN,
+            MAX(CASE WHEN QUALIFIER_QID = 140 THEN TRY_TO_DOUBLE(QUALIFIER_VALUE) END) AS END_X,
+            MAX(CASE WHEN QUALIFIER_QID = 141 THEN TRY_TO_DOUBLE(QUALIFIER_VALUE) END) AS END_Y,
+            MAX(CASE WHEN QUALIFIER_QID IN (214, 154, 111) THEN 1 ELSE 0 END) AS ER_CHANCE
+        FROM {DB}.OPTA_QUALIFIERS
+        GROUP BY EVENT_OPTAUUID
     )
-    SELECT * FROM OrderedEvents
-    WHERE EVENT_TYPE_NAVN IS NOT NULL
+    SELECT 
+        r.TAGER_UUID,
+        -- Kun medtag modtager hvis det er samme hold
+        CASE WHEN r.TEAM_UUID = r.NEXT_TEAM_UUID THEN r.MODTAGER_UUID ELSE NULL END AS MODTAGER_UUID,
+        r.START_X, r.START_Y, q.END_X, q.END_Y, q.TYPE_NAVN, r.EVENT_OUTCOME, q.ER_CHANCE, r.TEAM_UUID, r.EVENT_TIMESTAMP
+    FROM OrderedEvents r
+    INNER JOIN QualifiersMapped q ON r.EVENT_OPTAUUID = q.EVENT_OPTAUUID
+    WHERE q.TYPE_NAVN IS NOT NULL
     """
     df = conn.query(sql)
     if df is None or df.empty: return pd.DataFrame()
     df.columns = [c.upper() for c in df.columns]
 
-    # 3. Navne-mapping (Afsender og Modtager)
-    df['TAGER'] = df['PLAYER_OPTAUUID'].map(name_map)
-    # Vi tæller kun modtageren, hvis det er en medspiller (samme TEAM_UUID)
-    df['MODTAGER'] = np.where(
-        df['TEAM_UUID'] == df['NEXT_TEAM_UUID'], 
-        df['NEXT_PLAYER_UUID'].map(name_map), 
-        None
-    )
+    # 3. Map UUIDs til navne fra din CSV
+    df['TAGER'] = df['TAGER_UUID'].map(name_map)
+    df['MODTAGER'] = df['MODTAGER_UUID'].map(name_map)
     
-    # Succes-logik (Modtager er en medspiller fra din navne-liste)
-    df['SUCCESS'] = df['MODTAGER'].notna()
-    
-    return df
+    # Filtrer rækker fra hvor tageren ikke findes i din fil (fjerner modstandere helt)
+    return df.dropna(subset=['TAGER'])
 
 def vis_side():
     st.title("Standard-Analyse")
@@ -85,40 +91,38 @@ def vis_side():
     uuid_to_name = {v['opta_uuid'].upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
     df['KLUB'] = df['TEAM_UUID'].str.upper().map(uuid_to_name)
     
-    # Filtre
+    # UI Filtre
     c1, c2, c3 = st.columns(3)
     with c1: t_sel = st.selectbox("Hold", sorted(df['KLUB'].dropna().unique()))
     with c2: type_sel = st.selectbox("Type", ["Alle", "Hjørnespark", "Indkast", "Frispark"])
-    with c3: player_sel = st.selectbox("Spiller (Tager)", ["Alle"] + sorted(df[df['KLUB'] == t_sel]['TAGER'].dropna().unique()))
+    with c3: player_sel = st.selectbox("Spiller (Tager)", ["Alle"] + sorted(df[df['KLUB'] == t_sel]['TAGER'].unique()))
 
-    # Filtrering af data
+    # Anvend filtre
     mask = (df['KLUB'] == t_sel)
-    if type_sel != "Alle": mask &= (df['EVENT_TYPE_NAVN'] == type_sel)
+    if type_sel != "Alle": mask &= (df['TYPE_NAVN'] == type_sel)
     if player_sel != "Alle": mask &= (df['TAGER'] == player_sel)
-    
     df_plot = df[mask].copy()
 
-    # Tabs til visning
     tab_stats, tab_bane = st.tabs(["Statistik", "Banevisning"])
 
     with tab_stats:
-        # Grupperet oversigt over "Tager" og hvem de finder
-        stats = df_plot.groupby(['TAGER', 'EVENT_TYPE_NAVN']).apply(lambda x: pd.Series({
+        # Grupperet statistik
+        stats = df_plot.groupby(['TAGER', 'TYPE_NAVN']).apply(lambda x: pd.Series({
             'Antal': len(x),
-            'Succes (Eget hold)': x['SUCCESS'].sum(),
-            'Chancer skabt': x['IS_CHANCE'].sum(),
-            'Oftest fundne modtager': x['MODTAGER'].value_counts().idxmax() if not x['MODTAGER'].dropna().empty else "Ingen"
+            'Succesfulde': x['MODTAGER'].notna().sum(),
+            'Chancer': x['ER_CHANCE'].sum(),
+            'Primær Modtager': x['MODTAGER'].value_counts().idxmax() if not x['MODTAGER'].dropna().empty else "Ingen"
         })).reset_index()
 
-        st.dataframe(
+        st.data_editor(
             stats.sort_values('Antal', ascending=False),
             column_config={
                 "TAGER": "Spiller",
-                "EVENT_TYPE_NAVN": "Type",
-                "Oftest fundne modtager": "Primær Modtager"
+                "TYPE_NAVN": "Type",
+                "Succesfulde": "Ramt medspiller",
+                "Chancer": "Skud efter aktion"
             },
-            use_container_width=True,
-            hide_index=True
+            use_container_width=True, hide_index=True
         )
 
     with tab_bane:
@@ -126,14 +130,10 @@ def vis_side():
         fig, ax = pitch.draw(figsize=(8, 10))
         t_color = TEAM_COLORS.get(t_sel, {}).get('primary', HIF_RED)
         
-        # Tegn pile fra start til slut
-        valid_arrows = df_plot.dropna(subset=['END_X', 'END_Y'])
-        if not valid_arrows.empty:
-            pitch.arrows(valid_arrows.EVENT_X, valid_arrows.EVENT_Y, 
-                         valid_arrows.END_X, valid_arrows.END_Y, 
-                         color=t_color, ax=ax, alpha=0.3)
-            pitch.scatter(valid_arrows.END_X, valid_arrows.END_Y, color=t_color, edgecolors='white', ax=ax)
-        
+        valid = df_plot.dropna(subset=['END_X', 'END_Y'])
+        if not valid.empty:
+            pitch.arrows(valid.START_X, valid.START_Y, valid.END_X, valid.END_Y, color=t_color, ax=ax, alpha=0.3)
+            pitch.scatter(valid.END_X, valid.END_Y, color=t_color, edgecolors='white', s=100, ax=ax)
         st.pyplot(fig)
 
 if __name__ == "__main__":
