@@ -20,9 +20,10 @@ def load_setpiece_data():
     if not conn: 
         return pd.DataFrame()
 
+    # Vi definerer sub-queryen her
     match_sql = f"SELECT DISTINCT MATCH_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'"
 
-    # SQL der henter start- OG slutkoordinater via Qualifiers (140/141)
+    # SQL stringen er nu rettet så alle parenteser lukkes korrekt
     sql = f"""
     WITH END_X AS (
         SELECT EVENT_OPTAUUID, QUALIFIER_VALUE as ENDX FROM {DB}.OPTA_QUALIFIERS WHERE QUALIFIER_QID = 140
@@ -48,10 +49,11 @@ def load_setpiece_data():
     LEFT JOIN END_Y ey ON s.EVENT_OPTAUUID = ey.EVENT_OPTAUUID
     LEFT JOIN {DB}.OPTA_PLAYERS p ON s.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
     """
+    
     df = conn.query(sql)
     df.columns = [c.upper() for c in df.columns]
 
-    # Konverter koordinater til floats
+    # Konverter koordinater til tal
     for col in ['EVENT_X', 'EVENT_Y', 'EVENT_ENDX', 'EVENT_ENDY']:
         df[col] = pd.to_numeric(df[col], errors='coerce')
 
@@ -60,7 +62,6 @@ def load_setpiece_data():
     df['SET_PIECE_TYPE'] = df['QUALIFIER_QID'].map(type_map)
 
     return df
-
 def to_metric(val, total_m):
     return val * (total_m / 100)
 
