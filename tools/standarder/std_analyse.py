@@ -13,73 +13,75 @@ PLAYER_FILE = 'data/players/1div_overskrivning.csv'
 
 @st.cache_data(ttl=3600)
 def load_setpiece_data():
-    try:
-        df_lookup = pd.read_csv(PLAYER_FILE)
-        df_lookup['PLAYER_OPTAUUID'] = df_lookup['PLAYER_OPTAUUID'].astype(str).str.strip()
-        name_map = df_lookup.dropna(subset=['PLAYER_OPTAUUID']).set_index('PLAYER_OPTAUUID')['NAVN'].to_dict()
-    except Exception as e:
-        st.error(f"Fejl ved læsning af spiller-fil: {e}")
-        return pd.DataFrame()
-
     conn = _get_snowflake_conn()
     if not conn: return pd.DataFrame()
 
-    # SQL - Nu med filter der sikrer, at man ikke kan aflevere til sig selv
-    sql = f"""
-    WITH RawData AS (
-        SELECT
-            e.EVENT_OPTAUUID,
-            e.MATCH_OPTAUUID,
-            e.EVENT_TIMESTAMP,
-            e.EVENT_EVENTID,
-            e.EVENT_CONTESTANT_OPTAUUID AS TEAM_UUID,
-            TRIM(e.PLAYER_OPTAUUID) AS TAGER_UUID,
-            e.EVENT_X AS START_X,
-            e.EVENT_Y AS START_Y,
-            -- Vi bruger en Window function til at finde den FØRSTE spiller efter aktionen, 
-            -- som IKKE er tageren selv, men som er på samme hold.
-            MIN(CASE 
-                WHEN TRIM(e2.PLAYER_OPTAUUID) != TRIM(e.PLAYER_OPTAUUID) 
-                AND e2.EVENT_CONTESTANT_OPTAUUID = e.EVENT_CONTESTANT_OPTAUUID 
-                THEN TRIM(e2.PLAYER_OPTAUUID) 
-            END) OVER (
-                PARTITION BY e.MATCH_OPTAUUID 
-                ORDER BY e.EVENT_EVENTID 
-                ROWS BETWEEN 1 FOLLOWING AND 3 FOLLOWING
-            ) AS MODTAGER_UUID
-        FROM {DB}.OPTA_EVENTS e
-        LEFT JOIN {DB}.OPTA_EVENTS e2 ON e.MATCH_OPTAUUID = e2.MATCH_OPTAUUID 
-            AND e2.EVENT_EVENTID > e.EVENT_EVENTID 
-            AND e2.EVENT_EVENTID <= e.EVENT_EVENTID + 3
-    ),
-    Quals AS (
-        SELECT 
-            EVENT_OPTAUUID,
-            MAX(CASE WHEN QUALIFIER_QID = 6 THEN 'Hjørnespark'
-                     WHEN QUALIFIER_QID = 107 THEN 'Indkast'
-                     WHEN QUALIFIER_QID = 5 THEN 'Frispark' END) AS TYPE_NAVN,
-            MAX(CASE WHEN QUALIFIER_QID = 140 THEN TRY_TO_DOUBLE(QUALIFIER_VALUE) END) AS END_X,
-            MAX(CASE WHEN QUALIFIER_QID = 141 THEN TRY_TO_DOUBLE(QUALIFIER_VALUE) END) AS END_Y,
-            MAX(CASE WHEN QUALIFIER_QID IN (214, 154, 111) THEN 1 ELSE 0 END) AS ER_CHANCE
-        FROM {DB}.OPTA_QUALIFIERS
-        GROUP BY EVENT_OPTAUUID
-    )
-    SELECT DISTINCT
-        r.TAGER_UUID, r.MODTAGER_UUID, r.START_X, r.START_Y, 
-        q.END_X, q.END_Y, q.TYPE_NAVN, q.ER_CHANCE, r.TEAM_UUID, r.EVENT_TIMESTAMP
-    FROM RawData r
-    INNER JOIN Quals q ON r.EVENT_OPTAUUID = q.EVENT_OPTAUUID
-    WHERE q.TYPE_NAVN IS NOT NULL
+    # 1. Hent ALLE events for kampene (så vi kan se hvem der rører bolden efter sparket)
+    # Dette er nøglen til at fixe "Primær Modtager" fejlen
+    sql_events = f"""
+    SELECT 
+        MATCH_OPTAUUID, EVENT_EVENTID, EVENT_TIMESTAMP,
+        EVENT_CONTESTANT_OPTAUUID AS TEAM_UUID,
+        TRIM(PLAYER_OPTAUUID) AS PLAYER_UUID,
+        EVENT_TYPEID
+    FROM {DB}.OPTA_EVENTS
+    WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
+    ORDER BY MATCH_OPTAUUID, EVENT_EVENTID
     """
-    df = conn.query(sql)
-    if df is None or df.empty: return pd.DataFrame()
-    df.columns = [c.upper() for c in df.columns]
+    
+    # 2. Hent kun Qualifiers for standarder
+    sql_quals = f"""
+    SELECT 
+        q.EVENT_OPTAUUID, e.MATCH_OPTAUUID, e.EVENT_EVENTID,
+        q.QUALIFIER_QID, q.QUALIFIER_VALUE,
+        e.EVENT_X AS START_X, e.EVENT_Y AS START_Y
+    FROM {DB}.OPTA_QUALIFIERS q
+    JOIN {DB}.OPTA_EVENTS e ON q.EVENT_OPTAUUID = e.EVENT_OPTAUUID
+    WHERE e.TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
+      AND q.QUALIFIER_QID IN (5, 6, 107, 140, 141, 214, 154, 111)
+    """
 
-    df['TAGER'] = df['TAGER_UUID'].map(name_map)
+    df_all_events = conn.query(sql_events)
+    df_quals = conn.query(sql_quals)
+
+    # Find modtager ved at kigge på næste PLAYER_UUID i df_all_events
+    df_all_events['NEXT_PLAYER'] = df_all_events.groupby('MATCH_OPTAUUID')['PLAYER_UUID'].shift(-1)
+    df_all_events['NEXT_TEAM'] = df_all_events.groupby('MATCH_OPTAUUID')['TEAM_UUID'].shift(-1)
+
+    # Pivot qualifiers til kolonner
+    df_q = df_quals.pivot_table(
+        index=['EVENT_OPTAUUID', 'MATCH_OPTAUUID', 'EVENT_EVENTID', 'START_X', 'START_Y'],
+        columns='QUALIFIER_QID', values='QUALIFIER_VALUE', aggfunc='first'
+    ).reset_index()
+
+    # Join modtager-info på de pivoterede qualifiers
+    df = df_q.merge(df_all_events, on=['MATCH_OPTAUUID', 'EVENT_EVENTID'], how='inner')
+
+    # Navngivning og logik
+    df = df.rename(columns={6:'Hjørne', 107:'Indkast', 5:'Frispark', 140:'END_X', 141:'END_Y'})
+    df['TYPE_NAVN'] = np.select(
+        [df['Hjørne'].notna(), df['Indkast'].notna(), df['Frispark'].notna()],
+        ['Hjørnespark', 'Indkast', 'Frispark'], default=None
+    )
+    
+    # Valider modtager (skal være anden spiller, samme hold)
+    df['MODTAGER_UUID'] = np.where(
+        (df['NEXT_PLAYER'] != df['PLAYER_UUID']) & (df['NEXT_TEAM'] == df['TEAM_UUID']),
+        df['NEXT_PLAYER'], None
+    )
+
+    # Map navne
+    df_lookup = pd.read_csv(PLAYER_FILE)
+    name_map = df_lookup.set_index('PLAYER_OPTAUUID')['NAVN'].to_dict()
+    df['TAGER'] = df['PLAYER_UUID'].map(name_map)
     df['MODTAGER'] = df['MODTAGER_UUID'].map(name_map)
     
-    return df.dropna(subset=['TAGER'])
+    # Chance-logik
+    chance_ids = [214, 154, 111]
+    df['ER_CHANCE'] = df[df.columns[df.columns.isin(chance_ids)]].notna().any(axis=1).astype(int)
 
+    return df[df['TYPE_NAVN'].notna()].dropna(subset=['TAGER'])
+    
 def vis_side():
     st.title("Standard-Analyse")
     df = load_setpiece_data()
