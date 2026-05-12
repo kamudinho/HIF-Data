@@ -10,7 +10,7 @@ from data.data_load import _get_snowflake_conn
 HIF_RED = '#cc0000'
 DB = "KLUB_HVIDOVREIF.AXIS"
 LIGA_UUID = "dyjr458hcmrcy87fsabfsy87o" 
-PLAYER_FILE = 'data/players/spiller_overskrivning.csv'
+PLAYER_FILE = 'data/players/1div_overskrivning.csv'
 
 @st.cache_data(ttl=3600)
 def load_setpiece_data():
