@@ -9,7 +9,6 @@ from data.data_load import _get_snowflake_conn
 # --- KONFIGURATION ---
 HIF_RED = '#cc0000'
 DB = "KLUB_HVIDOVREIF.AXIS"
-# Opdateret til din aktuelle sæson UUID
 LIGA_UUID = "dyjr458hcmrcy87fsabfsy87o" 
 
 @st.cache_data(ttl=3600)
@@ -37,6 +36,7 @@ def load_setpiece_data():
         e.EVENT_Y, 
         e.EVENT_CONTESTANT_OPTAUUID as TEAM_UUID, 
         e.PLAYER_OPTAUUID as PLAYER_UUID,
+        e.EVENT_OUTCOME,
         q.QUAL_LIST,
         q.ENDX as EVENT_ENDX,
         q.ENDY as EVENT_ENDY,
@@ -78,24 +78,24 @@ def vis_side():
     
     df_all = load_setpiece_data()
     if df_all.empty:
-        st.error("Kunne ikke hente data fra databasen.")
+        st.error("Kunne ikke hente data.")
         return
 
-    # Team mapping og metadata
+    # Team mapping
     uuid_to_name = {v['opta_uuid'].upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
     df_all['KLUB_NAVN'] = df_all['TEAM_UUID'].str.upper().map(uuid_to_name)
     teams_in_data = sorted([n for n in df_all['KLUB_NAVN'].unique() if pd.notna(n)])
 
-    # Filtre i toppen
+    # Filtre
     col_f1, col_f2, col_f3 = st.columns(3)
     with col_f1:
-        t_sel = st.selectbox("Hold", teams_in_data, index=teams_in_data.index("Hvidovre") if "Hvidovre" in teams_in_data else 0)
+        t_sel = st.selectbox("Hold", teams_in_data, index=0)
     with col_f2:
         sp_type = st.selectbox("Type", ["Hjørnespark", "Indkast", "Frispark"])
     with col_f3:
         side_sel = st.selectbox("Side", ["Begge", "Venstre", "Højre"])
 
-    # Filtrering og dublet-tjek (vigtigt!)
+    # Filtrering og dublet-rens
     df_team = df_all[(df_all['KLUB_NAVN'] == t_sel) & (df_all['SET_PIECE_TYPE'] == sp_type)].copy()
     df_team = df_team.drop_duplicates(subset=['EVENT_OPTAUUID'])
 
@@ -115,64 +115,49 @@ def vis_side():
     elif side_sel == "Højre":
         df_team = df_team[df_team['Y_M'] >= 34]
 
-    # Tabs til de forskellige visninger
-    tab_bane, tab_data = st.tabs(["🏟️ Banevisning", "📊 Rådata & Statistik"])
+    # Tabs
+    tab_bane, tab_stats = st.tabs(["🏟️ Banevisning", "📊 Statistik & Dataframe"])
 
     with tab_bane:
         col_p, col_s = st.columns([2, 1])
-        
         with col_p:
             pitch = VerticalPitch(half=True, pitch_type='custom', pitch_length=105, pitch_width=68, line_color='#cccccc')
             fig, ax = pitch.draw(figsize=(10, 12))
             ax.set_ylim(50, 105) 
-            
             t_color = TEAM_COLORS.get(t_sel, {}).get('primary', HIF_RED)
             valid = df_team.dropna(subset=['ENDX_M', 'ENDY_M'])
-            
             if not valid.empty:
                 pitch.arrows(valid.X_M, valid.Y_M, valid.ENDX_M, valid.ENDY_M, color=t_color, ax=ax, alpha=0.4, width=2)
                 pitch.scatter(valid.ENDX_M, valid.ENDY_M, s=60, edgecolors='white', c=t_color, ax=ax, zorder=3)
-            else:
-                st.info("Ingen slutpositioner at vise.")
             st.pyplot(fig)
-
         with col_s:
             st.subheader("Overblik")
             st.metric(f"Total {sp_type}", len(df_team))
-            st.write("**Top skytter:**")
-            st.write(df_team['PLAYER_NAME'].value_counts().head(5))
-            
             if sp_type == "Hjørnespark":
                 st.write("**Skru:**")
                 st.write(df_team['SWING_TYPE'].value_counts())
 
-    # --- Denne del indsættes i din eksisterende vis_side() funktion ---
-
-    with tab_data:
-        st.subheader(f"Præstationsstatistik: {sp_type}")
+    with tab_stats:
+        st.subheader(f"Præstation: {sp_type}")
         
-        # Gruppér data for at beregne Antal, Succes og Succes %
-        # Vi bruger EVENT_OUTCOME (1 = succes, 0 = ikke succes)
+        # Beregning af tabel: Antal, Succes, Succes %
         stats_df = df_team.groupby('PLAYER_NAME').agg(
             Antal=('EVENT_OUTCOME', 'count'),
             Succes=('EVENT_OUTCOME', 'sum')
         ).reset_index()
-
-        # Beregn procenten
-        stats_df['Succes %'] = (stats_df['Succes'] / stats_df['Antal'] * 100).round(1)
         
-        # Sorter efter flest aktioner
+        stats_df['Succes %'] = (stats_df['Succes'] / stats_df['Antal'] * 100).round(1)
         stats_df = stats_df.sort_values(by='Antal', ascending=False)
 
-        # Vis den pæne dataframe
+        # Formatering til visning
         st.dataframe(
             stats_df.style.format({'Succes %': '{:.1f}%'}), 
             use_container_width=True,
             hide_index=True
         )
-
+        
         st.write("---")
-        st.subheader("Rådata hændelsesliste")
+        st.subheader("Hændelsesliste")
         st.dataframe(df_team[['PLAYER_NAME', 'EVENT_OUTCOME', 'SWING_TYPE', 'EVENT_X', 'EVENT_Y']], use_container_width=True)
 
 if __name__ == "__main__":
