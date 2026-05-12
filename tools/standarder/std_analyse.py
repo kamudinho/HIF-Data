@@ -16,91 +16,104 @@ def load_setpiece_data():
     conn = _get_snowflake_conn()
     if not conn: return pd.DataFrame()
 
-    # 1. Hent ALLE events for at finde den korrekte næste spiller
+    # 1. Hent ALLE events (Basis for tælling og modtager-logik)
+    # Vi henter kun de kolonner, vi så i dit udtræk
     sql_events = f"""
     SELECT 
-        MATCH_OPTAUUID, EVENT_EVENTID, 
+        EVENT_OPTAUUID, MATCH_OPTAUUID, EVENT_EVENTID, EVENT_TIMESTAMP,
         EVENT_CONTESTANT_OPTAUUID AS TEAM_UUID,
-        TRIM(PLAYER_OPTAUUID) AS PLAYER_UUID
+        TRIM(PLAYER_OPTAUUID) AS PLAYER_UUID,
+        EVENT_TYPEID, EVENT_X, EVENT_Y
     FROM {DB}.OPTA_EVENTS
     WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
     ORDER BY MATCH_OPTAUUID, EVENT_EVENTID
     """
     
-    # 2. Hent Qualifiers for standarder
+    # 2. Hent Qualifiers (Detaljer om sparket)
     sql_quals = f"""
     SELECT 
-        q.EVENT_OPTAUUID, e.MATCH_OPTAUUID, e.EVENT_EVENTID,
-        q.QUALIFIER_QID, q.QUALIFIER_VALUE,
-        e.EVENT_X AS START_X, e.EVENT_Y AS START_Y
-    FROM {DB}.OPTA_QUALIFIERS q
-    JOIN {DB}.OPTA_EVENTS e ON q.EVENT_OPTAUUID = e.EVENT_OPTAUUID
-    WHERE e.TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
-      AND q.QUALIFIER_QID IN (5, 6, 107, 140, 141, 214, 154, 111)
+        EVENT_OPTAUUID, QUALIFIER_QID, QUALIFIER_VALUE
+    FROM {DB}.OPTA_QUALIFIERS
+    WHERE QUALIFIER_QID IN (5, 6, 107, 140, 141, 214, 154, 111)
     """
 
-    df_all_events = conn.query(sql_events)
-    df_quals = conn.query(sql_quals)
+    df_e = conn.query(sql_events)
+    df_q_raw = conn.query(sql_quals)
     
-    if df_all_events is None or df_quals is None: return pd.DataFrame()
+    if df_e is None or df_q_raw is None: return pd.DataFrame()
 
-    # Find næste spiller i sekvensen
-    df_all_events = df_all_events.sort_values(['MATCH_OPTAUUID', 'EVENT_EVENTID'])
-    df_all_events['NEXT_PLAYER'] = df_all_events.groupby('MATCH_OPTAUUID')['PLAYER_UUID'].shift(-1)
-    df_all_events['NEXT_TEAM'] = df_all_events.groupby('MATCH_OPTAUUID')['TEAM_UUID'].shift(-1)
+    # --- BEHANDLING I PYTHON (Hurtigt og præcist) ---
 
-    # Pivot Qualifiers (Sikrer at QIDs behandles som tekst for at undgå 'str' vs 'int' fejl)
-    df_quals['QUALIFIER_QID'] = df_quals['QUALIFIER_QID'].astype(str)
-    df_q = df_quals.pivot_table(
-        index=['EVENT_OPTAUUID', 'MATCH_OPTAUUID', 'EVENT_EVENTID', 'START_X', 'START_Y'],
-        columns='QUALIFIER_QID', values='QUALIFIER_VALUE', aggfunc='first'
+    # A. Pivot Qualifiers så vi får 1 række pr. event
+    df_q_raw['QUALIFIER_QID'] = df_q_raw['QUALIFIER_QID'].astype(str)
+    df_q = df_q_raw.pivot_table(
+        index='EVENT_OPTAUUID', 
+        columns='QUALIFIER_QID', 
+        values='QUALIFIER_VALUE', 
+        aggfunc='first'
     ).reset_index()
 
-    # Join modtager-info på
-    df = df_q.merge(df_all_events, on=['MATCH_OPTAUUID', 'EVENT_EVENTID'], how='inner')
+    # B. Merge Qualifiers på Events
+    df = df_e.merge(df_q, on='EVENT_OPTAUUID', how='left')
 
-    # Omdøb og logik (Vi bruger nu tekst-nøgler her)
-    df = df.rename(columns={'6':'Hjørne', '107':'Indkast', '5':'Frispark', '140':'END_X', '141':'END_Y'})
+    # C. Definer Standard-type (Fixer tælle-fejlen fra tidligere)
+    conditions = [
+        df.get('6').notna(),   # Corner
+        df.get('107').notna(), # Throw-in
+        df.get('5').notna()    # Free kick
+    ]
+    choices = ['Hjørnespark', 'Indkast', 'Frispark']
+    df['TYPE_NAVN'] = np.select(conditions, choices, default=None)
+
+    # Filtrer med det samme så vi kun arbejder med standarder
+    df_standards = df[df['TYPE_NAVN'].notna()].copy()
+
+    # D. Find MODTAGER (Kig på næste event i den fulde df_e tidslinje)
+    df_e = df_e.sort_values(['MATCH_OPTAUUID', 'EVENT_EVENTID'])
+    df_e['NEXT_PLAYER'] = df_e.groupby('MATCH_OPTAUUID')['PLAYER_UUID'].shift(-1)
+    df_e['NEXT_TEAM'] = df_e.groupby('MATCH_OPTAUUID')['TEAM_UUID'].shift(-1)
     
-    df['TYPE_NAVN'] = np.select(
-        [df.get('Hjørne').notna() if 'Hjørne' in df else False, 
-         df.get('Indkast').notna() if 'Indkast' in df else False, 
-         df.get('Frispark').notna() if 'Frispark' in df else False],
-        ['Hjørnespark', 'Indkast', 'Frispark'], default=None
-    )
-    
-    # Valider modtager
-    df['MODTAGER_UUID'] = np.where(
-        (df['NEXT_PLAYER'] != df['PLAYER_UUID']) & (df['NEXT_TEAM'] == df['TEAM_UUID']),
-        df['NEXT_PLAYER'], None
+    # Map modtager-info tilbage på vores standards
+    receiver_info = df_e[['EVENT_OPTAUUID', 'NEXT_PLAYER', 'NEXT_TEAM']]
+    df_standards = df_standards.merge(receiver_info, on='EVENT_OPTAUUID', how='left')
+
+    # Valider: Modtager skal være en anden spiller på samme hold
+    df_standards['MODTAGER_UUID'] = np.where(
+        (df_standards['NEXT_PLAYER'] != df_standards['PLAYER_UUID']) & 
+        (df_standards['NEXT_TEAM'] == df_standards['TEAM_UUID']),
+        df_standards['NEXT_PLAYER'], None
     )
 
-    # Chance-logik (Her opstod fejlen typisk - vi bruger nu strenge)
-    chance_ids = ['214', '154', '111']
-    df['ER_CHANCE'] = df[df.columns[df.columns.isin(chance_ids)]].notna().any(axis=1).astype(int)
-
-    # Map navne
+    # E. Navne-mapping
     try:
         df_lookup = pd.read_csv(PLAYER_FILE)
         df_lookup['PLAYER_OPTAUUID'] = df_lookup['PLAYER_OPTAUUID'].astype(str).str.strip()
         name_map = df_lookup.set_index('PLAYER_OPTAUUID')['NAVN'].to_dict()
-        df['TAGER'] = df['PLAYER_UUID'].map(name_map)
-        df['MODTAGER'] = df['MODTAGER_UUID'].map(name_map)
+        df_standards['TAGER'] = df_standards['PLAYER_UUID'].map(name_map)
+        df_standards['MODTAGER'] = df_standards['MODTAGER_UUID'].map(name_map)
     except:
-        df['TAGER'] = df['PLAYER_UUID']
-        df['MODTAGER'] = df['MODTAGER_UUID']
+        df_standards['TAGER'] = df_standards['PLAYER_UUID']
+        df_standards['MODTAGER'] = df_standards['MODTAGER_UUID']
 
-    return df[df['TYPE_NAVN'].notna()].dropna(subset=['TAGER'])
+    # Konverter slut-koordinater til tal
+    df_standards['END_X'] = pd.to_numeric(df_standards.get('140'), errors='coerce')
+    df_standards['END_Y'] = pd.to_numeric(df_standards.get('141'), errors='coerce')
+    
+    # Chance-logik (QIDs for skud/chancer)
+    chance_ids = ['214', '154', '111']
+    df_standards['ER_CHANCE'] = df_standards[df_standards.columns[df_standards.columns.isin(chance_ids)]].notna().any(axis=1).astype(int)
 
+    return df_standards.dropna(subset=['TAGER'])
+
+# --- UI VISNING (vis_side() er uændret, da dataformatet nu er korrekt) ---
 def vis_side():
     st.title("🎯 Standard-Analyse")
     df = load_setpiece_data()
     
     if df.empty:
-        st.info("Ingen data indlæst.")
+        st.warning("Ingen data fundet.")
         return
 
-    # Hold mapping
     uuid_to_name = {v['opta_uuid'].upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
     df['KLUB'] = df['TEAM_UUID'].str.upper().map(uuid_to_name)
     
@@ -131,8 +144,8 @@ def vis_side():
         t_color = TEAM_COLORS.get(t_sel, {}).get('primary', HIF_RED)
         valid = df_plot.dropna(subset=['END_X', 'END_Y'])
         if not valid.empty:
-            pitch.arrows(valid.START_X, valid.START_Y, valid.END_X.astype(float), valid.END_Y.astype(float), color=t_color, ax=ax, alpha=0.3)
-            pitch.scatter(valid.END_X.astype(float), valid.END_Y.astype(float), color=t_color, edgecolors='white', s=100, ax=ax)
+            pitch.arrows(valid.EVENT_X, valid.EVENT_Y, valid.END_X, valid.END_Y, color=t_color, ax=ax, alpha=0.3)
+            pitch.scatter(valid.END_X, valid.END_Y, color=t_color, edgecolors='white', s=100, ax=ax)
         st.pyplot(fig)
 
 if __name__ == "__main__":
