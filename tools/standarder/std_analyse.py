@@ -16,7 +16,7 @@ def load_setpiece_data():
     conn = _get_snowflake_conn()
     if not conn: return pd.DataFrame()
 
-    # SQL bruger nu LEAD() til at finde modtageren af bolden uden at bruge EVENT_ID + 1
+    # SQL bruger LEAD() med EVENT_EVENTID til at finde næste spiller (modtager)
     sql = f"""
     WITH RAW_EVENTS AS (
         SELECT 
@@ -28,9 +28,11 @@ def load_setpiece_data():
             e.MATCH_OPTAUUID,
             e.PLAYER_OPTAUUID,
             TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME) as PLAYER_NAME,
-            LEAD(TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME)) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_ID_SORT) as NEXT_PLAYER_NAME
+            LEAD(TRIM(p_next.FIRST_NAME) || ' ' || TRIM(p_next.LAST_NAME)) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_EVENTID) as NEXT_PLAYER_NAME
         FROM {DB}.OPTA_EVENTS e
         LEFT JOIN {DB}.OPTA_PLAYERS p ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
+        LEFT JOIN {DB}.OPTA_EVENTS e_next ON e.MATCH_OPTAUUID = e_next.MATCH_OPTAUUID AND (e.EVENT_EVENTID + 1) = e_next.EVENT_EVENTID
+        LEFT JOIN {DB}.OPTA_PLAYERS p_next ON e_next.PLAYER_OPTAUUID = p_next.PLAYER_OPTAUUID
         WHERE e.MATCH_OPTAUUID IN (
             SELECT MATCH_OPTAUUID FROM {DB}.OPTA_MATCHINFO 
             WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
@@ -54,7 +56,7 @@ def load_setpiece_data():
         q.QUAL_LIST, q.ENDX as EVENT_ENDX, q.ENDY as EVENT_ENDY, q.IS_CHANCE, q.SWING_TYPE
     FROM RAW_EVENTS r
     INNER JOIN AGG_QUALS q ON r.EVENT_OPTAUUID = q.EVENT_OPTAUUID
-    AND (
+    WHERE (
         ',' || q.QUAL_LIST || ',' LIKE '%,6,%' OR 
         ',' || q.QUAL_LIST || ',' LIKE '%,107,%' OR 
         ',' || q.QUAL_LIST || ',' LIKE '%,5,%'
@@ -136,8 +138,7 @@ def vis_side():
 
     with tab_stats:
         def get_top_receiver(x):
-            receivers = x[x != "None"]
-            receivers = receivers.dropna()
+            receivers = x[x != "None"].dropna()
             return receivers.value_counts().idxmax() if not receivers.empty else "Ingen modtager"
 
         stats_df = df_team.groupby('PLAYER_NAME').agg(
