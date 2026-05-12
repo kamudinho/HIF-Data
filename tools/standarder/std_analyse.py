@@ -10,7 +10,6 @@ from data.utils.mapping import get_action_label
 # --- KONFIGURATION ---
 HIF_RED = '#cc0000'
 DB = "KLUB_HVIDOVREIF.AXIS"
-# Sørg for at denne UUID er opdateret til din nuværende sæson/liga
 LIGA_UUID = "dyjr458hcmrcy87fsabfsy87o" 
 
 @st.cache_data(ttl=3600)
@@ -21,7 +20,7 @@ def load_setpiece_data():
 
     match_sql = f"SELECT DISTINCT MATCH_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'"
 
-    # SQL der grupperer pr. unik hændelse for at undgå dubletter
+    # SQL med præcis filtrering for at undgå at keepere/forsvarsspillere tælles med
     sql = f"""
     WITH EVENT_BASE AS (
         SELECT 
@@ -32,9 +31,13 @@ def load_setpiece_data():
             e.EVENT_CONTESTANT_OPTAUUID, 
             e.PLAYER_OPTAUUID,
             e.MATCH_OPTAUUID,
+            e.EVENT_OUTCOME,
+            -- Saml alle tags til én streng
             LISTAGG(q.QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY q.QUALIFIER_QID) as QUAL_LIST,
+            -- Slutkoordinater (QID 140/141)
             MAX(CASE WHEN q.QUALIFIER_QID = 140 THEN TRY_TO_DOUBLE(q.QUALIFIER_VALUE) END) as EVENT_ENDX,
             MAX(CASE WHEN q.QUALIFIER_QID = 141 THEN TRY_TO_DOUBLE(q.QUALIFIER_VALUE) END) as EVENT_ENDY,
+            -- Tekniske stats fra dine Qualifiers
             MAX(CASE WHEN q.QUALIFIER_QID = 214 THEN 1 ELSE 0 END) as IS_BIG_CHANCE,
             MAX(CASE WHEN q.QUALIFIER_QID = 223 THEN 'Inswinger' 
                      WHEN q.QUALIFIER_QID = 224 THEN 'Outswinger' 
@@ -42,14 +45,21 @@ def load_setpiece_data():
         FROM {DB}.OPTA_EVENTS e
         JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
         WHERE e.MATCH_OPTAUUID IN ({match_sql})
-        GROUP BY 1, 2, 3, 4, 5, 6, 7
+          -- Vi skal kun bruge igangsætninger (der altid er Type 1 - Passes)
+          AND e.EVENT_TYPEID = 1
+        GROUP BY 1, 2, 3, 4, 5, 6, 7, 8
     )
     SELECT 
         b.*,
         TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME) as PLAYER_NAME
     FROM EVENT_BASE b
     LEFT JOIN {DB}.OPTA_PLAYERS p ON b.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
-    WHERE (QUAL_LIST LIKE '%6%' OR QUAL_LIST LIKE '%107%' OR QUAL_LIST LIKE '%5%')
+    -- PRÆCIS FILTRERING (Komma-tricket sikrer at vi finder f.eks. '6' og ikke '96')
+    WHERE (
+        ',' || QUAL_LIST || ',' LIKE '%,6,%' OR 
+        ',' || QUAL_LIST || ',' LIKE '%,107,%' OR 
+        ',' || QUAL_LIST || ',' LIKE '%,5,%'
+    )
     """
     
     df = conn.query(sql)
@@ -58,6 +68,7 @@ def load_setpiece_data():
     for col in ['EVENT_X', 'EVENT_Y', 'EVENT_ENDX', 'EVENT_ENDY']:
         df[col] = pd.to_numeric(df[col], errors='coerce')
 
+    # Mapping til dine labels (Hjørnespark, Indkast, Frispark)
     df['qual_list'] = df['QUAL_LIST']
     df['SET_PIECE_TYPE'] = df.apply(get_action_label, axis=1)
 
@@ -88,21 +99,23 @@ def vis_side():
     with col_f3:
         side_sel = st.selectbox("Side", ["Begge", "Venstre", "Højre"])
 
-    # Filtrering
+    # Filtrering på valgte hold og type
     df_team = df_all[(df_all['KLUB_NAVN'] == t_sel) & (df_all['SET_PIECE_TYPE'] == sp_type)].copy()
 
-    # --- NORMALISERING (Fixer spejlingsfejlen fra tidligere) ---
+    # --- NORMALISERING AF KOORDINATER ---
+    # Vi tvinger alle aktioner til at vende mod modstanderens mål (top af banen)
     mask_flip = df_team['EVENT_X'] < 50
     for col_x, col_y in [('EVENT_X', 'EVENT_Y'), ('EVENT_ENDX', 'EVENT_ENDY')]:
         df_team.loc[mask_flip, col_x] = 100 - df_team.loc[mask_flip, col_x]
         df_team.loc[mask_flip, col_y] = 100 - df_team.loc[mask_flip, col_y]
 
-    # Skalering
+    # Skalering til meter
     df_team['X_M'] = df_team['EVENT_X'].apply(lambda x: to_metric(x, 105))
     df_team['Y_M'] = df_team['EVENT_Y'].apply(lambda y: to_metric(y, 68))
     df_team['ENDX_M'] = df_team['EVENT_ENDX'].apply(lambda x: to_metric(x, 105))
     df_team['ENDY_M'] = df_team['EVENT_ENDY'].apply(lambda y: to_metric(y, 68))
 
+    # Side-filter (venstre/højre)
     if side_sel == "Venstre":
         df_team = df_team[df_team['Y_M'] < 34]
     elif side_sel == "Højre":
@@ -122,31 +135,30 @@ def vis_side():
                          width=2, headwidth=4, headlength=4, color=t_color, ax=ax, alpha=0.6)
             pitch.scatter(df_team.ENDX_M, df_team.ENDY_M, s=80, edgecolors='white', c=t_color, linewidth=1, alpha=0.8, ax=ax, zorder=3)
         else:
-            st.info("Ingen slut-koordinater fundet.")
+            st.info("Ingen pile at vise for dette filter.")
         
         st.pyplot(fig)
 
     with col_s:
-        st.subheader("Statistik")
+        st.subheader("Teknisk Statistik")
         total = len(df_team)
-        st.metric("Antal unikke aktioner", total)
+        st.metric("Antal unikke spark", total)
         
         if total > 0:
             bc_count = int(df_team['IS_BIG_CHANCE'].sum())
-            st.metric("Store chancer skabt", bc_count)
+            st.metric("Store chancer skabt (Q214)", bc_count)
 
             if sp_type == "Hjørnespark":
-                st.write("**Skru i bolden:**")
+                st.write("**Skru i bolden (Q223/224):**")
                 st.write(df_team['SWING_TYPE'].value_counts())
 
             st.write("---")
-            st.write("**Top udførere:**")
+            st.write("**Udført af:**")
             st.dataframe(df_team['PLAYER_NAME'].value_counts(), use_container_width=True)
 
             in_box = df_team[(df_team.ENDX_M >= 88.5) & (df_team.ENDY_M >= 13.8) & (df_team.ENDY_M <= 54.2)]
             box_pct = (len(in_box) / total) * 100 if total > 0 else 0
             st.metric("Rammer feltet (%)", f"{box_pct:.1f}%")
 
-# --- KONTROL AF LINJE 151 ---
 if __name__ == "__main__":
     vis_side()
