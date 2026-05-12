@@ -14,10 +14,9 @@ PLAYER_FILE = 'data/players/1div_overskrivning.csv'
 
 @st.cache_data(ttl=3600)
 def load_setpiece_data():
-    # 1. Hent dine navne fra CSV med det samme
+    # 1. Hent navne fra CSV
     try:
         df_lookup = pd.read_csv(PLAYER_FILE)
-        # Vi sikrer os at UUIDs er strings og uden mellemrum
         df_lookup['PLAYER_OPTAUUID'] = df_lookup['PLAYER_OPTAUUID'].astype(str).str.strip()
         name_map = df_lookup.dropna(subset=['PLAYER_OPTAUUID']).set_index('PLAYER_OPTAUUID')['NAVN'].to_dict()
     except Exception as e:
@@ -27,7 +26,7 @@ def load_setpiece_data():
     conn = _get_snowflake_conn()
     if not conn: return pd.DataFrame()
 
-    # 2. SQL - Vi henter rå-data uden ACTIVE_STATUS filter
+    # 2. SQL - Henter rå-data
     sql = f"""
     WITH RAW_EVENTS AS (
         SELECT 
@@ -35,7 +34,6 @@ def load_setpiece_data():
             e.EVENT_CONTESTANT_OPTAUUID as TEAM_UUID, 
             e.MATCH_OPTAUUID,
             TRIM(e.PLAYER_OPTAUUID) as PLAYER_OPTAUUID,
-            -- Vi finder UUID på den næste spiller i sekvensen
             LEAD(TRIM(e.PLAYER_OPTAUUID)) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_EVENTID) as NEXT_PLAYER_UUID
         FROM {DB}.OPTA_EVENTS e
         WHERE e.MATCH_OPTAUUID IN (
@@ -62,8 +60,7 @@ def load_setpiece_data():
     if df is None or df.empty: return pd.DataFrame()
     df.columns = [c.upper() for c in df.columns]
 
-    # 3. Map navne og filtrer trup baseret på din CSV
-    # Vi beholder kun spillere, der findes i din fil
+    # 3. Map navne og filtrer
     df = df[df['PLAYER_OPTAUUID'].isin(name_map.keys())].copy()
     df['PLAYER_NAME'] = df['PLAYER_OPTAUUID'].map(name_map)
     df['NEXT_PLAYER_NAME'] = df['NEXT_PLAYER_UUID'].map(name_map)
@@ -101,24 +98,22 @@ def vis_side():
 
     df_team = df_all[(df_all['KLUB_NAVN'] == t_sel) & (df_all['SET_PIECE_TYPE'] == sp_type)].copy()
     
-    # Side-logik og normalisering (Præcis som din gamle kode)
+    # Side-logik
     df_team['ACTUAL_SIDE'] = np.where(df_team['EVENT_Y'] < 50, "Venstre", "Højre")
     if side_filter != "Begge":
         df_team = df_team[df_team['ACTUAL_SIDE'] == side_filter]
 
-    mask_flip = df_team['EVENT_X'] < 50
-    for col in ['EVENT_X', 'EVENT_Y', 'EVENT_ENDX', 'EVENT_ENDY']:
-        df_team.loc[mask_flip, col] = 100 - df_team.loc[mask_flip, col]
-    
+    # Normalisering: Vi fjerner mask_flip, da Opta altid angriber mod x=100.
     if visning_mode == "Normaliseret (Højre side)":
         mask_mirror = df_team['EVENT_Y'] < 50
         df_team.loc[mask_mirror, 'EVENT_Y'] = 100 - df_team.loc[mask_mirror, 'EVENT_Y']
         df_team.loc[mask_mirror, 'EVENT_ENDY'] = 100 - df_team.loc[mask_mirror, 'EVENT_ENDY']
 
+    # Omregn til meter for VerticalPitch
     df_team['X_M'], df_team['Y_M'] = to_metric(df_team['EVENT_X'], 105), to_metric(df_team['EVENT_Y'], 68)
     df_team['ENDX_M'], df_team['ENDY_M'] = to_metric(df_team['EVENT_ENDX'], 105), to_metric(df_team['EVENT_ENDY'], 68)
 
-    # Ny Succes logik: Ramt en medspiller fra din liste (og ikke dig selv)
+    # Succes logik
     df_team['REAL_SUCCESS'] = (df_team['NEXT_PLAYER_NAME'].notna()) & (df_team['NEXT_PLAYER_UUID'] != df_team['PLAYER_OPTAUUID'])
 
     tab_bane, tab_zone, tab_stats = st.tabs(["Banevisning", "Zoneoversigt", "Statistik"])
@@ -138,14 +133,18 @@ def vis_side():
         pitch = VerticalPitch(half=True, pitch_type='custom', pitch_length=105, pitch_width=68, line_color='#555555')
         fig, ax = pitch.draw(figsize=(8, 10))
         if not valid.empty:
-            pitch.kdeplot(valid.ENDX_M, valid.ENDY_M, ax=ax, cmap='Reds', fill=True, alpha=0.5, levels=10)
+            # Rettelse til Contour-fejl: Tjekker for nok unikke datapunkter
+            if len(valid) > 2 and valid['ENDX_M'].nunique() > 1:
+                try:
+                    pitch.kdeplot(valid.ENDX_M, valid.ENDY_M, ax=ax, cmap='Reds', fill=True, alpha=0.5, levels=5)
+                except:
+                    pass 
             pitch.scatter(valid.ENDX_M, valid.ENDY_M, s=20, color='black', ax=ax, alpha=0.3)
         st.pyplot(fig)
 
     with tab_stats:
-        def get_top_receiver(row):
-            # Tæl kun modtagere der er i din CSV (reelle succeser)
-            receivers = row[row['REAL_SUCCESS']]['NEXT_PLAYER_NAME'].dropna()
+        def get_top_receiver(df_sub):
+            receivers = df_sub[df_sub['REAL_SUCCESS']]['NEXT_PLAYER_NAME'].dropna()
             if not receivers.empty:
                 counts = receivers.value_counts()
                 return f"{counts.idxmax()} ({counts.max()})"
