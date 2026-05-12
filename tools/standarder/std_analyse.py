@@ -1,153 +1,129 @@
-import streamlit as st
-import pandas as pd
-import numpy as np
-from mplsoccer import VerticalPitch
-import matplotlib.pyplot as plt
-from data.utils.team_mapping import TEAMS, TEAM_COLORS
-from data.data_load import _get_snowflake_conn
-from PIL import Image
-import requests
-from io import BytesIO
+# data/utils/mapping.py
 
-# --- KONFIGURATION ---
-HIF_RED = '#cc0000'
-DB = "KLUB_HVIDOVREIF.AXIS"
-LIGA_UUID = "dyjr458hcmrcy87fsabfsy87o"
+# --- 1. SPORTLIG OPTA EVENT TYPE MAPPING ---
+# Vi har fjernet alt administrativt støj og beholdt kun det, der sker på banen.
+OPTA_EVENT_TYPES = {
+    "1": "Pasning",
+    "2": "Offside Pass",
+    "3": "Dribling",
+    "4": "Frispark vundet",
+    "6": "Hjørnespark",
+    "7": "Tackling",
+    "8": "Interception",
+    "10": "Redning",
+    "11": "Felt-indgreb (Claim)",
+    "12": "Clearing",
+    "13": "Skud forbi",
+    "14": "Stolpeskud",
+    "15": "Skud reddet",
+    "16": "Mål",
+    "17": "Kort",
+    "18": "Udskiftet",
+    "19": "Indskiftet",
+    "41": "Boksning (Keeper)",
+    "44": "Luftduel",
+    "49": "Erobring",
+    "50": "Boldtab",
+    "51": "Personlig fejl",
+    "58": "Skud imod",
+    "60": "Stor chance brændt",
+    "72": "Caught Offside",
+    "74": "Blokeret aflevering",
+    "AS": "Assist",
+    "G": "Goal",
+    "OG": "Selvmål",
+    "RC": "Rødt kort",
+    "YC": "Gult kort"
+}
 
-@st.cache_data(ttl=3600)
-def load_setpiece_data():
-    conn = _get_snowflake_conn()
-    if not conn: 
-        return pd.DataFrame()
+# --- 2. DE AFGØRENDE QUALIFIERS ---
+# Disse bruges til at give pasninger og skud deres specifikke karakter.
+OPTA_QUALIFIERS = {
+    "1": "Lang aflevering", "2": "Indlæg", "3": "Aflevering (Hoved)", "4": "Stikning", 
+    "9": "Straffespark", "14": "Sidste mand", "15": "Hovedstød", "23": "Kontra",
+    "89": "1 mod 1", "101": "Reddet på stregen", "107": "Indkast", "124": "Målspark",
+    "138": "Stolpe/Overligger", "154": "Bevidst assist", "155": "Chip", 
+    "156": "Lay-off", "168": "Flick-on", "195": "Pull back", "196": "Sideskift",
+    "210": "Assist/Key Pass", "214": "Stor chance", "321": "xG"
+}
 
-    # Sub-query til at finde kampe i den valgte sæson
-    match_sql = f"SELECT DISTINCT MATCH_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'"
+# --- 3. CORE LOGIK & FILTRERING ---
+# Liste over ID'er der må passere ind i appen.
+CORE_GAME_EVENTS = list(OPTA_EVENT_TYPES.keys())
 
-    # SQL der henter hændelser og deres slut-koordinater (QID 140/141)
-    sql = f"""
-    WITH END_X AS (
-        SELECT EVENT_OPTAUUID, QUALIFIER_VALUE as ENDX FROM {DB}.OPTA_QUALIFIERS WHERE QUALIFIER_QID = 140
-    ),
-    END_Y AS (
-        SELECT EVENT_OPTAUUID, QUALIFIER_VALUE as ENDY FROM {DB}.OPTA_QUALIFIERS WHERE QUALIFIER_QID = 141
-    ),
-    SET_PIECE_EVENTS AS (
-        SELECT e.EVENT_OPTAUUID, e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, 
-               e.EVENT_CONTESTANT_OPTAUUID, e.PLAYER_OPTAUUID, q.QUALIFIER_QID, e.MATCH_OPTAUUID
-        FROM {DB}.OPTA_EVENTS e
-        JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
-        WHERE q.QUALIFIER_QID IN (2, 5, 107, 124) -- Corner, Free Kick, Throw-in
-        AND e.MATCH_OPTAUUID IN ({match_sql})
-    )
-    SELECT 
-        s.*,
-        ex.ENDX as EVENT_ENDX,
-        ey.ENDY as EVENT_ENDY,
-        TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME) as PLAYER_NAME
-    FROM SET_PIECE_EVENTS s
-    LEFT JOIN END_X ex ON s.EVENT_OPTAUUID = ex.EVENT_OPTAUUID
-    LEFT JOIN END_Y ey ON s.EVENT_OPTAUUID = ey.EVENT_OPTAUUID
-    LEFT JOIN {DB}.OPTA_PLAYERS p ON s.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
+def get_event_name(event_id):
+    """Returnerer det rå navn fra mappingen."""
+    return OPTA_EVENT_TYPES.get(str(event_id), f"Ukendt ({event_id})")
+
+def is_offensive_event(event_id):
+    """Tjekker om hændelsen er en afslutning (13, 14, 15, 16)."""
+    return str(event_id) in ["13", "14", "15", "16"]
+
+def get_action_label(row):
     """
-    
-    df = conn.query(sql)
-    df.columns = [c.upper() for c in df.columns]
-
-    # Konverter koordinater til tal
-    for col in ['EVENT_X', 'EVENT_Y', 'EVENT_ENDX', 'EVENT_ENDY']:
-        df[col] = pd.to_numeric(df[col], errors='coerce')
-
-    # Mapping af typer baseret på Opta Qualifiers
-    type_map = {2: "Hjørnespark", 124: "Hjørnespark", 5: "Frispark", 107: "Indkast"}
-    df['SET_PIECE_TYPE'] = df['QUALIFIER_QID'].map(type_map)
-
-    return df
-
-def to_metric(val, total_m):
-    return val * (total_m / 100)
-
-# --- MAIN APP ---
-def vis_side():
-    st.markdown("<style>header {visibility: hidden;} .main .block-container { padding-top: 1rem; }</style>", unsafe_allow_html=True)
-
-    df_all = load_setpiece_data()
-    if df_all.empty:
-        st.warning("Ingen data fundet. Tjek om ligaens UUID og Snowflake-forbindelsen er korrekt.")
-        return
-
-    # Team Mapping fra din utils
-    uuid_to_name = {v['opta_uuid'].upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
-    df_all['KLUB_NAVN'] = df_all['EVENT_CONTESTANT_OPTAUUID'].str.upper().map(uuid_to_name)
-    
-    # Hent liste over hold til dropdown
-    teams_in_data = sorted([n for n in df_all['KLUB_NAVN'].unique() if pd.notna(n)])
-
-    # Filtre i toppen
-    col_f1, col_f2, col_f3 = st.columns(3)
-    with col_f1:
-        t_sel = st.selectbox("Hold", teams_in_data, index=teams_in_data.index("Hvidovre") if "Hvidovre" in teams_in_data else 0)
-    with col_f2:
-        sp_type = st.selectbox("Type", ["Hjørnespark", "Indkast", "Frispark"])
-    with col_f3:
-        side_sel = st.selectbox("Side", ["Begge", "Venstre", "Højre"])
-
-    # Filtrering af data baseret på valg
-    df_team = df_all[(df_all['KLUB_NAVN'] == t_sel) & (df_all['SET_PIECE_TYPE'] == sp_type)].copy()
-
-    # Skalering til banens mål (meter)
-    df_team['X_M'] = df_team['EVENT_X'].apply(lambda x: to_metric(x, 105))
-    df_team['Y_M'] = df_team['EVENT_Y'].apply(lambda y: to_metric(y, 68))
-    df_team['ENDX_M'] = df_team['EVENT_ENDX'].apply(lambda x: to_metric(x, 105))
-    df_team['ENDY_M'] = df_team['EVENT_ENDY'].apply(lambda y: to_metric(y, 68))
-
-    # Filtrering på side (Venstre/Højre)
-    if side_sel == "Venstre":
-        df_team = df_team[df_team['Y_M'] < 34]
-    elif side_sel == "Højre":
-        df_team = df_team[df_team['Y_M'] >= 34]
-
-    t_color = TEAM_COLORS.get(t_sel, {}).get('primary', HIF_RED)
-
-    # Layout med bane og statistik
-    col_p, col_s = st.columns([2, 1])
-    
-    with col_p:
-        # Vi viser kun den øverste halvdel af banen (half=True)
-        pitch = VerticalPitch(half=True, pitch_type='custom', pitch_length=105, pitch_width=68, line_color='#cccccc')
-        fig, ax = pitch.draw(figsize=(10, 12))
-        ax.set_ylim(50, 105) # Zoom ind på modstanderens banehalvdel
-
-        if not df_team.dropna(subset=['ENDX_M', 'ENDY_M']).empty:
-            # Tegn pile for bevægelse
-            pitch.arrows(df_team.X_M, df_team.Y_M, df_team.ENDX_M, df_team.ENDY_M, 
-                         width=2, headwidth=4, headlength=4, color=t_color, ax=ax, alpha=0.5)
-
-            # Scatter slutpunkter (hvor bolden lander)
-            pitch.scatter(df_team.ENDX_M, df_team.ENDY_M, s=80, edgecolors='black', 
-                          c=t_color, linewidth=1, alpha=0.8, ax=ax, zorder=3)
-        else:
-            st.info("Ingen slut-koordinater tilgængelige for dette valg.")
+    Hvidovre-appens hjerte: Kategoriserer handlinger baseret på Event + Qualifiers.
+    Prioriterer farlighed (Big Chance/Assists) over standardnavne.
+    """
+    try:
+        eid = str(row['EVENT_TYPEID'])
         
-        st.pyplot(fig)
+        # Filtrér ikke-sportslige hændelser fra
+        if eid not in CORE_GAME_EVENTS:
+            return None
 
-    with col_s:
-        st.subheader("Statistik")
-        total = len(df_team)
-        st.metric("Antal aktioner", total)
+        # Håndtering af Qualifiers (antager liste eller komma-separeret streng)
+        ql = row.get('qual_list', [])
+        if isinstance(ql, str):
+            ql = ql.split(',')
+        ql = [str(q).strip() for q in ql]
+
+        # --- NIVEAU 1: DE AFGØRENDE AKTIONER (Big Chance & Assists) ---
+        if "214" in ql:
+            return "Stor chance"
         
-        if total > 0:
-            st.write("**Top udførere:**")
-            st.dataframe(df_team['PLAYER_NAME'].value_counts().head(5), use_container_width=True)
+        # Din vigtige pointe: 210 er en Shot Assist (uanset om der scores)
+        if "210" in ql:
+            if eid == "16": return "Målgivende assist"
+            return "Key Pass (Chance skabt)"
 
-            # Beregn hvor mange der rammer "feltet" (zone-estimat)
-            in_box = df_team[(df_team.ENDX_M >= 88.5) & (df_team.ENDY_M >= 13.8) & (df_team.ENDY_M <= 54.2)]
-            box_pct = (len(in_box) / total) * 100 if total > 0 else 0
-            st.metric("Rammer feltet (%)", f"{box_pct:.1f}%")
-            
-            # Beregn tendens (aktioner der flytter bolden mindst 5 meter fremad)
-            fremad = len(df_team[df_team.ENDX_M > df_team.X_M + 5])
-            fremad_pct = (fremad / total) * 100 if total > 0 else 0
-            st.write(f"**Søger fremad/feltet:** {int(fremad_pct)}%")
+        # --- NIVEAU 2: TAKTISKE DETALJER ---
+        if "14" in ql:   return "Afgørende indgreb (Sidste mand)"
+        if "4" in ql:    return "Stikning"
+        if "195" in ql:  return "Pull back"
+        if "196" in ql:  return "Sideskift"
+        if "155" in ql:  return "Chippet pasning"
 
-if __name__ == "__main__":
-    vis_side()
+        # --- NIVEAU 3: EVENT SPECIFIK LOGIK ---
+        
+        # Pasninger
+        if eid == "1":
+            if "2" in ql:   return "Indlæg"
+            if "107" in ql: return "Indkast"
+            if "1" in ql:   return "Lang bold"
+            return "Pasning"
+
+        # Skudtyper
+        if eid in ["13", "14", "15", "16"]:
+            suffix = " (Hovedstød)" if "15" in ql else ""
+            if eid == "16": return f"MÅL{suffix}"
+            if "138" in ql or eid == "14": return f"Skud på stolpe{suffix}"
+            if eid == "15": return f"Skud på mål{suffix}"
+            return f"Afslutning{suffix}"
+
+        # Defensivt
+        if eid == "7":  return "Tackling"
+        if eid == "8":  return "Interception"
+        if eid == "10": return "Redning"
+        if eid == "49": return "Erobring"
+        if eid == "12": return "Clearing"
+        if eid == "3":  return "Dribling"
+
+        # Fallback
+        return OPTA_EVENT_TYPES.get(eid, f"Aktion {eid}")
+
+    except Exception:
+        return "Ukendt aktion"
+
+def is_assist(qualifiers_list):
+    """Hurtig tjek om en aktion er en assist (ID 210)."""
+    return "210" in [str(q) for q in qualifiers_list]
