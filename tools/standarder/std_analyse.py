@@ -139,7 +139,11 @@ def vis_side():
     with tab_stats:
         def get_top_receiver(x):
             receivers = x[x != "None"].dropna()
-            return receivers.value_counts().idxmax() if not receivers.empty else "Ingen modtager"
+            if not receivers.empty:
+                top_player = receivers.value_counts().idxmax()
+                count = receivers.value_counts().max()
+                return f"{top_player} ({count})"
+            return "Ingen modtager"
 
         stats_df = df_team.groupby('PLAYER_NAME').agg(
             Antal=('EVENT_OUTCOME', 'count'),
@@ -155,7 +159,7 @@ def vis_side():
             stats_df.sort_values('Antal', ascending=False),
             column_config={
                 "PLAYER_NAME": "Spiller",
-                "Oftest_ramte": "Primær modtager",
+                "Oftest_ramte": "Primær modtager (antal)",
                 "Effektivitet": st.column_config.ProgressColumn("Effektivitet (Afslutninger)", min_value=0, max_value=1, format="%.2f")
             },
             hide_index=True, use_container_width=True
