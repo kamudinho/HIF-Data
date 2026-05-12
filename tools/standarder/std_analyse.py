@@ -176,10 +176,6 @@ def vis_side():
             use_container_width=True,
             key="setpiece_efficiency_table"
         )
-        
-        st.write("---")
-        st.caption("Hændelser")
-        st.dataframe(df_team[['PLAYER_NAME', 'EVENT_OUTCOME', 'IS_CHANCE', 'SWING_TYPE']], use_container_width=True)
 
 if __name__ == "__main__":
     vis_side()
