@@ -17,17 +17,22 @@ def load_setpiece_data():
     
     match_sql = f"SELECT DISTINCT MATCH_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'"
     
-    # Vi henter events og bruger qualifiers til at identificere typer og succes
+    # Vi bruger nu det korrekte kolonnenavn: EVENT_OUTCOME
     sql = f"""
         WITH EVENT_BASE AS (
             SELECT 
-                e.EVENT_OPTAUUID, e.EVENT_X, e.EVENT_Y, e.OUTCOME,
-                e.EVENT_CONTESTANT_OPTAUUID, e.PLAYER_OPTAUUID, e.MATCH_OPTAUUID,
+                e.EVENT_OPTAUUID, 
+                e.EVENT_X, 
+                e.EVENT_Y, 
+                e.EVENT_OUTCOME, -- Retttet her
+                e.EVENT_CONTESTANT_OPTAUUID, 
+                e.PLAYER_OPTAUUID, 
+                e.MATCH_OPTAUUID,
                 MAX(CASE WHEN q.QUALIFIER_QID = 107 THEN 1 ELSE 0 END) as IS_THROW_IN,
                 MAX(CASE WHEN q.QUALIFIER_QID IN (2, 6) THEN 1 ELSE 0 END) as IS_CORNER,
                 MAX(CASE WHEN q.QUALIFIER_QID IN (5, 26) THEN 1 ELSE 0 END) as IS_FREEKICK,
-                MAX(CASE WHEN q.QUALIFIER_QID = 140 THEN q.QUALIFIER_VALUE ELSE NULL END) as ENDX,
-                MAX(CASE WHEN q.QUALIFIER_QID = 141 THEN q.QUALIFIER_VALUE ELSE NULL END) as ENDY,
+                MAX(CASE WHEN q.QUALIFIER_QID = 140 THEN TRY_TO_DOUBLE(q.QUALIFIER_VALUE) ELSE NULL END) as ENDX,
+                MAX(CASE WHEN q.QUALIFIER_QID = 141 THEN TRY_TO_DOUBLE(q.QUALIFIER_VALUE) ELSE NULL END) as ENDY,
                 MAX(CASE WHEN q.QUALIFIER_QID = 210 THEN 1 ELSE 0 END) as IS_ASSIST
             FROM {DB}.OPTA_EVENTS e
             LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
@@ -48,14 +53,13 @@ def load_setpiece_data():
     def get_type(row):
         if row['IS_THROW_IN'] == 1: return "Indkast"
         if row['IS_CORNER'] == 1: return "Hjørnespark"
-        if row['IS_FREEKICK'] == 1: return "Frispark"
-        return "Andet"
+        return "Frispark"
     
     df['SET_PIECE_TYPE'] = df.apply(get_type, axis=1)
     
     # Numeriske værdier
     for col in ['EVENT_X', 'EVENT_Y', 'ENDX', 'ENDY']:
-        df[col] = pd.to_numeric(df[col], errors='coerce')
+        df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
     
     return df
 
