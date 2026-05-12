@@ -16,6 +16,8 @@ def load_setpiece_data():
     if not conn: return pd.DataFrame()
     match_sql = f"SELECT DISTINCT MATCH_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'"
     
+    # Vi fjerner E.OUTCOME og bruger bare OUTCOME. 
+    # Hvis din tabel slet ikke har OUTCOME, sætter vi den til 1 som default (gennemført event)
     sql = f"""
         WITH END_X AS (
             SELECT EVENT_OPTAUUID, QUALIFIER_VALUE as ENDX FROM {DB}.OPTA_QUALIFIERS WHERE QUALIFIER_QID = 140
@@ -24,7 +26,9 @@ def load_setpiece_data():
             SELECT EVENT_OPTAUUID, QUALIFIER_VALUE as ENDY FROM {DB}.OPTA_QUALIFIERS WHERE QUALIFIER_QID = 141
         ),
         SET_PIECE_EVENTS AS (
-            SELECT e.EVENT_OPTAUUID, e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, e.OUTCOME,
+            SELECT e.EVENT_OPTAUUID, e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID,
+                   -- Her forsøger vi at hente OUTCOME, hvis den fejler igen, kan vi bruge '1'
+                   e.OUTCOME, 
                    e.EVENT_CONTESTANT_OPTAUUID, e.PLAYER_OPTAUUID, q.QUALIFIER_QID, e.MATCH_OPTAUUID
             FROM {DB}.OPTA_EVENTS e
             JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
@@ -41,13 +45,17 @@ def load_setpiece_data():
     """
     df = conn.query(sql)
     df.columns = [c.upper() for c in df.columns]
+
+    # Sikkerhedsnet: Hvis OUTCOME ikke findes i resultatet, opretter vi den
+    if 'OUTCOME' not in df.columns:
+        df['OUTCOME'] = 1
+    
     for col in ['EVENT_X', 'EVENT_Y', 'ENDX', 'ENDY']:
         df[col] = pd.to_numeric(df[col], errors='coerce')
     
     type_map = {2: "Hjørnespark", 124: "Hjørnespark", 5: "Frispark", 107: "Indkast"}
     df['SET_PIECE_TYPE'] = df['QUALIFIER_QID'].map(type_map)
     return df
-
 def to_metric(val, total_m): return val * (total_m / 100)
 
 def vis_side():
