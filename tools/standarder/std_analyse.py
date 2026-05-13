@@ -80,6 +80,57 @@ def load_setpiece_data():
 def to_metric(val, total_m): 
     return val * (total_m / 100)
 
+def render_setpiece_analysis(df_team, sp_type, t_sel):
+    """Hjælpefunktion til at tegne analyse for en bestemt type"""
+    f1, f2 = st.columns([1, 1])
+    with f1:
+        p_list = ["Alle spillere"] + sorted(df_team[df_team['TYPE_NAVN'] == sp_type]['TAGER_NAVN'].unique().tolist())
+        p_sel = st.selectbox(f"Spiller ({sp_type})", p_list, key=f"sb_p_{sp_type}")
+    with f2:
+        vis_mode = st.selectbox(f"Visning ({sp_type})", ["Zoner + Pile", "Kun Zoner", "Kun Pile"], key=f"sb_m_{sp_type}")
+
+    mask = (df_team['TYPE_NAVN'] == sp_type)
+    if p_sel != "Alle spillere": mask &= (df_team['TAGER_NAVN'] == p_sel)
+    df_plot = df_team[mask].copy()
+
+    total = len(df_plot)
+    success = df_plot['MODTAGER'].notna().sum()
+    pct = (success / total * 100) if total > 0 else 0
+
+    col_p, col_s = st.columns([2, 1])
+    
+    with col_p:
+        for c in ['EVENT_X', 'EVENT_Y', 'ENDX', 'ENDY']: 
+            df_plot[c] = pd.to_numeric(df_plot[c], errors='coerce')
+        
+        df_plot['X_M'] = df_plot['EVENT_X'].apply(lambda x: to_metric(x, 105))
+        df_plot['Y_M'] = df_plot['EVENT_Y'].apply(lambda y: to_metric(y, 68))
+        df_plot['ENDX_M'] = df_plot['ENDX'].apply(lambda x: to_metric(x, 105))
+        df_plot['ENDY_M'] = df_plot['ENDY'].apply(lambda y: to_metric(y, 68))
+
+        pitch = VerticalPitch(half=True, pitch_type='custom', pitch_length=105, pitch_width=68, line_color='#cccccc')
+        fig, ax = pitch.draw(figsize=(10, 10))
+        ax.set_ylim(50, 105)
+        
+        if not df_plot.dropna(subset=['ENDX_M', 'ENDY_M']).empty:
+            if "Zoner" in vis_mode:
+                pitch.hexbin(df_plot.ENDX_M, df_plot.ENDY_M, ax=ax, gridsize=(12, 12), cmap='Reds', alpha=0.6)
+            if "Pile" in vis_mode:
+                pitch.arrows(df_plot.X_M, df_plot.Y_M, df_plot.ENDX_M, df_plot.ENDY_M, 
+                             color=TEAM_COLORS.get(t_sel, {}).get('primary', HIF_RED), ax=ax, alpha=0.3)
+        st.pyplot(fig)
+
+    with col_s:
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Antal", total)
+        m2.metric("Succes", success)
+        m3.metric("%", f"{pct:.0f}%")
+        st.write("---") 
+        st.write("**Top modtagere**")
+        mod_counts = df_plot['MODTAGER'].value_counts().reset_index()
+        mod_counts.columns = ['Spiller', 'Antal']
+        st.dataframe(mod_counts, use_container_width=True, hide_index=True)
+
 def vis_side():
     st.set_page_config(layout="wide", page_title="Standardsituationer")
     
@@ -99,7 +150,6 @@ def vis_side():
     df_all['KLUB_NAVN'] = df_all['TEAM_UUID'].str.upper().map(uuid_to_name)
     teams = sorted([n for n in df_all['KLUB_NAVN'].unique() if pd.notna(n)])
 
-    # --- TOPBAR ---
     col_title, col_empty, col_select = st.columns([2, 1, 1])
     with col_title:
         st.subheader("Standardsituationer")
@@ -108,76 +158,29 @@ def vis_side():
 
     df_team_selected = df_all[df_all['KLUB_NAVN'] == t_sel].copy()
 
-    tab1, tab2, tab3, tab4 = st.tabs(["Holdoversigt", "Spilleroversigt", "Analyse", "Zoneoversigt"])
+    # NY TAB STRUKTUR
+    tab_list = ["Holdoversigt", "Spilleroversigt", "Hjørnespark", "Frispark", "Indkast", "Zoneoversigt"]
+    tabs = st.tabs(tab_list)
 
-    # TAB 1 & 2
-    with tab1:
+    with tabs[0]: # Holdoversigt
         hold_stats = df_all.groupby(['KLUB_NAVN', 'TYPE_NAVN']).size().unstack(fill_value=0).reset_index()
         st.dataframe(hold_stats, use_container_width=True, hide_index=True)
 
-    with tab2:
+    with tabs[1]: # Spilleroversigt
         if not df_team_selected.empty:
             spiller_stats = df_team_selected.groupby(['TAGER_NAVN', 'TYPE_NAVN']).size().unstack(fill_value=0).reset_index()
             st.dataframe(spiller_stats, use_container_width=True, hide_index=True)
 
-    # TAB 3: Analyse
-    with tab3:
-        f1, f2, f3 = st.columns(3)
-        with f1: sp_type = st.selectbox("Type", ["Hjørnespark", "Indkast", "Frispark"], key="sb_type_ana")
-        with f2:
-            p_list = ["Alle spillere"] + sorted(df_team_selected[df_team_selected['TYPE_NAVN'] == sp_type]['TAGER_NAVN'].unique().tolist())
-            p_sel = st.selectbox("Spiller", p_list, key="sb_player_ana")
-        with f3: vis_mode = st.selectbox("Visning", ["Zoner + Pile", "Kun Zoner", "Kun Pile"], key="sb_mode_ana")
+    with tabs[2]: # Hjørnespark
+        render_setpiece_analysis(df_team_selected, "Hjørnespark", t_sel)
 
-        mask = (df_team_selected['TYPE_NAVN'] == sp_type)
-        if p_sel != "Alle spillere": mask &= (df_team_selected['TAGER_NAVN'] == p_sel)
-        df_plot = df_team_selected[mask].copy()
+    with tabs[3]: # Frispark
+        render_setpiece_analysis(df_team_selected, "Frispark", t_sel)
 
-        # Statistik-beregning
-        total = len(df_plot)
-        success = df_plot['MODTAGER'].notna().sum()
-        pct = (success / total * 100) if total > 0 else 0
+    with tabs[4]: # Indkast
+        render_setpiece_analysis(df_team_selected, "Indkast", t_sel)
 
-        # Layout: Bane til venstre, Stats og Modtagere til højre
-        col_p, col_s = st.columns([2, 1])
-        
-        with col_p:
-            for c in ['EVENT_X', 'EVENT_Y', 'ENDX', 'ENDY']: 
-                df_plot[c] = pd.to_numeric(df_plot[c], errors='coerce')
-            
-            df_plot['X_M'] = df_plot['EVENT_X'].apply(lambda x: to_metric(x, 105))
-            df_plot['Y_M'] = df_plot['EVENT_Y'].apply(lambda y: to_metric(y, 68))
-            df_plot['ENDX_M'] = df_plot['ENDX'].apply(lambda x: to_metric(x, 105))
-            df_plot['ENDY_M'] = df_plot['ENDY'].apply(lambda y: to_metric(y, 68))
-
-            pitch = VerticalPitch(half=True, pitch_type='custom', pitch_length=105, pitch_width=68, line_color='#cccccc')
-            fig, ax = pitch.draw(figsize=(10, 10))
-            ax.set_ylim(50, 105)
-            
-            if not df_plot.dropna(subset=['ENDX_M', 'ENDY_M']).empty:
-                if "Zoner" in vis_mode:
-                    pitch.hexbin(df_plot.ENDX_M, df_plot.ENDY_M, ax=ax, gridsize=(12, 12), cmap='Reds', alpha=0.6)
-                if "Pile" in vis_mode:
-                    pitch.arrows(df_plot.X_M, df_plot.Y_M, df_plot.ENDX_M, df_plot.ENDY_M, 
-                                 color=TEAM_COLORS.get(t_sel, {}).get('primary', HIF_RED), ax=ax, alpha=0.3)
-            st.pyplot(fig)
-
-        with col_s:
-            # 3 Metrics side om side i den højre kolonne
-            m1, m2, m3 = st.columns(3)
-            m1.metric("Antal", total)
-            m2.metric("Succes", success)
-            m3.metric("%", f"{pct:.0f}%")
-            
-            st.write("---") 
-            
-            st.write("**Top modtagere**")
-            mod_counts = df_plot['MODTAGER'].value_counts().reset_index()
-            mod_counts.columns = ['Spiller', 'Antal']
-            st.dataframe(mod_counts, use_container_width=True, hide_index=True)
-
-    # TAB 4
-    with tab4:
+    with tabs[5]: # Zoneoversigt
         def get_zone(y):
             if pd.isna(y): return "Ukendt"
             y_val = float(y)
