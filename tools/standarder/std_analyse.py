@@ -22,15 +22,17 @@ def load_setpiece_data():
         SELECT 
             e.EVENT_OPTAUUID, e.MATCH_OPTAUUID, e.EVENT_EVENTID,
             e.EVENT_CONTESTANT_OPTAUUID AS TEAM_UUID,
+            e.EVENT_TYPEID,
             TRIM(e.PLAYER_OPTAUUID) AS PLAYER_UUID,
             e.PLAYER_NAME,
             e.EVENT_X, e.EVENT_Y,
+            -- Kig frem for at finde modtager og afslutning
             LEAD(TRIM(e.PLAYER_OPTAUUID), 1) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_EVENTID) AS P1_UUID,
             LEAD(e.PLAYER_NAME, 1) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_EVENTID) AS P1_NAME,
             LEAD(e.EVENT_CONTESTANT_OPTAUUID, 1) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_EVENTID) AS P1_TEAM,
-            LEAD(TRIM(e.PLAYER_OPTAUUID), 2) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_EVENTID) AS P2_UUID,
-            LEAD(e.PLAYER_NAME, 2) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_EVENTID) AS P2_NAME,
-            LEAD(e.EVENT_CONTESTANT_OPTAUUID, 2) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_EVENTID) AS P2_TEAM
+            LEAD(e.EVENT_TYPEID, 1) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_EVENTID) AS P1_TYPE,
+            LEAD(e.EVENT_TYPEID, 2) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_EVENTID) AS P2_TYPE,
+            LEAD(e.EVENT_TYPEID, 3) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_EVENTID) AS P3_TYPE
         FROM {DB}.OPTA_EVENTS e
         WHERE e.TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
     ),
@@ -56,6 +58,7 @@ def load_setpiece_data():
         if df is None or df.empty: return pd.DataFrame()
         df.columns = [c.upper() for c in df.columns]
         
+        # Player mapping
         try:
             df_lookup = pd.read_csv(PLAYER_FILE)
             df_lookup['PLAYER_OPTAUUID'] = df_lookup['PLAYER_OPTAUUID'].astype(str).str.strip()
@@ -65,14 +68,17 @@ def load_setpiece_data():
 
         df['TAGER_NAVN'] = df.apply(lambda x: name_map.get(str(x['PLAYER_UUID']).strip(), x['PLAYER_NAME']), axis=1)
         
+        # Modtager logik
         def find_target(row):
             if row['P1_TEAM'] == row['TEAM_UUID'] and row['P1_UUID'] != row['PLAYER_UUID']:
                 return name_map.get(str(row['P1_UUID']).strip(), row['P1_NAME'])
-            if row['P2_TEAM'] == row['TEAM_UUID'] and row['P2_UUID'] != row['PLAYER_UUID']:
-                return name_map.get(str(row['P2_UUID']).strip(), row['P2_NAME'])
             return None
-
         df['MODTAGER'] = df.apply(find_target, axis=1)
+
+        # Afslutning logik (Type 13, 14, 15, 16 er skud i Opta)
+        shot_types = [13, 14, 15, 16]
+        df['ER_AFSLUTNING'] = df.apply(lambda x: 1 if x['P1_TYPE'] in shot_types or x['P2_TYPE'] in shot_types or x['P3_TYPE'] in shot_types else 0, axis=1)
+        
         return df
     except:
         return pd.DataFrame()
@@ -83,17 +89,17 @@ def to_metric(val, total_m):
 def get_summary_stats(df, group_col):
     stats = df.groupby(group_col).agg(
         Antal=('TYPE_NAVN', 'size'),
-        Succesfulde=('MODTAGER', lambda x: x.notna().sum())
+        Succesfulde=('MODTAGER', lambda x: x.notna().sum()),
+        Afslutninger=('ER_AFSLUTNING', 'sum')
     ).reset_index()
     
     stats['Succes %'] = (stats['Succesfulde'] / stats['Antal']).fillna(0)
+    stats['Afslutning %'] = (stats['Afslutninger'] / stats['Antal']).fillna(0)
     
     def get_top_modtager(sub_df):
         m = sub_df['MODTAGER'].value_counts()
         if m.empty: return "-"
-        name = m.index[0]
-        count = m.iloc[0]
-        return f"{name} ({count})"
+        return f"{m.index[0]} ({m.iloc[0]})"
 
     modtager_map = df.groupby(group_col).apply(get_top_modtager).to_dict()
     stats['Top Modtager'] = stats[group_col].map(modtager_map)
@@ -111,12 +117,9 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
     if p_sel != "Alle spillere": mask &= (df_team['TAGER_NAVN'] == p_sel)
     df_plot = df_team[mask].copy()
 
-    total = len(df_plot)
-    success = df_plot['MODTAGER'].notna().sum()
-    pct = (success / total * 100) if total > 0 else 0
-
     col_p, col_s = st.columns([2, 1])
     with col_p:
+        # Pitch plotting logic
         for c in ['EVENT_X', 'EVENT_Y', 'ENDX', 'ENDY']: 
             df_plot[c] = pd.to_numeric(df_plot[c], errors='coerce')
         df_plot['X_M'] = df_plot['EVENT_X'].apply(lambda x: to_metric(x, 105))
@@ -135,9 +138,9 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
         st.pyplot(fig)
     with col_s:
         m1, m2, m3 = st.columns(3)
-        m1.metric("Antal", total)
-        m2.metric("Succes", success)
-        m3.metric("%", f"{pct:.0f}%")
+        m1.metric("Antal", len(df_plot))
+        m2.metric("Succes", df_plot['MODTAGER'].notna().sum())
+        m3.metric("Afslutn.", df_plot['ER_AFSLUTNING'].sum())
         st.write("---") 
         st.write("**Top modtagere**")
         mod_counts = df_plot['MODTAGER'].value_counts().reset_index()
@@ -151,7 +154,6 @@ def vis_side():
         <style>
         header {visibility: hidden;}
         div[data-testid="stSelectbox"] label { display: none !important; }
-        /* Justering af radio buttons for at flugte bedre med tekst */
         div[data-testid="stHorizontalBlock"] { align-items: center; }
         </style>
     """, unsafe_allow_html=True)
@@ -173,27 +175,25 @@ def vis_side():
 
     df_team_selected = df_all[df_all['KLUB_NAVN'] == t_sel].copy()
 
-    tab_list = ["Holdoversigt", "Spilleroversigt", "Hjørnespark", "Frispark", "Indkast", "Zoneoversigt"]
-    tabs = st.tabs(tab_list)
+    tabs = st.tabs(["Holdoversigt", "Spilleroversigt", "Hjørnespark", "Frispark", "Indkast", "Zoneoversigt"])
     cat_options = ["Hjørnespark", "Frispark", "Indkast"]
+
+    # Tabel konfiguration (Genbrugelig)
+    col_cfg = {
+        "KLUB_NAVN": "Klub",
+        "TAGER_NAVN": "Spiller",
+        "Succes %": st.column_config.ProgressColumn("Succes %", format="%.0f%%", min_value=0, max_value=1),
+        "Afslutning %": st.column_config.ProgressColumn("Afslutning %", format="%.0f%%", min_value=0, max_value=1),
+        "Top Modtager": "Top Modtager"
+    }
 
     with tabs[0]: # Holdoversigt
         c_label, c_radio = st.columns([0.15, 0.85])
         with c_label: st.write("**Kategori**")
         with c_radio: cat_h = st.radio("cat_h", cat_options, horizontal=True, label_visibility="collapsed", key="radio_hold")
         
-        df_cat_h = df_all[df_all['TYPE_NAVN'] == cat_h]
-        stats_h = get_summary_stats(df_cat_h, 'KLUB_NAVN')
-        st.dataframe(
-            stats_h,
-            use_container_width=True,
-            hide_index=True,
-            height=500,
-            column_config={
-                "KLUB_NAVN": "Klub",
-                "Succes %": st.column_config.ProgressColumn("Succes %", format="%.0f%%", min_value=0, max_value=1)
-            }
-        )
+        stats_h = get_summary_stats(df_all[df_all['TYPE_NAVN'] == cat_h], 'KLUB_NAVN')
+        st.dataframe(stats_h, use_container_width=True, hide_index=True, height=500, column_config=col_cfg)
 
     with tabs[1]: # Spilleroversigt
         c_label_s, c_radio_s = st.columns([0.15, 0.85])
@@ -203,24 +203,13 @@ def vis_side():
         df_cat_s = df_team_selected[df_team_selected['TYPE_NAVN'] == cat_s]
         if not df_cat_s.empty:
             stats_s = get_summary_stats(df_cat_s, 'TAGER_NAVN')
-            st.dataframe(
-                stats_s,
-                use_container_width=True,
-                hide_index=True,
-                height=500,
-                column_config={
-                    "TAGER_NAVN": "Spiller",
-                    "Succes %": st.column_config.ProgressColumn("Succes %", format="%.0f%%", min_value=0, max_value=1)
-                }
-            )
-        else:
-            st.info(f"Ingen data for {cat_s} hos {t_sel}")
+            st.dataframe(stats_s, use_container_width=True, hide_index=True, height=500, column_config=col_cfg)
 
     with tabs[2]: render_setpiece_analysis(df_team_selected, "Hjørnespark", t_sel)
     with tabs[3]: render_setpiece_analysis(df_team_selected, "Frispark", t_sel)
     with tabs[4]: render_setpiece_analysis(df_team_selected, "Indkast", t_sel)
 
-    with tabs[5]: # Zoneoversigt
+    with tabs[5]:
         df_team_selected['ZONE'] = df_team_selected['ENDY'].apply(lambda y: "Venstre" if float(y or 0) < 33 else ("Højre" if float(y or 0) > 66 else "Center"))
         zone_stats = df_team_selected.groupby(['ZONE', 'TYPE_NAVN']).size().unstack(fill_value=0).reset_index()
         st.dataframe(zone_stats, use_container_width=True, hide_index=True)
