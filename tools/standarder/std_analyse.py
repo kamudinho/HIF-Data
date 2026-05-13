@@ -110,7 +110,6 @@ def vis_side():
 
     # --- TAB 1: Holdoversigt (Uafhængig af holdvalg) ---
     with tab1:
-        st.header("Overblik - Alle hold")
         hold_stats = df_all.groupby(['KLUB_NAVN', 'TYPE_NAVN']).size().unstack(fill_value=0)
         st.dataframe(hold_stats, use_container_width=True)
 
