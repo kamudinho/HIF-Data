@@ -54,6 +54,7 @@ def save_to_github(df):
     return False
 
 def vis_side():
+    st.set_page_config(layout="wide")
     st.title("Sikker Editor: 1. Division")
     
     if 'full_df_1div' not in st.session_state:
@@ -68,19 +69,19 @@ def vis_side():
 
     df = st.session_state['full_df_1div'].copy()
 
-    # --- AVANCERET DUBLET-TJEK ---
-    def count_unique_duplicates(series):
-        # Fjern tomme værdier, 0 og "None"
-        clean = series.replace(["None", "none", "", 0, "0"], pd.NA).dropna()
-        # Find værdier der optræder mere end én gang
-        vc = clean.value_counts()
-        return len(vc[vc > 1])
+    # --- DUBLET LOGIK ---
+    def get_duplicate_mask(df):
+        # Hjælpefunktion til at finde alle rækker der er involveret i en dublet
+        masks = []
+        for col in ['NAVN', 'PLAYER_WYID', 'PLAYER_OPTAUUID']:
+            clean_series = df[col].replace(["None", "none", "", 0, "0"], pd.NA)
+            # keep=False sørger for at markere ALLE rækker med dubletten, ikke kun nr. 2
+            masks.append(clean_series.duplicated(keep=False) & clean_series.notna())
+        return pd.concat(masks, axis=1).any(axis=1)
 
-    dub_navn = count_unique_duplicates(df['NAVN'])
-    dub_wyid = count_unique_duplicates(df['PLAYER_WYID'])
-    dub_opta = count_unique_duplicates(df['PLAYER_OPTAUUID'])
-    
-    total_dub_problemer = dub_navn + dub_wyid + dub_opta
+    # Statistik til KPI'er
+    dublet_maske = get_duplicate_mask(df)
+    total_dublet_raekker = df[dublet_maske].shape[0]
 
     # --- KPI VISNING ---
     mangler_opta = df[(df['PLAYER_OPTAUUID'].isna()) | (df['PLAYER_OPTAUUID'].astype(str).str.lower() == "none") | (df['PLAYER_OPTAUUID'].astype(str).str.strip() == "")].shape[0]
@@ -89,22 +90,31 @@ def vis_side():
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Mangler Opta-ID", mangler_opta)
     c2.metric("Uden klub", uden_klub)
-    # Her viser vi nu antallet af KONFLIKTER (f.eks. 3 navne der går igen)
-    c3.metric("Dublet-konflikter", total_dub_problemer, delta="Unikke fejl", delta_color="inverse" if total_dub_problemer > 0 else "normal")
+    c3.metric("Dublet-rækker", total_dublet_raekker, delta="Rækker der skal tjekkes", delta_color="inverse" if total_dublet_raekker > 0 else "normal")
     c4.metric("Total spillere", len(df))
 
     st.divider()
 
-    # --- SØGNING & EDITOR ---
-    soegning = st.text_input("Søg spiller/klub:", key="search").strip().lower()
-    if len(soegning) >= 2:
-        mask = df.apply(lambda x: x.astype(str).str.lower().str.contains(soegning)).any(axis=1)
-        visnings_df = df[mask].copy().reset_index(drop=True)
-    else:
-        visnings_df = df.copy().reset_index(drop=True)
+    # --- SØGNING OG FILTRERING ---
+    col_search, col_toggle = st.columns([3, 1])
+    with col_search:
+        soegning = st.text_input("Søg spiller/klub:", key="search").strip().lower()
+    with col_toggle:
+        st.write("") # Spacer
+        vis_kun_dubletter = st.toggle("Vis kun dubletter", value=False)
 
-    edited_data = st.data_editor(
-        visnings_df,
+    # Kombineret filter
+    visnings_df = df.copy()
+    if vis_kun_dubletter:
+        visnings_df = visnings_df[dublet_maske]
+    
+    if len(soegning) >= 2:
+        mask = visnings_df.apply(lambda x: x.astype(str).str.lower().str.contains(soegning)).any(axis=1)
+        visnings_df = visnings_df[mask]
+
+    # --- EDITOR ---
+    st.data_editor(
+        visnings_df.reset_index(drop=True),
         height=600,
         use_container_width=True,
         hide_index=True,
@@ -119,7 +129,7 @@ def vis_side():
 
     # --- GEM-KNAP ---
     if st.session_state.spiller_editor["edited_rows"]:
-        st.warning(f"Der er ugemte ændringer i {len(st.session_state.spiller_editor['edited_rows'])} rækker.")
+        st.warning(f"Du har {len(st.session_state.spiller_editor['edited_rows'])} ugemte ændringer.")
         if st.button("💾 Gem alle ændringer til GitHub", type="primary", use_container_width=True):
             changes = st.session_state.spiller_editor["edited_rows"]
             for idx_str, updated_cols in changes.items():
