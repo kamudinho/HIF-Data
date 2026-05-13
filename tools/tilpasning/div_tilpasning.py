@@ -19,13 +19,6 @@ POS_TRANSLATIONS = {
     "Midfielder": "Midtbanespiller"
 }
 
-def rens_specialtegn(val):
-    if not isinstance(val, str): return val
-    tegn_map = {'√∏': 'ø', '√ò': 'Ø', '√¶': 'æ', '√Ü': 'Æ', '√•': 'å', '√Ö': 'Å'}
-    for grimt, godt in tegn_map.items():
-        val = val.replace(grimt, godt)
-    return val
-
 # --- 2. GITHUB SERVICE ---
 def get_github_file(path):
     try:
@@ -42,50 +35,28 @@ def get_github_file(path):
     return None, None
 
 def save_to_github(df):
-    try:
-        _, sha = get_github_file(OVERWRITE_DB_PATH)
-        csv_content = df.to_csv(index=False, encoding='utf-8-sig')
-        payload = {
-            "message": "Update 1div data", 
-            "content": base64.b64encode(csv_content.encode('utf-8')).decode('utf-8'), 
-            "sha": sha
-        }
-        r = requests.put(f"https://api.github.com/repos/{REPO}/contents/{OVERWRITE_DB_PATH}", 
-                         headers={"Authorization": f"token {GITHUB_TOKEN}"}, json=payload)
-        if r.status_code in [200, 201]:
-            st.toast("Gemt på GitHub!", icon="✅")
-            return True
-    except Exception as e:
-        st.error(f"Gemme-fejl: {e}")
+    with st.spinner("Uploader til GitHub..."):
+        try:
+            _, sha = get_github_file(OVERWRITE_DB_PATH)
+            csv_content = df.to_csv(index=False, encoding='utf-8-sig')
+            payload = {
+                "message": "Bulk update 1div data", 
+                "content": base64.b64encode(csv_content.encode('utf-8')).decode('utf-8'), 
+                "sha": sha
+            }
+            r = requests.put(f"https://api.github.com/repos/{REPO}/contents/{OVERWRITE_DB_PATH}", 
+                             headers={"Authorization": f"token {GITHUB_TOKEN}"}, json=payload)
+            if r.status_code in [200, 201]:
+                st.success("Alle ændringer er nu gemt på GitHub!")
+                return True
+        except Exception as e:
+            st.error(f"Gemme-fejl: {e}")
     return False
-
-# --- 3. AUTO-SAVE HANDLER ---
-def handle_auto_save():
-    if 'spiller_editor' in st.session_state and st.session_state['spiller_editor'].get("edited_rows"):
-        changes = st.session_state['spiller_editor']["edited_rows"]
-        full_df = st.session_state['full_df_1div'].copy()
-        visnings_df = st.session_state['visnings_df_1div']
-        
-        has_changed = False
-        for idx_str, updated_cols in changes.items():
-            row_idx = int(idx_str)
-            wyid = visnings_df.iloc[row_idx]['PLAYER_WYID']
-            idx_in_full = full_df[full_df['PLAYER_WYID'] == wyid].index
-            
-            if not idx_in_full.empty:
-                has_changed = True
-                for col, val in updated_cols.items():
-                    full_df.at[idx_in_full[0], col] = val
-
-        if has_changed:
-            st.session_state['full_df_1div'] = full_df
-            if save_to_github(full_df):
-                st.cache_data.clear()
-                st.rerun()
 
 def vis_side():
     st.title("Sikker Editor: 1. Division")
     
+    # --- INDLÆSNING ---
     if 'full_df_1div' not in st.session_state:
         content, _ = get_github_file(OVERWRITE_DB_PATH)
         if content:
@@ -96,56 +67,69 @@ def vis_side():
             st.session_state['full_df_1div'] = df
         else: return
 
-    df = st.session_state['full_df_1div']
+    df = st.session_state['full_df_1div'].copy()
 
-    # --- NY FUNKTION: STATISTIK ---
-    # Vi tjekker for tomme strenge, NaN og teksten "None"
-    mangler_opta = df[
-        (df['PLAYER_OPTAUUID'].isna()) | 
-        (df['PLAYER_OPTAUUID'].astype(str).str.strip() == "") | 
-        (df['PLAYER_OPTAUUID'].astype(str).str.lower() == "none")
-    ].shape[0]
+    # --- STATISTIK ---
+    mangler_opta = df[(df['PLAYER_OPTAUUID'].isna()) | (df['PLAYER_OPTAUUID'].astype(str).str.lower() == "none") | (df['PLAYER_OPTAUUID'].astype(str).str.strip() == "")].shape[0]
+    uden_klub = df[(df['KLUB'].isna()) | (df['KLUB'].astype(str).str.lower() == "none") | (df['KLUB'].astype(str).str.strip() == "")].shape[0]
 
-    uden_klub = df[
-        (df['KLUB'].isna()) | 
-        (df['KLUB'].astype(str).str.strip() == "") | 
-        (df['KLUB'].astype(str).str.lower() == "none")
-    ].shape[0]
-
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Mangler Opta-ID", mangler_opta)
-    col2.metric("Uden klub", uden_klub)
-    col3.metric("Total spillere", len(df))
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Mangler Opta-ID", mangler_opta)
+    c2.metric("Uden klub", uden_klub)
+    c3.metric("Total spillere", len(df))
 
     st.divider()
 
-    # --- SØGNING OG EDITOR ---
+    # --- SØGNING ---
     soegning = st.text_input("Søg spiller/klub:", key="search").strip().lower()
-
     if len(soegning) >= 2:
         mask = df.apply(lambda x: x.astype(str).str.lower().str.contains(soegning)).any(axis=1)
         visnings_df = df[mask].copy().reset_index(drop=True)
     else:
         visnings_df = df.copy().reset_index(drop=True)
 
-    st.session_state['visnings_df_1div'] = visnings_df
-
-    st.data_editor(
+    # --- EDITOR ---
+    # Bemærk: Vi bruger IKKE on_change her for at undgå rerun ved hver celle
+    edited_data = st.data_editor(
         visnings_df,
         height=600,
         use_container_width=True,
         hide_index=True,
         disabled=["PLAYER_WYID"], 
         key="spiller_editor",
-        on_change=handle_auto_save,
         column_config={
             "PLAYER_WYID": st.column_config.NumberColumn("WYID (Låst)", format="%d"),
             "COMPETITION_WYID": st.column_config.NumberColumn("Komp-ID", format="%d"),
             "POSITION": st.column_config.SelectboxColumn("Position", options=list(POS_TRANSLATIONS.values())),
-            "PLAYER_OPTAUUID": st.column_config.TextColumn("PLAYER-UUID"),
-            "COMPETITION_OPTAUUID": st.column_config.TextColumn("Turnering-UUID")
         }
     )
+
+    # --- GEM-KNAP ---
+    # Vi tjekker om der er lavet ændringer i editoren
+    if st.session_state.spiller_editor["edited_rows"]:
+        st.warning("Du har ugemte ændringer i tabellen!")
+        
+        if st.button("💾 Gem alle ændringer til GitHub", type="primary", use_container_width=True):
+            # 1. Hent ændringerne fra editoren
+            changes = st.session_state.spiller_editor["edited_rows"]
+            
+            # 2. Opdater master-datasættet i session_state
+            for idx_str, updated_cols in changes.items():
+                row_idx = int(idx_str)
+                wyid = visnings_df.iloc[row_idx]['PLAYER_WYID']
+                
+                # Find rækken i det fulde datasæt og opdater
+                full_df_idx = df[df['PLAYER_WYID'] == wyid].index
+                if not full_df_idx.empty:
+                    for col, val in updated_cols.items():
+                        df.at[full_df_idx[0], col] = val
+            
+            # 3. Gem til GitHub
+            if save_to_github(df):
+                st.session_state['full_df_1div'] = df
+                st.cache_data.clear()
+                # Vi venter et kort øjeblik og genindlæser så tallene passer
+                st.rerun()
 
 if __name__ == "__main__":
     vis_side()
