@@ -44,7 +44,6 @@ def get_github_file(path):
 def save_to_github(df):
     try:
         _, sha = get_github_file(OVERWRITE_DB_PATH)
-        # Vi gemmer data præcis som de er, uden at tvinge til 0
         csv_content = df.to_csv(index=False, encoding='utf-8-sig')
         payload = {
             "message": "Update 1div data", 
@@ -70,7 +69,6 @@ def handle_auto_save():
         has_changed = False
         for idx_str, updated_cols in changes.items():
             row_idx = int(idx_str)
-            # Vi bruger WYID som den faste nøgle til at finde rækken
             wyid = visnings_df.iloc[row_idx]['PLAYER_WYID']
             idx_in_full = full_df[full_df['PLAYER_WYID'] == wyid].index
             
@@ -93,16 +91,37 @@ def vis_side():
         if content:
             df = pd.read_csv(StringIO(content), encoding='utf-8-sig')
             df.columns = df.columns.str.upper().str.strip()
-            # Sikr at WYID er pæne heltal i hukommelsen
             if 'PLAYER_WYID' in df.columns:
                 df['PLAYER_WYID'] = pd.to_numeric(df['PLAYER_WYID'], errors='coerce').fillna(0).astype(int)
             st.session_state['full_df_1div'] = df
         else: return
 
     df = st.session_state['full_df_1div']
+
+    # --- NY FUNKTION: STATISTIK ---
+    # Vi tjekker for tomme strenge, NaN og teksten "None"
+    mangler_opta = df[
+        (df['PLAYER_OPTAUUID'].isna()) | 
+        (df['PLAYER_OPTAUUID'].astype(str).str.strip() == "") | 
+        (df['PLAYER_OPTAUUID'].astype(str).str.lower() == "none")
+    ].shape[0]
+
+    uden_klub = df[
+        (df['KLUB'].isna()) | 
+        (df['KLUB'].astype(str).str.strip() == "") | 
+        (df['KLUB'].astype(str).str.lower() == "none")
+    ].shape[0]
+
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Mangler Opta-ID", mangler_opta)
+    col2.metric("Uden klub", uden_klub)
+    col3.metric("Total spillere", len(df))
+
+    st.divider()
+
+    # --- SØGNING OG EDITOR ---
     soegning = st.text_input("Søg spiller/klub:", key="search").strip().lower()
 
-    # Filtrering
     if len(soegning) >= 2:
         mask = df.apply(lambda x: x.astype(str).str.lower().str.contains(soegning)).any(axis=1)
         visnings_df = df[mask].copy().reset_index(drop=True)
@@ -111,13 +130,11 @@ def vis_side():
 
     st.session_state['visnings_df_1div'] = visnings_df
 
-    # Editor
     st.data_editor(
         visnings_df,
         height=600,
         use_container_width=True,
         hide_index=True,
-        # VI LÅSER WYID HER FOR AT BESKYTTE DATA-STRUKTUREN
         disabled=["PLAYER_WYID"], 
         key="spiller_editor",
         on_change=handle_auto_save,
