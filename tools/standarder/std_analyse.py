@@ -80,8 +80,30 @@ def load_setpiece_data():
 def to_metric(val, total_m): 
     return val * (total_m / 100)
 
+def get_summary_stats(df, group_col):
+    """Beregner den udvidede statistik til tabellerne"""
+    # 1. Basis stats
+    stats = df.groupby(group_col).agg(
+        Antal=('TYPE_NAVN', 'size'),
+        Succesfulde=('MODTAGER', lambda x: x.notna().sum())
+    ).reset_index()
+    
+    stats['Succes %'] = (stats['Succesfulde'] / stats['Antal']).fillna(0)
+    
+    # 2. Find top modtager for hver gruppe
+    def get_top_modtager(sub_df):
+        m = sub_df['MODTAGER'].value_counts()
+        if m.empty: return "-"
+        name = m.index[0]
+        count = m.iloc[0]
+        return f"{name} ({count})"
+
+    modtager_map = df.groupby(group_col).apply(get_top_modtager).to_dict()
+    stats['Top Modtager'] = stats[group_col].map(modtager_map)
+    
+    return stats
+
 def render_setpiece_analysis(df_team, sp_type, t_sel):
-    """Hjælpefunktion til at tegne analyse for en bestemt type"""
     f1, f2 = st.columns([1, 1])
     with f1:
         p_list = ["Alle spillere"] + sorted(df_team[df_team['TYPE_NAVN'] == sp_type]['TAGER_NAVN'].unique().tolist())
@@ -98,20 +120,16 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
     pct = (success / total * 100) if total > 0 else 0
 
     col_p, col_s = st.columns([2, 1])
-    
     with col_p:
         for c in ['EVENT_X', 'EVENT_Y', 'ENDX', 'ENDY']: 
             df_plot[c] = pd.to_numeric(df_plot[c], errors='coerce')
-        
         df_plot['X_M'] = df_plot['EVENT_X'].apply(lambda x: to_metric(x, 105))
         df_plot['Y_M'] = df_plot['EVENT_Y'].apply(lambda y: to_metric(y, 68))
         df_plot['ENDX_M'] = df_plot['ENDX'].apply(lambda x: to_metric(x, 105))
         df_plot['ENDY_M'] = df_plot['ENDY'].apply(lambda y: to_metric(y, 68))
-
         pitch = VerticalPitch(half=True, pitch_type='custom', pitch_length=105, pitch_width=68, line_color='#cccccc')
         fig, ax = pitch.draw(figsize=(10, 10))
         ax.set_ylim(50, 105)
-        
         if not df_plot.dropna(subset=['ENDX_M', 'ENDY_M']).empty:
             if "Zoner" in vis_mode:
                 pitch.hexbin(df_plot.ENDX_M, df_plot.ENDY_M, ax=ax, gridsize=(12, 12), cmap='Reds', alpha=0.6)
@@ -119,7 +137,6 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
                 pitch.arrows(df_plot.X_M, df_plot.Y_M, df_plot.ENDX_M, df_plot.ENDY_M, 
                              color=TEAM_COLORS.get(t_sel, {}).get('primary', HIF_RED), ax=ax, alpha=0.3)
         st.pyplot(fig)
-
     with col_s:
         m1, m2, m3 = st.columns(3)
         m1.metric("Antal", total)
@@ -158,27 +175,49 @@ def vis_side():
 
     df_team_selected = df_all[df_all['KLUB_NAVN'] == t_sel].copy()
 
-    # NY TAB STRUKTUR
+    # TABS
     tab_list = ["Holdoversigt", "Spilleroversigt", "Hjørnespark", "Frispark", "Indkast", "Zoneoversigt"]
     tabs = st.tabs(tab_list)
 
+    # Fælles radio-valg til oversigterne
+    cat_options = ["Hjørnespark", "Frispark", "Indkast"]
+
     with tabs[0]: # Holdoversigt
-        hold_stats = df_all.groupby(['KLUB_NAVN', 'TYPE_NAVN']).size().unstack(fill_value=0).reset_index()
-        st.dataframe(hold_stats, use_container_width=True, hide_index=True)
+        cat_h = st.radio("Kategori (Hold)", cat_options, horizontal=True, key="radio_hold")
+        df_cat_h = df_all[df_all['TYPE_NAVN'] == cat_h]
+        stats_h = get_summary_stats(df_cat_h, 'KLUB_NAVN')
+        
+        st.dataframe(
+            stats_h,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "KLUB_NAVN": "Klub",
+                "Succes %": st.column_config.ProgressColumn("Succes %", format="%.0f%%", min_value=0, max_value=1)
+            }
+        )
 
     with tabs[1]: # Spilleroversigt
-        if not df_team_selected.empty:
-            spiller_stats = df_team_selected.groupby(['TAGER_NAVN', 'TYPE_NAVN']).size().unstack(fill_value=0).reset_index()
-            st.dataframe(spiller_stats, use_container_width=True, hide_index=True)
+        cat_s = st.radio("Kategori (Spiller)", cat_options, horizontal=True, key="radio_spiller")
+        df_cat_s = df_team_selected[df_team_selected['TYPE_NAVN'] == cat_s]
+        
+        if not df_cat_s.empty:
+            stats_s = get_summary_stats(df_cat_s, 'TAGER_NAVN')
+            st.dataframe(
+                stats_s,
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "TAGER_NAVN": "Spiller",
+                    "Succes %": st.column_config.ProgressColumn("Succes %", format="%.0f%%", min_value=0, max_value=1)
+                }
+            )
+        else:
+            st.info(f"Ingen data for {cat_s} hos {t_sel}")
 
-    with tabs[2]: # Hjørnespark
-        render_setpiece_analysis(df_team_selected, "Hjørnespark", t_sel)
-
-    with tabs[3]: # Frispark
-        render_setpiece_analysis(df_team_selected, "Frispark", t_sel)
-
-    with tabs[4]: # Indkast
-        render_setpiece_analysis(df_team_selected, "Indkast", t_sel)
+    with tabs[2]: render_setpiece_analysis(df_team_selected, "Hjørnespark", t_sel)
+    with tabs[3]: render_setpiece_analysis(df_team_selected, "Frispark", t_sel)
+    with tabs[4]: render_setpiece_analysis(df_team_selected, "Indkast", t_sel)
 
     with tabs[5]: # Zoneoversigt
         def get_zone(y):
