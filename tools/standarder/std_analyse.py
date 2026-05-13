@@ -93,7 +93,7 @@ def load_team_setpiece_data(team_name):
 
 def vis_side():
     st.set_page_config(layout="wide")
-    st.title("🎯 Standard-Analyse")
+    st.caption("Standard-Analyse")
     
     t_sel = st.selectbox("Vælg Hold", get_team_options())
     df_raw = load_team_setpiece_data(t_sel)
