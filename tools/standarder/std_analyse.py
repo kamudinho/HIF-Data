@@ -83,13 +83,14 @@ def to_metric(val, total_m):
 def vis_side():
     st.set_page_config(layout="wide", page_title="Standardsituationer")
     
-    # CSS: Holder banneret i top, fjerner kun dropdown-label
+    # CSS: Fjerner al padding i toppen og skjuler label
     st.markdown("""
         <style>
         header {visibility: hidden;}
-        /* Standard padding så banneret ikke rykker sig */
-        .block-container {padding-top: 3.5rem !important;}
-        /* Skjul kun label på den øverste hold-vælger */
+        .block-container {
+            padding-top: 0rem !important;
+            padding-bottom: 0rem !important;
+        }
         div[data-testid="stSelectbox"] label { display: none !important; }
         </style>
     """, unsafe_allow_html=True)
@@ -109,7 +110,6 @@ def vis_side():
     with col_title:
         st.subheader("Standardsituationer")
     with col_select:
-        # Hold-dropdown (Label er skjult via CSS)
         t_sel = st.selectbox("hold_valg_top", teams, index=teams.index("Hvidovre") if "Hvidovre" in teams else 0)
 
     df_team_selected = df_all[df_all['KLUB_NAVN'] == t_sel].copy()
