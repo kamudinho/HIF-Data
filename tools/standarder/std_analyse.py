@@ -2,29 +2,26 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from mplsoccer import VerticalPitch
+import matplotlib.pyplot as plt
 from data.utils.team_mapping import TEAMS, TEAM_COLORS
 from data.data_load import _get_snowflake_conn
 
 # --- KONFIGURATION ---
+HIF_RED = '#cc0000'
 DB = "KLUB_HVIDOVREIF.AXIS"
-LIGA_UUID = "dyjr458hcmrcy87fsabfsy87o" 
+LIGA_UUID = "dyjr458hcmrcy87fsabfsy87o"
 PLAYER_FILE = 'data/players/1div_overskrivning.csv'
 
-def get_team_options():
-    return sorted([k for k in TEAMS.keys()])
-
 @st.cache_data(ttl=3600)
-def load_team_setpiece_data(team_name):
+def load_setpiece_data():
     conn = _get_snowflake_conn()
     if not conn: return pd.DataFrame()
-
-    team_uuid = TEAMS.get(team_name, {}).get('opta_uuid')
-    if not team_uuid: return pd.DataFrame()
-
+    
+    # SQL: Henter events, end-coordinates og de næste 2 hændelser for mønstergenkendelse
     sql = f"""
     WITH BaseEvents AS (
         SELECT 
-            e.EVENT_OPTAUUID, e.MATCH_OPTAUUID, e.EVENT_EVENTID,
+            e.EVENT_OPTAUUID, e.MATCH_OPTAUUID, e.EVENT_EVENTID, e.EVENT_OPTAID,
             e.EVENT_CONTESTANT_OPTAUUID AS TEAM_UUID,
             TRIM(e.PLAYER_OPTAUUID) AS PLAYER_UUID,
             e.PLAYER_NAME,
@@ -44,22 +41,24 @@ def load_team_setpiece_data(team_name):
             MAX(CASE WHEN QUALIFIER_QID = 107 THEN 'Indkast'
                      WHEN QUALIFIER_QID = 6 THEN 'Hjørnespark'
                      WHEN QUALIFIER_QID = 5 THEN 'Frispark' END) AS TYPE_NAVN,
-            MAX(CASE WHEN QUALIFIER_QID = 140 THEN QUALIFIER_VALUE END) AS END_X,
-            MAX(CASE WHEN QUALIFIER_QID = 141 THEN QUALIFIER_VALUE END) AS END_Y,
+            MAX(CASE WHEN QUALIFIER_QID = 140 THEN QUALIFIER_VALUE END) AS ENDX,
+            MAX(CASE WHEN QUALIFIER_QID = 141 THEN QUALIFIER_VALUE END) AS ENDY,
             MAX(CASE WHEN QUALIFIER_QID IN (214, 154, 111) THEN 1 ELSE 0 END) AS ER_CHANCE
         FROM {DB}.OPTA_QUALIFIERS
         WHERE QUALIFIER_QID IN (5, 6, 107, 140, 141, 214, 154, 111)
         GROUP BY EVENT_OPTAUUID
     )
-    SELECT b.*, q.TYPE_NAVN, q.END_X, q.END_Y, q.ER_CHANCE
+    SELECT b.*, q.TYPE_NAVN, q.ENDX, q.ENDY, q.ER_CHANCE
     FROM BaseEvents b
     JOIN Quals q ON b.EVENT_OPTAUUID = q.EVENT_OPTAUUID
-    WHERE b.TEAM_UUID = '{team_uuid}' AND q.TYPE_NAVN IS NOT NULL
+    WHERE q.TYPE_NAVN IS NOT NULL
     """
-
+    
     df = conn.query(sql)
     if df is None or df.empty: return pd.DataFrame()
+    df.columns = [c.upper() for c in df.columns]
 
+    # Navne mapping fra CSV
     try:
         df_lookup = pd.read_csv(PLAYER_FILE)
         df_lookup['PLAYER_OPTAUUID'] = df_lookup['PLAYER_OPTAUUID'].astype(str).str.strip()
@@ -73,8 +72,9 @@ def load_team_setpiece_data(team_name):
         full_name = name_map.get(u)
         return full_name if full_name else f"{db_name} ({u})"
 
-    df['TAGER'] = df.apply(lambda x: format_name(x['PLAYER_UUID'], x['PLAYER_NAME']), axis=1)
+    df['TAGER_NAVN'] = df.apply(lambda x: format_name(x['PLAYER_UUID'], x['PLAYER_NAME']), axis=1)
 
+    # Mønstergenkendelse logik
     def find_target(row):
         if row['P1_TEAM'] == row['TEAM_UUID'] and row['P1_UUID'] != row['PLAYER_UUID']:
             return format_name(row['P1_UUID'], row['P1_NAME'])
@@ -83,67 +83,100 @@ def load_team_setpiece_data(team_name):
         return None
 
     df['MODTAGER'] = df.apply(find_target, axis=1)
-    df['END_X'] = pd.to_numeric(df['END_X'], errors='coerce')
-    df['END_Y'] = pd.to_numeric(df['END_Y'], errors='coerce')
+    
+    for col in ['EVENT_X', 'EVENT_Y', 'ENDX', 'ENDY']:
+        df[col] = pd.to_numeric(df[col], errors='coerce')
+        
     return df
+
+def to_metric(val, total_m): 
+    return val * (total_m / 100)
 
 def vis_side():
     st.set_page_config(layout="wide")
+    st.markdown("<style>header {visibility: hidden;}</style>", unsafe_allow_html=True)
     st.title("Standard-Analyse")
     
-    # Globalt valg af hold - gælder for begge tabs
-    t_sel = st.selectbox("Vælg Hold", get_team_options())
-    df_raw = load_team_setpiece_data(t_sel)
-    
-    if df_raw.empty:
-        st.warning(f"Ingen data fundet for {t_sel}")
+    df_all = load_setpiece_data()
+    if df_all.empty:
+        st.warning("Ingen data fundet.")
         return
 
-    tab1, tab2 = st.tabs(["Statistik", "Banevisning"])
+    # Klub mapping
+    uuid_to_name = {v['opta_uuid'].upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
+    df_all['KLUB_NAVN'] = df_all['TEAM_UUID'].str.upper().map(uuid_to_name)
     
-    with tab1:
-        # Specifikke valg under statistik tab
-        c1, c2 = st.columns(2)
-        with c1:
-            type_sel = st.selectbox("Vælg Type", ["Alle", "Hjørnespark", "Indkast", "Frispark"])
-        with c2:
-            counts_tager = df_raw['TAGER'].value_counts()
-            tager_options = ["Alle"] + [f"{name} ({counts_tager[name]})" for name in counts_tager.index]
-            player_sel_raw = st.selectbox("Vælg Tager", tager_options)
-            player_sel = player_sel_raw.split(" (")[0] if player_sel_raw != "Alle" else "Alle"
+    # --- TOP FILTRE ---
+    teams = sorted([n for n in df_all['KLUB_NAVN'].unique() if pd.notna(n)])
+    
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        t_sel = st.selectbox("Hold", teams, index=teams.index("Hvidovre") if "Hvidovre" in teams else 0)
+    
+    df_team = df_all[df_all['KLUB_NAVN'] == t_sel].copy()
 
-        df_filtered = df_raw.copy()
-        if type_sel != "Alle": df_filtered = df_filtered[df_filtered['TYPE_NAVN'] == type_sel]
-        if player_sel != "Alle": df_filtered = df_filtered[df_filtered['TAGER'] == player_sel]
+    with c2:
+        sp_type = st.selectbox("Type", ["Hjørnespark", "Indkast", "Frispark"])
+    with c3:
+        players = ["Alle spillere"] + sorted(df_team[df_team['TYPE_NAVN'] == sp_type]['TAGER_NAVN'].unique().tolist())
+        p_sel = st.selectbox("Spiller", players)
+    with c4:
+        vis_mode = st.selectbox("Visning", ["Zoner + Pile", "Kun Zoner", "Kun Pile"])
 
-        if df_filtered.empty:
-            st.info("Ingen data for de valgte filtre.")
-        else:
-            def get_stats(group):
-                m_counts = group['MODTAGER'].value_counts()
-                top_modtager = f"{m_counts.idxmax()} ({m_counts.max()})" if not m_counts.empty else "Ingen"
-                return pd.Series({
-                    'Antal': len(group),
-                    'Ramt / Duel': group['MODTAGER'].notna().sum(),
-                    'Chancer': group['ER_CHANCE'].sum(),
-                    'Primær Modtager': top_modtager
-                })
+    # --- DATA FILTRERING ---
+    mask = (df_team['TYPE_NAVN'] == sp_type)
+    if p_sel != "Alle spillere":
+        mask &= (df_team['TAGER_NAVN'] == p_sel)
+    
+    df_plot = df_team[mask].copy()
 
-            stats_df = df_filtered.groupby(['TAGER', 'TYPE_NAVN']).apply(get_stats, include_groups=False).reset_index()
-            st.dataframe(stats_df.sort_values('Antal', ascending=False), use_container_width=True, hide_index=True)
+    # Skalering
+    df_plot['X_M'] = df_plot['EVENT_X'].apply(lambda x: to_metric(x, 105))
+    df_plot['Y_M'] = df_plot['EVENT_Y'].apply(lambda y: to_metric(y, 68))
+    df_plot['ENDX_M'] = df_plot['ENDX'].apply(lambda x: to_metric(x, 105))
+    df_plot['ENDY_M'] = df_plot['ENDY'].apply(lambda y: to_metric(y, 68))
 
-    with tab2:
-        # Banevisningen bruger hele datasættet for det valgte hold (medmindre man vil have filtrene herover også)
-        pitch = VerticalPitch(half=True, pitch_type='opta', line_color='#cccccc')
-        fig, ax = pitch.draw(figsize=(8, 10))
-        t_color = TEAM_COLORS.get(t_sel, {}).get('primary', '#cc0000')
-        
-        # Her bruger vi df_filtered så banevisningen følger valgene i Statistik-tabben
-        valid = df_filtered.dropna(subset=['END_X', 'END_Y'])
-        if not valid.empty:
-            pitch.arrows(valid.EVENT_X, valid.EVENT_Y, valid.END_X, valid.END_Y, color=t_color, ax=ax, alpha=0.3, width=2)
-            pitch.scatter(valid.END_X, valid.END_Y, color=t_color, edgecolors='white', s=100, ax=ax, zorder=3)
+    # --- VISUALISERING ---
+    t_color = TEAM_COLORS.get(t_sel, {}).get('primary', HIF_RED)
+    
+    col_p, col_s = st.columns([2, 1])
+
+    with col_p:
+        pitch = VerticalPitch(half=True, pitch_type='custom', pitch_length=105, pitch_width=68, line_color='#cccccc')
+        fig, ax = pitch.draw(figsize=(10, 12))
+        ax.set_ylim(50, 105)
+
+        if not df_plot.dropna(subset=['ENDX_M', 'ENDY_M']).empty:
+            if "Zoner" in vis_mode:
+                pitch.hexbin(df_plot.ENDX_M, df_plot.ENDY_M, ax=ax, gridsize=(12, 12), cmap='Reds', alpha=0.6, edgecolors='#f0f0f0')
+
+            if "Pile" in vis_mode:
+                alpha_val = 0.4 if len(df_plot) < 100 else 0.15
+                pitch.arrows(df_plot.X_M, df_plot.Y_M, df_plot.ENDX_M, df_plot.ENDY_M, 
+                             width=1, headwidth=3, color=t_color, ax=ax, alpha=alpha_val)
         st.pyplot(fig)
+
+    with col_s:
+        st.subheader("Statistik")
+        st.metric("Antal aktioner", len(df_plot))
+        
+        # Mønster-statistik
+        def get_top_receiver(group):
+            m_counts = group['MODTAGER'].value_counts()
+            if not m_counts.empty:
+                return f"{m_counts.idxmax()} ({m_counts.max()})"
+            return "Ingen"
+
+        st.write("**Top eksekutører:**")
+        st.dataframe(df_plot['TAGER_NAVN'].value_counts(), use_container_width=True)
+        
+        st.write("**Primære modtagere (Mønster):**")
+        receiver_df = df_plot.groupby('TAGER_NAVN').apply(lambda x: pd.Series({
+            'Primær Modtager': get_top_receiver(x),
+            'Ramte / Duel': x['MODTAGER'].notna().sum()
+        }), include_groups=False).reset_index()
+        
+        st.dataframe(receiver_df.sort_values('Ramte / Duel', ascending=False), use_container_width=True, hide_index=True)
 
 if __name__ == "__main__":
     vis_side()
