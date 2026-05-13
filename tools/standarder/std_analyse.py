@@ -17,7 +17,7 @@ def load_setpiece_data():
     conn = _get_snowflake_conn()
     if not conn: return pd.DataFrame()
     
-    # SQL rettet til de kolonnenavne du lige har sendt (EVENT_ID)
+    # SQL baseret på dit OPTA_EVENTS udtræk
     sql = f"""
     WITH BaseEvents AS (
         SELECT 
@@ -26,7 +26,8 @@ def load_setpiece_data():
             TRIM(e.PLAYER_OPTAUUID) AS PLAYER_UUID,
             e.PLAYER_NAME,
             e.EVENT_X, e.EVENT_Y,
-            -- Finder de næste hændelser baseret på EVENT_ID fra dit udtræk
+            e.EVENT_TYPEID,
+            -- Finder de næste hændelser i sekvensen via EVENT_ID
             LEAD(TRIM(e.PLAYER_OPTAUUID), 1) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_ID) AS P1_UUID,
             LEAD(e.PLAYER_NAME, 1) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_ID) AS P1_NAME,
             LEAD(e.EVENT_CONTESTANT_OPTAUUID, 1) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_ID) AS P1_TEAM,
@@ -69,14 +70,16 @@ def load_setpiece_data():
     def format_name(uuid, db_name):
         if pd.isna(uuid) or uuid is None: return None
         u = str(uuid).strip()
-        return name_map.get(u, f"{db_name} ({u})")
+        return name_map.get(u, f"{db_name}")
 
     df['TAGER_NAVN'] = df.apply(lambda x: format_name(x['PLAYER_UUID'], x['PLAYER_NAME']), axis=1)
 
     # Modtager logik (Mønster)
     def find_target(row):
+        # Hvis P1 er på samme hold og ikke er tageren selv
         if row['P1_TEAM'] == row['TEAM_UUID'] and row['P1_UUID'] != row['PLAYER_UUID']:
             return format_name(row['P1_UUID'], row['P1_NAME'])
+        # Ellers tjek om P2 er modtageren (f.eks. ved dueller)
         if row['P2_TEAM'] == row['TEAM_UUID'] and row['P2_UUID'] != row['PLAYER_UUID']:
             return format_name(row['P2_UUID'], row['P2_NAME'])
         return None
@@ -88,7 +91,8 @@ def load_setpiece_data():
         
     return df
 
-def to_metric(val, total_m): return val * (total_m / 100)
+def to_metric(val, total_m): 
+    return val * (total_m / 100)
 
 def vis_side():
     st.set_page_config(layout="wide")
@@ -100,12 +104,13 @@ def vis_side():
         st.warning("Ingen data fundet.")
         return
 
+    # Klub mapping
     uuid_to_name = {v['opta_uuid'].upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
     df_all['KLUB_NAVN'] = df_all['TEAM_UUID'].str.upper().map(uuid_to_name)
     
     teams = sorted([n for n in df_all['KLUB_NAVN'].unique() if pd.notna(n)])
     
-    # --- FILTRE (Layout som ønsket) ---
+    # --- FILTRE (Layout med 4 kolonner) ---
     c1, c2, c3, c4 = st.columns(4)
     with c1:
         t_sel = st.selectbox("Hold", teams, index=teams.index("Hvidovre") if "Hvidovre" in teams else 0)
