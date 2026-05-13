@@ -83,14 +83,10 @@ def to_metric(val, total_m):
 def vis_side():
     st.set_page_config(layout="wide", page_title="Standardsituationer")
     
-    # CSS: Fjerner al padding i toppen og skjuler label
+    # CSS: Kun skjul af header og selectbox-label
     st.markdown("""
         <style>
         header {visibility: hidden;}
-        .block-container {
-            padding-top: 0rem !important;
-            padding-bottom: 0rem !important;
-        }
         div[data-testid="stSelectbox"] label { display: none !important; }
         </style>
     """, unsafe_allow_html=True)
@@ -117,15 +113,18 @@ def vis_side():
     # --- TABS ---
     tab1, tab2, tab3, tab4 = st.tabs(["Holdoversigt", "Spilleroversigt", "Analyse", "Zoneoversigt"])
 
+    # TAB 1: Holdoversigt (Uafhængig af holdvalg)
     with tab1:
         hold_stats = df_all.groupby(['KLUB_NAVN', 'TYPE_NAVN']).size().unstack(fill_value=0).reset_index()
         st.dataframe(hold_stats, use_container_width=True, hide_index=True)
 
+    # TAB 2: Spilleroversigt (Afhængig)
     with tab2:
         if not df_team_selected.empty:
             spiller_stats = df_team_selected.groupby(['TAGER_NAVN', 'TYPE_NAVN']).size().unstack(fill_value=0).reset_index()
             st.dataframe(spiller_stats, use_container_width=True, hide_index=True)
 
+    # TAB 3: Analyse (Afhængig)
     with tab3:
         c1, c2, c3 = st.columns(3)
         with c1: sp_type = st.selectbox("Type", ["Hjørnespark", "Indkast", "Frispark"], key="ana_type")
@@ -165,6 +164,7 @@ def vis_side():
             mod_counts.columns = ['Spiller', 'Antal']
             st.dataframe(mod_counts, use_container_width=True, hide_index=True)
 
+    # TAB 4: Zoneoversigt (Afhængig)
     with tab4:
         def get_zone(y):
             if pd.isna(y): return "Ukendt"
