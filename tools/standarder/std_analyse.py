@@ -83,12 +83,13 @@ def to_metric(val, total_m):
 def vis_side():
     st.set_page_config(layout="wide", page_title="Standardsituationer")
     
-    # Minimal CSS for et rent look
+    # CSS: Holder banneret i top, fjerner kun dropdown-label
     st.markdown("""
         <style>
         header {visibility: hidden;}
-        .block-container {padding-top: 2rem !important;}
-        /* Fjerner label-pladsen over dropdown i top-højre */
+        /* Standard padding så banneret ikke rykker sig */
+        .block-container {padding-top: 3.5rem !important;}
+        /* Skjul kun label på den øverste hold-vælger */
         div[data-testid="stSelectbox"] label { display: none !important; }
         </style>
     """, unsafe_allow_html=True)
@@ -98,7 +99,7 @@ def vis_side():
         st.warning("Ingen data fundet.")
         return
 
-    # Forbered klubnavne
+    # Mapping af holdnavne
     uuid_to_name = {v['opta_uuid'].upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
     df_all['KLUB_NAVN'] = df_all['TEAM_UUID'].str.upper().map(uuid_to_name)
     teams = sorted([n for n in df_all['KLUB_NAVN'].unique() if pd.notna(n)])
@@ -108,38 +109,35 @@ def vis_side():
     with col_title:
         st.subheader("Standardsituationer")
     with col_select:
-        t_sel = st.selectbox("hold_valg", teams, index=teams.index("Hvidovre") if "Hvidovre" in teams else 0)
+        # Hold-dropdown (Label er skjult via CSS)
+        t_sel = st.selectbox("hold_valg_top", teams, index=teams.index("Hvidovre") if "Hvidovre" in teams else 0)
 
     df_team_selected = df_all[df_all['KLUB_NAVN'] == t_sel].copy()
 
-    # Tabs Definition
+    # --- TABS ---
     tab1, tab2, tab3, tab4 = st.tabs(["Holdoversigt", "Spilleroversigt", "Analyse", "Zoneoversigt"])
 
-    # --- TAB 1: Holdoversigt (Uafhængig) ---
     with tab1:
         hold_stats = df_all.groupby(['KLUB_NAVN', 'TYPE_NAVN']).size().unstack(fill_value=0).reset_index()
         st.dataframe(hold_stats, use_container_width=True, hide_index=True)
 
-    # --- TAB 2: Spilleroversigt (Afhængig) ---
     with tab2:
         if not df_team_selected.empty:
             spiller_stats = df_team_selected.groupby(['TAGER_NAVN', 'TYPE_NAVN']).size().unstack(fill_value=0).reset_index()
             st.dataframe(spiller_stats, use_container_width=True, hide_index=True)
 
-    # --- TAB 3: Analyse (Afhængig) ---
     with tab3:
         c1, c2, c3 = st.columns(3)
-        with c1: sp_type = st.selectbox("Type", ["Hjørnespark", "Indkast", "Frispark"], key="sb_type_ana")
+        with c1: sp_type = st.selectbox("Type", ["Hjørnespark", "Indkast", "Frispark"], key="ana_type")
         with c2:
             p_list = ["Alle spillere"] + sorted(df_team_selected[df_team_selected['TYPE_NAVN'] == sp_type]['TAGER_NAVN'].unique().tolist())
-            p_sel = st.selectbox("Spiller", p_list, key="sb_player_ana")
-        with c3: vis_mode = st.selectbox("Visning", ["Zoner + Pile", "Kun Zoner", "Kun Pile"], key="sb_mode_ana")
+            p_sel = st.selectbox("Spiller", p_list, key="ana_player")
+        with c3: vis_mode = st.selectbox("Visning", ["Zoner + Pile", "Kun Zoner", "Kun Pile"], key="ana_mode")
 
         mask = (df_team_selected['TYPE_NAVN'] == sp_type)
         if p_sel != "Alle spillere": mask &= (df_team_selected['TAGER_NAVN'] == p_sel)
         df_plot = df_team_selected[mask].copy()
 
-        # Konvertering til tal og metrikker
         for c in ['EVENT_X', 'EVENT_Y', 'ENDX', 'ENDY']: 
             df_plot[c] = pd.to_numeric(df_plot[c], errors='coerce')
         
@@ -167,7 +165,6 @@ def vis_side():
             mod_counts.columns = ['Spiller', 'Antal']
             st.dataframe(mod_counts, use_container_width=True, hide_index=True)
 
-    # --- TAB 4: Zoneoversigt (Afhængig) ---
     with tab4:
         def get_zone(y):
             if pd.isna(y): return "Ukendt"
