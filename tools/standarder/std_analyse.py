@@ -17,21 +17,22 @@ def load_setpiece_data():
     conn = _get_snowflake_conn()
     if not conn: return pd.DataFrame()
     
-    # Vi bruger EVENT_ID i stedet for EVENT_OPTAID, da det er standard i tabellen
+    # SQL rettet til de kolonnenavne du lige har sendt (EVENT_ID)
     sql = f"""
     WITH BaseEvents AS (
         SELECT 
-            e.EVENT_OPTAUUID, e.MATCH_OPTAUUID, e.EVENT_OPTAUUID,
+            e.EVENT_OPTAUUID, e.MATCH_OPTAUUID, e.EVENT_ID,
             e.EVENT_CONTESTANT_OPTAUUID AS TEAM_UUID,
             TRIM(e.PLAYER_OPTAUUID) AS PLAYER_UUID,
             e.PLAYER_NAME,
             e.EVENT_X, e.EVENT_Y,
-            LEAD(TRIM(e.PLAYER_OPTAUUID), 1) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_OPTAUUID) AS P1_UUID,
-            LEAD(e.PLAYER_NAME, 1) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_OPTAUUID) AS P1_NAME,
-            LEAD(e.EVENT_CONTESTANT_OPTAUUID, 1) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_OPTAUUID) AS P1_TEAM,
-            LEAD(TRIM(e.PLAYER_OPTAUUID), 2) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_OPTAUUID) AS P2_UUID,
-            LEAD(e.PLAYER_NAME, 2) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_OPTAUUID) AS P2_NAME,
-            LEAD(e.EVENT_CONTESTANT_OPTAUUID, 2) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_OPTAUUID) AS P2_TEAM
+            -- Finder de næste hændelser baseret på EVENT_ID fra dit udtræk
+            LEAD(TRIM(e.PLAYER_OPTAUUID), 1) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_ID) AS P1_UUID,
+            LEAD(e.PLAYER_NAME, 1) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_ID) AS P1_NAME,
+            LEAD(e.EVENT_CONTESTANT_OPTAUUID, 1) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_ID) AS P1_TEAM,
+            LEAD(TRIM(e.PLAYER_OPTAUUID), 2) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_ID) AS P2_UUID,
+            LEAD(e.PLAYER_NAME, 2) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_ID) AS P2_NAME,
+            LEAD(e.EVENT_CONTESTANT_OPTAUUID, 2) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_ID) AS P2_TEAM
         FROM {DB}.OPTA_EVENTS e
         WHERE e.TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
     ),
@@ -42,13 +43,12 @@ def load_setpiece_data():
                      WHEN QUALIFIER_QID = 6 THEN 'Hjørnespark'
                      WHEN QUALIFIER_QID = 5 THEN 'Frispark' END) AS TYPE_NAVN,
             MAX(CASE WHEN QUALIFIER_QID = 140 THEN QUALIFIER_VALUE END) AS ENDX,
-            MAX(CASE WHEN QUALIFIER_QID = 141 THEN QUALIFIER_VALUE END) AS ENDY,
-            MAX(CASE WHEN QUALIFIER_QID IN (214, 154, 111) THEN 1 ELSE 0 END) AS ER_CHANCE
+            MAX(CASE WHEN QUALIFIER_QID = 141 THEN QUALIFIER_VALUE END) AS ENDY
         FROM {DB}.OPTA_QUALIFIERS
-        WHERE QUALIFIER_QID IN (5, 6, 107, 140, 141, 214, 154, 111)
+        WHERE QUALIFIER_QID IN (5, 6, 107, 140, 141)
         GROUP BY EVENT_OPTAUUID
     )
-    SELECT b.*, q.TYPE_NAVN, q.ENDX, q.ENDY, q.ER_CHANCE
+    SELECT b.*, q.TYPE_NAVN, q.ENDX, q.ENDY
     FROM BaseEvents b
     JOIN Quals q ON b.EVENT_OPTAUUID = q.EVENT_OPTAUUID
     WHERE q.TYPE_NAVN IS NOT NULL
@@ -58,6 +58,7 @@ def load_setpiece_data():
     if df is None or df.empty: return pd.DataFrame()
     df.columns = [c.upper() for c in df.columns]
 
+    # Navne-mapping
     try:
         df_lookup = pd.read_csv(PLAYER_FILE)
         df_lookup['PLAYER_OPTAUUID'] = df_lookup['PLAYER_OPTAUUID'].astype(str).str.strip()
@@ -68,11 +69,11 @@ def load_setpiece_data():
     def format_name(uuid, db_name):
         if pd.isna(uuid) or uuid is None: return None
         u = str(uuid).strip()
-        full_name = name_map.get(u)
-        return full_name if full_name else f"{db_name} ({u})"
+        return name_map.get(u, f"{db_name} ({u})")
 
     df['TAGER_NAVN'] = df.apply(lambda x: format_name(x['PLAYER_UUID'], x['PLAYER_NAME']), axis=1)
 
+    # Modtager logik (Mønster)
     def find_target(row):
         if row['P1_TEAM'] == row['TEAM_UUID'] and row['P1_UUID'] != row['PLAYER_UUID']:
             return format_name(row['P1_UUID'], row['P1_NAME'])
@@ -87,8 +88,7 @@ def load_setpiece_data():
         
     return df
 
-def to_metric(val, total_m): 
-    return val * (total_m / 100)
+def to_metric(val, total_m): return val * (total_m / 100)
 
 def vis_side():
     st.set_page_config(layout="wide")
@@ -105,6 +105,7 @@ def vis_side():
     
     teams = sorted([n for n in df_all['KLUB_NAVN'].unique() if pd.notna(n)])
     
+    # --- FILTRE (Layout som ønsket) ---
     c1, c2, c3, c4 = st.columns(4)
     with c1:
         t_sel = st.selectbox("Hold", teams, index=teams.index("Hvidovre") if "Hvidovre" in teams else 0)
@@ -125,6 +126,7 @@ def vis_side():
     
     df_plot = df_team[mask].copy()
 
+    # Skalering
     df_plot['X_M'] = df_plot['EVENT_X'].apply(lambda x: to_metric(x, 105))
     df_plot['Y_M'] = df_plot['EVENT_Y'].apply(lambda y: to_metric(y, 68))
     df_plot['ENDX_M'] = df_plot['ENDX'].apply(lambda x: to_metric(x, 105))
