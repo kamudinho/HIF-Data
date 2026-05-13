@@ -152,7 +152,7 @@ def vis_side():
             break
         projekt_rod = os.path.dirname(projekt_rod)
 
-    overskriv_sti = os.path.join(projekt_rod, 'data', 'players', 'spiller_overskrivning.csv')
+    overskriv_sti = os.path.join(projekt_rod, 'data', 'players', 'allespillere_overskrivning.csv')
 
     if not os.path.exists(overskriv_sti):
         st.error(f"Kritisk fejl: CSV-filen kunne ikke findes på stien: {overskriv_sti}")
