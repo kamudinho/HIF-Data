@@ -21,94 +21,69 @@ def load_team_setpiece_data(team_name):
     team_uuid = TEAMS.get(team_name, {}).get('opta_uuid')
     if not team_uuid: return pd.DataFrame()
 
-    # SQL - Hent kun relevante kampe for at spare hukommelse
-    sql_events = f"""
-    SELECT 
-        EVENT_OPTAUUID, MATCH_OPTAUUID, EVENT_EVENTID, 
-        EVENT_CONTESTANT_OPTAUUID AS TEAM_UUID,
-        TRIM(PLAYER_OPTAUUID) AS PLAYER_UUID,
-        EVENT_X, EVENT_Y
-    FROM {DB}.OPTA_EVENTS
-    WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
-      AND MATCH_OPTAUUID IN (
-          SELECT DISTINCT MATCH_OPTAUUID 
-          FROM {DB}.OPTA_EVENTS 
-          WHERE EVENT_CONTESTANT_OPTAUUID = '{team_uuid}'
-      )
-    ORDER BY MATCH_OPTAUUID, EVENT_EVENTID
-    """
-    
-    sql_quals = f"""
-    SELECT q.EVENT_OPTAUUID, q.QUALIFIER_QID, q.QUALIFIER_VALUE
-    FROM {DB}.OPTA_QUALIFIERS q
-    JOIN {DB}.OPTA_EVENTS e ON q.EVENT_OPTAUUID = e.EVENT_OPTAUUID
-    WHERE e.EVENT_CONTESTANT_OPTAUUID = '{team_uuid}'
-      AND q.QUALIFIER_QID IN (5, 6, 107, 140, 141, 214, 154, 111)
-    """
-
-    df_e = conn.query(sql_events)
-    df_q_raw = conn.query(sql_quals)
-    
-    if df_e is None or df_q_raw is None: return pd.DataFrame()
-
-    # --- TYPE-SIKRING (Løser din 'object and int64' fejl) ---
-    for df_temp in [df_e, df_q_raw]:
-        if 'EVENT_OPTAUUID' in df_temp.columns:
-            df_temp['EVENT_OPTAUUID'] = df_temp['EVENT_OPTAUUID'].astype(str).str.strip()
-    
-    # --- PROCESSING ---
-    df_q_raw['QUALIFIER_QID'] = df_q_raw['QUALIFIER_QID'].astype(str)
-    df_q = df_q_raw.pivot_table(
-        index='EVENT_OPTAUUID', 
-        columns='QUALIFIER_QID', 
-        values='QUALIFIER_VALUE', 
-        aggfunc='first'
-    ).reset_index()
-
-    # Nu merger de uden fejl
-    df = df_e[df_e['TEAM_UUID'] == team_uuid].merge(df_q, on='EVENT_OPTAUUID', how='inner')
-    
-    # Find modtager via tidslinje
-    df_e['NEXT_PLAYER'] = df_e.groupby('MATCH_OPTAUUID')['PLAYER_UUID'].shift(-1)
-    df_e['NEXT_TEAM'] = df_e.groupby('MATCH_OPTAUUID')['TEAM_UUID'].shift(-1)
-    
-    receiver_map = df_e[['EVENT_OPTAUUID', 'NEXT_PLAYER', 'NEXT_TEAM']]
-    df = df.merge(receiver_map, on='EVENT_OPTAUUID', how='left')
-
-    # Validering
-    df['MODTAGER_UUID'] = np.where(
-        (df['NEXT_PLAYER'] != df['PLAYER_UUID']) & (df['NEXT_TEAM'] == df['TEAM_UUID']), 
-        df['NEXT_PLAYER'], None
+    # NY SUPER-SQL: Samler alt (Type, Koordinater, Modtager) i Snowflake
+    # Det forhindrer at appen lukker pga. hukommelsesmangel
+    sql = f"""
+    WITH BaseEvents AS (
+        SELECT 
+            e.EVENT_OPTAUUID, e.MATCH_OPTAUUID, e.EVENT_EVENTID,
+            e.EVENT_CONTESTANT_OPTAUUID AS TEAM_UUID,
+            TRIM(e.PLAYER_OPTAUUID) AS PLAYER_UUID,
+            e.EVENT_X, e.EVENT_Y,
+            -- Find næste spiller og hold i tidslinjen
+            LEAD(TRIM(e.PLAYER_OPTAUUID)) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_EVENTID) AS NEXT_PLAYER,
+            LEAD(e.EVENT_CONTESTANT_OPTAUUID) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_EVENTID) AS NEXT_TEAM
+        FROM {DB}.OPTA_EVENTS e
+        WHERE e.TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
+    ),
+    Quals AS (
+        SELECT 
+            EVENT_OPTAUUID,
+            MAX(CASE WHEN QUALIFIER_QID = 107 THEN 'Indkast'
+                     WHEN QUALIFIER_QID = 6 THEN 'Hjørnespark'
+                     WHEN QUALIFIER_QID = 5 THEN 'Frispark' END) AS TYPE_NAVN,
+            MAX(CASE WHEN QUALIFIER_QID = 140 THEN QUALIFIER_VALUE END) AS END_X,
+            MAX(CASE WHEN QUALIFIER_QID = 141 THEN QUALIFIER_VALUE END) AS END_Y,
+            MAX(CASE WHEN QUALIFIER_QID IN (214, 154, 111) THEN 1 ELSE 0 END) AS ER_CHANCE
+        FROM {DB}.OPTA_QUALIFIERS
+        WHERE QUALIFIER_QID IN (5, 6, 107, 140, 141, 214, 154, 111)
+        GROUP BY EVENT_OPTAUUID
     )
-    
-    # Definér typer (Brug strenge til opslag)
-    type_map = {'6': 'Hjørnespark', '107': 'Indkast', '5': 'Frispark'}
-    df['TYPE_NAVN'] = None
-    for qid, label in type_map.items():
-        if qid in df.columns:
-            df.loc[df[qid].notna(), 'TYPE_NAVN'] = label
+    SELECT 
+        b.*, q.TYPE_NAVN, q.END_X, q.END_Y, q.ER_CHANCE
+    FROM BaseEvents b
+    JOIN Quals q ON b.EVENT_OPTAUUID = q.EVENT_OPTAUUID
+    WHERE b.TEAM_UUID = '{team_uuid}'
+      AND q.TYPE_NAVN IS NOT NULL
+    """
 
-    # Mapping af navne
+    df = conn.query(sql)
+    if df is None or df.empty: return pd.DataFrame()
+
+    # --- PROCESSING I PYTHON (Kun navne og typer) ---
+    
+    # 1. Modtager logik: Kun hvis det er en medspiller
+    df['MODTAGER_UUID'] = np.where(df['NEXT_TEAM'] == df['TEAM_UUID'], df['NEXT_PLAYER'], None)
+    
+    # 2. Navne mapping
     try:
         df_lookup = pd.read_csv(PLAYER_FILE)
         df_lookup['PLAYER_OPTAUUID'] = df_lookup['PLAYER_OPTAUUID'].astype(str).str.strip()
         name_map = df_lookup.set_index('PLAYER_OPTAUUID')['NAVN'].to_dict()
-        df['TAGER'] = df['PLAYER_UUID'].map(name_map)
+        df['TAGER'] = df['PLAYER_UUID'].map(name_map).fillna(df['PLAYER_UUID'])
         df['MODTAGER'] = df['MODTAGER_UUID'].map(name_map)
     except:
         df['TAGER'] = df['PLAYER_UUID']
         df['MODTAGER'] = df['MODTAGER_UUID']
-    
-    # Koordinater og Chancer
-    df['END_X'] = pd.to_numeric(df.get('140'), errors='coerce')
-    df['END_Y'] = pd.to_numeric(df.get('141'), errors='coerce')
-    chance_cols = ['214', '154', '111']
-    df['ER_CHANCE'] = df[df.columns[df.columns.isin(chance_cols)]].notna().any(axis=1).astype(int)
 
-    return df[df['TYPE_NAVN'].notna()].dropna(subset=['TAGER'])
+    # 3. Konverter koordinater
+    df['END_X'] = pd.to_numeric(df['END_X'], errors='coerce')
+    df['END_Y'] = pd.to_numeric(df['END_Y'], errors='coerce')
+
+    return df
 
 def vis_side():
-    st.set_page_config(layout="wide")
+    # ... (Din vis_side() funktion er herfra rigtig fin og kan bruges direkte)
     st.title("🎯 Standard-Analyse")
     
     t_sel = st.selectbox("Vælg Hold", get_team_options())
@@ -128,22 +103,26 @@ def vis_side():
     tab1, tab2 = st.tabs(["📊 Statistik", "🏟️ Banevisning"])
     
     with tab1:
+        # Grupper og tæl
         stats = df_plot.groupby(['TAGER', 'TYPE_NAVN']).apply(lambda x: pd.Series({
             'Antal': len(x),
             'Ramt medspiller': x['MODTAGER'].notna().sum(),
-            'Skud efter aktion': x['ER_CHANCE'].sum(),
+            'Chancer skabt': x['ER_CHANCE'].sum(),
             'Primær Modtager': x['MODTAGER'].value_counts().idxmax() if not x['MODTAGER'].dropna().empty else "Ingen"
-        })).reset_index()
+        }), include_groups=False).reset_index()
         st.dataframe(stats.sort_values('Antal', ascending=False), use_container_width=True, hide_index=True)
 
     with tab2:
         pitch = VerticalPitch(half=True, pitch_type='opta', line_color='#cccccc')
         fig, ax = pitch.draw(figsize=(8, 10))
         t_color = TEAM_COLORS.get(t_sel, {}).get('primary', '#cc0000')
+        
         valid = df_plot.dropna(subset=['END_X', 'END_Y'])
         if not valid.empty:
-            pitch.arrows(valid.EVENT_X, valid.EVENT_Y, valid.END_X, valid.END_Y, color=t_color, ax=ax, alpha=0.3, width=2)
-            pitch.scatter(valid.END_X, valid.END_Y, color=t_color, edgecolors='white', s=100, ax=ax, zorder=3)
+            pitch.arrows(valid.EVENT_X, valid.EVENT_Y, valid.END_X, valid.END_Y, 
+                         color=t_color, ax=ax, alpha=0.3, width=2)
+            pitch.scatter(valid.END_X, valid.END_Y, color=t_color, 
+                          edgecolors='white', s=100, ax=ax, zorder=3)
         st.pyplot(fig)
 
 if __name__ == "__main__":
