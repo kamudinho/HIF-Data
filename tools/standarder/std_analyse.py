@@ -81,8 +81,6 @@ def to_metric(val, total_m):
     return val * (total_m / 100)
 
 def get_summary_stats(df, group_col):
-    """Beregner den udvidede statistik til tabellerne"""
-    # 1. Basis stats
     stats = df.groupby(group_col).agg(
         Antal=('TYPE_NAVN', 'size'),
         Succesfulde=('MODTAGER', lambda x: x.notna().sum())
@@ -90,7 +88,6 @@ def get_summary_stats(df, group_col):
     
     stats['Succes %'] = (stats['Succesfulde'] / stats['Antal']).fillna(0)
     
-    # 2. Find top modtager for hver gruppe
     def get_top_modtager(sub_df):
         m = sub_df['MODTAGER'].value_counts()
         if m.empty: return "-"
@@ -100,7 +97,6 @@ def get_summary_stats(df, group_col):
 
     modtager_map = df.groupby(group_col).apply(get_top_modtager).to_dict()
     stats['Top Modtager'] = stats[group_col].map(modtager_map)
-    
     return stats
 
 def render_setpiece_analysis(df_team, sp_type, t_sel):
@@ -155,6 +151,8 @@ def vis_side():
         <style>
         header {visibility: hidden;}
         div[data-testid="stSelectbox"] label { display: none !important; }
+        /* Justering af radio buttons for at flugte bedre med tekst */
+        div[data-testid="stHorizontalBlock"] { align-items: center; }
         </style>
     """, unsafe_allow_html=True)
     
@@ -175,22 +173,22 @@ def vis_side():
 
     df_team_selected = df_all[df_all['KLUB_NAVN'] == t_sel].copy()
 
-    # TABS
     tab_list = ["Holdoversigt", "Spilleroversigt", "Hjørnespark", "Frispark", "Indkast", "Zoneoversigt"]
     tabs = st.tabs(tab_list)
-
-    # Fælles radio-valg til oversigterne
     cat_options = ["Hjørnespark", "Frispark", "Indkast"]
 
     with tabs[0]: # Holdoversigt
-        cat_h = st.radio("Kategori (Hold)", cat_options, horizontal=True, key="radio_hold")
+        c_label, c_radio = st.columns([0.15, 0.85])
+        with c_label: st.write("**Kategori**")
+        with c_radio: cat_h = st.radio("cat_h", cat_options, horizontal=True, label_visibility="collapsed", key="radio_hold")
+        
         df_cat_h = df_all[df_all['TYPE_NAVN'] == cat_h]
         stats_h = get_summary_stats(df_cat_h, 'KLUB_NAVN')
-        
         st.dataframe(
             stats_h,
             use_container_width=True,
             hide_index=True,
+            height=600,
             column_config={
                 "KLUB_NAVN": "Klub",
                 "Succes %": st.column_config.ProgressColumn("Succes %", format="%.0f%%", min_value=0, max_value=1)
@@ -198,15 +196,18 @@ def vis_side():
         )
 
     with tabs[1]: # Spilleroversigt
-        cat_s = st.radio("Kategori (Spiller)", cat_options, horizontal=True, key="radio_spiller")
-        df_cat_s = df_team_selected[df_team_selected['TYPE_NAVN'] == cat_s]
+        c_label_s, c_radio_s = st.columns([0.15, 0.85])
+        with c_label_s: st.write("**Kategori**")
+        with c_radio_s: cat_s = st.radio("cat_s", cat_options, horizontal=True, label_visibility="collapsed", key="radio_spiller")
         
+        df_cat_s = df_team_selected[df_team_selected['TYPE_NAVN'] == cat_s]
         if not df_cat_s.empty:
             stats_s = get_summary_stats(df_cat_s, 'TAGER_NAVN')
             st.dataframe(
                 stats_s,
                 use_container_width=True,
                 hide_index=True,
+                height=600,
                 column_config={
                     "TAGER_NAVN": "Spiller",
                     "Succes %": st.column_config.ProgressColumn("Succes %", format="%.0f%%", min_value=0, max_value=1)
@@ -220,14 +221,7 @@ def vis_side():
     with tabs[4]: render_setpiece_analysis(df_team_selected, "Indkast", t_sel)
 
     with tabs[5]: # Zoneoversigt
-        def get_zone(y):
-            if pd.isna(y): return "Ukendt"
-            y_val = float(y)
-            if y_val < 33: return "Venstre"
-            if y_val > 66: return "Højre"
-            return "Center"
-        
-        df_team_selected['ZONE'] = df_team_selected['ENDY'].apply(get_zone)
+        df_team_selected['ZONE'] = df_team_selected['ENDY'].apply(lambda y: "Venstre" if float(y or 0) < 33 else ("Højre" if float(y or 0) > 66 else "Center"))
         zone_stats = df_team_selected.groupby(['ZONE', 'TYPE_NAVN']).size().unstack(fill_value=0).reset_index()
         st.dataframe(zone_stats, use_container_width=True, hide_index=True)
 
