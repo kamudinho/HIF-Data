@@ -12,6 +12,16 @@ DB = "KLUB_HVIDOVREIF.AXIS"
 LIGA_UUID = "dyjr458hcmrcy87fsabfsy87o" 
 PLAYER_FILE = 'data/players/1div_overskrivning.csv'
 
+# --- NY HJÆLPEFUNKTION TIL TEGN-RENS ---
+def universal_decode(text):
+    if not isinstance(text, str):
+        return text
+    try:
+        # Forsøger at rydde op i encoding-fejl (fx islandske og baltiske tegn)
+        return text.encode('latin1').decode('utf-8')
+    except:
+        return text
+
 @st.cache_data(ttl=3600)
 def load_setpiece_data():
     conn = _get_snowflake_conn()
@@ -57,9 +67,16 @@ def load_setpiece_data():
         if df is None or df.empty: return pd.DataFrame()
         df.columns = [c.upper() for c in df.columns]
         
+        # Rens database-navne med det samme
+        df['PLAYER_NAME'] = df['PLAYER_NAME'].apply(universal_decode)
+        df['P1_NAME'] = df['P1_NAME'].apply(universal_decode)
+        
         try:
-            df_lookup = pd.read_csv(PLAYER_FILE)
+            # Læs lookup-filen med korrekt encoding
+            df_lookup = pd.read_csv(PLAYER_FILE, encoding='utf-8-sig')
             df_lookup['PLAYER_OPTAUUID'] = df_lookup['PLAYER_OPTAUUID'].astype(str).str.strip()
+            # Rens navne i lookup-filen
+            df_lookup['NAVN'] = df_lookup['NAVN'].apply(universal_decode)
             name_map = df_lookup.set_index('PLAYER_OPTAUUID')['NAVN'].to_dict()
         except:
             name_map = {}
@@ -79,147 +96,4 @@ def load_setpiece_data():
     except:
         return pd.DataFrame()
 
-def to_metric(val, total_m): 
-    return val * (total_m / 100)
-
-def get_summary_stats(df, group_col):
-    if df.empty: return pd.DataFrame()
-    
-    stats = df.groupby(group_col).agg(
-        Antal=('TYPE_NAVN', 'size'),
-        Succesfulde=('MODTAGER', lambda x: x.notna().sum()),
-        Afslutninger=('ER_AFSLUTNING', 'sum')
-    ).reset_index()
-    
-    # Ganger med 100 her for at få hele tal til ProgressColumn
-    stats['Succes %'] = (stats['Succesfulde'] / stats['Antal'] * 100).round(0).fillna(0)
-    stats['Afslutning %'] = (stats['Afslutninger'] / stats['Antal'] * 100).round(0).fillna(0)
-    
-    def get_top_mod(sub_df):
-        m = sub_df['MODTAGER'].value_counts()
-        return f"{m.index[0]} ({m.iloc[0]})" if not m.empty else "-"
-    
-    def get_top_mod_shot(sub_df):
-        m = sub_df[sub_df['ER_AFSLUTNING'] == 1]['MODTAGER'].value_counts()
-        return f"{m.index[0]} ({m.iloc[0]})" if not m.empty else "-"
-
-    # Map modtagere
-    mod_map = df.groupby(group_col).apply(get_top_mod).to_dict()
-    mod_shot_map = df.groupby(group_col).apply(get_top_mod_shot).to_dict()
-    
-    stats['Top Modtager'] = stats[group_col].map(mod_map)
-    stats['Top Modtager (Afsl.)'] = stats[group_col].map(mod_shot_map)
-    
-    final_cols = [group_col, 'Antal', 'Succesfulde', 'Succes %', 'Top Modtager', 'Afslutninger', 'Afslutning %', 'Top Modtager (Afsl.)']
-    return stats[final_cols]
-
-def render_setpiece_analysis(df_team, sp_type, t_sel):
-    f1, f2 = st.columns([1, 1])
-    with f1:
-        p_list = ["Alle spillere"] + sorted(df_team[df_team['TYPE_NAVN'] == sp_type]['TAGER_NAVN'].unique().tolist())
-        p_sel = st.selectbox(f"Spiller ({sp_type})", p_list, key=f"sb_p_{sp_type}")
-    with f2:
-        vis_mode = st.selectbox(f"Visning ({sp_type})", ["Zoner + Pile", "Kun Zoner", "Kun Pile"], key=f"sb_m_{sp_type}")
-
-    mask = (df_team['TYPE_NAVN'] == sp_type)
-    if p_sel != "Alle spillere": mask &= (df_team['TAGER_NAVN'] == p_sel)
-    df_plot = df_team[mask].copy()
-
-    col_p, col_s = st.columns([2, 1])
-    with col_p:
-        for c in ['EVENT_X', 'EVENT_Y', 'ENDX', 'ENDY']: 
-            df_plot[c] = pd.to_numeric(df_plot[c], errors='coerce')
-        df_plot['X_M'] = df_plot['EVENT_X'].apply(lambda x: to_metric(x, 105))
-        df_plot['Y_M'] = df_plot['EVENT_Y'].apply(lambda y: to_metric(y, 68))
-        df_plot['ENDX_M'] = df_plot['ENDX'].apply(lambda x: to_metric(x, 105))
-        df_plot['ENDY_M'] = df_plot['ENDY'].apply(lambda y: to_metric(y, 68))
-        pitch = VerticalPitch(half=True, pitch_type='custom', pitch_length=105, pitch_width=68, line_color='#cccccc')
-        fig, ax = pitch.draw(figsize=(10, 10))
-        ax.set_ylim(50, 105)
-        if not df_plot.dropna(subset=['ENDX_M', 'ENDY_M']).empty:
-            if "Zoner" in vis_mode:
-                pitch.hexbin(df_plot.ENDX_M, df_plot.ENDY_M, ax=ax, gridsize=(12, 12), cmap='Reds', alpha=0.6)
-            if "Pile" in vis_mode:
-                pitch.arrows(df_plot.X_M, df_plot.Y_M, df_plot.ENDX_M, df_plot.ENDY_M, 
-                             color=TEAM_COLORS.get(t_sel, {}).get('primary', HIF_RED), ax=ax, alpha=0.3)
-        st.pyplot(fig)
-    with col_s:
-        m1, m2, m3 = st.columns(3)
-        m1.metric("Antal", len(df_plot))
-        m2.metric("Succes", df_plot['MODTAGER'].notna().sum())
-        m3.metric("Afslutn.", df_plot['ER_AFSLUTNING'].sum())
-        st.write("---") 
-        st.write("**Top modtagere**")
-        mod_counts = df_plot['MODTAGER'].value_counts().reset_index()
-        mod_counts.columns = ['Spiller', 'Antal']
-        st.dataframe(mod_counts, use_container_width=True, hide_index=True)
-
-def vis_side():
-    st.set_page_config(layout="wide", page_title="Standardsituationer")
-    
-    st.markdown("""
-        <style>
-        header {visibility: hidden;}
-        div[data-testid="stSelectbox"] label { display: none !important; }
-        div[data-testid="stHorizontalBlock"] { align-items: center; }
-        </style>
-    """, unsafe_allow_html=True)
-    
-    df_all = load_setpiece_data()
-    if df_all.empty:
-        st.warning("Ingen data fundet.")
-        return
-
-    uuid_to_name = {v['opta_uuid'].upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
-    df_all['KLUB_NAVN'] = df_all['TEAM_UUID'].str.upper().map(uuid_to_name)
-    teams = sorted([n for n in df_all['KLUB_NAVN'].unique() if pd.notna(n)])
-
-    col_title, col_empty, col_select = st.columns([2, 1, 1])
-    with col_title:
-        st.subheader("Standardsituationer")
-    with col_select:
-        t_sel = st.selectbox("hold_valg_top", teams, index=teams.index("Hvidovre") if "Hvidovre" in teams else 0)
-
-    df_team_selected = df_all[df_all['KLUB_NAVN'] == t_sel].copy()
-
-    tabs = st.tabs(["Holdoversigt", "Spilleroversigt", "Hjørnespark", "Frispark", "Indkast", "Zoneoversigt"])
-    cat_options = ["Hjørnespark", "Frispark", "Indkast"]
-
-    col_cfg = {
-        "KLUB_NAVN": "Klub",
-        "TAGER_NAVN": "Spiller",
-        "Succes %": st.column_config.ProgressColumn("Succes %", format="%.0f%%", min_value=0, max_value=100),
-        "Top Modtager": "Modtager (Succes)",
-        "Afslutning %": st.column_config.ProgressColumn("Afslutning %", format="%.0f%%", min_value=0, max_value=100),
-        "Top Modtager (Afsl.)": "Modtager (Afsl.)"
-    }
-
-    with tabs[0]: 
-        c_label, c_radio = st.columns([0.15, 0.85])
-        with c_label: st.write("**Kategori**")
-        with c_radio: cat_h = st.radio("cat_h", cat_options, horizontal=True, label_visibility="collapsed", key="radio_hold")
-        
-        stats_h = get_summary_stats(df_all[df_all['TYPE_NAVN'] == cat_h], 'KLUB_NAVN')
-        st.dataframe(stats_h, use_container_width=True, hide_index=True, height=500, column_config=col_cfg)
-
-    with tabs[1]: 
-        c_label_s, c_radio_s = st.columns([0.15, 0.85])
-        with c_label_s: st.write("**Kategori**")
-        with c_radio_s: cat_s = st.radio("cat_s", cat_options, horizontal=True, label_visibility="collapsed", key="radio_spiller")
-        
-        df_cat_s = df_team_selected[df_team_selected['TYPE_NAVN'] == cat_s]
-        if not df_cat_s.empty:
-            stats_s = get_summary_stats(df_cat_s, 'TAGER_NAVN')
-            st.dataframe(stats_s, use_container_width=True, hide_index=True, height=500, column_config=col_cfg)
-
-    with tabs[2]: render_setpiece_analysis(df_team_selected, "Hjørnespark", t_sel)
-    with tabs[3]: render_setpiece_analysis(df_team_selected, "Frispark", t_sel)
-    with tabs[4]: render_setpiece_analysis(df_team_selected, "Indkast", t_sel)
-
-    with tabs[5]:
-        df_team_selected['ZONE'] = df_team_selected['ENDY'].apply(lambda y: "Venstre" if float(y or 0) < 33 else ("Højre" if float(y or 0) > 66 else "Center"))
-        zone_stats = df_team_selected.groupby(['ZONE', 'TYPE_NAVN']).size().unstack(fill_value=0).reset_index()
-        st.dataframe(zone_stats, use_container_width=True, hide_index=True)
-
-if __name__ == "__main__":
-    vis_side()
+# ... RESTEN AF DIN KODE FORTSÆTTER HERFRA (get_summary_stats, render_setpiece_analysis, vis_side) ...
