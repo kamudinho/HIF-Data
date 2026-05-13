@@ -59,7 +59,6 @@ def load_team_setpiece_data(team_name):
     df = conn.query(sql)
     if df is None or df.empty: return pd.DataFrame()
 
-    # --- NAVNE MAPPING ---
     try:
         df_lookup = pd.read_csv(PLAYER_FILE)
         df_lookup['PLAYER_OPTAUUID'] = df_lookup['PLAYER_OPTAUUID'].astype(str).str.strip()
@@ -77,7 +76,6 @@ def load_team_setpiece_data(team_name):
 
     df['TAGER'] = df.apply(lambda x: format_name(x['PLAYER_UUID'], x['PLAYER_NAME']), axis=1)
     
-    # Modtager logik
     df['MODTAGER_UUID_FINAL'] = np.where(
         (df['NEXT_TEAM'] == df['TEAM_UUID']) & (df['NEXT_PLAYER'] != df['PLAYER_UUID']), 
         df['NEXT_PLAYER'], 
@@ -102,7 +100,6 @@ def vis_side():
         st.warning(f"Ingen data fundet for {t_sel}")
         return
 
-    # Dropdown filtre
     counts_tager = df_raw['TAGER'].value_counts()
     tager_options = ["Alle"] + [f"{name} ({counts_tager[name]})" for name in counts_tager.index]
     
@@ -125,28 +122,31 @@ def vis_side():
         if df_filtered.empty:
             st.info("Ingen data fundet.")
         else:
-            col_left, col_right = st.columns(2)
-            
-            with col_left:
-                st.subheader("Oversigt: Tagere")
-                stats_tager = df_filtered.groupby(['TAGER', 'TYPE_NAVN']).apply(lambda x: pd.Series({
-                    'Antal': len(x),
-                    'Ramt medspiller': x['MODTAGER'].notna().sum(),
-                    'Chancer skabt': x['ER_CHANCE'].sum(),
-                    'Primær Modtager': x['MODTAGER'].value_counts().idxmax() if not x['MODTAGER'].dropna().empty else "Ingen"
-                }), include_groups=False).reset_index()
-                st.dataframe(stats_tager.sort_values('Antal', ascending=False), use_container_width=True, hide_index=True)
+            # Her beregner vi statistikken og indsætter (antal) i modtager-navnet
+            def get_stats(group):
+                # Find mest hyppige modtager
+                m_counts = group['MODTAGER'].value_counts()
+                if not m_counts.empty:
+                    top_modtager_navn = m_counts.idxmax()
+                    top_modtager_antal = m_counts.max()
+                    primær_modtager_visning = f"{top_modtager_navn} ({top_modtager_antal})"
+                else:
+                    primær_modtager_visning = "Ingen"
 
-            with col_right:
-                st.subheader("Oversigt: Modtagere")
-                # Her tæller vi hvor mange gange hver spiller optræder som MODTAGER
-                receiver_counts = df_filtered['MODTAGER'].value_counts().reset_index()
-                receiver_counts.columns = ['Spiller', 'Modtagne bolde']
-                
-                # Formatér som "Navn (Antal)" i en kolonne for overblik
-                receiver_counts['Visning'] = receiver_counts.apply(lambda x: f"{x['Spiller']} ({x['Modtagne bolde']})", axis=1)
-                
-                st.dataframe(receiver_counts[['Spiller', 'Modtagne bolde']], use_container_width=True, hide_index=True)
+                return pd.Series({
+                    'Antal': len(group),
+                    'Ramt medspiller': group['MODTAGER'].notna().sum(),
+                    'Chancer skabt': group['ER_CHANCE'].sum(),
+                    'Primær Modtager': primær_modtager_visning
+                })
+
+            stats_df = df_filtered.groupby(['TAGER', 'TYPE_NAVN']).apply(get_stats, include_groups=False).reset_index()
+            
+            st.dataframe(
+                stats_df.sort_values('Antal', ascending=False), 
+                use_container_width=True, 
+                hide_index=True
+            )
 
     with tab2:
         pitch = VerticalPitch(half=True, pitch_type='opta', line_color='#cccccc')
