@@ -100,7 +100,7 @@ def vis_side():
         st.caption("Analyse: Standardsituationer")
     with col_select:
         # Denne selectbox styrer nu Tab 2, 3 og 4
-        t_sel = st.selectbox(teams, index=teams.index("Hvidovre") if "Hvidovre" in teams else 0)
+        t_sel = st.selectbox("", teams, index=teams.index("Hvidovre") if "Hvidovre" in teams else 0)
 
     # Filtrer data til det valgte hold med det samme
     df_team_selected = df_all[df_all['KLUB_NAVN'] == t_sel].copy()
