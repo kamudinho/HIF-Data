@@ -21,15 +21,17 @@ def load_team_setpiece_data(team_name):
     team_uuid = TEAMS.get(team_name, {}).get('opta_uuid')
     if not team_uuid: return pd.DataFrame()
 
-    # SQL: Samler alt og finder næste spiller
+    # SQL: Vi henter nu også PLAYER_NAME direkte fra databasen som fallback
     sql = f"""
     WITH BaseEvents AS (
         SELECT 
             e.EVENT_OPTAUUID, e.MATCH_OPTAUUID, e.EVENT_EVENTID,
             e.EVENT_CONTESTANT_OPTAUUID AS TEAM_UUID,
             TRIM(e.PLAYER_OPTAUUID) AS PLAYER_UUID,
+            e.PLAYER_NAME, -- Efternavn/Navn fra Opta
             e.EVENT_X, e.EVENT_Y,
             LEAD(TRIM(e.PLAYER_OPTAUUID)) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_EVENTID) AS NEXT_PLAYER,
+            LEAD(e.PLAYER_NAME) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_EVENTID) AS NEXT_PLAYER_NAME,
             LEAD(e.EVENT_CONTESTANT_OPTAUUID) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_EVENTID) AS NEXT_TEAM
         FROM {DB}.OPTA_EVENTS e
         WHERE e.TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
@@ -58,36 +60,39 @@ def load_team_setpiece_data(team_name):
     df = conn.query(sql)
     if df is None or df.empty: return pd.DataFrame()
 
-    # --- PROCESSING ---
+    # --- NAVNE LOGIK ---
+    try:
+        df_lookup = pd.read_csv(PLAYER_FILE)
+        df_lookup['PLAYER_OPTAUUID'] = df_lookup['PLAYER_OPTAUUID'].astype(str).str.strip()
+        name_map = df_lookup.set_index('PLAYER_OPTAUUID')['NAVN'].to_dict()
+    except:
+        name_map = {}
+
+    def format_name(uuid, db_name):
+        if pd.isna(uuid) or uuid is None: return None
+        uuid_str = str(uuid).strip()
+        # 1. Tjek om navnet findes i din CSV
+        full_name = name_map.get(uuid_str)
+        if full_name:
+            return full_name
+        # 2. Ellers kombiner efternavn fra DB og den fulde UUID
+        fallback_name = db_name if db_name else "Ukendt"
+        return f"{fallback_name} ({uuid_str})"
+
+    # Map Tager
+    df['TAGER'] = df.apply(lambda x: format_name(x['PLAYER_UUID'], x['PLAYER_NAME']), axis=1)
     
-    # Modtager logik (ikke selv-modtager)
-    df['MODTAGER_UUID'] = np.where(
+    # Map Modtager (kun hvis medspiller og ikke selv-modtager)
+    df['MODTAGER_UUID_FINAL'] = np.where(
         (df['NEXT_TEAM'] == df['TEAM_UUID']) & (df['NEXT_PLAYER'] != df['PLAYER_UUID']), 
         df['NEXT_PLAYER'], 
         None
     )
+    df['MODTAGER_NAME_FINAL'] = np.where(df['MODTAGER_UUID_FINAL'].notna(), df['NEXT_PLAYER_NAME'], None)
     
-    # Navne mapping med fallback
-    try:
-        df_lookup = pd.read_csv(PLAYER_FILE)
-        # Rens UUIDs i din CSV fil
-        df_lookup['PLAYER_OPTAUUID'] = df_lookup['PLAYER_OPTAUUID'].astype(str).str.strip()
-        name_map = df_lookup.set_index('PLAYER_OPTAUUID')['NAVN'].to_dict()
-        
-        # Funktion til at mappe navne pænt
-        def map_player_name(uuid):
-            if pd.isna(uuid) or uuid is None: return None
-            uuid_clean = str(uuid).strip()
-            # Hvis navnet findes i CSV, brug det. Ellers vis "Ukendt (Kort UUID)"
-            return name_map.get(uuid_clean, f"Ukendt ({uuid_clean[:5]}...)")
+    df['MODTAGER'] = df.apply(lambda x: format_name(x['MODTAGER_UUID_FINAL'], x['MODTAGER_NAME_FINAL']), axis=1)
 
-        df['TAGER'] = df['PLAYER_UUID'].apply(map_player_name)
-        df['MODTAGER'] = df['MODTAGER_UUID'].apply(map_player_name)
-    except Exception as e:
-        st.error(f"Fejl i navne-fil: {e}")
-        df['TAGER'] = df['PLAYER_UUID']
-        df['MODTAGER'] = df['MODTAGER_UUID']
-
+    # Typer
     df['END_X'] = pd.to_numeric(df['END_X'], errors='coerce')
     df['END_Y'] = pd.to_numeric(df['END_Y'], errors='coerce')
 
@@ -104,7 +109,7 @@ def vis_side():
         st.warning(f"Ingen data fundet for {t_sel}")
         return
 
-    # Dropdown med antal
+    # Dropdown med antal i parentes
     counts = df_raw['TAGER'].value_counts()
     player_options = ["Alle"] + [f"{name} ({counts[name]})" for name in counts.index]
     
