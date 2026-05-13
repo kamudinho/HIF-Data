@@ -120,51 +120,58 @@ def vis_side():
             st.dataframe(spiller_stats, use_container_width=True, hide_index=True)
 
     # --- TAB 3: Analyse med de nye stats ---
+    # --- TAB 3: Analyse ---
     with tab3:
-        c1, c2, c3 = st.columns(3)
-        with c1: sp_type = st.selectbox("Type", ["Hjørnespark", "Indkast", "Frispark"], key="ana_type")
-        with c2:
+        # Filtre i toppen af tab'en
+        f1, f2, f3 = st.columns(3)
+        with f1: sp_type = st.selectbox("Type", ["Hjørnespark", "Indkast", "Frispark"], key="sb_type_ana")
+        with f2:
             p_list = ["Alle spillere"] + sorted(df_team_selected[df_team_selected['TYPE_NAVN'] == sp_type]['TAGER_NAVN'].unique().tolist())
-            p_sel = st.selectbox("Spiller", p_list, key="ana_player")
-        with c3: vis_mode = st.selectbox("Visning", ["Zoner + Pile", "Kun Zoner", "Kun Pile"], key="ana_mode")
+            p_sel = st.selectbox("Spiller", p_list, key="sb_player_ana")
+        with f3: vis_mode = st.selectbox("Visning", ["Zoner + Pile", "Kun Zoner", "Kun Pile"], key="sb_mode_ana")
 
         mask = (df_team_selected['TYPE_NAVN'] == sp_type)
         if p_sel != "Alle spillere": mask &= (df_team_selected['TAGER_NAVN'] == p_sel)
         df_plot = df_team_selected[mask].copy()
 
-        # Beregn Statistik
+        # Statistik-beregning
         total = len(df_plot)
         success = df_plot['MODTAGER'].notna().sum()
         pct = (success / total * 100) if total > 0 else 0
 
-        # Visning af metrics
-        m1, m2, m3 = st.columns(3)
-        m1.metric("Antal aktioner", total)
-        m2.metric("Succesfulde", success)
-        m3.metric("Succes %", f"{pct:.1f}%")
-
-        for c in ['EVENT_X', 'EVENT_Y', 'ENDX', 'ENDY']: 
-            df_plot[c] = pd.to_numeric(df_plot[c], errors='coerce')
-        
-        df_plot['X_M'] = df_plot['EVENT_X'].apply(lambda x: to_metric(x, 105))
-        df_plot['Y_M'] = df_plot['EVENT_Y'].apply(lambda y: to_metric(y, 68))
-        df_plot['ENDX_M'] = df_plot['ENDX'].apply(lambda x: to_metric(x, 105))
-        df_plot['ENDY_M'] = df_plot['ENDY'].apply(lambda y: to_metric(y, 68))
-
+        # Layout: Bane til venstre, Stats og Modtagere til højre
         col_p, col_s = st.columns([2, 1])
+        
         with col_p:
+            # Pitch-plot
+            for c in ['EVENT_X', 'EVENT_Y', 'ENDX', 'ENDY']: 
+                df_plot[c] = pd.to_numeric(df_plot[c], errors='coerce')
+            
+            df_plot['X_M'] = df_plot['EVENT_X'].apply(lambda x: to_metric(x, 105))
+            df_plot['Y_M'] = df_plot['EVENT_Y'].apply(lambda y: to_metric(y, 68))
+            df_plot['ENDX_M'] = df_plot['ENDX'].apply(lambda x: to_metric(x, 105))
+            df_plot['ENDY_M'] = df_plot['ENDY'].apply(lambda y: to_metric(y, 68))
+
             pitch = VerticalPitch(half=True, pitch_type='custom', pitch_length=105, pitch_width=68, line_color='#cccccc')
-            fig, ax = pitch.draw(figsize=(10, 12))
+            fig, ax = pitch.draw(figsize=(10, 10)) # Justeret størrelse lidt
             ax.set_ylim(50, 105)
+            
             if not df_plot.dropna(subset=['ENDX_M', 'ENDY_M']).empty:
                 if "Zoner" in vis_mode:
                     pitch.hexbin(df_plot.ENDX_M, df_plot.ENDY_M, ax=ax, gridsize=(12, 12), cmap='Reds', alpha=0.6)
                 if "Pile" in vis_mode:
-                    # Vi bruger rød for alle aktioner og en grøn (eller primær farve) for at indikere retning
                     pitch.arrows(df_plot.X_M, df_plot.Y_M, df_plot.ENDX_M, df_plot.ENDY_M, 
                                  color=TEAM_COLORS.get(t_sel, {}).get('primary', HIF_RED), ax=ax, alpha=0.3)
             st.pyplot(fig)
+
         with col_s:
+            # Metrics i højre kolonne
+            st.metric("Antal aktioner", total)
+            st.metric("Succesfulde", success)
+            st.metric("Succes %", f"{pct:.1f}%")
+            
+            st.write("---") # Skillelinje
+            
             st.write("**Top modtagere**")
             mod_counts = df_plot['MODTAGER'].value_counts().reset_index()
             mod_counts.columns = ['Spiller', 'Antal']
