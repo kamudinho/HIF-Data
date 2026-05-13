@@ -80,7 +80,7 @@ def load_setpiece_data():
 
 def to_metric(val, total_m): return val * (total_m / 100)
 
-def vis_app():
+def vis_side():
     st.set_page_config(layout="wide", page_title="Hvidovre IF - Standardsituationer")
     st.markdown("<style>header {visibility: hidden;}</style>", unsafe_allow_html=True)
     
