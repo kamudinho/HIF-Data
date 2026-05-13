@@ -213,8 +213,8 @@ try:
     elif hoved_omraade == "TESTSIDE":
         # TILFØJET: Render logikken for Spiller-score under Tilpasning
         if sel == "1. Div-tilpasning":
-            import tools.tilpasning.1div_tilpasning as 1div
-            1div.vis_side()
+            import tools.tilpasning.div_tilpasning as div
+            div.vis_side()
         elif sel == "Grafer":
             import tools.ligaen.dataviz as dviz
             dviz.vis_side()
