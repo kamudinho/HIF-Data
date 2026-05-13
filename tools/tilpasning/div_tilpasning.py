@@ -40,23 +40,22 @@ def save_to_github(df):
             _, sha = get_github_file(OVERWRITE_DB_PATH)
             csv_content = df.to_csv(index=False, encoding='utf-8-sig')
             payload = {
-                "message": "Bulk update 1div data (inkl. dublet-tjek)", 
+                "message": "Bulk update 1div data", 
                 "content": base64.b64encode(csv_content.encode('utf-8')).decode('utf-8'), 
                 "sha": sha
             }
             r = requests.put(f"https://api.github.com/repos/{REPO}/contents/{OVERWRITE_DB_PATH}", 
                              headers={"Authorization": f"token {GITHUB_TOKEN}"}, json=payload)
             if r.status_code in [200, 201]:
-                st.success("Alle ændringer er nu gemt på GitHub!")
+                st.success("Gemt!")
                 return True
         except Exception as e:
-            st.error(f"Gemme-fejl: {e}")
+            st.error(f"Fejl: {e}")
     return False
 
 def vis_side():
     st.title("Sikker Editor: 1. Division")
     
-    # --- INDLÆSNING ---
     if 'full_df_1div' not in st.session_state:
         content, _ = get_github_file(OVERWRITE_DB_PATH)
         if content:
@@ -69,34 +68,34 @@ def vis_side():
 
     df = st.session_state['full_df_1div'].copy()
 
-    # --- STATISTIK & DUBLET-TJEK ---
-    # 1. Mangler Opta
-    mangler_opta = df[(df['PLAYER_OPTAUUID'].isna()) | (df['PLAYER_OPTAUUID'].astype(str).str.lower() == "none") | (df['PLAYER_OPTAUUID'].astype(str).str.strip() == "")].shape[0]
-    
-    # 2. Uden klub
-    uden_klub = df[(df['KLUB'].isna()) | (df['KLUB'].astype(str).str.lower() == "none") | (df['KLUB'].astype(str).str.strip() == "")].shape[0]
-    
-    # 3. Beregn Dubletter (Navn, WYID, OPTA-UUID)
-    # Vi tjekker kun dubletter for værdier der IKKE er tomme eller 0
-    dub_navn = df[df['NAVN'].duplicated() & (df['NAVN'] != "")].shape[0]
-    dub_wyid = df[df['PLAYER_WYID'].duplicated() & (df['PLAYER_WYID'] != 0)].shape[0]
-    
-    # Opta dubletter - tjekker kun hvis der faktisk står en UUID
-    opta_clean = df[~df['PLAYER_OPTAUUID'].isin(["", "None", "none", None])]
-    dub_opta = opta_clean[opta_clean['PLAYER_OPTAUUID'].duplicated()].shape[0]
-    
-    total_dubletter = dub_navn + dub_wyid + dub_opta
+    # --- AVANCERET DUBLET-TJEK ---
+    def count_unique_duplicates(series):
+        # Fjern tomme værdier, 0 og "None"
+        clean = series.replace(["None", "none", "", 0, "0"], pd.NA).dropna()
+        # Find værdier der optræder mere end én gang
+        vc = clean.value_counts()
+        return len(vc[vc > 1])
 
-    # Vis KPI'er
+    dub_navn = count_unique_duplicates(df['NAVN'])
+    dub_wyid = count_unique_duplicates(df['PLAYER_WYID'])
+    dub_opta = count_unique_duplicates(df['PLAYER_OPTAUUID'])
+    
+    total_dub_problemer = dub_navn + dub_wyid + dub_opta
+
+    # --- KPI VISNING ---
+    mangler_opta = df[(df['PLAYER_OPTAUUID'].isna()) | (df['PLAYER_OPTAUUID'].astype(str).str.lower() == "none") | (df['PLAYER_OPTAUUID'].astype(str).str.strip() == "")].shape[0]
+    uden_klub = df[(df['KLUB'].isna()) | (df['KLUB'].astype(str).str.lower() == "none") | (df['KLUB'].astype(str).str.strip() == "")].shape[0]
+
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Mangler Opta-ID", mangler_opta)
     c2.metric("Uden klub", uden_klub)
-    c3.metric("Dubletter totalt", total_dubletter, delta="Tjek Navn/ID", delta_color="inverse" if total_dubletter > 0 else "normal")
+    # Her viser vi nu antallet af KONFLIKTER (f.eks. 3 navne der går igen)
+    c3.metric("Dublet-konflikter", total_dub_problemer, delta="Unikke fejl", delta_color="inverse" if total_dub_problemer > 0 else "normal")
     c4.metric("Total spillere", len(df))
 
     st.divider()
 
-    # --- SØGNING ---
+    # --- SØGNING & EDITOR ---
     soegning = st.text_input("Søg spiller/klub:", key="search").strip().lower()
     if len(soegning) >= 2:
         mask = df.apply(lambda x: x.astype(str).str.lower().str.contains(soegning)).any(axis=1)
@@ -104,7 +103,6 @@ def vis_side():
     else:
         visnings_df = df.copy().reset_index(drop=True)
 
-    # --- EDITOR ---
     edited_data = st.data_editor(
         visnings_df,
         height=600,
@@ -121,8 +119,7 @@ def vis_side():
 
     # --- GEM-KNAP ---
     if st.session_state.spiller_editor["edited_rows"]:
-        st.warning(f"Du har {len(st.session_state.spiller_editor['edited_rows'])} ugemte ændringer!")
-        
+        st.warning(f"Der er ugemte ændringer i {len(st.session_state.spiller_editor['edited_rows'])} rækker.")
         if st.button("💾 Gem alle ændringer til GitHub", type="primary", use_container_width=True):
             changes = st.session_state.spiller_editor["edited_rows"]
             for idx_str, updated_cols in changes.items():
