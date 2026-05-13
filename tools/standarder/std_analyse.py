@@ -184,13 +184,28 @@ def vis_side():
     tabs = st.tabs(["Holdoversigt", "Spilleroversigt", "Hjørnespark", "Frispark", "Indkast", "Zoneoversigt"])
     cat_options = ["Hjørnespark", "Frispark", "Indkast"]
 
-    # Opdateret kolonne-rækkefølge og navne
+    # Opdateret kolonne-konfiguration med korrekt procent-visning
     col_cfg = {
         "KLUB_NAVN": "Klub",
         "TAGER_NAVN": "Spiller",
-        "Succes %": st.column_config.ProgressColumn("Succes %", format="%.0f%%", min_value=0, max_value=1),
-        "Top Modtager": "Top Modtager (Succes)",
-        "Afslutning %": st.column_config.ProgressColumn("Afslutning %", format="%.0f%%", min_value=0, max_value=1),
+        "Antal": st.column_config.NumberColumn("Antal", help="Total antal aktioner"),
+        "Succesfulde": st.column_config.NumberColumn("Succes", help="Aktioner med egen modtager"),
+        "Succes %": st.column_config.ProgressColumn(
+            "Succes %", 
+            help="Hvor stor en andel rammer en medspiller",
+            format="%.0f%%", # Viser 25% i stedet for 0%
+            min_value=0, 
+            max_value=1
+        ),
+        "Top Modtager": "Modtager (Succes)",
+        "Afslutninger": st.column_config.NumberColumn("Afslutn.", help="Aktioner der fører til skud"),
+        "Afslutning %": st.column_config.ProgressColumn(
+            "Afslutning %", 
+            help="Hvor stor en andel fører til skud",
+            format="%.0f%%", 
+            min_value=0, 
+            max_value=1
+        ),
         "Top Modtager (Afsl.)": "Top Modtager (Afsl.)"
     }
 
