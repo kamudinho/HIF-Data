@@ -21,8 +21,7 @@ def load_team_setpiece_data(team_name):
     team_uuid = TEAMS.get(team_name, {}).get('opta_uuid')
     if not team_uuid: return pd.DataFrame()
 
-    # NY SUPER-SQL: Samler alt (Type, Koordinater, Modtager) i Snowflake
-    # Det forhindrer at appen lukker pga. hukommelsesmangel
+    # SQL der samler alt (Type, Koordinater, Modtager) direkte i Snowflake
     sql = f"""
     WITH BaseEvents AS (
         SELECT 
@@ -30,7 +29,6 @@ def load_team_setpiece_data(team_name):
             e.EVENT_CONTESTANT_OPTAUUID AS TEAM_UUID,
             TRIM(e.PLAYER_OPTAUUID) AS PLAYER_UUID,
             e.EVENT_X, e.EVENT_Y,
-            -- Find næste spiller og hold i tidslinjen
             LEAD(TRIM(e.PLAYER_OPTAUUID)) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_EVENTID) AS NEXT_PLAYER,
             LEAD(e.EVENT_CONTESTANT_OPTAUUID) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_EVENTID) AS NEXT_TEAM
         FROM {DB}.OPTA_EVENTS e
@@ -60,10 +58,14 @@ def load_team_setpiece_data(team_name):
     df = conn.query(sql)
     if df is None or df.empty: return pd.DataFrame()
 
-    # --- PROCESSING I PYTHON (Kun navne og typer) ---
+    # --- PROCESSING I PYTHON ---
     
-    # 1. Modtager logik: Kun hvis det er en medspiller
-    df['MODTAGER_UUID'] = np.where(df['NEXT_TEAM'] == df['TEAM_UUID'], df['NEXT_PLAYER'], None)
+    # 1. Modtager logik: Skal være medspiller OG ikke tageren selv
+    df['MODTAGER_UUID'] = np.where(
+        (df['NEXT_TEAM'] == df['TEAM_UUID']) & (df['NEXT_PLAYER'] != df['PLAYER_UUID']), 
+        df['NEXT_PLAYER'], 
+        None
+    )
     
     # 2. Navne mapping
     try:
@@ -72,18 +74,19 @@ def load_team_setpiece_data(team_name):
         name_map = df_lookup.set_index('PLAYER_OPTAUUID')['NAVN'].to_dict()
         df['TAGER'] = df['PLAYER_UUID'].map(name_map).fillna(df['PLAYER_UUID'])
         df['MODTAGER'] = df['MODTAGER_UUID'].map(name_map)
-    except:
+    except Exception as e:
+        st.error(f"Fejl ved navne-mapping: {e}")
         df['TAGER'] = df['PLAYER_UUID']
         df['MODTAGER'] = df['MODTAGER_UUID']
 
-    # 3. Konverter koordinater
+    # 3. Konverter koordinater til tal
     df['END_X'] = pd.to_numeric(df['END_X'], errors='coerce')
     df['END_Y'] = pd.to_numeric(df['END_Y'], errors='coerce')
 
     return df
 
 def vis_side():
-    # ... (Din vis_side() funktion er herfra rigtig fin og kan bruges direkte)
+    st.set_page_config(layout="wide")
     st.title("🎯 Standard-Analyse")
     
     t_sel = st.selectbox("Vælg Hold", get_team_options())
@@ -93,36 +96,52 @@ def vis_side():
         st.warning(f"Ingen data fundet for {t_sel}")
         return
 
+    # --- SPILLER DROP-DOWN MED ANTAL I PARENTES ---
+    player_counts = df_plot['TAGER'].value_counts()
+    player_options = ["Alle"] + [f"{name} ({count})" for name, count in player_counts.items()]
+    
     c1, c2 = st.columns(2)
-    with c1: type_sel = st.selectbox("Type", ["Alle", "Hjørnespark", "Indkast", "Frispark"])
-    with c2: player_sel = st.selectbox("Spiller (Tager)", ["Alle"] + sorted(df_plot['TAGER'].unique()))
+    with c1: 
+        type_sel = st.selectbox("Type", ["Alle", "Hjørnespark", "Indkast", "Frispark"])
+    with c2: 
+        player_sel_raw = st.selectbox("Spiller (Tager)", player_options)
+        player_sel = player_sel_raw.split(" (")[0] if player_sel_raw != "Alle" else "Alle"
 
-    if type_sel != "Alle": df_plot = df_plot[df_plot['TYPE_NAVN'] == type_sel]
-    if player_sel != "Alle": df_plot = df_plot[df_plot['TAGER'] == player_sel]
+    # Filtrering baseret på valg
+    df_filtered = df_plot.copy()
+    if type_sel != "Alle": 
+        df_filtered = df_filtered[df_filtered['TYPE_NAVN'] == type_sel]
+    if player_sel != "Alle": 
+        df_filtered = df_filtered[df_filtered['TAGER'] == player_sel]
 
     tab1, tab2 = st.tabs(["📊 Statistik", "🏟️ Banevisning"])
     
     with tab1:
-        # Grupper og tæl
-        stats = df_plot.groupby(['TAGER', 'TYPE_NAVN']).apply(lambda x: pd.Series({
-            'Antal': len(x),
-            'Ramt medspiller': x['MODTAGER'].notna().sum(),
-            'Chancer skabt': x['ER_CHANCE'].sum(),
-            'Primær Modtager': x['MODTAGER'].value_counts().idxmax() if not x['MODTAGER'].dropna().empty else "Ingen"
-        }), include_groups=False).reset_index()
-        st.dataframe(stats.sort_values('Antal', ascending=False), use_container_width=True, hide_index=True)
+        if df_filtered.empty:
+            st.info("Ingen data for det valgte filter.")
+        else:
+            stats = df_filtered.groupby(['TAGER', 'TYPE_NAVN']).apply(lambda x: pd.Series({
+                'Antal': len(x),
+                'Ramt medspiller': x['MODTAGER'].notna().sum(),
+                'Chancer skabt': x['ER_CHANCE'].sum(),
+                'Primær Modtager': x['MODTAGER'].value_counts().idxmax() if not x['MODTAGER'].dropna().empty else "Ingen"
+            }), include_groups=False).reset_index()
+            
+            st.dataframe(stats.sort_values('Antal', ascending=False), use_container_width=True, hide_index=True)
 
     with tab2:
         pitch = VerticalPitch(half=True, pitch_type='opta', line_color='#cccccc')
         fig, ax = pitch.draw(figsize=(8, 10))
         t_color = TEAM_COLORS.get(t_sel, {}).get('primary', '#cc0000')
         
-        valid = df_plot.dropna(subset=['END_X', 'END_Y'])
+        valid = df_filtered.dropna(subset=['END_X', 'END_Y'])
         if not valid.empty:
             pitch.arrows(valid.EVENT_X, valid.EVENT_Y, valid.END_X, valid.END_Y, 
                          color=t_color, ax=ax, alpha=0.3, width=2)
             pitch.scatter(valid.END_X, valid.END_Y, color=t_color, 
                           edgecolors='white', s=100, ax=ax, zorder=3)
+        else:
+            st.info("Ingen slut-koordinater tilgængelige for det valgte filter.")
         st.pyplot(fig)
 
 if __name__ == "__main__":
