@@ -188,9 +188,9 @@ def vis_side():
     col_cfg = {
         "KLUB_NAVN": "Klub",
         "TAGER_NAVN": "Spiller",
-        "Succes %": st.column_config.ProgressColumn("Succes %", format="%.0f%%", min_value=0, max_value=1),
+        "Succes %": st.column_config.ProgressColumn("Succes %", format="%.0f%%", min_value=0, max_value=100),
         "Top Modtager": "Modtager (Succes)",
-        "Afslutning %": st.column_config.ProgressColumn("Afslutning %", format="%.0f%%", min_value=0, max_value=1),
+        "Afslutning %": st.column_config.ProgressColumn("Afslutning %", format="%.0f%%", min_value=0, max_value=100),
         "Top Modtager (Afsl.)": "Modtager (Afsl.)"
     }
 
