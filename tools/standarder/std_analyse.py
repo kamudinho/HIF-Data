@@ -99,6 +99,7 @@ def vis_side():
     df_all['KLUB_NAVN'] = df_all['TEAM_UUID'].str.upper().map(uuid_to_name)
     teams = sorted([n for n in df_all['KLUB_NAVN'].unique() if pd.notna(n)])
 
+    # --- TOPBAR ---
     col_title, col_empty, col_select = st.columns([2, 1, 1])
     with col_title:
         st.subheader("Standardsituationer")
@@ -109,7 +110,7 @@ def vis_side():
 
     tab1, tab2, tab3, tab4 = st.tabs(["Holdoversigt", "Spilleroversigt", "Analyse", "Zoneoversigt"])
 
-    # --- TAB 1 & 2 er uændrede ---
+    # TAB 1 & 2
     with tab1:
         hold_stats = df_all.groupby(['KLUB_NAVN', 'TYPE_NAVN']).size().unstack(fill_value=0).reset_index()
         st.dataframe(hold_stats, use_container_width=True, hide_index=True)
@@ -119,10 +120,8 @@ def vis_side():
             spiller_stats = df_team_selected.groupby(['TAGER_NAVN', 'TYPE_NAVN']).size().unstack(fill_value=0).reset_index()
             st.dataframe(spiller_stats, use_container_width=True, hide_index=True)
 
-    # --- TAB 3: Analyse med de nye stats ---
-    # --- TAB 3: Analyse ---
+    # TAB 3: Analyse
     with tab3:
-        # Filtre i toppen af tab'en
         f1, f2, f3 = st.columns(3)
         with f1: sp_type = st.selectbox("Type", ["Hjørnespark", "Indkast", "Frispark"], key="sb_type_ana")
         with f2:
@@ -143,7 +142,6 @@ def vis_side():
         col_p, col_s = st.columns([2, 1])
         
         with col_p:
-            # Pitch-plot
             for c in ['EVENT_X', 'EVENT_Y', 'ENDX', 'ENDY']: 
                 df_plot[c] = pd.to_numeric(df_plot[c], errors='coerce')
             
@@ -153,7 +151,7 @@ def vis_side():
             df_plot['ENDY_M'] = df_plot['ENDY'].apply(lambda y: to_metric(y, 68))
 
             pitch = VerticalPitch(half=True, pitch_type='custom', pitch_length=105, pitch_width=68, line_color='#cccccc')
-            fig, ax = pitch.draw(figsize=(10, 10)) # Justeret størrelse lidt
+            fig, ax = pitch.draw(figsize=(10, 10))
             ax.set_ylim(50, 105)
             
             if not df_plot.dropna(subset=['ENDX_M', 'ENDY_M']).empty:
@@ -165,19 +163,20 @@ def vis_side():
             st.pyplot(fig)
 
         with col_s:
-            # Metrics i højre kolonne
-            st.metric("Antal aktioner", total)
-            st.metric("Succesfulde", success)
-            st.metric("Succes %", f"{pct:.1f}%")
+            # 3 Metrics side om side i den højre kolonne
+            m1, m2, m3 = st.columns(3)
+            m1.metric("Antal", total)
+            m2.metric("Succes", success)
+            m3.metric("%", f"{pct:.0f}%")
             
-            st.write("---") # Skillelinje
+            st.write("---") 
             
             st.write("**Top modtagere**")
             mod_counts = df_plot['MODTAGER'].value_counts().reset_index()
             mod_counts.columns = ['Spiller', 'Antal']
             st.dataframe(mod_counts, use_container_width=True, hide_index=True)
 
-    # TAB 4: Zoneoversigt (Afhængig)
+    # TAB 4
     with tab4:
         def get_zone(y):
             if pd.isna(y): return "Ukendt"
