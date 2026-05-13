@@ -81,7 +81,7 @@ def load_setpiece_data():
 def to_metric(val, total_m): return val * (total_m / 100)
 
 def vis_side():
-    st.set_page_config(layout="wide", page_title="Hvidovre IF - Standardsituationer")
+    st.set_page_config(layout="wide", page_title="Standardsituationer")
     st.markdown("<style>header {visibility: hidden;}</style>", unsafe_allow_html=True)
     
     df_all = load_setpiece_data()
@@ -97,10 +97,10 @@ def vis_side():
     # --- TOPBAR: Holdvalg (placeret til højre) ---
     col_title, col_select = st.columns([3, 1])
     with col_title:
-        st.title("Standard-Analyse")
+        st.caption("Analyse: Standardsituationer")
     with col_select:
         # Denne selectbox styrer nu Tab 2, 3 og 4
-        t_sel = st.selectbox("Vælg hold (Tab 2-4)", teams, index=teams.index("Hvidovre") if "Hvidovre" in teams else 0)
+        t_sel = st.selectbox(teams, index=teams.index("Hvidovre") if "Hvidovre" in teams else 0)
 
     # Filtrer data til det valgte hold med det samme
     df_team_selected = df_all[df_all['KLUB_NAVN'] == t_sel].copy()
