@@ -54,7 +54,7 @@ def save_to_github(df):
     return False
 
 def vis_side():
-    st.set_page_config(layout="wide")
+    st.set_page_config(layout="wide", page_title="HIF 1. Div Editor")
     st.title("Sikker Editor: 1. Division")
     
     if 'full_df_1div' not in st.session_state:
@@ -69,29 +69,37 @@ def vis_side():
 
     df = st.session_state['full_df_1div'].copy()
 
-    # --- DUBLET LOGIK ---
-    def get_duplicate_mask(df):
-        # Hjælpefunktion til at finde alle rækker der er involveret i en dublet
-        masks = []
-        for col in ['NAVN', 'PLAYER_WYID', 'PLAYER_OPTAUUID']:
-            clean_series = df[col].replace(["None", "none", "", 0, "0"], pd.NA)
-            # keep=False sørger for at markere ALLE rækker med dubletten, ikke kun nr. 2
-            masks.append(clean_series.duplicated(keep=False) & clean_series.notna())
-        return pd.concat(masks, axis=1).any(axis=1)
-
-    # Statistik til KPI'er
-    dublet_maske = get_duplicate_mask(df)
-    total_dublet_raekker = df[dublet_maske].shape[0]
-
-    # --- KPI VISNING ---
+    # --- KPI BEREGNING ---
     mangler_opta = df[(df['PLAYER_OPTAUUID'].isna()) | (df['PLAYER_OPTAUUID'].astype(str).str.lower() == "none") | (df['PLAYER_OPTAUUID'].astype(str).str.strip() == "")].shape[0]
     uden_klub = df[(df['KLUB'].isna()) | (df['KLUB'].astype(str).str.lower() == "none") | (df['KLUB'].astype(str).str.strip() == "")].shape[0]
 
+    # --- AVANCERET DUBLET-IDENTIFIKATION ---
+    error_list = []
+    dublet_mask_final = pd.Series([False] * len(df))
+
+    for col in ['NAVN', 'PLAYER_WYID', 'PLAYER_OPTAUUID']:
+        clean_series = df[col].replace(["None", "none", "", 0, "0"], pd.NA)
+        # Find værdier der optræder mere end én gang
+        dupes = clean_series[clean_series.duplicated(keep=False) & clean_series.notna()].unique()
+        
+        for val in dupes:
+            names = df[df[col] == val]['NAVN'].tolist()
+            error_list.append(f"**{col} Dublet ({val}):** {', '.join(names)}")
+            # Markér rækkerne til filtrering
+            dublet_mask_final = dublet_mask_final | (df[col] == val)
+
+    # --- VIS KPI'ER ---
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Mangler Opta-ID", mangler_opta)
     c2.metric("Uden klub", uden_klub)
-    c3.metric("Dublet-rækker", total_dublet_raekker, delta="Rækker der skal tjekkes", delta_color="inverse" if total_dublet_raekker > 0 else "normal")
+    c3.metric("Dublet-konflikter", len(error_list), delta="Fejl der skal løses", delta_color="inverse")
     c4.metric("Total spillere", len(df))
+
+    # --- FEJLLISTE (Vises kun hvis der er fejl) ---
+    if error_list:
+        with st.expander("⚠️ Se specifikke dublet-fejl her", expanded=True):
+            for err in error_list:
+                st.write(f"- {err}")
 
     st.divider()
 
@@ -101,12 +109,11 @@ def vis_side():
         soegning = st.text_input("Søg spiller/klub:", key="search").strip().lower()
     with col_toggle:
         st.write("") # Spacer
-        vis_kun_dubletter = st.toggle("Vis kun dubletter", value=False)
+        vis_kun_dubletter = st.toggle("Vis kun dubletter i tabel", value=False)
 
-    # Kombineret filter
     visnings_df = df.copy()
     if vis_kun_dubletter:
-        visnings_df = visnings_df[dublet_maske]
+        visnings_df = visnings_df[dublet_mask_final]
     
     if len(soegning) >= 2:
         mask = visnings_df.apply(lambda x: x.astype(str).str.lower().str.contains(soegning)).any(axis=1)
@@ -115,7 +122,7 @@ def vis_side():
     # --- EDITOR ---
     st.data_editor(
         visnings_df.reset_index(drop=True),
-        height=600,
+        height=500,
         use_container_width=True,
         hide_index=True,
         disabled=["PLAYER_WYID"], 
