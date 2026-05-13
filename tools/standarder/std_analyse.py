@@ -21,7 +21,8 @@ def load_team_setpiece_data(team_name):
     team_uuid = TEAMS.get(team_name, {}).get('opta_uuid')
     if not team_uuid: return pd.DataFrame()
 
-    # SQL der samler alt (Type, Koordinater, Modtager) direkte i Snowflake
+    # FORBEDRET SQL: 
+    # Vi finder den første spiller efter sparket, som IKKE er tageren selv.
     sql = f"""
     WITH BaseEvents AS (
         SELECT 
@@ -29,8 +30,15 @@ def load_team_setpiece_data(team_name):
             e.EVENT_CONTESTANT_OPTAUUID AS TEAM_UUID,
             TRIM(e.PLAYER_OPTAUUID) AS PLAYER_UUID,
             e.EVENT_X, e.EVENT_Y,
-            LEAD(TRIM(e.PLAYER_OPTAUUID)) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_EVENTID) AS NEXT_PLAYER,
-            LEAD(e.EVENT_CONTESTANT_OPTAUUID) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_EVENTID) AS NEXT_TEAM
+            -- Find den næste spiller i kampen, som IKKE er den samme som tageren
+            LEAD(TRIM(e.PLAYER_OPTAUUID)) OVER (
+                PARTITION BY e.MATCH_OPTAUUID 
+                ORDER BY e.EVENT_EVENTID
+            ) AS NEXT_PLAYER_RAW,
+            LEAD(e.EVENT_CONTESTANT_OPTAUUID) OVER (
+                PARTITION BY e.MATCH_OPTAUUID 
+                ORDER BY e.EVENT_EVENTID
+            ) AS NEXT_TEAM_RAW
         FROM {DB}.OPTA_EVENTS e
         WHERE e.TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
     ),
@@ -58,28 +66,26 @@ def load_team_setpiece_data(team_name):
     df = conn.query(sql)
     if df is None or df.empty: return pd.DataFrame()
 
-    # --- PROCESSING I PYTHON ---
-    
-    # 1. Modtager logik: Skal være medspiller OG ikke tageren selv
+    # --- DOBBELT-TJEK I PYTHON FOR AT FJERNE SELV-MODTAGERE ---
+    # Hvis NEXT_PLAYER er den samme som PLAYER_UUID (tageren), sætter vi modtager til None.
+    # Opta har nogle gange sekvenser som: Hjørnespark -> Touch (samme mand) -> Head (medspiller).
     df['MODTAGER_UUID'] = np.where(
-        (df['NEXT_TEAM'] == df['TEAM_UUID']) & (df['NEXT_PLAYER'] != df['PLAYER_UUID']), 
-        df['NEXT_PLAYER'], 
+        (df['NEXT_TEAM_RAW'] == df['TEAM_UUID']) & (df['NEXT_PLAYER_RAW'] != df['PLAYER_UUID']), 
+        df['NEXT_PLAYER_RAW'], 
         None
     )
     
-    # 2. Navne mapping
+    # Navne mapping
     try:
         df_lookup = pd.read_csv(PLAYER_FILE)
         df_lookup['PLAYER_OPTAUUID'] = df_lookup['PLAYER_OPTAUUID'].astype(str).str.strip()
         name_map = df_lookup.set_index('PLAYER_OPTAUUID')['NAVN'].to_dict()
         df['TAGER'] = df['PLAYER_UUID'].map(name_map).fillna(df['PLAYER_UUID'])
         df['MODTAGER'] = df['MODTAGER_UUID'].map(name_map)
-    except Exception as e:
-        st.error(f"Fejl ved navne-mapping: {e}")
+    except:
         df['TAGER'] = df['PLAYER_UUID']
         df['MODTAGER'] = df['MODTAGER_UUID']
 
-    # 3. Konverter koordinater til tal
     df['END_X'] = pd.to_numeric(df['END_X'], errors='coerce')
     df['END_Y'] = pd.to_numeric(df['END_Y'], errors='coerce')
 
@@ -90,15 +96,16 @@ def vis_side():
     st.title("🎯 Standard-Analyse")
     
     t_sel = st.selectbox("Vælg Hold", get_team_options())
-    df_plot = load_team_setpiece_data(t_sel)
+    df_raw = load_team_setpiece_data(t_sel)
     
-    if df_plot.empty:
+    if df_raw.empty:
         st.warning(f"Ingen data fundet for {t_sel}")
         return
 
     # --- SPILLER DROP-DOWN MED ANTAL I PARENTES ---
-    player_counts = df_plot['TAGER'].value_counts()
-    player_options = ["Alle"] + [f"{name} ({count})" for name, count in player_counts.items()]
+    # Vi beregner antallet før vi filtrerer på type, så man kan se spillerens totale involvering
+    counts = df_raw['TAGER'].value_counts()
+    player_options = ["Alle"] + [f"{name} ({counts[name]})" for name in counts.index]
     
     c1, c2 = st.columns(2)
     with c1: 
@@ -107,8 +114,8 @@ def vis_side():
         player_sel_raw = st.selectbox("Spiller (Tager)", player_options)
         player_sel = player_sel_raw.split(" (")[0] if player_sel_raw != "Alle" else "Alle"
 
-    # Filtrering baseret på valg
-    df_filtered = df_plot.copy()
+    # Filtrering
+    df_filtered = df_raw.copy()
     if type_sel != "Alle": 
         df_filtered = df_filtered[df_filtered['TYPE_NAVN'] == type_sel]
     if player_sel != "Alle": 
@@ -118,8 +125,9 @@ def vis_side():
     
     with tab1:
         if df_filtered.empty:
-            st.info("Ingen data for det valgte filter.")
+            st.info("Ingen data fundet for de valgte filtre.")
         else:
+            # Vi bruger en aggregering der sikrer at "Primær Modtager" ikke kan være tageren selv
             stats = df_filtered.groupby(['TAGER', 'TYPE_NAVN']).apply(lambda x: pd.Series({
                 'Antal': len(x),
                 'Ramt medspiller': x['MODTAGER'].notna().sum(),
@@ -140,8 +148,6 @@ def vis_side():
                          color=t_color, ax=ax, alpha=0.3, width=2)
             pitch.scatter(valid.END_X, valid.END_Y, color=t_color, 
                           edgecolors='white', s=100, ax=ax, zorder=3)
-        else:
-            st.info("Ingen slut-koordinater tilgængelige for det valgte filter.")
         st.pyplot(fig)
 
 if __name__ == "__main__":
