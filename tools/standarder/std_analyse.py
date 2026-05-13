@@ -83,7 +83,6 @@ def to_metric(val, total_m):
 def vis_side():
     st.set_page_config(layout="wide", page_title="Standardsituationer")
     
-    # CSS: Kun skjul af header og selectbox-label
     st.markdown("""
         <style>
         header {visibility: hidden;}
@@ -96,12 +95,10 @@ def vis_side():
         st.warning("Ingen data fundet.")
         return
 
-    # Mapping af holdnavne
     uuid_to_name = {v['opta_uuid'].upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
     df_all['KLUB_NAVN'] = df_all['TEAM_UUID'].str.upper().map(uuid_to_name)
     teams = sorted([n for n in df_all['KLUB_NAVN'].unique() if pd.notna(n)])
 
-    # --- TOPBAR ---
     col_title, col_empty, col_select = st.columns([2, 1, 1])
     with col_title:
         st.subheader("Standardsituationer")
@@ -110,21 +107,19 @@ def vis_side():
 
     df_team_selected = df_all[df_all['KLUB_NAVN'] == t_sel].copy()
 
-    # --- TABS ---
     tab1, tab2, tab3, tab4 = st.tabs(["Holdoversigt", "Spilleroversigt", "Analyse", "Zoneoversigt"])
 
-    # TAB 1: Holdoversigt (Uafhængig af holdvalg)
+    # --- TAB 1 & 2 er uændrede ---
     with tab1:
         hold_stats = df_all.groupby(['KLUB_NAVN', 'TYPE_NAVN']).size().unstack(fill_value=0).reset_index()
         st.dataframe(hold_stats, use_container_width=True, hide_index=True)
 
-    # TAB 2: Spilleroversigt (Afhængig)
     with tab2:
         if not df_team_selected.empty:
             spiller_stats = df_team_selected.groupby(['TAGER_NAVN', 'TYPE_NAVN']).size().unstack(fill_value=0).reset_index()
             st.dataframe(spiller_stats, use_container_width=True, hide_index=True)
 
-    # TAB 3: Analyse (Afhængig)
+    # --- TAB 3: Analyse med de nye stats ---
     with tab3:
         c1, c2, c3 = st.columns(3)
         with c1: sp_type = st.selectbox("Type", ["Hjørnespark", "Indkast", "Frispark"], key="ana_type")
@@ -136,6 +131,17 @@ def vis_side():
         mask = (df_team_selected['TYPE_NAVN'] == sp_type)
         if p_sel != "Alle spillere": mask &= (df_team_selected['TAGER_NAVN'] == p_sel)
         df_plot = df_team_selected[mask].copy()
+
+        # Beregn Statistik
+        total = len(df_plot)
+        success = df_plot['MODTAGER'].notna().sum()
+        pct = (success / total * 100) if total > 0 else 0
+
+        # Visning af metrics
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Antal aktioner", total)
+        m2.metric("Succesfulde", success)
+        m3.metric("Succes %", f"{pct:.1f}%")
 
         for c in ['EVENT_X', 'EVENT_Y', 'ENDX', 'ENDY']: 
             df_plot[c] = pd.to_numeric(df_plot[c], errors='coerce')
@@ -154,11 +160,11 @@ def vis_side():
                 if "Zoner" in vis_mode:
                     pitch.hexbin(df_plot.ENDX_M, df_plot.ENDY_M, ax=ax, gridsize=(12, 12), cmap='Reds', alpha=0.6)
                 if "Pile" in vis_mode:
+                    # Vi bruger rød for alle aktioner og en grøn (eller primær farve) for at indikere retning
                     pitch.arrows(df_plot.X_M, df_plot.Y_M, df_plot.ENDX_M, df_plot.ENDY_M, 
                                  color=TEAM_COLORS.get(t_sel, {}).get('primary', HIF_RED), ax=ax, alpha=0.3)
             st.pyplot(fig)
         with col_s:
-            st.metric("Aktioner", len(df_plot))
             st.write("**Top modtagere**")
             mod_counts = df_plot['MODTAGER'].value_counts().reset_index()
             mod_counts.columns = ['Spiller', 'Antal']
