@@ -91,9 +91,9 @@ def get_summary_stats(df, group_col):
         Afslutninger=('ER_AFSLUTNING', 'sum')
     ).reset_index()
     
-    # Tving float for at sikre progress bar viser korrekte %
-    stats['Succes %'] = (stats['Succesfulde'].astype(float) / stats['Antal'].astype(float)).fillna(0.0)
-    stats['Afslutning %'] = (stats['Afslutninger'].astype(float) / stats['Antal'].astype(float)).fillna(0.0)
+    # Ganger med 100 her for at få hele tal til ProgressColumn
+    stats['Succes %'] = (stats['Succesfulde'] / stats['Antal'] * 100).round(0).fillna(0)
+    stats['Afslutning %'] = (stats['Afslutninger'] / stats['Antal'] * 100).round(0).fillna(0)
     
     def get_top_mod(sub_df):
         m = sub_df['MODTAGER'].value_counts()
