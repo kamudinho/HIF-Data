@@ -21,7 +21,7 @@ def load_team_setpiece_data(team_name):
     team_uuid = TEAMS.get(team_name, {}).get('opta_uuid')
     if not team_uuid: return pd.DataFrame()
 
-    # SQL OPDATERING: Vi henter nu de næste TO spillere/hold
+    # SQL: Vi kigger efter de næste hændelser for at finde dueller
     sql = f"""
     WITH BaseEvents AS (
         SELECT 
@@ -30,14 +30,14 @@ def load_team_setpiece_data(team_name):
             TRIM(e.PLAYER_OPTAUUID) AS PLAYER_UUID,
             e.PLAYER_NAME,
             e.EVENT_X, e.EVENT_Y,
-            -- Næste hændelse
-            LEAD(TRIM(e.PLAYER_OPTAUUID), 1) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_EVENTID) AS NEXT_PLAYER_1,
-            LEAD(e.PLAYER_NAME, 1) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_EVENTID) AS NEXT_NAME_1,
-            LEAD(e.EVENT_CONTESTANT_OPTAUUID, 1) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_EVENTID) AS NEXT_TEAM_1,
-            -- Næste-næste hændelse (for at fange dueller/støj)
-            LEAD(TRIM(e.PLAYER_OPTAUUID), 2) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_EVENTID) AS NEXT_PLAYER_2,
-            LEAD(e.PLAYER_NAME, 2) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_EVENTID) AS NEXT_NAME_2,
-            LEAD(e.EVENT_CONTESTANT_OPTAUUID, 2) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_EVENTID) AS NEXT_TEAM_2
+            -- Vi henter de næste 3 hændelser for at være sikre på at fange duellen
+            LEAD(TRIM(e.PLAYER_OPTAUUID), 1) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_EVENTID) AS P1_UUID,
+            LEAD(e.PLAYER_NAME, 1) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_EVENTID) AS P1_NAME,
+            LEAD(e.EVENT_CONTESTANT_OPTAUUID, 1) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_EVENTID) AS P1_TEAM,
+            
+            LEAD(TRIM(e.PLAYER_OPTAUUID), 2) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_EVENTID) AS P2_UUID,
+            LEAD(e.PLAYER_NAME, 2) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_EVENTID) AS P2_NAME,
+            LEAD(e.EVENT_CONTESTANT_OPTAUUID, 2) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_EVENTID) AS P2_TEAM
         FROM {DB}.OPTA_EVENTS e
         WHERE e.TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
     ),
@@ -54,12 +54,10 @@ def load_team_setpiece_data(team_name):
         WHERE QUALIFIER_QID IN (5, 6, 107, 140, 141, 214, 154, 111)
         GROUP BY EVENT_OPTAUUID
     )
-    SELECT 
-        b.*, q.TYPE_NAVN, q.END_X, q.END_Y, q.ER_CHANCE
+    SELECT b.*, q.TYPE_NAVN, q.END_X, q.END_Y, q.ER_CHANCE
     FROM BaseEvents b
     JOIN Quals q ON b.EVENT_OPTAUUID = q.EVENT_OPTAUUID
-    WHERE b.TEAM_UUID = '{team_uuid}'
-      AND q.TYPE_NAVN IS NOT NULL
+    WHERE b.TEAM_UUID = '{team_uuid}' AND q.TYPE_NAVN IS NOT NULL
     """
 
     df = conn.query(sql)
@@ -74,50 +72,47 @@ def load_team_setpiece_data(team_name):
 
     def format_name(uuid, db_name):
         if pd.isna(uuid) or uuid is None: return None
-        uuid_str = str(uuid).strip()
-        full_name = name_map.get(uuid_str)
-        if full_name: return full_name
-        return f"{db_name if db_name else 'Ukendt'} ({uuid_str})"
+        u = str(uuid).strip()
+        return name_map.get(u, f"{db_name} ({u})")
 
     df['TAGER'] = df.apply(lambda x: format_name(x['PLAYER_UUID'], x['PLAYER_NAME']), axis=1)
-    
-    # --- NY MODTAGER LOGIK (Kig på to trin) ---
-    def find_receiver(row):
-        # Tjek trin 1: Er det en medspiller (og ikke tageren selv)?
-        if row['NEXT_TEAM_1'] == row['TEAM_UUID'] and row['NEXT_PLAYER_1'] != row['PLAYER_UUID']:
-            return format_name(row['NEXT_PLAYER_1'], row['NEXT_NAME_1'])
+
+    # --- MODTAGER LOGIK (Fanger både succes og dueller) ---
+    def find_target(row):
+        # 1. Tjek om medspiller er involveret i den direkte næste aktion (succes eller duel)
+        if row['P1_TEAM'] == row['TEAM_UUID'] and row['P1_UUID'] != row['PLAYER_UUID']:
+            return format_name(row['P1_UUID'], row['P1_NAME'])
         
-        # Tjek trin 2: Hvis trin 1 var støj/modstander-snit, er trin 2 så en medspiller?
-        if row['NEXT_TEAM_2'] == row['TEAM_UUID'] and row['NEXT_PLAYER_2'] != row['PLAYER_UUID']:
-            return format_name(row['NEXT_PLAYER_2'], row['NEXT_NAME_2'])
+        # 2. Tjek om medspiller er involveret i aktion nr. 2 (f.eks. hvis modstander snitter den i en duel)
+        if row['P2_TEAM'] == row['TEAM_UUID'] and row['P2_UUID'] != row['PLAYER_UUID']:
+            return format_name(row['P2_UUID'], row['P2_NAME'])
         
         return None
 
-    df['MODTAGER'] = df.apply(find_receiver, axis=1)
+    df['MODTAGER'] = df.apply(find_target, axis=1)
     df['END_X'] = pd.to_numeric(df['END_X'], errors='coerce')
     df['END_Y'] = pd.to_numeric(df['END_Y'], errors='coerce')
-
     return df
 
 def vis_side():
     st.set_page_config(layout="wide")
-    st.title("🎯 Standard-Analyse")
+    st.title("🎯 Standard-Analyse (Mønstergenkendelse)")
     
     t_sel = st.selectbox("Vælg Hold", get_team_options())
     df_raw = load_team_setpiece_data(t_sel)
     
     if df_raw.empty:
-        st.warning(f"Ingen data fundet for {t_sel}")
+        st.warning(f"Ingen data fundet.")
         return
 
+    # Filter
     counts_tager = df_raw['TAGER'].value_counts()
-    player_options = ["Alle"] + [f"{name} ({counts_tager[name]})" for name in counts_tager.index]
+    tager_options = ["Alle"] + [f"{name} ({counts_tager[name]})" for name in counts_tager.index]
     
     c1, c2 = st.columns(2)
-    with c1: 
-        type_sel = st.selectbox("Type", ["Alle", "Hjørnespark", "Indkast", "Frispark"])
+    with c1: type_sel = st.selectbox("Type", ["Alle", "Hjørnespark", "Indkast", "Frispark"])
     with c2: 
-        player_sel_raw = st.selectbox("Spiller (Tager)", player_options)
+        player_sel_raw = st.selectbox("Spiller (Tager)", tager_options)
         player_sel = player_sel_raw.split(" (")[0] if player_sel_raw != "Alle" else "Alle"
 
     df_filtered = df_raw.copy()
@@ -127,29 +122,25 @@ def vis_side():
     tab1, tab2 = st.tabs(["📊 Statistik", "🏟️ Banevisning"])
     
     with tab1:
-        if df_filtered.empty:
-            st.info("Ingen data.")
-        else:
-            def get_stats(group):
-                m_counts = group['MODTAGER'].value_counts()
-                if not m_counts.empty:
-                    top_m = m_counts.idxmax()
-                    top_a = m_counts.max()
-                    primær = f"{top_m} ({top_a})"
-                else:
-                    primær = "Ingen"
+        def get_stats(group):
+            m_counts = group['MODTAGER'].value_counts()
+            top_modtager = f"{m_counts.idxmax()} ({m_counts.max()})" if not m_counts.empty else "Ingen"
+            
+            return pd.Series({
+                'Antal aktioner': len(group),
+                'Fundet i feltet (inkl. dueller)': group['MODTAGER'].notna().sum(),
+                'Chancer skabt': group['ER_CHANCE'].sum(),
+                'Primært mål (Mønster)': top_modtager
+            })
 
-                return pd.Series({
-                    'Antal': len(group),
-                    'Ramt medspiller': group['MODTAGER'].notna().sum(),
-                    'Chancer skabt': group['ER_CHANCE'].sum(),
-                    'Primær Modtager': primær
-                })
+        stats_df = df_filtered.groupby(['TAGER', 'TYPE_NAVN']).apply(get_stats, include_groups=False).reset_index()
+        st.subheader("Hvem slår vi efter?")
+        st.dataframe(stats_df.sort_values('Antal aktioner', ascending=False), use_container_width=True, hide_index=True)
 
-            stats_df = df_filtered.groupby(['TAGER', 'TYPE_NAVN']).apply(get_stats, include_groups=False).reset_index()
-            st.dataframe(stats_df.sort_values('Antal', ascending=False), use_container_width=True, hide_index=True)
+        st.info("Bemærk: 'Fundet i feltet' tæller både kontrollerede modtagelser og dueller, hvor spilleren har forsøgt at nå bolden.")
 
     with tab2:
+        # (Banevisning som før...)
         pitch = VerticalPitch(half=True, pitch_type='opta', line_color='#cccccc')
         fig, ax = pitch.draw(figsize=(8, 10))
         t_color = TEAM_COLORS.get(t_sel, {}).get('primary', '#cc0000')
