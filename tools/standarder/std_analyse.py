@@ -77,41 +77,19 @@ def load_setpiece_data():
     except:
         return pd.DataFrame()
 
-def to_metric(val, total_m): return val * (total_m / 100)
+def to_metric(val, total_m): 
+    return val * (total_m / 100)
 
 def vis_side():
     st.set_page_config(layout="wide", page_title="Standardsituationer")
     
-    # --- AGGRESSIV CSS TIL AT MINDSKE AFSTAND ---
+    # Minimal CSS for et rent look
     st.markdown("""
         <style>
         header {visibility: hidden;}
-        
-        /* Fjern padding i toppen af hoved-containeren */
-        .block-container {
-            padding-top: 1rem !important;
-            padding-bottom: 0rem !important;
-        }
-
-        /* Skjul label på selectbox helt */
-        div[data-testid="stSelectbox"] label {
-            display: none !important;
-        }
-
-        /* Reducer margin mellem elementer i top-sektionen */
-        div.stVerticalBlock {
-            gap: 0rem !important;
-        }
-
-        /* Specifik kontrol over tabs-margin */
-        div[data-testid="stTabs"] {
-            margin-top: -1.5rem !important;
-        }
-
-        /* Gør overskriften/caption mindre dominerende */
-        .stCaption {
-            margin-bottom: -1rem !important;
-        }
+        .block-container {padding-top: 2rem !important;}
+        /* Fjerner label-pladsen over dropdown i top-højre */
+        div[data-testid="stSelectbox"] label { display: none !important; }
         </style>
     """, unsafe_allow_html=True)
     
@@ -126,43 +104,45 @@ def vis_side():
     teams = sorted([n for n in df_all['KLUB_NAVN'].unique() if pd.notna(n)])
 
     # --- TOPBAR ---
-    # Vi bruger en container til at holde tingene samlet
-    with st.container():
-        col_title, col_select = st.columns([3, 1])
-        with col_title:
-            st.caption("ANALYSE: STANDARDSITUATIONER")
-        with col_select:
-            t_sel = st.selectbox("hold_valg", teams, index=teams.index("Hvidovre") if "Hvidovre" in teams else 0)
+    col_title, col_empty, col_select = st.columns([2, 1, 1])
+    with col_title:
+        st.subheader("Standardsituationer")
+    with col_select:
+        t_sel = st.selectbox("hold_valg", teams, index=teams.index("Hvidovre") if "Hvidovre" in teams else 0)
 
     df_team_selected = df_all[df_all['KLUB_NAVN'] == t_sel].copy()
 
     # Tabs Definition
     tab1, tab2, tab3, tab4 = st.tabs(["Holdoversigt", "Spilleroversigt", "Analyse", "Zoneoversigt"])
 
-    # --- TAB 1: Holdoversigt ---
+    # --- TAB 1: Holdoversigt (Uafhængig) ---
     with tab1:
         hold_stats = df_all.groupby(['KLUB_NAVN', 'TYPE_NAVN']).size().unstack(fill_value=0).reset_index()
-        st.dataframe(hold_stats, use_container_width=True, hide_index=True, column_config={"KLUB_NAVN": "Klub"})
+        st.dataframe(hold_stats, use_container_width=True, hide_index=True)
 
-    # --- TAB 2: Spilleroversigt ---
+    # --- TAB 2: Spilleroversigt (Afhængig) ---
     with tab2:
-        spiller_stats = df_team_selected.groupby(['TAGER_NAVN', 'TYPE_NAVN']).size().unstack(fill_value=0).reset_index()
-        st.dataframe(spiller_stats, use_container_width=True, hide_index=True, column_config={"TAGER_NAVN": "Spiller"})
+        if not df_team_selected.empty:
+            spiller_stats = df_team_selected.groupby(['TAGER_NAVN', 'TYPE_NAVN']).size().unstack(fill_value=0).reset_index()
+            st.dataframe(spiller_stats, use_container_width=True, hide_index=True)
 
-    # --- TAB 3: Analyse ---
+    # --- TAB 3: Analyse (Afhængig) ---
     with tab3:
-        c2, c3, c4 = st.columns(3)
-        with c2: sp_type = st.selectbox("Type", ["Hjørnespark", "Indkast", "Frispark"], key="sb_type_ana")
-        with c3:
-            players = ["Alle spillere"] + sorted(df_team_selected[df_team_selected['TYPE_NAVN'] == sp_type]['TAGER_NAVN'].unique().tolist())
-            p_sel = st.selectbox("Spiller", players, key="sb_player_ana")
-        with c4: vis_mode = st.selectbox("Visning", ["Zoner + Pile", "Kun Zoner", "Kun Pile"], key="sb_mode_ana")
+        c1, c2, c3 = st.columns(3)
+        with c1: sp_type = st.selectbox("Type", ["Hjørnespark", "Indkast", "Frispark"], key="sb_type_ana")
+        with c2:
+            p_list = ["Alle spillere"] + sorted(df_team_selected[df_team_selected['TYPE_NAVN'] == sp_type]['TAGER_NAVN'].unique().tolist())
+            p_sel = st.selectbox("Spiller", p_list, key="sb_player_ana")
+        with c3: vis_mode = st.selectbox("Visning", ["Zoner + Pile", "Kun Zoner", "Kun Pile"], key="sb_mode_ana")
 
         mask = (df_team_selected['TYPE_NAVN'] == sp_type)
         if p_sel != "Alle spillere": mask &= (df_team_selected['TAGER_NAVN'] == p_sel)
         df_plot = df_team_selected[mask].copy()
 
-        for c in ['EVENT_X', 'EVENT_Y', 'ENDX', 'ENDY']: df_plot[c] = pd.to_numeric(df_plot[c], errors='coerce')
+        # Konvertering til tal og metrikker
+        for c in ['EVENT_X', 'EVENT_Y', 'ENDX', 'ENDY']: 
+            df_plot[c] = pd.to_numeric(df_plot[c], errors='coerce')
+        
         df_plot['X_M'] = df_plot['EVENT_X'].apply(lambda x: to_metric(x, 105))
         df_plot['Y_M'] = df_plot['EVENT_Y'].apply(lambda y: to_metric(y, 68))
         df_plot['ENDX_M'] = df_plot['ENDX'].apply(lambda x: to_metric(x, 105))
@@ -181,13 +161,13 @@ def vis_side():
                                  color=TEAM_COLORS.get(t_sel, {}).get('primary', HIF_RED), ax=ax, alpha=0.3)
             st.pyplot(fig)
         with col_s:
-            st.metric("Aktioner i alt", len(df_plot))
+            st.metric("Aktioner", len(df_plot))
             st.write("**Top modtagere**")
-            modtager_df = df_plot['MODTAGER'].value_counts().reset_index()
-            modtager_df.columns = ['Spiller', 'Antal']
-            st.dataframe(modtager_df, use_container_width=True, hide_index=True)
+            mod_counts = df_plot['MODTAGER'].value_counts().reset_index()
+            mod_counts.columns = ['Spiller', 'Antal']
+            st.dataframe(mod_counts, use_container_width=True, hide_index=True)
 
-    # --- TAB 4: Zoneoversigt ---
+    # --- TAB 4: Zoneoversigt (Afhængig) ---
     with tab4:
         def get_zone(y):
             if pd.isna(y): return "Ukendt"
@@ -198,7 +178,7 @@ def vis_side():
         
         df_team_selected['ZONE'] = df_team_selected['ENDY'].apply(get_zone)
         zone_stats = df_team_selected.groupby(['ZONE', 'TYPE_NAVN']).size().unstack(fill_value=0).reset_index()
-        st.dataframe(zone_stats, use_container_width=True, hide_index=True, column_config={"ZONE": "Zone"})
+        st.dataframe(zone_stats, use_container_width=True, hide_index=True)
 
 if __name__ == "__main__":
     vis_side()
