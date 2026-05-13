@@ -26,7 +26,6 @@ def load_setpiece_data():
             TRIM(e.PLAYER_OPTAUUID) AS PLAYER_UUID,
             e.PLAYER_NAME,
             e.EVENT_X, e.EVENT_Y,
-            -- Kig frem for at finde modtager og afslutning
             LEAD(TRIM(e.PLAYER_OPTAUUID), 1) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_EVENTID) AS P1_UUID,
             LEAD(e.PLAYER_NAME, 1) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_EVENTID) AS P1_NAME,
             LEAD(e.EVENT_CONTESTANT_OPTAUUID, 1) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_EVENTID) AS P1_TEAM,
@@ -68,25 +67,25 @@ def load_setpiece_data():
 
         df['TAGER_NAVN'] = df.apply(lambda x: name_map.get(str(x['PLAYER_UUID']).strip(), x['PLAYER_NAME']), axis=1)
         
-        # Modtager logik
         def find_target(row):
             if row['P1_TEAM'] == row['TEAM_UUID'] and row['P1_UUID'] != row['PLAYER_UUID']:
                 return name_map.get(str(row['P1_UUID']).strip(), row['P1_NAME'])
             return None
         df['MODTAGER'] = df.apply(find_target, axis=1)
 
-        # Afslutning logik (Type 13, 14, 15, 16 er skud i Opta)
         shot_types = [13, 14, 15, 16]
         df['ER_AFSLUTNING'] = df.apply(lambda x: 1 if x['P1_TYPE'] in shot_types or x['P2_TYPE'] in shot_types or x['P3_TYPE'] in shot_types else 0, axis=1)
         
         return df
-    except:
+    except Exception as e:
+        st.error(f"Fejl i data-load: {e}")
         return pd.DataFrame()
 
 def to_metric(val, total_m): 
     return val * (total_m / 100)
 
 def get_summary_stats(df, group_col):
+    if df.empty: return pd.DataFrame()
     stats = df.groupby(group_col).agg(
         Antal=('TYPE_NAVN', 'size'),
         Succesfulde=('MODTAGER', lambda x: x.notna().sum()),
@@ -119,7 +118,6 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
 
     col_p, col_s = st.columns([2, 1])
     with col_p:
-        # Pitch plotting logic
         for c in ['EVENT_X', 'EVENT_Y', 'ENDX', 'ENDY']: 
             df_plot[c] = pd.to_numeric(df_plot[c], errors='coerce')
         df_plot['X_M'] = df_plot['EVENT_X'].apply(lambda x: to_metric(x, 105))
@@ -159,12 +157,19 @@ def vis_side():
     """, unsafe_allow_html=True)
     
     df_all = load_setpiece_data()
+    
     if df_all.empty:
-        st.warning("Ingen data fundet.")
+        st.warning("Ingen data fundet fra Snowflake.")
         return
 
+    # Mapping og debugging
     uuid_to_name = {v['opta_uuid'].upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
     df_all['KLUB_NAVN'] = df_all['TEAM_UUID'].str.upper().map(uuid_to_name)
+    
+    # DEBUG: Hvis du ser denne tekst, virker mappet ikke
+    if df_all['KLUB_NAVN'].isna().all():
+        st.error("Kunne ikke mappe TEAM_UUID til Klubnavne. Tjek TEAMS i team_mapping.py")
+
     teams = sorted([n for n in df_all['KLUB_NAVN'].unique() if pd.notna(n)])
 
     col_title, col_empty, col_select = st.columns([2, 1, 1])
@@ -178,7 +183,6 @@ def vis_side():
     tabs = st.tabs(["Holdoversigt", "Spilleroversigt", "Hjørnespark", "Frispark", "Indkast", "Zoneoversigt"])
     cat_options = ["Hjørnespark", "Frispark", "Indkast"]
 
-    # Tabel konfiguration (Genbrugelig)
     col_cfg = {
         "KLUB_NAVN": "Klub",
         "TAGER_NAVN": "Spiller",
@@ -187,7 +191,7 @@ def vis_side():
         "Top Modtager": "Top Modtager"
     }
 
-    with tabs[0]: # Holdoversigt
+    with tabs[0]: 
         c_label, c_radio = st.columns([0.15, 0.85])
         with c_label: st.write("**Kategori**")
         with c_radio: cat_h = st.radio("cat_h", cat_options, horizontal=True, label_visibility="collapsed", key="radio_hold")
@@ -195,7 +199,7 @@ def vis_side():
         stats_h = get_summary_stats(df_all[df_all['TYPE_NAVN'] == cat_h], 'KLUB_NAVN')
         st.dataframe(stats_h, use_container_width=True, hide_index=True, height=500, column_config=col_cfg)
 
-    with tabs[1]: # Spilleroversigt
+    with tabs[1]: 
         c_label_s, c_radio_s = st.columns([0.15, 0.85])
         with c_label_s: st.write("**Kategori**")
         with c_radio_s: cat_s = st.radio("cat_s", cat_options, horizontal=True, label_visibility="collapsed", key="radio_spiller")
@@ -204,12 +208,15 @@ def vis_side():
         if not df_cat_s.empty:
             stats_s = get_summary_stats(df_cat_s, 'TAGER_NAVN')
             st.dataframe(stats_s, use_container_width=True, hide_index=True, height=500, column_config=col_cfg)
+        else:
+            st.info(f"Ingen data fundet for {cat_s} hos {t_sel}")
 
     with tabs[2]: render_setpiece_analysis(df_team_selected, "Hjørnespark", t_sel)
     with tabs[3]: render_setpiece_analysis(df_team_selected, "Frispark", t_sel)
     with tabs[4]: render_setpiece_analysis(df_team_selected, "Indkast", t_sel)
 
     with tabs[5]:
+        # Zone logik med crash-sikring
         df_team_selected['ZONE'] = df_team_selected['ENDY'].apply(lambda y: "Venstre" if float(y or 0) < 33 else ("Højre" if float(y or 0) > 66 else "Center"))
         zone_stats = df_team_selected.groupby(['ZONE', 'TYPE_NAVN']).size().unstack(fill_value=0).reset_index()
         st.dataframe(zone_stats, use_container_width=True, hide_index=True)
