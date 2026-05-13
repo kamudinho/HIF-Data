@@ -115,7 +115,6 @@ def vis_side():
 
     # --- TAB 2: Spilleroversigt (Afhængig af holdvalg) ---
     with tab2:
-        st.header(f"Spilleroversigt: {t_sel}")
         spiller_stats = df_team_selected.groupby(['TAGER_NAVN', 'TYPE_NAVN']).size().unstack(fill_value=0).reset_index()
         st.dataframe(spiller_stats, use_container_width=True, hide_index=True)
 
@@ -159,7 +158,6 @@ def vis_side():
 
     # --- TAB 4: Zoneoversigt (Afhængig af holdvalg) ---
     with tab4:
-        st.header(f"Zonefordeling: {t_sel}")
         def get_zone(y):
             if pd.isna(y): return "Ukendt"
             y_val = float(y)
