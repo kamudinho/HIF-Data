@@ -17,21 +17,21 @@ def load_setpiece_data():
     conn = _get_snowflake_conn()
     if not conn: return pd.DataFrame()
     
-    # SQL: Henter events, end-coordinates og de næste 2 hændelser for mønstergenkendelse
+    # Vi bruger EVENT_ID i stedet for EVENT_OPTAID, da det er standard i tabellen
     sql = f"""
     WITH BaseEvents AS (
         SELECT 
-            e.EVENT_OPTAUUID, e.MATCH_OPTAUUID, e.EVENT_EVENTID, e.EVENT_OPTAID,
+            e.EVENT_OPTAUUID, e.MATCH_OPTAUUID, e.EVENT_OPTAUUID,
             e.EVENT_CONTESTANT_OPTAUUID AS TEAM_UUID,
             TRIM(e.PLAYER_OPTAUUID) AS PLAYER_UUID,
             e.PLAYER_NAME,
             e.EVENT_X, e.EVENT_Y,
-            LEAD(TRIM(e.PLAYER_OPTAUUID), 1) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_EVENTID) AS P1_UUID,
-            LEAD(e.PLAYER_NAME, 1) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_EVENTID) AS P1_NAME,
-            LEAD(e.EVENT_CONTESTANT_OPTAUUID, 1) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_EVENTID) AS P1_TEAM,
-            LEAD(TRIM(e.PLAYER_OPTAUUID), 2) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_EVENTID) AS P2_UUID,
-            LEAD(e.PLAYER_NAME, 2) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_EVENTID) AS P2_NAME,
-            LEAD(e.EVENT_CONTESTANT_OPTAUUID, 2) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_EVENTID) AS P2_TEAM
+            LEAD(TRIM(e.PLAYER_OPTAUUID), 1) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_OPTAUUID) AS P1_UUID,
+            LEAD(e.PLAYER_NAME, 1) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_OPTAUUID) AS P1_NAME,
+            LEAD(e.EVENT_CONTESTANT_OPTAUUID, 1) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_OPTAUUID) AS P1_TEAM,
+            LEAD(TRIM(e.PLAYER_OPTAUUID), 2) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_OPTAUUID) AS P2_UUID,
+            LEAD(e.PLAYER_NAME, 2) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_OPTAUUID) AS P2_NAME,
+            LEAD(e.EVENT_CONTESTANT_OPTAUUID, 2) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_OPTAUUID) AS P2_TEAM
         FROM {DB}.OPTA_EVENTS e
         WHERE e.TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
     ),
@@ -58,7 +58,6 @@ def load_setpiece_data():
     if df is None or df.empty: return pd.DataFrame()
     df.columns = [c.upper() for c in df.columns]
 
-    # Navne mapping fra CSV
     try:
         df_lookup = pd.read_csv(PLAYER_FILE)
         df_lookup['PLAYER_OPTAUUID'] = df_lookup['PLAYER_OPTAUUID'].astype(str).str.strip()
@@ -74,7 +73,6 @@ def load_setpiece_data():
 
     df['TAGER_NAVN'] = df.apply(lambda x: format_name(x['PLAYER_UUID'], x['PLAYER_NAME']), axis=1)
 
-    # Mønstergenkendelse logik
     def find_target(row):
         if row['P1_TEAM'] == row['TEAM_UUID'] and row['P1_UUID'] != row['PLAYER_UUID']:
             return format_name(row['P1_UUID'], row['P1_NAME'])
@@ -102,11 +100,9 @@ def vis_side():
         st.warning("Ingen data fundet.")
         return
 
-    # Klub mapping
     uuid_to_name = {v['opta_uuid'].upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
     df_all['KLUB_NAVN'] = df_all['TEAM_UUID'].str.upper().map(uuid_to_name)
     
-    # --- TOP FILTRE ---
     teams = sorted([n for n in df_all['KLUB_NAVN'].unique() if pd.notna(n)])
     
     c1, c2, c3, c4 = st.columns(4)
@@ -123,20 +119,17 @@ def vis_side():
     with c4:
         vis_mode = st.selectbox("Visning", ["Zoner + Pile", "Kun Zoner", "Kun Pile"])
 
-    # --- DATA FILTRERING ---
     mask = (df_team['TYPE_NAVN'] == sp_type)
     if p_sel != "Alle spillere":
         mask &= (df_team['TAGER_NAVN'] == p_sel)
     
     df_plot = df_team[mask].copy()
 
-    # Skalering
     df_plot['X_M'] = df_plot['EVENT_X'].apply(lambda x: to_metric(x, 105))
     df_plot['Y_M'] = df_plot['EVENT_Y'].apply(lambda y: to_metric(y, 68))
     df_plot['ENDX_M'] = df_plot['ENDX'].apply(lambda x: to_metric(x, 105))
     df_plot['ENDY_M'] = df_plot['ENDY'].apply(lambda y: to_metric(y, 68))
 
-    # --- VISUALISERING ---
     t_color = TEAM_COLORS.get(t_sel, {}).get('primary', HIF_RED)
     
     col_p, col_s = st.columns([2, 1])
@@ -149,7 +142,6 @@ def vis_side():
         if not df_plot.dropna(subset=['ENDX_M', 'ENDY_M']).empty:
             if "Zoner" in vis_mode:
                 pitch.hexbin(df_plot.ENDX_M, df_plot.ENDY_M, ax=ax, gridsize=(12, 12), cmap='Reds', alpha=0.6, edgecolors='#f0f0f0')
-
             if "Pile" in vis_mode:
                 alpha_val = 0.4 if len(df_plot) < 100 else 0.15
                 pitch.arrows(df_plot.X_M, df_plot.Y_M, df_plot.ENDX_M, df_plot.ENDY_M, 
@@ -160,7 +152,6 @@ def vis_side():
         st.subheader("Statistik")
         st.metric("Antal aktioner", len(df_plot))
         
-        # Mønster-statistik
         def get_top_receiver(group):
             m_counts = group['MODTAGER'].value_counts()
             if not m_counts.empty:
