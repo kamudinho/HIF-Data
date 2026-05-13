@@ -188,7 +188,7 @@ def vis_side():
             stats_h,
             use_container_width=True,
             hide_index=True,
-            height=600,
+            height=500,
             column_config={
                 "KLUB_NAVN": "Klub",
                 "Succes %": st.column_config.ProgressColumn("Succes %", format="%.0f%%", min_value=0, max_value=1)
@@ -207,7 +207,7 @@ def vis_side():
                 stats_s,
                 use_container_width=True,
                 hide_index=True,
-                height=600,
+                height=500,
                 column_config={
                     "TAGER_NAVN": "Spiller",
                     "Succes %": st.column_config.ProgressColumn("Succes %", format="%.0f%%", min_value=0, max_value=1)
