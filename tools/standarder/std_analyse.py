@@ -81,11 +81,37 @@ def to_metric(val, total_m): return val * (total_m / 100)
 
 def vis_side():
     st.set_page_config(layout="wide", page_title="Standardsituationer")
+    
+    # --- AGGRESSIV CSS TIL AT MINDSKE AFSTAND ---
     st.markdown("""
         <style>
         header {visibility: hidden;}
-        .stSelectbox label {display:none;} /* Skjuler label på selectbox */
-        div[data-testid="stExpander"] {border: none;}
+        
+        /* Fjern padding i toppen af hoved-containeren */
+        .block-container {
+            padding-top: 1rem !important;
+            padding-bottom: 0rem !important;
+        }
+
+        /* Skjul label på selectbox helt */
+        div[data-testid="stSelectbox"] label {
+            display: none !important;
+        }
+
+        /* Reducer margin mellem elementer i top-sektionen */
+        div.stVerticalBlock {
+            gap: 0rem !important;
+        }
+
+        /* Specifik kontrol over tabs-margin */
+        div[data-testid="stTabs"] {
+            margin-top: -1.5rem !important;
+        }
+
+        /* Gør overskriften/caption mindre dominerende */
+        .stCaption {
+            margin-bottom: -1rem !important;
+        }
         </style>
     """, unsafe_allow_html=True)
     
@@ -100,12 +126,13 @@ def vis_side():
     teams = sorted([n for n in df_all['KLUB_NAVN'].unique() if pd.notna(n)])
 
     # --- TOPBAR ---
-    col_title, col_select = st.columns([3, 1])
-    with col_title:
-        st.subheader("Standardsituationer")
-    with col_select:
-        # Dropdown uden label (styret via CSS i toppen)
-        t_sel = st.selectbox("hold_valg", teams, index=teams.index("Hvidovre") if "Hvidovre" in teams else 0)
+    # Vi bruger en container til at holde tingene samlet
+    with st.container():
+        col_title, col_select = st.columns([3, 1])
+        with col_title:
+            st.caption("ANALYSE: STANDARDSITUATIONER")
+        with col_select:
+            t_sel = st.selectbox("hold_valg", teams, index=teams.index("Hvidovre") if "Hvidovre" in teams else 0)
 
     df_team_selected = df_all[df_all['KLUB_NAVN'] == t_sel].copy()
 
@@ -115,22 +142,12 @@ def vis_side():
     # --- TAB 1: Holdoversigt ---
     with tab1:
         hold_stats = df_all.groupby(['KLUB_NAVN', 'TYPE_NAVN']).size().unstack(fill_value=0).reset_index()
-        st.dataframe(
-            hold_stats, 
-            use_container_width=True, 
-            hide_index=True,
-            column_config={"KLUB_NAVN": "Klub"}
-        )
+        st.dataframe(hold_stats, use_container_width=True, hide_index=True, column_config={"KLUB_NAVN": "Klub"})
 
     # --- TAB 2: Spilleroversigt ---
     with tab2:
         spiller_stats = df_team_selected.groupby(['TAGER_NAVN', 'TYPE_NAVN']).size().unstack(fill_value=0).reset_index()
-        st.dataframe(
-            spiller_stats, 
-            use_container_width=True, 
-            hide_index=True,
-            column_config={"TAGER_NAVN": "Spiller"}
-        )
+        st.dataframe(spiller_stats, use_container_width=True, hide_index=True, column_config={"TAGER_NAVN": "Spiller"})
 
     # --- TAB 3: Analyse ---
     with tab3:
@@ -181,12 +198,7 @@ def vis_side():
         
         df_team_selected['ZONE'] = df_team_selected['ENDY'].apply(get_zone)
         zone_stats = df_team_selected.groupby(['ZONE', 'TYPE_NAVN']).size().unstack(fill_value=0).reset_index()
-        st.dataframe(
-            zone_stats, 
-            use_container_width=True, 
-            hide_index=True,
-            column_config={"ZONE": "Zone"}
-        )
+        st.dataframe(zone_stats, use_container_width=True, hide_index=True, column_config={"ZONE": "Zone"})
 
 if __name__ == "__main__":
     vis_side()
