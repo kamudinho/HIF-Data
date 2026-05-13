@@ -134,7 +134,7 @@ with st.sidebar:
         sel = option_menu(None, options=filtrer_menu(["Spillerdata", "Spiller-score"]))
     elif hoved_omraade == "TESTSIDE":
         # TILFØJET: "Spiller-score" er nu placeret heri
-        sel = option_menu(None, options=filtrer_menu(["Grafer", "Standardsituationer"]))
+        sel = option_menu(None, options=filtrer_menu(["1. Div-tilpasning", "Grafer", "Standardsituationer"]))
     elif hoved_omraade == "ADMIN":
         # REMOVED: "Spiller-score" er fjernet herfra
         sel = option_menu(None, options=filtrer_menu(["System Log", "Profil", "Datakatalog", "Konklusion", "Fysisk profil", "Hold: Fysisk profil", "Intern analyse", "Top 5: Spillere", "Ordbog"]))
@@ -212,7 +212,10 @@ try:
 
     elif hoved_omraade == "TESTSIDE":
         # TILFØJET: Render logikken for Spiller-score under Tilpasning
-        if sel == "Grafer":
+        if sel == "1. Div-tilpasning":
+            import tools.tilpasning.1div_tilpasning as 1div
+            1div.vis_side()
+        elif sel == "Grafer":
             import tools.ligaen.dataviz as dviz
             dviz.vis_side()
         elif sel == "Standardsituationer":
