@@ -85,30 +85,31 @@ def to_metric(val, total_m):
 def get_summary_stats(df, group_col):
     if df.empty: return pd.DataFrame()
     
-    # Basis stats
     stats = df.groupby(group_col).agg(
         Antal=('TYPE_NAVN', 'size'),
         Succesfulde=('MODTAGER', lambda x: x.notna().sum()),
         Afslutninger=('ER_AFSLUTNING', 'sum')
     ).reset_index()
     
-    stats['Succes %'] = (stats['Succesfulde'] / stats['Antal']).fillna(0)
-    stats['Afslutning %'] = (stats['Afslutninger'] / stats['Antal']).fillna(0)
+    # Tving float for at sikre progress bar viser korrekte %
+    stats['Succes %'] = (stats['Succesfulde'].astype(float) / stats['Antal'].astype(float)).fillna(0.0)
+    stats['Afslutning %'] = (stats['Afslutninger'].astype(float) / stats['Antal'].astype(float)).fillna(0.0)
     
-    # Top modtager (Generelt)
     def get_top_mod(sub_df):
         m = sub_df['MODTAGER'].value_counts()
         return f"{m.index[0]} ({m.iloc[0]})" if not m.empty else "-"
     
-    # Top modtager (Kun ved afslutning)
     def get_top_mod_shot(sub_df):
         m = sub_df[sub_df['ER_AFSLUTNING'] == 1]['MODTAGER'].value_counts()
         return f"{m.index[0]} ({m.iloc[0]})" if not m.empty else "-"
 
-    stats['Top Modtager'] = stats[group_col].map(df.groupby(group_col).apply(get_top_mod).to_dict())
-    stats['Top Modtager (Afsl.)'] = stats[group_col].map(df.groupby(group_col).apply(get_top_mod_shot).to_dict())
+    # Map modtagere
+    mod_map = df.groupby(group_col).apply(get_top_mod).to_dict()
+    mod_shot_map = df.groupby(group_col).apply(get_top_mod_shot).to_dict()
     
-    # Sorter kolonnerne efter ønsket rækkefølge
+    stats['Top Modtager'] = stats[group_col].map(mod_map)
+    stats['Top Modtager (Afsl.)'] = stats[group_col].map(mod_shot_map)
+    
     final_cols = [group_col, 'Antal', 'Succesfulde', 'Succes %', 'Top Modtager', 'Afslutninger', 'Afslutning %', 'Top Modtager (Afsl.)']
     return stats[final_cols]
 
@@ -184,29 +185,13 @@ def vis_side():
     tabs = st.tabs(["Holdoversigt", "Spilleroversigt", "Hjørnespark", "Frispark", "Indkast", "Zoneoversigt"])
     cat_options = ["Hjørnespark", "Frispark", "Indkast"]
 
-    # Opdateret kolonne-konfiguration med korrekt procent-visning
     col_cfg = {
         "KLUB_NAVN": "Klub",
         "TAGER_NAVN": "Spiller",
-        "Antal": st.column_config.NumberColumn("Antal", help="Total antal aktioner"),
-        "Succesfulde": st.column_config.NumberColumn("Succes", help="Aktioner med egen modtager"),
-        "Succes %": st.column_config.ProgressColumn(
-            "Succes %", 
-            help="Hvor stor en andel rammer en medspiller",
-            format="%.0f%%", # Viser 25% i stedet for 0%
-            min_value=0, 
-            max_value=1
-        ),
+        "Succes %": st.column_config.ProgressColumn("Succes %", format="%.0f%%", min_value=0, max_value=1),
         "Top Modtager": "Modtager (Succes)",
-        "Afslutninger": st.column_config.NumberColumn("Afslutn.", help="Aktioner der fører til skud"),
-        "Afslutning %": st.column_config.ProgressColumn(
-            "Afslutning %", 
-            help="Hvor stor en andel fører til skud",
-            format="%.0f%%", 
-            min_value=0, 
-            max_value=1
-        ),
-        "Top Modtager (Afsl.)": "Top Modtager (Afsl.)"
+        "Afslutning %": st.column_config.ProgressColumn("Afslutning %", format="%.0f%%", min_value=0, max_value=1),
+        "Top Modtager (Afsl.)": "Modtager (Afsl.)"
     }
 
     with tabs[0]: 
