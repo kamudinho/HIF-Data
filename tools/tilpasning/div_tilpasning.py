@@ -40,7 +40,7 @@ def save_to_github(df):
             _, sha = get_github_file(OVERWRITE_DB_PATH)
             csv_content = df.to_csv(index=False, encoding='utf-8-sig')
             payload = {
-                "message": "Bulk update 1div data", 
+                "message": "Bulk update 1div data (inkl. dublet-tjek)", 
                 "content": base64.b64encode(csv_content.encode('utf-8')).decode('utf-8'), 
                 "sha": sha
             }
@@ -69,14 +69,30 @@ def vis_side():
 
     df = st.session_state['full_df_1div'].copy()
 
-    # --- STATISTIK ---
+    # --- STATISTIK & DUBLET-TJEK ---
+    # 1. Mangler Opta
     mangler_opta = df[(df['PLAYER_OPTAUUID'].isna()) | (df['PLAYER_OPTAUUID'].astype(str).str.lower() == "none") | (df['PLAYER_OPTAUUID'].astype(str).str.strip() == "")].shape[0]
+    
+    # 2. Uden klub
     uden_klub = df[(df['KLUB'].isna()) | (df['KLUB'].astype(str).str.lower() == "none") | (df['KLUB'].astype(str).str.strip() == "")].shape[0]
+    
+    # 3. Beregn Dubletter (Navn, WYID, OPTA-UUID)
+    # Vi tjekker kun dubletter for værdier der IKKE er tomme eller 0
+    dub_navn = df[df['NAVN'].duplicated() & (df['NAVN'] != "")].shape[0]
+    dub_wyid = df[df['PLAYER_WYID'].duplicated() & (df['PLAYER_WYID'] != 0)].shape[0]
+    
+    # Opta dubletter - tjekker kun hvis der faktisk står en UUID
+    opta_clean = df[~df['PLAYER_OPTAUUID'].isin(["", "None", "none", None])]
+    dub_opta = opta_clean[opta_clean['PLAYER_OPTAUUID'].duplicated()].shape[0]
+    
+    total_dubletter = dub_navn + dub_wyid + dub_opta
 
-    c1, c2, c3 = st.columns(3)
+    # Vis KPI'er
+    c1, c2, c3, c4 = st.columns(4)
     c1.metric("Mangler Opta-ID", mangler_opta)
     c2.metric("Uden klub", uden_klub)
-    c3.metric("Total spillere", len(df))
+    c3.metric("Dubletter totalt", total_dubletter, delta="Tjek Navn/ID", delta_color="inverse" if total_dubletter > 0 else "normal")
+    c4.metric("Total spillere", len(df))
 
     st.divider()
 
@@ -89,7 +105,6 @@ def vis_side():
         visnings_df = df.copy().reset_index(drop=True)
 
     # --- EDITOR ---
-    # Bemærk: Vi bruger IKKE on_change her for at undgå rerun ved hver celle
     edited_data = st.data_editor(
         visnings_df,
         height=600,
@@ -105,30 +120,22 @@ def vis_side():
     )
 
     # --- GEM-KNAP ---
-    # Vi tjekker om der er lavet ændringer i editoren
     if st.session_state.spiller_editor["edited_rows"]:
-        st.warning("Du har ugemte ændringer i tabellen!")
+        st.warning(f"Du har {len(st.session_state.spiller_editor['edited_rows'])} ugemte ændringer!")
         
         if st.button("💾 Gem alle ændringer til GitHub", type="primary", use_container_width=True):
-            # 1. Hent ændringerne fra editoren
             changes = st.session_state.spiller_editor["edited_rows"]
-            
-            # 2. Opdater master-datasættet i session_state
             for idx_str, updated_cols in changes.items():
                 row_idx = int(idx_str)
                 wyid = visnings_df.iloc[row_idx]['PLAYER_WYID']
-                
-                # Find rækken i det fulde datasæt og opdater
                 full_df_idx = df[df['PLAYER_WYID'] == wyid].index
                 if not full_df_idx.empty:
                     for col, val in updated_cols.items():
                         df.at[full_df_idx[0], col] = val
             
-            # 3. Gem til GitHub
             if save_to_github(df):
                 st.session_state['full_df_1div'] = df
                 st.cache_data.clear()
-                # Vi venter et kort øjeblik og genindlæser så tallene passer
                 st.rerun()
 
 if __name__ == "__main__":
