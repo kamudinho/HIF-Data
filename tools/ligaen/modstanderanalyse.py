@@ -275,27 +275,52 @@ def vis_side(dp=None):
         with m_col2:
             kat_map = {"Pasninger": 'P', "Afslutninger": 'A', "Erobringer": 'E', "Dueller": 'D', "Frispark": 'F'}
             col_map = {'P': '#084594', 'A': '#cb181d', 'E': '#238b45', 'D': '#ec7014', 'F': '#6a51a3'}
+            
+            # --- Graf 1 ---
             h_c1, d_c1 = st.columns([2, 1])
             val1 = d_c1.selectbox("Vælg", list(kat_map.keys()), index=0, key="val_top", label_visibility="collapsed")
             c_key1 = kat_map[val1]
             avg1 = df_plot[f'{c_key1}_tot'].mean()
             h_c1.markdown(f"**{val1} (Gns: {round(avg1, 1)})**")
-            fig1 = px.bar(df_plot, x='X_AXIS_LABEL', y=f"{c_key1}_tot", text=f"{c_key1}_tot")
+            
+            fig1 = px.bar(df_plot, x='X_AXIS_LABEL', y=f"{c_key1}_tot", text=f"{c_key1}_tot",
+                         # Vi sender ekstra data med ind i figuren til brug i hover
+                         customdata=np.stack((df_plot['OPP_NAME'], df_plot['LABEL']), axis=-1))
+            
             fig1.add_hline(y=avg1, line_dash="dot", line_color="rgba(0,0,0,0.2)", line_width=1)
-            fig1.update_traces(marker_color=col_map[c_key1], textposition='outside')
-            fig1.update_layout(height=300, margin=dict(t=25, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None)
+            
+            # Hovertemplate: <br> laver linjeskift, <b> gør fed
+            fig1.update_traces(
+                marker_color=col_map[c_key1], 
+                textposition='outside',
+                hovertemplate="vs. %{customdata[0]}<br>%{customdata[1]}<br><br><b>%{y}</b><extra></extra>"
+            )
+            
+            fig1.update_layout(height=300, margin=dict(t=25, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', 
+                              xaxis_title=None, yaxis_title=None, hoverlabel=dict(bgcolor="white", font_size=12))
             st.plotly_chart(fig1, use_container_width=True, config={'displayModeBar': False})
 
+            # --- Graf 2 ---
             options_2 = [k for k in kat_map.keys() if k != val1]
             h_c2, d_c2 = st.columns([2, 1])
             val2 = d_c2.selectbox("Vælg", options_2, index=0, key="val_bot", label_visibility="collapsed")
             c_key2 = kat_map[val2]
             avg2 = df_plot[f'{c_key2}_tot'].mean()
             h_c2.markdown(f"**{val2} (Gns: {round(avg2, 1)})**")
-            fig2 = px.bar(df_plot, x='X_AXIS_LABEL', y=f"{c_key2}_tot", text=f"{c_key2}_tot")
+            
+            fig2 = px.bar(df_plot, x='X_AXIS_LABEL', y=f"{c_key2}_tot", text=f"{c_key2}_tot",
+                         customdata=np.stack((df_plot['OPP_NAME'], df_plot['LABEL']), axis=-1))
+            
             fig2.add_hline(y=avg2, line_dash="dot", line_color="rgba(0,0,0,0.2)", line_width=1)
-            fig2.update_traces(marker_color=col_map[c_key2], textposition='outside')
-            fig2.update_layout(height=300, margin=dict(t=25, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None)
+            
+            fig2.update_traces(
+                marker_color=col_map[c_key2], 
+                textposition='outside',
+                hovertemplate="vs. %{customdata[0]}<br>%{customdata[1]}<br><br><b>%{y}</b><extra></extra>"
+            )
+            
+            fig2.update_layout(height=300, margin=dict(t=25, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', 
+                              xaxis_title=None, yaxis_title=None, hoverlabel=dict(bgcolor="white", font_size=12))
             st.plotly_chart(fig2, use_container_width=True, config={'displayModeBar': False})
             
     with t2:
