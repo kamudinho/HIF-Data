@@ -283,17 +283,15 @@ def vis_side(dp=None):
             avg1 = df_plot[f'{c_key1}_tot'].mean()
             h_c1.markdown(f"**{val1} (Gns: {round(avg1, 1)})**")
             
-            # Fjern customdata herfra for at undgå fejlen
             fig1 = px.bar(df_plot, x='X_AXIS_LABEL', y=f"{c_key1}_tot", text=f"{c_key1}_tot")
-            
             fig1.add_hline(y=avg1, line_dash="dot", line_color="rgba(0,0,0,0.2)", line_width=1)
             
-            # Tilføj customdata og hovertemplate her i stedet
+            # Vi tilføjer 'val1' (kategorinavnet) til customdata
             fig1.update_traces(
                 marker_color=col_map[c_key1], 
                 textposition='outside',
-                customdata=np.stack((df_plot['OPP_NAME'], df_plot['LABEL']), axis=-1),
-                hovertemplate="vs. %{customdata[0]}<br>%{customdata[1]}<br><br><b>%{y}</b><extra></extra>"
+                customdata=np.stack((df_plot['OPP_NAME'], df_plot['LABEL'], [val1.lower()] * len(df_plot)), axis=-1),
+                hovertemplate="vs. %{customdata[0]}<br>%{customdata[1]}<br><br><b>%{y} %{customdata[2]}</b><extra></extra>"
             )
             
             fig1.update_layout(height=300, margin=dict(t=25, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', 
@@ -309,14 +307,14 @@ def vis_side(dp=None):
             h_c2.markdown(f"**{val2} (Gns: {round(avg2, 1)})**")
             
             fig2 = px.bar(df_plot, x='X_AXIS_LABEL', y=f"{c_key2}_tot", text=f"{c_key2}_tot")
-            
             fig2.add_hline(y=avg2, line_dash="dot", line_color="rgba(0,0,0,0.2)", line_width=1)
             
+            # Vi tilføjer 'val2' (kategorinavnet) til customdata
             fig2.update_traces(
                 marker_color=col_map[c_key2], 
                 textposition='outside',
-                customdata=np.stack((df_plot['OPP_NAME'], df_plot['LABEL']), axis=-1),
-                hovertemplate="vs. %{customdata[0]}<br>%{customdata[1]}<br><br><b>%{y}</b><extra></extra>"
+                customdata=np.stack((df_plot['OPP_NAME'], df_plot['LABEL'], [val2.lower()] * len(df_plot)), axis=-1),
+                hovertemplate="vs. %{customdata[0]}<br>%{customdata[1]}<br><br><b>%{y} %{customdata[2]}</b><extra></extra>"
             )
             
             fig2.update_layout(height=300, margin=dict(t=25, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', 
