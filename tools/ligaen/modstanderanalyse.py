@@ -276,6 +276,14 @@ def vis_side(dp=None):
             kat_map = {"Pasninger": 'P', "Afslutninger": 'A', "Erobringer": 'E', "Dueller": 'D', "Frispark": 'F'}
             col_map = {'P': '#084594', 'A': '#cb181d', 'E': '#238b45', 'D': '#ec7014', 'F': '#6a51a3'}
             
+            # --- 1. Navne-mapping til forkortelser ---
+            # Vi opdaterer OPP_NAME så B 9 bliver B93 og HB bliver HBK
+            name_fix = {"B 9": "B93", "HB": "HBK"}
+            df_plot['OPP_NAME_CLEAN'] = df_plot['OPP_NAME'].replace(name_fix)
+            
+            # Opdater X-aksen så den bruger de nye navne
+            df_plot['X_AXIS_LABEL'] = df_plot['LABEL'] + "<br>" + df_plot['OPP_NAME_CLEAN'].str.upper()
+
             # --- Graf 1 ---
             h_c1, d_c1 = st.columns([2, 1])
             val1 = d_c1.selectbox("Vælg", list(kat_map.keys()), index=0, key="val_top", label_visibility="collapsed")
@@ -286,11 +294,11 @@ def vis_side(dp=None):
             fig1 = px.bar(df_plot, x='X_AXIS_LABEL', y=f"{c_key1}_tot", text=f"{c_key1}_tot")
             fig1.add_hline(y=avg1, line_dash="dot", line_color="rgba(0,0,0,0.2)", line_width=1)
             
-            # Vi tilføjer 'val1' (kategorinavnet) til customdata
             fig1.update_traces(
                 marker_color=col_map[c_key1], 
                 textposition='outside',
-                customdata=np.stack((df_plot['OPP_NAME'], df_plot['LABEL'], [val1.lower()] * len(df_plot)), axis=-1),
+                # Vi bruger OPP_NAME_CLEAN her for at få de rigtige navne i hover
+                customdata=np.stack((df_plot['OPP_NAME_CLEAN'], df_plot['LABEL'], [val1.lower()] * len(df_plot)), axis=-1),
                 hovertemplate="vs. %{customdata[0]}<br>%{customdata[1]}<br><br><b>%{y} %{customdata[2]}</b><extra></extra>"
             )
             
@@ -309,11 +317,10 @@ def vis_side(dp=None):
             fig2 = px.bar(df_plot, x='X_AXIS_LABEL', y=f"{c_key2}_tot", text=f"{c_key2}_tot")
             fig2.add_hline(y=avg2, line_dash="dot", line_color="rgba(0,0,0,0.2)", line_width=1)
             
-            # Vi tilføjer 'val2' (kategorinavnet) til customdata
             fig2.update_traces(
                 marker_color=col_map[c_key2], 
                 textposition='outside',
-                customdata=np.stack((df_plot['OPP_NAME'], df_plot['LABEL'], [val2.lower()] * len(df_plot)), axis=-1),
+                customdata=np.stack((df_plot['OPP_NAME_CLEAN'], df_plot['LABEL'], [val2.lower()] * len(df_plot)), axis=-1),
                 hovertemplate="vs. %{customdata[0]}<br>%{customdata[1]}<br><br><b>%{y} %{customdata[2]}</b><extra></extra>"
             )
             
