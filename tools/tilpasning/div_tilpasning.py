@@ -10,7 +10,6 @@ REPO = "Kamudinho/HIF-data"
 OVERWRITE_DB_PATH = "data/players/1div_overskrivning.csv"
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 
-# Vi har brug for begge veje for at kunne læse og gemme korrekt
 POS_TRANSLATIONS = {
     "Center Back": "Midterforsvarer", "Left Back": "Venstre Back", "Right Back": "Højre Back",
     "Left Wing Back": "Venstre Wingback", "Right Wing Back": "Højre Wingback",
@@ -21,12 +20,8 @@ POS_TRANSLATIONS = {
     "Midfielder": "Midtbanespiller"
 }
 
-# Omvendt map til når vi gemmer (hvis du vil gemme på engelsk igen - ellers slet denne logik)
-INV_POS_TRANSLATIONS = {v: k for k, v in POS_TRANSLATIONS.items()}
-
 def repair_encoding(text):
-    if not isinstance(text, str):
-        return text
+    if not isinstance(text, str): return text
     try:
         return text.encode('latin1').decode('utf-8')
     except:
@@ -52,7 +47,7 @@ def save_to_github(df):
             _, sha = get_github_file(OVERWRITE_DB_PATH)
             csv_content = df.to_csv(index=False, encoding='utf-8-sig')
             payload = {
-                "message": "Bulk update 1div data (Position & Encoding Fix)",
+                "message": "Update 1div: KPI, Dubletter & Position fix",
                 "content": base64.b64encode(csv_content.encode('utf-8-sig')).decode('utf-8'),
                 "sha": sha
             }
@@ -76,14 +71,12 @@ def vis_side():
             df = pd.read_csv(StringIO(content))
             df.columns = df.columns.str.upper().str.strip()
             
-            # 1. FIX ENCODING
+            # Rens Navne
             if 'NAVN' in df.columns:
                 df['NAVN'] = df['NAVN'].apply(repair_encoding)
             
-            # 2. FIX POSITIONER (Oversæt fra engelsk til dansk så de matcher Selectbox)
+            # FIX: Oversæt positioner med det samme (så de ikke er blanke i editor)
             if 'POSITION' in df.columns:
-                # Vi fjerner whitespace og mapper til danske navne. 
-                # Hvis navnet ikke findes i POS_TRANSLATIONS, beholder vi det gamle.
                 df['POSITION'] = df['POSITION'].str.strip().map(POS_TRANSLATIONS).fillna(df['POSITION'])
             
             if 'PLAYER_WYID' in df.columns:
@@ -91,27 +84,61 @@ def vis_side():
             
             st.session_state['full_df_1div'] = df
         else: 
+            st.error("Kunne ikke hente data.")
             return
 
     df = st.session_state['full_df_1div'].copy()
 
-    # --- KPI & FEJL ---
+    # --- 3. DUBLET- OG FEJL-IDENTIFIKATION ---
     mangler_opta = df[(df['PLAYER_OPTAUUID'].isna()) | (df['PLAYER_OPTAUUID'].astype(str).str.lower() == "none")].shape[0]
-    
-    # --- SØGNING ---
-    soegning = st.text_input("Søg spiller/klub:").strip().lower()
+    error_list = []
+    dublet_mask = pd.Series([False] * len(df))
+
+    # Tjekker for dubletter i nøgle-kolonner
+    for col in ['NAVN', 'PLAYER_WYID', 'PLAYER_OPTAUUID']:
+        clean_series = df[col].replace(["None", "none", "", 0, "0"], pd.NA)
+        dupes = clean_series[clean_series.duplicated(keep=False) & clean_series.notna()].unique()
+        for val in dupes:
+            names = df[df[col] == val]['NAVN'].tolist()
+            error_list.append(f"**{col} Dublet ({val}):** {', '.join(names)}")
+            # Markér rækkerne til filteret
+            idx_to_mark = df[df[col] == val].index
+            for i in idx_to_mark: dublet_mask[i] = True
+
+    # --- 4. KPI DASHBOARD ---
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Mangler Opta-ID", mangler_opta)
+    c2.metric("Dublet-konflikter", len(error_list))
+    c3.metric("Total spillere", len(df))
+
+    if error_list:
+        with st.expander("⚠️ Dublet-fejl fundet (Klik for detaljer)", expanded=True):
+            for err in error_list: st.write(f"- {err}")
+
+    st.divider()
+
+    # --- 5. SØGNING & FILTER ---
+    col_s1, col_s2 = st.columns([2, 1])
+    with col_s1:
+        soegning = st.text_input("Søg spiller, klub eller ID:").strip().lower()
+    with col_s2:
+        st.write(" ") # Spacer
+        vis_kun_dubletter = st.toggle("Vis kun dubletter / fejl")
+
     visnings_df = df.copy()
+    if vis_kun_dubletter: 
+        visnings_df = visnings_df[dublet_mask]
+        
     if len(soegning) >= 2:
         mask = visnings_df.apply(lambda x: x.astype(str).str.lower().str.contains(soegning)).any(axis=1)
         visnings_df = visnings_df[mask]
 
-    # --- EDITOR ---
-    # Vi henter de mulige danske værdier til dropdown
+    # --- 6. EDITOR ---
     pos_options = sorted(list(POS_TRANSLATIONS.values()))
 
     edited_df = st.data_editor(
-        visnings_df.reset_index(drop=True),
-        height=500,
+        visnings_df,
+        height=550,
         use_container_width=True,
         hide_index=True,
         disabled=["PLAYER_WYID"], 
@@ -119,24 +146,28 @@ def vis_side():
         column_config={
             "PLAYER_WYID": st.column_config.NumberColumn("WYID", format="%d"),
             "POSITION": st.column_config.SelectboxColumn("Position", options=pos_options),
+            "PLAYER_OPTAUUID": st.column_config.TextColumn("Opta UUID"),
+            "TEAM_WYID": st.column_config.NumberColumn("Klub WYID", format="%d"),
         }
     )
 
-    # --- GEM ---
+    # --- 7. GEM LOGIK ---
     if st.session_state.spiller_editor["edited_rows"]:
-        if st.button("💾 Gem ændringer", type="primary", use_container_width=True):
+        if st.button("💾 Gem alle ændringer til GitHub", type="primary", use_container_width=True):
             changes = st.session_state.spiller_editor["edited_rows"]
             
-            # Vi opdaterer session state med ændringerne
+            # Opdater de rigtige rækker i det store dataframe
             for idx_str, updated_cols in changes.items():
-                # Find rækken via WYID (sikreste metode)
-                idx = int(idx_str)
-                wyid = visnings_df.iloc[idx]['PLAYER_WYID']
-                df.loc[df['PLAYER_WYID'] == wyid, list(updated_cols.keys())] = list(updated_cols.values())
+                # Vi bruger WYID til at finde den præcise række i session_state
+                rel_idx = int(idx_str)
+                wyid = visnings_df.iloc[rel_idx]['PLAYER_WYID']
+                
+                for col, val in updated_cols.items():
+                    df.loc[df['PLAYER_WYID'] == wyid, col] = val
             
             if save_to_github(df):
                 st.session_state['full_df_1div'] = df
-                st.success("Gemt!")
+                st.success("Data er gemt succesfuldt!")
                 time.sleep(1)
                 st.rerun()
 
