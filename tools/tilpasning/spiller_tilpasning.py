@@ -7,7 +7,7 @@ from io import StringIO
 
 # --- 1. CONFIGURATION & GITHUB CONFIG (Genbrugt fra din anden side) ---
 REPO = "Kamudinho/HIF-data"
-OVERWRITE_DB_PATH = "data/players/allespillere_overskrivning.csv"
+OVERWRITE_DB_PATH = "data/players/1div_overskrivning.csv"
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 
 # De præcise, godkendte oversættelser (sikrer at rå engelske værdier bliver til pænt dansk)
