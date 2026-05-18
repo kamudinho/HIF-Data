@@ -10,6 +10,7 @@ REPO = "Kamudinho/HIF-data"
 OVERWRITE_DB_PATH = "data/players/1div_overskrivning.csv"
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 
+# Vi har brug for begge veje for at kunne læse og gemme korrekt
 POS_TRANSLATIONS = {
     "Center Back": "Midterforsvarer", "Left Back": "Venstre Back", "Right Back": "Højre Back",
     "Left Wing Back": "Venstre Wingback", "Right Wing Back": "Højre Wingback",
@@ -20,15 +21,15 @@ POS_TRANSLATIONS = {
     "Midfielder": "Midtbanespiller"
 }
 
-# --- HJÆLPEFUNKTION TIL AT REDDE DANSKE BOGSTAVER ---
+# Omvendt map til når vi gemmer (hvis du vil gemme på engelsk igen - ellers slet denne logik)
+INV_POS_TRANSLATIONS = {v: k for k, v in POS_TRANSLATIONS.items()}
+
 def repair_encoding(text):
     if not isinstance(text, str):
         return text
     try:
-        # Prøver at fikse de mest gængse fejl (f.eks. N√∏rager -> Nørager)
         return text.encode('latin1').decode('utf-8')
     except:
-        # Hvis den fejler, har den det nok fint i forvejen
         return text
 
 # --- 2. GITHUB SERVICE ---
@@ -39,7 +40,6 @@ def get_github_file(path):
         r = requests.get(url, headers=headers)
         if r.status_code == 200:
             data = r.json()
-            # Vi bruger utf-8-sig for at håndtere BOM (Byte Order Mark) fra Excel/Windows
             content = base64.b64decode(data['content']).decode('utf-8-sig', errors='replace')
             return content, data['sha']
     except Exception as e:
@@ -50,10 +50,9 @@ def save_to_github(df):
     with st.spinner("Uploader til GitHub..."):
         try:
             _, sha = get_github_file(OVERWRITE_DB_PATH)
-            # Gemmer altid med utf-8-sig, så Excel kan læse det korrekt bagefter
             csv_content = df.to_csv(index=False, encoding='utf-8-sig')
             payload = {
-                "message": "Bulk update 1div data (Encoding Fix)",
+                "message": "Bulk update 1div data (Position & Encoding Fix)",
                 "content": base64.b64encode(csv_content.encode('utf-8-sig')).decode('utf-8'),
                 "sha": sha
             }
@@ -62,9 +61,7 @@ def save_to_github(df):
                 headers={"Authorization": f"token {GITHUB_TOKEN}"}, 
                 json=payload
             )
-            if r.status_code in [200, 201]:
-                st.success("Gemt med korrekt format!")
-                return True
+            return r.status_code in [200, 201]
         except Exception as e:
             st.error(f"Fejl ved upload: {e}")
     return False
@@ -76,13 +73,18 @@ def vis_side():
     if 'full_df_1div' not in st.session_state:
         content, _ = get_github_file(OVERWRITE_DB_PATH)
         if content:
-            # Læs filen og rens med det samme
             df = pd.read_csv(StringIO(content))
             df.columns = df.columns.str.upper().str.strip()
             
-            # Kør navne-vaskemaskinen på kolonnen NAVN
+            # 1. FIX ENCODING
             if 'NAVN' in df.columns:
                 df['NAVN'] = df['NAVN'].apply(repair_encoding)
+            
+            # 2. FIX POSITIONER (Oversæt fra engelsk til dansk så de matcher Selectbox)
+            if 'POSITION' in df.columns:
+                # Vi fjerner whitespace og mapper til danske navne. 
+                # Hvis navnet ikke findes i POS_TRANSLATIONS, beholder vi det gamle.
+                df['POSITION'] = df['POSITION'].str.strip().map(POS_TRANSLATIONS).fillna(df['POSITION'])
             
             if 'PLAYER_WYID' in df.columns:
                 df['PLAYER_WYID'] = pd.to_numeric(df['PLAYER_WYID'], errors='coerce').fillna(0).astype(int)
@@ -93,42 +95,20 @@ def vis_side():
 
     df = st.session_state['full_df_1div'].copy()
 
-    # --- KPI & FEJL-IDENTIFIKATION ---
+    # --- KPI & FEJL ---
     mangler_opta = df[(df['PLAYER_OPTAUUID'].isna()) | (df['PLAYER_OPTAUUID'].astype(str).str.lower() == "none")].shape[0]
-    error_list = []
-    dublet_mask = pd.Series([False] * len(df))
-
-    for col in ['NAVN', 'PLAYER_WYID', 'PLAYER_OPTAUUID']:
-        clean_series = df[col].replace(["None", "none", "", 0, "0"], pd.NA)
-        dupes = clean_series[clean_series.duplicated(keep=False) & clean_series.notna()].unique()
-        for val in dupes:
-            names = df[df[col] == val]['NAVN'].tolist()
-            error_list.append(f"**{col} Dublet ({val}):** {', '.join(names)}")
-            dublet_mask = dublet_mask | (df[col] == val)
-
-    # --- VIS KPI'ER ---
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Mangler Opta-ID", mangler_opta)
-    c2.metric("Dublet-konflikter", len(error_list))
-    c3.metric("Total spillere", len(df))
-
-    if error_list:
-        with st.expander("⚠️ Dublet-fejl fundet", expanded=True):
-            for err in error_list: st.write(f"- {err}")
-
-    st.divider()
-
+    
     # --- SØGNING ---
     soegning = st.text_input("Søg spiller/klub:").strip().lower()
-    vis_kun_dubletter = st.toggle("Vis kun dubletter")
-
     visnings_df = df.copy()
-    if vis_kun_dubletter: visnings_df = visnings_df[dublet_mask]
     if len(soegning) >= 2:
         mask = visnings_df.apply(lambda x: x.astype(str).str.lower().str.contains(soegning)).any(axis=1)
         visnings_df = visnings_df[mask]
 
     # --- EDITOR ---
+    # Vi henter de mulige danske værdier til dropdown
+    pos_options = sorted(list(POS_TRANSLATIONS.values()))
+
     edited_df = st.data_editor(
         visnings_df.reset_index(drop=True),
         height=500,
@@ -138,23 +118,26 @@ def vis_side():
         key="spiller_editor",
         column_config={
             "PLAYER_WYID": st.column_config.NumberColumn("WYID", format="%d"),
-            "POSITION": st.column_config.SelectboxColumn("Position", options=list(POS_TRANSLATIONS.values())),
+            "POSITION": st.column_config.SelectboxColumn("Position", options=pos_options),
         }
     )
 
     # --- GEM ---
     if st.session_state.spiller_editor["edited_rows"]:
-        if st.button("💾 Gem ændringer (inkl. encoding fix)", type="primary", use_container_width=True):
+        if st.button("💾 Gem ændringer", type="primary", use_container_width=True):
             changes = st.session_state.spiller_editor["edited_rows"]
+            
+            # Vi opdaterer session state med ændringerne
             for idx_str, updated_cols in changes.items():
-                wyid = visnings_df.iloc[int(idx_str)]['PLAYER_WYID']
-                full_df_idx = df[df['PLAYER_WYID'] == wyid].index
-                if not full_df_idx.empty:
-                    for col, val in updated_cols.items():
-                        df.at[full_df_idx[0], col] = val
+                # Find rækken via WYID (sikreste metode)
+                idx = int(idx_str)
+                wyid = visnings_df.iloc[idx]['PLAYER_WYID']
+                df.loc[df['PLAYER_WYID'] == wyid, list(updated_cols.keys())] = list(updated_cols.values())
             
             if save_to_github(df):
                 st.session_state['full_df_1div'] = df
+                st.success("Gemt!")
+                time.sleep(1)
                 st.rerun()
 
 if __name__ == "__main__":
