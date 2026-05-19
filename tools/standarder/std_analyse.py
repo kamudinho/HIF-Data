@@ -146,9 +146,7 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
     if p_sel != "Alle spillere": mask &= (df_team['TAGER_NAVN'] == p_sel)
     df_plot = df_team[mask].copy()
 
-    # --- FEJLSIKRING MOD 0,0 DATA ---
-    # Vi fjerner rækker hvor EVENT_X og EVENT_Y begge er 0 (typisk en fejl i Opta)
-    # Vi tjekker også for ENDX/ENDY da de også kan lave mærkelige streger
+    # Fejlsikring mod 0,0 data
     df_plot = df_plot[~((df_plot['EVENT_X'] == 0) & (df_plot['EVENT_Y'] == 0))]
     df_plot = df_plot[~((df_plot['ENDX'] == 0) & (df_plot['ENDY'] == 0))]
 
@@ -159,37 +157,39 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
         for c in ['EVENT_X', 'EVENT_Y', 'ENDX', 'ENDY']: 
             df_plot[c] = pd.to_numeric(df_plot[c], errors='coerce')
 
-        # Normalisering: Vi tvinger alt mod højre (x=100)
+        # Normalisering til højre (x=100)
         mask_left = df_plot['EVENT_X'] < 50
         df_plot.loc[mask_left, ['EVENT_X', 'ENDX']] = 100 - df_plot.loc[mask_left, ['EVENT_X', 'ENDX']]
         df_plot.loc[mask_left, ['EVENT_Y', 'ENDY']] = 100 - df_plot.loc[mask_left, ['EVENT_Y', 'ENDY']]
 
-        # Konverter til meter for 105x68 bane
+        # Konverter til meter (105x68)
         df_plot['x'] = df_plot['EVENT_X'] * 1.05
         df_plot['y'] = df_plot['EVENT_Y'] * 0.68
         df_plot['end_x'] = df_plot['ENDX'] * 1.05
         df_plot['end_y'] = df_plot['ENDY'] * 0.68
 
+        # Pitch konfiguration
         pitch = Pitch(pitch_type='custom', pitch_length=105, pitch_width=68, 
                       line_color='#333333', goal_type='box', linewidth=1)
         
-        fig, ax = pitch.draw(figsize=(12, 7))
+        # Vi fjerner faste grænser for at lade Pitch styre proportionerne (ingen zoom)
+        fig, ax = pitch.draw(figsize=(12, 8))
         
-        # ZOOM: Vi viser de sidste 40 meter af banen
+        # VIGTIGT: Vi sætter grænserne til banens faktiske mål (105x68)
+        # Det fjerner tomrummet der skubber banen ned
         ax.set_xlim(0, 105)
-        ax.set_ylim(0, 105)
+        ax.set_ylim(0, 68) 
 
         if not df_plot.dropna(subset=['end_x', 'end_y']).empty:
             if "Zoner" in vis_mode:
                 pitch.hexbin(df_plot.end_x, df_plot.end_y, ax=ax, edgecolors='#f0f0f0',
-                             gridsize=(12, 12), cmap='Reds', alpha=0.7)
+                             gridsize=(15, 15), cmap='Reds', alpha=0.7)
             
             if "Pile" in vis_mode:
                 p_color = TEAM_COLORS.get(t_sel, {}).get('primary', HIF_RED)
                 pitch.arrows(df_plot.x, df_plot.y, df_plot.end_x, df_plot.end_y, 
                              color=p_color, ax=ax, width=1.2, headwidth=3, headlength=3, alpha=0.3)
                 
-                # Sæt prikker ved startpunktet (hjørneflag/frisparksted)
                 pitch.scatter(df_plot.x, df_plot.y, ax=ax, color=p_color, s=15, alpha=0.5)
 
         st.pyplot(fig)
