@@ -26,12 +26,16 @@ def get_logo_img(opta_uuid):
     try:
         response = requests.get(url, timeout=5)
         return Image.open(BytesIO(response.content))
-    except: return None
+    except:
+        return None
 
 def universal_decode(text):
+    """Fikser ødelagte tegn fra Norden, Baltikum og Sydeuropa."""
     if not isinstance(text, str): return text
-    try: return text.encode('latin1').decode('utf-8')
-    except: return text
+    try:
+        return text.encode('latin1').decode('utf-8')
+    except:
+        return text
 
 # --- 3. DATA LOAD ---
 @st.cache_data(ttl=3600)
@@ -87,7 +91,8 @@ def load_setpiece_data():
             df_lookup['PLAYER_OPTAUUID'] = df_lookup['PLAYER_OPTAUUID'].astype(str).str.strip()
             df_lookup['NAVN'] = df_lookup['NAVN'].apply(universal_decode)
             name_map = df_lookup.set_index('PLAYER_OPTAUUID')['NAVN'].to_dict()
-        except: name_map = {}
+        except:
+            name_map = {}
 
         df['TAGER_NAVN'] = df.apply(lambda x: name_map.get(str(x['PLAYER_UUID']).strip(), x['PLAYER_NAME']), axis=1)
         
@@ -101,7 +106,8 @@ def load_setpiece_data():
         df['ER_AFSLUTNING'] = df.apply(lambda x: 1 if x['P1_TYPE'] in shot_types or x['P2_TYPE'] in shot_types or x['P3_TYPE'] in shot_types else 0, axis=1)
         
         return df
-    except: return pd.DataFrame()
+    except:
+        return pd.DataFrame()
 
 # --- 4. STATISTIK BEREGNING ---
 def get_summary_stats(df, group_col):
@@ -134,7 +140,7 @@ def get_summary_stats(df, group_col):
 
 # --- 5. VISUALISERING (BANE) ---
 def render_setpiece_analysis(df_team, sp_type, t_sel):
-    # Henter Logo
+    # Henter Logo baseret på det valgte hold
     t_info = next((info for name, info in TEAMS.items() if name == t_sel), None)
     t_uuid = t_info.get('opta_uuid') if t_info else None
     hold_logo = get_logo_img(t_uuid)
@@ -155,6 +161,7 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
     succes = int(df_plot['MODTAGER'].notna().sum())
     pct = round((succes / total * 100), 1) if total > 0 else 0
 
+    # Overskrift og statistiklinje
     st.subheader(sp_type)
     st.markdown(f"**{p_sel}** ({total} / {succes} = **{pct}%**)")
 
@@ -164,11 +171,12 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
         for c in ['EVENT_X', 'EVENT_Y', 'ENDX', 'ENDY']: 
             df_plot[c] = pd.to_numeric(df_plot[c], errors='coerce')
 
-        # Normalisering til højre
+        # Spejlvend data så alt angribes mod højre
         mask_left = df_plot['EVENT_X'] < 50
         df_plot.loc[mask_left, ['EVENT_X', 'ENDX']] = 100 - df_plot.loc[mask_left, ['EVENT_X', 'ENDX']]
         df_plot.loc[mask_left, ['EVENT_Y', 'ENDY']] = 100 - df_plot.loc[mask_left, ['EVENT_Y', 'ENDY']]
 
+        # Konvertering til banestørrelse
         df_plot['x'] = df_plot['EVENT_X'] * 1.05
         df_plot['y'] = df_plot['EVENT_Y'] * 0.68
         df_plot['end_x'] = df_plot['ENDX'] * 1.05
@@ -183,6 +191,7 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
             spine.set_linewidth(0.6)
             spine.set_edgecolor('#333333')
 
+        # Indsæt Logo og holdnavn på banen
         if hold_logo:
             ax_logo = ax.inset_axes([0.02, 0.04, 0.10, 0.10], transform=ax.transAxes)
             ax_logo.imshow(hold_logo)
@@ -232,6 +241,7 @@ def vis_side():
         st.warning("Ingen data fundet.")
         return
 
+    # Mapping af UUID til navne fra TEAMS
     uuid_to_name = {v['opta_uuid'].upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
     df_all['KLUB_NAVN'] = df_all['TEAM_UUID'].str.upper().map(uuid_to_name)
     teams = sorted([n for n in df_all['KLUB_NAVN'].unique() if pd.notna(n)])
