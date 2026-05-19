@@ -135,6 +135,7 @@ def get_summary_stats(df, group_col):
 
 # --- 5. VISUALISERING (BANE) ---
 def render_setpiece_analysis(df_team, sp_type, t_sel):
+    # Vi ændrer ratio fra [2.5, 1] til [1.5, 1] for at gøre banen fysisk mindre på siden
     f1, f2 = st.columns([1, 1])
     with f1:
         p_list = ["Alle spillere"] + sorted(df_team[df_team['TYPE_NAVN'] == sp_type]['TAGER_NAVN'].unique().tolist())
@@ -146,64 +147,59 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
     if p_sel != "Alle spillere": mask &= (df_team['TAGER_NAVN'] == p_sel)
     df_plot = df_team[mask].copy()
 
-    # Fejlsikring mod 0,0 data
     df_plot = df_plot[~((df_plot['EVENT_X'] == 0) & (df_plot['EVENT_Y'] == 0))]
     df_plot = df_plot[~((df_plot['ENDX'] == 0) & (df_plot['ENDY'] == 0))]
 
     from mplsoccer import Pitch 
 
-    col_p, col_s = st.columns([2.5, 1])
+    # Her justerer vi kolonne-fordelingen for at give plads til højre
+    col_p, col_s = st.columns([1.8, 1.2]) 
+    
     with col_p:
         for c in ['EVENT_X', 'EVENT_Y', 'ENDX', 'ENDY']: 
             df_plot[c] = pd.to_numeric(df_plot[c], errors='coerce')
 
-        # Normalisering til højre (x=100)
         mask_left = df_plot['EVENT_X'] < 50
         df_plot.loc[mask_left, ['EVENT_X', 'ENDX']] = 100 - df_plot.loc[mask_left, ['EVENT_X', 'ENDX']]
         df_plot.loc[mask_left, ['EVENT_Y', 'ENDY']] = 100 - df_plot.loc[mask_left, ['EVENT_Y', 'ENDY']]
 
-        # Konverter til meter (105x68)
         df_plot['x'] = df_plot['EVENT_X'] * 1.05
         df_plot['y'] = df_plot['EVENT_Y'] * 0.68
         df_plot['end_x'] = df_plot['ENDX'] * 1.05
         df_plot['end_y'] = df_plot['ENDY'] * 0.68
 
-        # Pitch konfiguration
+        # Pitch konfiguration - vi lader mplsoccer styre det visuelle
         pitch = Pitch(pitch_type='custom', pitch_length=105, pitch_width=68, 
                       line_color='#333333', goal_type='box', linewidth=1)
         
-        # Vi fjerner faste grænser for at lade Pitch styre proportionerne (ingen zoom)
-        fig, ax = pitch.draw(figsize=(6, 4))
+        #constrained_layout fjerner unødvendig margin
+        fig, ax = pitch.draw(figsize=(5, 3), constrained_layout=True)
         
-        # VIGTIGT: Vi sætter grænserne til banens faktiske mål (105x68)
-        # Det fjerner tomrummet der skubber banen ned
-        ax.set_xlim(0, 105)
-        ax.set_ylim(0, 68) 
-
         if not df_plot.dropna(subset=['end_x', 'end_y']).empty:
             if "Zoner" in vis_mode:
                 pitch.hexbin(df_plot.end_x, df_plot.end_y, ax=ax, edgecolors='#f0f0f0',
-                             gridsize=(15, 15), cmap='Reds', alpha=0.7)
+                             gridsize=(12, 12), cmap='Reds', alpha=0.7)
             
             if "Pile" in vis_mode:
                 p_color = TEAM_COLORS.get(t_sel, {}).get('primary', HIF_RED)
                 pitch.arrows(df_plot.x, df_plot.y, df_plot.end_x, df_plot.end_y, 
-                             color=p_color, ax=ax, width=1.2, headwidth=3, headlength=3, alpha=0.3)
+                             color=p_color, ax=ax, width=1, headwidth=2, headlength=2, alpha=0.3)
                 
-                pitch.scatter(df_plot.x, df_plot.y, ax=ax, color=p_color, s=15, alpha=0.5)
+                pitch.scatter(df_plot.x, df_plot.y, ax=ax, color=p_color, s=10, alpha=0.5)
 
         st.pyplot(fig)
         
     with col_s:
+        # Statistikken i siden
         m1, m2, m3 = st.columns(3)
         m1.metric("Antal", len(df_plot))
-        m2.metric("Succes", df_plot['MODTAGER'].notna().sum())
-        m3.metric("Afslutn.", df_plot['ER_AFSLUTNING'].sum())
-        st.write("---") 
+        m2.metric("Succes", int(df_plot['MODTAGER'].notna().sum()))
+        m3.metric("Afslutn.", int(df_plot['ER_AFSLUTNING'].sum()))
+        st.divider()
         st.write("**Top modtagere**")
         mod_counts = df_plot['MODTAGER'].value_counts().reset_index()
         mod_counts.columns = ['Spiller', 'Antal']
-        st.dataframe(mod_counts, use_container_width=True, hide_index=True)
+        st.dataframe(mod_counts, use_container_width=True, hide_index=True, height=200)
         
 # --- 6. HOVEDSIDE ---
 def vis_side():
