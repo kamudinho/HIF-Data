@@ -120,7 +120,7 @@ def get_summary_stats(df, group_col):
     stats['Top Modtager'] = stats[group_col].map(mod_map)
     return stats[[group_col, 'Antal', 'Succes %', 'Top Modtager', 'Afslutning %']]
 
-# --- 5. VISUALISERING (BANE) ---
+# --- 5. VISUALISERING (OPDATERET PLACERING AF TEKST) ---
 def render_setpiece_analysis(df_team, sp_type, t_sel):
     t_info = next((info for name, info in TEAMS.items() if name == t_sel), None)
     t_uuid = t_info.get('opta_uuid') if t_info else None
@@ -155,28 +155,38 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
         df_plot['x'], df_plot['y'] = df_plot['EVENT_X'] * 1.05, df_plot['EVENT_Y'] * 0.68
         df_plot['end_x'], df_plot['end_y'] = df_plot['ENDX'] * 1.05, df_plot['ENDY'] * 0.68
 
-        pitch = Pitch(pitch_type='custom', pitch_length=105, pitch_width=68, line_color='#333333', goal_type='box', linewidth=0.6)
+        pitch = Pitch(pitch_type='custom', pitch_length=105, pitch_width=68, 
+                      line_color='#333333', goal_type='box', linewidth=0.6)
+        
         fig, ax = pitch.draw(figsize=(6, 4), constrained_layout=True)
         
-        # --- TEKST PÅ BANEN ---
-        ax.text(2, 66, sp_type.upper(), fontsize=10, fontweight='bold', color='#333333', alpha=0.8)
-        stats_line = f"{p_sel} | {total} aktioner ({int(pct)}% succes)"
-        ax.text(2, 62, stats_line, fontsize=8.5, color='#555555', va='top')
+        # --- TEKST I VENSTRE HJØRNE ---
+        # x=1 rykker teksten tæt på kanten
+        ax.text(1, 66, sp_type.upper(), fontsize=12, fontweight='bold', color='#333333', alpha=0.9)
+        
+        stats_line = f"{p_sel}\n{total} aktioner ({int(pct)}% succes)"
+        ax.text(1, 62, stats_line, fontsize=9, color='#444444', va='top', linespacing=1.5)
 
-        # Logo & Navn
+        # Logo & Klubnavn (nederst til venstre)
         if hold_logo:
-            ax_logo = ax.inset_axes([0.02, 0.04, 0.08, 0.08], transform=ax.transAxes)
-            ax_logo.imshow(hold_logo); ax_logo.axis('off')
-            ax.text(12, 4, t_sel.upper(), fontsize=9, fontweight='bold', color='#333333', alpha=0.6, va='center')
+            # Inset axes placeres i akse-koordinater (0 til 1)
+            ax_logo = ax.inset_axes([0.015, 0.03, 0.08, 0.08], transform=ax.transAxes)
+            ax_logo.imshow(hold_logo)
+            ax_logo.axis('off')
+            # Navnet placeres relativt til logoet
+            ax.text(11, 3, t_sel.upper(), fontsize=10, fontweight='bold', color='#333333', alpha=0.6, va='center')
         else:
-            ax.text(2, 4, t_sel.upper(), fontsize=9, fontweight='bold', color='#333333', alpha=0.6, va='center')
+            ax.text(1, 3, t_sel.upper(), fontsize=10, fontweight='bold', color='#333333', alpha=0.6, va='center')
 
+        # --- PLOT DATA ---
         if not df_plot.dropna(subset=['end_x', 'end_y']).empty:
             if "Zoner" in vis_mode:
-                pitch.hexbin(df_plot.end_x, df_plot.end_y, ax=ax, edgecolors='#f0f0f0', gridsize=(10, 10), cmap='Reds', alpha=0.7)
+                pitch.hexbin(df_plot.end_x, df_plot.end_y, ax=ax, edgecolors='#f0f0f0',
+                             gridsize=(10, 10), cmap='Reds', alpha=0.7)
             if "Pile" in vis_mode:
                 p_color = TEAM_COLORS.get(t_sel, {}).get('primary', HIF_RED)
-                pitch.arrows(df_plot.x, df_plot.y, df_plot.end_x, df_plot.end_y, color=p_color, ax=ax, width=0.4, headwidth=2, headlength=2, alpha=0.4)
+                pitch.arrows(df_plot.x, df_plot.y, df_plot.end_x, df_plot.end_y, 
+                             color=p_color, ax=ax, width=0.4, headwidth=2, headlength=2, alpha=0.4)
                 pitch.scatter(df_plot.x, df_plot.y, ax=ax, color=p_color, s=12, alpha=0.6)
 
         st.pyplot(fig)
