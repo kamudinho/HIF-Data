@@ -148,51 +148,48 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
 
     from mplsoccer import Pitch 
 
-    col_p, col_s = st.columns([2, 1])
+    col_p, col_s = st.columns([2.5, 1]) # Gør banen lidt bredere i kolonnen
     with col_p:
+        # Konvertering til tal og normalisering af retning mod højre (x=100)
         for c in ['EVENT_X', 'EVENT_Y', 'ENDX', 'ENDY']: 
             df_plot[c] = pd.to_numeric(df_plot[c], errors='coerce')
 
-        # --- NORMALISERING AF RETNING ---
-        # Vi tjekker om et hjørnespark starter på egen halvdel (x < 50).
-        # Hvis det gør, "flipper" vi hele koordinatsættet, så det altid er et angreb mod højre.
-        # Dette fikser fejlen med "hjørnespark fra egen ende".
-        
-        df_plot['X_FIXED'] = df_plot['EVENT_X']
-        df_plot['Y_FIXED'] = df_plot['EVENT_Y']
-        df_plot['ENDX_FIXED'] = df_plot['ENDX']
-        df_plot['ENDY_FIXED'] = df_plot['ENDY']
+        # Simpel normalisering: Hvis bolden starter på venstre halvdel, spejl alt til højre
+        mask_left = df_plot['EVENT_X'] < 50
+        df_plot.loc[mask_left, ['EVENT_X', 'ENDX']] = 100 - df_plot.loc[mask_left, ['EVENT_X', 'ENDX']]
+        df_plot.loc[mask_left, ['EVENT_Y', 'ENDY']] = 100 - df_plot.loc[mask_left, ['EVENT_Y', 'ENDY']]
 
-        # Flip koordinater for de events der ser ud til at være i "forkert" ende
-        flip_mask = df_plot['EVENT_X'] < 50
-        df_plot.loc[flip_mask, 'X_FIXED'] = 100 - df_plot['EVENT_X']
-        df_plot.loc[flip_mask, 'Y_FIXED'] = 100 - df_plot['EVENT_Y']
-        df_plot.loc[flip_mask, 'ENDX_FIXED'] = 100 - df_plot['ENDX']
-        df_plot.loc[flip_mask, 'ENDY_FIXED'] = 100 - df_plot['ENDY']
+        # Konverter til meter for mplsoccer (105x68)
+        df_plot['x'] = df_plot['EVENT_X'] * 1.05
+        df_plot['y'] = df_plot['EVENT_Y'] * 0.68
+        df_plot['end_x'] = df_plot['ENDX'] * 1.05
+        df_plot['end_y'] = df_plot['ENDY'] * 0.68
 
-        # Konverter til meter (105x68)
-        df_plot['X_M'] = df_plot['X_FIXED'].apply(lambda x: to_metric(x, 105))
-        df_plot['Y_M'] = df_plot['Y_FIXED'].apply(lambda y: to_metric(y, 68))
-        df_plot['ENDX_M'] = df_plot['ENDX_FIXED'].apply(lambda x: to_metric(x, 105))
-        df_plot['ENDY_M'] = df_plot['ENDY_FIXED'].apply(lambda y: to_metric(y, 68))
+        # Vi tegner en horisontal bane, men zoomer ind på den sidste tredjedel
+        pitch = Pitch(pitch_type='custom', pitch_length=105, pitch_width=68, 
+                      line_color='#333333', goal_type='box', linewidth=1)
         
-        # Tegn banen
-        pitch = Pitch(pitch_type='custom', pitch_length=105, pitch_width=68, line_color='#cccccc')
-        fig, ax = pitch.draw(figsize=(12, 8))
+        # Figurstørrelsen skal være bred for at det ser godt ud liggende
+        fig, ax = pitch.draw(figsize=(12, 7))
         
-        # Fokusér på modstanderens banehalvdel + lidt ekstra (f.eks. fra x=40 til 105)
-        # Det fjerner det tomme rum på egen halvdel, men beholder det "liggende" format.
-        ax.set_xlim(45, 105) 
-        
-        if not df_plot.dropna(subset=['ENDX_M', 'ENDY_M']).empty:
+        # ZOOM: Vi viser kun fra x=70 til x=105 (de sidste 35 meter)
+        # Det gør at feltet fylder det meste af skærmen, og det ser ikke "af helvedes til" ud
+        ax.set_xlim(70, 105)
+        ax.set_ylim(0, 68)
+
+        if not df_plot.dropna(subset=['end_x', 'end_y']).empty:
             if "Zoner" in vis_mode:
-                pitch.hexbin(df_plot.ENDX_M, df_plot.ENDY_M, ax=ax, gridsize=(15, 15), cmap='Reds', alpha=0.6)
+                pitch.hexbin(df_plot.end_x, df_plot.end_y, ax=ax, edgecolors='#f0f0f0',
+                             gridsize=(10, 10), cmap='Reds', alpha=0.7)
             
             if "Pile" in vis_mode:
                 p_color = TEAM_COLORS.get(t_sel, {}).get('primary', HIF_RED)
-                pitch.arrows(df_plot.X_M, df_plot.Y_M, df_plot.ENDX_M, df_plot.ENDY_M, 
-                             color=p_color, ax=ax, width=2, headwidth=3, headlength=3, alpha=0.3)
-        
+                pitch.arrows(df_plot.x, df_plot.y, df_plot.end_x, df_plot.end_y, 
+                             color=p_color, ax=ax, width=1.5, headwidth=3, headlength=3, alpha=0.4)
+                
+                # Sæt prikker ved startpunktet (f.eks. hjørneflaget)
+                pitch.scatter(df_plot.x, df_plot.y, ax=ax, color=p_color, s=20, alpha=0.6)
+
         st.pyplot(fig)
         
 # --- 6. HOVEDSIDE ---
