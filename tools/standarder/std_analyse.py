@@ -176,8 +176,8 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
         fig, ax = pitch.draw(figsize=(12, 7))
         
         # ZOOM: Vi viser de sidste 40 meter af banen
-        ax.set_xlim(65, 105)
-        ax.set_ylim(0, 68)
+        ax.set_xlim(0, 105)
+        ax.set_ylim(0, 105)
 
         if not df_plot.dropna(subset=['end_x', 'end_y']).empty:
             if "Zoner" in vis_mode:
