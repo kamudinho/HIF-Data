@@ -146,25 +146,40 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
     if p_sel != "Alle spillere": mask &= (df_team['TAGER_NAVN'] == p_sel)
     df_plot = df_team[mask].copy()
 
+    # Vi bruger 'Pitch' i stedet for 'VerticalPitch' for at få banen liggende
+    from mplsoccer import Pitch 
+
     col_p, col_s = st.columns([2, 1])
     with col_p:
         for c in ['EVENT_X', 'EVENT_Y', 'ENDX', 'ENDY']: 
             df_plot[c] = pd.to_numeric(df_plot[c], errors='coerce')
+        
+        # Konvertering til meter
         df_plot['X_M'] = df_plot['EVENT_X'].apply(lambda x: to_metric(x, 105))
         df_plot['Y_M'] = df_plot['EVENT_Y'].apply(lambda y: to_metric(y, 68))
         df_plot['ENDX_M'] = df_plot['ENDX'].apply(lambda x: to_metric(x, 105))
         df_plot['ENDY_M'] = df_plot['ENDY'].apply(lambda y: to_metric(y, 68))
         
-        pitch = VerticalPitch(half=True, pitch_type='custom', pitch_length=105, pitch_width=68, line_color='#cccccc')
-        fig, ax = pitch.draw(figsize=(10, 10))
-        ax.set_ylim(50, 105)
+        # Initialiser liggende bane. Vi fjerner 'half=True' for at se hele banen.
+        pitch = Pitch(pitch_type='custom', pitch_length=105, pitch_width=68, line_color='#cccccc')
+        fig, ax = pitch.draw(figsize=(12, 8))
+        
+        # Da det er en horisontal bane, styrer set_xlim nu hvor meget af længden vi ser.
+        # Hvis du stadig kun vil fokusere på den angribende halvdel, kan du sætte (50, 105).
+        # Men her viser vi hele banen som efterspurgt:
+        ax.set_xlim(0, 105) 
         
         if not df_plot.dropna(subset=['ENDX_M', 'ENDY_M']).empty:
             if "Zoner" in vis_mode:
-                pitch.hexbin(df_plot.ENDX_M, df_plot.ENDY_M, ax=ax, gridsize=(12, 12), cmap='Reds', alpha=0.6)
+                # Hexbin fungerer også horisontalt
+                pitch.hexbin(df_plot.ENDX_M, df_plot.ENDY_M, ax=ax, gridsize=(15, 15), cmap='Reds', alpha=0.6)
+            
             if "Pile" in vis_mode:
                 p_color = TEAM_COLORS.get(t_sel, {}).get('primary', HIF_RED)
-                pitch.arrows(df_plot.X_M, df_plot.Y_M, df_plot.ENDX_M, df_plot.ENDY_M, color=p_color, ax=ax, alpha=0.3)
+                # Arrows tegnes automatisk korrekt horisontalt i Pitch
+                pitch.arrows(df_plot.X_M, df_plot.Y_M, df_plot.ENDX_M, df_plot.ENDY_M, 
+                             color=p_color, ax=ax, width=2, headwidth=3, headlength=3, alpha=0.3)
+        
         st.pyplot(fig)
         
     with col_s:
@@ -177,7 +192,7 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
         mod_counts = df_plot['MODTAGER'].value_counts().reset_index()
         mod_counts.columns = ['Spiller', 'Antal']
         st.dataframe(mod_counts, use_container_width=True, hide_index=True)
-
+        
 # --- 6. HOVEDSIDE ---
 def vis_side():
     st.set_page_config(layout="wide", page_title="Standardsituationer")
