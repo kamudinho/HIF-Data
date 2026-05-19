@@ -120,7 +120,7 @@ def get_summary_stats(df, group_col):
     stats['Top Modtager'] = stats[group_col].map(mod_map)
     return stats[[group_col, 'Antal', 'Succes %', 'Top Modtager', 'Afslutning %']]
 
-# --- 5. VISUALISERING (OPDATERET PLACERING AF TEKST) ---
+# --- 5. VISUALISERING (OPDATERET TIL VENSTRE-ALIGNMENT) ---
 def render_setpiece_analysis(df_team, sp_type, t_sel):
     t_info = next((info for name, info in TEAMS.items() if name == t_sel), None)
     t_uuid = t_info.get('opta_uuid') if t_info else None
@@ -142,7 +142,7 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
     succes = int(df_plot['MODTAGER'].notna().sum())
     pct = round((succes / total * 100), 0) if total > 0 else 0
 
-    col_p, col_s = st.columns([2, 1]) 
+    col_p, col_s = st.columns([2.2, 0.8]) 
     
     with col_p:
         for c in ['EVENT_X', 'EVENT_Y', 'ENDX', 'ENDY']: 
@@ -158,27 +158,25 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
         pitch = Pitch(pitch_type='custom', pitch_length=105, pitch_width=68, 
                       line_color='#333333', goal_type='box', linewidth=0.6)
         
-        fig, ax = pitch.draw(figsize=(6, 4), constrained_layout=True)
+        fig, ax = pitch.draw(figsize=(8, 5), constrained_layout=True)
         
-        # --- TEKST I VENSTRE HJØRNE ---
-        # x=1 rykker teksten tæt på kanten
+        # --- TEKST I VENSTRE HJØRNE (X=1 for tæt alignment) ---
         ax.text(1, 66, sp_type.upper(), fontsize=12, fontweight='bold', color='#333333', alpha=0.9)
         
         stats_line = f"{p_sel}\n{total} aktioner ({int(pct)}% succes)"
-        ax.text(1, 62, stats_line, fontsize=9, color='#444444', va='top', linespacing=1.5)
+        ax.text(1, 62, stats_line, fontsize=9.5, color='#444444', va='top', linespacing=1.6)
 
-        # Logo & Klubnavn (nederst til venstre)
+        # Logo & Klubnavn (Nederst til venstre)
         if hold_logo:
-            # Inset axes placeres i akse-koordinater (0 til 1)
-            ax_logo = ax.inset_axes([0.015, 0.03, 0.08, 0.08], transform=ax.transAxes)
+            ax_logo = ax.inset_axes([0.012, 0.03, 0.08, 0.08], transform=ax.transAxes)
             ax_logo.imshow(hold_logo)
             ax_logo.axis('off')
-            # Navnet placeres relativt til logoet
+            # Navnet rykket en smule så det passer med logo-størrelsen
             ax.text(11, 3, t_sel.upper(), fontsize=10, fontweight='bold', color='#333333', alpha=0.6, va='center')
         else:
             ax.text(1, 3, t_sel.upper(), fontsize=10, fontweight='bold', color='#333333', alpha=0.6, va='center')
 
-        # --- PLOT DATA ---
+        # --- DATA PLOTTING ---
         if not df_plot.dropna(subset=['end_x', 'end_y']).empty:
             if "Zoner" in vis_mode:
                 pitch.hexbin(df_plot.end_x, df_plot.end_y, ax=ax, edgecolors='#f0f0f0',
@@ -186,8 +184,8 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
             if "Pile" in vis_mode:
                 p_color = TEAM_COLORS.get(t_sel, {}).get('primary', HIF_RED)
                 pitch.arrows(df_plot.x, df_plot.y, df_plot.end_x, df_plot.end_y, 
-                             color=p_color, ax=ax, width=0.4, headwidth=2, headlength=2, alpha=0.4)
-                pitch.scatter(df_plot.x, df_plot.y, ax=ax, color=p_color, s=12, alpha=0.6)
+                             color=p_color, ax=ax, width=0.4, headwidth=2.5, headlength=2.5, alpha=0.4)
+                pitch.scatter(df_plot.x, df_plot.y, ax=ax, color=p_color, s=15, alpha=0.6)
 
         st.pyplot(fig)
         
