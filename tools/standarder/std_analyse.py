@@ -170,7 +170,7 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
 
         # Pitch konfiguration - vi lader mplsoccer styre det visuelle
         pitch = Pitch(pitch_type='custom', pitch_length=105, pitch_width=68, 
-                      line_color='#333333', goal_type='box', linewidth=1)
+                      line_color='#333333', goal_type='box', linewidth=0.6)
         
         #constrained_layout fjerner unødvendig margin
         fig, ax = pitch.draw(figsize=(5, 3), constrained_layout=True)
@@ -183,7 +183,7 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
             if "Pile" in vis_mode:
                 p_color = TEAM_COLORS.get(t_sel, {}).get('primary', HIF_RED)
                 pitch.arrows(df_plot.x, df_plot.y, df_plot.end_x, df_plot.end_y, 
-                             color=p_color, ax=ax, width=1, headwidth=2, headlength=2, alpha=0.3)
+                             color=p_color, ax=ax, width=0.3, headwidth=2, headlength=2, alpha=0.3)
                 
                 pitch.scatter(df_plot.x, df_plot.y, ax=ax, color=p_color, s=10, alpha=0.5)
 
