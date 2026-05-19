@@ -135,6 +135,8 @@ def get_summary_stats(df, group_col):
 
 # --- 5. VISUALISERING (BANE) ---
 def render_setpiece_analysis(df_team, sp_type, t_sel):
+    # 1. Header sektion (Kategori og Navn med stats)
+    # Beregn stats for den valgte visning
     f1, f2 = st.columns([1, 1])
     with f1:
         p_list = ["Alle spillere"] + sorted(df_team[df_team['TYPE_NAVN'] == sp_type]['TAGER_NAVN'].unique().tolist())
@@ -146,8 +148,17 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
     if p_sel != "Alle spillere": mask &= (df_team['TAGER_NAVN'] == p_sel)
     df_plot = df_team[mask].copy()
 
+    # Fejlsikring mod 0,0 data
     df_plot = df_plot[~((df_plot['EVENT_X'] == 0) & (df_plot['EVENT_Y'] == 0))]
-    df_plot = df_plot[~((df_plot['ENDX'] == 0) & (df_plot['ENDY'] == 0))]
+    
+    # Beregn tekst-stats
+    total = len(df_plot)
+    succes = int(df_plot['MODTAGER'].notna().sum())
+    pct = round((succes / total * 100), 1) if total > 0 else 0
+
+    # Overskrift: Kategori + Navn (Stats)
+    st.markdown(f"### {sp_type}")
+    st.markdown(f"**{p_sel}** ({total} / {succes} = **{pct}%**)")
 
     from mplsoccer import Pitch 
 
@@ -166,17 +177,24 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
         df_plot['end_x'] = df_plot['ENDX'] * 1.05
         df_plot['end_y'] = df_plot['ENDY'] * 0.68
 
-        # Pitch konfiguration - linewidth her styrer banens indre linjer
         pitch = Pitch(pitch_type='custom', pitch_length=105, pitch_width=68, 
                       line_color='#333333', goal_type='box', linewidth=0.6)
         
         fig, ax = pitch.draw(figsize=(5, 3), constrained_layout=True)
         
-        # --- FIX AF DEN YDERSTE RAMME ---
-        # Vi fjerner eller tilpasser tykkelsen på de spines, som Matplotlib tegner
+        # Fix af ramme
         for spine in ax.spines.values():
-            spine.set_linewidth(0.6) # Sæt til samme tykkelse som pitch-linjerne
+            spine.set_linewidth(0.6)
             spine.set_edgecolor('#333333')
+
+        # --- TILFØJ HOLDNAVN OG LOGO PÅ BANEN ---
+        # Vi placerer teksten i øverste venstre hjørne af banen (x=5, y=5)
+        ax.text(5, 5, t_sel.upper(), color='#333333', va='center', ha='left', 
+                fontsize=9, fontweight='bold', alpha=0.5)
+        
+        # Hvis du har logo-stier i din TEAMS-mapping, kan de indlejres her:
+        # team_logo = TEAMS.get(t_sel, {}).get('logo_url')
+        # Hvis du vil have et fysisk logo på, kræver det image-load, men tekstløsningen er ultra-clean.
 
         if not df_plot.dropna(subset=['end_x', 'end_y']).empty:
             if "Zoner" in vis_mode:
@@ -193,19 +211,17 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
         st.pyplot(fig)
         
     with col_s:
+        # Flyt de store metrics herned for at spare vertikal plads i toppen
         m1, m2, m3 = st.columns(3)
-        m1.metric("Antal", len(df_plot))
-        m2.metric("Succes", int(df_plot['MODTAGER'].notna().sum()))
+        m1.metric("Antal", total)
+        m2.metric("Succes", succes)
         m3.metric("Afslutn.", int(df_plot['ER_AFSLUTNING'].sum()))
+        
         st.divider()
         st.write("**Top 5-modtagere**")
-        
-        # --- TOP 5 LOGIK ---
         mod_counts = df_plot['MODTAGER'].value_counts().reset_index()
         mod_counts.columns = ['Spiller', 'Antal']
-        top_5_mod = mod_counts.head(5) # Tag kun de øverste 5
-        
-        st.dataframe(top_5_mod, use_container_width=True, hide_index=True, height=210)
+        st.dataframe(mod_counts.head(5), use_container_width=True, hide_index=True, height=210)
         
 # --- 6. HOVEDSIDE ---
 def vis_side():
