@@ -135,8 +135,12 @@ def get_summary_stats(df, group_col):
 
 # --- 5. VISUALISERING (BANE) ---
 def render_setpiece_analysis(df_team, sp_type, t_sel):
-    # 1. Header sektion (Kategori og Navn med stats)
-    # Beregn stats for den valgte visning
+    # 1. Hent Logo (bruger logikken fra din modstanderanalyse)
+    # Vi finder uuid for det valgte hold i TEAMS mappingen
+    t_info = next((info for name, info in TEAMS.items() if name == t_sel), None)
+    t_uuid = t_info.get('opta_uuid') if t_info else None
+    hold_logo = get_logo_img(t_uuid)
+
     f1, f2 = st.columns([1, 1])
     with f1:
         p_list = ["Alle spillere"] + sorted(df_team[df_team['TYPE_NAVN'] == sp_type]['TAGER_NAVN'].unique().tolist())
@@ -150,14 +154,14 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
 
     # Fejlsikring mod 0,0 data
     df_plot = df_plot[~((df_plot['EVENT_X'] == 0) & (df_plot['EVENT_Y'] == 0))]
-    
-    # Beregn tekst-stats
+
+    # --- BEREGN STATS TIL NAVN-LINJE ---
     total = len(df_plot)
     succes = int(df_plot['MODTAGER'].notna().sum())
     pct = round((succes / total * 100), 1) if total > 0 else 0
 
-    # Overskrift: Kategori + Navn (Stats)
-    st.markdown(f"### {sp_type}")
+    # 2. Overskrift: Kategori + Navn (Antal / Succes = Succes %)
+    st.subheader(sp_type)
     st.markdown(f"**{p_sel}** ({total} / {succes} = **{pct}%**)")
 
     from mplsoccer import Pitch 
@@ -182,19 +186,24 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
         
         fig, ax = pitch.draw(figsize=(5, 3), constrained_layout=True)
         
-        # Fix af ramme
         for spine in ax.spines.values():
             spine.set_linewidth(0.6)
             spine.set_edgecolor('#333333')
 
-        # --- TILFØJ HOLDNAVN OG LOGO PÅ BANEN ---
-        # Vi placerer teksten i øverste venstre hjørne af banen (x=5, y=5)
-        ax.text(5, 5, t_sel.upper(), color='#333333', va='center', ha='left', 
-                fontsize=9, fontweight='bold', alpha=0.5)
-        
-        # Hvis du har logo-stier i din TEAMS-mapping, kan de indlejres her:
-        # team_logo = TEAMS.get(t_sel, {}).get('logo_url')
-        # Hvis du vil have et fysisk logo på, kræver det image-load, men tekstløsningen er ultra-clean.
+        # --- TILFØJ HOLDNAVN OG LOGO PÅ BANEN (Inspiration fra draw_match_info_box) ---
+        if hold_logo:
+            # Vi placerer logoet i nederste venstre hjørne (transform=ax.transAxes bruger 0-1 skala)
+            ax_logo = ax.inset_axes([0.02, 0.04, 0.10, 0.10], transform=ax.transAxes)
+            ax_logo.imshow(hold_logo)
+            ax_logo.axis('off')
+            
+            # Holdnavn placeres ved siden af logoet
+            ax.text(0.13, 0.09, t_sel.upper(), transform=ax.transAxes, 
+                    fontsize=9, fontweight='bold', color='#333333', alpha=0.6, va='center')
+        else:
+            # Hvis intet logo, skriv blot navnet
+            ax.text(0.04, 0.09, t_sel.upper(), transform=ax.transAxes, 
+                    fontsize=9, fontweight='bold', color='#333333', alpha=0.6, va='center')
 
         if not df_plot.dropna(subset=['end_x', 'end_y']).empty:
             if "Zoner" in vis_mode:
@@ -211,7 +220,6 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
         st.pyplot(fig)
         
     with col_s:
-        # Flyt de store metrics herned for at spare vertikal plads i toppen
         m1, m2, m3 = st.columns(3)
         m1.metric("Antal", total)
         m2.metric("Succes", succes)
@@ -219,6 +227,7 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
         
         st.divider()
         st.write("**Top 5-modtagere**")
+        
         mod_counts = df_plot['MODTAGER'].value_counts().reset_index()
         mod_counts.columns = ['Spiller', 'Antal']
         st.dataframe(mod_counts.head(5), use_container_width=True, hide_index=True, height=210)
