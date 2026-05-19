@@ -1,8 +1,11 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-from mplsoccer import VerticalPitch
 import matplotlib.pyplot as plt
+import requests
+from PIL import Image
+from io import BytesIO
+from mplsoccer import Pitch
 from data.utils.team_mapping import TEAMS, TEAM_COLORS
 from data.data_load import _get_snowflake_conn
 
@@ -12,19 +15,23 @@ DB = "KLUB_HVIDOVREIF.AXIS"
 LIGA_UUID = "dyjr458hcmrcy87fsabfsy87o" 
 PLAYER_FILE = 'data/players/1div_overskrivning.csv'
 
-# --- 2. HJÆLPEFUNKTIONER (ENCODING & KONVERTERING) ---
-def universal_decode(text):
-    """Fikser ødelagte tegn fra Norden, Baltikum og Sydeuropa."""
-    if not isinstance(text, str):
-        return text
+# --- 2. HJÆLPEFUNKTIONER (LOGO & DECODE) ---
+@st.cache_data(ttl=3600)
+def get_logo_img(opta_uuid):
+    """Henter klublogo fra din TEAMS mapping eller via URL"""
+    if not opta_uuid: return None
+    # Finder URL i TEAMS baseret på UUID
+    url = next((info['logo'] for name, info in TEAMS.items() if info.get('opta_uuid') == opta_uuid), None)
+    if not url: return None
     try:
-        # Tvinger teksten gennem en latin1-til-utf8 vask
-        return text.encode('latin1').decode('utf-8')
-    except:
-        return text
+        response = requests.get(url, timeout=5)
+        return Image.open(BytesIO(response.content))
+    except: return None
 
-def to_metric(val, total_m): 
-    return val * (total_m / 100)
+def universal_decode(text):
+    if not isinstance(text, str): return text
+    try: return text.encode('latin1').decode('utf-8')
+    except: return text
 
 # --- 3. DATA LOAD ---
 @st.cache_data(ttl=3600)
@@ -72,35 +79,29 @@ def load_setpiece_data():
         if df is None or df.empty: return pd.DataFrame()
         df.columns = [c.upper() for c in df.columns]
         
-        # Vask navne fra databasen
         df['PLAYER_NAME'] = df['PLAYER_NAME'].apply(universal_decode)
         df['P1_NAME'] = df['P1_NAME'].apply(universal_decode)
         
         try:
-            # Læs og vask navne fra lookup-filen
             df_lookup = pd.read_csv(PLAYER_FILE, encoding='utf-8-sig')
             df_lookup['PLAYER_OPTAUUID'] = df_lookup['PLAYER_OPTAUUID'].astype(str).str.strip()
             df_lookup['NAVN'] = df_lookup['NAVN'].apply(universal_decode)
             name_map = df_lookup.set_index('PLAYER_OPTAUUID')['NAVN'].to_dict()
-        except:
-            name_map = {}
+        except: name_map = {}
 
         df['TAGER_NAVN'] = df.apply(lambda x: name_map.get(str(x['PLAYER_UUID']).strip(), x['PLAYER_NAME']), axis=1)
         
         def find_target(row):
             if row['P1_TEAM'] == row['TEAM_UUID'] and row['P1_UUID'] != row['PLAYER_UUID']:
-                target_name = name_map.get(str(row['P1_UUID']).strip(), row['P1_NAME'])
-                return target_name
+                return name_map.get(str(row['P1_UUID']).strip(), row['P1_NAME'])
             return None
         
         df['MODTAGER'] = df.apply(find_target, axis=1)
-
         shot_types = [13, 14, 15, 16]
         df['ER_AFSLUTNING'] = df.apply(lambda x: 1 if x['P1_TYPE'] in shot_types or x['P2_TYPE'] in shot_types or x['P3_TYPE'] in shot_types else 0, axis=1)
         
         return df
-    except:
-        return pd.DataFrame()
+    except: return pd.DataFrame()
 
 # --- 4. STATISTIK BEREGNING ---
 def get_summary_stats(df, group_col):
@@ -112,7 +113,6 @@ def get_summary_stats(df, group_col):
         Afslutninger=('ER_AFSLUTNING', 'sum')
     ).reset_index()
     
-    # Procent-fix til ProgressColumn (0-100 skala)
     stats['Succes %'] = (stats['Succesfulde'] / stats['Antal'] * 100).round(0).fillna(0)
     stats['Afslutning %'] = (stats['Afslutninger'] / stats['Antal'] * 100).round(0).fillna(0)
     
@@ -130,13 +130,11 @@ def get_summary_stats(df, group_col):
     stats['Top Modtager'] = stats[group_col].map(mod_map)
     stats['Top Modtager (Afsl.)'] = stats[group_col].map(mod_shot_map)
     
-    final_cols = [group_col, 'Antal', 'Succesfulde', 'Succes %', 'Top Modtager', 'Afslutninger', 'Afslutning %', 'Top Modtager (Afsl.)']
-    return stats[final_cols]
+    return stats[[group_col, 'Antal', 'Succesfulde', 'Succes %', 'Top Modtager', 'Afslutninger', 'Afslutning %', 'Top Modtager (Afsl.)']]
 
 # --- 5. VISUALISERING (BANE) ---
 def render_setpiece_analysis(df_team, sp_type, t_sel):
-    # 1. Hent Logo (bruger logikken fra din modstanderanalyse)
-    # Vi finder uuid for det valgte hold i TEAMS mappingen
+    # Henter Logo
     t_info = next((info for name, info in TEAMS.items() if name == t_sel), None)
     t_uuid = t_info.get('opta_uuid') if t_info else None
     hold_logo = get_logo_img(t_uuid)
@@ -151,20 +149,14 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
     mask = (df_team['TYPE_NAVN'] == sp_type)
     if p_sel != "Alle spillere": mask &= (df_team['TAGER_NAVN'] == p_sel)
     df_plot = df_team[mask].copy()
-
-    # Fejlsikring mod 0,0 data
     df_plot = df_plot[~((df_plot['EVENT_X'] == 0) & (df_plot['EVENT_Y'] == 0))]
 
-    # --- BEREGN STATS TIL NAVN-LINJE ---
     total = len(df_plot)
     succes = int(df_plot['MODTAGER'].notna().sum())
     pct = round((succes / total * 100), 1) if total > 0 else 0
 
-    # 2. Overskrift: Kategori + Navn (Antal / Succes = Succes %)
     st.subheader(sp_type)
     st.markdown(f"**{p_sel}** ({total} / {succes} = **{pct}%**)")
-
-    from mplsoccer import Pitch 
 
     col_p, col_s = st.columns([1.8, 1.2]) 
     
@@ -172,6 +164,7 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
         for c in ['EVENT_X', 'EVENT_Y', 'ENDX', 'ENDY']: 
             df_plot[c] = pd.to_numeric(df_plot[c], errors='coerce')
 
+        # Normalisering til højre
         mask_left = df_plot['EVENT_X'] < 50
         df_plot.loc[mask_left, ['EVENT_X', 'ENDX']] = 100 - df_plot.loc[mask_left, ['EVENT_X', 'ENDX']]
         df_plot.loc[mask_left, ['EVENT_Y', 'ENDY']] = 100 - df_plot.loc[mask_left, ['EVENT_Y', 'ENDY']]
@@ -190,18 +183,13 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
             spine.set_linewidth(0.6)
             spine.set_edgecolor('#333333')
 
-        # --- TILFØJ HOLDNAVN OG LOGO PÅ BANEN (Inspiration fra draw_match_info_box) ---
         if hold_logo:
-            # Vi placerer logoet i nederste venstre hjørne (transform=ax.transAxes bruger 0-1 skala)
             ax_logo = ax.inset_axes([0.02, 0.04, 0.10, 0.10], transform=ax.transAxes)
             ax_logo.imshow(hold_logo)
             ax_logo.axis('off')
-            
-            # Holdnavn placeres ved siden af logoet
             ax.text(0.13, 0.09, t_sel.upper(), transform=ax.transAxes, 
                     fontsize=9, fontweight='bold', color='#333333', alpha=0.6, va='center')
         else:
-            # Hvis intet logo, skriv blot navnet
             ax.text(0.04, 0.09, t_sel.upper(), transform=ax.transAxes, 
                     fontsize=9, fontweight='bold', color='#333333', alpha=0.6, va='center')
 
@@ -209,12 +197,10 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
             if "Zoner" in vis_mode:
                 pitch.hexbin(df_plot.end_x, df_plot.end_y, ax=ax, edgecolors='#f0f0f0',
                              gridsize=(12, 12), cmap='Reds', alpha=0.7)
-            
             if "Pile" in vis_mode:
                 p_color = TEAM_COLORS.get(t_sel, {}).get('primary', HIF_RED)
                 pitch.arrows(df_plot.x, df_plot.y, df_plot.end_x, df_plot.end_y, 
                              color=p_color, ax=ax, width=0.3, headwidth=2, headlength=2, alpha=0.3)
-                
                 pitch.scatter(df_plot.x, df_plot.y, ax=ax, color=p_color, s=10, alpha=0.5)
 
         st.pyplot(fig)
@@ -224,14 +210,12 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
         m1.metric("Antal", total)
         m2.metric("Succes", succes)
         m3.metric("Afslutn.", int(df_plot['ER_AFSLUTNING'].sum()))
-        
         st.divider()
         st.write("**Top 5-modtagere**")
-        
         mod_counts = df_plot['MODTAGER'].value_counts().reset_index()
         mod_counts.columns = ['Spiller', 'Antal']
         st.dataframe(mod_counts.head(5), use_container_width=True, hide_index=True, height=210)
-        
+
 # --- 6. HOVEDSIDE ---
 def vis_side():
     st.set_page_config(layout="wide", page_title="Standardsituationer")
@@ -240,7 +224,6 @@ def vis_side():
         <style>
         header {visibility: hidden;}
         div[data-testid="stSelectbox"] label { display: none !important; }
-        div[data-testid="stHorizontalBlock"] { align-items: center; }
         </style>
     """, unsafe_allow_html=True)
     
@@ -254,50 +237,34 @@ def vis_side():
     teams = sorted([n for n in df_all['KLUB_NAVN'].unique() if pd.notna(n)])
 
     col_title, col_empty, col_select = st.columns([2, 1, 1])
-    with col_title:
-        st.subheader("Standardsituationer")
+    with col_title: st.subheader("Standardsituationer")
     with col_select:
         t_sel = st.selectbox("hold_valg_top", teams, index=teams.index("Hvidovre") if "Hvidovre" in teams else 0)
 
     df_team_selected = df_all[df_all['KLUB_NAVN'] == t_sel].copy()
-
     tabs = st.tabs(["Holdoversigt", "Spilleroversigt", "Hjørnespark", "Frispark", "Indkast", "Zoneoversigt"])
-    cat_options = ["Hjørnespark", "Frispark", "Indkast"]
-
-    # Konfiguration af kolonner med korrekt procent-visning
+    
     col_cfg = {
-        "KLUB_NAVN": "Klub",
-        "TAGER_NAVN": "Spiller",
         "Succes %": st.column_config.ProgressColumn("Succes %", format="%d%%", min_value=0, max_value=100),
-        "Top Modtager": "Modtager (Succes)",
-        "Afslutning %": st.column_config.ProgressColumn("Afslutning %", format="%d%%", min_value=0, max_value=100),
-        "Top Modtager (Afsl.)": "Modtager (Afsl.)"
+        "Afslutning %": st.column_config.ProgressColumn("Afslutning %", format="%d%%", min_value=0, max_value=100)
     }
 
     with tabs[0]: 
-        c_label, c_radio = st.columns([0.15, 0.85])
-        with c_label: st.write("**Kategori**")
-        with c_radio: cat_h = st.radio("cat_h", cat_options, horizontal=True, label_visibility="collapsed", key="radio_hold")
+        cat_h = st.radio("Kategori", ["Hjørnespark", "Frispark", "Indkast"], horizontal=True, key="radio_hold")
         stats_h = get_summary_stats(df_all[df_all['TYPE_NAVN'] == cat_h], 'KLUB_NAVN')
-        st.dataframe(stats_h, use_container_width=True, hide_index=True, height=500, column_config=col_cfg)
+        st.dataframe(stats_h, use_container_width=True, hide_index=True, column_config=col_cfg)
 
     with tabs[1]: 
-        c_label_s, c_radio_s = st.columns([0.15, 0.85])
-        with c_label_s: st.write("**Kategori**")
-        with c_radio_s: cat_s = st.radio("cat_s", cat_options, horizontal=True, label_visibility="collapsed", key="radio_spiller")
-        df_cat_s = df_team_selected[df_team_selected['TYPE_NAVN'] == cat_s]
-        if not df_cat_s.empty:
-            stats_s = get_summary_stats(df_cat_s, 'TAGER_NAVN')
-            st.dataframe(stats_s, use_container_width=True, hide_index=True, height=500, column_config=col_cfg)
+        cat_s = st.radio("Kategori", ["Hjørnespark", "Frispark", "Indkast"], horizontal=True, key="radio_spiller")
+        stats_s = get_summary_stats(df_team_selected[df_team_selected['TYPE_NAVN'] == cat_s], 'TAGER_NAVN')
+        st.dataframe(stats_s, use_container_width=True, hide_index=True, column_config=col_cfg)
 
     with tabs[2]: render_setpiece_analysis(df_team_selected, "Hjørnespark", t_sel)
     with tabs[3]: render_setpiece_analysis(df_team_selected, "Frispark", t_sel)
     with tabs[4]: render_setpiece_analysis(df_team_selected, "Indkast", t_sel)
-
     with tabs[5]:
         df_team_selected['ZONE'] = df_team_selected['ENDY'].apply(lambda y: "Venstre" if float(y or 0) < 33 else ("Højre" if float(y or 0) > 66 else "Center"))
-        zone_stats = df_team_selected.groupby(['ZONE', 'TYPE_NAVN']).size().unstack(fill_value=0).reset_index()
-        st.dataframe(zone_stats, use_container_width=True, hide_index=True)
+        st.dataframe(df_team_selected.groupby(['ZONE', 'TYPE_NAVN']).size().unstack(fill_value=0), use_container_width=True)
 
 if __name__ == "__main__":
     vis_side()
