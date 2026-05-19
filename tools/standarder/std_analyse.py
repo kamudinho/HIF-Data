@@ -173,7 +173,7 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
                       line_color='#333333', goal_type='box', linewidth=1)
         
         # Vi fjerner faste grænser for at lade Pitch styre proportionerne (ingen zoom)
-        fig, ax = pitch.draw(figsize=(12, 8))
+        fig, ax = pitch.draw(figsize=(6, 4))
         
         # VIGTIGT: Vi sætter grænserne til banens faktiske mål (105x68)
         # Det fjerner tomrummet der skubber banen ned
