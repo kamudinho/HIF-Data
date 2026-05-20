@@ -128,7 +128,7 @@ with st.sidebar:
     elif hoved_omraade == "SPILLERANALYSE":
         sel = option_menu(None, options=["Spillerprofil", "Charts"])
     elif hoved_omraade == "SCOUTING":
-        sel = option_menu(None, options=filtrer_menu(["Scoutrapport", "Database", "Emnedatabase", "Sammenligning"]))
+        sel = option_menu(None, options=filtrer_menu(["Scoutrapport", "Database", "Emnedatabase", "Sammenligning", "Transfers"]))
     elif hoved_omraade == "TILPASNING":
         # TILFØJET: "Spiller-score" er nu placeret heri
         sel = option_menu(None, options=filtrer_menu(["Spillerdata", "Spiller-score", "Standardsituationer"]))
@@ -175,7 +175,11 @@ try:
         elif sel == "Sammenligning":
             import tools.scouting.comparison as comp
             comp.vis_side(dp["players"], None, None, dp["career"], dp["sql_players"], dp["advanced_stats"])
+        elif sel == "Transfers":
+            import tools.scouting.transfer_input as t_input
+            t_input.vis_side()
 
+    
     elif hoved_omraade == "SPILLERANALYSE":
         if sel == "Charts":
             import tools.ligaen.chart as pc
