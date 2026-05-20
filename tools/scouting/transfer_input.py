@@ -13,14 +13,16 @@ GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 
 COMP_MAP = { 
     335: "Superliga", 328: "Betinia Ligaen", 329: "2. division", 
-    43319: "3. division", 1305: "U19 Ligaen" 
+    43319: "3. division", 1305: "U19 Ligaen", 1306: "U17 Ligaen", 1307: "U15 Ligaen" 
 }
 
 AGE_LIMITS = { 1305: 19, 1306: 17, 1307: 15 }
+
+# Tilføjet TIMESTAMP til kolonneordenen
 COL_ORDER = [
     "KLUB", "NAVN", "POSITION", "PLAYER_WYID", "PLAYER_OPTAUUID", 
     "COMPETITION_WYID", "COMPETITION_OPTAUUID", "SENESTE_KLUB", 
-    "KONTRAKT_START", "KONTRAKT_UDLOEB", "KILDE", "KOMMENTAR"
+    "KONTRAKT_START", "KONTRAKT_UDLOEB", "KILDE", "KOMMENTAR", "TIMESTAMP"
 ]
 
 def get_github_file(path):
@@ -59,6 +61,10 @@ def vis_side():
     csv_content, csv_sha = get_github_file(FILE_PATH)
     df_csv = pd.read_csv(StringIO(csv_content)) if csv_content else pd.DataFrame(columns=COL_ORDER)
     df_csv['PLAYER_WYID'] = df_csv['PLAYER_WYID'].apply(rens_id)
+    
+    # Sikrer at TIMESTAMP kolonnen eksisterer i den indlæste dataframe
+    if "TIMESTAMP" not in df_csv.columns:
+        df_csv["TIMESTAMP"] = ""
 
     col_left, col_right = st.columns([1, 1], gap="large")
 
@@ -67,7 +73,6 @@ def vis_side():
     with col_left:
         st.subheader("Transfer Center")
         
-        # Hent basisdata fra Snowflake
         sql_players_q = f"""
             SELECT DISTINCT p.PLAYER_WYID, p.SHORTNAME AS NAVN, t.TEAMNAME AS KLUB, 
                             p.ROLECODE3 AS POSITION, p.IMAGEDATAURL, p.BIRTHDATE 
@@ -80,14 +85,10 @@ def vis_side():
         
         search_options = {}
         if df_sql_players is not None:
-            # Lav et opslagsværk fra CSV for hurtig adgang
             csv_lookup = df_csv.set_index('PLAYER_WYID')['KLUB'].to_dict()
-            
             for _, r in df_sql_players.iterrows():
                 p_id = rens_id(r['PLAYER_WYID'])
-                # Hvis spilleren findes i CSV, brug klubben derfra, ellers Snowflake
                 aktuel_klub = csv_lookup.get(p_id, r['KLUB'])
-                
                 search_options[p_id] = {
                     "label": f"{r['NAVN']} ({aktuel_klub})", 
                     "data": r.to_dict(),
@@ -122,6 +123,8 @@ def vis_side():
                 kommentar = st.text_area("Kommentar")
 
                 if st.form_submit_button("REGISTRER TRANSFER"):
+                    now_ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    
                     if skift_udland:
                         final_klub = "Udlandet"
                         final_liga = 0
@@ -140,7 +143,8 @@ def vis_side():
                             "SENESTE_KLUB": entry['aktuel_klub'], 
                             "KONTRAKT_START": k_start.strftime('%Y-%m-%d'),
                             "KONTRAKT_UDLOEB": k_udloeb.strftime('%Y-%m-%d') if k_udloeb else "",
-                            "KILDE": kilde, "KOMMENTAR": kommentar
+                            "KILDE": kilde, "KOMMENTAR": kommentar,
+                            "TIMESTAMP": now_ts # Her gemmes tidsstemplet
                         }
                         df_csv = df_csv[df_csv['PLAYER_WYID'].astype(str) != str(sel_id)]
                         df_csv = pd.concat([df_csv, pd.DataFrame([ny_data])], ignore_index=True)
