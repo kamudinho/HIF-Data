@@ -11,22 +11,20 @@ REPO = "Kamudinho/HIF-data"
 FILE_PATH = "data/players/1div_overskrivning.csv"
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 
-# Din liga-mapping
-COMP_MAP = {
-    335: "Superliga",
-    328: "NordicBet Liga",
-    329: "2. division",
-    43319: "3. division"
+# Dine præcise liga-definitioner
+COMP_MAP = { 
+    335: "Superliga", 
+    328: "NordicBet Liga", 
+    329: "2. division", 
+    43319: "3. division" 
 }
 
-# Den præcise rækkefølge vi ønsker fremover
-# Vi tilføjer COMPETITION_WYID så vi kan gemme liga-tilhørsforhold
+# Overskrifterne holdes præcis som i din oprindelige CSV
 COL_ORDER = [
     "KLUB", "NAVN", "POSITION", "PLAYER_WYID", 
     "PLAYER_OPTAUUID", "CONTRACT_EXPIRY", "TRANSFER_DATE", "PREVIOUS_CLUB", "COMPETITION_WYID"
 ]
 
-# --- HJÆLPEFUNKTIONER ---
 def get_github_file(path):
     try:
         url = f"https://api.github.com/repos/{REPO}/contents/{path}?t={int(time.time())}"
@@ -50,11 +48,8 @@ def rens_id(val):
     if pd.isna(val) or str(val).strip() == "": return ""
     return str(val).split('.')[0].strip()
 
-# --- HOVEDSIDE ---
 def vis_side():
-    st.title("🏟️ HIF Scouting & Transfer Hub")
-
-    # 1. HENT OG REPARER CSV
+    # 1. DATA HENTNING
     csv_content, csv_sha = get_github_file(FILE_PATH)
     
     if csv_content:
@@ -67,7 +62,6 @@ def vis_side():
     df_1div['TRANSFER_DATE'] = pd.to_datetime(df_1div['TRANSFER_DATE'], errors='coerce').dt.date
     today = date.today()
 
-    # Hent database (Snowflake)
     import data.HIF_load as hif_load
     try:
         dp = hif_load.get_scouting_package()
@@ -75,12 +69,11 @@ def vis_side():
     except:
         df_sql = pd.DataFrame()
 
-    # 2. LAYOUT
-    col_left, col_right = st.columns([1, 1.1], gap="large")
+    col_left, col_right = st.columns([1, 1], gap="large")
 
-    # --- VENSTRE SIDE: REDIGERING ---
+    # --- VENSTRE SIDE: TRANSFER CENTER ---
     with col_left:
-        st.subheader("🔄 Opdater Transfer")
+        st.caption("Opdater Transfer")
         
         unique_players = {}
         csv_ids = set(df_1div['PLAYER_WYID'].tolist())
@@ -88,10 +81,7 @@ def vis_side():
         for _, r in df_1div.iterrows():
             p_id = r['PLAYER_WYID']
             if p_id:
-                unique_players[p_id] = {
-                    "label": f"🟢 {r['NAVN']} ({r['KLUB']})",
-                    "data": r.to_dict()
-                }
+                unique_players[p_id] = {"label": f"{r['NAVN']} ({r['KLUB']})", "data": r.to_dict()}
 
         if not df_sql.empty:
             for _, r in df_sql.iterrows():
@@ -101,33 +91,30 @@ def vis_side():
                 f, l = str(r.get('FIRSTNAME', '')).strip(), str(r.get('LASTNAME', '')).strip()
                 navn = f"{f} {l}".strip() if (f or l) else str(r.get('PLAYER_NAME', 'Ukendt'))
                 unique_players[p_id] = {
-                    "label": f"⚪ {navn} ({r.get('TEAMNAME', 'DB')})",
+                    "label": f"{navn} ({r.get('TEAMNAME', 'DB')})",
                     "data": {
-                        "NAVN": navn, 
-                        "PLAYER_WYID": p_id, 
-                        "POSITION": r.get('ROLECODE3', ""), 
-                        "KLUB": r.get('TEAMNAME', ""), 
-                        "PLAYER_OPTAUUID": r.get('PLAYER_OPTAUUID', ""),
+                        "NAVN": navn, "PLAYER_WYID": p_id, "POSITION": r.get('ROLECODE3', ""), 
+                        "KLUB": r.get('TEAMNAME', ""), "PLAYER_OPTAUUID": r.get('PLAYER_OPTAUUID', ""),
                         "COMPETITION_WYID": r.get('COMPETITION_WYID')
                     }
                 }
 
-        sel_id = st.selectbox("Søg spiller", [""] + sorted(unique_players.keys(), key=lambda x: unique_players[x]["label"][2:]), 
-                              format_func=lambda x: unique_players[x]["label"] if x else "Vælg spiller...")
+        sel_id = st.selectbox("Søg spiller", [""] + sorted(unique_players.keys(), key=lambda x: unique_players[x]["label"]), 
+                              format_func=lambda x: unique_players[x]["label"] if x else "Vælg...")
 
         if sel_id:
             p = unique_players[sel_id]["data"]
             with st.form("edit_form"):
-                st.write(f"Redigerer: **{p['NAVN']}**")
+                st.write(f"Redigerer: {p['NAVN']}")
                 
                 eksisterende_klubber = sorted([k for k in df_1div['KLUB'].unique() if pd.notna(k)])
                 ny_klub = st.selectbox("Destination", ["--- UÆNDRET ---", "Slet / Udlandet"] + eksisterende_klubber)
                 
                 c1, c2 = st.columns(2)
                 exp_date = c1.date_input("Kontraktudløb", value=pd.to_datetime(p.get('CONTRACT_EXPIRY')).date() if pd.notna(p.get('CONTRACT_EXPIRY')) else today)
-                eff_date = c2.date_input("Skiftet træder i kraft", value=today)
+                eff_date = c2.date_input("Effektueringsdato", value=today)
                 
-                if st.form_submit_button("GEM ÆNDRING"):
+                if st.form_submit_button("GEM"):
                     df_final = df_1div[df_1div['PLAYER_WYID'] != sel_id].copy()
                     
                     if ny_klub != "Slet / Udlandet":
@@ -147,48 +134,28 @@ def vis_side():
                     
                     csv_string = df_final[COL_ORDER].to_csv(index=False)
                     push_to_github(FILE_PATH, f"Opdatering: {p['NAVN']}", csv_string, csv_sha)
-                    st.success("Gemt!")
-                    time.sleep(0.5)
                     st.rerun()
 
-    # --- HØJRE SIDE: LIGA-FILTRERING OG TRUP ---
+    # --- HØJRE SIDE: TRUPOVERSIGT MED LIGA-FILTER ---
     with col_right:
-        st.subheader("📋 Trupoversigt")
+        st.caption("Trupoversigt")
         
-        # Liga-vælger
-        liga_navne = list(COMP_MAP.values())
-        valgt_liga_navn = st.segmented_control("Vælg Liga", liga_navne, default="NordicBet Liga")
+        # Liga-vælger baseret på dine IDs
+        liga_valg = st.selectbox("Vælg liga", list(COMP_MAP.values()))
+        valgt_id = [k for k, v in COMP_MAP.items() if v == liga_valg][0]
         
-        # Find ID for valgt liga
-        valgt_liga_id = [k for k, v in COMP_MAP.items() if v == valgt_liga_navn][0]
+        # Filtrering
+        mask = df_1div['COMPETITION_WYID'].astype(str).str.contains(str(valgt_id), na=False)
+        klubber_i_liga = sorted(df_1div[mask]['KLUB'].unique().tolist())
         
-        # Filtrer klubber baseret på liga (bruger COMPETITION_WYID fra CSV)
-        df_liga = df_1div[df_1div['COMPETITION_WYID'].astype(str).str.contains(str(valgt_liga_id), na=False)]
+        valgt_hold = st.selectbox("Vælg hold", klubber_i_liga if klubber_i_liga else ["Ingen data"])
         
-        klubber_i_liga = sorted(df_liga['KLUB'].unique().tolist())
-        
-        if not klubber_i_liga:
-            st.warning(f"Ingen klubber registreret i {valgt_liga_navn} endnu.")
-            valgt_hold = None
-        else:
-            valgt_hold = st.selectbox("Vælg klub", klubber_i_liga)
-        
-        if valgt_hold:
+        if valgt_hold and valgt_hold != "Ingen data":
             trup = df_1div[df_1div['KLUB'] == valgt_hold].copy()
-            
             vis_df = []
             for _, s in trup.iterrows():
-                status = ""
-                if pd.notna(s['TRANSFER_DATE']) and s['TRANSFER_DATE'] > today:
-                    status = f"⏳ Tilgår {s['TRANSFER_DATE']}"
-                
-                vis_df.append({
-                    "Spiller": s['NAVN'],
-                    "Pos": s['POSITION'],
-                    "Udløb": s['CONTRACT_EXPIRY'] if pd.notna(s['CONTRACT_EXPIRY']) else "-",
-                    "Info": status
-                })
-            
+                info = f"Tilgår {s['TRANSFER_DATE']}" if pd.notna(s['TRANSFER_DATE']) and s['TRANSFER_DATE'] > today else ""
+                vis_df.append({"Spiller": s['NAVN'], "Pos": s['POSITION'], "Udløb": s['CONTRACT_EXPIRY'], "Info": info})
             st.table(pd.DataFrame(vis_df))
 
 if __name__ == "__main__":
