@@ -75,10 +75,9 @@ def vis_side():
         except:
             df_sql = pd.DataFrame()
 
-    # --- KONSTRUKTION AF SPILLERLISTEN (VIGTIGT!) ---
     unique_players = {}
     
-    # TRIN 1: Tilføj dem fra CSV først (De grønne - Andreas Smed m.fl.)
+    # TRIN 1: Tilføj dem fra CSV (De grønne)
     for _, r in df_1div.iterrows():
         p_id = rens_id(r.get('PLAYER_WYID'))
         if p_id:
@@ -90,12 +89,12 @@ def vis_side():
                 }
             }
 
-    # TRIN 2: Tilføj kun fra SQL, hvis de IKKE allerede er i CSV'en
+    # TRIN 2: Tilføj kun fra SQL, hvis de IKKE er i CSV'en (De hvide)
     if not df_sql.empty:
         for _, r in df_sql.iterrows():
             p_id = rens_id(r.get('PLAYER_WYID'))
             if not p_id or p_id in csv_ids: 
-                continue # Spring over hvis han allerede er grøn
+                continue 
             
             f = str(r.get('FIRSTNAME', '')).strip()
             l = str(r.get('LASTNAME', '')).strip()
@@ -106,10 +105,11 @@ def vis_side():
                 "data": {"n": full_navn, "id": p_id, "pos": r.get('ROLECODE3', ""), "klub": "Database", "opta": ""}
             }
 
-    # Sortering: Grønne cirkler øverst, derefter alfabetisk
+    # --- NY SORTERING: ALFABETISK PÅ NAVN (Miks af grøn/hvid) ---
+    # Vi sorterer på labelen, men fjerner cirklen i sorterings-logikken så 'A' altid kommer før 'B'
     options_list = sorted(
         unique_players.keys(), 
-        key=lambda x: (unique_players[x]["label"].startswith("⚪"), unique_players[x]["label"])
+        key=lambda x: unique_players[x]["label"][2:] # Sorterer fra karakter 2 og frem (efter cirklen)
     )
 
     # --- UI ---
@@ -133,7 +133,6 @@ def vis_side():
         with st.form("transfer_form"):
             col_a, col_b = st.columns(2)
             
-            # Outcome Scenarier
             eksisterende_klubber = sorted(df_1div['KLUB'].unique().tolist())
             destinations = ["--- VÆLG DESTINATION ---", "✈️ Udlandet / Anden række"] + eksisterende_klubber
             
@@ -145,11 +144,10 @@ def vis_side():
                 if valgt_klub == "--- VÆLG DESTINATION ---":
                     st.warning("Vælg venligst hvor spilleren skal hen.")
                 else:
-                    # Rens eksisterende række
                     df_final = df_1div[df_1div['PLAYER_WYID'].astype(str).apply(rens_id) != str(sel_id)].copy()
                     
                     if valgt_klub == "✈️ Udlandet / Anden række":
-                        msg = f"Slettet/Udlandet: {p_info['n']}"
+                        msg = f"Slettet: {p_info['n']}"
                     else:
                         ny_række = {
                             "KLUB": valgt_klub, "NAVN": p_info['n'], "POSITION": valgt_pos,
