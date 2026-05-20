@@ -36,14 +36,14 @@ def rens_id(val):
     if pd.isna(val) or str(val).strip() == "": return ""
     return str(val).split('.')[0].strip()
 
-# --- HOVEDLOGIK ---
+# --- HOVEDSIDE ---
 def vis_side():
     from data.data_load import _get_snowflake_conn
     conn = _get_snowflake_conn()
     DB = "KLUB_HVIDOVREIF.AXIS"
 
-    # Hent CSV-data (bruges til Betinia Ligaen og til opslag i søgning)
-    csv_content, csv_sha = get_github_file(FILE_PATH)
+    # Hent CSV til 1. division (328)
+    csv_content, _ = get_github_file(FILE_PATH)
     df_csv = pd.read_csv(StringIO(csv_content)) if csv_content else pd.DataFrame(columns=COL_ORDER)
 
     col_left, col_right = st.columns([1, 1], gap="large")
@@ -52,7 +52,7 @@ def vis_side():
     with col_left:
         st.caption("Opdater Spiller/Transfer")
         
-        # Bred søgning på tværs af alle aktive spillere i 2025/2026
+        # SQL-søgning (Bred, kun 25/26 aktive)
         search_q = f"""
             SELECT DISTINCT p.PLAYER_WYID, p.SHORTNAME AS NAVN, t.TEAMNAME AS KLUB, p.ROLECODE3 AS POSITION
             FROM {DB}.WYSCOUT_PLAYERS p
@@ -60,78 +60,71 @@ def vis_side():
             JOIN {DB}.WYSCOUT_SEASONS s ON p.COMPETITION_WYID = s.COMPETITION_WYID
             WHERE s.SEASONNAME = '2025/2026' AND p.STATUS = 'active'
         """
-        df_search_sql = conn.query(search_q)
+        df_search = conn.query(search_q)
         
         search_options = {}
-        # CSV-spillere
         for _, r in df_csv.iterrows():
             p_id = rens_id(r['PLAYER_WYID'])
             if p_id: search_options[p_id] = {"label": f"📝 {r['NAVN']} ({r['KLUB']})", "data": r.to_dict()}
-        # SQL-spillere
-        if df_search_sql is not None:
-            for _, r in df_search_sql.iterrows():
+        if df_search is not None:
+            for _, r in df_search.iterrows():
                 p_id = rens_id(r['PLAYER_WYID'])
                 if p_id and p_id not in search_options:
                     search_options[p_id] = {"label": f"🌐 {r['NAVN']} ({r['KLUB']})", "data": r.to_dict()}
 
         sel_id = st.selectbox("Søg spiller", [""] + sorted(search_options.keys(), key=lambda x: search_options[x]["label"]),
                             format_func=lambda x: search_options[x]["label"] if x else "Vælg spiller...")
-
+        
         if sel_id:
-            p = search_options[sel_id]["data"]
-            with st.form("transfer_form"):
-                st.write(f"Valgt: **{p.get('NAVN', p.get('PLAYER_NAME'))}**")
-                # (Her kan du tilføje din gemme-logik til GitHub)
-                st.form_submit_button("Opdater")
+            st.info(f"Valgt: {search_options[sel_id]['label']}")
+            # Form-logik her...
 
-    # --- HØJRE SIDE: TRUPOVERSIGT (DEN NYE LOGIK) ---
+    # --- HØJRE SIDE: TRUPOVERSIGT (12 HOLD LOGIK) ---
     with col_right:
-        st.caption("Trupoversigt (Sæson 2025/2026)")
-        liga_navne = list(COMP_MAP.values())
-        valgt_liga_navn = st.segmented_control("Vælg liga", liga_navne, default="Superliga")
+        st.caption("Trupoversigt (Kun 2025/2026 hold)")
+        valgt_liga_navn = st.segmented_control("Vælg liga", list(COMP_MAP.values()), default="Superliga")
         valgt_id = int([k for k, v in COMP_MAP.items() if v == valgt_liga_navn][0])
 
         if valgt_id == 328:
-            # Betinia Ligaen kører fortsat på CSV-logik
-            kilde_df = df_csv.copy()
-            kilde_df['L_ID'] = pd.to_numeric(kilde_df['COMPETITION_WYID'], errors='coerce')
-            final_df = kilde_df[kilde_df['L_ID'] == 328].copy()
+            final_df = df_csv.copy()
+            final_df['L_ID'] = pd.to_numeric(final_df['COMPETITION_WYID'], errors='coerce')
+            final_df = final_df[final_df['L_ID'] == 328].copy()
         else:
-            # NY SQL LOGIK:
-            # 1. Find alle hold (TEAM_WYID) der er i denne liga i sæsonen 25/26
-            # 2. Hent de spillere der er tilknyttet disse hold
+            # DEN NYE QUERY:
+            # 1. Vi finder kun de hold der har en aktiv relation til den valgte liga i denne sæson.
+            # 2. Vi Joiner spillere på de specifikke hold.
             query = f"""
-                WITH TargetTeams AS (
-                    SELECT DISTINCT TEAM_WYID, TEAMNAME
-                    FROM {DB}.WYSCOUT_TEAMS
-                    WHERE COMPETITION_WYID = {valgt_id}
+                WITH CurrentTeams AS (
+                    SELECT DISTINCT t.TEAM_WYID, t.TEAMNAME
+                    FROM {DB}.WYSCOUT_TEAMS t
+                    JOIN {DB}.WYSCOUT_SEASONS s ON t.COMPETITION_WYID = s.COMPETITION_WYID
+                    WHERE t.COMPETITION_WYID = {valgt_id}
+                    AND s.SEASONNAME = '2025/2026'
                 )
                 SELECT DISTINCT 
                     p.SHORTNAME AS NAVN, 
                     p.ROLECODE3 AS POSITION, 
                     p.PLAYER_WYID, 
-                    t.TEAMNAME AS KLUB
+                    ct.TEAMNAME AS KLUB
                 FROM {DB}.WYSCOUT_PLAYERS p
-                INNER JOIN TargetTeams t ON p.CURRENTTEAM_WYID = t.TEAM_WYID
-                INNER JOIN {DB}.WYSCOUT_SEASONS s ON p.COMPETITION_WYID = s.COMPETITION_WYID
-                WHERE s.SEASONNAME = '2025/2026'
+                INNER JOIN CurrentTeams ct ON p.CURRENTTEAM_WYID = ct.TEAM_WYID
+                WHERE p.COMPETITION_WYID = {valgt_id}
                 AND p.STATUS = 'active'
-                AND p.COMPETITION_WYID = {valgt_id}
             """
             final_df = conn.query(query)
 
         if final_df is not None and not final_df.empty:
             final_df.columns = [c.upper() for c in final_df.columns]
+            # Her får du nu kun de 12 hold (eller hvor mange der er i s_f)
             hold_liste = sorted(final_df['KLUB'].unique().tolist())
             
-            # Unik key for hver liga tvinger dropdown til at nulstille
             valgt_hold = st.selectbox("Vælg hold", hold_liste, key=f"squad_select_{valgt_id}")
             
             if valgt_hold:
                 trup = final_df[final_df['KLUB'] == valgt_hold].copy()
                 st.table(trup[['NAVN', 'POSITION', 'PLAYER_WYID']].sort_values(by='NAVN'))
         else:
-            st.info("Ingen hold fundet for denne liga i 2025/2026.")
+            st.warning("Ingen hold fundet.")
 
 if __name__ == "__main__":
     vis_side()
