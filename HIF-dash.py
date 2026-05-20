@@ -177,7 +177,7 @@ try:
             comp.vis_side(dp["players"], None, None, dp["career"], dp["sql_players"], dp["advanced_stats"])
         elif sel == "Transfers":
             import tools.scouting.transfer_input as t_input
-            t_input.vis_side()
+            t_input.vis_side(dp)
 
     
     elif hoved_omraade == "SPILLERANALYSE":
