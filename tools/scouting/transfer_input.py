@@ -75,9 +75,9 @@ def vis_side():
 
     # --- VENSTRE SIDE: TRANSFER CENTER ---
     with col_left:
-        st.caption("Transfers")
+        st.subheader("Transfer Center")
         
-        # SQL opdateret til at bruge FIRSTNAME og LASTNAME
+        # Hent spillere fra SQL
         sql_players_q = f"""
             SELECT DISTINCT p.PLAYER_WYID, 
                    CONCAT(p.FIRSTNAME, ' ', p.LASTNAME) AS NAVN, 
@@ -100,58 +100,65 @@ def vis_side():
         
         sel_id = st.selectbox("Søg på spiller...", [""] + sorted(search_options.keys(), key=lambda x: search_options[x]["label"]), format_func=lambda x: search_options[x]["label"] if x else "Vælg spiller...")
 
+        # Vis billede og info hvis spiller er valgt
         if sel_id:
             entry = search_options[sel_id]
             p = entry["data"]; alder = beregn_alder(p['BIRTHDATE'])
-            
             c1, c2 = st.columns([0.25, 0.75])
             with c1: st.image(p['IMAGEDATAURL'] if p['IMAGEDATAURL'] else "https://cdn5.wyscout.com/photos/players/public/ndplayer_100x130.png", width=70)
             with c2:
                 st.write(f"**{p['NAVN']}**")
                 st.caption(f"Nuværende: {entry['aktuel_klub']} | Alder: {alder if alder else '?'}")
+        else:
+            st.info("Vælg en spiller for at udfylde formularen")
 
-            with st.form("full_transfer_form", clear_on_submit=True):
-                skift_udland = st.checkbox("Skift til udlandet (Fjern fra danske lister)")
-                
-                hold_liste = sorted(df_alle_hold['TEAMNAME'].tolist()) if df_alle_hold is not None else []
-                ny_klub = st.selectbox("Ny klub", hold_liste, disabled=skift_udland)
-                
-                d1, d2 = st.columns(2)
-                k_start = d1.date_input("Kontraktstart", value=datetime.now())
-                k_udloeb = d2.date_input("Kontraktudløb", value=None)
-                
-                kilde = st.text_input("Kilde (Link)")
-                kommentar = st.text_area("Kommentar")
+        # FORMULAREN VISES NU ALTID
+        with st.form("full_transfer_form", clear_on_submit=True):
+            # Felterne deaktiveres hvis ingen spiller er valgt
+            is_disabled = not sel_id
+            
+            skift_udland = st.checkbox("Skift til udlandet (Fjern fra danske lister)", disabled=is_disabled)
+            
+            hold_liste = sorted(df_alle_hold['TEAMNAME'].tolist()) if df_alle_hold is not None else []
+            ny_klub = st.selectbox("Ny klub", hold_liste, disabled=(is_disabled or skift_udland))
+            
+            d1, d2 = st.columns(2)
+            k_start = d1.date_input("Kontraktstart", value=datetime.now(), disabled=is_disabled)
+            k_udloeb = d2.date_input("Kontraktudløb", value=None, disabled=is_disabled)
+            
+            kilde = st.text_input("Kilde (Link)", disabled=is_disabled)
+            kommentar = st.text_area("Kommentar", disabled=is_disabled)
 
-                if st.form_submit_button("REGISTRER TRANSFER"):
-                    now_ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                    
-                    if skift_udland:
-                        final_klub = "Udlandet"
-                        final_liga = 0
-                        is_udland = "True"
-                    else:
-                        match_liga = df_alle_hold[df_alle_hold['TEAMNAME'] == ny_klub]['COMPETITION_WYID'].values
-                        final_klub = ny_klub
-                        final_liga = int(match_liga[0]) if len(match_liga) > 0 else 0
-                        is_udland = "False"
+            submit = st.form_submit_button("REGISTRER TRANSFER", disabled=is_disabled)
 
-                    max_alder = AGE_LIMITS.get(final_liga)
-                    if max_alder and alder and alder > max_alder:
-                        st.error(f"Spilleren er for gammel til {COMP_MAP.get(final_liga)}.")
-                    else:
-                        ny_data = {
-                            "KLUB": final_klub, "NAVN": p['NAVN'], "POSITION": p['POSITION'],
-                            "PLAYER_WYID": sel_id, "COMPETITION_WYID": final_liga,
-                            "SENESTE_KLUB": entry['aktuel_klub'], "KONTRAKT_START": k_start.strftime('%Y-%m-%d'),
-                            "KONTRAKT_UDLOEB": k_udloeb.strftime('%Y-%m-%d') if k_udloeb else "",
-                            "KILDE": kilde, "KOMMENTAR": kommentar, 
-                            "TIMESTAMP": now_ts, "UDLANDET": is_udland
-                        }
-                        df_csv = df_csv[df_csv['PLAYER_WYID'].astype(str) != str(sel_id)]
-                        df_csv = pd.concat([df_csv, pd.DataFrame([ny_data])], ignore_index=True)
-                        push_to_github(FILE_PATH, f"Transfer: {p['NAVN']} -> {final_klub}", df_csv[COL_ORDER].to_csv(index=False), csv_sha)
-                        st.success("Transfer gennemført"); time.sleep(1); st.rerun()
+            if submit and sel_id:
+                now_ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                entry = search_options[sel_id]
+                p = entry["data"]
+                
+                if skift_udland:
+                    final_klub = "Udlandet"; final_liga = 0; is_udland = "True"
+                else:
+                    match_liga = df_alle_hold[df_alle_hold['TEAMNAME'] == ny_klub]['COMPETITION_WYID'].values
+                    final_klub = ny_klub
+                    final_liga = int(match_liga[0]) if len(match_liga) > 0 else 0
+                    is_udland = "False"
+
+                ny_data = {
+                    "KLUB": final_klub, "NAVN": p['NAVN'], "POSITION": p['POSITION'],
+                    "PLAYER_WYID": sel_id, "COMPETITION_WYID": final_liga,
+                    "SENESTE_KLUB": entry['aktuel_klub'], "KONTRAKT_START": k_start.strftime('%Y-%m-%d'),
+                    "KONTRAKT_UDLOEB": k_udloeb.strftime('%Y-%m-%d') if k_udloeb else "",
+                    "KILDE": kilde, "KOMMENTAR": kommentar, 
+                    "TIMESTAMP": now_ts, "UDLANDET": is_udland
+                }
+                
+                df_csv = df_csv[df_csv['PLAYER_WYID'].astype(str) != str(sel_id)]
+                df_csv = pd.concat([df_csv, pd.DataFrame([ny_data])], ignore_index=True)
+                push_to_github(FILE_PATH, f"Transfer: {p['NAVN']}", df_csv[COL_ORDER].to_csv(index=False), csv_sha)
+                st.success(f"Transfer registreret for {p['NAVN']}")
+                time.sleep(1)
+                st.rerun()
 
     # --- HØJRE SIDE: TRUPOVERSIGT ---
     with col_right:
