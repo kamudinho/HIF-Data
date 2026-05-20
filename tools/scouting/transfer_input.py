@@ -175,7 +175,7 @@ def vis_side():
                 # 2. Fjern TIMESTAMP kolonnen så den ikke vises i appen
                 vis_trup = trup_udland.sort_values(by="TIMESTAMP", ascending=False).drop(columns=['TIMESTAMP'])
                 
-                st.table(vis_trup)
+                st.dataframe(vis_trup)
             else:
                 st.info("Ingen spillere registreret i udlandet.")
 
@@ -185,7 +185,7 @@ def vis_side():
             valgt_hold = st.selectbox("Vælg hold", hold_i_csv)
             if valgt_hold:
                 trup = df_csv_vis[(df_csv_vis['KLUB'] == valgt_hold) & (df_csv_vis['COMPETITION_WYID'] == 328)][['NAVN', 'POSITION', 'PLAYER_WYID']]
-                st.table(trup.sort_values(by="NAVN"))
+                st.dataframe(trup.sort_values(by="NAVN"))
 
         else:
             valgt_liga_id = int([k for k, v in COMP_MAP.items() if v == liga_valg][0])
@@ -211,7 +211,7 @@ def vis_side():
                     sql_f = sql_trup[(sql_trup['KLUB'] == v_hold) & (~sql_trup['PLAYER_WYID'].isin(csv_ids))]
                     csv_f = df_csv_vis[(df_csv_vis['COMPETITION_WYID'] == valgt_liga_id) & (df_csv_vis['KLUB'] == v_hold)]
                     vis_trup = pd.concat([sql_f[['NAVN', 'POSITION', 'PLAYER_WYID']], csv_f[['NAVN', 'POSITION', 'PLAYER_WYID']]], ignore_index=True)
-                    st.table(vis_trup.sort_values(by="NAVN"))
+                    st.dataframe(vis_trup.sort_values(by="NAVN"))
 
 if __name__ == "__main__":
     vis_side()
