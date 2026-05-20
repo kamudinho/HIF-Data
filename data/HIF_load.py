@@ -72,7 +72,7 @@ def get_scouting_package():
             career_q = career_q.replace("ORDER BY", f"WHERE pc.PLAYER_WYID IN {id_str} ORDER BY") if "ORDER BY" in career_q else career_q + f" WHERE pc.PLAYER_WYID IN {id_str}"
             df_career = conn.query(career_q)
             
-            df_wyscout_search = conn.query(queries["wyscout_players"])
+            df_wyscout_search = conn.query(queries["players"])
 
             adv_q = queries["player_stats_total"] + f" AND pt.PLAYER_WYID IN {id_str}"
             df_adv = conn.query(adv_q)
