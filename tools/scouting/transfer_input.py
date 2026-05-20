@@ -78,7 +78,7 @@ def vis_side():
 
     # --- VENSTRE SIDE: REDIGERING ---
     with col_left:
-        st.subheader("Opdater Transfer")
+        st.caption("Opdater Transfer")
         
         unique_players = {}
         csv_ids = set(df_1div['PLAYER_WYID'].tolist())
