@@ -1,3 +1,4 @@
+#HIF-Data/tools/scouting/transfer_input.py
 import streamlit as st
 import pandas as pd
 import requests
@@ -68,7 +69,7 @@ def vis_side():
 
     # --- VENSTRE SIDE: SØG & OPDATER ---
     with col_left:
-        st.subheader("Opdater Spiller/Transfer")
+        st.caption("Opdater Spiller/Transfer")
         
         search_options = {}
         
@@ -131,7 +132,7 @@ def vis_side():
 
     # --- HØJRE SIDE: TRUPOVERSIGT ---
     with col_right:
-        st.subheader("Trupoversigt")
+        st.caption("Trupoversigt")
         
         liga_navne = list(COMP_MAP.values())
         valgt_liga_navn = st.segmented_control("Vælg liga", liga_navne, default="Betinia Ligaen")
@@ -143,8 +144,10 @@ def vis_side():
             kilde_df = df_csv[mask].copy()
         else:
             if not df_sql.empty:
-                # Filtrer SQL data baseret på liga ID (f.eks. 335 for Superliga)
-                mask = df_sql['COMPETITION_WYID'].fillna(0).astype(int) == int(valgt_id)
+                # Robust filtrering: Vi omdanner begge sider til tekst og fjerner eventuelle decimaler
+                sql_ids = df_sql['COMPETITION_WYID'].astype(str).str.split('.').str[0]
+                mask = sql_ids == str(valgt_id)
+                
                 kilde_df = df_sql[mask].copy().rename(columns={'TEAMNAME': 'KLUB', 'PLAYER_NAME': 'NAVN', 'ROLECODE3': 'POSITION'})
             else:
                 kilde_df = pd.DataFrame()
