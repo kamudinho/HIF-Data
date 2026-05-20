@@ -141,32 +141,30 @@ def vis_side():
         # Find det tilsvarende WYID (f.eks. 335 for Superliga)
         valgt_id = [k for k, v in COMP_MAP.items() if v == valgt_liga_navn][0]
         
-        # 2. Logik for data-kilde
+        # --- LOGIK FOR DATA-KILDE ---
         if valgt_id == 328:
-            # For 1. division (Betinia) bruger vi din overskrivnings-fil (CSV)
-            # Vi sikrer os at vi kun tager rækker der rent faktisk hører til liga 328
+            # Kun spillere fra din lokale CSV der tilhører 1. division
             mask = df_csv['COMPETITION_WYID'].astype(str).str.contains('328', na=False)
             kilde_df = df_csv[mask].copy()
         else:
-            # For alle andre (Superliga, 2. div osv.) bruger vi SQL data
+            # SQL data til Superliga, 2. div, osv.
             if not df_sql.empty:
-                # Robust filtrering: Gør ID til streng, fjern .0 og sammenlign
-                df_sql['COMP_ID_STR'] = df_sql['COMPETITION_WYID'].astype(str).str.split('.').str[0].str.strip()
+                # KRITISK: Vi tvinger ID til at være en ren streng uden decimaler
+                # så 335.0 bliver til "335"
+                df_sql['COMP_ID_RENS'] = df_sql['COMPETITION_WYID'].astype(str).str.split('.').str[0].str.strip()
                 
-                mask = df_sql['COMP_ID_STR'] == str(valgt_id)
+                # Filtrer så vi KUN har den valgte liga (f.eks. "335")
+                mask = df_sql['COMP_ID_RENS'] == str(valgt_id)
                 kilde_df = df_sql[mask].copy()
                 
-                # Omdøb kolonner så de matcher tabellens forventninger
-                kilde_df = kilde_df.rename(columns={
-                    'TEAMNAME': 'KLUB', 
-                    'PLAYER_NAME': 'NAVN', 
-                    'ROLECODE3': 'POSITION'
-                })
+                # Omdøb kolonner
+                kilde_df = kilde_df.rename(columns={'TEAMNAME': 'KLUB', 'PLAYER_NAME': 'NAVN', 'ROLECODE3': 'POSITION'})
             else:
                 kilde_df = pd.DataFrame()
 
-        # 3. Vis hold-vælger baseret på den filtrerede kilde
+        # --- GENERER HOLDLISTE FRA DEN FILTREREDE DATA ---
         if not kilde_df.empty:
+            # Nu indeholder kilde_df KUN de hold, der matcher valgt_id!
             hold_liste = sorted(kilde_df['KLUB'].unique().tolist())
             valgt_hold = st.selectbox("Vælg hold", hold_liste)
             
