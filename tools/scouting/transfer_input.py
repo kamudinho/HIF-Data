@@ -155,16 +155,23 @@ def vis_side():
 
     # --- HØJRE SIDE: TRUPOVERSIGT ---
     with col_right:
-        st.subheader("Trupoversigt")
+        st.caption("Trupoversigt")
         
         faner = list(COMP_MAP.values()) + ["Udlandet"]
         liga_valg = st.segmented_control("Vælg liga", faner, default="Betinia Ligaen")
 
         if liga_valg == "Udlandet":
             st.write("### Spillere i udlandet")
-            trup_udland = df_csv[df_csv['UDLANDET'].astype(str) == "True"][['NAVN', 'POSITION', 'PLAYER_WYID', 'SENESTE_KLUB']]
+            
+            # Vi tager TIMESTAMP med her for at kunne sortere
+            trup_udland = df_csv[df_csv['UDLANDET'].astype(str) == "True"][['NAVN', 'POSITION', 'PLAYER_WYID', 'SENESTE_KLUB', 'TIMESTAMP']]
+            
             if not trup_udland.empty:
-                st.table(trup_udland.sort_values(by="TIMESTAMP", ascending=False))
+                # 1. Sorter efter TIMESTAMP (nyeste øverst)
+                # 2. Fjern TIMESTAMP kolonnen så den ikke vises i appen
+                vis_trup = trup_udland.sort_values(by="TIMESTAMP", ascending=False).drop(columns=['TIMESTAMP'])
+                
+                st.table(vis_trup)
             else:
                 st.info("Ingen spillere registreret i udlandet.")
 
