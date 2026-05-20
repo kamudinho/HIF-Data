@@ -131,29 +131,55 @@ def vis_side():
                     push_to_github(FILE_PATH, f"Opdatering: {p['NAVN']}", csv_string, csv_sha)
                     st.rerun()
 
-    # --- HØJRE SIDE: TRUPOVERSIGT MED BOKSE ---
+    # --- HØJRE SIDE: TRUPOVERSIGT (CSV + DATABASE) ---
     with col_right:
         st.caption("Trupoversigt")
         
-        # Boksene til liga-valg med det korrekte navn: Betinia Ligaen
         liga_navne = list(COMP_MAP.values())
         valgt_liga_navn = st.segmented_control("Vælg liga", liga_navne, default="Betinia Ligaen", label_visibility="collapsed")
-        
-        # Find ID'et for den valgte liga-boks
         valgt_id = [k for k, v in COMP_MAP.items() if v == valgt_liga_navn][0]
         
-        # Filtrer klubber der matcher det valgte liga-ID
-        mask = df_1div['COMPETITION_WYID'].astype(str).str.contains(str(valgt_id), na=False)
-        klubber_i_liga = sorted(df_1div[mask]['KLUB'].unique().tolist())
-        
-        valgt_hold = st.selectbox("Vælg hold", klubber_i_liga if klubber_i_liga else ["Ingen data"])
+        # LOGIK: Hvor skal vi hente truppen fra?
+        if valgt_id == 328:
+            # Betinia Ligaen: Brug din CSV (inkl. dem uden ID)
+            mask = (df_1div['COMPETITION_WYID'].astype(str).str.contains('328', na=False)) | (df_1div['COMPETITION_WYID'].isna())
+            kilde_df = df_1div[mask].copy()
+            hold_liste = sorted([k for k in kilde_df['KLUB'].unique() if pd.notna(k)])
+        else:
+            # Andre ligaer: Brug SQL databasen direkte
+            mask = df_sql['COMPETITION_WYID'].astype(float) == float(valgt_id)
+            kilde_df = df_sql[mask].copy()
+            # Omdøb SQL kolonner så de matcher tabellen (TEAMNAME -> KLUB)
+            kilde_df = kilde_df.rename(columns={'TEAMNAME': 'KLUB', 'PLAYER_NAME': 'NAVN', 'ROLECODE3': 'POSITION'})
+            hold_liste = sorted([k for k in kilde_df['KLUB'].unique() if pd.notna(k)])
+
+        valgt_hold = st.selectbox("Vælg hold", hold_liste if hold_liste else ["Ingen data"])
         
         if valgt_hold and valgt_hold != "Ingen data":
-            trup = df_1div[df_1div['KLUB'] == valgt_hold].copy()
+            # Filtrer på det valgte hold
+            trup = kilde_df[kilde_df['KLUB'] == valgt_hold].copy()
+            
             vis_df = []
             for _, s in trup.iterrows():
-                info = f"Tilgår {s['TRANSFER_DATE']}" if pd.notna(s['TRANSFER_DATE']) and s['TRANSFER_DATE'] > today else ""
-                vis_df.append({"Spiller": s['NAVN'], "Pos": s['POSITION'], "Udløb": s['CONTRACT_EXPIRY'], "Info": info})
+                # Formatering af navn (håndterer hvis SQL mangler samlet navn)
+                navn = s['NAVN']
+                if pd.isna(navn):
+                    f, l = str(s.get('FIRSTNAME', '')), str(s.get('LASTNAME', ''))
+                    navn = f"{f} {l}".strip()
+
+                # Info-felt (kun relevant for CSV-data)
+                info = ""
+                if valgt_id == 328:
+                    if pd.notna(s.get('TRANSFER_DATE')) and s['TRANSFER_DATE'] > today:
+                        info = f"Tilgår {s['TRANSFER_DATE']}"
+                
+                vis_df.append({
+                    "Spiller": navn,
+                    "Pos": s.get('POSITION', '-'),
+                    "Udløb": s.get('CONTRACT_EXPIRY', '-'),
+                    "Info": info
+                })
+            
             st.table(pd.DataFrame(vis_df))
 
 if __name__ == "__main__":
