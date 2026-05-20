@@ -11,7 +11,6 @@ REPO = "Kamudinho/HIF-data"
 FILE_PATH = "data/players/1div_overskrivning.csv"
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 
-# U17 og U15 er fjernet som ønsket
 COMP_MAP = { 
     335: "Superliga", 
     328: "Betinia Ligaen", 
@@ -22,7 +21,6 @@ COMP_MAP = {
 
 AGE_LIMITS = { 1305: 19 }
 
-# Kolonneorden inkl. TIMESTAMP og UDLANDET
 COL_ORDER = [
     "KLUB", "NAVN", "POSITION", "PLAYER_WYID", "PLAYER_OPTAUUID", 
     "COMPETITION_WYID", "COMPETITION_OPTAUUID", "SENESTE_KLUB", 
@@ -64,7 +62,6 @@ def vis_side():
     conn = _get_snowflake_conn()
     DB = "KLUB_HVIDOVREIF.AXIS"
 
-    # Hent CSV og klargør data
     csv_content, csv_sha = get_github_file(FILE_PATH)
     df_csv = pd.read_csv(StringIO(csv_content)) if csv_content else pd.DataFrame(columns=COL_ORDER)
     df_csv['PLAYER_WYID'] = df_csv['PLAYER_WYID'].apply(rens_id)
@@ -74,19 +71,27 @@ def vis_side():
 
     col_left, col_right = st.columns([1, 1], gap="large")
 
-    # Hent database-hold
     df_alle_hold = conn.query(f"SELECT DISTINCT t.TEAMNAME, t.COMPETITION_WYID FROM {DB}.WYSCOUT_TEAMS t JOIN {DB}.WYSCOUT_SEASONS s ON t.SEASON_WYID = s.SEASON_WYID WHERE s.SEASONNAME = '2025/2026'")
 
     # --- VENSTRE SIDE: TRANSFER CENTER ---
     with col_left:
         st.subheader("Transfer Center")
         
-        sql_players_q = f"SELECT DISTINCT p.PLAYER_WYID, p.SHORTNAME AS NAVN, t.TEAMNAME AS KLUB, p.ROLECODE3 AS POSITION, p.IMAGEDATAURL, p.BIRTHDATE FROM {DB}.WYSCOUT_SEASONS s JOIN {DB}.WYSCOUT_TEAMS t ON t.SEASON_WYID = s.SEASON_WYID JOIN {DB}.WYSCOUT_PLAYERS p ON (p.CURRENTTEAM_WYID = t.TEAM_WYID AND p.SEASON_WYID = s.SEASON_WYID) WHERE s.SEASONNAME = '2025/2026' AND p.STATUS = 'active'"
+        # SQL opdateret til at bruge FIRSTNAME og LASTNAME
+        sql_players_q = f"""
+            SELECT DISTINCT p.PLAYER_WYID, 
+                   CONCAT(p.FIRSTNAME, ' ', p.LASTNAME) AS NAVN, 
+                   t.TEAMNAME AS KLUB, p.ROLECODE3 AS POSITION, 
+                   p.IMAGEDATAURL, p.BIRTHDATE 
+            FROM {DB}.WYSCOUT_SEASONS s 
+            JOIN {DB}.WYSCOUT_TEAMS t ON t.SEASON_WYID = s.SEASON_WYID 
+            JOIN {DB}.WYSCOUT_PLAYERS p ON (p.CURRENTTEAM_WYID = t.TEAM_WYID AND p.SEASON_WYID = s.SEASON_WYID) 
+            WHERE s.SEASONNAME = '2025/2026' AND p.STATUS = 'active'
+        """
         df_sql_players = conn.query(sql_players_q)
         
         search_options = {}
         if df_sql_players is not None:
-            # Prioriterer CSV-klub fremfor Snowflake-klub i søgningen
             csv_lookup = df_csv.set_index('PLAYER_WYID')['KLUB'].to_dict()
             for _, r in df_sql_players.iterrows():
                 p_id = rens_id(r['PLAYER_WYID'])
@@ -174,7 +179,16 @@ def vis_side():
         else:
             valgt_liga_id = int([k for k, v in COMP_MAP.items() if v == liga_valg][0])
             df_csv_vis = df_csv[df_csv['UDLANDET'].astype(str) != "True"]
-            sql_q = f"SELECT DISTINCT p.SHORTNAME AS NAVN, p.ROLECODE3 AS POSITION, p.PLAYER_WYID, t.TEAMNAME AS KLUB FROM {DB}.WYSCOUT_TEAMS t JOIN {DB}.WYSCOUT_SEASONS s ON t.SEASON_WYID = s.SEASON_WYID JOIN {DB}.WYSCOUT_PLAYERS p ON (p.CURRENTTEAM_WYID = t.TEAM_WYID AND p.SEASON_WYID = s.SEASON_WYID) WHERE t.COMPETITION_WYID = {valgt_liga_id} AND s.SEASONNAME = '2025/2026' AND p.STATUS = 'active'"
+            
+            # SQL opdateret her også til FIRSTNAME + LASTNAME
+            sql_q = f"""
+                SELECT DISTINCT CONCAT(p.FIRSTNAME, ' ', p.LASTNAME) AS NAVN, 
+                       p.ROLECODE3 AS POSITION, p.PLAYER_WYID, t.TEAMNAME AS KLUB 
+                FROM {DB}.WYSCOUT_TEAMS t 
+                JOIN {DB}.WYSCOUT_SEASONS s ON t.SEASON_WYID = s.SEASON_WYID 
+                JOIN {DB}.WYSCOUT_PLAYERS p ON (p.CURRENTTEAM_WYID = t.TEAM_WYID AND p.SEASON_WYID = s.SEASON_WYID) 
+                WHERE t.COMPETITION_WYID = {valgt_liga_id} AND s.SEASONNAME = '2025/2026' AND p.STATUS = 'active'
+            """
             sql_trup = conn.query(sql_q)
             if sql_trup is not None:
                 sql_trup.columns = [c.upper() for c in sql_trup.columns]
