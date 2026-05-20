@@ -23,7 +23,6 @@ COL_ORDER = [
     "KONTRAKT_START", "KONTRAKT_UDLOEB", "KILDE", "KOMMENTAR"
 ]
 
-# --- HJÆLPEFUNKTIONER ---
 def get_github_file(path):
     try:
         url = f"https://api.github.com/repos/{REPO}/contents/{path}?t={int(time.time())}"
@@ -52,7 +51,6 @@ def beregn_alder(fodselsdato):
         return nu.year - fodt.year - ((nu.month, nu.day) < (fodt.month, fodt.day))
     except: return None
 
-# --- HOVEDSIDE ---
 def vis_side():
     from data.data_load import _get_snowflake_conn
     conn = _get_snowflake_conn()
@@ -64,29 +62,54 @@ def vis_side():
 
     col_left, col_right = st.columns([1, 1], gap="large")
 
-    # Hent hold-data
     df_alle_hold = conn.query(f"SELECT DISTINCT t.TEAMNAME, t.COMPETITION_WYID FROM {DB}.WYSCOUT_TEAMS t JOIN {DB}.WYSCOUT_SEASONS s ON t.SEASON_WYID = s.SEASON_WYID WHERE s.SEASONNAME = '2025/2026'")
 
     with col_left:
         st.subheader("Transfer Center")
-        df_sql_players = conn.query(f"SELECT DISTINCT p.PLAYER_WYID, p.SHORTNAME AS NAVN, t.TEAMNAME AS KLUB, p.ROLECODE3 AS POSITION, p.IMAGEDATAURL, p.BIRTHDATE FROM {DB}.WYSCOUT_SEASONS s JOIN {DB}.WYSCOUT_TEAMS t ON t.SEASON_WYID = s.SEASON_WYID JOIN {DB}.WYSCOUT_PLAYERS p ON (p.CURRENTTEAM_WYID = t.TEAM_WYID AND p.SEASON_WYID = s.SEASON_WYID) WHERE s.SEASONNAME = '2025/2026' AND p.STATUS = 'active'")
         
-        search_options = {rens_id(r['PLAYER_WYID']): {"label": f"{r['NAVN']} ({r['KLUB']})", "data": r.to_dict()} for _, r in df_sql_players.iterrows()} if df_sql_players is not None else {}
-        sel_id = st.selectbox("Søg på spiller...", [""] + sorted(search_options.keys(), key=lambda x: search_options[x]["label"]), format_func=lambda x: search_options[x]["label"] if x else "Vælg spiller...")
+        # Hent basisdata fra Snowflake
+        sql_players_q = f"""
+            SELECT DISTINCT p.PLAYER_WYID, p.SHORTNAME AS NAVN, t.TEAMNAME AS KLUB, 
+                            p.ROLECODE3 AS POSITION, p.IMAGEDATAURL, p.BIRTHDATE 
+            FROM {DB}.WYSCOUT_SEASONS s 
+            JOIN {DB}.WYSCOUT_TEAMS t ON t.SEASON_WYID = s.SEASON_WYID 
+            JOIN {DB}.WYSCOUT_PLAYERS p ON (p.CURRENTTEAM_WYID = t.TEAM_WYID AND p.SEASON_WYID = s.SEASON_WYID) 
+            WHERE s.SEASONNAME = '2025/2026' AND p.STATUS = 'active'
+        """
+        df_sql_players = conn.query(sql_players_q)
+        
+        search_options = {}
+        if df_sql_players is not None:
+            # Lav et opslagsværk fra CSV for hurtig adgang
+            csv_lookup = df_csv.set_index('PLAYER_WYID')['KLUB'].to_dict()
+            
+            for _, r in df_sql_players.iterrows():
+                p_id = rens_id(r['PLAYER_WYID'])
+                # Hvis spilleren findes i CSV, brug klubben derfra, ellers Snowflake
+                aktuel_klub = csv_lookup.get(p_id, r['KLUB'])
+                
+                search_options[p_id] = {
+                    "label": f"{r['NAVN']} ({aktuel_klub})", 
+                    "data": r.to_dict(),
+                    "aktuel_klub": aktuel_klub
+                }
+        
+        sel_id = st.selectbox("Søg på spiller...", [""] + sorted(search_options.keys(), key=lambda x: search_options[x]["label"]), 
+                            format_func=lambda x: search_options[x]["label"] if x else "Vælg spiller...")
 
         if sel_id:
-            p = search_options[sel_id]["data"]
+            entry = search_options[sel_id]
+            p = entry["data"]
             alder = beregn_alder(p['BIRTHDATE'])
             
             c1, c2 = st.columns([0.25, 0.75])
             with c1: st.image(p['IMAGEDATAURL'] if p['IMAGEDATAURL'] else "https://cdn5.wyscout.com/photos/players/public/ndplayer_100x130.png", width=70)
             with c2:
                 st.write(f"**{p['NAVN']}**")
-                st.caption(f"Fra: {p['KLUB']} | Alder: {alder if alder else '?'}")
+                st.caption(f"Nuværende klub: {entry['aktuel_klub']} | Alder: {alder if alder else '?'}")
 
             with st.form("full_transfer_form", clear_on_submit=True):
-                # Udlandet Checkbox
-                skift_udland = st.checkbox("Skift til udlandet 🌍 (Fjern fra danske lister)")
+                skift_udland = st.checkbox("Skift til udlandet (Fjern fra danske lister)")
                 
                 hold_liste = sorted(df_alle_hold['TEAMNAME'].tolist()) if df_alle_hold is not None else []
                 ny_klub = st.selectbox("Ny klub", hold_liste, disabled=skift_udland)
@@ -109,24 +132,23 @@ def vis_side():
 
                     max_alder = AGE_LIMITS.get(final_liga)
                     if max_alder and alder and alder > max_alder:
-                        st.error(f"⚠️ Spilleren er for gammel ({alder} år) til {COMP_MAP.get(final_liga, 'denne liga')}.")
+                        st.error(f"Spilleren er for gammel ({alder} år) til {COMP_MAP.get(final_liga, 'denne liga')}.")
                     else:
                         ny_data = {
                             "KLUB": final_klub, "NAVN": p['NAVN'], "POSITION": p['POSITION'],
                             "PLAYER_WYID": sel_id, "COMPETITION_WYID": final_liga,
-                            "SENESTE_KLUB": p['KLUB'], 
+                            "SENESTE_KLUB": entry['aktuel_klub'], 
                             "KONTRAKT_START": k_start.strftime('%Y-%m-%d'),
                             "KONTRAKT_UDLOEB": k_udloeb.strftime('%Y-%m-%d') if k_udloeb else "",
                             "KILDE": kilde, "KOMMENTAR": kommentar
                         }
-                        # Overstyr eksisterende record for spilleren
                         df_csv = df_csv[df_csv['PLAYER_WYID'].astype(str) != str(sel_id)]
                         df_csv = pd.concat([df_csv, pd.DataFrame([ny_data])], ignore_index=True)
                         
                         csv_string = df_csv[COL_ORDER].to_csv(index=False)
                         res = push_to_github(FILE_PATH, f"Transfer: {p['NAVN']} -> {final_klub}", csv_string, csv_sha)
                         if res in [200, 201]:
-                            st.success("Transfer gennemført!")
+                            st.success("Transfer gennemført")
                             time.sleep(1)
                             st.rerun()
 
@@ -137,14 +159,12 @@ def vis_side():
         valgt_liga_id = int([k for k, v in COMP_MAP.items() if v == liga_valg][0])
 
         if valgt_liga_id == 328:
-            # Endelig sandhed for 328
             hold_i_csv = sorted(df_csv[df_csv['COMPETITION_WYID'] == 328]['KLUB'].unique().tolist())
             valgt_hold = st.selectbox("Vælg hold", hold_i_csv)
             if valgt_hold:
                 trup = df_csv[(df_csv['KLUB'] == valgt_hold) & (df_csv['COMPETITION_WYID'] == 328)][['NAVN', 'POSITION', 'PLAYER_WYID']]
                 st.table(trup.sort_values(by="NAVN"))
         else:
-            # Snowflake + CSV fletning for de andre
             sql_q = f"SELECT DISTINCT p.SHORTNAME AS NAVN, p.ROLECODE3 AS POSITION, p.PLAYER_WYID, t.TEAMNAME AS KLUB FROM {DB}.WYSCOUT_TEAMS t JOIN {DB}.WYSCOUT_SEASONS s ON t.SEASON_WYID = s.SEASON_WYID JOIN {DB}.WYSCOUT_PLAYERS p ON (p.CURRENTTEAM_WYID = t.TEAM_WYID AND p.SEASON_WYID = s.SEASON_WYID) WHERE t.COMPETITION_WYID = {valgt_liga_id} AND s.SEASONNAME = '2025/2026' AND p.STATUS = 'active'"
             sql_trup = conn.query(sql_q)
             if sql_trup is not None:
