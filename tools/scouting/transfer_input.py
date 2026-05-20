@@ -17,7 +17,6 @@ COMP_MAP = {
     43319: "3. division" 
 }
 
-# Kolonner i CSV (KLUB = Ny destination, SENESTE_KLUB = Afsender)
 COL_ORDER = [
     "KLUB", "NAVN", "POSITION", "PLAYER_WYID", "PLAYER_OPTAUUID", 
     "COMPETITION_WYID", "COMPETITION_OPTAUUID",
@@ -55,7 +54,6 @@ def vis_side():
     conn = _get_snowflake_conn()
     DB = "KLUB_HVIDOVREIF.AXIS"
 
-    # 1. Hent CSV fra GitHub (Overskrivningslisten)
     csv_content, csv_sha = get_github_file(FILE_PATH)
     if csv_content:
         df_csv = pd.read_csv(StringIO(csv_content))
@@ -66,11 +64,9 @@ def vis_side():
 
     col_left, col_right = st.columns([1, 1], gap="large")
 
-    # --- VENSTRE SIDE: SØG OG TRANSFER FORM ---
     with col_left:
         st.caption("Transfer")
         
-        # Den "Gyldne" SQL: Henter kun aktive spillere fra 25/26 sæsonens hold
         search_q = f"""
             SELECT DISTINCT 
                 p.PLAYER_WYID, 
@@ -103,24 +99,20 @@ def vis_side():
         if sel_id:
             p = search_options[sel_id]["data"]
             
-            # Præsentation af spiller
-            c1, c2 = st.columns([1, 2])
+            # Præsentation af spiller - Optimeret layout
+            c1, c2 = st.columns([0.25, 0.75])
             with c1:
                 img = p['IMAGEDATAURL'] if p['IMAGEDATAURL'] else "https://cdn5.wyscout.com/photos/players/public/ndplayer_100x130.png"
-                st.image(img, width=80)
+                st.image(img, width=65)
             with c2:
-                st.caption(f"### {p['NAVN']}")
-                st.caption(f"**Fra:** {p['KLUB']}")
-                st.caption(f"**Position:** {p['POSITION']}")
-                st.caption(f"**ID:** {sel_id}")
+                # Bruger captions og mindre spacing for at trække formularen op
+                st.write(f"**{p['NAVN']}**")
+                st.caption(f"Fra: {p['KLUB']} | Pos: {p['POSITION']} | ID: {sel_id}")
 
-            st.divider()
-
-            # Form til transfer-data
+            # Form til transfer-data - mindre margin-top
             with st.form("transfer_form", clear_on_submit=True):
                 st.text_input("Afgående klub", value=p['KLUB'], disabled=True)
                 
-                # Alle aktive hold fra 25/26 databasen
                 alle_klubber = sorted(df_sql['KLUB'].unique().tolist()) if df_sql is not None else []
                 ny_klub = st.selectbox("Ny klub (Destination)", alle_klubber)
                 
@@ -129,7 +121,7 @@ def vis_side():
                 k_udloeb = d2.text_input("Kontraktudløb")
                 
                 kilde = st.text_input("Kilde (Link)")
-                kommentar = st.text_area("Kommentar")
+                kommentar = st.text_area("Kommentar", height=100)
 
                 if st.form_submit_button("SEND TRANSFER TIL DATABASEN"):
                     ny_række = {
@@ -137,7 +129,7 @@ def vis_side():
                         "NAVN": p['NAVN'],
                         "POSITION": p['POSITION'],
                         "PLAYER_WYID": sel_id,
-                        "PLAYER_OPTAUUID": "", # Snowflake har ikke Opta-ID her
+                        "PLAYER_OPTAUUID": "", 
                         "COMPETITION_WYID": p['COMPETITION_WYID'],
                         "COMPETITION_OPTAUUID": "",
                         "SENESTE_KLUB": p['KLUB'],
@@ -147,7 +139,6 @@ def vis_side():
                         "KOMMENTAR": kommentar
                     }
                     
-                    # Opdater data: Fjern gammel post for spilleren, tilføj den nye
                     df_csv = df_csv[df_csv['PLAYER_WYID'].astype(str) != str(sel_id)]
                     df_csv = pd.concat([df_csv, pd.DataFrame([ny_række])], ignore_index=True)
                     
@@ -155,17 +146,15 @@ def vis_side():
                     res_code = push_to_github(FILE_PATH, f"Transfer: {p['NAVN']} -> {ny_klub}", csv_string, csv_sha)
                     
                     if res_code in [200, 201]:
-                        st.success(f"Gemt: {p['NAVN']} er nu i {ny_klub}")
+                        st.success(f"Gemt: {p['NAVN']} -> {ny_klub}")
                         time.sleep(1)
                         st.rerun()
 
-    # --- HØJRE SIDE: TRUPOVERSIGT (12 HOLD TJEK) ---
     with col_right:
         st.caption("Trupoversigt (2025/2026)")
         liga_valg = st.segmented_control("Vælg liga", list(COMP_MAP.values()), default="Superliga")
         liga_id = int([k for k, v in COMP_MAP.items() if v == liga_valg][0])
 
-        # Hent truppen direkte via den relationelle kæde
         query = f"""
             SELECT DISTINCT 
                 p.SHORTNAME AS NAVN, p.ROLECODE3 AS POSITION, p.PLAYER_WYID, t.TEAMNAME AS KLUB
@@ -185,7 +174,6 @@ def vis_side():
             
             if valgt_hold:
                 vis_trup = trup_data[trup_data['KLUB'] == valgt_hold].sort_values(by='NAVN')
-                # Vis Navn, Position og PLAYER_WYID helt til højre
                 st.table(vis_trup[['NAVN', 'POSITION', 'PLAYER_WYID']])
         else:
             st.warning("Kunne ikke hente trup-data.")
