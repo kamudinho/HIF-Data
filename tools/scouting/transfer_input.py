@@ -62,15 +62,19 @@ def vis_side():
 
     col_left, col_right = st.columns([1, 1], gap="large")
 
-    with col_right:
-        st.caption("Trupoversigt (2025/2026)")
-        liga_valg = st.segmented_control("Vælg liga", list(COMP_MAP.values()), default="Betinia Ligaen")
-        valgt_liga_id = int([k for k, v in COMP_MAP.items() if v == liga_valg][0])
-
+    # Hent ALLE hold fra Snowflake én gang for at bruge dem i dropdowns
+    alle_hold_q = f"""
+        SELECT DISTINCT TEAMNAME, COMPETITION_WYID 
+        FROM {DB}.WYSCOUT_TEAMS t 
+        JOIN {DB}.WYSCOUT_SEASONS s ON t.SEASON_WYID = s.SEASON_WYID 
+        WHERE s.SEASONNAME = '2025/2026'
+    """
+    df_alle_hold = conn.query(alle_hold_q)
+    
     with col_left:
         st.caption("Transfer")
         
-        # SQL til at finde spillere på tværs af alle klubber i 25/26
+        # Søg spiller
         search_q = f"""
             SELECT DISTINCT p.PLAYER_WYID, p.SHORTNAME AS NAVN, t.TEAMNAME AS KLUB, 
                             p.ROLECODE3 AS POSITION, p.IMAGEDATAURL
@@ -79,11 +83,11 @@ def vis_side():
             JOIN {DB}.WYSCOUT_PLAYERS p ON (p.CURRENTTEAM_WYID = t.TEAM_WYID AND p.SEASON_WYID = s.SEASON_WYID)
             WHERE s.SEASONNAME = '2025/2026' AND p.STATUS = 'active'
         """
-        df_sql = conn.query(search_q)
+        df_sql_players = conn.query(search_q)
 
         search_options = {}
-        if df_sql is not None:
-            for _, r in df_sql.iterrows():
+        if df_sql_players is not None:
+            for _, r in df_sql_players.iterrows():
                 p_id = rens_id(r['PLAYER_WYID'])
                 search_options[p_id] = {"label": f"{r['NAVN']} ({r['KLUB']})", "data": r.to_dict()}
 
@@ -101,12 +105,9 @@ def vis_side():
             with st.form("transfer_form", clear_on_submit=True):
                 st.text_input("Tidligere klub", value=p['KLUB'], disabled=True)
                 
-                # Hent hold fra Snowflake for den valgte liga
-                hold_q = f"SELECT DISTINCT TEAMNAME FROM {DB}.WYSCOUT_TEAMS t JOIN {DB}.WYSCOUT_SEASONS s ON t.SEASON_WYID = s.SEASON_WYID WHERE t.COMPETITION_WYID = {valgt_liga_id} AND s.SEASONNAME = '2025/2026'"
-                df_hold = conn.query(hold_q)
-                alle_klubber = sorted(df_hold['TEAMNAME'].tolist()) if df_hold is not None else []
-                
-                ny_klub = st.selectbox(f"Ny klub i {liga_valg}", alle_klubber)
+                # Nu vises ALLE hold uanset liga
+                hold_liste = sorted(df_alle_hold['TEAMNAME'].tolist()) if df_alle_hold is not None else []
+                ny_klub = st.selectbox("Vælg ny klub (Alle rækker)", hold_liste)
                 
                 d1, d2 = st.columns(2)
                 k_start = d1.date_input("Kontraktstart", value=datetime.now(), format="DD.MM.YYYY")
@@ -116,19 +117,19 @@ def vis_side():
                 kommentar = st.text_area("Kommentar", height=80)
 
                 if st.form_submit_button("SEND TRANSFER TIL DATABASEN"):
+                    # Find automatisk den korrekte liga (Competition ID) for den valgte klub
+                    match_liga = df_alle_hold[df_alle_hold['TEAMNAME'] == ny_klub]['COMPETITION_WYID'].values
+                    ny_liga_id = int(match_liga[0]) if len(match_liga) > 0 else 0
+
                     ny_række = {
-                        "KLUB": ny_klub, 
-                        "NAVN": p['NAVN'], 
-                        "POSITION": p['POSITION'],
-                        "PLAYER_WYID": sel_id, 
-                        "PLAYER_OPTAUUID": "", 
-                        "COMPETITION_WYID": valgt_liga_id, 
+                        "KLUB": ny_klub, "NAVN": p['NAVN'], "POSITION": p['POSITION'],
+                        "PLAYER_WYID": sel_id, "PLAYER_OPTAUUID": "", 
+                        "COMPETITION_WYID": ny_liga_id, # Gemmer den rigtige liga for holdet
                         "COMPETITION_OPTAUUID": "",
                         "SENESTE_KLUB": p['KLUB'],
                         "KONTRAKT_START": k_start.strftime('%Y-%m-%d') if k_start else "",
                         "KONTRAKT_UDLOEB": k_udloeb.strftime('%Y-%m-%d') if k_udloeb else "",
-                        "KILDE": kilde, 
-                        "KOMMENTAR": kommentar
+                        "KILDE": kilde, "KOMMENTAR": kommentar
                     }
                     df_csv = df_csv[df_csv['PLAYER_WYID'].astype(str) != str(sel_id)]
                     df_csv = pd.concat([df_csv, pd.DataFrame([ny_række])], ignore_index=True)
@@ -136,12 +137,15 @@ def vis_side():
                     csv_string = df_csv[COL_ORDER].to_csv(index=False)
                     res_code = push_to_github(FILE_PATH, f"Transfer: {p['NAVN']} -> {ny_klub}", csv_string, csv_sha)
                     if res_code in [200, 201]:
-                        st.success(f"Gemt!")
+                        st.success(f"Gemt! {p['NAVN']} er nu i {ny_klub}")
                         time.sleep(1)
                         st.rerun()
 
     # --- HØJRE SIDE: TRUPOVERSIGT ---
     with col_right:
+        liga_valg = st.segmented_control("Vælg liga", list(COMP_MAP.values()), default="Betinia Ligaen")
+        valgt_liga_id = int([k for k, v in COMP_MAP.items() if v == liga_valg][0])
+
         sql_q = f"""
             SELECT DISTINCT p.SHORTNAME AS NAVN, p.ROLECODE3 AS POSITION, p.PLAYER_WYID, t.TEAMNAME AS KLUB
             FROM {DB}.WYSCOUT_COMPETITIONS c
@@ -160,21 +164,16 @@ def vis_side():
             valgt_hold = st.selectbox(f"Vælg hold", alle_hold_i_liga, key=f"v_final_{valgt_liga_id}")
             
             if valgt_hold:
-                # 1. Fjern spillere fra Snowflake hvis de findes i CSV (vi stoler på manuel indtastning)
                 csv_ids = df_csv['PLAYER_WYID'].unique().tolist()
                 sql_filt = sql_trup[(sql_trup['KLUB'] == valgt_hold) & (~sql_trup['PLAYER_WYID'].isin(csv_ids))]
                 
-                # 2. LOGIK TIL FUZZY MATCH:
-                # Vi finder dem i CSV'en, hvor klubnavnet matcher det valgte hold (selvom navnet ikke er 100% ens)
-                # Vi tjekker om 'valgt_hold' indeholder navnet fra CSV eller omvendt.
+                # Fuzzy match på klubnavn for at sikre, at spillere fra CSV dukker op korrekt
                 csv_filt = df_csv[
                     (df_csv['COMPETITION_WYID'] == valgt_liga_id) & 
                     (df_csv['KLUB'].apply(lambda x: str(x).lower() in valgt_hold.lower() or valgt_hold.lower() in str(x).lower()))
                 ]
-                
                 csv_display = csv_filt[['NAVN', 'POSITION', 'PLAYER_WYID']]
                 
-                # Saml truppen
                 final_trup = pd.concat([sql_filt[['NAVN', 'POSITION', 'PLAYER_WYID']], csv_display], ignore_index=True).sort_values(by='NAVN')
                 st.table(final_trup)
 
