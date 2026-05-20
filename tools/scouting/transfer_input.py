@@ -140,7 +140,11 @@ def vis_side():
         
         # Find det tilsvarende WYID (f.eks. 335 for Superliga)
         valgt_id = [k for k, v in COMP_MAP.items() if v == valgt_liga_navn][0]
-        
+
+        st.write(f"Valgt Liga ID: {valgt_id}")
+        if not df_sql.empty:
+            st.write("Unikke Liga-ID'er i SQL-data:", df_sql['COMPETITION_WYID'].unique().tolist())
+    
         # --- LOGIK FOR DATA-KILDE ---
         if valgt_id == 328:
             # Kun spillere fra din lokale CSV der tilhører 1. division
