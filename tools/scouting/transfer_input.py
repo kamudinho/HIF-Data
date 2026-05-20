@@ -11,12 +11,8 @@ REPO = "Kamudinho/HIF-data"
 FILE_PATH = "data/players/1div_overskrivning.csv"
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 
-COMP_MAP = { 
-    335: "Superliga", 
-    328: "Betinia Ligaen", 
-    329: "2. division", 
-    43319: "3. division" 
-}
+# Map over ligaer - 328 er NordicBet Ligaen (Betinia)
+COMP_MAP = { 335: "Superliga", 328: "Betinia Ligaen", 329: "2. division", 43319: "3. division" }
 
 COL_ORDER = [
     "KLUB", "NAVN", "POSITION", "PLAYER_WYID", "PLAYER_OPTAUUID", 
@@ -24,7 +20,6 @@ COL_ORDER = [
     "SENESTE_KLUB", "KONTRAKT_START", "KONTRAKT_UDLOEB", "KILDE", "KOMMENTAR"
 ]
 
-# --- GITHUB FUNKTIONER ---
 def get_github_file(path):
     try:
         url = f"https://api.github.com/repos/{REPO}/contents/{path}?t={int(time.time())}"
@@ -58,6 +53,7 @@ def vis_side():
     csv_content, csv_sha = get_github_file(FILE_PATH)
     if csv_content:
         df_csv = pd.read_csv(StringIO(csv_content))
+        df_csv['PLAYER_WYID'] = df_csv['PLAYER_WYID'].apply(rens_id)
         for col in COL_ORDER:
             if col not in df_csv.columns: df_csv[col] = ""
     else:
@@ -65,22 +61,23 @@ def vis_side():
 
     col_left, col_right = st.columns([1, 1], gap="large")
 
+    # Vi definerer liga-valget øverst, så vi kan bruge det til at sætte det korrekte liga-ID på transferen
+    with col_right:
+        st.caption("Trupoversigt (2025/2026)")
+        liga_valg = st.segmented_control("Vælg liga for visning & transfer-mål", list(COMP_MAP.values()), default="Betinia Ligaen")
+        valgt_liga_id = int([k for k, v in COMP_MAP.items() if v == liga_valg][0])
+
     with col_left:
+        st.caption("Transfer")
         
+        # Søg på tværs af alle spillere i 25/26 for at finde dem, der skal skifte
         search_q = f"""
-            SELECT DISTINCT 
-                p.PLAYER_WYID, 
-                p.SHORTNAME AS NAVN, 
-                t.TEAMNAME AS KLUB, 
-                p.ROLECODE3 AS POSITION, 
-                p.IMAGEDATAURL, 
-                p.COMPETITION_WYID
-            FROM {DB}.WYSCOUT_COMPETITIONS c
-            JOIN {DB}.WYSCOUT_SEASONS s ON c.COMPETITION_WYID = s.COMPETITION_WYID
-            JOIN {DB}.WYSCOUT_TEAMS t ON (t.COMPETITION_WYID = c.COMPETITION_WYID AND t.SEASON_WYID = s.SEASON_WYID)
+            SELECT DISTINCT p.PLAYER_WYID, p.SHORTNAME AS NAVN, t.TEAMNAME AS KLUB, 
+                            p.ROLECODE3 AS POSITION, p.IMAGEDATAURL
+            FROM {DB}.WYSCOUT_SEASONS s
+            JOIN {DB}.WYSCOUT_TEAMS t ON t.SEASON_WYID = s.SEASON_WYID
             JOIN {DB}.WYSCOUT_PLAYERS p ON (p.CURRENTTEAM_WYID = t.TEAM_WYID AND p.SEASON_WYID = s.SEASON_WYID)
-            WHERE s.SEASONNAME = '2025/2026' 
-            AND p.STATUS = 'active'
+            WHERE s.SEASONNAME = '2025/2026' AND p.STATUS = 'active'
         """
         df_sql = conn.query(search_q)
 
@@ -88,21 +85,15 @@ def vis_side():
         if df_sql is not None:
             for _, r in df_sql.iterrows():
                 p_id = rens_id(r['PLAYER_WYID'])
-                search_options[p_id] = {
-                    "label": f"{r['NAVN']} ({r['KLUB']})",
-                    "data": r.to_dict()
-                }
+                search_options[p_id] = {"label": f"{r['NAVN']} ({r['KLUB']})", "data": r.to_dict()}
 
-        sel_id = st.selectbox("Søg på spillernavn...", [""] + sorted(search_options.keys(), key=lambda x: search_options[x]["label"]),
+        sel_id = st.selectbox("Søg på spiller der skifter...", [""] + sorted(search_options.keys(), key=lambda x: search_options[x]["label"]),
                             format_func=lambda x: search_options[x]["label"] if x else "Indtast navn...")
 
         if sel_id:
             p = search_options[sel_id]["data"]
-            
             c1, c2 = st.columns([0.25, 0.75])
-            with c1:
-                img = p['IMAGEDATAURL'] if p['IMAGEDATAURL'] else "https://cdn5.wyscout.com/photos/players/public/ndplayer_100x130.png"
-                st.image(img, width=65)
+            with c1: st.image(p['IMAGEDATAURL'] if p['IMAGEDATAURL'] else "https://cdn5.wyscout.com/photos/players/public/ndplayer_100x130.png", width=65)
             with c2:
                 st.write(f"**{p['NAVN']}**")
                 st.caption(f"Fra: {p['KLUB']} | Pos: {p['POSITION']} | ID: {sel_id}")
@@ -110,69 +101,76 @@ def vis_side():
             with st.form("transfer_form", clear_on_submit=True):
                 st.text_input("Afgående klub", value=p['KLUB'], disabled=True)
                 
-                alle_klubber = sorted(df_sql['KLUB'].unique().tolist()) if df_sql is not None else []
-                ny_klub = st.selectbox("Ny klub (Destination)", alle_klubber)
+                # Her henter vi kun holdene fra den valgte liga til højre, så man ikke vælger en forkert klub
+                hold_q = f"SELECT DISTINCT TEAMNAME FROM {DB}.WYSCOUT_TEAMS t JOIN {DB}.WYSCOUT_SEASONS s ON t.SEASON_WYID = s.SEASON_WYID WHERE t.COMPETITION_WYID = {valgt_liga_id} AND s.SEASONNAME = '2025/2026'"
+                df_hold = conn.query(hold_q)
+                alle_klubber = sorted(df_hold['TEAMNAME'].tolist()) if df_hold is not None else []
                 
-                # NYHED: Kalender-vælgere i stedet for tekstfelter
+                ny_klub = st.selectbox(f"Ny klub i {liga_valg}", alle_klubber)
+                
                 d1, d2 = st.columns(2)
-                k_start = d1.date_input("Kontraktstart", value=datetime.now())
-                k_udloeb = d2.date_input("Kontraktudløb", value=None)
+                k_start = d1.date_input("Kontraktstart", value=datetime.now(), format="DD.MM.YYYY")
+                k_udloeb = d2.date_input("Kontraktudløb", value=None, format="DD.MM.YYYY")
                 
                 kilde = st.text_input("Kilde (Link)")
-                kommentar = st.text_area("Kommentar", height=100)
+                kommentar = st.text_area("Kommentar", height=80)
 
                 if st.form_submit_button("SEND TRANSFER TIL DATABASEN"):
                     ny_række = {
-                        "KLUB": ny_klub,
-                        "NAVN": p['NAVN'],
+                        "KLUB": ny_klub, 
+                        "NAVN": p['NAVN'], 
                         "POSITION": p['POSITION'],
-                        "PLAYER_WYID": sel_id,
+                        "PLAYER_WYID": sel_id, 
                         "PLAYER_OPTAUUID": "", 
-                        "COMPETITION_WYID": p['COMPETITION_WYID'],
+                        "COMPETITION_WYID": valgt_liga_id, # FIX: Bruger nu liga-ID fra valget til højre!
                         "COMPETITION_OPTAUUID": "",
                         "SENESTE_KLUB": p['KLUB'],
-                        # Formaterer datoen til streng før lagring
                         "KONTRAKT_START": k_start.strftime('%Y-%m-%d') if k_start else "",
                         "KONTRAKT_UDLOEB": k_udloeb.strftime('%Y-%m-%d') if k_udloeb else "",
-                        "KILDE": kilde,
+                        "KILDE": kilde, 
                         "KOMMENTAR": kommentar
                     }
-                    
                     df_csv = df_csv[df_csv['PLAYER_WYID'].astype(str) != str(sel_id)]
                     df_csv = pd.concat([df_csv, pd.DataFrame([ny_række])], ignore_index=True)
                     
                     csv_string = df_csv[COL_ORDER].to_csv(index=False)
                     res_code = push_to_github(FILE_PATH, f"Transfer: {p['NAVN']} -> {ny_klub}", csv_string, csv_sha)
-                    
                     if res_code in [200, 201]:
-                        st.success(f"Gemt: {p['NAVN']} -> {ny_klub}")
+                        st.success(f"Gemt! {p['NAVN']} er nu registreret i {liga_valg}")
                         time.sleep(1)
                         st.rerun()
 
+    # --- HØJRE SIDE: TRUPOVERSIGT ---
     with col_right:
-        liga_valg = st.segmented_control("Vælg liga", list(COMP_MAP.values()), default="Superliga")
-        liga_id = int([k for k, v in COMP_MAP.items() if v == liga_valg][0])
-
-        query = f"""
-            SELECT DISTINCT 
-                p.SHORTNAME AS NAVN, p.ROLECODE3 AS POSITION, p.PLAYER_WYID, t.TEAMNAME AS KLUB
+        # SQL Truppen for den valgte liga
+        sql_q = f"""
+            SELECT DISTINCT p.SHORTNAME AS NAVN, p.ROLECODE3 AS POSITION, p.PLAYER_WYID, t.TEAMNAME AS KLUB
             FROM {DB}.WYSCOUT_COMPETITIONS c
             JOIN {DB}.WYSCOUT_SEASONS s ON c.COMPETITION_WYID = s.COMPETITION_WYID
             JOIN {DB}.WYSCOUT_TEAMS t ON (t.COMPETITION_WYID = c.COMPETITION_WYID AND t.SEASON_WYID = s.SEASON_WYID)
             JOIN {DB}.WYSCOUT_PLAYERS p ON (p.CURRENTTEAM_WYID = t.TEAM_WYID AND p.SEASON_WYID = s.SEASON_WYID)
-            WHERE c.COMPETITION_WYID = {liga_id} AND s.SEASONNAME = '2025/2026' AND p.STATUS = 'active'
+            WHERE c.COMPETITION_WYID = {valgt_liga_id} AND s.SEASONNAME = '2025/2026' AND p.STATUS = 'active'
         """
-        trup_data = conn.query(query)
+        sql_trup = conn.query(sql_q)
         
-        if trup_data is not None:
-            trup_data.columns = [c.upper() for c in trup_data.columns]
-            aktuelle_hold = sorted(trup_data['KLUB'].unique().tolist())
+        if sql_trup is not None:
+            sql_trup.columns = [c.upper() for c in sql_trup.columns]
+            sql_trup['PLAYER_WYID'] = sql_trup['PLAYER_WYID'].apply(rens_id)
             
-            valgt_hold = st.selectbox(f"Vælg hold ({len(aktuelle_hold)} fundet)", aktuelle_hold, key=f"v_final_{liga_id}")
+            alle_hold_i_liga = sorted(sql_trup['KLUB'].unique().tolist())
+            valgt_hold = st.selectbox(f"Vælg hold", alle_hold_i_liga, key=f"v_final_{valgt_liga_id}")
             
             if valgt_hold:
-                vis_trup = trup_data[trup_data['KLUB'] == valgt_hold].sort_values(by='NAVN')
-                st.table(vis_trup[['NAVN', 'POSITION', 'PLAYER_WYID']])
+                # Filtrer Snowflake-data (fjern dem der er flyttet i CSV)
+                csv_ids = df_csv['PLAYER_WYID'].tolist()
+                sql_filt = sql_trup[(sql_trup['KLUB'] == valgt_hold) & (~sql_trup['PLAYER_WYID'].isin(csv_ids))]
+                
+                # Hent dem fra CSV der er sat til dette hold og denne liga
+                csv_filt = df_csv[(df_csv['KLUB'] == valgt_hold) & (df_csv['COMPETITION_WYID'].astype(str) == str(valgt_liga_id))]
+                csv_display = csv_filt[['NAVN', 'POSITION', 'PLAYER_WYID']]
+                
+                final_trup = pd.concat([sql_filt[['NAVN', 'POSITION', 'PLAYER_WYID']], csv_display], ignore_index=True).sort_values(by='NAVN')
+                st.table(final_trup)
 
 if __name__ == "__main__":
     vis_side()
