@@ -64,17 +64,21 @@ def vis_side():
     with col_left:
         st.subheader("Søg & Registrer Transfer")
         
-        # Den gyldne SQL Query der finder aktuelle spillere for 25/26
+        # SQL: Henter de rå data fra Wyscout
         search_q = f"""
             SELECT DISTINCT 
-                p.PLAYER_WYID, p.SHORTNAME AS NAVN, t.TEAMNAME AS KLUB, 
-                p.ROLECODE3 AS POSITION, p.IMAGEDATAURL, 
-                p.COMPETITION_WYID, p.PLAYER_OPTAUUID, c.COMPETITION_OPTAUUID
+                p.PLAYER_WYID, 
+                p.SHORTNAME AS NAVN, 
+                t.TEAMNAME AS KLUB, 
+                p.ROLECODE3 AS POSITION, 
+                p.IMAGEDATAURL, 
+                p.COMPETITION_WYID
             FROM {DB}.WYSCOUT_COMPETITIONS c
             JOIN {DB}.WYSCOUT_SEASONS s ON c.COMPETITION_WYID = s.COMPETITION_WYID
             JOIN {DB}.WYSCOUT_TEAMS t ON (t.COMPETITION_WYID = c.COMPETITION_WYID AND t.SEASON_WYID = s.SEASON_WYID)
             JOIN {DB}.WYSCOUT_PLAYERS p ON (p.CURRENTTEAM_WYID = t.TEAM_WYID AND p.SEASON_WYID = s.SEASON_WYID)
-            WHERE s.SEASONNAME = '2025/2026' AND p.STATUS = 'active'
+            WHERE s.SEASONNAME = '2025/2026' 
+            AND p.STATUS = 'active'
         """
         df_sql = conn.query(search_q)
 
@@ -93,7 +97,6 @@ def vis_side():
         if sel_id:
             p = search_options[sel_id]["data"]
             
-            # Profil-visning
             c1, c2 = st.columns([1, 2])
             with c1:
                 img = p['IMAGEDATAURL'] if p['IMAGEDATAURL'] else "https://cdn5.wyscout.com/photos/players/public/ndplayer_100x130.png"
@@ -102,42 +105,39 @@ def vis_side():
                 st.markdown(f"### {p['NAVN']}")
                 st.write(f"**Nuværende klub:** {p['KLUB']}")
                 st.write(f"**Position:** {p['POSITION']}")
+                st.info(f"**PLAYER_WYID:** {sel_id}") # Tydelig visning af ID
 
             st.divider()
 
-            # Transfer Form
             with st.form("transfer_form"):
-                # Seneste klub låses til den nuværende klub fra Snowflake
-                st.text_input("Seneste klub (Fra)", value=p['KLUB'], disabled=True)
+                st.text_input("Fra klub", value=p['KLUB'], disabled=True)
                 
-                # Ny klub dropdown
                 alle_klubber = sorted(df_sql['KLUB'].unique().tolist()) if df_sql is not None else []
-                ny_klub = st.selectbox("Ny klub (Til)", alle_klubber)
+                ny_klub = st.selectbox("Til klub (Destination)", alle_klubber)
                 
                 c_date1, c_date2 = st.columns(2)
                 k_start = c_date1.text_input("Kontraktstart")
                 k_udloeb = c_date2.text_input("Kontraktudløb")
                 
-                kilde = st.text_input("Kilde (Link)")
+                kilde = st.text_input("Kilde (URL)")
                 kommentar = st.text_area("Kommentar")
 
                 if st.form_submit_button("GEM TRANSFER"):
                     ny_række = {
-                        "KLUB": ny_klub, # Destinationen gemmes i den primære KLUB kolonne
+                        "KLUB": ny_klub,
                         "NAVN": p['NAVN'],
                         "POSITION": p['POSITION'],
-                        "PLAYER_WYID": p['PLAYER_WYID'],
-                        "PLAYER_OPTAUUID": p.get('PLAYER_OPTAUUID', ''),
+                        "PLAYER_WYID": sel_id, # Her gemmes det ID vi har vist
+                        "PLAYER_OPTAUUID": "", 
                         "COMPETITION_WYID": p['COMPETITION_WYID'],
-                        "COMPETITION_OPTAUUID": p.get('COMPETITION_OPTAUUID', ''),
-                        "SENESTE_KLUB": p['KLUB'], # Her gemmer vi historikken
+                        "COMPETITION_OPTAUUID": "", 
+                        "SENESTE_KLUB": p['KLUB'],
                         "KONTRAKT_START": k_start,
                         "KONTRAKT_UDLOEB": k_udloeb,
                         "KILDE": kilde,
                         "KOMMENTAR": kommentar
                     }
                     
-                    # Opdater lokalt og push
                     df_csv = df_csv[df_csv['PLAYER_WYID'].astype(str) != str(sel_id)]
                     df_csv = pd.concat([df_csv, pd.DataFrame([ny_række])], ignore_index=True)
                     
@@ -145,7 +145,7 @@ def vis_side():
                     status = push_to_github(FILE_PATH, f"Transfer: {p['NAVN']} -> {ny_klub}", csv_output, csv_sha)
                     
                     if status in [200, 201]:
-                        st.success(f"✅ Registreret: {p['NAVN']} er skiftet til {ny_klub}")
+                        st.success(f"✅ {p['NAVN']} gemt med ID {sel_id}")
                         time.sleep(1)
                         st.rerun()
 
@@ -155,7 +155,7 @@ def vis_side():
         valgt_liga_navn = st.segmented_control("Vælg liga", list(COMP_MAP.values()), default="Superliga")
         valgt_id = int([k for k, v in COMP_MAP.items() if v == valgt_liga_navn][0])
 
-        # Her bruger vi samme gyldne SQL som i sidste turn
+        # Query der henter truppen præcis som før
         query = f"""
             SELECT DISTINCT 
                 p.SHORTNAME AS NAVN, p.ROLECODE3 AS POSITION, p.PLAYER_WYID, t.TEAMNAME AS KLUB
@@ -167,18 +167,19 @@ def vis_side():
         """
         sql_data = conn.query(query)
         
-        # Merge SQL og CSV for at vise de opdaterede trupper
         if sql_data is not None:
-            # Vi fjerner spillere fra SQL-truppen hvis de er flyttet i CSV
             sql_data.columns = [c.upper() for c in sql_data.columns]
-            # (Yderligere merge-logik kan tilføjes her for at vise transfers i oversigten)
-            
             hold_liste = sorted(sql_data['KLUB'].unique().tolist())
-            valgt_hold = st.selectbox(f"Vælg hold", hold_liste, key=f"squad_view_{valgt_id}")
+            valgt_hold = st.selectbox(f"Vælg hold", hold_liste, key=f"squad_view_final_{valgt_id}")
             
             if valgt_hold:
-                trup = sql_data[sql_data['KLUB'] == valgt_hold].sort_values(by='NAVN')
-                st.table(trup[['NAVN', 'POSITION', 'PLAYER_WYID']])
+                # Filtrer og vis tabel med PLAYER_WYID tydeligt til højre
+                trup = sql_data[sql_data['KLUB'] == valgt_hold].sort_values(by='NAVN').copy()
+                
+                # Formater tabel til visning
+                vis_df = trup[['NAVN', 'POSITION', 'PLAYER_WYID']]
+                vis_df.columns = ['Navn', 'Position', 'PLAYER_WYID'] # Vi beholder navnet her
+                st.table(vis_df)
 
 if __name__ == "__main__":
     vis_side()
