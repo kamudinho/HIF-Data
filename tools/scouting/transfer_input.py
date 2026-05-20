@@ -75,7 +75,7 @@ def vis_side():
 
     # --- VENSTRE SIDE: TRANSFER CENTER ---
     with col_left:
-        st.subheader("Transfer Center")
+        st.caption("Transfers")
         
         # Hent spillere fra SQL
         sql_players_q = f"""
@@ -100,7 +100,7 @@ def vis_side():
         
         sel_id = st.selectbox("Søg på spiller...", [""] + sorted(search_options.keys(), key=lambda x: search_options[x]["label"]), format_func=lambda x: search_options[x]["label"] if x else "Vælg spiller...")
 
-        # Vis billede og info hvis spiller er valgt
+        # Vis kun billede og info hvis spiller er valgt - ellers intet (fjernet st.info)
         if sel_id:
             entry = search_options[sel_id]
             p = entry["data"]; alder = beregn_alder(p['BIRTHDATE'])
@@ -109,14 +109,12 @@ def vis_side():
             with c2:
                 st.write(f"**{p['NAVN']}**")
                 st.caption(f"Nuværende: {entry['aktuel_klub']} | Alder: {alder if alder else '?'}")
-        
 
-        # FORMULAREN VISES NU ALTID
+        # FORMULAREN VISES ALTID
         with st.form("full_transfer_form", clear_on_submit=True):
-            # Felterne deaktiveres hvis ingen spiller er valgt
             is_disabled = not sel_id
             
-            skift_udland = st.checkbox("Skift til udlandet (Fjern fra danske lister)", disabled=is_disabled)
+            skift_udland = st.checkbox("Skifter til udlandet", disabled=is_disabled)
             
             hold_liste = sorted(df_alle_hold['TEAMNAME'].tolist()) if df_alle_hold is not None else []
             ny_klub = st.selectbox("Ny klub", hold_liste, disabled=(is_disabled or skift_udland))
