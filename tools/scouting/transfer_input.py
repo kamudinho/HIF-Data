@@ -4,6 +4,7 @@ import requests
 import base64
 from io import StringIO
 import time
+from datetime import datetime
 
 # --- KONFIGURATION ---
 REPO = "Kamudinho/HIF-data"
@@ -99,26 +100,24 @@ def vis_side():
         if sel_id:
             p = search_options[sel_id]["data"]
             
-            # Præsentation af spiller - Optimeret layout
             c1, c2 = st.columns([0.25, 0.75])
             with c1:
                 img = p['IMAGEDATAURL'] if p['IMAGEDATAURL'] else "https://cdn5.wyscout.com/photos/players/public/ndplayer_100x130.png"
                 st.image(img, width=65)
             with c2:
-                # Bruger captions og mindre spacing for at trække formularen op
                 st.write(f"**{p['NAVN']}**")
                 st.caption(f"Fra: {p['KLUB']} | Pos: {p['POSITION']} | ID: {sel_id}")
 
-            # Form til transfer-data - mindre margin-top
             with st.form("transfer_form", clear_on_submit=True):
                 st.text_input("Afgående klub", value=p['KLUB'], disabled=True)
                 
                 alle_klubber = sorted(df_sql['KLUB'].unique().tolist()) if df_sql is not None else []
                 ny_klub = st.selectbox("Ny klub (Destination)", alle_klubber)
                 
+                # NYHED: Kalender-vælgere i stedet for tekstfelter
                 d1, d2 = st.columns(2)
-                k_start = d1.text_input("Kontraktstart")
-                k_udloeb = d2.text_input("Kontraktudløb")
+                k_start = d1.date_input("Kontraktstart", value=datetime.now())
+                k_udloeb = d2.date_input("Kontraktudløb", value=None)
                 
                 kilde = st.text_input("Kilde (Link)")
                 kommentar = st.text_area("Kommentar", height=100)
@@ -133,8 +132,9 @@ def vis_side():
                         "COMPETITION_WYID": p['COMPETITION_WYID'],
                         "COMPETITION_OPTAUUID": "",
                         "SENESTE_KLUB": p['KLUB'],
-                        "KONTRAKT_START": k_start,
-                        "KONTRAKT_UDLOEB": k_udloeb,
+                        # Formaterer datoen til streng før lagring
+                        "KONTRAKT_START": k_start.strftime('%Y-%m-%d') if k_start else "",
+                        "KONTRAKT_UDLOEB": k_udloeb.strftime('%Y-%m-%d') if k_udloeb else "",
                         "KILDE": kilde,
                         "KOMMENTAR": kommentar
                     }
@@ -175,8 +175,6 @@ def vis_side():
             if valgt_hold:
                 vis_trup = trup_data[trup_data['KLUB'] == valgt_hold].sort_values(by='NAVN')
                 st.table(vis_trup[['NAVN', 'POSITION', 'PLAYER_WYID']])
-        else:
-            st.warning("Kunne ikke hente trup-data.")
 
 if __name__ == "__main__":
     vis_side()
