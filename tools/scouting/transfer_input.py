@@ -75,7 +75,7 @@ def vis_side():
 
     # --- VENSTRE SIDE: TRANSFER CENTER ---
     with col_left:
-        st.subheader("Transfer Center")
+        st.caption("Transfers")
         
         # SQL opdateret til at bruge FIRSTNAME og LASTNAME
         sql_players_q = f"""
