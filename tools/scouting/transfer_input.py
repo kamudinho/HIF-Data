@@ -8,14 +8,12 @@ import time
 
 # IMPORT FRA DINE EGNE MODULER
 from data.data_load import _get_snowflake_conn
+import data.HIF_load as hif_load
 
 # --- KONFIGURATION ---
 REPO = "Kamudinho/HIF-data"
 FILE_PATH = "data/players/1div_overskrivning.csv"
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
-
-# LOKAL TILPASNING AF LIGAER
-LIGA_FILTER = (335, 328, 329, 43319)
 
 COL_ORDER = [
     "KLUB", "NAVN", "POSITION", "PLAYER_WYID", 
@@ -55,29 +53,20 @@ def rens_id(val):
 def vis_side():
     st.markdown("### 🏟️ Trupplanlægning & Transfer Styring")
     
-    # 1. Hent CSV fra GitHub
+    # 1. Hent din CSV-fil (overskrivningslisten)
     csv_content, csv_sha = get_github_file(FILE_PATH)
     df_1div = pd.read_csv(StringIO(csv_content)) if csv_content else pd.DataFrame(columns=COL_ORDER)
-    
     csv_ids = set(df_1div['PLAYER_WYID'].astype(str).apply(rens_id).tolist())
 
-    # 2. Hent Snowflake data (Nu med TEAM_NAME)
-    with st.spinner("Henter spillere og klubber..."):
-        conn = _get_snowflake_conn()
-        # Vi joiner med TEAM_NAME så vi altid har en klub at vise
-        query = f"""
-            SELECT PLAYER_WYID, FIRSTNAME, LASTNAME, SHORTNAME, ROLECODE3, TEAM_NAME
-            FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_PLAYERS
-            WHERE COMPETITION_WYID IN {LIGA_FILTER}
-        """
-        try:
-            df_sql = conn.query(query, ttl=3600)
-        except:
-            df_sql = pd.DataFrame()
+    # 2. Hent databasen (Vi bruger din eksisterende scouting package logik)
+    with st.spinner("Synkroniserer med Snowflake..."):
+        # Her kalder vi din hif_load, som bruger dine wy_queries.py
+        dp = hif_load.get_scouting_package()
+        df_sql = dp.get("wyscout_players", pd.DataFrame())
 
     unique_players = {}
     
-    # TRIN 1: Tilføj dem fra CSV (De grønne)
+    # TRIN A: Tilføj dem fra CSV (Prioritet 1 - Grønne)
     for _, r in df_1div.iterrows():
         p_id = rens_id(r.get('PLAYER_WYID'))
         if p_id:
@@ -89,24 +78,27 @@ def vis_side():
                 }
             }
 
-    # TRIN 2: Tilføj kun fra SQL, hvis de IKKE er i CSV'en (De hvide)
+    # TRIN B: Tilføj fra SQL (Databasen - Hvide)
     if not df_sql.empty:
         for _, r in df_sql.iterrows():
             p_id = rens_id(r.get('PLAYER_WYID'))
+            # Hvis spilleren allerede er i CSV, spring over (så vi beholder den grønne label)
             if not p_id or p_id in csv_ids: 
                 continue 
             
-            f = str(r.get('FIRSTNAME', '')).strip()
-            l = str(r.get('LASTNAME', '')).strip()
-            full_navn = f"{f} {l}".strip() if (f or l) else str(r.get('SHORTNAME', 'Ukendt'))
-            klub_navn = str(r.get('TEAM_NAME', 'Ukendt klub')).strip()
+            # Brug kolonnenavne fra din wy_queries.py: PLAYER_NAME og TEAMNAME
+            p_navn = str(r.get('PLAYER_NAME', 'Ukendt')).strip()
+            klub_navn = str(r.get('TEAMNAME', 'Database')).strip()
             
             unique_players[p_id] = {
-                "label": f"⚪ {full_navn} ({klub_navn})", # Nu med klubnavn fra databasen
-                "data": {"n": full_navn, "id": p_id, "pos": r.get('ROLECODE3', ""), "klub": klub_navn, "opta": ""}
+                "label": f"⚪ {p_navn} ({klub_navn})",
+                "data": {
+                    "n": p_navn, "id": p_id, "pos": r.get('ROLECODE3', ""), 
+                    "klub": klub_navn, "opta": ""
+                }
             }
 
-    # Sortering: Alfabetisk (ignorerer cirklen)
+    # Miks dem alfabetisk efter navn (ignorerer cirklen i sorteringen)
     options_list = sorted(
         unique_players.keys(), 
         key=lambda x: unique_players[x]["label"][2:].lower()
@@ -144,10 +136,11 @@ def vis_side():
                 if valgt_klub == "--- VÆLG DESTINATION ---":
                     st.warning("Vælg venligst en destination.")
                 else:
+                    # Rens eksisterende række for at undgå dubletter
                     df_final = df_1div[df_1div['PLAYER_WYID'].astype(str).apply(rens_id) != str(sel_id)].copy()
                     
                     if valgt_klub == "✈️ Udlandet / Anden række":
-                        msg = f"Fjernet: {p_info['n']}"
+                        msg = f"Transfer: {p_info['n']} -> Udlandet"
                     else:
                         ny_række = {
                             "KLUB": valgt_klub, "NAVN": p_info['n'], "POSITION": valgt_pos,
@@ -166,5 +159,5 @@ def vis_side():
                         st.rerun()
 
     st.write("---")
-    with st.expander("Se nuværende holdlister"):
+    with st.expander("Se nuværende holdlister (CSV data)"):
         st.dataframe(df_1div.sort_values(['KLUB', 'NAVN']), use_container_width=True, hide_index=True)
