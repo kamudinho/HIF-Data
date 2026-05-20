@@ -42,31 +42,34 @@ def vis_side():
     conn = _get_snowflake_conn()
     DB = "KLUB_HVIDOVREIF.AXIS"
 
-    # 1. Hent lokal CSV data
+    # Hent CSV-data fra GitHub
     csv_content, _ = get_github_file(FILE_PATH)
     df_csv = pd.read_csv(StringIO(csv_content)) if csv_content else pd.DataFrame(columns=COL_ORDER)
 
     col_left, col_right = st.columns([1, 1], gap="large")
 
-    # --- VENSTRE SIDE: SØGNING & TRANSFER ---
+    # --- VENSTRE SIDE: SØGNING (ALTID 25/26 AKTIV) ---
     with col_left:
         st.caption("Opdater Spiller/Transfer")
-        # Vi henter en liste over alle spillere til søgning (Sæson 25/26)
+        
+        # Søge-query: Finder kun spillere der ER i en klub i den nuværende sæson
         search_q = f"""
             SELECT DISTINCT p.PLAYER_WYID, p.SHORTNAME AS NAVN, t.TEAMNAME AS KLUB
             FROM {DB}.WYSCOUT_PLAYERS p
             JOIN {DB}.WYSCOUT_TEAMS t ON p.CURRENTTEAM_WYID = t.TEAM_WYID
             JOIN {DB}.WYSCOUT_SEASONS s ON t.SEASON_WYID = s.SEASON_WYID
-            WHERE s.SEASONNAME = '2025/2026' AND p.STATUS = 'active'
+            WHERE s.SEASONNAME = '2025/2026' 
+            AND p.STATUS = 'active'
         """
         df_search = conn.query(search_q)
         
-        # (Søge- og transfer-logik her...)
+        # (Søge-logik og selectbox her...)
 
-    # --- HØJRE SIDE: TRUPOVERSIGT (PRÆCIS CURRENT TEAM LOGIK) ---
+    # --- HØJRE SIDE: TRUPOVERSIGT (PRÆCIS LOGIK) ---
     with col_right:
         st.caption("Trupoversigt (Sæson 2025/2026)")
-        valgt_liga_navn = st.segmented_control("Vælg liga", list(COMP_MAP.values()), default="Superliga")
+        liga_navne = list(COMP_MAP.values())
+        valgt_liga_navn = st.segmented_control("Vælg liga", liga_navne, default="Superliga")
         valgt_id = int([k for k, v in COMP_MAP.items() if v == valgt_liga_navn][0])
 
         if valgt_id == 328:
@@ -75,9 +78,9 @@ def vis_side():
             final_df['L_ID'] = pd.to_numeric(final_df['COMPETITION_WYID'], errors='coerce')
             final_df = final_df[final_df['L_ID'] == 328].copy()
         else:
-            # SQL LOGIK:
-            # 1. Start med at finde de hold der er i den valgte liga i 25/26
-            # 2. Join KUN de spillere hvis CURRENTTEAM_WYID matcher holdets ID
+            # SQL LOGIK TIL DE 12 HOLD OG DERES SPILLERE:
+            # 1. Vi finder hold der hører til ligaen i 25/26 via SEASONS-tabellen
+            # 2. Vi sikrer at spillerens CURRENTTEAM_WYID matcher dette hold
             query = f"""
                 SELECT DISTINCT 
                     p.SHORTNAME AS NAVN, 
@@ -97,17 +100,17 @@ def vis_side():
             final_df.columns = [c.upper() for c in final_df.columns]
             hold_liste = sorted(final_df['KLUB'].unique().tolist())
             
-            # Dropdown til at vælge holdet
-            valgt_hold = st.selectbox(f"Vælg hold ({len(hold_liste)} fundet)", hold_liste, key=f"squad_v6_{valgt_id}")
+            # Unik key sikrer reset af dropdown ved liga-skift
+            valgt_hold = st.selectbox(f"Vælg hold ({len(hold_liste)} hold i ligaen)", hold_liste, key=f"sq_v7_{valgt_id}")
             
             if valgt_hold:
-                # Her viser vi nu kun spillerne for det valgte hold
+                # Filtrer til det valgte holds aktuelle trup
                 trup = final_df[final_df['KLUB'] == valgt_hold].copy()
                 vis_tabel = trup[['NAVN', 'POSITION', 'PLAYER_WYID']].sort_values(by='NAVN')
                 vis_tabel.columns = ['Spiller', 'Position', 'ID']
                 st.table(vis_tabel)
         else:
-            st.info("Ingen hold fundet for denne liga i 2025/2026.")
+            st.warning("Ingen aktive hold fundet for 2025/2026.")
 
 if __name__ == "__main__":
     vis_side()
