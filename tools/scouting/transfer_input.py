@@ -14,17 +14,17 @@ GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 # Dine præcise liga-definitioner
 COMP_MAP = { 
     335: "Superliga", 
-    328: "NordicBet Liga", 
+    328: "Betinia Ligaen", 
     329: "2. division", 
     43319: "3. division" 
 }
 
-# Overskrifterne holdes præcis som i din oprindelige CSV
 COL_ORDER = [
     "KLUB", "NAVN", "POSITION", "PLAYER_WYID", 
     "PLAYER_OPTAUUID", "CONTRACT_EXPIRY", "TRANSFER_DATE", "PREVIOUS_CLUB", "COMPETITION_WYID"
 ]
 
+# --- HJÆLPEFUNKTIONER ---
 def get_github_file(path):
     try:
         url = f"https://api.github.com/repos/{REPO}/contents/{path}?t={int(time.time())}"
@@ -48,6 +48,7 @@ def rens_id(val):
     if pd.isna(val) or str(val).strip() == "": return ""
     return str(val).split('.')[0].strip()
 
+# --- HOVEDSIDE ---
 def vis_side():
     # 1. DATA HENTNING
     csv_content, csv_sha = get_github_file(FILE_PATH)
@@ -71,7 +72,7 @@ def vis_side():
 
     col_left, col_right = st.columns([1, 1], gap="large")
 
-    # --- VENSTRE SIDE: TRANSFER CENTER ---
+    # --- VENSTRE SIDE: REDIGERING ---
     with col_left:
         st.caption("Opdater Transfer")
         
@@ -106,7 +107,6 @@ def vis_side():
             p = unique_players[sel_id]["data"]
             with st.form("edit_form"):
                 st.write(f"Redigerer: {p['NAVN']}")
-                
                 eksisterende_klubber = sorted([k for k in df_1div['KLUB'].unique() if pd.notna(k)])
                 ny_klub = st.selectbox("Destination", ["--- UÆNDRET ---", "Slet / Udlandet"] + eksisterende_klubber)
                 
@@ -116,17 +116,12 @@ def vis_side():
                 
                 if st.form_submit_button("GEM"):
                     df_final = df_1div[df_1div['PLAYER_WYID'] != sel_id].copy()
-                    
                     if ny_klub != "Slet / Udlandet":
                         target_klub = p['KLUB'] if ny_klub == "--- UÆNDRET ---" else ny_klub
                         ny_række = {
-                            "KLUB": target_klub,
-                            "NAVN": p['NAVN'],
-                            "POSITION": p.get('POSITION', ''),
-                            "PLAYER_WYID": sel_id,
-                            "PLAYER_OPTAUUID": p.get('PLAYER_OPTAUUID'),
-                            "CONTRACT_EXPIRY": str(exp_date),
-                            "TRANSFER_DATE": str(eff_date),
+                            "KLUB": target_klub, "NAVN": p['NAVN'], "POSITION": p.get('POSITION', ''),
+                            "PLAYER_WYID": sel_id, "PLAYER_OPTAUUID": p.get('PLAYER_OPTAUUID'),
+                            "CONTRACT_EXPIRY": str(exp_date), "TRANSFER_DATE": str(eff_date),
                             "PREVIOUS_CLUB": p['KLUB'] if ny_klub != "--- UÆNDRET ---" else p.get('PREVIOUS_CLUB'),
                             "COMPETITION_WYID": p.get('COMPETITION_WYID')
                         }
@@ -136,15 +131,18 @@ def vis_side():
                     push_to_github(FILE_PATH, f"Opdatering: {p['NAVN']}", csv_string, csv_sha)
                     st.rerun()
 
-    # --- HØJRE SIDE: TRUPOVERSIGT MED LIGA-FILTER ---
+    # --- HØJRE SIDE: TRUPOVERSIGT MED BOKSE (SEGMENTED CONTROL) ---
     with col_right:
         st.caption("Trupoversigt")
         
-        # Liga-vælger baseret på dine IDs
-        liga_valg = st.selectbox("Vælg liga", list(COMP_MAP.values()))
-        valgt_id = [k for k, v in COMP_MAP.items() if v == liga_valg][0]
+        # De "bokse" du godt kunne lide til liga-valg
+        liga_navne = list(COMP_MAP.values())
+        valgt_liga_navn = st.segmented_control("Vælg liga", liga_navne, default="NordicBet Liga", label_visibility="collapsed")
         
-        # Filtrering
+        # Find ID'et for den valgte liga-boks
+        valgt_id = [k for k, v in COMP_MAP.items() if v == valgt_liga_navn][0]
+        
+        # Filtrer klubber der matcher det valgte liga-ID
         mask = df_1div['COMPETITION_WYID'].astype(str).str.contains(str(valgt_id), na=False)
         klubber_i_liga = sorted(df_1div[mask]['KLUB'].unique().tolist())
         
