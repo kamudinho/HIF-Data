@@ -87,10 +87,11 @@ def get_scouting_package():
             st.error(f"SQL Fejl i Scouting Load: {e}")
 
     return {
-        "scout_reports": scout_df,
-        "wyscout_players": df_wyscout_search,
-        "players": df_local,
-        "sql_players": df_sql_p,
-        "career": df_career,
-        "advanced_stats": df_adv
-    }
+    "scout_reports": scout_df,
+    "wyscout_players": df_wyscout_search, # Denne kan du beholde hvis andre sider bruger den
+    "players": df_wyscout_search,        # TILFØJ DENNE: Det er her transfer_input kigger!
+    "local_players": df_local, 
+    "sql_players": df_sql_p,
+    "career": df_career,
+    "advanced_stats": df_adv
+}
