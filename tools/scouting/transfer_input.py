@@ -167,15 +167,12 @@ def vis_side():
         if liga_valg == "Udlandet":
             st.write("### Spillere i udlandet")
             
-            # Vi tager TIMESTAMP med her for at kunne sortere
             trup_udland = df_csv[df_csv['UDLANDET'].astype(str) == "True"][['NAVN', 'POSITION', 'PLAYER_WYID', 'SENESTE_KLUB', 'TIMESTAMP']]
             
             if not trup_udland.empty:
-                # 1. Sorter efter TIMESTAMP (nyeste øverst)
-                # 2. Fjern TIMESTAMP kolonnen så den ikke vises i appen
                 vis_trup = trup_udland.sort_values(by="TIMESTAMP", ascending=False).drop(columns=['TIMESTAMP'])
-                
-                st.dataframe(vis_trup)
+                # hide_index=True fjerner de grå numre
+                st.dataframe(vis_trup, hide_index=True, use_container_width=True)
             else:
                 st.info("Ingen spillere registreret i udlandet.")
 
@@ -185,13 +182,13 @@ def vis_side():
             valgt_hold = st.selectbox("Vælg hold", hold_i_csv)
             if valgt_hold:
                 trup = df_csv_vis[(df_csv_vis['KLUB'] == valgt_hold) & (df_csv_vis['COMPETITION_WYID'] == 328)][['NAVN', 'POSITION', 'PLAYER_WYID']]
-                st.dataframe(trup.sort_values(by="NAVN"))
+                # hide_index=True fjerner de grå numre
+                st.dataframe(trup.sort_values(by="NAVN"), hide_index=True, use_container_width=True)
 
         else:
             valgt_liga_id = int([k for k, v in COMP_MAP.items() if v == liga_valg][0])
             df_csv_vis = df_csv[df_csv['UDLANDET'].astype(str) != "True"]
             
-            # SQL opdateret her også til FIRSTNAME + LASTNAME
             sql_q = f"""
                 SELECT DISTINCT CONCAT(p.FIRSTNAME, ' ', p.LASTNAME) AS NAVN, 
                        p.ROLECODE3 AS POSITION, p.PLAYER_WYID, t.TEAMNAME AS KLUB 
@@ -211,7 +208,8 @@ def vis_side():
                     sql_f = sql_trup[(sql_trup['KLUB'] == v_hold) & (~sql_trup['PLAYER_WYID'].isin(csv_ids))]
                     csv_f = df_csv_vis[(df_csv_vis['COMPETITION_WYID'] == valgt_liga_id) & (df_csv_vis['KLUB'] == v_hold)]
                     vis_trup = pd.concat([sql_f[['NAVN', 'POSITION', 'PLAYER_WYID']], csv_f[['NAVN', 'POSITION', 'PLAYER_WYID']]], ignore_index=True)
-                    st.dataframe(vis_trup.sort_values(by="NAVN"))
+                    # hide_index=True fjerner de grå numre
+                    st.dataframe(vis_trup.sort_values(by="NAVN"), hide_index=True, use_container_width=True)
 
 if __name__ == "__main__":
     vis_side()
