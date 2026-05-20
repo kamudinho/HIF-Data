@@ -14,7 +14,7 @@ REPO = "Kamudinho/HIF-data"
 FILE_PATH = "data/players/1div_overskrivning.csv"
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 
-# LOKAL TILPASNING AF LIGAER (335: SL, 328: 1.D, 329: 2.D, 43319: 3.D)
+# LOKAL TILPASNING AF LIGAER
 LIGA_FILTER = (335, 328, 329, 43319)
 
 COL_ORDER = [
@@ -58,8 +58,11 @@ def vis_side():
     # 1. Hent CSV fra GitHub
     csv_content, csv_sha = get_github_file(FILE_PATH)
     df_1div = pd.read_csv(StringIO(csv_content)) if csv_content else pd.DataFrame(columns=COL_ORDER)
+    
+    # Lav et hurtigt opslagssæt for ID'er i CSV
+    csv_ids = set(df_1div['PLAYER_WYID'].astype(str).apply(rens_id).tolist())
 
-    # 2. Hent Snowflake data (Håndterer de valgte ligaer lokalt)
+    # 2. Hent Snowflake data
     with st.spinner("Synkroniserer med spillerdatabase..."):
         conn = _get_snowflake_conn()
         query = f"""
@@ -72,14 +75,27 @@ def vis_side():
         except:
             df_sql = pd.DataFrame()
 
-    # --- LOGIK FOR LISTE-VISNING ---
+    # --- KONSTRUKTION AF SPILLERLISTEN (VIGTIGT!) ---
     unique_players = {}
     
-    # TRIN 1: Fyld først listen med alle spillere fra Snowflake (Database-status)
+    # TRIN 1: Tilføj dem fra CSV først (De grønne - Andreas Smed m.fl.)
+    for _, r in df_1div.iterrows():
+        p_id = rens_id(r.get('PLAYER_WYID'))
+        if p_id:
+            unique_players[p_id] = {
+                "label": f"🟢 {r['NAVN']} ({r['KLUB']})",
+                "data": {
+                    "n": r['NAVN'], "id": p_id, "pos": r['POSITION'], 
+                    "klub": r['KLUB'], "opta": r.get('PLAYER_OPTAUUID', "")
+                }
+            }
+
+    # TRIN 2: Tilføj kun fra SQL, hvis de IKKE allerede er i CSV'en
     if not df_sql.empty:
         for _, r in df_sql.iterrows():
             p_id = rens_id(r.get('PLAYER_WYID'))
-            if not p_id: continue
+            if not p_id or p_id in csv_ids: 
+                continue # Spring over hvis han allerede er grøn
             
             f = str(r.get('FIRSTNAME', '')).strip()
             l = str(r.get('LASTNAME', '')).strip()
@@ -90,29 +106,19 @@ def vis_side():
                 "data": {"n": full_navn, "id": p_id, "pos": r.get('ROLECODE3', ""), "klub": "Database", "opta": ""}
             }
 
-    # TRIN 2: Overskriv dem der findes i CSV (Klub-status)
-    # Dette sikrer at Andreas Smed m.fl. altid vises med deres klub og grøn cirkel
-    for _, r in df_1div.iterrows():
-        p_id = rens_id(r.get('PLAYER_WYID'))
-        if p_id:
-            # Vi tvinger overskrivning her, så label bliver korrekt
-            unique_players[p_id] = {
-                "label": f"🟢 {r['NAVN']} ({r['KLUB']})",
-                "data": {
-                    "n": r['NAVN'], 
-                    "id": p_id, 
-                    "pos": r['POSITION'], 
-                    "klub": r['KLUB'], 
-                    "opta": r.get('PLAYER_OPTAUUID', "")
-                }
-            }
-
-    # Sorter listen så alle (også dem fra CSV) optræder alfabetisk
-    options_list = sorted(list(unique_players.keys()), key=lambda x: unique_players[x]["label"])
+    # Sortering: Grønne cirkler øverst, derefter alfabetisk
+    options_list = sorted(
+        unique_players.keys(), 
+        key=lambda x: (unique_players[x]["label"].startswith("⚪"), unique_players[x]["label"])
+    )
 
     # --- UI ---
-    sel_id = st.selectbox("Søg spiller (Navn eller ID)", [""] + options_list, 
-                          format_func=lambda x: unique_players[x]["label"] if x else "Vælg spiller...")
+    sel_id = st.selectbox(
+        "Søg spiller (Navn eller ID)", 
+        [""] + options_list, 
+        format_func=lambda x: unique_players[x]["label"] if x else "Vælg spiller...",
+        key="transfer_selector"
+    )
 
     if sel_id:
         p_info = unique_players[sel_id]["data"]
@@ -139,15 +145,12 @@ def vis_side():
                 if valgt_klub == "--- VÆLG DESTINATION ---":
                     st.warning("Vælg venligst hvor spilleren skal hen.")
                 else:
-                    # Rens altid eksisterende række for at undgå dubletter
-                    df_final = df_1div[df_1div['PLAYER_WYID'].astype(str).str.split('.').str[0] != str(sel_id)].copy()
+                    # Rens eksisterende række
+                    df_final = df_1div[df_1div['PLAYER_WYID'].astype(str).apply(rens_id) != str(sel_id)].copy()
                     
                     if valgt_klub == "✈️ Udlandet / Anden række":
-                        # Ved udlandet tilføjer vi ham IKKE til CSV'en igen
-                        msg = f"Sletet/Udlandet: {p_info['n']}"
-                        st.info(f"{p_info['n']} fjernes fra holdlisterne.")
+                        msg = f"Slettet/Udlandet: {p_info['n']}"
                     else:
-                        # Tilføj til den valgte klub
                         ny_række = {
                             "KLUB": valgt_klub, "NAVN": p_info['n'], "POSITION": valgt_pos,
                             "PLAYER_WYID": int(sel_id), "PLAYER_OPTAUUID": valgt_opta if valgt_opta else None,
@@ -161,7 +164,7 @@ def vis_side():
                     
                     if res in [200, 201]:
                         st.success("Opdateret!")
-                        time.sleep(1)
+                        time.sleep(0.5)
                         st.rerun()
 
     st.write("---")
