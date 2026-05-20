@@ -43,7 +43,7 @@ def rens_id(val):
 
 # --- HOVEDSIDE ---
 def vis_side():
-    st.title("🏟️ Transfer & Trup Management")
+    st.caption("Transfers")
 
     # 1. HENT OG REPARER CSV
     csv_content, csv_sha = get_github_file(FILE_PATH)
@@ -78,7 +78,7 @@ def vis_side():
 
     # --- VENSTRE SIDE: REDIGERING ---
     with col_left:
-        st.subheader("🔄 Opdater Spiller / Transfer")
+        st.subheader("Opdater Transfer")
         
         unique_players = {}
         csv_ids = set(df_1div['PLAYER_WYID'].tolist())
@@ -115,7 +115,7 @@ def vis_side():
                 
                 # Klub-liste fra CSV + muligheden for at skrive en ny
                 eksisterende_klubber = sorted([k for k in df_1div['KLUB'].unique() if pd.notna(k)])
-                ny_klub = st.selectbox("Destination", ["--- UÆNDRET ---", "✈️ Slet / Udlandet"] + eksisterende_klubber)
+                ny_klub = st.selectbox("Destination", ["--- UÆNDRET ---", "Slet / Udlandet"] + eksisterende_klubber)
                 
                 c1, c2 = st.columns(2)
                 exp_date = c1.date_input("Kontraktudløb", value=pd.to_datetime(p.get('CONTRACT_EXPIRY')).date() if pd.notna(p.get('CONTRACT_EXPIRY')) else today)
@@ -148,7 +148,7 @@ def vis_side():
 
     # --- HØJRE SIDE: DROPDOWN OG TRUP ---
     with col_right:
-        st.subheader("📋 Trupoversigt")
+        st.caption("Trupoversigt")
         klubber = sorted([k for k in df_1div['KLUB'].unique() if pd.notna(k)])
         valgt_hold = st.selectbox("Vælg hold", klubber)
         
