@@ -162,7 +162,7 @@ def vis_side():
 
         if liga_valg == "Udlandet":
             st.write("### Spillere i udlandet")
-            trup_udland = df_csv[df_csv['UDLANDET'].astype(str) == "True"][['NAVN', 'POSITION', 'SENESTE_KLUB', 'TIMESTAMP']]
+            trup_udland = df_csv[df_csv['UDLANDET'].astype(str) == "True"][['NAVN', 'POSITION', 'PLAYER_WYID', 'SENESTE_KLUB']]
             if not trup_udland.empty:
                 st.table(trup_udland.sort_values(by="TIMESTAMP", ascending=False))
             else:
