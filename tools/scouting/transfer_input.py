@@ -140,35 +140,54 @@ def vis_side():
                         st.success("Transfer gennemført"); time.sleep(1); st.rerun()
 
     # --- HØJRE SIDE: TRUPOVERSIGT ---
-    with col_right:
-        st.subheader("Trupoversigt")
-        liga_valg = st.segmented_control("Vælg liga", list(COMP_MAP.values()), default="Betinia Ligaen")
-        valgt_liga_id = int([k for k, v in COMP_MAP.items() if v == liga_valg][0])
+with col_right:
+    st.subheader("Trupoversigt")
+    
+    # Tilføjer "Udlandet" som en valgmulighed i fanerne
+    faner = list(COMP_MAP.values()) + ["Udlandet"]
+    liga_valg = st.segmented_control("Vælg liga", faner, default="Betinia Ligaen")
 
-        # VI FILTRERER ALTID UDLANDET FRA I VISNINGEN
-        df_csv_vis = df_csv[df_csv['UDLANDET'].astype(str) != "True"]
-
-        if valgt_liga_id == 328:
-            hold_i_csv = sorted(df_csv_vis[df_csv_vis['COMPETITION_WYID'] == 328]['KLUB'].unique().tolist())
-            valgt_hold = st.selectbox("Vælg hold", hold_i_csv)
-            if valgt_hold:
-                trup = df_csv_vis[(df_csv_vis['KLUB'] == valgt_hold) & (df_csv_vis['COMPETITION_WYID'] == 328)][['NAVN', 'POSITION', 'PLAYER_WYID']]
-                st.table(trup.sort_values(by="NAVN"))
+    if liga_valg == "Udlandet":
+        # VIS SPILLERE I UDLANDET
+        st.write("### Spillere i udlandet")
+        # Her henter vi alle hvor UDLANDET-kolonnen er True
+        trup_udland = df_csv[df_csv['UDLANDET'].astype(str) == "True"][['NAVN', 'POSITION', 'SENESTE_KLUB', 'TIMESTAMP']]
+        
+        if not trup_udland.empty:
+            # Sorterer så de nyeste skifter står øverst
+            st.table(trup_udland.sort_values(by="TIMESTAMP", ascending=False))
         else:
-            sql_q = f"SELECT DISTINCT p.SHORTNAME AS NAVN, p.ROLECODE3 AS POSITION, p.PLAYER_WYID, t.TEAMNAME AS KLUB FROM {DB}.WYSCOUT_TEAMS t JOIN {DB}.WYSCOUT_SEASONS s ON t.SEASON_WYID = s.SEASON_WYID JOIN {DB}.WYSCOUT_PLAYERS p ON (p.CURRENTTEAM_WYID = t.TEAM_WYID AND p.SEASON_WYID = s.SEASON_WYID) WHERE t.COMPETITION_WYID = {valgt_liga_id} AND s.SEASONNAME = '2025/2026' AND p.STATUS = 'active'"
-            sql_trup = conn.query(sql_q)
-            if sql_trup is not None:
-                sql_trup.columns = [c.upper() for c in sql_trup.columns]
-                sql_trup['PLAYER_WYID'] = sql_trup['PLAYER_WYID'].apply(rens_id)
-                klubber = sorted(sql_trup['KLUB'].unique().tolist())
-                v_hold = st.selectbox("Vælg hold", klubber)
-                if v_hold:
-                    csv_ids = df_csv['PLAYER_WYID'].unique().tolist()
-                    sql_f = sql_trup[(sql_trup['KLUB'] == v_hold) & (~sql_trup['PLAYER_WYID'].isin(csv_ids))]
-                    # Kun dem fra CSV der ikke er markeret som udlandet
-                    csv_f = df_csv_vis[(df_csv_vis['COMPETITION_WYID'] == valgt_liga_id) & (df_csv_vis['KLUB'] == v_hold)]
-                    vis_trup = pd.concat([sql_f[['NAVN', 'POSITION', 'PLAYER_WYID']], csv_f[['NAVN', 'POSITION', 'PLAYER_WYID']]], ignore_index=True)
-                    st.table(vis_trup.sort_values(by="NAVN"))
+            st.info("Der er ikke registreret nogen spillere i udlandet endnu.")
+
+    elif liga_valg == "Betinia Ligaen":
+        # Din eksisterende logik for Betinia Ligaen (Endelig sandhed)
+        df_csv_vis = df_csv[df_csv['UDLANDET'].astype(str) != "True"]
+        hold_i_csv = sorted(df_csv_vis[df_csv_vis['COMPETITION_WYID'] == 328]['KLUB'].unique().tolist())
+        valgt_hold = st.selectbox("Vælg hold", hold_i_csv)
+        if valgt_hold:
+            trup = df_csv_vis[(df_csv_vis['KLUB'] == valgt_hold) & (df_csv_vis['COMPETITION_WYID'] == 328)][['NAVN', 'POSITION', 'PLAYER_WYID']]
+            st.table(trup.sort_values(by="NAVN"))
+
+    else:
+        # Standard visning for Superliga, 2. div, 3. div og U19
+        valgt_liga_id = int([k for k, v in COMP_MAP.items() if v == liga_valg][0])
+        df_csv_vis = df_csv[df_csv['UDLANDET'].astype(str) != "True"]
+        
+        sql_q = f"SELECT DISTINCT p.SHORTNAME AS NAVN, p.ROLECODE3 AS POSITION, p.PLAYER_WYID, t.TEAMNAME AS KLUB FROM {DB}.WYSCOUT_TEAMS t JOIN {DB}.WYSCOUT_SEASONS s ON t.SEASON_WYID = s.SEASON_WYID JOIN {DB}.WYSCOUT_PLAYERS p ON (p.CURRENTTEAM_WYID = t.TEAM_WYID AND p.SEASON_WYID = s.SEASON_WYID) WHERE t.COMPETITION_WYID = {valgt_liga_id} AND s.SEASONNAME = '2025/2026' AND p.STATUS = 'active'"
+        sql_trup = conn.query(sql_q)
+        
+        if sql_trup is not None:
+            sql_trup.columns = [c.upper() for c in sql_trup.columns]
+            sql_trup['PLAYER_WYID'] = sql_trup['PLAYER_WYID'].apply(rens_id)
+            klubber = sorted(sql_trup['KLUB'].unique().tolist())
+            v_hold = st.selectbox("Vælg hold", klubber)
+            
+            if v_hold:
+                csv_ids = df_csv['PLAYER_WYID'].unique().tolist()
+                sql_f = sql_trup[(sql_trup['KLUB'] == v_hold) & (~sql_trup['PLAYER_WYID'].isin(csv_ids))]
+                csv_f = df_csv_vis[(df_csv_vis['COMPETITION_WYID'] == valgt_liga_id) & (df_csv_vis['KLUB'] == v_hold)]
+                vis_trup = pd.concat([sql_f[['NAVN', 'POSITION', 'PLAYER_WYID']], csv_f[['NAVN', 'POSITION', 'PLAYER_WYID']]], ignore_index=True)
+                st.table(vis_trup.sort_values(by="NAVN"))
 
 if __name__ == "__main__":
     vis_side()
