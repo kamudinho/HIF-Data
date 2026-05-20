@@ -68,7 +68,7 @@ def vis_side():
 
     # --- VENSTRE SIDE: SØG OG TRANSFER FORM ---
     with col_left:
-        st.subheader("Søg & Registrer Transfer")
+        st.caption("Transfer")
         
         # Den "Gyldne" SQL: Henter kun aktive spillere fra 25/26 sæsonens hold
         search_q = f"""
@@ -107,12 +107,12 @@ def vis_side():
             c1, c2 = st.columns([1, 2])
             with c1:
                 img = p['IMAGEDATAURL'] if p['IMAGEDATAURL'] else "https://cdn5.wyscout.com/photos/players/public/ndplayer_100x130.png"
-                st.image(img, width=120)
+                st.image(img, width=80)
             with c2:
-                st.markdown(f"### {p['NAVN']}")
-                st.write(f"**Fra:** {p['KLUB']}")
-                st.write(f"**Position:** {p['POSITION']}")
-                st.info(f"**ID:** {sel_id}")
+                st.write(f"### {p['NAVN']}")
+                st.caption(f"**Fra:** {p['KLUB']}")
+                st.caption(f"**Position:** {p['POSITION']}")
+                st.caption(f"**ID:** {sel_id}")
 
             st.divider()
 
@@ -131,7 +131,7 @@ def vis_side():
                 kilde = st.text_input("Kilde (Link)")
                 kommentar = st.text_area("Kommentar")
 
-                if st.form_submit_button("GEM TRANSFER TIL CSV"):
+                if st.form_submit_button("SEND TRANSFER TIL DATABASEN"):
                     ny_række = {
                         "KLUB": ny_klub,
                         "NAVN": p['NAVN'],
@@ -155,13 +155,13 @@ def vis_side():
                     res_code = push_to_github(FILE_PATH, f"Transfer: {p['NAVN']} -> {ny_klub}", csv_string, csv_sha)
                     
                     if res_code in [200, 201]:
-                        st.success(f"✅ Gemt: {p['NAVN']} er nu i {ny_klub}")
+                        st.success(f"Gemt: {p['NAVN']} er nu i {ny_klub}")
                         time.sleep(1)
                         st.rerun()
 
     # --- HØJRE SIDE: TRUPOVERSIGT (12 HOLD TJEK) ---
     with col_right:
-        st.subheader("Trupoversigt (2025/2026)")
+        st.caption("Trupoversigt (2025/2026)")
         liga_valg = st.segmented_control("Vælg liga", list(COMP_MAP.values()), default="Superliga")
         liga_id = int([k for k, v in COMP_MAP.items() if v == liga_valg][0])
 
