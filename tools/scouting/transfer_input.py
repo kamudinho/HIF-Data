@@ -43,8 +43,6 @@ def rens_id(val):
 
 # --- HOVEDSIDE ---
 def vis_side():
-    st.caption("Transfers")
-
     # 1. HENT OG REPARER CSV
     csv_content, csv_sha = get_github_file(FILE_PATH)
     
