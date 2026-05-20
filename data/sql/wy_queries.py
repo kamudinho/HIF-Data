@@ -19,19 +19,19 @@ def get_wy_queries(comp_filter, season_filter):
         # 1. PLAYERS (Behold filter her, så din hovedliste ikke eksploderer)
         "players": f"""
             SELECT DISTINCT
-                p.PLAYER_WYID,
+                p.PLAYER_WYID, 
                 p.FIRSTNAME,
                 p.LASTNAME,
                 p.SHORTNAME AS PLAYER_NAME,
+                p.ROLECODE3,
                 p.BIRTHDATE,
-                p.IMAGEDATAURL,
-                p.ROLECODE3
+                t.TEAMNAME,
+                p.COMPETITION_WYID,
+                p.PLAYER_OPTAUUID
             FROM {DB}.WYSCOUT_PLAYERS p
-            WHERE p.PLAYER_WYID IN (
-                SELECT pc.PLAYER_WYID 
-                FROM {DB}.WYSCOUT_PLAYERCAREER pc
-                JOIN {DB}.WYSCOUT_SEASONS s ON pc.SEASON_WYID = s.SEASON_WYID
-            )
+            JOIN {DB}.WYSCOUT_TEAMS t ON p.CURRENTTEAM_WYID = t.TEAM_WYID
+            WHERE p.COMPETITION_WYID IN {liga_ids}
+            AND p.STATUS = 'active'
         """,
         
         # 2. PLAYER CAREER (HER VAR FEJLEN!)
