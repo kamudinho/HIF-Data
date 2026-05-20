@@ -109,7 +109,7 @@ def vis_side():
                 img = p['IMAGEDATAURL'] if p['IMAGEDATAURL'] else "https://cdn5.wyscout.com/photos/players/public/ndplayer_100x130.png"
                 st.image(img, width=80)
             with c2:
-                st.write(f"### {p['NAVN']}")
+                st.caption(f"### {p['NAVN']}")
                 st.caption(f"**Fra:** {p['KLUB']}")
                 st.caption(f"**Position:** {p['POSITION']}")
                 st.caption(f"**ID:** {sel_id}")
