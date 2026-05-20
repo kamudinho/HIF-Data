@@ -103,56 +103,51 @@ def vis_side():
                     # ... din eksisterende gemme-logik ...
                     pass
 
-    # --- HØJRE SIDE: TRUPOVERSIGT (RETTET) ---
+    # --- HØJRE SIDE: TRUPOVERSIGT ---
     with col_right:
         st.caption("Trupoversigt")
         
         liga_navne = list(COMP_MAP.values())
-        # Vi bruger en key her for at sikre at komponenten nulstilles korrekt
-        valgt_liga_navn = st.segmented_control("Vælg liga", liga_navne, default="Superliga", key="liga_selector")
+        valgt_liga_navn = st.segmented_control("Vælg liga", liga_navne, default="Superliga")
         
-        # Find ID (f.eks. 329 for 2. division)
-        valgt_id = [k for k, v in COMP_MAP.items() if v == valgt_liga_navn][0]
+        # 1. Find ID og tving det til streng med det samme
+        valgt_id_str = str([k for k, v in COMP_MAP.items() if v == valgt_liga_navn][0])
         
         kilde_df = pd.DataFrame()
 
-        # LOGIK: Filtrer data før vi overhovedet kigger på holdene
-        if valgt_id == 328:
-            # 1. Division (Betinia) -> hent fra CSV
+        if valgt_id_str == "328":
             if not df_csv.empty:
+                # Tving kolonnen til streng og rens for .0
                 df_csv['COMP_ID_TMP'] = df_csv['COMPETITION_WYID'].astype(str).str.split('.').str[0].str.strip()
                 kilde_df = df_csv[df_csv['COMP_ID_TMP'] == "328"].copy()
         else:
-            # Andre ligaer -> hent fra SQL
             if not df_sql.empty:
-                # Tving alt til streng for at matche (329.0 -> "329")
+                # VIGTIGT: Rens SQL kolonnen her
                 df_sql['COMP_ID_CLEAN'] = df_sql['COMPETITION_WYID'].astype(str).str.split('.').str[0].str.strip()
-                kilde_df = df_sql[df_sql['COMP_ID_CLEAN'] == str(valgt_id)].copy()
                 
-                # Standardiser navne
-                kilde_df = kilde_df.rename(columns={
-                    'TEAMNAME': 'KLUB', 
-                    'PLAYER_NAME': 'NAVN', 
-                    'ROLECODE3': 'POSITION'
-                })
+                # Filtrer nu (Vi sammenligner streng mod streng: "329" == "329")
+                kilde_df = df_sql[df_sql['COMP_ID_CLEAN'] == valgt_id_str].copy()
+                
+                # Omdøb kolonner så de matcher tabellen
+                kilde_df = kilde_df.rename(columns={'TEAMNAME': 'KLUB', 'PLAYER_NAME': 'NAVN', 'ROLECODE3': 'POSITION'})
 
-        # VISNING AF HOLD
+        # --- VISNING ---
         if not kilde_df.empty:
-            # VIGTIGT: hold_liste laves KUN ud fra den filtrerede kilde_df
+            # Vi tvinger selectboxen til at genstarte hver gang ligaen skifter med 'key'
             hold_liste = sorted(kilde_df['KLUB'].unique().tolist())
-            
-            # Vi bruger valgt_id i nøglen for at tvinge selectboxen til at opdatere sig
-            valgt_hold = st.selectbox("Vælg hold", hold_liste, key=f"hold_select_{valgt_id}")
+            valgt_hold = st.selectbox("Vælg hold", hold_liste, key=f"fixed_hold_{valgt_id_str}")
             
             if valgt_hold:
                 trup = kilde_df[kilde_df['KLUB'] == valgt_hold].copy()
+                
+                # Lav en pæn tabel
                 vis_df = trup[['NAVN', 'POSITION', 'PLAYER_WYID']].copy()
                 vis_df.columns = ['Spiller', 'Position', 'ID']
                 vis_df['ID'] = vis_df['ID'].astype(str).str.split('.').str[0]
                 
                 st.table(vis_df.sort_values(by='Spiller'))
         else:
-            st.warning(f"Ingen data fundet for {valgt_liga_navn} (ID: {valgt_id})")
+            st.warning(f"Ingen hold fundet for {valgt_liga_navn} (ID: {valgt_id_str})")
 
 if __name__ == "__main__":
     vis_side()
