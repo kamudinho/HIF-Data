@@ -17,9 +17,10 @@ def get_wy_queries(comp_filter, season_filter):
 
     return {
         # 1. PLAYERS (Behold filter her, så din hovedliste ikke eksploderer)
+        # 1. PLAYERS (Optimeret til trupoversigt og liga-filtrering)
         "players": f"""
             SELECT DISTINCT
-                p.PLAYER_WYID, 
+                p.PLAYER_WYID,
                 p.FIRSTNAME,
                 p.LASTNAME,
                 p.SHORTNAME AS PLAYER_NAME,
@@ -27,7 +28,8 @@ def get_wy_queries(comp_filter, season_filter):
                 p.BIRTHDATE,
                 t.TEAMNAME,
                 p.COMPETITION_WYID,
-                p.PLAYER_OPTAUUID
+                p.PLAYER_OPTAUUID,
+                p.IMAGEDATAURL
             FROM {DB}.WYSCOUT_PLAYERS p
             JOIN {DB}.WYSCOUT_TEAMS t ON p.CURRENTTEAM_WYID = t.TEAM_WYID
             WHERE p.COMPETITION_WYID IN {liga_ids}
