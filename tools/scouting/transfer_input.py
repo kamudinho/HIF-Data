@@ -11,7 +11,7 @@ REPO = "Kamudinho/HIF-data"
 FILE_PATH = "data/players/1div_overskrivning.csv"
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 
-# Dine præcise liga-definitioner
+# Opdaterede navne baseret på dine rettelser
 COMP_MAP = { 
     335: "Superliga", 
     328: "Betinia Ligaen", 
@@ -131,13 +131,13 @@ def vis_side():
                     push_to_github(FILE_PATH, f"Opdatering: {p['NAVN']}", csv_string, csv_sha)
                     st.rerun()
 
-    # --- HØJRE SIDE: TRUPOVERSIGT MED BOKSE (SEGMENTED CONTROL) ---
+    # --- HØJRE SIDE: TRUPOVERSIGT MED BOKSE ---
     with col_right:
         st.caption("Trupoversigt")
         
-        # De "bokse" du godt kunne lide til liga-valg
+        # Boksene til liga-valg med det korrekte navn: Betinia Ligaen
         liga_navne = list(COMP_MAP.values())
-        valgt_liga_navn = st.segmented_control("Vælg liga", liga_navne, default="NordicBet Liga", label_visibility="collapsed")
+        valgt_liga_navn = st.segmented_control("Vælg liga", liga_navne, default="Betinia Ligaen", label_visibility="collapsed")
         
         # Find ID'et for den valgte liga-boks
         valgt_id = [k for k, v in COMP_MAP.items() if v == valgt_liga_navn][0]
