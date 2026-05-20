@@ -66,7 +66,6 @@ def vis_side():
     col_left, col_right = st.columns([1, 1], gap="large")
 
     with col_left:
-        st.caption("Transfer")
         
         search_q = f"""
             SELECT DISTINCT 
@@ -151,7 +150,6 @@ def vis_side():
                         st.rerun()
 
     with col_right:
-        st.caption("Trupoversigt (2025/2026)")
         liga_valg = st.segmented_control("Vælg liga", list(COMP_MAP.values()), default="Superliga")
         liga_id = int([k for k, v in COMP_MAP.items() if v == liga_valg][0])
 
