@@ -18,13 +18,11 @@ COMP_MAP = {
     43319: "3. division" 
 }
 
-# Overskrifter baseret på din CSV-struktur
 COL_ORDER = [
     "KLUB", "NAVN", "POSITION", "PLAYER_WYID", 
     "PLAYER_OPTAUUID", "COMPETITION_WYID", "COMPETITION_OPTAUUID"
 ]
 
-# --- FUNKTIONER ---
 def get_github_file(path):
     try:
         url = f"https://api.github.com/repos/{REPO}/contents/{path}?t={int(time.time())}"
@@ -54,14 +52,15 @@ def vis_side():
     
     if csv_content:
         df_csv = pd.read_csv(StringIO(csv_content), on_bad_lines='skip')
-        df_csv = df_csv.reindex(columns=COL_ORDER) # Sikrer alle kolonner er der
+        df_csv = df_csv.reindex(columns=COL_ORDER)
     else:
         df_csv = pd.DataFrame(columns=COL_ORDER)
 
     import data.HIF_load as hif_load
     try:
         dp = hif_load.get_scouting_package()
-        df_sql = dp.get("wyscout_players", pd.DataFrame())
+        # VIGTIGT: Vi henter nu 'players' nøglen fra Snowflake
+        df_sql = dp.get("players", pd.DataFrame())
     except:
         df_sql = pd.DataFrame()
 
@@ -69,25 +68,24 @@ def vis_side():
 
     # --- VENSTRE SIDE: SØG & OPDATER ---
     with col_left:
-        st.caption("Opdater Transfer")
+        st.subheader("Opdater Spiller/Transfer")
         
-        # Vi samler spillere fra både CSV og Database til søgning
         search_options = {}
         
         # Fra CSV
         for _, r in df_csv.iterrows():
             p_id = rens_id(r['PLAYER_WYID'])
             if p_id:
-                search_options[p_id] = {"label": f"{r['NAVN']} ({r['KLUB']})", "source": "csv", "data": r.to_dict()}
+                search_options[p_id] = {"label": f"📝 {r['NAVN']} ({r['KLUB']})", "source": "csv", "data": r.to_dict()}
         
-        # Fra SQL (kun hvis de ikke allerede er i CSV)
+        # Fra SQL (hvis ikke i CSV)
         if not df_sql.empty:
             for _, r in df_sql.iterrows():
                 p_id = rens_id(r.get('PLAYER_WYID'))
                 if p_id and p_id not in search_options:
                     navn = f"{r.get('FIRSTNAME','')} {r.get('LASTNAME','')}".strip() or r.get('PLAYER_NAME', 'Ukendt')
                     search_options[p_id] = {
-                        "label": f"{navn} ({r.get('TEAMNAME', 'DB')})", 
+                        "label": f"🌐 {navn} ({r.get('TEAMNAME', 'DB')})", 
                         "source": "sql", 
                         "data": {
                             "NAVN": navn, "PLAYER_WYID": p_id, "POSITION": r.get('ROLECODE3', ""), 
@@ -97,20 +95,21 @@ def vis_side():
                     }
 
         sel_id = st.selectbox("Søg spiller", [""] + sorted(search_options.keys(), key=lambda x: search_options[x]["label"]), 
-                              format_func=lambda x: search_options[x]["label"] if x else "Vælg spiller...")
+                            format_func=lambda x: search_options[x]["label"] if x else "Indtast navn...")
 
         if sel_id:
             p = search_options[sel_id]["data"]
             with st.form("edit_form"):
-                st.write(f"Redigerer: **{p['NAVN']}**")
+                st.write(f"Valgt spiller: **{p['NAVN']}**")
                 
-                alle_klubber = sorted(list(set(df_csv['KLUB'].dropna().tolist() + ([df_sql['TEAMNAME'].dropna().unique().tolist()] if not df_sql.empty else []))))
-                ny_klub = st.selectbox("Flyt til klub", ["--- UÆNDRET ---"] + alle_klubber)
+                # Dynamisk klubliste
+                alle_klubber = sorted(list(set(df_csv['KLUB'].dropna().tolist() + 
+                                              (df_sql['TEAMNAME'].dropna().unique().tolist() if not df_sql.empty else []))))
+                
+                ny_klub = st.selectbox("Flyt spiller til:", ["--- UÆNDRET ---"] + alle_klubber)
                 
                 if st.form_submit_button("GEM ÆNDRING"):
-                    # Fjern gammel post hvis den findes
                     df_final = df_csv[df_csv['PLAYER_WYID'].astype(str) != str(sel_id)].copy()
-                    
                     target_klub = p['KLUB'] if ny_klub == "--- UÆNDRET ---" else ny_klub
                     
                     ny_række = {
@@ -126,41 +125,40 @@ def vis_side():
                     df_final = pd.concat([df_final, pd.DataFrame([ny_række])], ignore_index=True)
                     csv_string = df_final[COL_ORDER].to_csv(index=False)
                     push_to_github(FILE_PATH, f"Transfer: {p['NAVN']} -> {target_klub}", csv_string, csv_sha)
+                    st.success(f"Gemt! {p['NAVN']} er nu i {target_klub}")
+                    time.sleep(1)
                     st.rerun()
 
     # --- HØJRE SIDE: TRUPOVERSIGT ---
     with col_right:
-        st.caption("Trupoversigt")
+        st.subheader("Trupoversigt")
         
         liga_navne = list(COMP_MAP.values())
-        valgt_liga_navn = st.segmented_control("Vælg liga", liga_navne, default="Betinia Ligaen", label_visibility="collapsed")
+        valgt_liga_navn = st.segmented_control("Vælg liga", liga_navne, default="Betinia Ligaen")
         valgt_id = [k for k, v in COMP_MAP.items() if v == valgt_liga_navn][0]
         
-        # DATA-KILDE LOGIK:
-        # Hvis vi vælger Betinia Ligaen, bruger vi din manuelle CSV. 
-        # For alle andre (Superliga osv.) bruger vi SQL-databasen direkte.
+        # Logik: Betinia Ligaen kommer fra CSV (overskrivninger), resten fra SQL
         if valgt_id == 328:
             mask = df_csv['COMPETITION_WYID'].astype(str).str.contains('328', na=False)
             kilde_df = df_csv[mask].copy()
         else:
             if not df_sql.empty:
+                # Filtrer SQL data baseret på liga ID (f.eks. 335 for Superliga)
                 mask = df_sql['COMPETITION_WYID'].fillna(0).astype(int) == int(valgt_id)
                 kilde_df = df_sql[mask].copy().rename(columns={'TEAMNAME': 'KLUB', 'PLAYER_NAME': 'NAVN', 'ROLECODE3': 'POSITION'})
             else:
                 kilde_df = pd.DataFrame()
 
         hold_liste = sorted(kilde_df['KLUB'].unique().tolist()) if not kilde_df.empty else []
-        valgt_hold = st.selectbox("Vælg hold", hold_liste if hold_liste else ["Ingen data"])
+        valgt_hold = st.selectbox("Vælg hold", hold_liste if hold_liste else ["Ingen data fundet"])
         
-        if valgt_hold and valgt_hold != "Ingen data":
+        if valgt_hold and valgt_hold != "Ingen data fundet":
             trup = kilde_df[kilde_df['KLUB'] == valgt_hold].copy()
             
-            # Rent tabel-look
             tabel_data = []
             for _, s in trup.iterrows():
-                navn = s['NAVN'] if 'NAVN' in s and pd.notna(s['NAVN']) else f"{s.get('FIRSTNAME','')} {s.get('LASTNAME','')}".strip()
                 tabel_data.append({
-                    "Spiller": navn,
+                    "Spiller": s.get('NAVN', 'Ukendt'),
                     "Position": s.get('POSITION', '-'),
                     "ID": rens_id(s.get('PLAYER_WYID'))
                 })
