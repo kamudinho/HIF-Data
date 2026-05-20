@@ -109,8 +109,7 @@ def vis_side():
             with c2:
                 st.write(f"**{p['NAVN']}**")
                 st.caption(f"Nuværende: {entry['aktuel_klub']} | Alder: {alder if alder else '?'}")
-        else:
-            st.info("Vælg en spiller for at udfylde formularen")
+        
 
         # FORMULAREN VISES NU ALTID
         with st.form("full_transfer_form", clear_on_submit=True):
@@ -162,7 +161,7 @@ def vis_side():
 
     # --- HØJRE SIDE: TRUPOVERSIGT ---
     with col_right:
-        st.caption("Trupoversigt")
+        st.caption("Holdlister")
         
         faner = list(COMP_MAP.values()) + ["Udlandet"]
         liga_valg = st.segmented_control("Vælg liga", faner, default="Betinia Ligaen")
