@@ -28,7 +28,6 @@ def get_wy_queries(comp_filter, season_filter):
                 p.BIRTHDATE,
                 t.TEAMNAME,
                 p.COMPETITION_WYID,
-                p.PLAYER_OPTAUUID,
                 p.IMAGEDATAURL
             FROM {DB}.WYSCOUT_PLAYERS p
             JOIN {DB}.WYSCOUT_TEAMS t ON p.CURRENTTEAM_WYID = t.TEAM_WYID
