@@ -19,6 +19,7 @@ COMP_MAP = {
 
 COL_ORDER = ["KLUB", "NAVN", "POSITION", "PLAYER_WYID", "PLAYER_OPTAUUID", "COMPETITION_WYID", "COMPETITION_OPTAUUID"]
 
+# --- GITHUB FUNKTIONER ---
 def get_github_file(path):
     try:
         url = f"https://api.github.com/repos/{REPO}/contents/{path}?t={int(time.time())}"
@@ -35,6 +36,7 @@ def rens_id(val):
     if pd.isna(val) or str(val).strip() == "": return ""
     return str(val).split('.')[0].strip()
 
+# --- HOVEDSIDE ---
 def vis_side():
     from data.data_load import _get_snowflake_conn
     conn = _get_snowflake_conn()
@@ -46,10 +48,10 @@ def vis_side():
 
     col_left, col_right = st.columns([1, 1], gap="large")
 
-    # --- VENSTRE SIDE: SØGNING ---
+    # --- VENSTRE SIDE: SØGNING & TRANSFER ---
     with col_left:
-        st.caption("Søg Spiller")
-        # Vi henter en bred liste af spillere til søgning, men kun fra den aktuelle sæson
+        st.caption("Opdater Spiller/Transfer")
+        # Vi henter en liste over alle spillere til søgning (Sæson 25/26)
         search_q = f"""
             SELECT DISTINCT p.PLAYER_WYID, p.SHORTNAME AS NAVN, t.TEAMNAME AS KLUB
             FROM {DB}.WYSCOUT_PLAYERS p
@@ -58,9 +60,10 @@ def vis_side():
             WHERE s.SEASONNAME = '2025/2026' AND p.STATUS = 'active'
         """
         df_search = conn.query(search_q)
-        # (Søge-logik her...)
+        
+        # (Søge- og transfer-logik her...)
 
-    # --- HØJRE SIDE: TRUPOVERSIGT (PRÆCIS LOGIK) ---
+    # --- HØJRE SIDE: TRUPOVERSIGT (PRÆCIS CURRENT TEAM LOGIK) ---
     with col_right:
         st.caption("Trupoversigt (Sæson 2025/2026)")
         valgt_liga_navn = st.segmented_control("Vælg liga", list(COMP_MAP.values()), default="Superliga")
@@ -72,8 +75,9 @@ def vis_side():
             final_df['L_ID'] = pd.to_numeric(final_df['COMPETITION_WYID'], errors='coerce')
             final_df = final_df[final_df['L_ID'] == 328].copy()
         else:
-            # SQL LOGIK TIL DE 12 HOLD:
-            # Vi Joiner TEAMS med SEASONS på SEASON_WYID for at finde de 12 aktuelle hold
+            # SQL LOGIK:
+            # 1. Start med at finde de hold der er i den valgte liga i 25/26
+            # 2. Join KUN de spillere hvis CURRENTTEAM_WYID matcher holdets ID
             query = f"""
                 SELECT DISTINCT 
                     p.SHORTNAME AS NAVN, 
@@ -82,7 +86,7 @@ def vis_side():
                     t.TEAMNAME AS KLUB
                 FROM {DB}.WYSCOUT_TEAMS t
                 JOIN {DB}.WYSCOUT_SEASONS s ON t.SEASON_WYID = s.SEASON_WYID
-                JOIN {DB}.WYSCOUT_PLAYERS p ON p.CURRENTTEAM_WYID = t.TEAM_WYID
+                INNER JOIN {DB}.WYSCOUT_PLAYERS p ON p.CURRENTTEAM_WYID = t.TEAM_WYID
                 WHERE t.COMPETITION_WYID = {valgt_id}
                 AND s.SEASONNAME = '2025/2026'
                 AND p.STATUS = 'active'
@@ -93,16 +97,17 @@ def vis_side():
             final_df.columns = [c.upper() for c in final_df.columns]
             hold_liste = sorted(final_df['KLUB'].unique().tolist())
             
-            # Antal hold fundet (burde være 12 for Superliga)
-            st.write(f"Antal hold fundet: {len(hold_liste)}")
-            
-            valgt_hold = st.selectbox("Vælg hold", hold_liste, key=f"squad_select_{valgt_id}")
+            # Dropdown til at vælge holdet
+            valgt_hold = st.selectbox(f"Vælg hold ({len(hold_liste)} fundet)", hold_liste, key=f"squad_v6_{valgt_id}")
             
             if valgt_hold:
+                # Her viser vi nu kun spillerne for det valgte hold
                 trup = final_df[final_df['KLUB'] == valgt_hold].copy()
-                st.table(trup[['NAVN', 'POSITION', 'PLAYER_WYID']].sort_values(by='NAVN'))
+                vis_tabel = trup[['NAVN', 'POSITION', 'PLAYER_WYID']].sort_values(by='NAVN')
+                vis_tabel.columns = ['Spiller', 'Position', 'ID']
+                st.table(vis_tabel)
         else:
-            st.warning("Ingen hold fundet for denne kombination.")
+            st.info("Ingen hold fundet for denne liga i 2025/2026.")
 
 if __name__ == "__main__":
     vis_side()
