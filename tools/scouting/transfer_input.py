@@ -59,14 +59,14 @@ def vis_side():
     csv_content, csv_sha = get_github_file(FILE_PATH)
     df_1div = pd.read_csv(StringIO(csv_content)) if csv_content else pd.DataFrame(columns=COL_ORDER)
     
-    # Lav et hurtigt opslagssæt for ID'er i CSV
     csv_ids = set(df_1div['PLAYER_WYID'].astype(str).apply(rens_id).tolist())
 
-    # 2. Hent Snowflake data
-    with st.spinner("Synkroniserer med spillerdatabase..."):
+    # 2. Hent Snowflake data (Nu med TEAM_NAME)
+    with st.spinner("Henter spillere og klubber..."):
         conn = _get_snowflake_conn()
+        # Vi joiner med TEAM_NAME så vi altid har en klub at vise
         query = f"""
-            SELECT PLAYER_WYID, FIRSTNAME, LASTNAME, SHORTNAME, ROLECODE3 
+            SELECT PLAYER_WYID, FIRSTNAME, LASTNAME, SHORTNAME, ROLECODE3, TEAM_NAME
             FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_PLAYERS
             WHERE COMPETITION_WYID IN {LIGA_FILTER}
         """
@@ -99,17 +99,17 @@ def vis_side():
             f = str(r.get('FIRSTNAME', '')).strip()
             l = str(r.get('LASTNAME', '')).strip()
             full_navn = f"{f} {l}".strip() if (f or l) else str(r.get('SHORTNAME', 'Ukendt'))
+            klub_navn = str(r.get('TEAM_NAME', 'Ukendt klub')).strip()
             
             unique_players[p_id] = {
-                "label": f"⚪ {full_navn} (Database)",
-                "data": {"n": full_navn, "id": p_id, "pos": r.get('ROLECODE3', ""), "klub": "Database", "opta": ""}
+                "label": f"⚪ {full_navn} ({klub_navn})", # Nu med klubnavn fra databasen
+                "data": {"n": full_navn, "id": p_id, "pos": r.get('ROLECODE3', ""), "klub": klub_navn, "opta": ""}
             }
 
-    # --- NY SORTERING: ALFABETISK PÅ NAVN (Miks af grøn/hvid) ---
-    # Vi sorterer på labelen, men fjerner cirklen i sorterings-logikken så 'A' altid kommer før 'B'
+    # Sortering: Alfabetisk (ignorerer cirklen)
     options_list = sorted(
         unique_players.keys(), 
-        key=lambda x: unique_players[x]["label"][2:] # Sorterer fra karakter 2 og frem (efter cirklen)
+        key=lambda x: unique_players[x]["label"][2:].lower()
     )
 
     # --- UI ---
@@ -128,7 +128,7 @@ def vis_side():
             st.image(f"https://cdn5.wyscout.com/photos/players/public/{sel_id}.png", width=100)
         with c2:
             st.markdown(f"#### {p_info['n']}")
-            st.caption(f"Nuværende status: {p_info['klub']} (ID: {sel_id})")
+            st.caption(f"Status: {p_info['klub']} (ID: {sel_id})")
 
         with st.form("transfer_form"):
             col_a, col_b = st.columns(2)
@@ -142,12 +142,12 @@ def vis_side():
             
             if st.form_submit_button("GEM OPDATERING", use_container_width=True):
                 if valgt_klub == "--- VÆLG DESTINATION ---":
-                    st.warning("Vælg venligst hvor spilleren skal hen.")
+                    st.warning("Vælg venligst en destination.")
                 else:
                     df_final = df_1div[df_1div['PLAYER_WYID'].astype(str).apply(rens_id) != str(sel_id)].copy()
                     
                     if valgt_klub == "✈️ Udlandet / Anden række":
-                        msg = f"Slettet: {p_info['n']}"
+                        msg = f"Fjernet: {p_info['n']}"
                     else:
                         ny_række = {
                             "KLUB": valgt_klub, "NAVN": p_info['n'], "POSITION": valgt_pos,
@@ -166,5 +166,5 @@ def vis_side():
                         st.rerun()
 
     st.write("---")
-    with st.expander("Se nuværende holdlister (CSV data)"):
+    with st.expander("Se nuværende holdlister"):
         st.dataframe(df_1div.sort_values(['KLUB', 'NAVN']), use_container_width=True, hide_index=True)
