@@ -14,7 +14,6 @@ def vis_side():
 
     # --- 2. VELKOMST & HURTIG STATUS ---
     st.write("Hvidovre IF - Performance Dashboard")
-   
     st.markdown("---")
 
     # --- 3. KOMMENDE KAMP & TRANSFERS ---
