@@ -4,12 +4,43 @@ import numpy as np
 from data.data_load import _get_snowflake_conn
 
 # --- POPUP VINDUE TIL TRANSFERS ---
-@st.dialog("Alle Transfers - 1. Division")
+@st.dialog("Alle Transfers - 1. Division", width="large")
 def vis_alle_transfers(df):
-    # Formaterer TIMESTAMP til læsbar dato i oversigten
-    if 'TIMESTAMP' in df.columns:
-        df['Dato'] = pd.to_datetime(df['TIMESTAMP']).dt.strftime('%d/%m-%Y')
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    df_display = df.copy()
+    
+    # 1. Dato fra TIMESTAMP
+    df_display['Dato'] = pd.to_datetime(df_display['TIMESTAMP']).dt.strftime('%d/%m-%Y')
+    
+    # 2. Transfer (Fra -> Til)
+    # Vi bruger SENESTE_KLUB som 'Fra' og KLUB som 'Til'
+    df_display['Transfer'] = df_display['SENESTE_KLUB'].fillna('?') + " ➔ " + df_display['KLUB'].fillna('?')
+    
+    # 3. Kontrakt info
+    # Vi samler start og udløb for at vise "længde/periode"
+    def beregn_kontrakt(row):
+        start = str(row.get('KONTRAKT_START', '-'))
+        udloeb = str(row.get('KONTRAKT_UDLOEB', '-'))
+        if start != '-' and udloeb != '-':
+            return f"{start} -> {udloeb}"
+        return udloeb if udloeb != '-' else start
+
+    df_display['Kontrakt'] = df_display.apply(beregn_kontrakt, axis=1)
+
+    # Vælg de kolonner du bad om
+    cols_to_show = {
+        'Dato': 'Dato',
+        'NAVN': 'Spiller',
+        'Transfer': 'Transfer',
+        'Kontrakt': 'Kontrakt',
+        'KILDE': 'Kilde'
+    }
+    
+    # Vis kun de kolonner der er defineret ovenfor
+    st.dataframe(
+        df_display[list(cols_to_show.keys())].rename(columns=cols_to_show),
+        use_container_width=True, 
+        hide_index=True
+    )
 
 def vis_side(dp=None):
     conn = _get_snowflake_conn()
@@ -20,12 +51,12 @@ def vis_side(dp=None):
     LIGA_UUID = "dyjr458hcmrcy87fsabfsy87o" 
     HIF_UUID = "8gxd9ry2580pu1b1dd5ny9ymy"   
 
-    # --- DATA LOAD (MODSTANDER & HIF) ---
+    # --- DATA LOAD (SNOWFLAKE) ---
     sql = f"SELECT * FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'"
     df_matches = conn.query(sql) if hasattr(conn, 'query') else pd.read_sql(sql, conn)
     if df_matches is None or df_matches.empty: return
 
-    # --- RENS ---
+    # --- RENS MATCH DATA ---
     df_matches.columns = [str(c).upper() for c in df_matches.columns]
     hif_id = str(HIF_UUID).strip().lower()
     df_matches['HOME_ID'] = df_matches['CONTESTANTHOME_OPTAUUID'].astype(str).str.strip().str.lower()
@@ -39,7 +70,7 @@ def vis_side(dp=None):
     st.markdown("### 🏟️ Hvidovre IF Dashboard")
     col1, col2, col3 = st.columns([1.2, 1, 1])
 
-    # KOLONNE 1: NÆSTE MODSTANDER + FORM (LODRET INFO)
+    # KOLONNE 1: NÆSTE MODSTANDER
     with col1:
         st.caption("##### Næste Modstander")
         with st.container(border=True):
@@ -48,7 +79,6 @@ def vis_side(dp=None):
                 er_hjemme = nk['HOME_ID'] == hif_id
                 opp_id, opp_name = (nk['AWAY_ID'], nk['CONTESTANTAWAY_NAME']) if er_hjemme else (nk['HOME_ID'], nk['CONTESTANTHOME_NAME'])
                 loc, dato, runde = ("H" if er_hjemme else "U"), nk['MATCH_DATE_FULL'].strftime('%d/%m'), int(nk['WEEK'])
-
                 st.markdown(f"<div style='display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;'><span style='font-size:16px;font-weight:bold;'>{opp_name} ({loc})</span><span style='font-size:11px;color:#666;'>R. {runde} • {dato}</span></div>", unsafe_allow_html=True)
                 
                 opp_m = df_matches[((df_matches['HOME_ID'] == opp_id) | (df_matches['AWAY_ID'] == opp_id)) & (df_matches['MATCH_STATUS'].str.upper().str.contains('PLAY|FULL|FINISH|FT'))].sort_values('MATCH_DATE_FULL', ascending=False).head(5)
@@ -64,26 +94,30 @@ def vis_side(dp=None):
                             st.markdown(f"<div style='background:{col};color:white;text-align:center;border-radius:2px;font-weight:bold;font-size:10px;padding:2px;'>{res}</div><div style='text-align:center;font-size:9px;color:#444;margin-top:3px;line-height:1.1;'>{h_s}-{a_s}<br>{mod_kort.upper()}</div>", unsafe_allow_html=True)
             else: st.write("Sæson slut")
 
-    # KOLONNE 2: TRANSFERS (MED TIMESTAMP)
+    # KOLONNE 2: TRANSFERS
     with col2:
         st.caption("##### Seneste Transfers")
         with st.container(border=True):
             try:
-                df_t = pd.read_csv("data/players/1div_overskrivning.csv")
-                # Sorterer så de nyeste er øverst
-                if 'TIMESTAMP' in df_t.columns:
+                df_t_raw = pd.read_csv("data/players/1div_overskrivning.csv")
+                
+                # KRAV: Vis kun hvis TIMESTAMP er udfyldt
+                df_t = df_t_raw.dropna(subset=['TIMESTAMP']).copy()
+                
+                if not df_t.empty:
                     df_t['TS_CLEAN'] = pd.to_datetime(df_t['TIMESTAMP'], errors='coerce')
                     df_t = df_t.sort_values('TS_CLEAN', ascending=False)
 
-                for _, r in df_t.head(8).iterrows():
-                    # Formaterer TIMESTAMP til DD/MM
-                    ts_txt = r['TS_CLEAN'].strftime('%d/%m') if pd.notnull(r['TS_CLEAN']) else "--/--"
-                    st.markdown(f"<p style='font-size:10px;margin:0;line-height:1.4;'><span style='color:#888;'>{ts_txt}</span> <b>{r['KLUB']}</b>: {r['NAVN']}</p>", unsafe_allow_html=True)
-                
-                st.markdown("<div style='margin-top:8px;'></div>", unsafe_allow_html=True)
-                if st.button("Se alle transfers", use_container_width=True):
-                    vis_alle_transfers(df_t)
-            except: st.caption("Ingen data")
+                    for _, r in df_t.head(8).iterrows():
+                        ts_txt = r['TS_CLEAN'].strftime('%d/%m')
+                        st.markdown(f"<p style='font-size:10px;margin:0;line-height:1.4;'><span style='color:#888;'>{ts_txt}</span> <b>{r['KLUB']}</b>: {r['NAVN']}</p>", unsafe_allow_html=True)
+                    
+                    st.markdown("<div style='margin-top:8px;'></div>", unsafe_allow_html=True)
+                    if st.button("Se alle transfers", use_container_width=True):
+                        vis_alle_transfers(df_t)
+                else:
+                    st.caption("Venter på transfer-data...")
+            except: st.caption("Kunne ikke indlæse transfers.")
 
     # KOLONNE 3: EMNELISTE
     with col3:
