@@ -3,6 +3,14 @@ import pandas as pd
 import numpy as np
 from data.data_load import _get_snowflake_conn
 
+# --- POPUP VINDUE TIL TRANSFERS ---
+@st.dialog("Alle Transfers - 1. Division")
+def vis_alle_transfers(df):
+    # Formaterer TIMESTAMP til læsbar dato i oversigten
+    if 'TIMESTAMP' in df.columns:
+        df['Dato'] = pd.to_datetime(df['TIMESTAMP']).dt.strftime('%d/%m-%Y')
+    st.dataframe(df, use_container_width=True, hide_index=True)
+
 def vis_side(dp=None):
     conn = _get_snowflake_conn()
     if not conn: return
@@ -12,7 +20,7 @@ def vis_side(dp=None):
     LIGA_UUID = "dyjr458hcmrcy87fsabfsy87o" 
     HIF_UUID = "8gxd9ry2580pu1b1dd5ny9ymy"   
 
-    # --- DATA LOAD ---
+    # --- DATA LOAD (MODSTANDER & HIF) ---
     sql = f"SELECT * FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'"
     df_matches = conn.query(sql) if hasattr(conn, 'query') else pd.read_sql(sql, conn)
     if df_matches is None or df_matches.empty: return
@@ -29,34 +37,21 @@ def vis_side(dp=None):
 
     # --- DASHBOARD LAYOUT ---
     st.markdown("### 🏟️ Hvidovre IF Dashboard")
-    # Justeret bredde: col1 er nu lidt smallere (1.2 i stedet for 1.4)
     col1, col2, col3 = st.columns([1.2, 1, 1])
 
-    # KOLONNE 1: NÆSTE MODSTANDER + FORM
+    # KOLONNE 1: NÆSTE MODSTANDER + FORM (LODRET INFO)
     with col1:
         st.caption("##### Næste Modstander")
         with st.container(border=True):
             if not future.empty:
                 nk = future.iloc[0]
                 er_hjemme = nk['HOME_ID'] == hif_id
-                opp_id = nk['AWAY_ID'] if er_hjemme else nk['HOME_ID']
-                opp_name = nk['CONTESTANTAWAY_NAME'] if er_hjemme else nk['CONTESTANTHOME_NAME']
-                loc = "H" if er_hjemme else "U"
-                dato = nk['MATCH_DATE_FULL'].strftime('%d/%m')
-                runde = int(nk['WEEK'])
+                opp_id, opp_name = (nk['AWAY_ID'], nk['CONTESTANTAWAY_NAME']) if er_hjemme else (nk['HOME_ID'], nk['CONTESTANTHOME_NAME'])
+                loc, dato, runde = ("H" if er_hjemme else "U"), nk['MATCH_DATE_FULL'].strftime('%d/%m'), int(nk['WEEK'])
 
-                # Elegant toplinje med (H/U)
-                st.markdown(f"""
-                    <div style='display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px;'>
-                        <span style='font-size: 16px; font-weight: bold;'>{opp_name} ({loc})</span>
-                        <span style='font-size: 11px; color: #666;'>R. {runde} • {dato}</span>
-                    </div>
-                """, unsafe_allow_html=True)
+                st.markdown(f"<div style='display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;'><span style='font-size:16px;font-weight:bold;'>{opp_name} ({loc})</span><span style='font-size:11px;color:#666;'>R. {runde} • {dato}</span></div>", unsafe_allow_html=True)
                 
-                # Modstanderens 5 seneste
-                opp_m = df_matches[((df_matches['HOME_ID'] == opp_id) | (df_matches['AWAY_ID'] == opp_id)) & 
-                                   (df_matches['MATCH_STATUS'].str.upper().str.contains('PLAY|FULL|FINISH|FT'))].sort_values('MATCH_DATE_FULL', ascending=False).head(5)
-                
+                opp_m = df_matches[((df_matches['HOME_ID'] == opp_id) | (df_matches['AWAY_ID'] == opp_id)) & (df_matches['MATCH_STATUS'].str.upper().str.contains('PLAY|FULL|FINISH|FT'))].sort_values('MATCH_DATE_FULL', ascending=False).head(5)
                 if not opp_m.empty:
                     m_list = opp_m.iloc[::-1]
                     f_cols = st.columns(5)
@@ -64,25 +59,30 @@ def vis_side(dp=None):
                         is_h_opp = m['HOME_ID'] == opp_id
                         h_s, a_s = int(m['TOTAL_HOME_SCORE']), int(m['TOTAL_AWAY_SCORE'])
                         mod_kort = m['CONTESTANTAWAY_NAME'][:3] if is_h_opp else m['CONTESTANTHOME_NAME'][:3]
-                        
-                        if h_s == a_s: res, col = "U", "#999"
-                        elif (is_h_opp and h_s > a_s) or (not is_h_opp and a_s > h_s): res, col = "V", "#28a745"
-                        else: res, col = "T", "#dc3545"
-                        
+                        res, col = (("U", "#999") if h_s == a_s else (("V", "#28a745") if (is_h_opp and h_s > a_s) or (not is_h_opp and a_s > h_s) else ("T", "#dc3545")))
                         with f_cols[i]:
-                            st.markdown(f"<div style='background:{col}; color:white; text-align:center; border-radius:2px; font-weight:bold; font-size:10px; padding:2px;'>{res}</div>", unsafe_allow_html=True)
-                            st.markdown(f"<div style='text-align:center; font-size:9px; color:#444; margin-top:3px; line-height:1.1;'>{h_s}-{a_s}<br>{mod_kort.upper()}</div>", unsafe_allow_html=True)
-            else:
-                st.write("Sæson slut")
+                            st.markdown(f"<div style='background:{col};color:white;text-align:center;border-radius:2px;font-weight:bold;font-size:10px;padding:2px;'>{res}</div><div style='text-align:center;font-size:9px;color:#444;margin-top:3px;line-height:1.1;'>{h_s}-{a_s}<br>{mod_kort.upper()}</div>", unsafe_allow_html=True)
+            else: st.write("Sæson slut")
 
-    # KOLONNE 2: TRANSFERS
+    # KOLONNE 2: TRANSFERS (MED TIMESTAMP)
     with col2:
         st.caption("##### Seneste Transfers")
         with st.container(border=True):
             try:
-                df_t = pd.read_csv("data/players/1div_overskrivning.csv").tail(8)
-                for _, r in df_t.iloc[::-1].iterrows():
-                    st.markdown(f"<p style='font-size:11px; margin:0; line-height:1.3;'>• <b>{r['KLUB']}</b>: {r['NAVN']}</p>", unsafe_allow_html=True)
+                df_t = pd.read_csv("data/players/1div_overskrivning.csv")
+                # Sorterer så de nyeste er øverst
+                if 'TIMESTAMP' in df_t.columns:
+                    df_t['TS_CLEAN'] = pd.to_datetime(df_t['TIMESTAMP'], errors='coerce')
+                    df_t = df_t.sort_values('TS_CLEAN', ascending=False)
+
+                for _, r in df_t.head(8).iterrows():
+                    # Formaterer TIMESTAMP til DD/MM
+                    ts_txt = r['TS_CLEAN'].strftime('%d/%m') if pd.notnull(r['TS_CLEAN']) else "--/--"
+                    st.markdown(f"<p style='font-size:10px;margin:0;line-height:1.4;'><span style='color:#888;'>{ts_txt}</span> <b>{r['KLUB']}</b>: {r['NAVN']}</p>", unsafe_allow_html=True)
+                
+                st.markdown("<div style='margin-top:8px;'></div>", unsafe_allow_html=True)
+                if st.button("Se alle transfers", use_container_width=True):
+                    vis_alle_transfers(df_t)
             except: st.caption("Ingen data")
 
     # KOLONNE 3: EMNELISTE
@@ -92,7 +92,7 @@ def vis_side(dp=None):
             try:
                 df_e = pd.read_csv("data/scouting/emneliste.csv").tail(8)
                 for _, r in df_e.iterrows():
-                    st.markdown(f"<p style='font-size:11px; margin:0; line-height:1.3;'>⭐ <b>{r.get('Navn', 'Ukendt')}</b> ({r.get('Klub', '-')})</p>", unsafe_allow_html=True)
+                    st.markdown(f"<p style='font-size:11px;margin:0;line-height:1.3;'>⭐ <b>{r.get('Navn', 'Ukendt')}</b> ({r.get('Klub', '-')})</p>", unsafe_allow_html=True)
             except: st.caption("Listen er tom")
 
     st.divider()
