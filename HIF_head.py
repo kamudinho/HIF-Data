@@ -98,7 +98,7 @@ def vis_side(dp=None):
                         mod_kort = m['CONTESTANTAWAY_NAME'][:3] if is_h_opp else m['CONTESTANTHOME_NAME'][:3]
                         res, col = (("U", "#999") if h_s == a_s else (("V", "#28a745") if (is_h_opp and h_s > a_s) or (not is_h_opp and a_s > h_s) else ("T", "#dc3545")))
                         with f_cols[i]:
-                            st.markdown(f"<div style='background:{col};color:white;text-align:center;border-radius:2px;font-weight:bold;font-size:10px;padding:2px;'>{res}</div><div style='text-align:center;font-size:9px;color:#444;margin-top:3px;line-height:1.1;'>{h_s}-{a_s}<br>{mod_kort.upper()}</div>", unsafe_allow_html=True)
+                            st.markdown(f"<div style='background:{col};color:white;text-align:center;border-radius:1px;font-weight:bold;font-size:8px;padding:1px;'>{res}</div><div style='text-align:center;font-size:9px;color:#444;margin-top:3px;line-height:1.1;'>{h_s}-{a_s}<br>{mod_kort.upper()}</div>", unsafe_allow_html=True)
             else: st.write("Sæson slut")
 
     # KOLONNE 2: TRANSFERS (NU MED POSITION)
