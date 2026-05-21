@@ -187,7 +187,7 @@ with st.sidebar:
 
     # Undermenu logik
     if hoved_omraade == "HVIDOVRE IF":
-        sel = option_menu(None, options=filtrer_menu(["Forside", "Oversigt", "Forecast"]), key="sub_menu_selection")
+        sel = option_menu(None, options=filtrer_menu(["Oversigt", "Forecast"]), key="sub_menu_selection")
     elif hoved_omraade == "HOLDANALYSE":
         sel = option_menu(None, options=filtrer_menu(["Modstanderanalyse", "Ligaoversigt", "Kampoversigt", "Afslutninger", "Fysisk data"]))
     elif hoved_omraade == "SPILLERANALYSE":
