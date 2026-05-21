@@ -128,7 +128,7 @@ with st.sidebar:
             st.cache_data.clear()
             st.rerun()
 
-    st.markdown("<hr style='margin: 5px 0px 15px 0px; opacity: 0.2;'>", unsafe_allow_html=True)
+    st.markdown("<hr style='margin: 5px 0px -15px 0px; opacity: 0.2;'>", unsafe_allow_html=True)
 
     # Menu Style definition
     menu_style = {
