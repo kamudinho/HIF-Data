@@ -113,24 +113,50 @@ if not st.session_state["logged_in"]:
 
 # --- 3. SIDEBAR NAVIGATION ---
 with st.sidebar:
-    # TILFØJET: "TILPASNING" er nu en del af hovedområderne
+    # --- DISKRETE IKONER ØVERST ---
+    # Vi bruger små kolonner for at holde ikonerne kompakte
+    top_col1, top_col2, top_col3 = st.columns([1, 1, 3])
+    
+    with top_col1:
+        if st.button("🏠", help="Gå til Forsiden"):
+            # Nulstiller valg så den hopper tilbage til HIF-head.py
+            st.session_state["main_menu_selection"] = "HVIDOVRE IF"
+            st.session_state["sub_menu_selection"] = "Forside"
+            st.rerun()
+            
+    with top_col2:
+        if st.button("🧹", help="Ryd cache (hvis appen driller)"):
+            st.cache_data.clear()
+            st.cache_resource.clear()
+            st.rerun()
+    
+    st.markdown("---") # En tynd adskillelse
+
+    # Definer alle områder
     alle_omraader = ["HVIDOVRE IF", "HOLDANALYSE", "SPILLERANALYSE", "SCOUTING", "TILPASNING", "TESTSIDE", "ADMIN"]
     
-    # Hent brugerinfo og tjek for restriktioner
+    # Bruger-restriktioner
     user_info = USER_DB.get(st.session_state["user"], {})
     restriktioner = [r.lower().strip() for r in user_info.get("restricted", [])]
 
-    # Filtrer hovedmenu baseret på rettigheder
+    # Filtrer hovedmenu
     synlige_hoved_options = [o for o in alle_omraader if o.lower().strip() not in restriktioner]
-    hoved_omraade = option_menu(None, options=synlige_hoved_options, default_index=0)
+    
+    # Hovedmenu - Vi bruger en key, så vi kan styre den via session_state
+    hoved_omraade = option_menu(
+        None, 
+        options=synlige_hoved_options, 
+        default_index=0,
+        key="main_menu_selection"
+    )
 
-    # Hjælpefunktion til at filtrere undermenuer
     def filtrer_menu(liste):
         return [o for o in liste if o.lower().strip() not in restriktioner]
 
     # Undermenu logik
     if hoved_omraade == "HVIDOVRE IF":
-        sel = option_menu(None, options=filtrer_menu(["Oversigt", "Forecast"]))
+        # Tilføjet "Forside" som valgmulighed, der peger på HIF-head.py
+        sel = option_menu(None, options=filtrer_menu(["Forside", "Oversigt", "Forecast"]), key="sub_menu_selection")
     elif hoved_omraade == "HOLDANALYSE":
         sel = option_menu(None, options=filtrer_menu(["Modstanderanalyse", "Ligaoversigt", "Kampoversigt", "Afslutninger", "Fysisk data"]))
     elif hoved_omraade == "SPILLERANALYSE":
@@ -138,36 +164,29 @@ with st.sidebar:
     elif hoved_omraade == "SCOUTING":
         sel = option_menu(None, options=filtrer_menu(["Scoutrapport", "Database", "Emnedatabase", "Sammenligning", "Transfers"]))
     elif hoved_omraade == "TILPASNING":
-        # TILFØJET: "Spiller-score" er nu placeret heri
         sel = option_menu(None, options=filtrer_menu(["Spillerdata", "Spiller-score", "Standardsituationer"]))
     elif hoved_omraade == "TESTSIDE":
-        # TILFØJET: "Spiller-score" er nu placeret heri
         sel = option_menu(None, options=filtrer_menu(["1. Div-tilpasning", "Grafer"]))
     elif hoved_omraade == "ADMIN":
-        # REMOVED: "Spiller-score" er fjernet herfra
         sel = option_menu(None, options=filtrer_menu(["System Log", "Profil", "Datakatalog", "Konklusion", "Fysisk profil", "Hold: Fysisk profil", "Intern analyse", "Top 5: Spillere", "Ordbog"]))
-
-    # --- DISKRET CACHE-RYDDER ---
-    st.markdown("<br>" * 4, unsafe_allow_html=True)  
-    side_col1, side_col2, side_col3 = st.columns([1, 5, 1])
-    with side_col2:
-        if st.button("Clear Cache", use_container_width=True, help="Hvis appen driller eller viser fejl, så tryk her for at nulstille data"):
-            st.cache_data.clear()
-            st.cache_resource.clear()
-            st.rerun()
 
 # --- 4. DATA LOADING & RENDERING ---
 render_hif_header(f"{hoved_omraade}  |  {sel.upper()}")
 
 try:
     if hoved_omraade == "HVIDOVRE IF":
-        dp_quick = hif_load.get_squad_only()
-        if sel == "Oversigt":
-            import tools.truppen.players as pl
-            pl.vis_side(dp_quick["players"])
-        elif sel == "Forecast":
-            import tools.truppen.squad as sq
-            sq.vis_side(dp_quick["players"])
+        if sel == "Forside":
+            # HER LINKES TIL DIN NYE FORSIDE
+            import HIF_head as fh
+            fh.vis_side() # Sørg for at HIF-head.py har en funktion der hedder vis_side()
+        else:
+            dp_quick = hif_load.get_squad_only()
+            if sel == "Oversigt":
+                import tools.truppen.players as pl
+                pl.vis_side(dp_quick["players"])
+            elif sel == "Forecast":
+                import tools.truppen.squad as sq
+                sq.vis_side(dp_quick["players"])
 
     elif hoved_omraade == "SCOUTING":
         dp = hif_load.get_scouting_package() 
