@@ -15,6 +15,7 @@ from data.users import get_users
 # --- 1. KONFIGURATION & BRANDING ---
 HIF_LOGO_URL = "https://cdn5.wyscout.com/photos/team/public/2659_120x120.png"
 HIF_ROD = "#df003b"
+SIDEBAR_BACKGROUND_COLOR = "#f0f2f6" # En standard lys grå sidebar farve
 
 st.set_page_config(
     page_title="HIF Data Hub",
@@ -34,10 +35,10 @@ st.markdown(f"""
         [data-testid="stSidebarUserContent"] {{ padding-top: 0.5rem !important; }}
         [data-testid="stSidebarNav"] {{ display: none; }}
         
-        /* Styling af top-ikoner for at gøre dem monokrome og diskrete */
+        /* Styling af top-ikoner for at gøre dem monokrome, diskrete og gennemsigtige */
         .stButton > button {{
             border: none !important;
-            background-color: transparent !important;
+            background-color: transparent !important; /* Gør baggrunden gennemsigtig */
             color: #31333F !important;
             font-size: 20px !important;
             padding: 0px !important;
@@ -272,7 +273,7 @@ try:
             import tools.analyse.konklusion as kon
             kon.vis_side()
         elif sel == "Datakatalog":
-            import tools.admin_page.data_katalog as dk
+            import dk
             dk.vis_side(hif_load._get_snowflake_conn())
         elif sel == "Fysisk profil":
             import tools.players.fysisk_player as fp
