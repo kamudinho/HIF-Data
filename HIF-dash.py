@@ -116,6 +116,9 @@ if not st.session_state["logged_in"]:
 
 # --- 3. SIDEBAR NAVIGATION ---
 with st.sidebar:
+    # Tvinger indholdet helt op i toppen af sidebaren
+    st.markdown('<div style="margin-top: -50px;"></div>', unsafe_allow_html=True)
+
     # --- TOP IKONER (🏠 & 🔄) ---
     icon_col1, icon_col2, icon_col3, icon_col4 = st.columns([1.5, 1, 1, 1.5])
     with icon_col2:
@@ -162,6 +165,9 @@ with st.sidebar:
     )
     st.session_state["main_menu_selection"] = hoved_omraade
 
+    # En simpel vandret linje i stedet for border-boksen
+    st.markdown("---")
+
     # --- UNDERMENU LOGIK ---
     menu_map = {
         "HVIDOVRE IF": ["Forside", "Oversigt", "Forecast"],
@@ -178,22 +184,15 @@ with st.sidebar:
     if "sub_menu_selection" not in st.session_state or st.session_state["sub_menu_selection"] not in aktuel_undermenu:
         st.session_state["sub_menu_selection"] = aktuel_undermenu[0]
 
-    # --- UNDERMENU WRAPPER (Border uden tom boks) ---
-    st.markdown("""
-        <div style="border: 1px solid #ddd; border-radius: 8px; padding: 5px; margin-top: 10px;">
-    """, unsafe_allow_html=True)
-    
+    # Undermenu uden border-container
     sel = option_menu(
         None, 
         options=aktuel_undermenu,
-        # Her tvinger vi ikoner på alle punkter, så de matcher hovedmenuen:
         icons=["play-fill"] * len(aktuel_undermenu),
         default_index=aktuel_undermenu.index(st.session_state["sub_menu_selection"]),
         key="sub_menu_widget",
         styles=menu_style
     )
-    
-    st.markdown("</div>", unsafe_allow_html=True)
     st.session_state["sub_menu_selection"] = sel
 
 # --- 4. DATA LOADING & RENDERING ---
