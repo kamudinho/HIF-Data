@@ -4,7 +4,7 @@ import numpy as np
 import re
 from data.data_load import _get_snowflake_conn
 
-# --- FORBEDRET KONTRAKT-BEREGNING (Rettet mod 20000-års fejlen) ---
+# --- FORBEDRET KONTRAKT-BEREGNING ---
 def beregn_aar(start, slut):
     try:
         s_match = re.search(r'20\d{2}', str(start))
@@ -91,17 +91,17 @@ def vis_side(dp=None):
                 opp_m = df_matches[((df_matches['HOME_ID'] == opp_id) | (df_matches['AWAY_ID'] == opp_id)) & (df_matches['MATCH_STATUS'].str.upper().str.contains('PLAY|FULL|FINISH|FT'))].sort_values('MATCH_DATE_FULL', ascending=False).head(5)
                 if not opp_m.empty:
                     m_list = opp_m.iloc[::-1]
-                    f_cols = st.columns(5)
+                    # Optimeret bredde på legends med gap control
+                    f_cols = st.columns(5, gap="small")
                     for i, (_, m) in enumerate(m_list.iterrows()):
                         is_h_opp = m['HOME_ID'] == opp_id
                         h_s, a_s = int(m['TOTAL_HOME_SCORE']), int(m['TOTAL_AWAY_SCORE'])
                         mod_kort = m['CONTESTANTAWAY_NAME'][:3] if is_h_opp else m['CONTESTANTHOME_NAME'][:3]
                         res, col = (("U", "#999") if h_s == a_s else (("V", "#28a745") if (is_h_opp and h_s > a_s) or (not is_h_opp and a_s > h_s) else ("T", "#dc3545")))
                         with f_cols[i]:
-                            st.markdown(f"<div style='background:{col};color:white;text-align:center;border-radius:1px;font-weight:bold;font-size:8px;padding:1px;'>{res}</div><div style='text-align:center;font-size:9px;color:#444;margin-top:3px;line-height:1.1;'>{h_s}-{a_s}<br>{mod_kort.upper()}</div>", unsafe_allow_html=True)
+                            st.markdown(f"<div style='background:{col};color:white;text-align:center;border-radius:2px;font-weight:bold;font-size:10px;padding:2px;'>{res}</div><div style='text-align:center;font-size:9px;color:#444;margin-top:3px;line-height:1.1;'>{h_s}-{a_s}<br>{mod_kort.upper()}</div>", unsafe_allow_html=True)
             else: st.write("Sæson slut")
 
-    # KOLONNE 2: TRANSFERS (NU MED POSITION)
     with col2:
         st.caption("##### Transfers")
         with st.container(border=True):
@@ -113,7 +113,6 @@ def vis_side(dp=None):
                     df_t = df_t.sort_values('TS_CLEAN', ascending=False)
                     for _, r in df_t.head(8).iterrows():
                         ts_txt = r['TS_CLEAN'].strftime('%d/%m')
-                        # Tilføjet POSITION i parentes her:
                         pos = f" ({r['POSITION']})" if pd.notnull(r.get('POSITION')) else ""
                         st.markdown(f"<p style='font-size:12px;margin:0;line-height:1.4;'><span style='color:#888;'>{ts_txt}</span> <b>{r['KLUB']}</b>: {r['NAVN']}{pos}</p>", unsafe_allow_html=True)
                     
