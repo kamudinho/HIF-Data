@@ -21,7 +21,7 @@ def vis_side():
     col1, col2 = st.columns(2)
     
     with col1:
-        st.markdown("### 🏟️ Næste Modstander")
+        st.markdown("##### Næste Modstander")
         with st.container(border=True):
             st.markdown("**SønderjyskE** (H)")
             st.caption("NordicBet Liga  |  Søndag d. 24. Maj  |  Hvidovre Stadion")
@@ -32,7 +32,7 @@ def vis_side():
             m3.metric("Tabelsæde", "2.")
 
     with col2:
-        st.caption("##### 📝 Seneste Transfers (1. Div)")
+        st.caption("##### Seneste Transfers (1. Div)")
         with st.container(border=True):
             if not seneste_transfers.empty:
                 for _, row in seneste_transfers.iterrows():
@@ -47,7 +47,7 @@ def vis_side():
                 st.rerun()
 
     # --- 4. FORM-OVERBLIK ---
-    st.markdown("### 📊 Form Check")
+    st.markdown("##### Form Check")
     f_col1, f_col2 = st.columns(2)
     
     with f_col1:
@@ -67,17 +67,17 @@ def vis_side():
     b1, b2, b3 = st.columns(3)
     
     with b1:
-        st.markdown("#### 🏥 Skadesliste")
+        st.markdown("##### Skadesliste")
         st.error("Matti Olsen (Knæ)")
         st.warning("Christian Jakobsen (Tvivlsom)")
 
     with b2:
-        st.markdown("#### 🟨 Karantænefare")
+        st.markdown("###### Karantænefare")
         st.write("Daniel Stenderup (1 point)")
         st.write("Magnus Fredslund (3 point)")
 
     with b3:
-        st.markdown("#### ⚡ Quick Actions")
+        st.markdown("##### ⚡ Quick Actions")
         if st.button("Ny Scoutrapport", use_container_width=True):
             st.session_state["main_menu_selection"] = "SCOUTING"
             st.session_state["sub_menu_selection"] = "Scoutrapport"
