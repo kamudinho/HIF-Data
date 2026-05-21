@@ -30,9 +30,6 @@ def vis_side():
         # st.error(f"Fejl ved indlæsning af emner: {e}") # Fjern udkommentering for at debugge
         seneste_emner = pd.DataFrame()
 
-    # --- 2. VELKOMST ---
-    st.write("Hvidovre IF - Performance Dashboard")
-    st.markdown("---")
 
     # --- 3. TOP SEKTION ---
     col1, col2, col3 = st.columns(3)
