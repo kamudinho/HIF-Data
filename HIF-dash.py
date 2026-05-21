@@ -113,37 +113,39 @@ if not st.session_state["logged_in"]:
 
 # --- 3. SIDEBAR NAVIGATION ---
 with st.sidebar:
-    # CSS til at rykke menuen helt op og style ikonerne
+    # Aggressiv CSS til at fjerne top-margin og padding i sidebaren
     st.markdown("""
         <style>
-            /* Ryk sidebar indhold helt til tops */
-            [data-testid="stSidebarNav"] {padding-top: 0rem;}
-            .block-container {padding-top: 0rem;}
-            
-            /* Centrer kolonne-indhold (ikonerne) */
-            [data-testid="column"] {
+            /* Fjerner padding i selve sidebar-containeren */
+            [data-testid="stSidebarUserContent"] {
+                padding-top: 0rem !important;
+            }
+            /* Fjerner den hvide blok i toppen af sidebaren */
+            [data-testid="stSidebarNav"] {
+                display: none;
+            }
+            /* Justering af afstanden for den øverste kolonne */
+            .stVerticalBlock {
+                gap: 0rem !important;
+            }
+            /* Centrer ikonerne og fjern deres rammer */
+            div[data-testid="column"] {
                 display: flex;
                 justify-content: center;
                 align-items: center;
             }
-
-            /* Gør knapperne diskrete og gennemsigtige */
             .stButton > button {
                 border: none !important;
                 background-color: transparent !important;
-                box-shadow: none !important;
-                font-size: 20px !important;
-                transition: transform 0.2s;
-            }
-            .stButton > button:hover {
-                transform: scale(1.2);
-                background-color: rgba(0,0,0,0.05) !important;
+                padding: 0px !important;
+                margin-top: 10px !important; /* Lille justering så det ikke rører kanten 100% */
+                font-size: 24px !important;
             }
         </style>
     """, unsafe_allow_html=True)
 
     # --- CENTREREDE IKONER ØVERST ---
-    # Vi bruger 3 kolonner for at centrere de to ikoner i midten
+    # Vi bruger 'icon_cols' til at skabe en stram top
     icon_col1, icon_col2, icon_col3, icon_col4 = st.columns([1.5, 1, 1, 1.5])
     
     with icon_col2:
@@ -158,27 +160,23 @@ with st.sidebar:
             st.cache_resource.clear()
             st.rerun()
     
-    st.markdown("<div style='margin-top: -10px; margin-bottom: 5px;'><hr></div>", unsafe_allow_html=True)
+    # En meget tynd diskret linje
+    st.markdown("<hr style='margin: 5px 0px 15px 0px; opacity: 0.2;'>", unsafe_allow_html=True)
 
-    # Definer alle områder
+    # --- MENUEN ---
     alle_omraader = ["HVIDOVRE IF", "HOLDANALYSE", "SPILLERANALYSE", "SCOUTING", "TILPASNING", "TESTSIDE", "ADMIN"]
-    
-    # Bruger-restriktioner
     user_info = USER_DB.get(st.session_state["user"], {})
     restriktioner = [r.lower().strip() for r in user_info.get("restricted", [])]
-
-    # Filtrer hovedmenu
     synlige_hoved_options = [o for o in alle_omraader if o.lower().strip() not in restriktioner]
     
-    # Hovedmenu
     hoved_omraade = option_menu(
         None, 
         options=synlige_hoved_options, 
         default_index=0,
         key="main_menu_selection",
         styles={
-            "container": {"padding": "0!important", "background-color": "transparent"},
-            "nav-link": {"font-size": "14px", "text-align": "left", "margin":"0px", "--hover-color": "#eee"}
+            "container": {"padding": "0!important", "margin": "0px"},
+            "nav-link": {"font-size": "14px", "text-align": "left", "margin":"0px"}
         }
     )
 
@@ -199,8 +197,7 @@ with st.sidebar:
     elif hoved_omraade == "TESTSIDE":
         sel = option_menu(None, options=filtrer_menu(["1. Div-tilpasning", "Grafer"]))
     elif hoved_omraade == "ADMIN":
-        sel = option_menu(None, options=filtrer_menu(["System Log", "Profil", "Datakatalog", "Konklusion", "Fysisk profil", "Hold: Fysisk profil", "Intern analyse", "Top 5: Spillere", "Ordbog"]))
-        
+        sel = option_menu(None, options=filtrer_menu(["System Log", "Profil", "Datakatalog", "Konklusion", "Fysisk profil", "Hold: Fysisk profil", "Intern analyse", "Top 5: Spillere", "Ordbog"]))        
 # --- 4. DATA LOADING & RENDERING ---
 render_hif_header(f"{hoved_omraade}  |  {sel.upper()}")
 
