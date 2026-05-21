@@ -26,8 +26,16 @@ st.set_page_config(
 # Centraliseret CSS
 st.markdown(f"""
     <style>
+        <style>
+        /* Skjul Streamlit menu (de tre prikker) og deploy knappen */
+        #MainMenu {{visibility: hidden;}}
+        footer {{visibility: hidden;}}
+        header {{visibility: hidden;}} /* Dette fjerner hele top-bjælken */
+        
+        /* Dine eksisterende styles */
         .block-container {{ padding-top: 0.5rem !important; }}
         [data-testid="stHeader"] {{ background: rgba(0,0,0,0); }}
+        
         .hif-header-container {{
             background-color: {HIF_ROD};
             height: 50px;
