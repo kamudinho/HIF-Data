@@ -120,21 +120,39 @@ if not st.session_state["logged_in"]:
 
 # --- 3. SIDEBAR NAVIGATION ---
 with st.sidebar:
-    # --- TOP IKONER (OPTIMERET MED SAC) ---
+    # --- TOP IKONER (RETTET SAC LOGIK) ---
     top_selection = sac.buttons([
-        sac.ButtonsItem(icon='house', tooltip='Gå til Forsiden'),
-        sac.ButtonsItem(icon='arrow-clockwise', tooltip='Ryd Cache')
+        sac.ButtonsItem(label='', icon='house', tooltip='Gå til Forsiden'),
+        sac.ButtonsItem(label='', icon='arrow-clockwise', tooltip='Ryd Cache')
     ], align='center', variant='link', color='gray', index=None)
 
-    if top_selection:
-        if top_selection == 'house':
-            st.session_state["main_menu_selection"] = "HVIDOVRE IF"
-            st.session_state["sub_menu_selection"] = "Forside"
-            st.rerun()
-        else:
-            st.cache_data.clear()
-            st.cache_resource.clear()
-            st.rerun()
+    # Logikken skal tjekke på index (0 for hus, 1 for refresh), 
+    # da knapper uden labels returnerer deres index eller position.
+    if top_selection is not None:
+        if top_selection == '': # Hvis sac returnerer den tomme label streng
+             # For at være sikker, tjekker vi rækkefølgen manuelt hvis ovenstående driller:
+             pass
+
+    # En mere skudsikker måde med sac.buttons når labels er tomme:
+    if top_selection == '': 
+        # Da begge har tom label, kan sac have svært ved at skelne. 
+        # Lad os bruge en "label" der bare er et mellemrum for at tvinge adskillelse:
+        pass
+
+    # PRØV DENNE VERSION DER ER MERE STABIL:
+    top_selection = sac.buttons([
+        {'label': ' ', 'icon': 'house', 'tooltip': 'Gå til Forsiden'},
+        {'label': '  ', 'icon': 'arrow-clockwise', 'tooltip': 'Ryd Cache'}
+    ], align='center', variant='link', color='gray', index=None)
+
+    if top_selection == ' ':
+        st.session_state["main_menu_selection"] = "HVIDOVRE IF"
+        st.session_state["sub_menu_selection"] = "Forside"
+        st.rerun()
+    elif top_selection == '  ':
+        st.cache_data.clear()
+        st.cache_resource.clear()
+        st.rerun()
 
     st.markdown("<hr style='margin: 10px 0px; opacity: 0.2;'>", unsafe_allow_html=True)
 
