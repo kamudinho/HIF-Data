@@ -103,7 +103,7 @@ def vis_side(dp=None):
             else: st.write("Sæson slut")
 
     with col2:
-        st.caption("##### Seneste Transfers")
+        st.caption("##### Transfers")
         with st.container(border=True):
             try:
                 df_t_raw = pd.read_csv("data/players/1div_overskrivning.csv")
@@ -114,14 +114,14 @@ def vis_side(dp=None):
                     for _, r in df_t.head(8).iterrows():
                         ts_txt = r['TS_CLEAN'].strftime('%d/%m')
                         st.markdown(f"<p style='font-size:10px;margin:0;line-height:1.4;'><span style='color:#888;'>{ts_txt}</span> <b>{r['KLUB']}</b>: {r['NAVN']}</p>", unsafe_allow_html=True)
-                    st.markdown("<div style='margin-top:8px;'></div>", unsafe_allow_html=True)
+                    st.markdown("<div style='margin-top:12px;'></div>", unsafe_allow_html=True)
                     if st.button("Se alle transfers", use_container_width=True):
                         vis_alle_transfers(df_t)
                 else: st.caption("Afventer data...")
             except: st.caption("Fejl i data")
 
     with col3:
-        st.caption("##### Scouting Emner")
+        st.caption("##### Scouting")
         with st.container(border=True):
             try:
                 df_e = pd.read_csv("data/scouting/emneliste.csv").tail(8)
