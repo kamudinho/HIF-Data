@@ -40,7 +40,7 @@ st.markdown(f"""
             background-color: transparent !important;
             color: #31333F !important;
             font-size: 22px !important;
-            padding: 0px !important;
+            padding: -10px !important;
             width: 100% !important;
         }}
         .stButton > button:hover {{
