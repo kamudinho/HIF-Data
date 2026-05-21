@@ -3,7 +3,6 @@ import sys
 import streamlit as st
 from streamlit_option_menu import option_menu
 import pandas as pd
-import streamlit_antd_components as sac
 
 # Sikr at vi kan finde vores egne moduler
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -34,6 +33,20 @@ st.markdown(f"""
         .block-container {{ padding-top: 0.5rem !important; }}
         [data-testid="stSidebarUserContent"] {{ padding-top: 0.5rem !important; }}
         [data-testid="stSidebarNav"] {{ display: none; }}
+        
+        /* Styling af top-ikoner for at gøre dem monokrome og diskrete */
+        .stButton > button {{
+            border: none !important;
+            background-color: transparent !important;
+            color: #31333F !important;
+            font-size: 20px !important;
+            padding: 0px !important;
+            line-height: 1 !important;
+        }}
+        .stButton > button:hover {{
+            color: {HIF_ROD} !important;
+            background-color: transparent !important;
+        }}
         
         .hif-header-container {{
             background-color: {HIF_ROD};
@@ -112,23 +125,22 @@ if not st.session_state["logged_in"]:
 
 # --- 3. SIDEBAR NAVIGATION ---
 with st.sidebar:
-    # --- TOP IKONER (RETTET OG OPTIMERET) ---
-    # Vi bruger 'label' med forskellige antal mellemrum for at kende forskel uden tekst
-    top_selection = sac.buttons([
-        {'label': ' ', 'icon': 'house'},
-        {'label': '  ', 'icon': 'arrow-clockwise'}
-    ], align='center', variant='link', color='gray', index=None)
+    # --- TOP IKONER (STABIL VERSION UDEN SAC) ---
+    icon_col1, icon_col2, icon_col3, icon_col4 = st.columns([1.5, 1, 1, 1.5])
+    
+    with icon_col2:
+        if st.button("🏠", help="Gå til Forsiden"):
+            st.session_state["main_menu_selection"] = "HVIDOVRE IF"
+            st.session_state["sub_menu_selection"] = "Forside"
+            st.rerun()
+            
+    with icon_col3:
+        if st.button("🔄", help="Ryd cache"):
+            st.cache_data.clear()
+            st.cache_resource.clear()
+            st.rerun()
 
-    if top_selection == ' ':
-        st.session_state["main_menu_selection"] = "HVIDOVRE IF"
-        st.session_state["sub_menu_selection"] = "Forside"
-        st.rerun()
-    elif top_selection == '  ':
-        st.cache_data.clear()
-        st.cache_resource.clear()
-        st.rerun()
-
-    st.markdown("<hr style='margin: 10px 0px; opacity: 0.2;'>", unsafe_allow_html=True)
+    st.markdown("<hr style='margin: 5px 0px 15px 0px; opacity: 0.2;'>", unsafe_allow_html=True)
 
     # --- HOVEDMENU (UDEN IKONER) ---
     alle_omraader = ["HVIDOVRE IF", "HOLDANALYSE", "SPILLERANALYSE", "SCOUTING", "TILPASNING", "TESTSIDE", "ADMIN"]
