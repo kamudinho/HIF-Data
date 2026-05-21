@@ -116,8 +116,23 @@ if not st.session_state["logged_in"]:
 
 # --- 3. SIDEBAR NAVIGATION ---
 with st.sidebar:
-    # Tvinger indholdet helt op i toppen af sidebaren
-    st.markdown('<div style="margin-top: -50px;"></div>', unsafe_allow_html=True)
+    # Tvinger indholdet helt op i toppen og definerer linje-stilen
+    st.markdown("""
+        <style>
+            /* Fjern luft i toppen af sidebaren */
+            [data-testid="stSidebarUserContent"] { padding-top: 0.5rem !important; }
+            
+            /* Juster margin på den vandrette linje */
+            .custom-hr {
+                margin-top: 5px !important;
+                margin-bottom: 5px !important;
+                opacity: 0.2;
+                border: 0;
+                border-top: 1px solid #31333F;
+            }
+        </style>
+        <div style="margin-top: -40px;"></div>
+    """, unsafe_allow_html=True)
 
     # --- TOP IKONER (🏠 & 🔄) ---
     icon_col1, icon_col2, icon_col3, icon_col4 = st.columns([1.5, 1, 1, 1.5])
@@ -131,9 +146,10 @@ with st.sidebar:
             st.cache_data.clear()
             st.rerun()
 
-    st.markdown("<hr style='margin: 5px 0px 15px 0px; opacity: 0.2;'>", unsafe_allow_html=True)
+    # Den tætte linje under top-ikonerne
+    st.markdown('<hr class="custom-hr">', unsafe_allow_html=True)
 
-    # --- STYLE DEFINITION ---
+    # --- STYLE DEFINITION FOR MENUER ---
     menu_style = {
         "container": {"padding": "0!important", "background-color": "transparent"},
         "nav-link": {
@@ -165,8 +181,8 @@ with st.sidebar:
     )
     st.session_state["main_menu_selection"] = hoved_omraade
 
-    # En simpel vandret linje i stedet for border-boksen
-    st.markdown("---")
+    # Den tætte linje mellem de to menuer
+    st.markdown('<hr class="custom-hr">', unsafe_allow_html=True)
 
     # --- UNDERMENU LOGIK ---
     menu_map = {
@@ -184,7 +200,7 @@ with st.sidebar:
     if "sub_menu_selection" not in st.session_state or st.session_state["sub_menu_selection"] not in aktuel_undermenu:
         st.session_state["sub_menu_selection"] = aktuel_undermenu[0]
 
-    # Undermenu uden border-container
+    # Selve undermenuen
     sel = option_menu(
         None, 
         options=aktuel_undermenu,
