@@ -1,116 +1,131 @@
 import streamlit as st
 import pandas as pd
-import os
+import numpy as np
+from data.utils.team_mapping import TEAMS, TEAM_COLORS
+from data.data_load import _get_snowflake_conn
 
 def vis_side():
-    # CSS til at styre generelle skriftstørrelser på forsiden
+    # --- 1. CONFIG & DATA FETCH ---
+    HIF_OPTA_UUID = "dyjr458hcmrcy87fsabfsy87o" # Din UUID fra test_matches
+    DB = "KLUB_HVIDOVREIF.AXIS"
+    LIGA_UUID = "dyjr458hcmrcy87fsabfsy87o"
+
+    # CSS til styling (Fra din test_matches logik)
     st.markdown("""
         <style>
-            .small-font { font-size: 12px !important; }
-            .medium-font { font-size: 14px !important; }
-            .transfer-item { font-size: 13px; margin-bottom: -5px; }
+        .stat-box { text-align: center; background: #f8f9fa; border-radius: 6px; padding: 8px 4px; border-bottom: 2px solid #cc0000; height: 52px; display: flex; flex-direction: column; justify-content: center; }
+        .stat-label { font-size: 10px; color: #666; text-transform: uppercase; font-weight: 600; line-height: 1.1; margin-bottom: 2px; }
+        .stat-val { font-weight: 800; font-size: 15px; color: #111; line-height: 1.1; }
+        .form-card { text-align: center; border-radius: 4px; padding: 5px; background: #fff; border: 1px solid #eee; }
+        .transfer-item { font-size: 12px; margin-bottom: -5px; line-height: 1.2; }
         </style>
     """, unsafe_allow_html=True)
 
-    # --- 1. DATALOAD ---
-    # Transfers i 1. Division
-    try:
-        df_transfers = pd.read_csv("data/players/1div_overskrivning.csv")
-        seneste_transfers = df_transfers.tail(5).iloc[::-1] 
-    except:
-        seneste_transfers = pd.DataFrame()
+    conn = _get_snowflake_conn()
+    if not conn:
+        st.error("Ingen forbindelse til Snowflake.")
+        return
 
-    # Egne scouting-emner (Emneliste)
-    try:
-        df_emner = pd.read_csv("data/scouting/emneliste.csv") 
-        # SIKRING: Gør kolonnenavne store så de matcher din stil fra transfers-filen
-        df_emner.columns = [c.upper() for c in df_emner.columns]
-        seneste_emner = df_emner.tail(5).iloc[::-1]
-    except Exception as e:
-        # st.error(f"Fejl ved indlæsning af emner: {e}") # Fjern udkommentering for at debugge
-        seneste_emner = pd.DataFrame()
-
-
-    # --- 3. TOP SEKTION ---
-    col1, col2, col3 = st.columns(3)
+    # Her bruger vi din store SQL-query fra test_matches.py (forenklet her for overblik)
+    sql = f"SELECT * FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'"
     
+    with st.spinner("Opdaterer Dashboard..."):
+        df_matches = conn.query(sql) if hasattr(conn, 'query') else pd.read_sql(sql, conn)
+        df_matches.columns = [str(c).upper() for c in df_matches.columns]
+        df_matches['MATCH_DATE_FULL'] = pd.to_datetime(df_matches['MATCH_DATE_FULL'])
+
+    # --- 2. LOGIK: FILTRERING AF KAMPE ---
+    hif_m = df_matches[(df_matches['CONTESTANTHOME_OPTAUUID'] == HIF_OPTA_UUID) | 
+                       (df_matches['CONTESTANTAWAY_OPTAUUID'] == HIF_OPTA_UUID)].sort_values('MATCH_DATE_FULL')
+
+    # Find næste kamp (Første kamp hvor status ikke er 'Played'/'Full-Time')
+    upcoming = hif_m[~hif_m['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)]
+    naeste = upcoming.iloc[0] if not upcoming.empty else None
+
+    # Find seneste 5 kampe til form-bar
+    played = hif_m[hif_m['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].sort_values('MATCH_DATE_FULL', ascending=False)
+    seneste_5 = played.head(5)
+
+    # --- 3. UI: TOP SEKTION ---
+    col1, col2, col3 = st.columns(3)
+
     with col1:
         st.caption("##### Næste Modstander")
         with st.container(border=True):
-            st.markdown("### SønderjyskE (H)") # Større overskrift
-            st.caption("NordicBet Liga  |  Søndag d. 24. Maj")
-            
-            m1, m2, m3 = st.columns(3)
-            # Metrics har faste størrelser, men vi kan caption dem
-            m1.metric("Form", "V-U-T")
-            m2.metric("xG", "1.42")
-            m3.metric("Plads", "2.")
+            if naeste is not None:
+                er_hjemme = naeste['CONTESTANTHOME_OPTAUUID'] == HIF_OPTA_UUID
+                modstander = naeste['CONTESTANTAWAY_NAME'] if er_hjemme else naeste['CONTESTANTHOME_NAME']
+                st.markdown(f"**{modstander}** ({'H' if er_hjemme else 'U'})")
+                st.caption(f"Runde {int(naeste['WEEK'])} | {naeste['MATCH_DATE_FULL'].strftime('%d. %b')}")
+            else:
+                st.write("Ingen kommende kampe")
 
     with col2:
-        st.caption("##### Seneste Transfers (1. Div)")
+        st.caption("##### Seneste Transfers (Liga)")
         with st.container(border=True):
-            if not seneste_transfers.empty:
-                for _, row in seneste_transfers.iterrows():
-                    # Bruger HTML for at styre præcis skriftstørrelse
-                    st.markdown(f"<p class='transfer-item'><b>{row['KLUB']}</b>: {row['NAVN']}</p>", unsafe_allow_html=True)
-            else:
-                st.write("Ingen nye transfers.")
-            
-            st.markdown("<br>", unsafe_allow_html=True)
-            if st.button("Se alle transfers", use_container_width=True, key="btn_trans"):
-                st.session_state["main_menu_selection"] = "SCOUTING"
-                st.session_state["sub_menu_selection"] = "Database"
-                st.rerun()
+            try:
+                df_t = pd.read_csv("data/players/1div_overskrivning.csv").tail(3).iloc[::-1]
+                for _, r in df_t.iterrows():
+                    st.markdown(f"<p class='transfer-item'><b>{r['KLUB']}</b>: {r['NAVN']}</p>", unsafe_allow_html=True)
+            except:
+                st.write("Kunne ikke hente transfers.")
 
     with col3:
-        st.caption("##### Nyeste på Emnelisten")
+        st.caption("##### Nyeste Emner")
         with st.container(border=True):
-            if not seneste_emner.empty:
-                for _, row in seneste_emner.iterrows():
-                    # Vi bruger de øverste kolonnenavne (NAVN, POSITION) som i transfer-filen
-                    st.markdown(f"<p class='transfer-item'>⭐ <b>{row['NAVN']}</b> ({row['POSITION']})</p>", unsafe_allow_html=True)
-            else:
-                st.info("Emnelisten kunne ikke læses eller er tom.")
-            
-            st.markdown("<br>", unsafe_allow_html=True)
-            if st.button("Gå til Emnedatabase", use_container_width=True, key="btn_emne"):
-                st.session_state["main_menu_selection"] = "SCOUTING"
-                st.session_state["sub_menu_selection"] = "Emnedatabase"
-                st.rerun()
+            try:
+                df_e = pd.read_csv("data/scouting/emneliste.csv").tail(3).iloc[::-1]
+                for _, r in df_e.iterrows():
+                    st.markdown(f"<p class='transfer-item'>⭐ {r['Navn']}</p>", unsafe_allow_html=True)
+            except:
+                st.write("Ingen emner fundet.")
 
-    # --- 4. FORM-OVERBLIK ---
-    st.markdown("##### Form Check")
-    f_col1, f_col2 = st.columns(2)
-    
-    with f_col1:
-        with st.container(border=True):
-            st.markdown("<p class='medium-font'><b>Hvidovre IF</b></p>", unsafe_allow_html=True)
-            st.markdown("🟢 🟢 🟡 🔴 🟢")
-            st.caption("Seneste: 2-1 mod Hobro")
+    # --- 4. FORM CHECK (SENESTE 5) ---
+    st.markdown("##### HIF Form (Seneste 5 kampe)")
+    if not seneste_5.empty:
+        f_cols = st.columns(5)
+        # Vi reverserer seneste_5 for at vise dem kronologisk fra venstre mod højre
+        for i, (_, match) in enumerate(seneste_5.iloc[::-1].iterrows()):
+            with f_cols[i]:
+                h_s = int(match['TOTAL_HOME_SCORE'])
+                a_s = int(match['TOTAL_AWAY_SCORE'])
+                is_h = match['CONTESTANTHOME_OPTAUUID'] == HIF_OPTA_UUID
+                
+                # Resultat logik
+                if h_s == a_s: res, color = "U", "#999"
+                elif (is_h and h_s > a_s) or (not is_h and a_s > h_s): res, color = "V", "#28a745"
+                else: res, color = "T", "#dc3545"
+                
+                st.markdown(f"""
+                    <div class="form-card">
+                        <div style="background:{color}; color:white; font-weight:bold; border-radius:3px;">{res}</div>
+                        <div style="font-size:12px; margin-top:3px;">{h_s}-{a_s}</div>
+                    </div>
+                """, unsafe_allow_html=True)
 
-    with f_col2:
-        with st.container(border=True):
-            st.markdown("<p class='medium-font'><b>SønderjyskE</b></p>", unsafe_allow_html=True)
-            st.markdown("🟢 🟢 🟢 🟡 🟢")
-            st.caption("Seneste: 4-0 mod B93")
-
-    # --- 5. TRUP-STATUS & ACTIONS ---
+    # --- 5. STATS SNIT ---
     st.markdown("---")
-    b1, b2, b3 = st.columns(3)
+    st.caption("##### Holdets Snit (Sæson)")
+    s1, s2, s3, s4, s5, s6 = st.columns(6)
     
-    with b1:
-        st.markdown("<p class='medium-font'><b>Skadesliste</b></p>", unsafe_allow_html=True)
-        st.error("Matti Olsen (Knæ)")
-        st.warning("Christian Jakobsen (Tvivlsom)")
+    # Her beregner vi snit dynamisk fra din SQL dataframe
+    # Bemærk: 'HOME_XG' osv skal være med i din SQL query
+    def get_hif_stat(col):
+        return played.apply(lambda x: x[f'HOME_{col}'] if x['CONTESTANTHOME_OPTAUUID'] == HIF_OPTA_UUID else x[f'AWAY_{col}'], axis=1).mean()
 
-    with b2:
-        st.markdown("<p class='medium-font'><b>Karantænefare</b></p>", unsafe_allow_html=True)
-        st.write("Daniel Stenderup (1 point)")
-        st.write("Magnus Fredslund (3 point)")
+    stats = [
+        ("xG Skabt", "XG", 2),
+        ("Boldbesid.", "POSS", 0),
+        ("Fremadrett.", "FORWARD_PASSES", 0),
+        ("Store Chan.", "BIG_CHANCES", 1),
+        ("Afslutt.", "SHOTS", 0),
+        ("Mål", "TOTAL_HOME_SCORE", 1) # Simpelt eksempel
+    ]
 
-    with b3:
-        st.markdown("<p class='medium-font'><b>⚡ Quick Actions</b></p>", unsafe_allow_html=True)
-        if st.button("Ny Scoutrapport", use_container_width=True):
-            st.session_state["main_menu_selection"] = "SCOUTING"
-            st.session_state["sub_menu_selection"] = "Scoutrapport"
-            st.rerun()
+    for i, (label, key, dec) in enumerate(stats):
+        with [s1, s2, s3, s4, s5, s6][i]:
+            try:
+                val = get_hif_stat(key)
+                st.markdown(f"<div class='stat-box'><div class='stat-label'>{label}</div><div class='stat-val'>{val:.{dec}f}</div></div>", unsafe_allow_html=True)
+            except:
+                st.markdown(f"<div class='stat-box'><div class='stat-label'>{label}</div><div class='stat-val'>-</div></div>", unsafe_allow_html=True)
