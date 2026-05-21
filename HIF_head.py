@@ -4,128 +4,115 @@ import numpy as np
 from data.utils.team_mapping import TEAMS, TEAM_COLORS
 from data.data_load import _get_snowflake_conn
 
-def vis_side():
-    # --- 1. CONFIG & DATA FETCH ---
-    HIF_OPTA_UUID = "dyjr458hcmrcy87fsabfsy87o" # Din UUID fra test_matches
-    DB = "KLUB_HVIDOVREIF.AXIS"
-    LIGA_UUID = "dyjr458hcmrcy87fsabfsy87o"
-
-    # CSS til styling (Fra din test_matches logik)
-    st.markdown("""
-        <style>
-        .stat-box { text-align: center; background: #f8f9fa; border-radius: 6px; padding: 8px 4px; border-bottom: 2px solid #cc0000; height: 52px; display: flex; flex-direction: column; justify-content: center; }
-        .stat-label { font-size: 10px; color: #666; text-transform: uppercase; font-weight: 600; line-height: 1.1; margin-bottom: 2px; }
-        .stat-val { font-weight: 800; font-size: 15px; color: #111; line-height: 1.1; }
-        .form-card { text-align: center; border-radius: 4px; padding: 5px; background: #fff; border: 1px solid #eee; }
-        .transfer-item { font-size: 12px; margin-bottom: -5px; line-height: 1.2; }
-        </style>
-    """, unsafe_allow_html=True)
-
+def vis_side(dp=None):
+    # --- 1. DIN SQL LOGIK (Fra test_matches.py) ---
     conn = _get_snowflake_conn()
-    if not conn:
-        st.error("Ingen forbindelse til Snowflake.")
+    if not conn: return
+
+    DB = "KLUB_HVIDOVREIF.AXIS"
+    LIGA_UUID = "dyjr458hcmrcy87fsabfsy87o" 
+    HIF_UUID = "DYJR458HCMRCY87FSABFSY87O" # Vi tvinger den til HIF
+
+    # ... (Indsæt din fulde WITH MatchBase, StatsPivot, XGPivot query her) ...
+    # Vi gemmer plads, men brug præcis den SQL du sendte før.
+    
+    with st.spinner("Opdaterer dashboard..."):
+        df_matches = conn.query(sql) if hasattr(conn, 'query') else pd.read_sql(sql, conn)
+
+    if df_matches is None or df_matches.empty:
+        st.warning("Ingen data fundet i Snowflake.")
         return
 
-    # Her bruger vi din store SQL-query fra test_matches.py (forenklet her for overblik)
-    sql = f"SELECT * FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'"
+    # --- 2. DATA PREP (Uændret fra din kode) ---
+    df_matches.columns = [str(c).upper() for c in df_matches.columns]
+    df_matches['MATCH_DATE_FULL'] = pd.to_datetime(df_matches['MATCH_DATE_FULL'], errors='coerce')
+    df_matches['TOTAL_HOME_SCORE'] = pd.to_numeric(df_matches['TOTAL_HOME_SCORE'], errors='coerce').fillna(0)
+    df_matches['TOTAL_AWAY_SCORE'] = pd.to_numeric(df_matches['TOTAL_AWAY_SCORE'], errors='coerce').fillna(0)
     
-    with st.spinner("Opdaterer Dashboard..."):
-        df_matches = conn.query(sql) if hasattr(conn, 'query') else pd.read_sql(sql, conn)
-        df_matches.columns = [str(c).upper() for c in df_matches.columns]
-        df_matches['MATCH_DATE_FULL'] = pd.to_datetime(df_matches['MATCH_DATE_FULL'])
+    for col in ['CONTESTANTHOME_OPTAUUID', 'CONTESTANTAWAY_OPTAUUID']:
+        df_matches[col] = df_matches[col].astype(str).str.strip().str.upper()
 
-    # --- 2. LOGIK: FILTRERING AF KAMPE ---
-    hif_m = df_matches[(df_matches['CONTESTANTHOME_OPTAUUID'] == HIF_OPTA_UUID) | 
-                       (df_matches['CONTESTANTAWAY_OPTAUUID'] == HIF_OPTA_UUID)].sort_values('MATCH_DATE_FULL')
+    # --- 3. AUTOMATISK FILTRERING FOR HVIDOVRE ---
+    # Vi dropper selectboxen og finder HIF kampe med det samme
+    hif_matches = df_matches[(df_matches['CONTESTANTHOME_OPTAUUID'] == HIF_UUID) | 
+                             (df_matches['CONTESTANTAWAY_OPTAUUID'] == HIF_UUID)].copy()
 
-    # Find næste kamp (Første kamp hvor status ikke er 'Played'/'Full-Time')
-    upcoming = hif_m[~hif_m['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)]
-    naeste = upcoming.iloc[0] if not upcoming.empty else None
+    played_p = hif_matches[hif_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].sort_values('MATCH_DATE_FULL', ascending=False)
+    future = hif_matches[~hif_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].sort_values('MATCH_DATE_FULL', ascending=True)
 
-    # Find seneste 5 kampe til form-bar
-    played = hif_m[hif_m['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].sort_values('MATCH_DATE_FULL', ascending=False)
-    seneste_5 = played.head(5)
+    # Beregn S, U, N (Præcis din logik)
+    summary = {"K": len(played_p), "S": 0, "U": 0, "N": 0, "M+": 0, "M-": 0}
+    for _, m in played_p.iterrows():
+        is_h = m['CONTESTANTHOME_OPTAUUID'] == HIF_UUID
+        h_s, a_s = int(m['TOTAL_HOME_SCORE']), int(m['TOTAL_AWAY_SCORE'])
+        summary["M+"] += h_s if is_h else a_s
+        summary["M-"] += a_s if is_h else h_s
+        if h_s == a_s: summary["U"] += 1
+        elif (is_h and h_s > a_s) or (not is_h and a_s > h_s): summary["S"] += 1
+        else: summary["N"] += 1
 
-    # --- 3. UI: TOP SEKTION ---
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-        st.caption("##### Næste Modstander")
+    # --- 4. DASHBOARD LAYOUT ---
+    st.markdown("### HIF Dashboard")
+    
+    c1, c2, c3 = st.columns(3)
+    
+    # BOX 1: Næste kamp (Hentet dynamisk fra din 'future' variabel)
+    with c1:
+        st.caption("##### Næste Kamp")
         with st.container(border=True):
-            if naeste is not None:
-                er_hjemme = naeste['CONTESTANTHOME_OPTAUUID'] == HIF_OPTA_UUID
-                modstander = naeste['CONTESTANTAWAY_NAME'] if er_hjemme else naeste['CONTESTANTHOME_NAME']
+            if not future.empty:
+                nk = future.iloc[0]
+                er_hjemme = nk['CONTESTANTHOME_OPTAUUID'] == HIF_UUID
+                modstander = nk['CONTESTANTAWAY_NAME'] if er_hjemme else nk['CONTESTANTHOME_NAME']
                 st.markdown(f"**{modstander}** ({'H' if er_hjemme else 'U'})")
-                st.caption(f"Runde {int(naeste['WEEK'])} | {naeste['MATCH_DATE_FULL'].strftime('%d. %b')}")
+                st.caption(f"Runde {int(nk['WEEK'])} | {nk['MATCH_DATE_FULL'].strftime('%d. %b')}")
             else:
                 st.write("Ingen kommende kampe")
 
-    with col2:
-        st.caption("##### Seneste Transfers (Liga)")
+    # BOX 2: Form (De 5 seneste resultater)
+    with c2:
+        st.caption("##### Form (Seneste 5)")
         with st.container(border=True):
-            try:
-                df_t = pd.read_csv("data/players/1div_overskrivning.csv").tail(3).iloc[::-1]
-                for _, r in df_t.iterrows():
-                    st.markdown(f"<p class='transfer-item'><b>{r['KLUB']}</b>: {r['NAVN']}</p>", unsafe_allow_html=True)
-            except:
-                st.write("Kunne ikke hente transfers.")
+            if not played_p.empty:
+                f_cols = st.columns(5)
+                # Vi tager de 5 nyeste og viser dem
+                for i, (_, m) in enumerate(played_p.head(5).iloc[::-1].iterrows()):
+                    is_h = m['CONTESTANTHOME_OPTAUUID'] == HIF_UUID
+                    h_s, a_s = int(m['TOTAL_HOME_SCORE']), int(m['TOTAL_AWAY_SCORE'])
+                    if h_s == a_s: res, col = "U", "#999"
+                    elif (is_h and h_s > a_s) or (not is_h and a_s > h_s): res, col = "V", "#28a745"
+                    else: res, col = "T", "#dc3545"
+                    
+                    f_cols[i].markdown(f"<div style='background:{col}; color:white; text-align:center; border-radius:3px; font-weight:bold; font-size:12px;'>{res}</div>", unsafe_allow_html=True)
+            else:
+                st.write("Ingen data")
 
-    with col3:
-        st.caption("##### Nyeste Emner")
+    # BOX 3: Sæson Status (Dine S-U-N beregninger)
+    with c3:
+        st.caption("##### Sæson Status")
         with st.container(border=True):
-            try:
-                df_e = pd.read_csv("data/scouting/emneliste.csv").tail(3).iloc[::-1]
-                for _, r in df_e.iterrows():
-                    st.markdown(f"<p class='transfer-item'>⭐ {r['Navn']}</p>", unsafe_allow_html=True)
-            except:
-                st.write("Ingen emner fundet.")
+            st.markdown(f"**{summary['S']}**V - **{summary['U']}**U - **{summary['N']}**T")
+            st.caption(f"Mål: {summary['M+']} - {summary['M-']} ({summary['M+']-summary['M-']})")
 
-    # --- 4. FORM CHECK (SENESTE 5) ---
-    st.markdown("##### HIF Form (Seneste 5 kampe)")
-    if not seneste_5.empty:
-        f_cols = st.columns(5)
-        # Vi reverserer seneste_5 for at vise dem kronologisk fra venstre mod højre
-        for i, (_, match) in enumerate(seneste_5.iloc[::-1].iterrows()):
-            with f_cols[i]:
-                h_s = int(match['TOTAL_HOME_SCORE'])
-                a_s = int(match['TOTAL_AWAY_SCORE'])
-                is_h = match['CONTESTANTHOME_OPTAUUID'] == HIF_OPTA_UUID
-                
-                # Resultat logik
-                if h_s == a_s: res, color = "U", "#999"
-                elif (is_h and h_s > a_s) or (not is_h and a_s > h_s): res, color = "V", "#28a745"
-                else: res, color = "T", "#dc3545"
-                
-                st.markdown(f"""
-                    <div class="form-card">
-                        <div style="background:{color}; color:white; font-weight:bold; border-radius:3px;">{res}</div>
-                        <div style="font-size:12px; margin-top:3px;">{h_s}-{a_s}</div>
-                    </div>
-                """, unsafe_allow_html=True)
-
-    # --- 5. STATS SNIT ---
+    # --- 5. DIN STAT-BOX LOGIK (De 6 bokse i bunden) ---
     st.markdown("---")
     st.caption("##### Holdets Snit (Sæson)")
-    s1, s2, s3, s4, s5, s6 = st.columns(6)
     
-    # Her beregner vi snit dynamisk fra din SQL dataframe
-    # Bemærk: 'HOME_XG' osv skal være med i din SQL query
-    def get_hif_stat(col):
-        return played.apply(lambda x: x[f'HOME_{col}'] if x['CONTESTANTHOME_OPTAUUID'] == HIF_OPTA_UUID else x[f'AWAY_{col}'], axis=1).mean()
-
-    stats = [
-        ("xG Skabt", "XG", 2),
-        ("Boldbesid.", "POSS", 0),
-        ("Fremadrett.", "FORWARD_PASSES", 0),
-        ("Store Chan.", "BIG_CHANCES", 1),
-        ("Afslutt.", "SHOTS", 0),
-        ("Mål", "TOTAL_HOME_SCORE", 1) # Simpelt eksempel
+    avg_cols = st.columns(6)
+    avg_map = [
+        ("POSS", "POSS %", 1, "%"), ("XG", "xG", 2, ""), 
+        ("XGNP", "xGnp", 2, ""), ("BIG_CHANCES", "STORE CHANCER", 1, ""), 
+        ("PASSES", "PASSES", 0, ""), ("FORWARD_PASSES", "FREMADRETTEDE", 0, "")
     ]
 
-    for i, (label, key, dec) in enumerate(stats):
-        with [s1, s2, s3, s4, s5, s6][i]:
-            try:
-                val = get_hif_stat(key)
-                st.markdown(f"<div class='stat-box'><div class='stat-label'>{label}</div><div class='stat-val'>{val:.{dec}f}</div></div>", unsafe_allow_html=True)
-            except:
-                st.markdown(f"<div class='stat-box'><div class='stat-label'>{label}</div><div class='stat-val'>-</div></div>", unsafe_allow_html=True)
+    for i, (key, label, dec, suffix) in enumerate(avg_map):
+        vals = []
+        for _, m in played_p.iterrows():
+            pref = "HOME_" if m['CONTESTANTHOME_OPTAUUID'] == HIF_UUID else "AWAY_"
+            vals.append(pd.to_numeric(m.get(f"{pref}{key}"), errors='coerce'))
+        
+        avg_val = np.nanmean(vals) if vals else 0
+        fmt = f"{avg_val:.{dec}f}{suffix}" if dec > 0 else f"{int(round(avg_val))}{suffix}"
+        
+        with avg_cols[i]:
+            st.markdown(f"<div class='stat-box'><div class='stat-label'>{label}</div><div class='stat-val'>{fmt}</div></div>", unsafe_allow_html=True)
