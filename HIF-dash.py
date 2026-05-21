@@ -172,7 +172,7 @@ with st.sidebar:
 
     # BUND-SEKTION
     st.markdown('<hr class="custom-hr">', unsafe_allow_html=True)
-    if st.button("Clear Cache", use_container_width=True):
+    if st.button("Ryd cache", use_container_width=True):
         st.cache_data.clear()
         st.rerun()
 
