@@ -17,7 +17,7 @@ def vis_side():
     st.markdown("---")
 
     # --- 3. KOMMENDE KAMP & TRANSFERS ---
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
     
     with col1:
         st.caption("##### Næste Modstander")
@@ -31,6 +31,21 @@ def vis_side():
             m3.metric("Tabelsæde", "2.")
 
     with col2:
+        st.caption("##### Seneste Transfers (1. Div)")
+        with st.container(border=True):
+            if not seneste_transfers.empty:
+                for _, row in seneste_transfers.iterrows():
+                    # Viser Klub, Navn og Position fra din CSV
+                    st.markdown(f"**{row['KLUB']}**: {row['NAVN']} ({row['POSITION']})")
+            else:
+                st.write("Ingen nye transfers registreret.")
+            
+            if st.button("Se alle transfers", use_container_width=True):
+                st.session_state["main_menu_selection"] = "SCOUTING"
+                st.session_state["sub_menu_selection"] = "Database"
+                st.rerun()
+
+    with col3:
         st.caption("##### Seneste Transfers (1. Div)")
         with st.container(border=True):
             if not seneste_transfers.empty:
