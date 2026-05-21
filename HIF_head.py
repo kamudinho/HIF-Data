@@ -24,89 +24,83 @@ def vis_side(dp=None):
     df_matches['AWAY_ID'] = df_matches['CONTESTANTAWAY_OPTAUUID'].astype(str).str.strip().str.lower()
     df_matches['MATCH_DATE_FULL'] = pd.to_datetime(df_matches['MATCH_DATE_FULL'], errors='coerce')
     
-    # Hvidovre kampe
     hif_m = df_matches[(df_matches['HOME_ID'] == hif_id) | (df_matches['AWAY_ID'] == hif_id)].copy()
     is_played = hif_m['MATCH_STATUS'].str.upper().str.contains('PLAY|FULL|FINISH|FT', na=False)
     played = hif_m[is_played].sort_values('MATCH_DATE_FULL', ascending=False)
     future = hif_m[~is_played].sort_values('MATCH_DATE_FULL', ascending=True)
 
-    # --- UI: ØVERSTE DASHBOARD (HIF STATUS) ---
-    st.markdown("### 🏟️ Hvidovre IF Dashboard")
-    c1, c2, c3 = st.columns(3)
+    # --- BEREGN STATS (S-U-N) ---
+    summary = {"S": 0, "U": 0, "N": 0}
+    for _, m in played.iterrows():
+        h_s, a_s = int(m['TOTAL_HOME_SCORE']), int(m['TOTAL_AWAY_SCORE'])
+        if h_s == a_s: summary["U"] += 1
+        elif (m['HOME_ID'] == hif_id and h_s > a_s) or (m['AWAY_ID'] == hif_id and a_s > h_s): summary["S"] += 1
+        else: summary["N"] += 1
 
-    with c1:
-        st.caption("##### Næste Modstander")
+    # --- DASHBOARD LAYOUT (3 KOLONNER) ---
+    st.markdown("### 🏟️ Hvidovre IF Dashboard")
+    col1, col2, col3 = st.columns([1, 1.2, 1.2])
+
+    # KOLONNE 1: NÆSTE KAMP & FORM
+    with col1:
+        st.caption("##### Næste Kamp & Form")
         with st.container(border=True):
             if not future.empty:
                 nk = future.iloc[0]
-                opp_id = nk['AWAY_ID'] if nk['HOME_ID'] == hif_id else nk['HOME_ID']
-                opp_name = nk['CONTESTANTAWAY_NAME'] if nk['HOME_ID'] == hif_id else nk['CONTESTANTHOME_NAME']
-                st.markdown(f"**{opp_name}** ({'H' if nk['HOME_ID'] == hif_id else 'U'})")
+                er_hjemme = nk['HOME_ID'] == hif_id
+                mod = nk['CONTESTANTAWAY_NAME'] if er_hjemme else nk['CONTESTANTHOME_NAME']
+                st.markdown(f"**{mod}** ({'H' if er_hjemme else 'U'})")
                 st.caption(f"{nk['MATCH_DATE_FULL'].strftime('%d. %b')} | Runde {int(nk['WEEK'])}")
-            else: st.write("Sæson slut")
-
-    with c2:
-        st.caption("##### HIF Form (Seneste 5)")
-        with st.container(border=True):
+            
+            st.markdown("<div style='margin-top:10px; border-top:1px solid #eee; padding-top:10px;'></div>", unsafe_allow_html=True)
+            
+            # Form-ikoner (Gjort mindre og lagt herind)
             if not played.empty:
                 f_cols = st.columns(5)
                 for i, (_, m) in enumerate(played.head(5).iloc[::-1].iterrows()):
                     is_h = m['HOME_ID'] == hif_id
                     h_s, a_s = int(m['TOTAL_HOME_SCORE']), int(m['TOTAL_AWAY_SCORE'])
                     res, col = ("U", "#999") if h_s == a_s else (("V", "#28a745") if (is_h and h_s > a_s) or (not is_h and a_s > h_s) else ("T", "#dc3545"))
-                    f_cols[i].markdown(f"<div style='background:{col}; color:white; text-align:center; border-radius:3px; font-weight:bold; font-size:12px;'>{res}</div>", unsafe_allow_html=True)
-            else: st.write("-")
+                    f_cols[i].markdown(f"<div style='background:{col}; color:white; text-align:center; border-radius:2px; font-weight:bold; font-size:10px; padding:1px;'>{res}</div>", unsafe_allow_html=True)
+            
+            st.caption(f"Sæson: {summary['S']}V - {summary['U']}U - {summary['N']}T")
 
-    with c3:
-        summary = {"S": 0, "U": 0, "N": 0}
-        for _, m in played.iterrows():
-            h_s, a_s = int(m['TOTAL_HOME_SCORE']), int(m['TOTAL_AWAY_SCORE'])
-            if h_s == a_s: summary["U"] += 1
-            elif (m['HOME_ID'] == hif_id and h_s > a_s) or (m['AWAY_ID'] == hif_id and a_s > h_s): summary["S"] += 1
-            else: summary["N"] += 1
-        st.caption("##### Sæson Total")
+    # KOLONNE 2: TRANSFERS
+    with col2:
+        st.caption("##### Seneste Transfers")
         with st.container(border=True):
-            st.markdown(f"**{summary['S']}**V - **{summary['U']}**U - **{summary['N']}**T")
+            try:
+                df_t = pd.read_csv("data/players/1div_overskrivning.csv").tail(8)
+                for _, r in df_t.iloc[::-1].iterrows():
+                    st.markdown(f"<p style='font-size:11px; margin:0; line-height:1.4;'>• <b>{r['KLUB']}</b>: {r['NAVN']}</p>", unsafe_allow_html=True)
+            except: st.caption("Ingen data")
 
-    st.divider()
+    # KOLONNE 3: EMNELISTE
+    with col3:
+        st.caption("##### Scouting Emner")
+        with st.container(border=True):
+            try:
+                df_e = pd.read_csv("data/scouting/emneliste.csv").head(8)
+                for _, r in df_e.iterrows():
+                    # Vi antager kolonnerne 'Navn' og 'Klub' findes
+                    st.markdown(f"<p style='font-size:11px; margin:0; line-height:1.4;'>⭐ <b>{r.get('Navn', 'Ukendt')}</b> ({r.get('Klub', '-')})</p>", unsafe_allow_html=True)
+            except: st.caption("Listen er tom")
 
-    # --- SEKTION: KOMMENDE MODSTANDER DATA ---
+    # --- DATA FOR KOMMENDE MODSTANDER (Under de tre kolonner) ---
     if not future.empty:
-        st.markdown(f"### 🛡️ Spejdning: {opp_name}")
-        # Find modstanderens seneste kampe i ligaen
-        opp_matches = df_matches[((df_matches['HOME_ID'] == opp_id) | (df_matches['AWAY_ID'] == opp_id)) & 
-                                 (df_matches['MATCH_STATUS'].str.upper().str.contains('PLAY|FULL|FINISH|FT'))].sort_values('MATCH_DATE_FULL', ascending=False).head(5)
+        st.divider()
+        opp_id = nk['AWAY_ID'] if nk['HOME_ID'] == hif_id else nk['HOME_ID']
+        opp_name = nk['CONTESTANTAWAY_NAME'] if nk['HOME_ID'] == hif_id else nk['CONTESTANTHOME_NAME']
         
-        col_opp1, col_opp2 = st.columns([1, 2])
-        with col_opp1:
-            st.caption("Modstanderens Form")
-            for _, m in opp_matches.iterrows():
-                is_h = m['HOME_ID'] == opp_id
-                h_s, a_s = int(m['TOTAL_HOME_SCORE']), int(m['TOTAL_AWAY_SCORE'])
-                res = "🤝" if h_s == a_s else ("✅" if (is_h and h_s > a_s) or (not is_h and a_s > h_s) else "❌")
-                m_txt = f"{m['CONTESTANTHOME_NAME']} {h_s}-{a_s} {m['CONTESTANTAWAY_NAME']}"
-                st.markdown(f"<p style='font-size:12px; margin:0;'>{res} {m_txt}</p>", unsafe_allow_html=True)
+        st.caption(f"##### Modstander-fokus: {opp_name}")
+        opp_m = df_matches[((df_matches['HOME_ID'] == opp_id) | (df_matches['AWAY_ID'] == opp_id)) & 
+                           (df_matches['MATCH_STATUS'].str.upper().str.contains('PLAY|FULL|FINISH|FT'))].sort_values('MATCH_DATE_FULL', ascending=False).head(5)
         
-        with col_opp2:
-            st.caption("Kamp Detaljer")
-            st.info(f"Hvidovre møder {opp_name} i runde {int(nk['WEEK'])}. Kampen spilles {nk['MATCH_DATE_FULL'].strftime('%A d. %d. %B')}.")
-
-    st.divider()
-
-    # --- SEKTION: TRANSFERS & EMNER ---
-    col_t1, col_t2 = st.columns(2)
-    
-    with col_t1:
-        st.markdown("### 🔄 Seneste Transfers (1. Div)")
-        try:
-            df_transfers = pd.read_csv("data/players/1div_overskrivning.csv")
-            st.dataframe(df_transfers.tail(10), use_container_width=True, hide_index=True)
-        except: st.info("Ingen transferdata tilgængelig.")
-
-    with col_t2:
-        st.markdown("### ⭐ Scouting Emneliste")
-        try:
-            df_emner = pd.read_csv("data/scouting/emneliste.csv")
-            # Vi viser Navn, Klub og Position hvis de findes
-            st.dataframe(df_emner, use_container_width=True, hide_index=True)
-        except: st.info("Emnelisten er tom.")
+        o_cols = st.columns(5)
+        for i, (_, m) in enumerate(opp_m.iloc[::-1].iterrows()):
+            is_h = m['HOME_ID'] == opp_id
+            h_s, a_s = int(m['TOTAL_HOME_SCORE']), int(m['TOTAL_AWAY_SCORE'])
+            res, col = ("U", "#999") if h_s == a_s else (("V", "#28a745") if (is_h and h_s > a_s) or (not is_h and a_s > h_s) else ("T", "#dc3545"))
+            with o_cols[i]:
+                st.markdown(f"<div style='background:{col}; color:white; text-align:center; border-radius:3px; font-size:10px;'>{res}</div>", unsafe_allow_html=True)
+                st.caption(f"<div style='text-align:center; font-size:9px;'>{h_s}-{a_s}</div>", unsafe_allow_html=True)
