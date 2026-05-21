@@ -116,45 +116,21 @@ if not st.session_state["logged_in"]:
 
 # --- 3. SIDEBAR NAVIGATION ---
 with st.sidebar:
-    # Denne blok fjerner ALT luft i toppen af sidebaren helt oppe fra system-niveau
+    # Fjerner standard-luft i toppen uden ikonerne
     st.markdown("""
         <style>
-            /* 1. Fjern polstring i selve sidebar-containeren */
             [data-testid="stSidebarUserContent"] {
-                padding-top: 0rem !important;
-                padding-bottom: 0rem !important;
+                padding-top: 1rem !important;
             }
-            /* 2. Fjern den hvide plads over ikonerne */
-            .sidebar-top-spacer {
-                margin-top: -60px; /* Juster dette tal hvis de skal endnu højere op */
-            }
-            /* 3. Custom linje med minimal luft */
             .custom-hr {
-                margin-top: 2px !important;
-                margin-bottom: 2px !important;
+                margin-top: 5px !important;
+                margin-bottom: 5px !important;
                 opacity: 0.2;
                 border: 0;
                 border-top: 1px solid #31333F;
             }
         </style>
-        <div class="sidebar-top-spacer"></div>
     """, unsafe_allow_html=True)
-
-    # --- TOP IKONER (🏠 & 🔄) ---
-    # Vi bruger columns, men minimerer afstanden
-    icon_col1, icon_col2, icon_col3, icon_col4 = st.columns([1, 1, 1, 1])
-    with icon_col2:
-        if st.button("🏠", help="Gå til Forsiden"):
-            st.session_state["main_menu_selection"] = "HVIDOVRE IF"
-            st.session_state["sub_menu_selection"] = "Forside"
-            st.rerun()
-    with icon_col3:
-        if st.button("🔄", help="Ryd cache"):
-            st.cache_data.clear()
-            st.rerun()
-
-    # Tæt linje under ikoner
-    st.markdown('<hr class="custom-hr">', unsafe_allow_html=True)
 
     # --- STYLE DEFINITION FOR MENUER ---
     menu_style = {
@@ -188,7 +164,7 @@ with st.sidebar:
     )
     st.session_state["main_menu_selection"] = hoved_omraade
 
-    # Tæt linje mellem menuer
+    # En tæt linje mellem de to menuer
     st.markdown('<hr class="custom-hr">', unsafe_allow_html=True)
 
     # --- UNDERMENU ---
@@ -216,6 +192,14 @@ with st.sidebar:
         styles=menu_style
     )
     st.session_state["sub_menu_selection"] = sel
+
+    # --- BUND-SEKTION (Clear Cache) ---
+    # Vi bruger st.spacer eller en række linjeskift for at presse den i bunden
+    st.markdown("<br>" * 10, unsafe_allow_html=True)
+    st.markdown('<hr class="custom-hr">', unsafe_allow_html=True)
+    if st.button("🔄 Clear Cache", use_container_width=True, help="Ryd cache hvis appen driller"):
+        st.cache_data.clear()
+        st.rerun()
 
 # --- 4. DATA LOADING & RENDERING ---
 render_hif_header(f"{st.session_state['main_menu_selection']}  |  {st.session_state['sub_menu_selection'].upper()}")
