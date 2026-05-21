@@ -31,8 +31,10 @@ st.markdown(f"""
         footer {{visibility: hidden;}}
         header {{visibility: hidden;}} 
         
+        /* Ryk indhold helt op */
         .block-container {{ padding-top: 0.5rem !important; }}
-        [data-testid="stHeader"] {{ background: rgba(0,0,0,0); }}
+        [data-testid="stSidebarUserContent"] {{ padding-top: 0.5rem !important; }}
+        [data-testid="stSidebarNav"] {{ display: none; }}
         
         .hif-header-container {{
             background-color: {HIF_ROD};
@@ -49,6 +51,13 @@ st.markdown(f"""
             letter-spacing: 2px;
             font-weight: 600;
             margin: 0;
+        }}
+        
+        /* Fjern unødvendig luft omkring knapperne i toppen */
+        .stButtonGroup {{
+            display: flex;
+            justify-content: center;
+            margin-bottom: -10px;
         }}
     </style>
 """, unsafe_allow_html=True)
@@ -111,37 +120,21 @@ if not st.session_state["logged_in"]:
 
 # --- 3. SIDEBAR NAVIGATION ---
 with st.sidebar:
-    st.markdown("""
-        <style>
-            [data-testid="stSidebarUserContent"] { padding-top: 0.5rem !important; }
-            [data-testid="stSidebarNav"] { display: none; }
-            .nav-link { background-color: transparent !important; }
-        </style>
-    """, unsafe_allow_html=True)
+    # --- TOP IKONER (OPTIMERET MED SAC) ---
+    top_selection = sac.buttons([
+        sac.ButtonsItem(icon='house', tooltip='Gå til Forsiden'),
+        sac.ButtonsItem(icon='arrow-clockwise', tooltip='Ryd Cache')
+    ], align='center', variant='link', color='gray', index=None)
 
-    # --- TOP IKONER (Home & Clear) ---
-    top_selection = option_menu(
-        None, 
-        options=["Home", "Clear"], 
-        icons=["house", "arrow-clockwise"], 
-        default_index=-1, 
-        orientation="horizontal",
-        styles={
-            "container": {"padding": "0!important", "background-color": "transparent", "border": "none"},
-            "icon": {"color": "#31333F", "font-size": "20px"},
-            "nav-link": {"font-size": "0px", "text-align": "center", "margin":"0px"},
-            "nav-link-selected": {"background-color": "transparent", "color": "#df003b"}, 
-        }
-    )
-
-    if top_selection == "Home":
-        st.session_state["main_menu_selection"] = "HVIDOVRE IF"
-        st.session_state["sub_menu_selection"] = "Forside"
-        st.rerun()
-    elif top_selection == "Clear":
-        st.cache_data.clear()
-        st.cache_resource.clear()
-        st.rerun()
+    if top_selection:
+        if top_selection == 'house':
+            st.session_state["main_menu_selection"] = "HVIDOVRE IF"
+            st.session_state["sub_menu_selection"] = "Forside"
+            st.rerun()
+        else:
+            st.cache_data.clear()
+            st.cache_resource.clear()
+            st.rerun()
 
     st.markdown("<hr style='margin: 10px 0px; opacity: 0.2;'>", unsafe_allow_html=True)
 
