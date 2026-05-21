@@ -116,12 +116,23 @@ if not st.session_state["logged_in"]:
 
 # --- 3. SIDEBAR NAVIGATION ---
 with st.sidebar:
-    # Fjerner standard-luft i toppen uden ikonerne
+    # Aggressiv CSS til at fjerne scroll og styre layout
     st.markdown("""
         <style>
+            /* Fjern scrollbar i sidebaren */
             [data-testid="stSidebarUserContent"] {
                 padding-top: 1rem !important;
+                overflow: hidden !important; /* Fjerner scroll helt */
+                display: flex;
+                flex-direction: column;
+                height: 95vh; /* Sætter en fast højde */
             }
+            
+            /* Gør at menu-containeren fylder det meste, så knappen presses ned */
+            .nav-wrapper {
+                flex-grow: 1;
+            }
+
             .custom-hr {
                 margin-top: 5px !important;
                 margin-bottom: 5px !important;
@@ -129,8 +140,16 @@ with st.sidebar:
                 border: 0;
                 border-top: 1px solid #31333F;
             }
+            
+            /* Fjern Streamlits standard margin under knapper */
+            .stButton button {
+                margin-bottom: 10px !important;
+            }
         </style>
     """, unsafe_allow_html=True)
+
+    # Wrap menuerne i en div, der skubber bunden ned
+    st.markdown('<div class="nav-wrapper">', unsafe_allow_html=True)
 
     # --- STYLE DEFINITION FOR MENUER ---
     menu_style = {
@@ -155,16 +174,13 @@ with st.sidebar:
         st.session_state["main_menu_selection"] = synlige_hoved_options[0]
 
     hoved_omraade = option_menu(
-        None, 
-        options=synlige_hoved_options, 
+        None, options=synlige_hoved_options, 
         icons=["play-fill"] * len(synlige_hoved_options), 
         default_index=synlige_hoved_options.index(st.session_state["main_menu_selection"]),
-        key="main_menu_widget",
-        styles=menu_style
+        key="main_menu_widget", styles=menu_style
     )
     st.session_state["main_menu_selection"] = hoved_omraade
 
-    # En tæt linje mellem de to menuer
     st.markdown('<hr class="custom-hr">', unsafe_allow_html=True)
 
     # --- UNDERMENU ---
@@ -177,27 +193,21 @@ with st.sidebar:
         "TESTSIDE": ["1. Div-tilpasning", "Grafer"],
         "ADMIN": ["System Log", "Profil", "Datakatalog", "Konklusion", "Fysisk profil", "Hold: Fysisk profil", "Intern analyse", "Top 5: Spillere", "Ordbog"]
     }
-
     aktuel_undermenu = [o for o in menu_map.get(hoved_omraade, ["Forside"]) if o.lower().strip() not in restriktioner]
     
-    if "sub_menu_selection" not in st.session_state or st.session_state["sub_menu_selection"] not in aktuel_undermenu:
-        st.session_state["sub_menu_selection"] = aktuel_undermenu[0]
-
     sel = option_menu(
-        None, 
-        options=aktuel_undermenu,
+        None, options=aktuel_undermenu,
         icons=["play-fill"] * len(aktuel_undermenu),
-        default_index=aktuel_undermenu.index(st.session_state["sub_menu_selection"]),
-        key="sub_menu_widget",
-        styles=menu_style
+        default_index=aktuel_undermenu.index(st.session_state.get("sub_menu_selection", aktuel_undermenu[0])),
+        key="sub_menu_widget", styles=menu_style
     )
     st.session_state["sub_menu_selection"] = sel
 
-    # --- BUND-SEKTION (Clear Cache) ---
-    # Vi bruger st.spacer eller en række linjeskift for at presse den i bunden
-    st.markdown("<br>" * 10, unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True) # Lukker nav-wrapper
+
+    # --- BUND-SEKTION ---
     st.markdown('<hr class="custom-hr">', unsafe_allow_html=True)
-    if st.button("🔄 Clear Cache", use_container_width=True, help="Ryd cache hvis appen driller"):
+    if st.button("Clear Cache", use_container_width=True):
         st.cache_data.clear()
         st.rerun()
 
