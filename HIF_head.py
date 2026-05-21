@@ -1,21 +1,28 @@
 import streamlit as st
 import pandas as pd
+import os
 
 def vis_side():
-    # --- 1. VELKOMST & HURTIG STATUS ---
-    col_header, col_logo = st.columns([4, 1])
-    with col_header:
-        st.subheader("Hvidovre IF - Performance Dashboard")
-        st.write("Velkommen tilbage. Her er de vigtigste opdateringer for staben.")
+    # --- 1. DATALOAD (Transfers) ---
+    try:
+        # Vi læser din specifikke sti
+        df_transfers = pd.read_csv("data/players/1div_overskrivning.csv")
+        # Sorter efter nyeste hvis TIMESTAMP findes, ellers tager vi de sidste i filen
+        seneste_transfers = df_transfers.tail(5).iloc[::-1] 
+    except:
+        seneste_transfers = pd.DataFrame()
+
+    # --- 2. VELKOMST & HURTIG STATUS ---
+    st.subheader("Hvidovre IF - Performance Dashboard")
+    st.write("Velkommen tilbage. Her er dagens overblik over rækken og truppen.")
     
     st.markdown("---")
 
-    # --- 2. KOMMENDE KAMP & TRANSFERS (TOP RÆKKE) ---
+    # --- 3. KOMMENDE KAMP & TRANSFERS ---
     col1, col2 = st.columns(2)
     
     with col1:
         st.markdown("### 🏟️ Næste Modstander")
-        # Her vil vi senere trække data fra din modstander-analyse
         with st.container(border=True):
             st.markdown("**SønderjyskE** (H)")
             st.caption("NordicBet Liga  |  Søndag d. 24. Maj  |  Hvidovre Stadion")
@@ -26,41 +33,44 @@ def vis_side():
             m3.metric("Tabelsæde", "2.")
 
     with col2:
-        st.markdown("### 📝 Transfer Update")
+        st.markdown("### 📝 Seneste Transfers (1. Div)")
         with st.container(border=True):
-            # Eksempel på visning af emner eller aktive forhandlinger
-            st.write("Seneste 3 emner i kikkerten:")
-            st.caption("1. Mads Hansen (FCM) - Scouting 82%")
-            st.caption("2. Elias Jelert (FCK) - Monitoreres")
-            st.caption("3. Mikkel Jensen (BIF) - Forhandling")
-            if st.button("Gå til Database", use_container_width=True):
+            if not seneste_transfers.empty:
+                for _, row in seneste_transfers.iterrows():
+                    # Viser Klub, Navn og Position fra din CSV
+                    st.markdown(f"**{row['KLUB']}**: {row['NAVN']} ({row['POSITION']})")
+            else:
+                st.write("Ingen nye transfers registreret.")
+            
+            if st.button("Se alle transfers", use_container_width=True):
                 st.session_state["main_menu_selection"] = "SCOUTING"
                 st.session_state["sub_menu_selection"] = "Database"
                 st.rerun()
 
-    # --- 3. FORM-OVERBLIK (MIDTER RÆKKE) ---
-    st.markdown("### 📊 Form Check (Seneste 5 kampe)")
+    # --- 4. FORM-OVERBLIK ---
+    st.markdown("### 📊 Form Check")
     f_col1, f_col2 = st.columns(2)
     
     with f_col1:
-        st.write("**Hvidovre IF**")
-        # Visualisering af form (Cirkler eller små bokse)
-        st.markdown("🟢 🟢 🟡 🔴 🟢")
-        st.caption("Seneste: 2-1 Sejr mod Hobro")
+        with st.container(border=True):
+            st.write("**Hvidovre IF**")
+            st.markdown("🟢 🟢 🟡 🔴 🟢")
+            st.caption("Seneste: 2-1 mod Hobro")
 
     with f_col2:
-        st.write("**Næste Modstander (SønderjyskE)**")
-        st.markdown("🟢 🟢 🟢 🟡 🟢")
-        st.caption("Seneste: 4-0 Sejr mod B93")
+        with st.container(border=True):
+            st.write("**SønderjyskE**")
+            st.markdown("🟢 🟢 🟢 🟡 🟢")
+            st.caption("Seneste: 4-0 mod B93")
 
-    # --- 4. TRUP-STATUS & HURTIGE LINKS (BUND) ---
+    # --- 5. TRUP-STATUS ---
     st.markdown("---")
     b1, b2, b3 = st.columns(3)
     
     with b1:
         st.markdown("#### 🏥 Skadesliste")
-        st.error("Matti Olsen (Knæ) - Retur Juni")
-        st.warning("Christian Jakobsen (Ankel) - Tvivlsom")
+        st.error("Matti Olsen (Knæ)")
+        st.warning("Christian Jakobsen (Tvivlsom)")
 
     with b2:
         st.markdown("#### 🟨 Karantænefare")
@@ -69,7 +79,7 @@ def vis_side():
 
     with b3:
         st.markdown("#### ⚡ Quick Actions")
-        if st.button("Lav Scoutrapport", use_container_width=True):
+        if st.button("Ny Scoutrapport", use_container_width=True):
             st.session_state["main_menu_selection"] = "SCOUTING"
             st.session_state["sub_menu_selection"] = "Scoutrapport"
             st.rerun()
