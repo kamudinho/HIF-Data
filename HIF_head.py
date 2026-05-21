@@ -1,56 +1,44 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import urllib.parse
+import re
 from data.data_load import _get_snowflake_conn
 
-# --- HJÆLPEFUNKTION TIL LINKS ---
-def rens_link(url):
-    if pd.isna(url) or url == "": return "-"
+# --- FORBEDRET KONTRAKT-BEREGNING ---
+def beregn_aar(start, slut):
     try:
-        parsed = urllib.parse.urlparse(str(url))
-        domain = parsed.netloc if parsed.netloc else parsed.path.split('/')[0]
-        return domain.replace('www.', '')
-    except: return "Link"
+        # Find det første 4-cifrede tal i strengen (f.eks. 2028 fra "30.06.2028")
+        s_match = re.search(r'20\d{2}', str(start))
+        e_match = re.search(r'20\d{2}', str(slut))
+        
+        if s_match and e_match:
+            s_year = int(s_match.group())
+            e_year = int(e_match.group())
+            diff = e_year - s_year
+            if 0 < diff < 10: # Sikkerhedstjek så vi ikke får 20000 år
+                return f"{slut} ({diff} år)"
+    except:
+        pass
+    return slut
 
-# --- POPUP VINDUE TIL TRANSFERS ---
+# --- POPUP VINDUE ---
 @st.dialog("Alle Transfers - 1. Division", width="large")
 def vis_alle_transfers(df):
     df_display = df.copy()
-    
-    # 1. Dato
     df_display['Dato'] = pd.to_datetime(df_display['TIMESTAMP']).dt.strftime('%d/%m-%Y')
-    
-    # 2. Transfer (Fra -> Til)
     df_display['Transfer'] = df_display['SENESTE_KLUB'].fillna('?') + " ➔ " + df_display['KLUB'].fillna('?')
     
-    # 3. Kontrakt (Dato + Længde i år)
-    def format_kontrakt(row):
-        udloeb = str(row.get('KONTRAKT_UDLOEB', '-'))
-        start = str(row.get('KONTRAKT_START', ''))
-        
-        # Beregn år hvis begge årstal findes (f.eks. 2024 og 2027)
-        try:
-            start_year = int(''.join(filter(str.isdigit, start)))
-            end_year = int(''.join(filter(str.isdigit, udloeb)))
-            diff = end_year - start_year
-            if diff > 0:
-                return f"{udloeb} ({diff} år)"
-        except: pass
-        return udloeb
-
-    df_display['Kontrakt'] = df_display.apply(format_kontrakt, axis=1)
-
-    # 4. Rens links og gør dem klikbare
-    # Streamlit column_config gør det muligt at klikke på links i st.dataframe
-    df_display['Kilde_Link'] = df_display['KILDE']
+    # Brug den nye beregnings-funktion
+    df_display['Kontrakt'] = df_display.apply(
+        lambda x: beregn_aar(x['KONTRAKT_START'], x['KONTRAKT_UDLOEB']), axis=1
+    )
 
     cols_to_show = {
         'Dato': 'Dato',
         'NAVN': 'Spiller',
         'Transfer': 'Transfer',
         'Kontrakt': 'Kontrakt',
-        'Kilde_Link': 'Kilde'
+        'KILDE': 'Kilde'
     }
     
     st.dataframe(
@@ -60,7 +48,7 @@ def vis_alle_transfers(df):
         column_config={
             "Kilde": st.column_config.LinkColumn(
                 "Kilde",
-                display_text=r"^https?://(?:www\.)?([^/]+)" # Viser kun domænet
+                display_text=r"^https?://(?:www\.)?([^/]+)"
             )
         }
     )
@@ -79,7 +67,6 @@ def vis_side(dp=None):
     df_matches = conn.query(sql) if hasattr(conn, 'query') else pd.read_sql(sql, conn)
     if df_matches is None or df_matches.empty: return
 
-    # --- RENS MATCH DATA ---
     df_matches.columns = [str(c).upper() for c in df_matches.columns]
     hif_id = str(HIF_UUID).strip().lower()
     df_matches['HOME_ID'] = df_matches['CONTESTANTHOME_OPTAUUID'].astype(str).str.strip().str.lower()
@@ -90,10 +77,8 @@ def vis_side(dp=None):
     future = hif_m[~hif_m['MATCH_STATUS'].str.upper().str.contains('PLAY|FULL|FINISH|FT', na=False)].sort_values('MATCH_DATE_FULL', ascending=True)
 
     # --- DASHBOARD LAYOUT ---
-    st.markdown("### 🏟️ Hvidovre IF Dashboard")
     col1, col2, col3 = st.columns([1.2, 1, 1])
 
-    # KOLONNE 1: NÆSTE MODSTANDER
     with col1:
         st.caption("##### Næste Modstander")
         with st.container(border=True):
@@ -117,29 +102,24 @@ def vis_side(dp=None):
                             st.markdown(f"<div style='background:{col};color:white;text-align:center;border-radius:2px;font-weight:bold;font-size:10px;padding:2px;'>{res}</div><div style='text-align:center;font-size:9px;color:#444;margin-top:3px;line-height:1.1;'>{h_s}-{a_s}<br>{mod_kort.upper()}</div>", unsafe_allow_html=True)
             else: st.write("Sæson slut")
 
-    # KOLONNE 2: TRANSFERS
     with col2:
         st.caption("##### Seneste Transfers")
         with st.container(border=True):
             try:
                 df_t_raw = pd.read_csv("data/players/1div_overskrivning.csv")
                 df_t = df_t_raw.dropna(subset=['TIMESTAMP']).copy()
-                
                 if not df_t.empty:
                     df_t['TS_CLEAN'] = pd.to_datetime(df_t['TIMESTAMP'], errors='coerce')
                     df_t = df_t.sort_values('TS_CLEAN', ascending=False)
-
                     for _, r in df_t.head(8).iterrows():
                         ts_txt = r['TS_CLEAN'].strftime('%d/%m')
-                        st.markdown(f"<p style='font-size:12px;margin:0;line-height:1.4;'><span style='color:#888;'>{ts_txt}</span> <b>{r['KLUB']}</b>: {r['NAVN']}</p>", unsafe_allow_html=True)
-                    
-                    st.markdown("<div style='margin-top:10px;'></div>", unsafe_allow_html=True)
+                        st.markdown(f"<p style='font-size:10px;margin:0;line-height:1.4;'><span style='color:#888;'>{ts_txt}</span> <b>{r['KLUB']}</b>: {r['NAVN']}</p>", unsafe_allow_html=True)
+                    st.markdown("<div style='margin-top:8px;'></div>", unsafe_allow_html=True)
                     if st.button("Se alle transfers", use_container_width=True):
                         vis_alle_transfers(df_t)
                 else: st.caption("Afventer data...")
-            except: st.caption("Kunne ikke indlæse transfers.")
+            except: st.caption("Fejl i data")
 
-    # KOLONNE 3: EMNELISTE
     with col3:
         st.caption("##### Scouting Emner")
         with st.container(border=True):
