@@ -113,24 +113,52 @@ if not st.session_state["logged_in"]:
 
 # --- 3. SIDEBAR NAVIGATION ---
 with st.sidebar:
-    # --- DISKRETE IKONER ØVERST ---
-    # Vi bruger små kolonner for at holde ikonerne kompakte
-    top_col1, top_col2, top_col3 = st.columns([1, 1, 3])
+    # CSS til at rykke menuen helt op og style ikonerne
+    st.markdown("""
+        <style>
+            /* Ryk sidebar indhold helt til tops */
+            [data-testid="stSidebarNav"] {padding-top: 0rem;}
+            .block-container {padding-top: 0rem;}
+            
+            /* Centrer kolonne-indhold (ikonerne) */
+            [data-testid="column"] {
+                display: flex;
+                justify-content: center;
+                align-items: center;
+            }
+
+            /* Gør knapperne diskrete og gennemsigtige */
+            .stButton > button {
+                border: none !important;
+                background-color: transparent !important;
+                box-shadow: none !important;
+                font-size: 20px !important;
+                transition: transform 0.2s;
+            }
+            .stButton > button:hover {
+                transform: scale(1.2);
+                background-color: rgba(0,0,0,0.05) !important;
+            }
+        </style>
+    """, unsafe_allow_html=True)
+
+    # --- CENTREREDE IKONER ØVERST ---
+    # Vi bruger 3 kolonner for at centrere de to ikoner i midten
+    icon_col1, icon_col2, icon_col3, icon_col4 = st.columns([1.5, 1, 1, 1.5])
     
-    with top_col1:
+    with icon_col2:
         if st.button("🏠", help="Gå til Forsiden"):
-            # Nulstiller valg så den hopper tilbage til HIF-head.py
             st.session_state["main_menu_selection"] = "HVIDOVRE IF"
             st.session_state["sub_menu_selection"] = "Forside"
             st.rerun()
             
-    with top_col2:
-        if st.button("🧹", help="Ryd cache (hvis appen driller)"):
+    with icon_col3:
+        if st.button("🧹", help="Ryd cache"):
             st.cache_data.clear()
             st.cache_resource.clear()
             st.rerun()
     
-    st.markdown("---") # En tynd adskillelse
+    st.markdown("<div style='margin-top: -10px; margin-bottom: 5px;'><hr></div>", unsafe_allow_html=True)
 
     # Definer alle områder
     alle_omraader = ["HVIDOVRE IF", "HOLDANALYSE", "SPILLERANALYSE", "SCOUTING", "TILPASNING", "TESTSIDE", "ADMIN"]
@@ -142,12 +170,16 @@ with st.sidebar:
     # Filtrer hovedmenu
     synlige_hoved_options = [o for o in alle_omraader if o.lower().strip() not in restriktioner]
     
-    # Hovedmenu - Vi bruger en key, så vi kan styre den via session_state
+    # Hovedmenu
     hoved_omraade = option_menu(
         None, 
         options=synlige_hoved_options, 
         default_index=0,
-        key="main_menu_selection"
+        key="main_menu_selection",
+        styles={
+            "container": {"padding": "0!important", "background-color": "transparent"},
+            "nav-link": {"font-size": "14px", "text-align": "left", "margin":"0px", "--hover-color": "#eee"}
+        }
     )
 
     def filtrer_menu(liste):
@@ -155,7 +187,6 @@ with st.sidebar:
 
     # Undermenu logik
     if hoved_omraade == "HVIDOVRE IF":
-        # Tilføjet "Forside" som valgmulighed, der peger på HIF-head.py
         sel = option_menu(None, options=filtrer_menu(["Forside", "Oversigt", "Forecast"]), key="sub_menu_selection")
     elif hoved_omraade == "HOLDANALYSE":
         sel = option_menu(None, options=filtrer_menu(["Modstanderanalyse", "Ligaoversigt", "Kampoversigt", "Afslutninger", "Fysisk data"]))
@@ -169,7 +200,7 @@ with st.sidebar:
         sel = option_menu(None, options=filtrer_menu(["1. Div-tilpasning", "Grafer"]))
     elif hoved_omraade == "ADMIN":
         sel = option_menu(None, options=filtrer_menu(["System Log", "Profil", "Datakatalog", "Konklusion", "Fysisk profil", "Hold: Fysisk profil", "Intern analyse", "Top 5: Spillere", "Ordbog"]))
-
+        
 # --- 4. DATA LOADING & RENDERING ---
 render_hif_header(f"{hoved_omraade}  |  {sel.upper()}")
 
