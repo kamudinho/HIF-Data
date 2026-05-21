@@ -113,40 +113,49 @@ if not st.session_state["logged_in"]:
 
 # --- 3. SIDEBAR NAVIGATION ---
 with st.sidebar:
-    # Aggressiv CSS til at fjerne top-margin og padding i sidebaren
+    # Justeret CSS for balance mellem "top-align" og "luft"
     st.markdown("""
         <style>
-            /* Fjerner padding i selve sidebar-containeren */
+            /* Fjern standard padding men tilføj en lille kontrolleret top-margin */
             [data-testid="stSidebarUserContent"] {
-                padding-top: 0rem !important;
+                padding-top: 1rem !important; 
             }
-            /* Fjerner den hvide blok i toppen af sidebaren */
-            [data-testid="stSidebarNav"] {
-                display: none;
-            }
-            /* Justering af afstanden for den øverste kolonne */
-            .stVerticalBlock {
-                gap: 0rem !important;
-            }
-            /* Centrer ikonerne og fjern deres rammer */
+            
+            /* Skjul standard nav */
+            [data-testid="stSidebarNav"] { display: none; }
+
+            /* Centrer ikonerne */
             div[data-testid="column"] {
                 display: flex;
                 justify-content: center;
                 align-items: center;
             }
+
+            /* Styling af ikoner - tilføjer lidt luft omkring dem */
             .stButton > button {
                 border: none !important;
                 background-color: transparent !important;
-                padding: 0px !important;
-                margin-top: 10px !important; /* Lille justering så det ikke rører kanten 100% */
-                font-size: 24px !important;
+                font-size: 22px !important;
+                padding: 10px !important; /* Giver knappen lidt fylde så den ikke er mast */
+                transition: 0.3s;
+            }
+            
+            .stButton > button:hover {
+                background-color: rgba(255,255,255,0.1) !important;
+                border-radius: 10px;
+            }
+
+            /* Skab luft mellem ikoner og menu */
+            .menu-divider {
+                margin-top: 15px;
+                margin-bottom: 15px;
+                border-bottom: 1px solid rgba(49, 51, 63, 0.2);
             }
         </style>
     """, unsafe_allow_html=True)
 
     # --- CENTREREDE IKONER ØVERST ---
-    # Vi bruger 'icon_cols' til at skabe en stram top
-    icon_col1, icon_col2, icon_col3, icon_col4 = st.columns([1.5, 1, 1, 1.5])
+    icon_col1, icon_col2, icon_col3, icon_col4 = st.columns([1.2, 1, 1, 1.2])
     
     with icon_col2:
         if st.button("🏠", help="Gå til Forsiden"):
@@ -160,10 +169,10 @@ with st.sidebar:
             st.cache_resource.clear()
             st.rerun()
     
-    # En meget tynd diskret linje
-    st.markdown("<hr style='margin: 5px 0px 15px 0px; opacity: 0.2;'>", unsafe_allow_html=True)
+    # Kontrolleret afstandsholder i stedet for standard <hr>
+    st.markdown('<div class="menu-divider"></div>', unsafe_allow_html=True)
 
-    # --- MENUEN ---
+    # --- HOVEDMENU ---
     alle_omraader = ["HVIDOVRE IF", "HOLDANALYSE", "SPILLERANALYSE", "SCOUTING", "TILPASNING", "TESTSIDE", "ADMIN"]
     user_info = USER_DB.get(st.session_state["user"], {})
     restriktioner = [r.lower().strip() for r in user_info.get("restricted", [])]
@@ -175,17 +184,22 @@ with st.sidebar:
         default_index=0,
         key="main_menu_selection",
         styles={
-            "container": {"padding": "0!important", "margin": "0px"},
-            "nav-link": {"font-size": "14px", "text-align": "left", "margin":"0px"}
+            "container": {"padding": "5px !important", "background-color": "transparent"},
+            "nav-link": {"font-size": "14px", "text-align": "left", "margin":"5px 0px", "padding": "10px"},
+            "nav-link-selected": {"background-color": "#df003b"} # HIF Rød
         }
     )
 
     def filtrer_menu(liste):
         return [o for o in liste if o.lower().strip() not in restriktioner]
 
-    # Undermenu logik
+    # --- UNDERMENU LOGIK ---
+    # Vi tilføjer lidt afstand før undermenuen for at undgå det komprimerede look
+    st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
+
     if hoved_omraade == "HVIDOVRE IF":
-        sel = option_menu(None, options=filtrer_menu(["Oversigt", "Forecast"]), key="sub_menu_selection")
+        sel = option_menu(None, options=filtrer_menu(["Oversigt", "Forecast"]), 
+                         key="sub_menu_selection", orientation="vertical")
     elif hoved_omraade == "HOLDANALYSE":
         sel = option_menu(None, options=filtrer_menu(["Modstanderanalyse", "Ligaoversigt", "Kampoversigt", "Afslutninger", "Fysisk data"]))
     elif hoved_omraade == "SPILLERANALYSE":
@@ -197,8 +211,8 @@ with st.sidebar:
     elif hoved_omraade == "TESTSIDE":
         sel = option_menu(None, options=filtrer_menu(["1. Div-tilpasning", "Grafer"]))
     elif hoved_omraade == "ADMIN":
-        sel = option_menu(None, options=filtrer_menu(["System Log", "Profil", "Datakatalog", "Konklusion", "Fysisk profil", "Hold: Fysisk profil", "Intern analyse", "Top 5: Spillere", "Ordbog"]))        
-# --- 4. DATA LOADING & RENDERING ---
+        sel = option_menu(None, options=filtrer_menu(["System Log", "Profil", "Datakatalog", "Konklusion", "Fysisk profil", "Hold: Fysisk profil", "Intern analyse", "Top 5: Spillere", "Ordbog"]))
+        # --- 4. DATA LOADING & RENDERING ---
 render_hif_header(f"{hoved_omraade}  |  {sel.upper()}")
 
 try:
