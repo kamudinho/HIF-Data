@@ -147,6 +147,19 @@ with st.sidebar:
     st.markdown("<hr style='margin: 5px 0px 15px 0px; opacity: 0.2;'>", unsafe_allow_html=True)
 
     # --- HOVEDMENU ---
+    # Vi gemmer stilen i en variabel, så vi kan genbruge den præcis ens begge steder
+    menu_style = {
+        "container": {"padding": "0!important", "background-color": "transparent"},
+        "nav-link": {
+            "font-size": "14px", 
+            "text-align": "left", 
+            "margin": "0px", 
+            "color": "#31333F",
+            "border-radius": "4px"
+        },
+        "nav-link-selected": {"background-color": HIF_ROD, "color": "white"}
+    }
+
     alle_omraader = ["HVIDOVRE IF", "HOLDANALYSE", "SPILLERANALYSE", "SCOUTING", "TILPASNING", "TESTSIDE", "ADMIN"]
     user_info = USER_DB.get(st.session_state["user"], {})
     restriktioner = [r.lower().strip() for r in user_info.get("restricted", [])]
@@ -159,17 +172,11 @@ with st.sidebar:
         None, options=synlige_hoved_options, icons=None,
         default_index=synlige_hoved_options.index(st.session_state["main_menu_selection"]),
         key="main_menu_widget",
-        styles={
-            "container": {"padding": "0!important", "background-color": "transparent"},
-            "nav-link-selected": {"background-color": HIF_ROD}
-        }
+        styles=menu_style
     )
     st.session_state["main_menu_selection"] = hoved_omraade
 
-    def filtrer_menu(liste):
-        return [o for o in liste if o.lower().strip() not in restriktioner]
-
-    # --- UNDERMENUER MED RAMME ---
+    # --- UNDERMENU MED RAMME (RETTET) ---
     menu_map = {
         "HVIDOVRE IF": ["Forside", "Oversigt", "Forecast"],
         "HOLDANALYSE": ["Modstanderanalyse", "Ligaoversigt", "Kampoversigt", "Afslutninger", "Fysisk data"],
@@ -180,23 +187,24 @@ with st.sidebar:
         "ADMIN": ["System Log", "Profil", "Datakatalog", "Konklusion", "Fysisk profil", "Hold: Fysisk profil", "Intern analyse", "Top 5: Spillere", "Ordbog"]
     }
 
-    aktuel_undermenu = filtrer_menu(menu_map.get(hoved_omraade, ["Forside"]))
+    aktuel_undermenu = [o for o in menu_map.get(hoved_omraade, ["Forside"]) if o.lower().strip() not in restriktioner]
     
     if "sub_menu_selection" not in st.session_state or st.session_state["sub_menu_selection"] not in aktuel_undermenu:
         st.session_state["sub_menu_selection"] = aktuel_undermenu[0]
 
-    # Vi wrapper undermenuen i en div med klassen 'undermenu-box' for at få borderen
-    st.markdown('<div class="undermenu-box">', unsafe_allow_html=True)
+    # Rammen lægges udenom her:
+    st.markdown("""
+        <div style="border: 1px solid #ddd; border-radius: 8px; padding: 5px; margin-top: 20px;">
+    """, unsafe_allow_html=True)
+    
     sel = option_menu(
         None, options=aktuel_undermenu,
         default_index=aktuel_undermenu.index(st.session_state["sub_menu_selection"]),
         key="sub_menu_widget",
-        styles={
-            "container": {"padding": "0!important", "background-color": "transparent"},
-            "nav-link-selected": {"background-color": HIF_ROD}
-        }
+        styles=menu_style # Bruger præcis samme stil som hovedmenuen
     )
-    st.markdown('</div>', unsafe_allow_html=True)
+    
+    st.markdown("</div>", unsafe_allow_html=True)
     st.session_state["sub_menu_selection"] = sel
 
 # --- 4. RENDERING ---
