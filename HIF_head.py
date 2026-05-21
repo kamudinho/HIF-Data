@@ -13,9 +13,8 @@ def vis_side():
         seneste_transfers = pd.DataFrame()
 
     # --- 2. VELKOMST & HURTIG STATUS ---
-    st.subheader("Hvidovre IF - Performance Dashboard")
-    st.write("Velkommen tilbage. Her er dagens overblik over rækken og truppen.")
-    
+    st.write("Hvidovre IF - Performance Dashboard")
+   
     st.markdown("---")
 
     # --- 3. KOMMENDE KAMP & TRANSFERS ---
@@ -33,7 +32,7 @@ def vis_side():
             m3.metric("Tabelsæde", "2.")
 
     with col2:
-        st.markdown("### 📝 Seneste Transfers (1. Div)")
+        st.caption("### 📝 Seneste Transfers (1. Div)")
         with st.container(border=True):
             if not seneste_transfers.empty:
                 for _, row in seneste_transfers.iterrows():
