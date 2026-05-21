@@ -1,45 +1,68 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import urllib.parse
 from data.data_load import _get_snowflake_conn
+
+# --- HJÆLPEFUNKTION TIL LINKS ---
+def rens_link(url):
+    if pd.isna(url) or url == "": return "-"
+    try:
+        parsed = urllib.parse.urlparse(str(url))
+        domain = parsed.netloc if parsed.netloc else parsed.path.split('/')[0]
+        return domain.replace('www.', '')
+    except: return "Link"
 
 # --- POPUP VINDUE TIL TRANSFERS ---
 @st.dialog("Alle Transfers - 1. Division", width="large")
 def vis_alle_transfers(df):
     df_display = df.copy()
     
-    # 1. Dato fra TIMESTAMP
+    # 1. Dato
     df_display['Dato'] = pd.to_datetime(df_display['TIMESTAMP']).dt.strftime('%d/%m-%Y')
     
     # 2. Transfer (Fra -> Til)
-    # Vi bruger SENESTE_KLUB som 'Fra' og KLUB som 'Til'
     df_display['Transfer'] = df_display['SENESTE_KLUB'].fillna('?') + " ➔ " + df_display['KLUB'].fillna('?')
     
-    # 3. Kontrakt info
-    # Vi samler start og udløb for at vise "længde/periode"
-    def beregn_kontrakt(row):
-        start = str(row.get('KONTRAKT_START', '-'))
+    # 3. Kontrakt (Dato + Længde i år)
+    def format_kontrakt(row):
         udloeb = str(row.get('KONTRAKT_UDLOEB', '-'))
-        if start != '-' and udloeb != '-':
-            return f"{start} -> {udloeb}"
-        return udloeb if udloeb != '-' else start
+        start = str(row.get('KONTRAKT_START', ''))
+        
+        # Beregn år hvis begge årstal findes (f.eks. 2024 og 2027)
+        try:
+            start_year = int(''.join(filter(str.isdigit, start)))
+            end_year = int(''.join(filter(str.isdigit, udloeb)))
+            diff = end_year - start_year
+            if diff > 0:
+                return f"{udloeb} ({diff} år)"
+        except: pass
+        return udloeb
 
-    df_display['Kontrakt'] = df_display.apply(beregn_kontrakt, axis=1)
+    df_display['Kontrakt'] = df_display.apply(format_kontrakt, axis=1)
 
-    # Vælg de kolonner du bad om
+    # 4. Rens links og gør dem klikbare
+    # Streamlit column_config gør det muligt at klikke på links i st.dataframe
+    df_display['Kilde_Link'] = df_display['KILDE']
+
     cols_to_show = {
         'Dato': 'Dato',
         'NAVN': 'Spiller',
         'Transfer': 'Transfer',
         'Kontrakt': 'Kontrakt',
-        'KILDE': 'Kilde'
+        'Kilde_Link': 'Kilde'
     }
     
-    # Vis kun de kolonner der er defineret ovenfor
     st.dataframe(
         df_display[list(cols_to_show.keys())].rename(columns=cols_to_show),
         use_container_width=True, 
-        hide_index=True
+        hide_index=True,
+        column_config={
+            "Kilde": st.column_config.LinkColumn(
+                "Kilde",
+                display_text=r"^https?://(?:www\.)?([^/]+)" # Viser kun domænet
+            )
+        }
     )
 
 def vis_side(dp=None):
@@ -51,7 +74,7 @@ def vis_side(dp=None):
     LIGA_UUID = "dyjr458hcmrcy87fsabfsy87o" 
     HIF_UUID = "8gxd9ry2580pu1b1dd5ny9ymy"   
 
-    # --- DATA LOAD (SNOWFLAKE) ---
+    # --- DATA LOAD ---
     sql = f"SELECT * FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'"
     df_matches = conn.query(sql) if hasattr(conn, 'query') else pd.read_sql(sql, conn)
     if df_matches is None or df_matches.empty: return
@@ -100,8 +123,6 @@ def vis_side(dp=None):
         with st.container(border=True):
             try:
                 df_t_raw = pd.read_csv("data/players/1div_overskrivning.csv")
-                
-                # KRAV: Vis kun hvis TIMESTAMP er udfyldt
                 df_t = df_t_raw.dropna(subset=['TIMESTAMP']).copy()
                 
                 if not df_t.empty:
@@ -115,8 +136,7 @@ def vis_side(dp=None):
                     st.markdown("<div style='margin-top:8px;'></div>", unsafe_allow_html=True)
                     if st.button("Se alle transfers", use_container_width=True):
                         vis_alle_transfers(df_t)
-                else:
-                    st.caption("Venter på transfer-data...")
+                else: st.caption("Afventer data...")
             except: st.caption("Kunne ikke indlæse transfers.")
 
     # KOLONNE 3: EMNELISTE
