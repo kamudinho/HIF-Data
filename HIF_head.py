@@ -20,7 +20,7 @@ def vis_side():
     col1, col2 = st.columns(2)
     
     with col1:
-        st.markdown("##### Næste Modstander")
+        st.caption("##### Næste Modstander")
         with st.container(border=True):
             st.markdown("**SønderjyskE** (H)")
             st.caption("NordicBet Liga  |  Søndag d. 24. Maj  |  Hvidovre Stadion")
