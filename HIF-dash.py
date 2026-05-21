@@ -116,10 +116,10 @@ if not st.session_state["logged_in"]:
 
 # --- 3. SIDEBAR NAVIGATION ---
 with st.sidebar:
-    # --- TOP IKONER ---
+    # --- TOP IKONER (🏠 & 🔄) ---
     icon_col1, icon_col2, icon_col3, icon_col4 = st.columns([1.5, 1, 1, 1.5])
     with icon_col2:
-        if st.button("🏠", help="Hjem"):
+        if st.button("🏠", help="Gå til Forsiden"):
             st.session_state["main_menu_selection"] = "HVIDOVRE IF"
             st.session_state["sub_menu_selection"] = "Forside"
             st.rerun()
@@ -128,16 +128,22 @@ with st.sidebar:
             st.cache_data.clear()
             st.rerun()
 
-    st.markdown("<hr style='margin: -50px 0px -15px 0px; opacity: 0.2;'>", unsafe_allow_html=True)
+    st.markdown("<hr style='margin: 5px 0px 15px 0px; opacity: 0.2;'>", unsafe_allow_html=True)
 
-    # Menu Style definition
+    # --- STYLE DEFINITION ---
     menu_style = {
         "container": {"padding": "0!important", "background-color": "transparent"},
-        "nav-link": {"font-size": "14px", "text-align": "left", "margin": "0px", "color": "#31333F", "border-radius": "4px"},
+        "nav-link": {
+            "font-size": "14px", 
+            "text-align": "left", 
+            "margin": "0px", 
+            "color": "#31333F",
+            "border-radius": "4px"
+        },
         "nav-link-selected": {"background-color": HIF_ROD, "color": "white"}
     }
 
-    # Hovedmenu
+    # --- HOVEDMENU ---
     alle_omraader = ["HVIDOVRE IF", "HOLDANALYSE", "SPILLERANALYSE", "SCOUTING", "TILPASNING", "TESTSIDE", "ADMIN"]
     user_info = USER_DB.get(st.session_state["user"], {})
     restriktioner = [r.lower().strip() for r in user_info.get("restricted", [])]
@@ -147,13 +153,16 @@ with st.sidebar:
         st.session_state["main_menu_selection"] = synlige_hoved_options[0]
 
     hoved_omraade = option_menu(
-        None, options=synlige_hoved_options, icons=None,
+        None, 
+        options=synlige_hoved_options, 
+        icons=["play-fill"] * len(synlige_hoved_options), 
         default_index=synlige_hoved_options.index(st.session_state["main_menu_selection"]),
-        key="main_menu_widget", styles=menu_style
+        key="main_menu_widget",
+        styles=menu_style
     )
     st.session_state["main_menu_selection"] = hoved_omraade
 
-    # Undermenu Logik
+    # --- UNDERMENU LOGIK ---
     menu_map = {
         "HVIDOVRE IF": ["Forside", "Oversigt", "Forecast"],
         "HOLDANALYSE": ["Modstanderanalyse", "Ligaoversigt", "Kampoversigt", "Afslutninger", "Fysisk data"],
@@ -169,13 +178,22 @@ with st.sidebar:
     if "sub_menu_selection" not in st.session_state or st.session_state["sub_menu_selection"] not in aktuel_undermenu:
         st.session_state["sub_menu_selection"] = aktuel_undermenu[0]
 
-    st.markdown('<div class="sub-nav-container">', unsafe_allow_html=True)
+    # --- UNDERMENU WRAPPER (Border uden tom boks) ---
+    st.markdown("""
+        <div style="border: 1px solid #ddd; border-radius: 8px; padding: 5px; margin-top: 10px;">
+    """, unsafe_allow_html=True)
+    
     sel = option_menu(
-        None, options=aktuel_undermenu,
+        None, 
+        options=aktuel_undermenu,
+        # Her tvinger vi ikoner på alle punkter, så de matcher hovedmenuen:
+        icons=["play-fill"] * len(aktuel_undermenu),
         default_index=aktuel_undermenu.index(st.session_state["sub_menu_selection"]),
-        key="sub_menu_widget", styles=menu_style
+        key="sub_menu_widget",
+        styles=menu_style
     )
-    st.markdown('</div>', unsafe_allow_html=True)
+    
+    st.markdown("</div>", unsafe_allow_html=True)
     st.session_state["sub_menu_selection"] = sel
 
 # --- 4. DATA LOADING & RENDERING ---
