@@ -31,7 +31,6 @@ st.markdown(f"""
         footer {{visibility: hidden;}}
         header {{visibility: hidden;}} 
         
-        /* Ryk indhold helt op */
         .block-container {{ padding-top: 0.5rem !important; }}
         [data-testid="stSidebarUserContent"] {{ padding-top: 0.5rem !important; }}
         [data-testid="stSidebarNav"] {{ display: none; }}
@@ -51,13 +50,6 @@ st.markdown(f"""
             letter-spacing: 2px;
             font-weight: 600;
             margin: 0;
-        }}
-        
-        /* Fjern unødvendig luft omkring knapperne i toppen */
-        .stButtonGroup {{
-            display: flex;
-            justify-content: center;
-            margin-bottom: -10px;
         }}
     </style>
 """, unsafe_allow_html=True)
@@ -120,29 +112,11 @@ if not st.session_state["logged_in"]:
 
 # --- 3. SIDEBAR NAVIGATION ---
 with st.sidebar:
-    # --- TOP IKONER (RETTET SAC LOGIK) ---
+    # --- TOP IKONER (RETTET OG OPTIMERET) ---
+    # Vi bruger 'label' med forskellige antal mellemrum for at kende forskel uden tekst
     top_selection = sac.buttons([
-        sac.ButtonsItem(label='', icon='house', tooltip='Gå til Forsiden'),
-        sac.ButtonsItem(label='', icon='arrow-clockwise', tooltip='Ryd Cache')
-    ], align='center', variant='link', color='gray', index=None)
-
-    # Logikken skal tjekke på index (0 for hus, 1 for refresh), 
-    # da knapper uden labels returnerer deres index eller position.
-    if top_selection is not None:
-        if top_selection == '': # Hvis sac returnerer den tomme label streng
-             # For at være sikker, tjekker vi rækkefølgen manuelt hvis ovenstående driller:
-             pass
-
-    # En mere skudsikker måde med sac.buttons når labels er tomme:
-    if top_selection == '': 
-        # Da begge har tom label, kan sac have svært ved at skelne. 
-        # Lad os bruge en "label" der bare er et mellemrum for at tvinge adskillelse:
-        pass
-
-    # PRØV DENNE VERSION DER ER MERE STABIL:
-    top_selection = sac.buttons([
-        {'label': ' ', 'icon': 'house', 'tooltip': 'Gå til Forsiden'},
-        {'label': '  ', 'icon': 'arrow-clockwise', 'tooltip': 'Ryd Cache'}
+        {'label': ' ', 'icon': 'house'},
+        {'label': '  ', 'icon': 'arrow-clockwise'}
     ], align='center', variant='link', color='gray', index=None)
 
     if top_selection == ' ':
