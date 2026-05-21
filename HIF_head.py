@@ -32,7 +32,7 @@ def vis_side():
             m3.metric("Tabelsæde", "2.")
 
     with col2:
-        st.caption("# 📝 Seneste Transfers (1. Div)")
+        st.caption("##### 📝 Seneste Transfers (1. Div)")
         with st.container(border=True):
             if not seneste_transfers.empty:
                 for _, row in seneste_transfers.iterrows():
