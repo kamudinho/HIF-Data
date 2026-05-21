@@ -48,6 +48,7 @@ st.markdown(f"""
             background-color: transparent !important;
         }}
         
+        /* HEADER */
         .hif-header-container {{
             background-color: {HIF_ROD};
             height: 50px;
@@ -63,6 +64,30 @@ st.markdown(f"""
             letter-spacing: 2px;
             font-weight: 600;
             margin: 0;
+        }}
+
+        /* Fælles styling for ALLE option-menus (Hoved og Under) */
+        .nav-link {{
+            --hover-color: #eee;
+            font-size: 14px !important;
+            text-align: left !important;
+            padding: 10px !important;
+            color: #31333F !important;
+            border-radius: 4px !important;
+        }}
+        
+        .nav-link-selected {{
+            background-color: {HIF_ROD} !important;
+            color: white !important;
+        }}
+
+        /* Specifik styling for UNDERMENU-CONTAINEREN (Det område sel ligger i) */
+        .undermenu-box {{
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 10px;
+            margin-top: 20px;
+            background-color: transparent; /* Fjerner den hvide baggrund */
         }}
     </style>
 """, unsafe_allow_html=True)
@@ -127,7 +152,6 @@ with st.sidebar:
     restriktioner = [r.lower().strip() for r in user_info.get("restricted", [])]
     synlige_hoved_options = [o for o in alle_omraader if o.lower().strip() not in restriktioner]
     
-    # Sørg for at hovedmenuen altid har en gyldig default
     if "main_menu_selection" not in st.session_state:
         st.session_state["main_menu_selection"] = synlige_hoved_options[0]
 
@@ -137,18 +161,15 @@ with st.sidebar:
         key="main_menu_widget",
         styles={
             "container": {"padding": "0!important", "background-color": "transparent"},
-            "nav-link": {"font-size": "14px", "text-align": "left", "margin":"0px", "color": "#31333F"},
-            "nav-link-selected": {"background-color": "#df003b", "color": "white"}
+            "nav-link-selected": {"background-color": HIF_ROD}
         }
     )
-    # Opdater session state hvis brugeren klikker direkte
     st.session_state["main_menu_selection"] = hoved_omraade
 
     def filtrer_menu(liste):
         return [o for o in liste if o.lower().strip() not in restriktioner]
 
-    # --- UNDERMENUER ---
-    # Her definerer vi undermenuerne baseret på valget i hovedmenuen
+    # --- UNDERMENUER MED RAMME ---
     menu_map = {
         "HVIDOVRE IF": ["Forside", "Oversigt", "Forecast"],
         "HOLDANALYSE": ["Modstanderanalyse", "Ligaoversigt", "Kampoversigt", "Afslutninger", "Fysisk data"],
@@ -161,15 +182,21 @@ with st.sidebar:
 
     aktuel_undermenu = filtrer_menu(menu_map.get(hoved_omraade, ["Forside"]))
     
-    # Reset undermenu hvis hovedmenuen ændres
     if "sub_menu_selection" not in st.session_state or st.session_state["sub_menu_selection"] not in aktuel_undermenu:
         st.session_state["sub_menu_selection"] = aktuel_undermenu[0]
 
+    # Vi wrapper undermenuen i en div med klassen 'undermenu-box' for at få borderen
+    st.markdown('<div class="undermenu-box">', unsafe_allow_html=True)
     sel = option_menu(
         None, options=aktuel_undermenu,
         default_index=aktuel_undermenu.index(st.session_state["sub_menu_selection"]),
-        key="sub_menu_widget"
+        key="sub_menu_widget",
+        styles={
+            "container": {"padding": "0!important", "background-color": "transparent"},
+            "nav-link-selected": {"background-color": HIF_ROD}
+        }
     )
+    st.markdown('</div>', unsafe_allow_html=True)
     st.session_state["sub_menu_selection"] = sel
 
 # --- 4. RENDERING ---
