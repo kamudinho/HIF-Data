@@ -4,10 +4,9 @@ import numpy as np
 import re
 from data.data_load import _get_snowflake_conn
 
-# --- FORBEDRET KONTRAKT-BEREGNING ---
+# --- FORBEDRET KONTRAKT-BEREGNING (Rettet mod 20000-års fejlen) ---
 def beregn_aar(start, slut):
     try:
-        # Find det første 4-cifrede tal i strengen (f.eks. 2028 fra "30.06.2028")
         s_match = re.search(r'20\d{2}', str(start))
         e_match = re.search(r'20\d{2}', str(slut))
         
@@ -15,7 +14,7 @@ def beregn_aar(start, slut):
             s_year = int(s_match.group())
             e_year = int(e_match.group())
             diff = e_year - s_year
-            if 0 < diff < 10: # Sikkerhedstjek så vi ikke får 20000 år
+            if 0 < diff < 10:
                 return f"{slut} ({diff} år)"
     except:
         pass
@@ -28,7 +27,6 @@ def vis_alle_transfers(df):
     df_display['Dato'] = pd.to_datetime(df_display['TIMESTAMP']).dt.strftime('%d/%m-%Y')
     df_display['Transfer'] = df_display['SENESTE_KLUB'].fillna('?') + " ➔ " + df_display['KLUB'].fillna('?')
     
-    # Brug den nye beregnings-funktion
     df_display['Kontrakt'] = df_display.apply(
         lambda x: beregn_aar(x['KONTRAKT_START'], x['KONTRAKT_UDLOEB']), axis=1
     )
@@ -36,6 +34,7 @@ def vis_alle_transfers(df):
     cols_to_show = {
         'Dato': 'Dato',
         'NAVN': 'Spiller',
+        'POSITION': 'Pos',
         'Transfer': 'Transfer',
         'Kontrakt': 'Kontrakt',
         'KILDE': 'Kilde'
@@ -102,6 +101,7 @@ def vis_side(dp=None):
                             st.markdown(f"<div style='background:{col};color:white;text-align:center;border-radius:2px;font-weight:bold;font-size:10px;padding:2px;'>{res}</div><div style='text-align:center;font-size:9px;color:#444;margin-top:3px;line-height:1.1;'>{h_s}-{a_s}<br>{mod_kort.upper()}</div>", unsafe_allow_html=True)
             else: st.write("Sæson slut")
 
+    # KOLONNE 2: TRANSFERS (NU MED POSITION)
     with col2:
         st.caption("##### Transfers")
         with st.container(border=True):
@@ -113,7 +113,10 @@ def vis_side(dp=None):
                     df_t = df_t.sort_values('TS_CLEAN', ascending=False)
                     for _, r in df_t.head(8).iterrows():
                         ts_txt = r['TS_CLEAN'].strftime('%d/%m')
-                        st.markdown(f"<p style='font-size:10px;margin:0;line-height:1.4;'><span style='color:#888;'>{ts_txt}</span> <b>{r['KLUB']}</b>: {r['NAVN']}</p>", unsafe_allow_html=True)
+                        # Tilføjet POSITION i parentes her:
+                        pos = f" ({r['POSITION']})" if pd.notnull(r.get('POSITION')) else ""
+                        st.markdown(f"<p style='font-size:12px;margin:0;line-height:1.4;'><span style='color:#888;'>{ts_txt}</span> <b>{r['KLUB']}</b>: {r['NAVN']}{pos}</p>", unsafe_allow_html=True)
+                    
                     st.markdown("<div style='margin-top:12px;'></div>", unsafe_allow_html=True)
                     if st.button("Se alle transfers", use_container_width=True):
                         vis_alle_transfers(df_t)
