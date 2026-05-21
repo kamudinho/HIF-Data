@@ -116,26 +116,33 @@ if not st.session_state["logged_in"]:
 
 # --- 3. SIDEBAR NAVIGATION ---
 with st.sidebar:
-    # Tvinger indholdet helt op i toppen og definerer linje-stilen
+    # Denne blok fjerner ALT luft i toppen af sidebaren helt oppe fra system-niveau
     st.markdown("""
         <style>
-            /* Fjern luft i toppen af sidebaren */
-            [data-testid="stSidebarUserContent"] { padding-top: 0.5rem !important; }
-            
-            /* Juster margin på den vandrette linje */
+            /* 1. Fjern polstring i selve sidebar-containeren */
+            [data-testid="stSidebarUserContent"] {
+                padding-top: 0rem !important;
+                padding-bottom: 0rem !important;
+            }
+            /* 2. Fjern den hvide plads over ikonerne */
+            .sidebar-top-spacer {
+                margin-top: -60px; /* Juster dette tal hvis de skal endnu højere op */
+            }
+            /* 3. Custom linje med minimal luft */
             .custom-hr {
-                margin-top: -15px !important;
-                margin-bottom: 5px !important;
+                margin-top: 2px !important;
+                margin-bottom: 2px !important;
                 opacity: 0.2;
                 border: 0;
                 border-top: 1px solid #31333F;
             }
         </style>
-        <div style="margin-top: -40px;"></div>
+        <div class="sidebar-top-spacer"></div>
     """, unsafe_allow_html=True)
 
     # --- TOP IKONER (🏠 & 🔄) ---
-    icon_col1, icon_col2, icon_col3, icon_col4 = st.columns([1.5, 1, 1, 1.5])
+    # Vi bruger columns, men minimerer afstanden
+    icon_col1, icon_col2, icon_col3, icon_col4 = st.columns([1, 1, 1, 1])
     with icon_col2:
         if st.button("🏠", help="Gå til Forsiden"):
             st.session_state["main_menu_selection"] = "HVIDOVRE IF"
@@ -146,7 +153,7 @@ with st.sidebar:
             st.cache_data.clear()
             st.rerun()
 
-    # Den tætte linje under top-ikonerne
+    # Tæt linje under ikoner
     st.markdown('<hr class="custom-hr">', unsafe_allow_html=True)
 
     # --- STYLE DEFINITION FOR MENUER ---
@@ -181,10 +188,10 @@ with st.sidebar:
     )
     st.session_state["main_menu_selection"] = hoved_omraade
 
-    # Den tætte linje mellem de to menuer
+    # Tæt linje mellem menuer
     st.markdown('<hr class="custom-hr">', unsafe_allow_html=True)
 
-    # --- UNDERMENU LOGIK ---
+    # --- UNDERMENU ---
     menu_map = {
         "HVIDOVRE IF": ["Forside", "Oversigt", "Forecast"],
         "HOLDANALYSE": ["Modstanderanalyse", "Ligaoversigt", "Kampoversigt", "Afslutninger", "Fysisk data"],
@@ -200,7 +207,6 @@ with st.sidebar:
     if "sub_menu_selection" not in st.session_state or st.session_state["sub_menu_selection"] not in aktuel_undermenu:
         st.session_state["sub_menu_selection"] = aktuel_undermenu[0]
 
-    # Selve undermenuen
     sel = option_menu(
         None, 
         options=aktuel_undermenu,
