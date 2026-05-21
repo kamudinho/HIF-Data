@@ -19,10 +19,6 @@ def vis_side():
     except:
         seneste_emner = pd.DataFrame()
 
-    # --- 2. VELKOMST ---
-    st.write("Hvidovre IF - Performance Dashboard")
-    st.markdown("---")
-
     # --- 3. TOP SEKTION: MODSTANDER | TRANSFERS | EMNER ---
     col1, col2, col3 = st.columns(3)
     
