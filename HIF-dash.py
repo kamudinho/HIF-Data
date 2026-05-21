@@ -27,13 +27,10 @@ st.set_page_config(
 # Centraliseret CSS
 st.markdown(f"""
     <style>
-        <style>
-        /* Skjul Streamlit menu (de tre prikker) og deploy knappen */
         #MainMenu {{visibility: hidden;}}
         footer {{visibility: hidden;}}
-        header {{visibility: hidden;}} /* Dette fjerner hele top-bjælken */
+        header {{visibility: hidden;}} 
         
-        /* Dine eksisterende styles */
         .block-container {{ padding-top: 0.5rem !important; }}
         [data-testid="stHeader"] {{ background: rgba(0,0,0,0); }}
         
@@ -114,25 +111,19 @@ if not st.session_state["logged_in"]:
 
 # --- 3. SIDEBAR NAVIGATION ---
 with st.sidebar:
-    # CSS til at rykke alt helt op og styre det visuelle
     st.markdown("""
         <style>
-            /* Ryk indholdet helt til tops i sidebaren */
             [data-testid="stSidebarUserContent"] { padding-top: 0.5rem !important; }
             [data-testid="stSidebarNav"] { display: none; }
-            
-            /* Sørg for at den øverste ikon-menu ikke har baggrund */
             .nav-link { background-color: transparent !important; }
         </style>
     """, unsafe_allow_html=True)
 
-    # --- TOP IKONER (Kun Hjem & Ryd Cache) ---
-    # Vi bruger option_menu uden tekst (font-size: 0) for at få de rene Bootstrap ikoner
+    # --- TOP IKONER (Home & Clear) ---
     top_selection = option_menu(
         None, 
         options=["Home", "Clear"], 
-        icons=["house", "arrow-clockwise"], # Rene Bootstrap ikoner uden emoji-farver
-        menu_icon="cast", 
+        icons=["house", "arrow-clockwise"], 
         default_index=-1, 
         orientation="horizontal",
         styles={
@@ -143,7 +134,6 @@ with st.sidebar:
         }
     )
 
-    # Logik til top-ikonerne
     if top_selection == "Home":
         st.session_state["main_menu_selection"] = "HVIDOVRE IF"
         st.session_state["sub_menu_selection"] = "Forside"
@@ -164,7 +154,7 @@ with st.sidebar:
     hoved_omraade = option_menu(
         None, 
         options=synlige_hoved_options, 
-        icons=None, # FJERNET: Ingen ikoner her
+        icons=None, 
         default_index=0,
         key="main_menu_selection",
         styles={
@@ -177,11 +167,11 @@ with st.sidebar:
     def filtrer_menu(liste):
         return [o for o in liste if o.lower().strip() not in restriktioner]
 
-    # --- UNDERMENU LOGIK ---
     st.markdown("<div style='margin-top: 5px;'></div>", unsafe_allow_html=True)
 
+    # --- UNDERMENU LOGIK ---
     if hoved_omraade == "HVIDOVRE IF":
-        sel = option_menu(None, options=filtrer_menu(["Oversigt", "Forecast"]), key="sub_menu_selection")
+        sel = option_menu(None, options=filtrer_menu(["Forside", "Oversigt", "Forecast"]), key="sub_menu_selection")
     elif hoved_omraade == "HOLDANALYSE":
         sel = option_menu(None, options=filtrer_menu(["Modstanderanalyse", "Ligaoversigt", "Kampoversigt", "Afslutninger", "Fysisk data"]))
     elif hoved_omraade == "SPILLERANALYSE":
@@ -201,9 +191,8 @@ render_hif_header(f"{hoved_omraade}  |  {sel.upper()}")
 try:
     if hoved_omraade == "HVIDOVRE IF":
         if sel == "Forside":
-            # HER LINKES TIL DIN NYE FORSIDE
             import HIF_head as fh
-            fh.vis_side() # Sørg for at HIF-head.py har en funktion der hedder vis_side()
+            fh.vis_side() 
         else:
             dp_quick = hif_load.get_squad_only()
             if sel == "Oversigt":
@@ -230,7 +219,6 @@ try:
         elif sel == "Transfers":
             import tools.scouting.transfer_input as t_input
             t_input.vis_side()
-
     
     elif hoved_omraade == "SPILLERANALYSE":
         if sel == "Charts":
@@ -258,7 +246,6 @@ try:
             ma.vis_side()
 
     elif hoved_omraade == "TILPASNING":
-        # TILFØJET: Render logikken for Spiller-score under Tilpasning
         if sel == "Spillerdata":
             import tools.tilpasning.spiller_tilpasning as tilpasning
             tilpasning.vis_side()
@@ -270,14 +257,12 @@ try:
             std.vis_side()
 
     elif hoved_omraade == "TESTSIDE":
-        # TILFØJET: Render logikken for Spiller-score under Tilpasning
         if sel == "1. Div-tilpasning":
             import tools.tilpasning.div_tilpasning as div
             div.vis_side()
         elif sel == "Grafer":
             import tools.ligaen.dataviz as dviz
             dviz.vis_side()
-        
 
     elif hoved_omraade == "ADMIN":
         if sel == "System Log":
