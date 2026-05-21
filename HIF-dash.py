@@ -23,7 +23,7 @@ st.set_page_config(
     initial_sidebar_state="auto"
 )
 
-# Centraliseret CSS (Renset for UTF-8 fejl og dobbelt tags)
+# Centraliseret CSS
 st.markdown(f"""
     <style>
         #MainMenu {{visibility: hidden;}}
@@ -31,30 +31,7 @@ st.markdown(f"""
         header {{visibility: hidden;}} 
         
         .block-container {{ padding-top: 0.5rem !important; }}
-        [data-testid="stSidebarUserContent"] {{ padding-top: 0.5rem !important; }}
-        [data-testid="stSidebarNav"] {{ display: none; }}
         
-        /* Top-ikoner styling */
-        .stButton > button {{
-            border: none !important;
-            background-color: transparent !important;
-            color: #31333F !important;
-            font-size: 22px !important;
-            padding: -10px !important;
-            width: 100% !important;
-        }}
-        .stButton > button:hover {{
-            color: {HIF_ROD} !important;
-        }}
-        
-        /* Indrammet undermenu */
-        .sub-nav-container {{
-            border: 1px solid #ddd !important;
-            border-radius: 8px !important;
-            padding: 4px !important;
-            margin-top: 20px !important;
-        }}
-
         .hif-header-container {{
             background-color: {HIF_ROD};
             height: 50px;
@@ -116,55 +93,35 @@ if not st.session_state["logged_in"]:
 
 # --- 3. SIDEBAR NAVIGATION ---
 with st.sidebar:
-    # Aggressiv CSS til at fjerne scroll og styre layout
     st.markdown("""
         <style>
-            /* Fjern scrollbar i sidebaren */
+            /* Fjerner scrollbar og tvinger layout */
             [data-testid="stSidebarUserContent"] {
                 padding-top: 1rem !important;
-                overflow: hidden !important; /* Fjerner scroll helt */
+                overflow: hidden !important; 
                 display: flex;
                 flex-direction: column;
-                height: 95vh; /* Sætter en fast højde */
+                height: 98vh; 
             }
-            
-            /* Gør at menu-containeren fylder det meste, så knappen presses ned */
-            .nav-wrapper {
-                flex-grow: 1;
-            }
-
+            .nav-wrapper { flex-grow: 1; }
             .custom-hr {
-                margin-top: 5px !important;
-                margin-bottom: 5px !important;
+                margin: 5px 0px !important;
                 opacity: 0.2;
                 border: 0;
                 border-top: 1px solid #31333F;
             }
-            
-            /* Fjern Streamlits standard margin under knapper */
-            .stButton button {
-                margin-bottom: 10px !important;
-            }
         </style>
     """, unsafe_allow_html=True)
 
-    # Wrap menuerne i en div, der skubber bunden ned
     st.markdown('<div class="nav-wrapper">', unsafe_allow_html=True)
 
-    # --- STYLE DEFINITION FOR MENUER ---
     menu_style = {
         "container": {"padding": "0!important", "background-color": "transparent"},
-        "nav-link": {
-            "font-size": "14px", 
-            "text-align": "left", 
-            "margin": "0px", 
-            "color": "#31333F",
-            "border-radius": "4px"
-        },
+        "nav-link": {"font-size": "14px", "text-align": "left", "margin": "0px", "color": "#31333F", "border-radius": "4px"},
         "nav-link-selected": {"background-color": HIF_ROD, "color": "white"}
     }
 
-    # --- HOVEDMENU ---
+    # HOVEDMENU
     alle_omraader = ["HVIDOVRE IF", "HOLDANALYSE", "SPILLERANALYSE", "SCOUTING", "TILPASNING", "TESTSIDE", "ADMIN"]
     user_info = USER_DB.get(st.session_state["user"], {})
     restriktioner = [r.lower().strip() for r in user_info.get("restricted", [])]
@@ -183,7 +140,7 @@ with st.sidebar:
 
     st.markdown('<hr class="custom-hr">', unsafe_allow_html=True)
 
-    # --- UNDERMENU ---
+    # UNDERMENU LOGIK
     menu_map = {
         "HVIDOVRE IF": ["Forside", "Oversigt", "Forecast"],
         "HOLDANALYSE": ["Modstanderanalyse", "Ligaoversigt", "Kampoversigt", "Afslutninger", "Fysisk data"],
@@ -193,19 +150,27 @@ with st.sidebar:
         "TESTSIDE": ["1. Div-tilpasning", "Grafer"],
         "ADMIN": ["System Log", "Profil", "Datakatalog", "Konklusion", "Fysisk profil", "Hold: Fysisk profil", "Intern analyse", "Top 5: Spillere", "Ordbog"]
     }
+    
     aktuel_undermenu = [o for o in menu_map.get(hoved_omraade, ["Forside"]) if o.lower().strip() not in restriktioner]
     
+    # SIKKERHEDSTJEK: Undgå ValueError ved skift af hovedmenu
+    if "sub_menu_selection" not in st.session_state or st.session_state["sub_menu_selection"] not in aktuel_undermenu:
+        u_index = 0
+    else:
+        u_index = aktuel_undermenu.index(st.session_state["sub_menu_selection"])
+
     sel = option_menu(
         None, options=aktuel_undermenu,
         icons=["play-fill"] * len(aktuel_undermenu),
-        default_index=aktuel_undermenu.index(st.session_state.get("sub_menu_selection", aktuel_undermenu[0])),
-        key="sub_menu_widget", styles=menu_style
+        default_index=u_index,
+        key=f"sub_menu_{hoved_omraade}", 
+        styles=menu_style
     )
     st.session_state["sub_menu_selection"] = sel
 
-    st.markdown('</div>', unsafe_allow_html=True) # Lukker nav-wrapper
+    st.markdown('</div>', unsafe_allow_html=True) 
 
-    # --- BUND-SEKTION ---
+    # BUND-SEKTION
     st.markdown('<hr class="custom-hr">', unsafe_allow_html=True)
     if st.button("Clear Cache", use_container_width=True):
         st.cache_data.clear()
