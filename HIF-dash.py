@@ -3,6 +3,7 @@ import sys
 import streamlit as st
 from streamlit_option_menu import option_menu
 import pandas as pd
+import streamlit_antd_components as sac
 
 # Sikr at vi kan finde vores egne moduler
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -113,66 +114,48 @@ if not st.session_state["logged_in"]:
 
 # --- 3. SIDEBAR NAVIGATION ---
 with st.sidebar:
-    # Justeret CSS for balance mellem "top-align" og "luft"
+    # CSS til at rykke alt helt op og styre det visuelle
     st.markdown("""
         <style>
-            /* Fjern standard padding men tilføj en lille kontrolleret top-margin */
-            [data-testid="stSidebarUserContent"] {
-                padding-top: 1rem !important; 
-            }
-            
-            /* Skjul standard nav */
+            /* Ryk indholdet helt til tops i sidebaren */
+            [data-testid="stSidebarUserContent"] { padding-top: 0.5rem !important; }
             [data-testid="stSidebarNav"] { display: none; }
-
-            /* Centrer ikonerne */
-            div[data-testid="column"] {
-                display: flex;
-                justify-content: center;
-                align-items: center;
-            }
-
-            /* Styling af ikoner - tilføjer lidt luft omkring dem */
-            .stButton > button {
-                border: none !important;
-                background-color: transparent !important;
-                font-size: 22px !important;
-                padding: 10px !important; /* Giver knappen lidt fylde så den ikke er mast */
-                transition: 0.3s;
-            }
             
-            .stButton > button:hover {
-                background-color: rgba(255,255,255,0.1) !important;
-                border-radius: 10px;
-            }
-
-            /* Skab luft mellem ikoner og menu */
-            .menu-divider {
-                margin-top: 15px;
-                margin-bottom: 15px;
-                border-bottom: 1px solid rgba(49, 51, 63, 0.2);
-            }
+            /* Sørg for at den øverste ikon-menu ikke har baggrund */
+            .nav-link { background-color: transparent !important; }
         </style>
     """, unsafe_allow_html=True)
 
-    # --- CENTREREDE IKONER ØVERST ---
-    icon_col1, icon_col2, icon_col3, icon_col4 = st.columns([1.2, 1, 1, 1.2])
-    
-    with icon_col2:
-        if st.button("🏠", help="Gå til Forsiden"):
-            st.session_state["main_menu_selection"] = "HVIDOVRE IF"
-            st.session_state["sub_menu_selection"] = "Forside"
-            st.rerun()
-            
-    with icon_col3:
-        if st.button("🧹", help="Ryd cache"):
-            st.cache_data.clear()
-            st.cache_resource.clear()
-            st.rerun()
-    
-    # Kontrolleret afstandsholder i stedet for standard <hr>
-    st.markdown('<div class="menu-divider"></div>', unsafe_allow_html=True)
+    # --- TOP IKONER (Kun Hjem & Ryd Cache) ---
+    # Vi bruger option_menu uden tekst (font-size: 0) for at få de rene Bootstrap ikoner
+    top_selection = option_menu(
+        None, 
+        options=["Home", "Clear"], 
+        icons=["house", "arrow-clockwise"], # Rene Bootstrap ikoner uden emoji-farver
+        menu_icon="cast", 
+        default_index=-1, 
+        orientation="horizontal",
+        styles={
+            "container": {"padding": "0!important", "background-color": "transparent", "border": "none"},
+            "icon": {"color": "#31333F", "font-size": "20px"},
+            "nav-link": {"font-size": "0px", "text-align": "center", "margin":"0px"},
+            "nav-link-selected": {"background-color": "transparent", "color": "#df003b"}, 
+        }
+    )
 
-    # --- HOVEDMENU ---
+    # Logik til top-ikonerne
+    if top_selection == "Home":
+        st.session_state["main_menu_selection"] = "HVIDOVRE IF"
+        st.session_state["sub_menu_selection"] = "Forside"
+        st.rerun()
+    elif top_selection == "Clear":
+        st.cache_data.clear()
+        st.cache_resource.clear()
+        st.rerun()
+
+    st.markdown("<hr style='margin: 10px 0px; opacity: 0.2;'>", unsafe_allow_html=True)
+
+    # --- HOVEDMENU (UDEN IKONER) ---
     alle_omraader = ["HVIDOVRE IF", "HOLDANALYSE", "SPILLERANALYSE", "SCOUTING", "TILPASNING", "TESTSIDE", "ADMIN"]
     user_info = USER_DB.get(st.session_state["user"], {})
     restriktioner = [r.lower().strip() for r in user_info.get("restricted", [])]
@@ -181,12 +164,13 @@ with st.sidebar:
     hoved_omraade = option_menu(
         None, 
         options=synlige_hoved_options, 
+        icons=None, # FJERNET: Ingen ikoner her
         default_index=0,
         key="main_menu_selection",
         styles={
-            "container": {"padding": "5px !important", "background-color": "transparent"},
-            "nav-link": {"font-size": "14px", "text-align": "left", "margin":"5px 0px", "padding": "10px"},
-            "nav-link-selected": {"background-color": "#df003b"} # HIF Rød
+            "container": {"padding": "0!important", "background-color": "transparent"},
+            "nav-link": {"font-size": "14px", "text-align": "left", "margin":"0px", "color": "#31333F"},
+            "nav-link-selected": {"background-color": "#df003b", "color": "white"}
         }
     )
 
@@ -194,12 +178,10 @@ with st.sidebar:
         return [o for o in liste if o.lower().strip() not in restriktioner]
 
     # --- UNDERMENU LOGIK ---
-    # Vi tilføjer lidt afstand før undermenuen for at undgå det komprimerede look
-    st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='margin-top: 5px;'></div>", unsafe_allow_html=True)
 
     if hoved_omraade == "HVIDOVRE IF":
-        sel = option_menu(None, options=filtrer_menu(["Oversigt", "Forecast"]), 
-                         key="sub_menu_selection", orientation="vertical")
+        sel = option_menu(None, options=filtrer_menu(["Oversigt", "Forecast"]), key="sub_menu_selection")
     elif hoved_omraade == "HOLDANALYSE":
         sel = option_menu(None, options=filtrer_menu(["Modstanderanalyse", "Ligaoversigt", "Kampoversigt", "Afslutninger", "Fysisk data"]))
     elif hoved_omraade == "SPILLERANALYSE":
@@ -212,7 +194,8 @@ with st.sidebar:
         sel = option_menu(None, options=filtrer_menu(["1. Div-tilpasning", "Grafer"]))
     elif hoved_omraade == "ADMIN":
         sel = option_menu(None, options=filtrer_menu(["System Log", "Profil", "Datakatalog", "Konklusion", "Fysisk profil", "Hold: Fysisk profil", "Intern analyse", "Top 5: Spillere", "Ordbog"]))
-        # --- 4. DATA LOADING & RENDERING ---
+        
+# --- 4. DATA LOADING & RENDERING ---
 render_hif_header(f"{hoved_omraade}  |  {sel.upper()}")
 
 try:
