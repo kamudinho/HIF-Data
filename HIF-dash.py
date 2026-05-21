@@ -120,11 +120,11 @@ with st.sidebar:
     st.markdown("""
         <style>
             /* Fjern luft i toppen af sidebaren */
-            [data-testid="stSidebarUserContent"] { padding-top: -2.5rem !important; }
+            [data-testid="stSidebarUserContent"] { padding-top: 0.5rem !important; }
             
             /* Juster margin på den vandrette linje */
             .custom-hr {
-                margin-top: 5px !important;
+                margin-top: -15px !important;
                 margin-bottom: 5px !important;
                 opacity: 0.2;
                 border: 0;
