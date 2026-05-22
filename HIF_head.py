@@ -76,6 +76,14 @@ def apply_custom_style():
             .new-club { font-weight: 700; text-align: right; }
         </style>
     """, unsafe_allow_html=True)
+
+div.stButton > button {
+    padding: 2px 10px !important;
+    font-size: 11px !important;
+    height: auto !important;
+    min-height: 25px !important;
+    margin-top: 5px;
+}
     
 def vis_side():
     apply_custom_style()
