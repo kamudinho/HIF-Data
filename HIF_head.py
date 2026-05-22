@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+from urllib.parse import urlparse # Til at forkorte links
 from data.utils.team_mapping import TEAMS
 from data.data_load import _get_snowflake_conn
 
@@ -29,7 +30,6 @@ def apply_custom_style():
             
             .title-date { color: #888; font-weight: 500; text-transform: none; font-size: 11px; }
 
-            /* Stats Tabel uden linjer overhovedet */
             .stats-table {
                 width: 95%;
                 font-size: 10px;
@@ -43,7 +43,6 @@ def apply_custom_style():
             .stats-label { color: #666; font-weight: 500; }
             .stats-value { text-align: right; font-weight: 700; color: #111; }
 
-            /* Form / Legends med ekstra luft i bunden */
             .form-wrapper {
                 display: flex;
                 justify-content: space-between;
@@ -82,7 +81,17 @@ def apply_custom_style():
         </style>
     """, unsafe_allow_html=True)
 
-# Dialog-boks funktionen
+# Hjælpefunktion til at forkorte URL'er
+def shorten_url(url):
+    if pd.isna(url) or str(url).strip() == "":
+        return ""
+    try:
+        domain = urlparse(str(url)).netloc
+        return domain.replace('www.', '')
+    except:
+        return str(url)
+
+# Dialog-boks funktionen med forkortede links
 @st.dialog("Alle Transfers", width="large")
 def vis_transfer_dialog(df):
     cols_to_show = {
@@ -94,9 +103,39 @@ def vis_transfer_dialog(df):
         'LÆNGDE': 'Længde',
         'KILDE': 'Kilde'
     }
-    existing_cols = {k: v for k, v in cols_to_show.items() if k in df.columns}
-    df_final = df.sort_values('TS_SORT', ascending=False).rename(columns=existing_cols)
-    st.dataframe(df_final[list(existing_cols.values())], hide_index=True, use_container_width=True)
+    
+    # Præparer data til visning
+    df_display = df.copy()
+    
+    # Forkort linket i 'KILDE' kolonnen før visning
+    if 'KILDE' in df_display.columns:
+        df_display['KILDE_DISPLAY'] = df_display['KILDE'].apply(shorten_url)
+    
+    # Find eksisterende kolonner og omdøb
+    existing_cols = {k: v for k, v in cols_to_show.items() if k in df_display.columns}
+    
+    # Omdøb KILDE til KILDE_URL for at bevare linket, men vis KILDE_DISPLAY
+    df_final = df_display.sort_values('TS_SORT', ascending=False)
+    
+    # Vi bruger st.column_config til at gøre linket klikbart, selvom teksten er kort
+    st.dataframe(
+        df_final,
+        column_order=(list(existing_cols.keys())[:-1] + ['KILDE']), 
+        column_config={
+            "TIMESTAMP": "Dato",
+            "NAVN": "Spiller",
+            "FRA_KLUB": "Fra",
+            "KLUB": "Til",
+            "KONTRAKT_START": "Start",
+            "LÆNGDE": "Længde",
+            "KILDE": st.column_config.LinkColumn(
+                "Kilde",
+                display_text=r'^https?://(?:www\.)?([^/?#]+)' # Regex der kun viser domænet
+            ),
+        },
+        hide_index=True,
+        use_container_width=True
+    )
 
 def vis_side(dp=None):
     apply_custom_style()
@@ -105,15 +144,13 @@ def vis_side(dp=None):
 
     DB, LIGA_UUID, HIF_UUID = "KLUB_HVIDOVREIF.AXIS", "dyjr458hcmrcy87fsabfsy87o", "8GXD9RY2580PU1B1DD5NY9YMY"
     
-    # --- DATA PREP ---
+    # (Data load og Næste kamp sektion er uændret...)
     sql = f"SELECT * FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'"
     df_matches = conn.query(sql) if hasattr(conn, 'query') else pd.read_sql(sql, conn)
     if df_matches is None or df_matches.empty: return
-
     df_matches.columns = [str(c).upper() for c in df_matches.columns]
     hif_id = HIF_UUID.strip().upper()
     opta_to_name = {str(v['opta_uuid']).strip().upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
-    
     df_matches['MATCH_DATE_FULL'] = pd.to_datetime(df_matches['MATCH_DATE_FULL'], errors='coerce')
     hif_m = df_matches[(df_matches['CONTESTANTHOME_OPTAUUID'].str.upper() == hif_id) | (df_matches['CONTESTANTAWAY_OPTAUUID'].str.upper() == hif_id)].copy()
     
@@ -140,7 +177,6 @@ def vis_side(dp=None):
                     st.markdown(f"""<table class='stats-table'><tr><td class='stats-label'>Mål f/i</td><td class='stats-value'>1.4/1.1</td></tr><tr><td class='stats-label'>xG f/i</td><td class='stats-value'>1.5/1.2</td></tr><tr><td class='stats-label'>Poss.</td><td class='stats-value'>52%</td></tr></table>""", unsafe_allow_html=True)
                 
                 st.markdown(f"<div style='font-size:10px; color:#888; font-weight:700; margin-top:14px; text-transform:uppercase;'>Form: {opp_name}</div>", unsafe_allow_html=True)
-                # Form logik...
                 opp_m = df_matches[((df_matches['CONTESTANTHOME_OPTAUUID'] == opp_id) | (df_matches['CONTESTANTAWAY_OPTAUUID'] == opp_id)) & (df_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False))].sort_values('MATCH_DATE_FULL', ascending=False).head(5)
                 if not opp_m.empty:
                     f_items = ""
@@ -153,7 +189,7 @@ def vis_side(dp=None):
                         f_items += f"<div class='form-column'><div class='res-pill' style='background:{res_col};'>{h_s}-{a_s}</div><img src='{o_logo}' class='legend-logo'></div>"
                     st.markdown(f"<div class='form-wrapper'>{f_items}</div>", unsafe_allow_html=True)
 
-    # 2. TRANSFERS (Med rigtig Popup boks)
+    # 2. TRANSFERS 
     with col2:
         with st.container(border=True):
             st.markdown('<div class="card-title"><span>TRANSFERS</span></div>', unsafe_allow_html=True)
