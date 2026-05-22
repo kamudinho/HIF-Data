@@ -114,9 +114,11 @@ def vis_side():
         with st.form("full_transfer_form", clear_on_submit=True):
             is_disabled = not sel_id
             
-            skift_udland = st.checkbox("Skifter til udlandet")
-            skift_klubloes = st.checkbox("Ukendt") # NY
-
+            # --- NYT: Checkbokse på samme linje ---
+            c1, c2 = st.columns(2)
+            skift_udland = c1.checkbox("Skifter til udlandet", disabled=is_disabled)
+            skift_klubloes = c2.checkbox("Ukendt", disabled=is_disabled)
+            
             hold_liste = sorted(df_alle_hold['TEAMNAME'].tolist()) if df_alle_hold is not None else []
             ny_klub = st.selectbox("Ny klub", hold_liste, disabled=(is_disabled or skift_udland or skift_klubloes))
             
