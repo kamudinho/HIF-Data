@@ -21,7 +21,7 @@ def apply_custom_style():
 
             .card-title {
                 color: #1a1a1a;
-                font-size: 13px;
+                font-size: 10px;
                 font-weight: 700;
                 margin-bottom: 12px;
                 text-transform: uppercase;
