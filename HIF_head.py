@@ -124,16 +124,22 @@ def vis_side():
         with col:
             metric_cfg = metrics[i]
             st.caption(f"**{metric_cfg['name']}**")
-            y_domain = [0, 100] if metric_cfg['name'] == "Possession" else [0, None]
             
-            # Linje + Gennemsnitslinje
+            # Vi undgår 'None' ved at lade Altair styre domænet for 'high' værdier
+            # Vi bruger 'zero=True' til at fiksere bunden
+            y_scale = alt.Scale(zero=True)
+            
+            # Basis-graf (linjen)
             line = alt.Chart(hif_recent).mark_line(color='#111', strokeWidth=2).encode(
-                x=alt.X('index:Q', axis=alt.Axis(domain=True, grid=False, labels=False, ticks=False, title=None), scale=alt.Scale(domain=[0, 32])),
-                y=alt.Y(f'{metric_cfg["col"]}:Q', axis=alt.Axis(domain=True, grid=False, labels=False, ticks=False, title=None), scale=alt.Scale(domain=y_domain, zero=True))
+                x=alt.X('index:Q', axis=alt.Axis(domain=True, grid=False, labels=False, ticks=False, title=None)),
+                y=alt.Y(f'{metric_cfg["col"]}:Q', axis=alt.Axis(domain=True, grid=False, labels=False, ticks=False, title=None), scale=y_scale)
             )
+            
+            # Gennemsnitslinje
             rule = alt.Chart(hif_recent).mark_rule(color='#ccc', strokeDash=[3,3]).encode(
                 y=f'mean({metric_cfg["col"]}):Q'
             )
+            
             st.altair_chart(line + rule, use_container_width=True)
 
 if __name__ == "__main__":
