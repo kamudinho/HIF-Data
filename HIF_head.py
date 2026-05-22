@@ -222,7 +222,6 @@ def vis_side():
             hif_m = df_matches[(df_matches['CONTESTANTHOME_OPTAUUID'].str.upper() == HIF_UUID.strip().upper()) | 
                                (df_matches['CONTESTANTAWAY_OPTAUUID'].str.upper() == HIF_UUID.strip().upper())]
             
-            # Find næste kamp baseret på kalenderen (dags dato eller frem i tiden)
             today = pd.Timestamp.today().normalize()
             future = hif_m[hif_m['MATCH_DATE_FULL'] >= today].sort_values('MATCH_DATE_FULL')
 
@@ -233,45 +232,48 @@ def vis_side():
 
                 st.markdown(f"<div class='card-title'><span>NÆSTE KAMP vs. {opp_name.upper()}</span><span class='title-date'>{nk['MATCH_DATE_FULL'].strftime('%d/%m')}</span></div>", unsafe_allow_html=True)
 
-                t_l, t_r = st.columns([1, 1.2]) 
-                with t_l:
-                    c1, c2, c3 = st.columns([1, 0.8, 1])
-                    c1.image(TEAMS.get("Hvidovre", {}).get("logo", ""), width=38)
-                    c2.markdown("<div style='text-align:center; padding-top:10px; font-size:9px; color:#888;'>VS</div>", unsafe_allow_html=True)
-                    c3.image(TEAMS.get(opp_name, {}).get("logo", ""), width=38)
+                # --- 1. CENTRERET LOGO-SEKTION ---
+                # Vi bruger usynlige spacer-kolonner i siderne for at tvinge logoerne ind mod midten
+                c_space1, c_logo_hif, c_vs, c_logo_opp, c_space2 = st.columns([1, 1.5, 1, 1.5, 1])
+                with c_logo_hif:
+                    st.image(TEAMS.get("Hvidovre", {}).get("logo", ""), width=45)
+                with c_vs:
+                    st.markdown("<div style='text-align:center; padding-top:12px; font-size:10px; font-weight:bold; color:#888;'>VS</div>", unsafe_allow_html=True)
+                with c_logo_opp:
+                    st.image(TEAMS.get(opp_name, {}).get("logo", ""), width=45)
                 
-                # Beregn data til sammenligning
+                # --- 2. BEREGN STATS ---
                 hif_stats = beregn_hold_stats(df_stats, HIF_UUID)
                 opp_stats = beregn_hold_stats(df_stats, opp_id)
 
-                with t_r:
-                    stats_html = f"""
-                    <table class='stats-table'>
-                        <tr>
-                            <td class='stats-label' style='padding-bottom: 4px;'></td>
-                            <td class='stats-value' style='font-size:8px; color:#dc3545; padding-bottom: 4px;'>HIF</td>
-                            <td class='stats-value' style='font-size:8px; color:#666; padding-bottom: 4px;'>{opp_name[:3].upper()}</td>
-                        </tr>
-                        <tr>
-                            <td class='stats-label'>Mål f/i</td>
-                            <td class='stats-value'>{hif_stats['gf']}/{hif_stats['ga']}</td>
-                            <td class='stats-value'>{opp_stats['gf']}/{opp_stats['ga']}</td>
-                        </tr>
-                        <tr>
-                            <td class='stats-label'>xG f/i</td>
-                            <td class='stats-value'>{hif_stats['xgf']}/{hif_stats['xga']}</td>
-                            <td class='stats-value'>{opp_stats['xgf']}/{opp_stats['xga']}</td>
-                        </tr>
-                        <tr>
-                            <td class='stats-label'>Poss.</td>
-                            <td class='stats-value'>{hif_stats['poss']}</td>
-                            <td class='stats-value'>{opp_stats['poss']}</td>
-                        </tr>
-                    </table>
-                    """
-                    st.markdown(stats_html, unsafe_allow_html=True)
+                # --- 3. METRICS NEDENFOR (Fuld bredde) ---
+                stats_html = f"""
+                <table class='stats-table' style='margin-top: 15px; width: 100%;'>
+                    <tr>
+                        <td class='stats-label' style='text-align: left; width: 34%; border-bottom: 1px solid #eee;'></td>
+                        <td class='stats-value' style='text-align: center; font-size:10px; color:#dc3545; width: 33%; border-bottom: 1px solid #eee; padding-bottom: 4px;'>HIF</td>
+                        <td class='stats-value' style='text-align: center; font-size:10px; color:#666; width: 33%; border-bottom: 1px solid #eee; padding-bottom: 4px;'>{opp_name[:3].upper()}</td>
+                    </tr>
+                    <tr>
+                        <td class='stats-label' style='text-align: left;'>Mål f/i</td>
+                        <td class='stats-value' style='text-align: center;'>{hif_stats['gf']}/{hif_stats['ga']}</td>
+                        <td class='stats-value' style='text-align: center;'>{opp_stats['gf']}/{opp_stats['ga']}</td>
+                    </tr>
+                    <tr>
+                        <td class='stats-label' style='text-align: left;'>xG f/i</td>
+                        <td class='stats-value' style='text-align: center;'>{hif_stats['xgf']}/{hif_stats['xga']}</td>
+                        <td class='stats-value' style='text-align: center;'>{opp_stats['xgf']}/{opp_stats['xga']}</td>
+                    </tr>
+                    <tr>
+                        <td class='stats-label' style='text-align: left;'>Poss.</td>
+                        <td class='stats-value' style='text-align: center;'>{hif_stats['poss']}</td>
+                        <td class='stats-value' style='text-align: center;'>{opp_stats['poss']}</td>
+                    </tr>
+                </table>
+                """
+                st.markdown(stats_html, unsafe_allow_html=True)
 
-                # Seneste 5 kampe for modstanderen (Form-guide)
+                # --- 4. FORM GUIDE / LEGENDS ---
                 opp_m = df_matches[((df_matches['CONTESTANTHOME_OPTAUUID'] == opp_id) | (df_matches['CONTESTANTAWAY_OPTAUUID'] == opp_id)) & (df_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False))].sort_values('MATCH_DATE_FULL', ascending=False).head(5)
                 if not opp_m.empty:
                     f_items = ""
