@@ -115,7 +115,7 @@ def vis_side():
             is_disabled = not sel_id
             
             skift_udland = st.checkbox("Skifter til udlandet")
-            skift_klubloes = st.checkbox("Kontrakt ophørt / Klubløs") # NY
+            skift_klubloes = st.checkbox("Ukendt") # NY
 
             hold_liste = sorted(df_alle_hold['TEAMNAME'].tolist()) if df_alle_hold is not None else []
             ny_klub = st.selectbox("Ny klub", hold_liste, disabled=(is_disabled or skift_udland or skift_klubloes))
@@ -166,7 +166,7 @@ def vis_side():
         
         # Tilføj "Klubløs" til menuen
         faner = list(COMP_MAP.values()) + ["Udlandet", "Klubløs"] 
-        liga_valg = st.segmented_control("Vælg liga", faner, default="Betinia Ligaen")
+        liga_valg = st.segmented_control("Vælg liga", faner, default="Betinia Liga")
     
         if liga_valg == "Klubløs":
             st.write("### Klubløse spillere")
