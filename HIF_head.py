@@ -74,5 +74,3 @@ def vis_side():
     with col3:
         with st.container(border=True):
             st.markdown('<div class="card-title">SCOUTING</div>', unsafe_allow_html=True)
-
-vis_side()
