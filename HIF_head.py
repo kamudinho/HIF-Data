@@ -237,49 +237,43 @@ def vis_side():
                 opp_id = nk['CONTESTANTAWAY_OPTAUUID'] if str(nk['CONTESTANTHOME_OPTAUUID']).upper() == HIF_UUID.strip().upper() else nk['CONTESTANTHOME_OPTAUUID']
                 opp_name = opta_to_name.get(str(opp_id).upper(), "Ukendt")
 
-                # --- NYT CARD-TITLE MED LOGOER ---
-                hif_logo = TEAMS.get("Hvidovre", {}).get("logo", "")
-                opp_logo = TEAMS.get(opp_name, {}).get("logo", "")
-                
-                st.markdown(f"""
-                    <div class='card-title' style='align-items: center; padding-bottom: 12px;'>
-                        <div style='display: flex; align-items: center; gap: 8px;'>
-                            <img src='{hif_logo}' style='width: 20px; height: 20px; object-fit: contain;'>
-                            <span>VS</span>
-                            <img src='{opp_logo}' style='width: 20px; height: 20px; object-fit: contain;'>
-                        </div>
-                        <span class='title-date'>{nk['MATCH_DATE_FULL'].strftime('%d/%m')}</span>
-                    </div>
-                """, unsafe_allow_html=True)
+                # --- 1. GENETABLERET OVERSKRIFT ---
+                st.markdown(f"<div class='card-title'><span>NÆSTE KAMP vs. {opp_name.upper()}</span><span class='title-date'>{nk['MATCH_DATE_FULL'].strftime('%d/%m')}</span></div>", unsafe_allow_html=True)
 
-                # --- BEREGN STATS ---
+                # --- 2. BEREGN STATS ---
                 hif_stats = beregn_hold_stats(df_stats, HIF_UUID)
                 opp_stats = beregn_hold_stats(df_stats, opp_id)
+                
+                hif_logo = TEAMS.get("Hvidovre", {}).get("logo", "")
+                opp_logo = TEAMS.get(opp_name, {}).get("logo", "")
 
-                # --- METRICS NEDENFOR ---
+                # --- 3. TABEL MED LOGOER ---
                 stats_html = f"""
                 <table class='stats-table' style='width: 100%;'>
                     <tr>
-                        <td class='stats-label' style='text-align: left; width: 34%;'></td>
-                        <td class='stats-value' style='text-align: center; font-size:10px; color:#dc3545; width: 33%; border-bottom: 1px solid #eee; padding-bottom: 4px;'>HIF</td>
-                        <td class='stats-value' style='text-align: center; font-size:10px; color:#666; width: 33%; border-bottom: 1px solid #eee; padding-bottom: 4px;'>{opp_name[:3].upper()}</td>
+                        <td style='width: 34%;'></td>
+                        <td style='text-align: center; width: 33%; border-bottom: 1px solid #eee; padding-bottom: 4px;'>
+                            <img src='{hif_logo}' style='width: 22px; height: 22px; object-fit: contain;'>
+                        </td>
+                        <td style='text-align: center; width: 33%; border-bottom: 1px solid #eee; padding-bottom: 4px;'>
+                            <img src='{opp_logo}' style='width: 22px; height: 22px; object-fit: contain;'>
+                        </td>
                     </tr>
                     <tr>
-                        <td class='stats-label' style='text-align: left;'>Possession.</td>
-                        <td class='stats-value' style='text-align: center;'>{hif_stats['poss']}</td>
-                        <td class='stats-value' style='text-align: center;'>{opp_stats['poss']}</td>
-                    </tr>
-                    <tr>
-                        <td class='stats-label' style='text-align: left;'>Mål for/imod</td>
+                        <td class='stats-label' style='text-align: left;'>Mål f/i</td>
                         <td class='stats-value' style='text-align: center;'>{hif_stats['gf']}/{hif_stats['ga']}</td>
                         <td class='stats-value' style='text-align: center;'>{opp_stats['gf']}/{opp_stats['ga']}</td>
                     </tr>
                     <tr>
-                        <td class='stats-label' style='text-align: left;'>xG for/imod</td>
+                        <td class='stats-label' style='text-align: left;'>xG f/i</td>
                         <td class='stats-value' style='text-align: center;'>{hif_stats['xgf']}/{hif_stats['xga']}</td>
                         <td class='stats-value' style='text-align: center;'>{opp_stats['xgf']}/{opp_stats['xga']}</td>
                     </tr>
-                    
+                    <tr>
+                        <td class='stats-label' style='text-align: left;'>Poss.</td>
+                        <td class='stats-value' style='text-align: center;'>{hif_stats['poss']}</td>
+                        <td class='stats-value' style='text-align: center;'>{opp_stats['poss']}</td>
+                    </tr>
                 </table>
                 """
                 st.markdown(stats_html, unsafe_allow_html=True)
