@@ -177,20 +177,13 @@ def vis_side():
             
             if not trup_andet.empty:
                 # Sorterer og viser kun relevante kolonner
-                vis_trup = trup_andet[['NAVN', 'KLUB', 'POSITION', 'SENESTE_KLUB']].sort_values(by="NAVN")
+                vis_trup = trup_andet[['NAVN', 'POSITION', 'SENESTE_KLUB', 'KLUB',]].sort_values(by="NAVN")
                 st.dataframe(vis_trup, hide_index=True, use_container_width=True)
             else:
                 st.info("Ingen spillere registreret i 'Andet' kategorien.")
             
             trup_udland = df_csv[df_csv['UDLANDET'].astype(str) == "True"][['NAVN', 'POSITION', 'PLAYER_WYID', 'SENESTE_KLUB', 'TIMESTAMP']]
             
-            if not trup_udland.empty:
-                vis_trup = trup_udland.sort_values(by="TIMESTAMP", ascending=False).drop(columns=['TIMESTAMP'])
-                # hide_index=True fjerner de grå numre
-                st.dataframe(vis_trup, hide_index=True, use_container_width=True)
-            else:
-                st.info("Ingen spillere registreret i udlandet.")
-
         elif liga_valg == "Betinia Ligaen":
             df_csv_vis = df_csv[df_csv['UDLANDET'].astype(str) != "True"]
             hold_i_csv = sorted(df_csv_vis[df_csv_vis['COMPETITION_WYID'] == 328]['KLUB'].unique().tolist())
