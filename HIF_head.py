@@ -218,8 +218,7 @@ def vis_side():
                         x=alt.X('index:O', axis=None),
                         y=alt.Y(f'{col_name}:Q', axis=None, scale=alt.Scale(zero=False)),
                         tooltip=[
-                            alt.Tooltip('MODSTANDER', title='Modstander'),
-                            alt.Tooltip('H_U', title='H/U'),
+                            alt.Tooltip('MODSTANDER (H_U)', title='Modstander', 'H/U'),
                             alt.Tooltip(col_name, title=metrics[idx]['name'], format=metrics[idx]['fmt'])
                         ]
                     ).properties(height=120)
