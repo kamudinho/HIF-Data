@@ -3,6 +3,7 @@ import pandas as pd
 import datetime
 from data.utils.team_mapping import TEAMS
 from data.data_load import _get_snowflake_conn
+import altair as alt
 
 # --- DIALOG-BOKS (Skal defineres øverst) ---
 @st.dialog("Alle Transfers", width="large")
@@ -365,22 +366,32 @@ def vis_side():
     ]
 
     for i, col in enumerate(trend_cols):
-        with col:
-            metric_cfg = metrics[i]
-            st.caption(f"**{metric_cfg['name']}**")
-            
-            # 1. Hent data, men fjern alle rækker hvor værdien er 0 (eller tomme kampe)
-            # Da nogle stats (som mål) kan være 0, bør vi filtrere baseret på index/længde
-            data = hif_recent[[metric_cfg['col']]].copy()
-            
-            # 2. Possession-fix med renset data
-            if metric_cfg['name'] == "Possession":
-                # Vi bruger kun de faktiske spillede kampe
-                plot_data = data[data[metric_cfg['col']] > 0]
-                
-                st.line_chart(plot_data, height=100)
-            else:
-                st.line_chart(data, height=100)
+    with col:
+        metric_cfg = metrics[i]
+        st.caption(f"**{metric_cfg['name']}**")
+        
+        # Vi definerer rammerne for grafen
+        # Y-akse: 0-100 for Possession, ellers auto. X-akse: 0-32
+        y_scale = [0, 100] if metric_cfg['name'] == "Possession" else None
+        
+        chart = alt.Chart(hif_recent).mark_line(color='#111', strokeWidth=2).encode(
+            x=alt.X('index:Q', axis=alt.Axis(
+                domain=True,    # Viser "L"-linjen
+                grid=False,     # Fjerner gridlines
+                labels=False,   # Fjerner tal
+                ticks=False,    # Fjerner små streger
+                title=None
+            ), scale=alt.Scale(domain=[0, 32])),
+            y=alt.Y(f'{metric_cfg["col"]}:Q', axis=alt.Axis(
+                domain=True,    # Viser "L"-linjen
+                grid=False,     # Fjerner gridlines
+                labels=False,   # Fjerner tal
+                ticks=False,    # Fjerner små streger
+                title=None
+            ), scale=alt.Scale(domain=y_scale if y_scale else None))
+        ).properties(height=100)
+        
+        st.altair_chart(chart, use_container_width=True)
                 
 # Til sidst: Sørg for at kalde funktionen, når filen indlæses
 if __name__ == "__main__":
