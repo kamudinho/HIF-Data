@@ -97,20 +97,20 @@ def vis_transfer_dialog(df):
     df_display = df_display.sort_values('TS_SORT', ascending=False)
     df_display['Dato'] = df_display['TS_SORT'].dt.strftime('%d/%m-%Y')
     
-    # 2. Spiller med position: "Navn (Pos)"
-    # Antager kolonnen hedder 'POSITION' - hvis den hedder noget andet, ret venligst her
-    df_display['Spiller'] = df_display['NAVN'] + " (" + df_display['POSITION'].fillna('-') + ")"
+    # 2. Spiller med position (Tjek om kolonnen hedder POSITION eller POS)
+    pos_col = 'POSITION' if 'POSITION' in df_display.columns else 'POS'
+    df_display['Spiller'] = df_display['NAVN'] + " (" + df_display.get(pos_col, '-').fillna('-') + ")"
 
-    # 3. Logo-logik
-    def get_logo(klub_navn):
-        return TEAMS.get(klub_navn, {}).get("logo", "")
+    # 3. Logo-logik (Sikker opslag)
+    def get_logo(navn):
+        if pd.isna(navn): return ""
+        return TEAMS.get(navn, {}).get("logo", "")
 
     df_display['Logo_Fra'] = df_display['SENESTE_KLUB'].apply(get_logo)
     df_display['Logo_Til'] = df_display['KLUB'].apply(get_logo)
 
-    # 4. Kontrakt
-    # (Beholder din eksisterende logik)
-    df_display['Kontrakt'] = df_display.apply(lambda row: str(row.get('KONTRAKT_UDLOEB', '')), axis=1)
+    # 4. Skifte kolonne (Visuelt: Fra -> Til)
+    df_display['SKIFTE'] = df_display['SENESTE_KLUB'] + " ➔ " + df_display['KLUB']
 
     # 5. Tabel visning
     st.dataframe(
@@ -118,9 +118,9 @@ def vis_transfer_dialog(df):
         column_order=[
             'Dato', 
             'Spiller', 
-            'Logo_Fra', 'SENESTE_KLUB', 
-            'Logo_Til', 'KLUB', 
-            'Kontrakt', 
+            'Logo_Fra', 
+            'SKIFTE', 
+            'Logo_Til', 
             'KILDE'
         ],
         column_config={
@@ -128,7 +128,7 @@ def vis_transfer_dialog(df):
             "Spiller": st.column_config.Column("Spiller (Pos)", width="medium"),
             "Logo_Fra": st.column_config.ImageColumn("Fra", width="small"),
             "Logo_Til": st.column_config.ImageColumn("Til", width="small"),
-            "KILDE": st.column_config.LinkColumn("Kilde", display_text="Se kilde"),
+            "KILDE": st.column_config.LinkColumn("Kilde", display_text="Link"),
         },
         hide_index=True,
         use_container_width=True
