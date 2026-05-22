@@ -123,7 +123,7 @@ def vis_side(dp=None):
                     c1.image(TEAMS.get("Hvidovre", {}).get("logo", ""), width=42)
                     c2.markdown(f"<div style='text-align:center; padding-top:3px;'><b>VS</b><br><small>{nk['MATCH_DATE_FULL'].strftime('%d/%m')}</small></div>", unsafe_allow_html=True)
                     c3.image(TEAMS.get(opp_name, {}).get("logo", ""), width=42)
-                    st.markdown(f"<div style='text-align:center; font-size:12px; font-weight:700; margin-top:8px;'>{opp_name}</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div style='text-align:center; font-size:8px; font-weight:700; margin-top:8px;'>{opp_name}</div>", unsafe_allow_html=True)
                 
                 with t_r:
                     st.markdown(f"""
