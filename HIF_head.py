@@ -97,12 +97,11 @@ def vis_transfer_dialog(df):
     df_display = df_display.sort_values('TS_SORT', ascending=False)
     df_display['Dato'] = df_display['TS_SORT'].dt.strftime('%d/%m-%Y')
     
-    # 2. Navn + Position
-    # Antager at din kolonne hedder POSITION
+    # 2. Spiller med position: "Navn (Pos)"
+    # Antager kolonnen hedder 'POSITION' - hvis den hedder noget andet, ret venligst her
     df_display['Spiller'] = df_display['NAVN'] + " (" + df_display['POSITION'].fillna('-') + ")"
 
-    # 3. Logo-logik (Vi bruger TEAMS mappingen fra din import)
-    # Vi henter logo-url baseret på klubnavn
+    # 3. Logo-logik
     def get_logo(klub_navn):
         return TEAMS.get(klub_navn, {}).get("logo", "")
 
@@ -110,18 +109,25 @@ def vis_transfer_dialog(df):
     df_display['Logo_Til'] = df_display['KLUB'].apply(get_logo)
 
     # 4. Kontrakt
-    # (Din eksisterende logik beholdes)
-    df_display['Kontrakt_Info'] = df_display['KONTRAKT_START'] + " (" + df_display['KONTRAKT_UDLOEB'] + ")"
+    # (Beholder din eksisterende logik)
+    df_display['Kontrakt'] = df_display.apply(lambda row: str(row.get('KONTRAKT_UDLOEB', '')), axis=1)
 
     # 5. Tabel visning
     st.dataframe(
         df_display,
-        column_order=['Dato', 'Logo_Fra', 'SENESTE_KLUB', 'Logo_Til', 'KLUB', 'Spiller', 'Kontrakt_Info', 'KILDE'],
+        column_order=[
+            'Dato', 
+            'Spiller', 
+            'Logo_Fra', 'SENESTE_KLUB', 
+            'Logo_Til', 'KLUB', 
+            'Kontrakt', 
+            'KILDE'
+        ],
         column_config={
             "Dato": st.column_config.Column(width="small"),
+            "Spiller": st.column_config.Column("Spiller (Pos)", width="medium"),
             "Logo_Fra": st.column_config.ImageColumn("Fra", width="small"),
             "Logo_Til": st.column_config.ImageColumn("Til", width="small"),
-            "Spiller": st.column_config.Column("Spiller (Pos)", width="medium"),
             "KILDE": st.column_config.LinkColumn("Kilde", display_text="Se kilde"),
         },
         hide_index=True,
