@@ -53,10 +53,10 @@ def apply_custom_style():
             .stApp { background-color: #FFFFFF; }
             .card-title { color: #1a1a1a; font-size: 11px; font-weight: 700; margin-bottom: 15px; text-transform: uppercase; border-bottom: 1px solid #f0f0f0; padding-bottom: 8px; display: flex; justify-content: space-between; }
             .title-date { color: #888; font-weight: 500; text-transform: none; font-size: 11px; }
-            .stats-table { width: 95%; font-size: 10px; border-collapse: collapse; margin-left: auto; }
-            .stats-label { color: #666; font-weight: 500; padding: 4px 0; }
+            .stats-table { width: 100%; font-size: 10px; border-collapse: collapse; table-layout: fixed; }
+            .stats-label { color: #666; font-weight: 700; width: 40%; }
             .stats-value { text-align: right; font-weight: 700; color: #111; padding: 4px 0; }
-            .form-wrapper { display: flex; justify-content: space-between; gap: 8px; width: 100%; margin-top: 20px; }
+            .form-wrapper { display: flex; justify-content: space-between; gap: 4px; width: 100%; margin-top: 15px; }
             .form-column { display: flex; flex-direction: column; align-items: center; flex: 1; }
             .res-pill { width: 100%; border-radius: 4px; color: white; text-align: center; font-size: 10px; font-weight: 800; padding: 4px 0; margin-bottom: 6px; }
             .legend-logo { width: 26px; height: 26px; object-fit: contain; }
