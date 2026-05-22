@@ -93,54 +93,52 @@ def shorten_url(url):
 
 @st.dialog("Alle Transfers", width="large")
 def vis_transfer_dialog(df):
-    # 1. Præparer kopi af data
+    if df.empty:
+        st.write("Ingen data fundet.")
+        return
+
+    # 1. Præparer kopi og tving kolonnenavne til STORE BOGSTAVER
     df_display = df.copy()
+    df_display.columns = [str(c).upper().strip() for c in df_display.columns]
+    
+    # Lav sorterings-timestamp
     df_display['TS_SORT'] = pd.to_datetime(df_display['TIMESTAMP'], errors='coerce')
     
-    # 2. Logik: Skifte (FRA -> TIL)
-    # Vi håndterer manglende værdier med fillna for at undgå 'nan' i teksten
+    # 2. Logik: Skifte (SENESTE_KLUB -> KLUB)
+    # Vi bruger dine rigtige navne fra overblikket: SENESTE_KLUB og KLUB
     df_display['Skifte'] = (
-        df_display['FRA_KLUB'].fillna('Ukendt') + 
+        df_display['SENESTE_KLUB'].fillna('?').astype(str) + 
         " → " + 
-        df_display['KLUB'].fillna('Ukendt')
+        df_display['KLUB'].fillna('?').astype(str)
     )
 
-    # 3. Logik: Kontrakt (Dato (X år))
+    # 3. Logik: Kontrakt (Start + Udlob)
     def format_contract(row):
         start = str(row.get('KONTRAKT_START', '')).strip()
-        laengde = str(row.get('LÆNGDE', '')).strip()
-        if start and start != 'nan':
-            return f"{start} ({laengde} år)" if laengde and laengde != 'nan' else start
+        udloeb = str(row.get('KONTRAKT_UDLOEB', '')).strip()
+        
+        # Hvis der er data, samler vi det pænt
+        if start and start != 'nan' and start != '':
+            if udloeb and udloeb != 'nan' and udloeb != '':
+                return f"{start} (Udløb: {udloeb})"
+            return start
         return ""
 
-    df_display['Kontrakt'] = df_display.apply(format_contract, axis=1)
+    df_display['Kontrakt_Info'] = df_display.apply(format_contract, axis=1)
 
-    # 4. Logik: Link (Kun domæne med www)
-    def clean_url(url):
-        if pd.isna(url) or str(url).strip() == "": return ""
-        try:
-            netloc = urlparse(str(url)).netloc
-            # Sørg for at den starter med www. hvis muligt
-            if not netloc.startswith('www.') and netloc:
-                return f"www.{netloc}"
-            return netloc
-        except: return "Link"
-
-    # Vi overskriver KILDE kolonnen med den pæne tekst, men beholder URL'en som link-destination
-    df_display['Kilde_Tekst'] = df_display['KILDE'].apply(clean_url)
-
-    # 5. Visning af tabellen
+    # 4. Visning af tabellen
     st.dataframe(
         df_display.sort_values('TS_SORT', ascending=False),
-        column_order=['TIMESTAMP', 'NAVN', 'Skifte', 'Kontrakt', 'KILDE'],
+        column_order=['TIMESTAMP', 'NAVN', 'Skifte', 'Kontrakt_Info', 'KILDE'],
         column_config={
             "TIMESTAMP": st.column_config.Column("Dato", width="small"),
             "NAVN": "Spiller",
-            "Skifte": st.column_config.Column("Skifte", width="medium"),
-            "Kontrakt": "Kontrakt",
+            "Skifte": "Skifte",
+            "Kontrakt_Info": "Kontrakt",
             "KILDE": st.column_config.LinkColumn(
                 "Link",
-                display_text=r'https?://(?:www\.)?([^/?#]+)' # Viser kun domænet i cellen
+                # Regex der sikrer 'www.domæne.dk' visning
+                display_text=r'^https?://(?:www\.)?([^/?#]+)' 
             ),
         },
         hide_index=True,
