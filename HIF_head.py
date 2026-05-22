@@ -199,7 +199,7 @@ def vis_side():
             for i in range(3):
                 idx = row * 3 + i
                 with cols[i]:
-                    st.caption(f"**{metrics[idx]['name']}**")
+                    st.caption(f"***{metrics[idx]['name']}***")
                     
                     # 1. Definer base med data, x, y og TOOLTIP
                     base = alt.Chart(hif_recent).encode(
@@ -209,11 +209,11 @@ def vis_side():
                             alt.Tooltip('MODSTANDER', title='vs.'),
                             alt.Tooltip(f'{metrics[idx]["col"]}', title=f'{metrics[idx]["name"]}', format='.1f')
                         ]
-                    ).properties(height=140)
+                    ).properties(height=120)
                     
                     # 2. Byg lagene ovenpå basen
                     line = base.mark_line(color='#cccccc', strokeWidth=2)
-                    points = base.mark_circle(size=60, color='#C41E3A')
+                    points = base.mark_circle(size=50, color='#C41E3A')
                     
                     # 3. Regel (skal ikke have tooltip, så den defineres separat)
                     rule = alt.Chart(hif_recent).mark_rule(
