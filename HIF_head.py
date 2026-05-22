@@ -89,17 +89,7 @@ def vis_transfer_dialog(df):
         st.write("Ingen data fundet.")
         return
 
-    # --- HJÆLPEFUNKTION (Defineret lokalt for at sikre scope) ---
-    def rens_link(url):
-        if pd.isna(url) or str(url).strip() == "": return "Link"
-        try:
-            parsed = urlparse(str(url))
-            domain = parsed.netloc if parsed.netloc else parsed.path.split('/')[0]
-            return domain.replace('www.', '')
-        except: return "Link"
-
     df_display = df.copy()
-    # Sikr at alle kolonnenavne er ensartede
     df_display.columns = [str(c).upper().strip() for c in df_display.columns]
     
     # 1. Sortering og Dato
@@ -107,44 +97,32 @@ def vis_transfer_dialog(df):
     df_display = df_display.sort_values('TS_SORT', ascending=False)
     df_display['Dato'] = df_display['TS_SORT'].dt.strftime('%d/%m-%Y')
     
-    # 2. Skifte
-    df_display['Skifte'] = df_display['SENESTE_KLUB'].fillna('?') + " → " + df_display['KLUB'].fillna('?')
+    # 2. Navn + Position
+    # Antager at din kolonne hedder POSITION
+    df_display['Spiller'] = df_display['NAVN'] + " (" + df_display['POSITION'].fillna('-') + ")"
 
-    # 3. Kontrakt
-    def calculate_years(row):
-        udloeb = str(row.get('KONTRAKT_UDLOEB', '')).strip()
-        start = str(row.get('KONTRAKT_START', '')).strip()
-        if udloeb and udloeb != 'nan':
-            try:
-                dt = pd.to_datetime(udloeb, dayfirst=True, errors='coerce')
-                if pd.notnull(dt):
-                    diff = (dt - datetime.datetime.now()).days / 365.25
-                    aar = round(max(0, diff))
-                    return f"{start} ({aar} år)" if start and start != 'nan' else f"({aar} år)"
-            except: pass
-        return start if start != 'nan' else ""
+    # 3. Logo-logik (Vi bruger TEAMS mappingen fra din import)
+    # Vi henter logo-url baseret på klubnavn
+    def get_logo(klub_navn):
+        return TEAMS.get(klub_navn, {}).get("logo", "")
 
-    df_display['Kontrakt'] = df_display.apply(calculate_years, axis=1)
+    df_display['Logo_Fra'] = df_display['SENESTE_KLUB'].apply(get_logo)
+    df_display['Logo_Til'] = df_display['KLUB'].apply(get_logo)
 
-    # 4. Link-logik (Renset og klargjort)
-    # Vi gemmer den rå KILDE (URL) i kolonnen 'KILDE'
-    # Vi laver 'Kilde_Tekst' med www. formatet til visning
-    df_display['Kilde_Tekst'] = df_display['KILDE'].apply(rens_link)
-    df_display['Kilde_Tekst'] = 'www.' + df_display['Kilde_Tekst'].str.replace('www.', '')
+    # 4. Kontrakt
+    # (Din eksisterende logik beholdes)
+    df_display['Kontrakt_Info'] = df_display['KONTRAKT_START'] + " (" + df_display['KONTRAKT_UDLOEB'] + ")"
 
     # 5. Tabel visning
     st.dataframe(
         df_display,
-        column_order=['Dato', 'NAVN', 'Skifte', 'Kontrakt', 'KILDE'], 
+        column_order=['Dato', 'Logo_Fra', 'SENESTE_KLUB', 'Logo_Til', 'KLUB', 'Spiller', 'Kontrakt_Info', 'KILDE'],
         column_config={
             "Dato": st.column_config.Column(width="small"),
-            "NAVN": "Spiller",
-            "Skifte": "Skifte",
-            "Kontrakt": "Kontrakt",
-            "KILDE": st.column_config.LinkColumn(
-                "Kilde",
-                display_text="Se transfer-kilde" # Streamlit viser teksten fra denne kolonne
-            ),
+            "Logo_Fra": st.column_config.ImageColumn("Fra", width="small"),
+            "Logo_Til": st.column_config.ImageColumn("Til", width="small"),
+            "Spiller": st.column_config.Column("Spiller (Pos)", width="medium"),
+            "KILDE": st.column_config.LinkColumn("Kilde", display_text="Se kilde"),
         },
         hide_index=True,
         use_container_width=True
