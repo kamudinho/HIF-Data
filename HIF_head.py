@@ -199,7 +199,7 @@ def vis_side():
                         x=alt.X('index:O', axis=None),
                         y=alt.Y(f'{metrics[idx]["col"]}:Q', axis=None, scale=alt.Scale(zero=False))
                     ).properties(height=80)
-                    rule = alt.Chart(hif_recent).mark_rule(color='#fff', strokeDash=[3,3]).encode(
+                    rule = alt.Chart(hif_recent).mark_rule(color='#000', strokeDash=[3,3]).encode(
                         y=f'mean({metrics[idx]["col"]}):Q'
                     )
                     st.altair_chart(line + rule, use_container_width=True)
