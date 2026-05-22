@@ -220,17 +220,19 @@ def vis_side():
                     line = base.mark_line(color='#cccccc', strokeWidth=2)
                     points = base.mark_circle(size=50, color='#C41E3A')
                     
-                    # 3. Regel (skal ikke have tooltip, så den defineres separat)
+                    # 3. Regel - sikr at den bruger hif_recent data
                     rule = alt.Chart(hif_recent).mark_rule(
                         color='#333333', 
                         strokeWidth=1.5, 
                         strokeDash=[4, 4]
                     ).encode(
-                        y=f'mean({metrics[idx]["col"]}):Q'
+                        y=alt.Y(f'mean({metrics[idx]["col"]}):Q')
                     )
                     
-                    # 4. Kombiner og vis
-                    st.altair_chart(line + points + rule, use_container_width=True)
+                    # 4. Kombiner og gør det interaktivt (hover virker kun på lag med tooltips)
+                    chart = (line + points + rule).interactive()
+                    
+                    st.altair_chart(chart, use_container_width=True)
                     
 if __name__ == "__main__":
     vis_side()
