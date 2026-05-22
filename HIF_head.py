@@ -92,80 +92,56 @@ def vis_transfer_dialog(df):
     df_display = df.copy()
     df_display.columns = [str(c).upper().strip() for c in df_display.columns]
     
-    # 1. Sortering og Dato (DD/MM-YYYY)
+    # 1. Sortering og Dato
     df_display['TS_SORT'] = pd.to_datetime(df_display['TIMESTAMP'], errors='coerce')
     df_display = df_display.sort_values('TS_SORT', ascending=False)
-    df_display['Dato_Visning'] = df_display['TS_SORT'].dt.strftime('%d/%m-%Y')
+    df_display['Dato'] = df_display['TS_SORT'].dt.strftime('%d/%m-%Y')
     
-    # 2. Skifte (Fra → Til)
-    df_display['Skifte'] = (
-        df_display['SENESTE_KLUB'].fillna('?').astype(str) + 
-        " → " + 
-        df_display['KLUB'].fillna('?').astype(str)
-    )
+    # 2. Skifte
+    df_display['Skifte'] = df_display['SENESTE_KLUB'].fillna('?') + " → " + df_display['KLUB'].fillna('?')
 
-    # 3. Kontrakt (Beregning af år fra maj 2026)
-    def format_contract_years(row):
+    # 3. Kontrakt (År fra maj 2026)
+    def calculate_years(row):
+        udloeb = str(row.get('KONTRAKT_UDLOEB', '')).strip()
         start = str(row.get('KONTRAKT_START', '')).strip()
-        udloeb_str = str(row.get('KONTRAKT_UDLOEB', '')).strip()
-        if not udloeb_str or udloeb_str in ['nan', '']:
-            return start if start not in ['nan', ''] else ""
-        try:
-            udloeb_dt = pd.to_datetime(udloeb_str, dayfirst=True, errors='coerce')
-            if pd.notnull(udloeb_dt):
-                today = datetime.datetime.now() # Maj 2026
-                diff_years = (udloeb_dt - today).days / 365.25
-                years = round(max(0, diff_years))
-                prefix = f"{start} " if start not in ['nan', ''] else ""
-                return f"{prefix}({years} år)"
-        except: pass
-        return start
+        if udloeb and udloeb != 'nan':
+            try:
+                dt = pd.to_datetime(udloeb, dayfirst=True, errors='coerce')
+                if pd.notnull(dt):
+                    diff = (dt - datetime.datetime.now()).days / 365.25
+                    aar = round(max(0, diff))
+                    return f"{start} ({aar} år)" if start and start != 'nan' else f"({aar} år)"
+            except: pass
+        return start if start != 'nan' else ""
 
-    df_display['Kontrakt_Info'] = df_display.apply(format_contract_years, axis=1)
+    df_display['Kontrakt'] = df_display.apply(calculate_years, axis=1)
 
-    # 4. Link-logik: Vi bygger visnings-teksten her
-    def rens_link_hif(url):
+    # 4. Link-fix: Manuel formatering af URL
+    def format_kilde(url):
         if pd.isna(url) or str(url).strip() == "": return ""
+        u = str(url).strip()
         try:
-            u = str(url).strip()
-            if not u.startswith(('http://', 'https://')): u = 'https://' + u
-            parsed = urlparse(u)
-            # Find domæne (f.eks. vejle-boldklub.dk)
-            domain = parsed.netloc.lower().replace('www.', '')
-            if not domain: domain = parsed.path.split('/')[0].replace('www.', '')
-            return f"www.{domain}"
-        except: return "www.link.dk"
+            # Rens domænet til visning
+            parse_u = u if u.startswith('http') else 'https://' + u
+            domaene = urlparse(parse_u).netloc.lower().replace('www.', '')
+            return f"www.{domaene}"
+        except: return "Link"
 
-    # 4. Link-logik: Vi laver en kolonne med selve domæne-navnet (uden www her for at undgå rod)
-    def hent_domaene(url):
-        if pd.isna(url) or str(url).strip() == "": return ""
-        try:
-            u = str(url).strip()
-            if not u.startswith(('http://', 'https://')): u = 'https://' + u
-            parsed = urlparse(u)
-            # Vi tager kun domænet her (f.eks. bold.dk)
-            domain = parsed.netloc.lower().replace('www.', '')
-            if not domain: domain = parsed.path.split('/')[0].replace('www.', '')
-            return domain
-        except: return "link.dk"
+    # Vi laver den pæne tekst
+    df_display['VIS_URL'] = df_display['KILDE'].apply(format_kilde)
 
-    # Lav kolonnen som vi refererer til lige om lidt
-    df_display['DOMAENE_NAVN'] = df_display['KILDE'].apply(hent_domaene)
-
-    # 5. Tabel visning
+    # 5. Tabel visning - Vi bruger TextColumn med link-mulighed
     st.dataframe(
         df_display,
-        column_order=['Dato_Visning', 'NAVN', 'Skifte', 'Kontrakt_Info', 'KILDE'],
+        column_order=['Dato', 'NAVN', 'Skifte', 'Kontrakt', 'KILDE'],
         column_config={
-            "Dato_Visning": st.column_config.Column("Dato", width="small"),
+            "Dato": st.column_config.Column(width="small"),
             "NAVN": "Spiller",
-            "Skifte": "Skifte",
-            "Kontrakt_Info": "Kontrakt",
             "KILDE": st.column_config.LinkColumn(
                 "Kilde",
-                # HER ER TRICKET: Ved at bruge f-string formatet {kolonnenavn}, 
-                # forstår Streamlit at den skal kigge i dataene.
-                display_text="www.{DOMAENE_NAVN}" 
+                # VI BRUGER REGEX HER - men kun på den del vi VED er der.
+                # Denne regex fanger alt før den første skråstreg efter domænet.
+                display_text=r"^(?:https?://)?(?:www\.)?([^/]+)"
             ),
         },
         hide_index=True,
