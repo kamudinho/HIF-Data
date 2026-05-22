@@ -344,7 +344,12 @@ def vis_side():
     hif_recent['PLOT_POSS'] = hif_recent.apply(lambda r: r['HOME_POSS'] if r['CONTESTANTHOME_OPTAUUID'].upper() == HIF_UUID else r['AWAY_POSS'], axis=1)
     hif_recent['PLOT_FWD'] = hif_recent.apply(lambda r: r['HOME_FORWARD_PASSES'] if r['CONTESTANTHOME_OPTAUUID'].upper() == HIF_UUID else r['AWAY_FORWARD_PASSES'], axis=1)
 
-    # 3. Nulstil indeks og brug kampnummer (1, 2, 3...) som index for x-aksen
+    #3. Konverter alle PLOT-kolonner til tal
+    plot_cols = ['PLOT_GOALS', 'PLOT_XG', 'PLOT_SHOTS', 'PLOT_TOUCHES', 'PLOT_POSS', 'PLOT_FWD']
+    for col_name in plot_cols:
+        hif_recent[col_name] = pd.to_numeric(hif_recent[col_name], errors='coerce')
+    
+    # 4. Nu kan vi roligt filtrere og plotte
     hif_recent = hif_recent.reset_index(drop=True)
     hif_recent.index = hif_recent.index + 1 
 
