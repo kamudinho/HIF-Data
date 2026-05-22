@@ -11,10 +11,8 @@ def apply_custom_style():
             [data-testid="stHeader"] { background: rgba(0,0,0,0); }
             .stApp { background-color: #FFFFFF; }
             
-            /* SIKRER ENS HØJDE OG BREDE-FØLELSE */
             .stVizColumns { gap: 1rem; }
             
-            /* Denne selector rammer de containere vi laver med border=True */
             [data-testid="stVerticalBlockBorderWrapper"] {
                 min-height: 335px;
             }
@@ -28,7 +26,6 @@ def apply_custom_style():
                 letter-spacing: 0.5px;
             }
 
-            /* Stats Tabel - Gør den mere luftig nu hvor der er plads */
             .stats-table {
                 width: 95%;
                 font-size: 10px;
@@ -43,7 +40,6 @@ def apply_custom_style():
             .stats-label { color: #666; font-weight: 500; }
             .stats-value { text-align: right; font-weight: 700; color: #111; }
 
-            /* Form / Legends */
             .form-wrapper {
                 display: flex;
                 justify-content: space-between;
@@ -69,7 +65,6 @@ def apply_custom_style():
             }
             .legend-logo { width: 26px; height: 26px; object-fit: contain; }
             
-            /* Lister i de små bokse */
             .list-item {
                 font-size: 11px;
                 margin-bottom: 5px;
@@ -84,7 +79,6 @@ def vis_side(dp=None):
     conn = _get_snowflake_conn()
     if not conn: return
 
-    # --- DATA ---
     DB = "KLUB_HVIDOVREIF.AXIS"
     LIGA_UUID = "dyjr458hcmrcy87fsabfsy87o" 
     HIF_UUID = "8GXD9RY2580PU1B1DD5NY9YMY" 
@@ -102,10 +96,10 @@ def vis_side(dp=None):
     df_matches['MATCH_DATE_FULL'] = pd.to_datetime(df_matches['MATCH_DATE_FULL'], errors='coerce')
     hif_m = df_matches[(df_matches['HOME_ID'] == hif_id) | (df_matches['AWAY_ID'] == hif_id)].copy()
     
-    # OPPDATERET BREDDE: Col 1 fylder nu langt mere
+    # Fastholder dine 1/1/1 kolonner
     col1, col2, col3 = st.columns([1, 1, 1])
 
-    # 1. NÆSTE KAMP (Den brede boks)
+    # 1. NÆSTE KAMP
     with col1:
         future = hif_m[~hif_m['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].sort_values('MATCH_DATE_FULL')
         with st.container(border=True):
@@ -116,12 +110,17 @@ def vis_side(dp=None):
                 
                 st.markdown(f"<div class='card-title'>Næste kamp • R. {int(nk['WEEK'])}</div>", unsafe_allow_html=True)
                 
-                # Herinde bruger vi nu et 1:1.2 forhold for at give metrics plads
                 t_l, t_r = st.columns([1, 1.2])
                 with t_l:
+                    # Justeret "VS" og dato størrelse her
                     c1, c2, c3 = st.columns([1, 0.7, 1])
                     c1.image(TEAMS.get("Hvidovre", {}).get("logo", ""), width=42)
-                    c2.markdown(f"<div style='text-align:center; padding-top:3px;'><b>VS</b><br><small>{nk['MATCH_DATE_FULL'].strftime('%d/%m')}</small></div>", unsafe_allow_html=True)
+                    c2.markdown(f"""
+                        <div style='text-align:center; padding-top:2px; line-height:1;'>
+                            <b style='font-size:10px;'>VS</b><br>
+                            <small style='font-size:8px; color:#666;'>{nk['MATCH_DATE_FULL'].strftime('%d/%m')}</small>
+                        </div>
+                    """, unsafe_allow_html=True)
                     c3.image(TEAMS.get(opp_name, {}).get("logo", ""), width=42)
                     st.markdown(f"<div style='text-align:center; font-size:8px; font-weight:700; margin-top:8px;'>{opp_name}</div>", unsafe_allow_html=True)
                 
