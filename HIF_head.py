@@ -7,23 +7,29 @@ from data.data_load import _get_snowflake_conn
 def apply_custom_style():
     st.markdown("""
         <style>
+            /* Fjerner Streamlit headers og titler helt */
             [data-testid="stHeaderBlockContainer"] h1 { display: none; }
+            [data-testid="stHeader"] { background: rgba(0,0,0,0); }
             .stApp { background-color: #FFFFFF; }
             
+            /* Justering af kortets titel */
             .card-title {
                 color: #1a1a1a;
                 font-size: 13px;
                 font-weight: 700;
-                margin-bottom: 15px;
+                margin-bottom: 18px;
                 text-transform: uppercase;
+                letter-spacing: 0.5px;
             }
 
-            /* Container til form-rækken */
+            /* Container til form-rækken - Tilføjet ekstra luft i bunden */
             .form-wrapper {
                 display: flex;
                 justify-content: space-between;
-                gap: 4px;
+                gap: 6px;
                 width: 100%;
+                padding-bottom: 10px; /* Giver plads til logoerne */
+                margin-top: 12px;
             }
             
             .form-column {
@@ -41,19 +47,26 @@ def apply_custom_style():
                 font-size: 10px;
                 font-weight: 800;
                 padding: 4px 0;
-                margin-bottom: 5px;
+                margin-bottom: 8px; /* Mere afstand til logoet */
             }
             
             .legend-logo {
-                width: 22px;
-                height: 22px;
+                width: 28px; /* Lidt større logoer */
+                height: 28px;
                 object-fit: contain;
+                display: block;
             }
 
             .list-item {
                 font-size: 11px;
-                margin-bottom: 5px;
+                margin-bottom: 6px;
                 color: #333;
+                line-height: 1.3;
+            }
+            
+            /* Sikrer at containeren ikke cutter indhold */
+            [data-testid="stVerticalBlock"] {
+                gap: 0.5rem;
             }
         </style>
     """, unsafe_allow_html=True)
@@ -81,8 +94,7 @@ def vis_side(dp=None):
     df_matches['MATCH_DATE_FULL'] = pd.to_datetime(df_matches['MATCH_DATE_FULL'], errors='coerce')
     hif_m = df_matches[(df_matches['HOME_ID'] == hif_id) | (df_matches['AWAY_ID'] == hif_id)].copy()
     
-    # --- UI ---
-    st.markdown("### Hvidovre IF Dashboard")
+    # --- UI LAYOUT (Uden st.markdown header) ---
     col1, col2, col3 = st.columns([1.5, 1, 1])
 
     # 1. NÆSTE KAMP & FORM
@@ -94,16 +106,15 @@ def vis_side(dp=None):
                 opp_id = nk['AWAY_ID'] if nk['HOME_ID'] == hif_id else nk['HOME_ID']
                 opp_name = opta_to_name.get(opp_id, "Modstander")
                 
-                st.markdown(f"<div class='card-title'>Næste kamp: {opp_name}</div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='card-title'>Næste: {opp_name}</div>", unsafe_allow_html=True)
                 
-                # Brug Streamlit columns til logoerne for at undgå HTML fejl her
                 cl, cc, cr = st.columns([1, 1, 1])
                 cl.image(TEAMS.get("Hvidovre", {}).get("logo", ""), width=45)
                 cc.markdown(f"<div style='text-align:center; padding-top:10px;'><b>VS</b><br><small>{nk['MATCH_DATE_FULL'].strftime('%d/%m')}</small></div>", unsafe_allow_html=True)
                 cr.image(TEAMS.get(opp_name, {}).get("logo", ""), width=45)
                 
-                # FORM SEKTION (HTML rendering)
-                st.markdown(f"<div style='font-size:10px; color:#888; font-weight:700; margin-top:15px; margin-bottom:5px;'>FORM: {opp_name.upper()}</div>", unsafe_allow_html=True)
+                # FORM SEKTION
+                st.markdown(f"<div style='font-size:10px; color:#888; font-weight:700; margin-top:20px; margin-bottom:5px;'>FORM: {opp_name.upper()}</div>", unsafe_allow_html=True)
                 
                 opp_m = df_matches[((df_matches['HOME_ID'] == opp_id) | (df_matches['AWAY_ID'] == opp_id)) & 
                                    (df_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False))].sort_values('MATCH_DATE_FULL', ascending=False).head(5)
@@ -114,12 +125,10 @@ def vis_side(dp=None):
                         is_opp_home = m['HOME_ID'] == opp_id
                         h_s, a_s = int(m['TOTAL_HOME_SCORE']), int(m['TOTAL_AWAY_SCORE'])
                         
-                        # Farvevalg
                         if h_s == a_s: res_col = "#6c757d"
                         elif (is_opp_home and h_s > a_s) or (not is_opp_home and a_s > h_s): res_col = "#28a745"
                         else: res_col = "#dc3545"
                         
-                        # Modstander-logo
                         other_uuid = m['AWAY_ID'] if is_opp_home else m['HOME_ID']
                         other_team = opta_to_name.get(other_uuid, "")
                         other_logo = TEAMS.get(other_team, {}).get("logo", "")
@@ -137,29 +146,24 @@ def vis_side(dp=None):
         with st.container(border=True):
             st.markdown('<div class="card-title">Transfers</div>', unsafe_allow_html=True)
             try:
-                # Vi indlæser og viser de seneste 5
-                df_t = pd.read_csv("data/players/1div_overskrivning.csv").head(5)
+                df_t = pd.read_csv("data/players/1div_overskrivning.csv").head(6)
                 for _, r in df_t.iterrows():
                     st.markdown(f"<div class='list-item'><b>{r['KLUB']}</b>: {r['NAVN']}</div>", unsafe_allow_html=True)
                 
-                # Popover til alle
                 with st.popover("Se alle transfers", use_container_width=True):
                     st.dataframe(pd.read_csv("data/players/1div_overskrivning.csv"), hide_index=True)
             except:
-                st.caption("Ingen transferdata tilgængelig")
+                st.caption("Ingen data")
 
     # 3. SCOUTING
     with col3:
         with st.container(border=True):
             st.markdown('<div class="card-title">Scouting</div>', unsafe_allow_html=True)
             try:
-                df_e = pd.read_csv("data/scouting/emneliste.csv").tail(5)
-                if not df_e.empty:
-                    for _, r in df_e.iterrows():
-                        st.markdown(f"<div class='list-item'>⭐ {r['Navn']}</div>", unsafe_allow_html=True)
-                else:
-                    st.caption("Listen er tom")
+                df_e = pd.read_csv("data/scouting/emneliste.csv").tail(6)
+                for _, r in df_e.iterrows():
+                    st.markdown(f"<div class='list-item'>⭐ {r['Navn']}</div>", unsafe_allow_html=True)
             except:
-                st.caption("Kunne ikke indlæse scouting-liste")
+                st.caption("Listen er tom")
 
     st.divider()
