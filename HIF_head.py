@@ -366,32 +366,31 @@ def vis_side():
     ]
 
     for i, col in enumerate(trend_cols):
-    with col:
-        metric_cfg = metrics[i]
-        st.caption(f"**{metric_cfg['name']}**")
-        
-        # Vi definerer rammerne for grafen
-        # Y-akse: 0-100 for Possession, ellers auto. X-akse: 0-32
-        y_scale = [0, 100] if metric_cfg['name'] == "Possession" else None
-        
-        chart = alt.Chart(hif_recent).mark_line(color='#111', strokeWidth=2).encode(
-            x=alt.X('index:Q', axis=alt.Axis(
-                domain=True,    # Viser "L"-linjen
-                grid=False,     # Fjerner gridlines
-                labels=False,   # Fjerner tal
-                ticks=False,    # Fjerner små streger
-                title=None
-            ), scale=alt.Scale(domain=[0, 32])),
-            y=alt.Y(f'{metric_cfg["col"]}:Q', axis=alt.Axis(
-                domain=True,    # Viser "L"-linjen
-                grid=False,     # Fjerner gridlines
-                labels=False,   # Fjerner tal
-                ticks=False,    # Fjerner små streger
-                title=None
-            ), scale=alt.Scale(domain=y_scale if y_scale else None))
-        ).properties(height=100)
-        
-        st.altair_chart(chart, use_container_width=True)
+        with col:
+            metric_cfg = metrics[i]
+            st.caption(f"**{metric_cfg['name']}**")
+            
+            # Y-akse: 0-100 for Possession, ellers auto. X-akse: 0-32
+            y_scale = [0, 100] if metric_cfg['name'] == "Possession" else None
+            
+            chart = alt.Chart(hif_recent).mark_line(color='#111', strokeWidth=2).encode(
+                x=alt.X('index:Q', axis=alt.Axis(
+                    domain=True, 
+                    grid=False, 
+                    labels=False, 
+                    ticks=False, 
+                    title=None
+                ), scale=alt.Scale(domain=[0, 32])),
+                y=alt.Y(f'{metric_cfg["col"]}:Q', axis=alt.Axis(
+                    domain=True, 
+                    grid=False, 
+                    labels=False, 
+                    ticks=False, 
+                    title=None
+                ), scale=alt.Scale(domain=y_scale if y_scale else None))
+            ).properties(height=100)
+            
+            st.altair_chart(chart, use_container_width=True)
                 
 # Til sidst: Sørg for at kalde funktionen, når filen indlæses
 if __name__ == "__main__":
