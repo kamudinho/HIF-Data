@@ -202,13 +202,24 @@ def vis_side(dp=None):
                 # Sorter og tag de 7 nyeste
                 df_display = df_t.sort_values('TS_SORT', ascending=False).head(7)
                 
+                # Debug: Tjek kolonnerne i din CSV
+                # st.write(df_display.columns) 
+                
                 for _, r in df_display.iterrows():
-                    # Formatering: Dato: Klub - Navn (Position)
-                    dato_str = pd.to_datetime(r['TIMESTAMP']).strftime('%d/%m')
-                    klub = r['KLUB']
-                    navn = r['NAVN']
-                    pos = r.get('POSITION', '-') # Henter position hvis den findes
+                    # 1. Hent rå data
+                    dato_raw = r.get('TIMESTAMP', '')
+                    klub = str(r.get('KLUB', 'Ukendt'))
+                    navn = str(r.get('NAVN', 'Ukendt'))
                     
+                    # 2. Hent position - prøv forskellige navne hvis det fejler
+                    pos = str(r.get('POSITION', r.get('POS', '-')))
+                    
+                    # 3. Formater dato sikkert
+                    try:
+                        dato_str = pd.to_datetime(dato_raw).strftime('%d/%m')
+                    except:
+                        dato_str = "??/??"
+
                     st.markdown(f"""
                         <div class='list-item'>
                             {dato_str}: <b>{klub}</b> - {navn} ({pos})
