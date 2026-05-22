@@ -343,17 +343,25 @@ def vis_side():
     hif_recent = df_stats[
         (df_stats['CONTESTANTHOME_OPTAUUID'].str.upper() == HIF_UUID.strip().upper()) | 
         (df_stats['CONTESTANTAWAY_OPTAUUID'].str.upper() == HIF_UUID.strip().upper())
-    ].sort_values('MATCH_DATE_FULL', ascending=True).tail(5)
+    ].sort_values('MATCH_DATE_FULL', ascending=True).tail(5).copy() # .copy() er vigtig
+
+    # SÆT DATO SOM INDEKS: Dette fortæller Streamlit, at det er en tidslinje
+    hif_recent = hif_recent.set_index('MATCH_DATE_FULL')
 
     for i, col in enumerate(trend_cols):
         with col:
             metric_cfg = metrics[i]
             st.caption(metric_cfg['name'])
             
-            # Lav en simpel line chart for den valgte metric
-            # Vi skal håndtere logikken for om det er HOME eller AWAY stats
+            # Vælg den korrekte kolonne (Home vs Away)
+            # Her skal vi dynamisk vælge kolonne baseret på om HIF er hjemme eller ude
+            # En nem måde er at lave en beregnet kolonne eller bruge en maske
             data_to_plot = hif_recent[[metric_cfg['col']]].fillna(0)
-            st.line_chart(data_to_plot, height=100, use_container_width=True)
+            
+            # Brug use_container_width og lad være med at bekymre dig om label-antallet
+            # Hvis du vil se alle datoer, hjælper det ofte at rotere dem (kræver dog ofte mere plads)
+            st.line_chart(data_to_plot, height=100)
+            
 # Til sidst: Sørg for at kalde funktionen, når filen indlæses
 if __name__ == "__main__":
     vis_side()
