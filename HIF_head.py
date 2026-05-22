@@ -195,11 +195,11 @@ def vis_side():
                 idx = row * 3 + i
                 with cols[i]:
                     st.caption(f"**{metrics[idx]['name']}**")
-                    line = alt.Chart(hif_recent).mark_line(point=True, color='#111', strokeWidth=2).encode(
+                    line = alt.Chart(hif_recent).mark_line(point=True, color='#ccc', strokeWidth=2).encode(
                         x=alt.X('index:O', axis=None),
                         y=alt.Y(f'{metrics[idx]["col"]}:Q', axis=None, scale=alt.Scale(zero=False))
                     ).properties(height=80)
-                    rule = alt.Chart(hif_recent).mark_rule(color='#ccc', strokeDash=[3,3]).encode(
+                    rule = alt.Chart(hif_recent).mark_rule(color='#fff', strokeDash=[3,3]).encode(
                         y=f'mean({metrics[idx]["col"]}):Q'
                     )
                     st.altair_chart(line + rule, use_container_width=True)
