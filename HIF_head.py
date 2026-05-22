@@ -260,19 +260,19 @@ def vis_side():
                         </td>
                     </tr>
                     <tr>
-                        <td class='stats-label' style='text-align: left;'>Mål f/i</td>
+                        <td class='stats-label' style='text-align: left;'>Possession</td>
+                        <td class='stats-value' style='text-align: center;'>{hif_stats['poss']}</td>
+                        <td class='stats-value' style='text-align: center;'>{opp_stats['poss']}</td>
+                    </tr>
+                    <tr>
+                        <td class='stats-label' style='text-align: left;'>Mål for/imod</td>
                         <td class='stats-value' style='text-align: center;'>{hif_stats['gf']}/{hif_stats['ga']}</td>
                         <td class='stats-value' style='text-align: center;'>{opp_stats['gf']}/{opp_stats['ga']}</td>
                     </tr>
                     <tr>
-                        <td class='stats-label' style='text-align: left;'>xG f/i</td>
+                        <td class='stats-label' style='text-align: left;'>xG for/imod</td>
                         <td class='stats-value' style='text-align: center;'>{hif_stats['xgf']}/{hif_stats['xga']}</td>
                         <td class='stats-value' style='text-align: center;'>{opp_stats['xgf']}/{opp_stats['xga']}</td>
-                    </tr>
-                    <tr>
-                        <td class='stats-label' style='text-align: left;'>Poss.</td>
-                        <td class='stats-value' style='text-align: center;'>{hif_stats['poss']}</td>
-                        <td class='stats-value' style='text-align: center;'>{opp_stats['poss']}</td>
                     </tr>
                 </table>
                 """
