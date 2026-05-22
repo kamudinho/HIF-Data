@@ -89,7 +89,17 @@ def vis_transfer_dialog(df):
         st.write("Ingen data fundet.")
         return
 
+    # --- HJÆLPEFUNKTION (Defineret lokalt for at sikre scope) ---
+    def rens_link(url):
+        if pd.isna(url) or str(url).strip() == "": return "Link"
+        try:
+            parsed = urlparse(str(url))
+            domain = parsed.netloc if parsed.netloc else parsed.path.split('/')[0]
+            return domain.replace('www.', '')
+        except: return "Link"
+
     df_display = df.copy()
+    # Sikr at alle kolonnenavne er ensartede
     df_display.columns = [str(c).upper().strip() for c in df_display.columns]
     
     # 1. Sortering og Dato
@@ -116,12 +126,11 @@ def vis_transfer_dialog(df):
 
     df_display['Kontrakt'] = df_display.apply(calculate_years, axis=1)
 
-    # 4. Link-logik: Vi bruger din rens_link funktion
-    # Vi gemmer den rå URL i 'KILDE' og laver visningstekst i 'Kilde_Tekst'
+    # 4. Link-logik (Renset og klargjort)
+    # Vi gemmer den rå KILDE (URL) i kolonnen 'KILDE'
+    # Vi laver 'Kilde_Tekst' med www. formatet til visning
     df_display['Kilde_Tekst'] = df_display['KILDE'].apply(rens_link)
-    
-    # Sørg for at den rensede tekst har "www." foran, da din funktion fjerner det
-    df_display['Kilde_Tekst'] = 'www.' + df_display['Kilde_Tekst']
+    df_display['Kilde_Tekst'] = 'www.' + df_display['Kilde_Tekst'].str.replace('www.', '')
 
     # 5. Tabel visning
     st.dataframe(
@@ -134,7 +143,7 @@ def vis_transfer_dialog(df):
             "Kontrakt": "Kontrakt",
             "KILDE": st.column_config.LinkColumn(
                 "Kilde",
-                display_text="Kilde_Tekst" # Streamlit læser www.domæne.dk herfra
+                display_text="Kilde_Tekst" # Streamlit viser teksten fra denne kolonne
             ),
         },
         hide_index=True,
