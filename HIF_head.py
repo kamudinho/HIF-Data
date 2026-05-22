@@ -157,7 +157,7 @@ def vis_side():
             st.markdown('<div class="card-title"><span>SCOUTING</span></div>', unsafe_allow_html=True)
 
     # --- TRENDLINES (2 rækker af 3) ---
-    st.caption("###### Sæsontrend - Hvidovre IF")
+    st.caption("##### Sæsontrend - Hvidovre IF")
     
     # [HIF_RECENT DEFINITION SOM FØR - UDELADT FOR KORTHED]
     hif_recent = df_stats[
