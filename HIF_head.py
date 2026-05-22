@@ -222,7 +222,7 @@ def vis_side():
                             alt.Tooltip('H_U', title='H/U'),
                             alt.Tooltip(col_name, title=metrics[idx]['name'], format=metrics[idx]['fmt'])
                         ]
-                    ).properties(height=80)
+                    ).properties(height=120)
                     
                     line = base.mark_line(color='#cccccc', strokeWidth=2)
                     points = base.mark_circle(size=50, color='#C41E3A')
