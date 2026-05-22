@@ -101,9 +101,31 @@ def vis_side():
     df_matches['MATCH_DATE_FULL'] = pd.to_datetime(df_matches['MATCH_DATE_FULL'], errors='coerce').dt.tz_localize(None)
 
     col1, col2, col3 = st.columns([1, 1, 1])
-    # ... (Resten af koden til col1, col2, col3 indsættes her som før) ...
 
-    # TRENDLINES
+    with col1:
+        with st.container(border=True):
+            hif_m = df_matches[(df_matches['CONTESTANTHOME_OPTAUUID'].str.upper() == HIF_UUID.strip().upper()) | (df_matches['CONTESTANTAWAY_OPTAUUID'].str.upper() == HIF_UUID.strip().upper())]
+            today = pd.Timestamp.today().normalize()
+            future = hif_m[hif_m['MATCH_DATE_FULL'] >= today].sort_values('MATCH_DATE_FULL')
+            if not future.empty:
+                nk = future.iloc[0]
+                opp_id = nk['CONTESTANTAWAY_OPTAUUID'] if str(nk['CONTESTANTHOME_OPTAUUID']).upper() == HIF_UUID.strip().upper() else nk['CONTESTANTHOME_OPTAUUID']
+                opp_name = opta_to_name.get(str(opp_id).upper(), "Ukendt")
+                st.markdown(f"<div class='card-title'><span>NÆSTE KAMP vs. {opp_name.upper()}</span><span class='title-date'>{nk['MATCH_DATE_FULL'].strftime('%d/%m')}</span></div>", unsafe_allow_html=True)
+                hif_stats = beregn_hold_stats(df_stats, HIF_UUID)
+                opp_stats = beregn_hold_stats(df_stats, opp_id)
+                st.markdown(f"Possession: {hif_stats['poss']} / {opp_stats['poss']}", unsafe_allow_html=True)
+
+    with col2:
+        with st.container(border=True):
+            st.markdown('<div class="card-title"><span>TRANSFERS</span></div>', unsafe_allow_html=True)
+            # ... (indsæt din transfer logik her) ...
+
+    with col3:
+        with st.container(border=True):
+            st.markdown('<div class="card-title"><span>SCOUTING</span></div>', unsafe_allow_html=True)
+
+    # --- TRENDLINES ---
     st.markdown("---")
     st.caption("##### Hvidovre IF: Sæson-trends (pr. kamp)")
     hif_recent = df_stats[((df_stats['CONTESTANTHOME_OPTAUUID'].str.upper() == HIF_UUID.strip().upper()) | (df_stats['CONTESTANTAWAY_OPTAUUID'].str.upper() == HIF_UUID.strip().upper())) & (df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False))].sort_values('MATCH_DATE_FULL', ascending=True).copy()
@@ -125,21 +147,13 @@ def vis_side():
             metric_cfg = metrics[i]
             st.caption(f"**{metric_cfg['name']}**")
             
-            # Vi undgår 'None' ved at lade Altair styre domænet for 'high' værdier
-            # Vi bruger 'zero=True' til at fiksere bunden
-            y_scale = alt.Scale(zero=True)
-            
-            # Basis-graf (linjen)
             line = alt.Chart(hif_recent).mark_line(color='#111', strokeWidth=2).encode(
                 x=alt.X('index:Q', axis=alt.Axis(domain=True, grid=False, labels=False, ticks=False, title=None)),
-                y=alt.Y(f'{metric_cfg["col"]}:Q', axis=alt.Axis(domain=True, grid=False, labels=False, ticks=False, title=None), scale=y_scale)
+                y=alt.Y(f'{metric_cfg["col"]}:Q', axis=alt.Axis(domain=True, grid=False, labels=False, ticks=False, title=None), scale=alt.Scale(zero=True))
             )
-            
-            # Gennemsnitslinje
             rule = alt.Chart(hif_recent).mark_rule(color='#ccc', strokeDash=[3,3]).encode(
                 y=f'mean({metric_cfg["col"]}):Q'
             )
-            
             st.altair_chart(line + rule, use_container_width=True)
 
 if __name__ == "__main__":
