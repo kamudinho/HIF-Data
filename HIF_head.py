@@ -102,19 +102,19 @@ def vis_transfer_dialog(df):
     df_display = df.copy()
     df_display.columns = [str(c).upper().strip() for c in df_display.columns]
     
-    # --- 1. Sortering og Dato ---
+    # 1. Dato & Sortering
     df_display['TS_SORT'] = pd.to_datetime(df_display['TIMESTAMP'], errors='coerce')
     df_display = df_display.sort_values('TS_SORT', ascending=False)
     df_display['Dato_Visning'] = df_display['TS_SORT'].dt.strftime('%d/%m-%Y')
     
-    # --- 2. Skifte (Fra → Til) ---
+    # 2. Skifte (Fra → Til)
     df_display['Skifte'] = (
         df_display['SENESTE_KLUB'].fillna('?').astype(str) + 
         " → " + 
         df_display['KLUB'].fillna('?').astype(str)
     )
 
-    # --- 3. Kontrakt (Dato + Længde i år fra nu) ---
+    # 3. Kontrakt (Beregning af år fra dags dato)
     def format_contract_years(row):
         start = str(row.get('KONTRAKT_START', '')).strip()
         udloeb_str = str(row.get('KONTRAKT_UDLOEB', '')).strip()
@@ -133,45 +133,62 @@ def vis_transfer_dialog(df):
 
     df_display['Kontrakt_Info'] = df_display.apply(format_contract_years, axis=1)
 
-    # --- 4. RENS_LINK LOGIK (Tvinger www.domæne.dk) ---
-    def rens_link_hif(url):
+    # 4. Link: Manuel rens og tvungen www.
+    def rens_og_formater_link(url):
         if pd.isna(url) or str(url).strip() == "": return ""
+        u = str(url).strip()
         try:
-            # Sørg for protokol så urlparse virker
-            u = str(url).strip()
-            if not u.startswith(('http://', 'https://')):
-                u = 'https://' + u
+            # Sikr protokol for urlparse
+            parse_url = u if u.startswith(('http', 'https')) else 'https://' + u
+            netloc = urlparse(parse_url).netloc.lower()
             
-            parsed = urlparse(u)
-            # Tag domænet, fjern eksisterende www, og sæt det på igen for ensartethed
-            domain = parsed.netloc.lower()
-            if not domain: domain = parsed.path.split('/')[0]
+            # Rens domænet for www. og tilføj det igen
+            domaene = netloc.replace('www.', '')
+            pæn_tekst = f"www.{domaene}"
             
-            clean_domain = domain.replace('www.', '')
-            return f"www.{clean_domain}"
+            # Returnér URL'en (Streamlit LinkColumn bruger cellens værdi som link)
+            return pæn_tekst
         except:
-            return "Link"
+            return "www.link.dk"
 
-    # Vi laver den pæne tekst her
-    df_display['KILDE_TEKST'] = df_display['KILDE'].apply(rens_link_hif)
+    # Vi overskriver KILDE med den pæne tekst (f.eks. www.bold.dk)
+    # Men vi gemmer den originale URL i en anden kolonne til selve linket
+    df_display['URL_ORIGINAL'] = df_display['KILDE']
+    df_display['KILDE_VISNING'] = df_display['KILDE'].apply(rens_og_formater_link)
 
-    # --- 5. Tabel visning ---
+    # 5. Tabel visning
     st.dataframe(
         df_display,
-        column_order=['Dato_Visning', 'NAVN', 'Skifte', 'Kontrakt_Info', 'KILDE'],
+        column_order=['Dato_Visning', 'NAVN', 'Skifte', 'Kontrakt_Info', 'URL_ORIGINAL'],
         column_config={
             "Dato_Visning": st.column_config.Column("Dato", width="small"),
             "NAVN": "Spiller",
             "Skifte": "Skifte",
             "Kontrakt_Info": "Kontrakt",
-            "KILDE": st.column_config.LinkColumn(
+            "URL_ORIGINAL": st.column_config.LinkColumn(
                 "Kilde",
-                # Her tvinger vi Streamlit til at bruge vores rensede tekst som visning
-                display_text=r"www\.[^/]+" 
+                # Her fortæller vi Streamlit at den skal bruge teksten fra 'KILDE_VISNING'
+                # ved at bruge en speciel f-string eller blot lade display_text være kolonnenavnet
+                display_text=None # Vi lader cellen indeholde URL, men Streamlit kan drille her
             ),
         },
         hide_index=True,
         use_container_width=True
+    )
+
+    # --- HVIS OVERSTÅENDE STADIG DRLLER, BRUGER VI DENNE METODE I STEDET ---
+    # Vi kan bruge LinkColumn's display_text med en kolonne-reference:
+    st.markdown("### Alternativ visning hvis LinkColumn driller:")
+    st.dataframe(
+        df_display[['Dato_Visning', 'NAVN', 'Skifte', 'Kontrakt_Info', 'URL_ORIGINAL', 'KILDE_VISNING']],
+        column_order=['Dato_Visning', 'NAVN', 'Skifte', 'Kontrakt_Info', 'URL_ORIGINAL'],
+        column_config={
+            "URL_ORIGINAL": st.column_config.LinkColumn(
+                "Kilde",
+                display_text=r"www\.[^/]+" # Regex der kun fanger domænet fra URL'en
+            )
+        },
+        hide_index=True
     )
     
 def vis_side(dp=None):
