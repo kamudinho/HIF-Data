@@ -47,19 +47,25 @@ def apply_custom_style():
             [data-testid="stHeaderBlockContainer"] h1 { display: none; }
             .stApp { background-color: #FFFFFF; }
             .card-title { color: #1a1a1a; font-size: 11px; font-weight: 700; margin-bottom: 12px; text-transform: uppercase; border-bottom: 1px solid #f0f0f0; padding-bottom: 6px; display: flex; justify-content: space-between; }
-            .title-date { color: #888; font-weight: 500; text-transform: none; font-size: 11px; }
-            .stats-table { width: 100%; font-size: 10px; border-collapse: collapse; table-layout: fixed; }
-            .stats-label { color: #666; font-weight: 700; width: 45%; padding: 2px 0; }
-            .stats-value { text-align: right; font-weight: 700; color: #111; padding: 2px 0; }
-            .form-wrapper { display: flex; justify-content: space-between; gap: 4px; width: 100%; margin-top: 12px; }
+            
+            /* FORMKURVE JUSTERINGER */
+            .form-wrapper { display: flex; justify-content: space-between; gap: 4px; width: 100%; margin-top: 12px; padding-bottom: 10px; } /* Tilføjet padding-bottom */
             .form-column { display: flex; flex-direction: column; align-items: center; flex: 1; }
-            .res-pill { width: 100%; border-radius: 4px; color: white; text-align: center; font-size: 9px; font-weight: 800; padding: 3px 0; margin-bottom: 4px; }
-            .legend-logo { width: 22px; height: 22px; object-fit: contain; }
+            .res-pill { width: 100%; border-radius: 4px; color: white; text-align: center; font-size: 9px; font-weight: 800; padding: 2px 0; margin-bottom: 4px; }
+            .legend-logo { width: 20px; height: 20px; object-fit: contain; } /* Lidt mindre logoer */
             
-            div.stButton > button { padding: 2px 8px !important; font-size: 10px !important; height: 26px !important; margin-top: 5px; }
+            /* KNAP JUSTERINGER */
+            div.stButton > button { 
+                padding: 1px 6px !important; 
+                font-size: 9px !important; 
+                height: 22px !important; 
+                width: auto !important; 
+                margin-top: 4px !important;
+                border-radius: 3px !important;
+            }
             
+            /* Grid layout til transfers */
             .list-item { font-size: 10px; margin-bottom: 6px; color: #333; display: grid; grid-template-columns: 1fr auto auto auto; align-items: center; gap: 4px; width: 100%; }
-            .player-info { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
             .prev-club { color: #aaa; font-size: 9px; text-align: right; }
             .new-club { font-weight: 700; text-align: right; }
         </style>
