@@ -329,24 +329,34 @@ def vis_side():
     st.caption("##### Hvidovre IF") # En skillelinje for visuel adskillelse
     trend_cols = st.columns(6)
 
-    # Vi definerer de 6 metrics vi vil tracke
-    metrics = [
-        {"name": "Mål", "col": "TOTAL_HOME_SCORE"}, # Skal tilpasses ift om HIF er hjemme/ude
-        {"name": "xG", "col": "HOME_XG"},
-        {"name": "Skud", "col": "HOME_SHOTS"},
-        {"name": "Touches i boks", "col": "HOME_TOUCHES"},
-        {"name": "Possession", "col": "HOME_POSS"},
-        {"name": "Forward passes", "col": "HOME_FORWARDPASSES"}
-    ]
-
-    # Hent HIF's seneste kampe til trendline
+    # 1. Filtrer kun afviklede kampe og tag ALLE kampe i sæsonen
     hif_recent = df_stats[
-        (df_stats['CONTESTANTHOME_OPTAUUID'].str.upper() == HIF_UUID.strip().upper()) | 
-        (df_stats['CONTESTANTAWAY_OPTAUUID'].str.upper() == HIF_UUID.strip().upper())
-    ].sort_values('MATCH_DATE_FULL', ascending=True).tail(5).copy() # .copy() er vigtig
+        ((df_stats['CONTESTANTHOME_OPTAUUID'].str.upper() == HIF_UUID.strip().upper()) | 
+         (df_stats['CONTESTANTAWAY_OPTAUUID'].str.upper() == HIF_UUID.strip().upper())) &
+        (df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False))
+    ].sort_values('MATCH_DATE_FULL', ascending=True).copy()
 
-    # SÆT DATO SOM INDEKS: Dette fortæller Streamlit, at det er en tidslinje
+    # 2. Dynamisk kolonne-valg (Hjemme/Ude logik)
+    # Vi opretter midlertidige kolonner til graferne, så vi altid viser HIF's data
+    hif_recent['PLOT_GOALS'] = hif_recent.apply(lambda r: r['TOTAL_HOME_SCORE'] if r['CONTESTANTHOME_OPTAUUID'].upper() == HIF_UUID else r['TOTAL_AWAY_SCORE'], axis=1)
+    hif_recent['PLOT_XG'] = hif_recent.apply(lambda r: r['HOME_XG'] if r['CONTESTANTHOME_OPTAUUID'].upper() == HIF_UUID else r['AWAY_XG'], axis=1)
+    hif_recent['PLOT_SHOTS'] = hif_recent.apply(lambda r: r['HOME_SHOTS'] if r['CONTESTANTHOME_OPTAUUID'].upper() == HIF_UUID else r['AWAY_SHOTS'], axis=1)
+    hif_recent['PLOT_TOUCHES'] = hif_recent.apply(lambda r: r['HOME_TOUCHES'] if r['CONTESTANTHOME_OPTAUUID'].upper() == HIF_UUID else r['AWAY_TOUCHES'], axis=1)
+    hif_recent['PLOT_POSS'] = hif_recent.apply(lambda r: r['HOME_POSS'] if r['CONTESTANTHOME_OPTAUUID'].upper() == HIF_UUID else r['AWAY_POSS'], axis=1)
+    hif_recent['PLOT_FWD'] = hif_recent.apply(lambda r: r['HOME_FORWARD_PASSES'] if r['CONTESTANTHOME_OPTAUUID'].upper() == HIF_UUID else r['AWAY_FORWARD_PASSES'], axis=1)
+
+    # Sæt dato som indeks
     hif_recent = hif_recent.set_index('MATCH_DATE_FULL')
+
+    # Opdater metrik-mapping til de nye plot-kolonner
+    metrics = [
+        {"name": "Mål", "col": "PLOT_GOALS"},
+        {"name": "xG", "col": "PLOT_XG"},
+        {"name": "Skud", "col": "PLOT_SHOTS"},
+        {"name": "Touches i boks", "col": "PLOT_TOUCHES"},
+        {"name": "Possession", "col": "PLOT_POSS"},
+        {"name": "Fwd passes", "col": "PLOT_FWD"}
+    ]
 
     for i, col in enumerate(trend_cols):
         with col:
