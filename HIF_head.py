@@ -126,7 +126,7 @@ def vis_transfer_dialog(df):
     # 5. Tabel visning
     st.dataframe(
         df_display,
-        column_order=['Dato', 'Spiller', 'Skifte', 'Kontrakt', 'KILDE'], 
+        column_order=['Dato', 'Spiller', 'Position', 'Skifte', 'Kontrakt', 'KILDE'], 
         column_config={
             "Dato": st.column_config.Column(width="small"),
             "Spiller": st.column_config.Column("Spiller", width="medium"),
