@@ -134,7 +134,7 @@ def vis_side(dp=None):
                         </table>
                     """, unsafe_allow_html=True)
                 
-                st.markdown(f"<div style='font-size:10px; color:#888; font-weight:700; margin-top:18px; text-transform:uppercase;'>Form: {opp_name}</div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='font-size:10px; color:#888; font-weight:700; margin-top:14px; text-transform:uppercase;'>Form: {opp_name}</div>", unsafe_allow_html=True)
                 opp_m = df_matches[((df_matches['HOME_ID'] == opp_id) | (df_matches['AWAY_ID'] == opp_id)) & 
                                    (df_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False))].sort_values('MATCH_DATE_FULL', ascending=False).head(5)
                 
