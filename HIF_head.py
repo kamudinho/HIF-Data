@@ -11,29 +11,33 @@ def apply_custom_style():
             [data-testid="stHeader"] { background: rgba(0,0,0,0); }
             .stApp { background-color: #FFFFFF; }
             
-            /* Ensartet højde på containere */
-            [data-testid="stVerticalBlockBorderWrapper"] > div > div {
-                min-height: 320px;
+            /* SIKRER ENS HØJDE OG BREDE-FØLELSE */
+            .stVizColumns { gap: 1rem; }
+            
+            /* Denne selector rammer de containere vi laver med border=True */
+            [data-testid="stVerticalBlockBorderWrapper"] {
+                min-height: 335px;
             }
 
             .card-title {
                 color: #1a1a1a;
                 font-size: 13px;
                 font-weight: 700;
-                margin-bottom: 15px;
+                margin-bottom: 12px;
                 text-transform: uppercase;
                 letter-spacing: 0.5px;
             }
 
-            /* Stats Tabel */
+            /* Stats Tabel - Gør den mere luftig nu hvor der er plads */
             .stats-table {
-                width: 100%;
+                width: 95%;
                 font-size: 11px;
                 border-collapse: collapse;
-                margin-top: 5px;
+                margin-top: 0px;
+                margin-left: auto;
             }
             .stats-table td {
-                padding: 6px 0;
+                padding: 5px 0;
                 border-bottom: 1px solid #f0f0f0;
             }
             .stats-label { color: #666; font-weight: 500; }
@@ -43,7 +47,7 @@ def apply_custom_style():
             .form-wrapper {
                 display: flex;
                 justify-content: space-between;
-                gap: 4px;
+                gap: 8px;
                 width: 100%;
                 margin-top: 15px;
             }
@@ -63,12 +67,12 @@ def apply_custom_style():
                 padding: 4px 0;
                 margin-bottom: 6px;
             }
-            .legend-logo { width: 24px; height: 24px; object-fit: contain; }
+            .legend-logo { width: 26px; height: 26px; object-fit: contain; }
             
-            /* Lister */
+            /* Lister i de små bokse */
             .list-item {
                 font-size: 11px;
-                margin-bottom: 6px;
+                margin-bottom: 5px;
                 color: #333;
                 line-height: 1.2;
             }
@@ -80,7 +84,7 @@ def vis_side(dp=None):
     conn = _get_snowflake_conn()
     if not conn: return
 
-    # --- DATA & CONFIG ---
+    # --- DATA ---
     DB = "KLUB_HVIDOVREIF.AXIS"
     LIGA_UUID = "dyjr458hcmrcy87fsabfsy87o" 
     HIF_UUID = "8GXD9RY2580PU1B1DD5NY9YMY" 
@@ -93,16 +97,15 @@ def vis_side(dp=None):
     hif_id = HIF_UUID.strip().upper()
     opta_to_name = {str(v['opta_uuid']).strip().upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
 
-    # Prep
     df_matches['HOME_ID'] = df_matches['CONTESTANTHOME_OPTAUUID'].astype(str).str.strip().str.upper()
     df_matches['AWAY_ID'] = df_matches['CONTESTANTAWAY_OPTAUUID'].astype(str).str.strip().str.upper()
     df_matches['MATCH_DATE_FULL'] = pd.to_datetime(df_matches['MATCH_DATE_FULL'], errors='coerce')
     hif_m = df_matches[(df_matches['HOME_ID'] == hif_id) | (df_matches['AWAY_ID'] == hif_id)].copy()
     
-    # UI Layout
-    col1, col2, col3 = st.columns([2.2, 1, 1])
+    # OPPDATERET BREDDE: Col 1 fylder nu langt mere
+    col1, col2, col3 = st.columns([2.5, 1, 1])
 
-    # 1. NÆSTE KAMP
+    # 1. NÆSTE KAMP (Den brede boks)
     with col1:
         future = hif_m[~hif_m['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].sort_values('MATCH_DATE_FULL')
         with st.container(border=True):
@@ -113,13 +116,14 @@ def vis_side(dp=None):
                 
                 st.markdown(f"<div class='card-title'>Næste kamp • R. {int(nk['WEEK'])}</div>", unsafe_allow_html=True)
                 
+                # Herinde bruger vi nu et 1:1.2 forhold for at give metrics plads
                 t_l, t_r = st.columns([1, 1.2])
                 with t_l:
-                    c1, c2, c3 = st.columns([1, 0.8, 1])
-                    c1.image(TEAMS.get("Hvidovre", {}).get("logo", ""), width=40)
-                    c2.markdown(f"<div style='text-align:center; padding-top:10px;'><b>VS</b><br><small>{nk['MATCH_DATE_FULL'].strftime('%d/%m')}</small></div>", unsafe_allow_html=True)
-                    c3.image(TEAMS.get(opp_name, {}).get("logo", ""), width=40)
-                    st.markdown(f"<div style='text-align:center; font-size:12px; font-weight:700; margin-top:5px;'>{opp_name}</div>", unsafe_allow_html=True)
+                    c1, c2, c3 = st.columns([1, 0.7, 1])
+                    c1.image(TEAMS.get("Hvidovre", {}).get("logo", ""), width=42)
+                    c2.markdown(f"<div style='text-align:center; padding-top:12px;'><b>VS</b><br><small>{nk['MATCH_DATE_FULL'].strftime('%d/%m')}</small></div>", unsafe_allow_html=True)
+                    c3.image(TEAMS.get(opp_name, {}).get("logo", ""), width=42)
+                    st.markdown(f"<div style='text-align:center; font-size:12px; font-weight:700; margin-top:8px;'>{opp_name}</div>", unsafe_allow_html=True)
                 
                 with t_r:
                     st.markdown(f"""
@@ -130,7 +134,7 @@ def vis_side(dp=None):
                         </table>
                     """, unsafe_allow_html=True)
                 
-                st.markdown(f"<div style='font-size:10px; color:#888; font-weight:700; margin-top:15px; text-transform:uppercase;'>Form: {opp_name}</div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='font-size:10px; color:#888; font-weight:700; margin-top:18px; text-transform:uppercase;'>Form: {opp_name}</div>", unsafe_allow_html=True)
                 opp_m = df_matches[((df_matches['HOME_ID'] == opp_id) | (df_matches['AWAY_ID'] == opp_id)) & 
                                    (df_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False))].sort_values('MATCH_DATE_FULL', ascending=False).head(5)
                 
@@ -164,10 +168,8 @@ def vis_side(dp=None):
             st.markdown('<div class="card-title">Scouting</div>', unsafe_allow_html=True)
             try:
                 df_e = pd.read_csv("data/scouting/emneliste.csv").tail(6)
-                if not df_e.empty:
-                    for _, r in df_e.iterrows():
-                        st.markdown(f"<div class='list-item'>⭐ {r['Navn']}</div>", unsafe_allow_html=True)
-                else: st.caption("Listen er tom")
+                for _, r in df_e.iterrows():
+                    st.markdown(f"<div class='list-item'>⭐ {r['Navn']}</div>", unsafe_allow_html=True)
             except: st.caption("Kunne ikke indlæse")
 
     st.divider()
