@@ -13,10 +13,10 @@ GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 
 COMP_MAP = { 
     335: "Superliga", 
-    328: "Betinia Ligaen", 
+    328: "Betinia Liga", 
     329: "2. div", 
     43319: "3. div", 
-    1305: "U19 Ligaen"
+    1305: "U19 Liga"
 }
 
 AGE_LIMITS = { 1305: 19 }
