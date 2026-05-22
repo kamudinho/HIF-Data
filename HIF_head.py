@@ -208,28 +208,37 @@ def vis_side():
             for i in range(3):
                 idx = row * 3 + i
                 col_name = metrics[idx]['col']
-                avg_val = hif_recent[col_name].mean() # Beregn gennemsnit
+                # Beregn snit direkte fra den forberedte dataframe
+                avg_val = hif_recent[col_name].mean()
                 
                 with cols[i]:
-                    # Vis navn og gennemsnit i titlen
                     st.caption(f"**{metrics[idx]['name']}** (Snit: {avg_val:{metrics[idx]['fmt']}})")
                     
+                    # Definer base (indeholder data og tooltips)
                     base = alt.Chart(hif_recent).encode(
                         x=alt.X('index:O', axis=None),
                         y=alt.Y(f'{col_name}:Q', axis=None, scale=alt.Scale(zero=False)),
                         tooltip=[
                             alt.Tooltip('MODSTANDER', title='Modstander'),
                             alt.Tooltip('H_U', title='H/U'),
-                            alt.Tooltip(col_name, title=f'{metrics[idx]["name"]}', format=metrics[idx]["fmt"])
+                            alt.Tooltip(col_name, title=metrics[idx]['name'], format=metrics[idx]['fmt'])
                         ]
                     ).properties(height=80)
                     
+                    # Linje og punkter arver fra base
                     line = base.mark_line(color='#cccccc', strokeWidth=2)
                     points = base.mark_circle(size=50, color='#C41E3A')
-                    rule = alt.Chart(hif_recent).mark_rule(
-                        color='#333333', strokeWidth=1.5, strokeDash=[4, 4]
-                    ).encode(y=alt.Y(f'mean({col_name}):Q'))
                     
+                    # Gennemsnitslinje (skal også kende dataene fra hif_recent)
+                    rule = alt.Chart(hif_recent).mark_rule(
+                        color='#333333', 
+                        strokeWidth=1.5, 
+                        strokeDash=[4, 4]
+                    ).encode(
+                        y=f'mean({col_name}):Q'
+                    )
+                    
+                    # Vis kombineret chart
                     st.altair_chart((line + points + rule).interactive(), use_container_width=True)                    
 if __name__ == "__main__":
     vis_side()
