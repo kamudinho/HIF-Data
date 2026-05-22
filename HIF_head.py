@@ -100,12 +100,20 @@ def vis_side():
 
     with col1:
         with st.container(border=True):
-            future = df_matches[~df_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].sort_values('MATCH_DATE_FULL')
+            # 1. Konverter datoen først så sortering virker
+            df_matches['MATCH_DATE_DT'] = pd.to_datetime(df_matches['MATCH_DATE_FULL'], errors='coerce')
+            
+            # 2. Filtrer kampe der IKKE er spillet (og sørg for at de har en dato)
+            future = df_matches[
+                ~df_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish|postponed|abandoned', na=False) & 
+                df_matches['MATCH_DATE_DT'].notnull()
+            ].sort_values('MATCH_DATE_DT', ascending=True) # Sorter stigende så den tidligste fremtidige kamp er først
+            
             if not future.empty:
                 nk = future.iloc[0]
+                # Logik for at finde modstanderen
                 opp_id = nk['CONTESTANTAWAY_OPTAUUID'] if str(nk['CONTESTANTHOME_OPTAUUID']).upper() == HIF_UUID.strip().upper() else nk['CONTESTANTHOME_OPTAUUID']
                 opp_name = opta_to_name.get(str(opp_id).upper(), "Ukendt")
-
                 is_home = df_team['CONTESTANTHOME_OPTAUUID'].str.upper() == HIF_UUID.strip().upper()
                 avg_goals_f = round(pd.concat([df_team.loc[is_home, 'TOTAL_HOME_SCORE'], df_team.loc[~is_home, 'TOTAL_AWAY_SCORE']]).mean(), 1)
                 avg_goals_i = round(pd.concat([df_team.loc[is_home, 'TOTAL_AWAY_SCORE'], df_team.loc[~is_home, 'TOTAL_HOME_SCORE']]).mean(), 1)
