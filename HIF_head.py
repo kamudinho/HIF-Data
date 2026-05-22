@@ -127,21 +127,42 @@ def vis_transfer_dialog(df):
             return f"www.{domaene}"
         except: return "Link"
 
-    # Vi laver den pæne tekst
-    df_display['VIS_URL'] = df_display['KILDE'].apply(format_kilde)
+    # 4. Link-logik: Vi renser selve URL'en i kolonnen først
+    def rens_link_til_visning(url):
+        if pd.isna(url) or str(url).strip() == "": return ""
+        try:
+            u = str(url).strip()
+            # Sikr protokol for parsing
+            parse_u = u if u.startswith('http') else 'https://' + u
+            domaene = urlparse(parse_u).netloc.lower().replace('www.', '')
+            if not domaene:
+                domaene = urlparse(parse_u).path.split('/')[0].replace('www.', '')
+            
+            # Vi returnerer den præcise tekst, vi vil se
+            return f"www.{domaene}"
+        except:
+            return "www.link.dk"
 
-    # 5. Tabel visning - Vi bruger TextColumn med link-mulighed
+    # Her er tricket: Vi overskriver KILDE med den rensede tekst (www.bold.dk)
+    # Streamlit vil stadig bruge den oprindelige URL som selve linket, 
+    # SÅFREMT vi har gemt den oprindelige URL et sted.
+    df_display['URL_LINK'] = df_display['KILDE'] # Gem originalen til selve klikket
+    df_display['KILDE_TEKST'] = df_display['KILDE'].apply(rens_link_til_visning)
+
+    # 5. Tabel visning
     st.dataframe(
         df_display,
-        column_order=['Dato', 'NAVN', 'Skifte', 'Kontrakt', 'KILDE'],
+        # Sørg for at URL_LINK er med i rækkefølgen
+        column_order=['Dato', 'NAVN', 'Skifte', 'Kontrakt', 'URL_LINK'], 
         column_config={
             "Dato": st.column_config.Column(width="small"),
             "NAVN": "Spiller",
-            "KILDE": st.column_config.LinkColumn(
+            "Skifte": "Skifte",
+            "Kontrakt": "Kontrakt",
+            "URL_LINK": st.column_config.LinkColumn(
                 "Kilde",
-                # VI BRUGER REGEX HER - men kun på den del vi VED er der.
-                # Denne regex fanger alt før den første skråstreg efter domænet.
-                display_text=r"^(?:https?://)?(?:www\.)?([^/]+)"
+                # Her peger vi direkte på kolonnen med de rensede www-links
+                display_text="KILDE_TEKST" 
             ),
         },
         hide_index=True,
