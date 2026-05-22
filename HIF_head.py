@@ -164,10 +164,19 @@ def vis_side(dp=None):
         with st.container(border=True):
             if not future.empty:
                 nk = future.iloc[0]
-                opp_id = nk['CONTESTANTAWAY_OPTAUUID'] if nk['CONTESTANTHOME_OPTAUUID'] == hif_id else nk['CONTESTANTHOME_OPTAUUID']
-                opp_name = opta_to_name.get(opp_id.upper(), "Modstander")
-                st.markdown(f"<div class='card-title'><span>NÆSTE KAMP vs. {opp_name.upper()}</span><span class='title-date'>{nk['MATCH_DATE_FULL'].strftime('%d/%m')}</span></div>", unsafe_allow_html=True)
                 
+                # Hent home og away UUID
+                home_id = str(nk.get('CONTESTANTHOME_OPTAUUID', '')).strip().upper()
+                away_id = str(nk.get('CONTESTANTAWAY_OPTAUUID', '')).strip().upper()
+                
+                # Identificer modstanderens ID
+                # Hvis hjemmeholdet er HIF, er modstander udeholdet. Ellers er modstander hjemmeholdet.
+                opp_id = away_id if home_id == hif_id else home_id
+                
+                # Hent navn fra mapping
+                opp_name = opta_to_name.get(opp_id, "Ukendt Modstander")
+                
+                st.markdown(f"<div class='card-title'><span>NÆSTE KAMP vs. {opp_name.upper()}</span><span class='title-date'>{nk['MATCH_DATE_FULL'].strftime('%d/%m')}</span></div>", unsafe_allow_html=True)                
                 t_l, t_r = st.columns([1, 1.2])
                 with t_l:
                     c1, c2, c3 = st.columns([1, 0.6, 1])
