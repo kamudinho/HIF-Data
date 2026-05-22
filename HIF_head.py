@@ -326,17 +326,17 @@ def vis_side():
 
 
 # --- NY RÆKKE: TRENDLINES (6 kolonner) ---
-    st.markdown("---") # En skillelinje for visuel adskillelse
+    st.markdown("##### Hvidovre IF") # En skillelinje for visuel adskillelse
     trend_cols = st.columns(6)
 
     # Vi definerer de 6 metrics vi vil tracke
     metrics = [
-        {"name": "Mål scoret", "col": "TOTAL_HOME_SCORE"}, # Skal tilpasses ift om HIF er hjemme/ude
+        {"name": "Mål", "col": "TOTAL_HOME_SCORE"}, # Skal tilpasses ift om HIF er hjemme/ude
         {"name": "xG", "col": "HOME_XG"},
         {"name": "Skud", "col": "HOME_SHOTS"},
         {"name": "Touches i boks", "col": "HOME_TOUCHES"},
         {"name": "Possession", "col": "HOME_POSS"},
-        {"name": "Forward passes", "col": "HOME_FORWARD_PASSES"}
+        {"name": "Forward passes", "col": "HOME_FORWARDPASSES"}
     ]
 
     # Hent HIF's seneste kampe til trendline
