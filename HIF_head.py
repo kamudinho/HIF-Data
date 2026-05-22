@@ -77,24 +77,35 @@ def vis_side():
     if not conn: return
 
     DB, LIGA_UUID, HIF_UUID = "KLUB_HVIDOVREIF.AXIS", "dyjr458hcmrcy87fsabfsy87o", "8GXD9RY2580PU1B1DD5NY9YMY"
+    
+    # Hent data
     df_matches = conn.query(f"SELECT * FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'")
     df_matches.columns = [str(c).upper() for c in df_matches.columns]
+    
+    queries = get_opta_queries(liga_f="NordicBet Liga", saeson_f="2025/2026", hif_only=True)
+    df_team = conn.query(queries["opta_team_stats"])
+    
     opta_to_name = {str(v['opta_uuid']).strip().upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
-    df_matches['MATCH_DATE_FULL'] = pd.to_datetime(df_matches['MATCH_DATE_FULL'], errors='coerce')
     
     col1, col2, col3 = st.columns([1, 1, 1])
 
     with col1:
         with st.container(border=True):
-            hif_m = df_matches[(df_matches['CONTESTANTHOME_OPTAUUID'].str.upper() == HIF_UUID.strip().upper()) | (df_matches['CONTESTANTAWAY_OPTAUUID'].str.upper() == HIF_UUID.strip().upper())]
-            future = hif_m[~hif_m['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].sort_values('MATCH_DATE_FULL')
-            
+            # Find næste kamp
+            future = df_matches[~df_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].sort_values('MATCH_DATE_FULL')
             if not future.empty:
                 nk = future.iloc[0]
                 opp_id = nk['CONTESTANTAWAY_OPTAUUID'] if str(nk['CONTESTANTHOME_OPTAUUID']).upper() == HIF_UUID.strip().upper() else nk['CONTESTANTHOME_OPTAUUID']
                 opp_name = opta_to_name.get(str(opp_id).upper(), "Ukendt")
                 
-                st.markdown(f"<div class='card-title'><span>NÆSTE KAMP vs. {opp_name.upper()}</span><span class='title-date'>{nk['MATCH_DATE_FULL'].strftime('%d/%m')}</span></div>", unsafe_allow_html=True)
+                # Beregn dynamiske stats fra de sidste 5 kampe i df_team
+                last_5 = df_team.head(5)
+                # Logik: Tjek om HIF var hjemme eller ude i de sidste 5 kampe
+                is_home = df_team['CONTESTANTHOME_OPTAUUID'].str.upper() == HIF_UUID.strip().upper()
+                avg_goals_f = round(pd.concat([df_team.loc[is_home, 'TOTAL_HOME_SCORE'], df_team.loc[~is_home, 'TOTAL_AWAY_SCORE']]).mean(), 1)
+                avg_goals_i = round(pd.concat([df_team.loc[is_home, 'TOTAL_AWAY_SCORE'], df_team.loc[~is_home, 'TOTAL_HOME_SCORE']]).mean(), 1)
+                
+                st.markdown(f"<div class='card-title'><span>NÆSTE KAMP vs. {opp_name.upper()}</span></div>", unsafe_allow_html=True)
                 
                 t_l, t_r = st.columns([1, 1.2]) 
                 with t_l:
@@ -102,20 +113,26 @@ def vis_side():
                     c1.image(TEAMS.get("Hvidovre", {}).get("logo", ""), width=38)
                     c2.markdown("<div style='text-align:center; padding-top:10px; font-size:9px; color:#888;'>VS</div>", unsafe_allow_html=True)
                     c3.image(TEAMS.get(opp_name, {}).get("logo", ""), width=38)
-                with t_r:
-                    st.markdown(f"<table class='stats-table'><tr><td class='stats-label'>Mål f/i</td><td class='stats-value'>1.4/1.1</td></tr><tr><td class='stats-label'>xG f/i</td><td class='stats-value'>1.5/1.2</td></tr><tr><td class='stats-label'>Poss.</td><td class='stats-value'>52%</td></tr></table>", unsafe_allow_html=True)
                 
-                opp_m = df_matches[((df_matches['CONTESTANTHOME_OPTAUUID'] == opp_id) | (df_matches['CONTESTANTAWAY_OPTAUUID'] == opp_id)) & (df_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False))].sort_values('MATCH_DATE_FULL', ascending=False).head(5)
-                if not opp_m.empty:
-                    f_items = ""
-                    for _, m in opp_m.iloc[::-1].iterrows():
-                        is_h = str(m['CONTESTANTHOME_OPTAUUID']).upper() == str(opp_id).upper()
-                        h_s, a_s = int(m['TOTAL_HOME_SCORE']), int(m['TOTAL_AWAY_SCORE'])
-                        res_col = "#28a745" if (is_h and h_s > a_s) or (not is_h and a_s > h_s) else ("#6c757d" if h_s == a_s else "#dc3545")
-                        o_uuid = m['CONTESTANTAWAY_OPTAUUID'] if is_h else m['CONTESTANTHOME_OPTAUUID']
-                        o_logo = TEAMS.get(opta_to_name.get(str(o_uuid).upper(), ""), {}).get("logo", "")
-                        f_items += f"<div class='form-column'><div class='res-pill' style='background:{res_col};'>{h_s}-{a_s}</div><img src='{o_logo}' class='legend-logo'></div>"
-                    st.markdown(f"<div class='form-wrapper'>{f_items}</div>", unsafe_allow_html=True)
+                with t_r:
+                    # Dynamiske metrics med 10px skriftstørrelse
+                    st.markdown(f"""
+                        <table class='stats-table' style='font-size: 10px;'>
+                            <tr><td class='stats-label'>Mål f/i</td><td class='stats-value'>{avg_goals_f}/{avg_goals_i}</td></tr>
+                            <tr><td class='stats-label'>Form</td><td class='stats-value'>Sidste 5</td></tr>
+                        </table>
+                    """, unsafe_allow_html=True)
+
+                # Formkurve logik
+                f_items = ""
+                for _, m in df_team.head(5).iloc[::-1].iterrows():
+                    is_h = str(m['CONTESTANTHOME_OPTAUUID']).upper() == HIF_UUID.strip().upper()
+                    h_s, a_s = int(m['TOTAL_HOME_SCORE']), int(m['TOTAL_AWAY_SCORE'])
+                    res_col = "#28a745" if (is_h and h_s > a_s) or (not is_h and a_s > h_s) else ("#6c757d" if h_s == a_s else "#dc3545")
+                    o_uuid = m['CONTESTANTAWAY_OPTAUUID'] if is_h else m['CONTESTANTHOME_OPTAUUID']
+                    o_logo = TEAMS.get(opta_to_name.get(str(o_uuid).upper(), ""), {}).get("logo", "")
+                    f_items += f"<div class='form-column'><div class='res-pill' style='background:{res_col};'>{h_s}-{a_s}</div><img src='{o_logo}' class='legend-logo'></div>"
+                st.markdown(f"<div class='form-wrapper'>{f_items}</div>", unsafe_allow_html=True)
 
     with col2:
         with st.container(border=True):
