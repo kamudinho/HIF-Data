@@ -28,7 +28,6 @@ def apply_custom_style():
             .card-title { color: #1a1a1a; font-size: 11px; font-weight: 700; margin-bottom: 12px; text-transform: uppercase; border-bottom: 1px solid #f0f0f0; padding-bottom: 6px; display: flex; justify-content: space-between; }
             .form-wrapper { display: flex; justify-content: space-between; gap: 4px; width: 100%; margin-top: 12px; }
             .res-pill { width: 100%; border-radius: 4px; color: white; text-align: center; font-size: 9px; font-weight: 800; padding: 2px 0; }
-            .legend-logo { width: 20px; height: 20px; object-fit: contain; }
             .list-item { font-size: 10px; margin-bottom: 6px; color: #333; display: grid; grid-template-columns: 1fr auto auto auto; align-items: center; gap: 4px; width: 100%; }
         </style>
     """, unsafe_allow_html=True)
@@ -39,7 +38,10 @@ def vis_side():
     if not conn: return
     
     HIF_UUID = "8GXD9RY2580PU1B1DD5NY9YMY"
+    
+    # Kald din eksterne funktion korrekt
     queries = get_opta_queries(liga_f="NordicBet Liga", saeson_f="2025/2026", hif_only=True)
+    
     df_matches = conn.query(queries["opta_team_stats"])
     df_matches.columns = [str(c).upper() for c in df_matches.columns]
     opta_to_name = {str(v['opta_uuid']).strip().upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
@@ -66,10 +68,13 @@ def vis_side():
     with col2:
         with st.container(border=True):
             st.markdown('<div class="card-title">TRANSFERS</div>', unsafe_allow_html=True)
-            df_t = pd.read_csv("data/players/1div_overskrivning.csv")
-            for _, r in df_t.sort_values('TIMESTAMP', ascending=False).head(5).iterrows():
-                st.markdown(f"<div class='list-item'><span>{r['NAVN']}</span><span>{r['KLUB']}</span></div>", unsafe_allow_html=True)
-            if st.button("Se alle", key="transfers_btn"): vis_transfer_dialog(df_t)
+            try:
+                df_t = pd.read_csv("data/players/1div_overskrivning.csv")
+                for _, r in df_t.sort_values('TIMESTAMP', ascending=False).head(5).iterrows():
+                    st.markdown(f"<div class='list-item'><span>{r['NAVN']}</span><span>{r['KLUB']}</span></div>", unsafe_allow_html=True)
+                if st.button("Se alle", key="transfers_btn"): vis_transfer_dialog(df_t)
+            except:
+                st.write("Ingen transferdata.")
 
     with col3:
         with st.container(border=True):
