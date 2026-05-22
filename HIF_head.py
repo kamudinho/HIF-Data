@@ -306,7 +306,7 @@ def vis_side():
                 df_t['TS_DATE'] = pd.to_datetime(df_t['TIMESTAMP'], errors='coerce')
                 df_t = df_t.dropna(subset=['TS_DATE'])
 
-                for _, r in df_t.sort_values('TS_DATE', ascending=False).head(5).iterrows():
+                for _, r in df_t.sort_values('TS_DATE', ascending=False).head(7).iterrows():
                     dato_str = r['TS_DATE'].strftime('%d/%m')
 
                     fra_klub = r.get('SENESTE_KLUB', '?')
