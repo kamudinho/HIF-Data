@@ -94,49 +94,44 @@ def shorten_url(url):
 # Dialog-boks funktionen med forkortede links
 @st.dialog("Alle Transfers", width="large")
 def vis_transfer_dialog(df):
-    cols_to_show = {
-        'TIMESTAMP': 'Dato',
-        'NAVN': 'Spiller',
-        'FRA_KLUB': 'Fra',
-        'KLUB': 'Til',
-        'KONTRAKT_START': 'Start',
-        'LÆNGDE': 'Længde',
-        'KILDE': 'Kilde'
-    }
-    
-    # Præparer data til visning
+    # Præparer data
     df_display = df.copy()
+    df_display['TS_SORT'] = pd.to_datetime(df_display['TIMESTAMP'], errors='coerce')
     
-    # Forkort linket i 'KILDE' kolonnen før visning
-    if 'KILDE' in df_display.columns:
-        df_display['KILDE_DISPLAY'] = df_display['KILDE'].apply(shorten_url)
-    
-    # Find eksisterende kolonner og omdøb
-    existing_cols = {k: v for k, v in cols_to_show.items() if k in df_display.columns}
-    
-    # Omdøb KILDE til KILDE_URL for at bevare linket, men vis KILDE_DISPLAY
-    df_final = df_display.sort_values('TS_SORT', ascending=False)
-    
-    # Vi bruger st.column_config til at gøre linket klikbart, selvom teksten er kort
+    # 1. Lav en hjælpefunktion til at trække domænet ud
+    def get_domain(url):
+        if pd.isna(url) or str(url).strip() == "":
+            return ""
+        try:
+            # Fjerner protocol og www, og tager kun det første led
+            domain = urlparse(str(url)).netloc.replace('www.', '')
+            return domain
+        except:
+            return "Link"
+
+    # 2. Lav en kolonne med den tekst vi vil vise
+    df_display['Kilde'] = df_display['KILDE'].apply(get_domain)
+
+    # 3. Definer hvilke kolonner vi vil have i hvilken rækkefølge
+    # Vi viser 'KILDE' kolonnen (som nu indeholder domænenavnet), men gør den klikbar til den oprindelige URL
     st.dataframe(
-        df_final,
-        column_order=(list(existing_cols.keys())[:-1] + ['KILDE']), 
+        df_display.sort_values('TS_SORT', ascending=False),
+        column_order=['TIMESTAMP', 'NAVN', 'FRA_KLUB', 'KLUB', 'KONTRAKT_START', 'KILDE'],
         column_config={
             "TIMESTAMP": "Dato",
             "NAVN": "Spiller",
             "FRA_KLUB": "Fra",
             "KLUB": "Til",
             "KONTRAKT_START": "Start",
-            "LÆNGDE": "Længde",
             "KILDE": st.column_config.LinkColumn(
                 "Kilde",
-                display_text=r'^https?://(?:www\.)?([^/?#]+)' # Regex der kun viser domænet
+                # Her bruger vi selve værdien fra rækken som tekst
+                display_text=None # Når display_text er None, viser den værdien i cellen (vores domæne)
             ),
         },
         hide_index=True,
         use_container_width=True
     )
-
 def vis_side(dp=None):
     apply_custom_style()
     conn = _get_snowflake_conn()
