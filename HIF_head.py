@@ -183,7 +183,7 @@ def vis_side():
 
         metrics = [
             {"name": "Mål", "col": "PLOT_GOALS", "fmt": ".0f"}, 
-            {"name": "xG", "col": "PLOT_XG", "fmt": ".1f"}, 
+            {"name": "xG", "col": "PLOT_XG", "fmt": ".2f"}, 
             {"name": "Skud", "col": "PLOT_SHOTS", "fmt": ".0f"}, 
             {"name": "Touches", "col": "PLOT_TOUCHES", "fmt": ".0f"}, 
             {"name": "Possession", "col": "PLOT_POSS", "fmt": ".1f"}, 
