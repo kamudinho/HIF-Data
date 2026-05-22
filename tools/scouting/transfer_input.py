@@ -170,7 +170,7 @@ def vis_side():
         liga_valg = st.segmented_control("Vælg liga", faner, default="Betinia Liga")
 
         if liga_valg == "Andet":
-            st.write("### Øvrige (Udlandet & Klubløse)")
+            st.caption("##### Øvrige")
             
             # Filtrer for spillere der enten er i udlandet ELLER er klubløse
             trup_andet = df_csv[(df_csv['KLUB'] == "Klubløs") | (df_csv['UDLANDET'].astype(str) == "True")].copy()
