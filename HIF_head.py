@@ -195,14 +195,32 @@ def vis_side():
                 idx = row * 3 + i
                 with cols[i]:
                     st.caption(f"**{metrics[idx]['name']}**")
-                    line = alt.Chart(hif_recent).mark_line(point=True, color='#ccc', strokeWidth=2).encode(
+                    
+                    # Definer grafen med rød markør og lysere linje
+                    line = alt.Chart(hif_recent).mark_line(
+                        color='#cccccc', 
+                        strokeWidth=2
+                    ).encode(
                         x=alt.X('index:O', axis=None),
                         y=alt.Y(f'{metrics[idx]["col"]}:Q', axis=None, scale=alt.Scale(zero=False))
                     ).properties(height=80)
-                    rule = alt.Chart(hif_recent).mark_rule(color='#000', strokeDash=[3,3]).encode(
+                    
+                    # Definer punkterne separat for at få dem røde
+                    points = alt.Chart(hif_recent).mark_circle(size=60, color='#C41E3A').encode(
+                        x=alt.X('index:O', axis=None),
+                        y=alt.Y(f'{metrics[idx]["col"]}:Q', axis=None)
+                    )
+                    
+                    # Gennemsnitslinjen (tydeligere)
+                    rule = alt.Chart(hif_recent).mark_rule(
+                        color='#333333', 
+                        strokeWidth=1.5, 
+                        strokeDash=[4, 4]
+                    ).encode(
                         y=f'mean({metrics[idx]["col"]}):Q'
                     )
-                    st.altair_chart(line + rule, use_container_width=True)
+                    
+                    st.altair_chart(line + points + rule, use_container_width=True)
                     
 if __name__ == "__main__":
     vis_side()
