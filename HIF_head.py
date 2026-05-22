@@ -324,6 +324,36 @@ def vis_side():
         with st.container(border=True):
             st.markdown('<div class="card-title"><span>SCOUTING</span></div>', unsafe_allow_html=True)
 
+
+# --- NY RÆKKE: TRENDLINES (6 kolonner) ---
+    st.markdown("---") # En skillelinje for visuel adskillelse
+    trend_cols = st.columns(6)
+
+    # Vi definerer de 6 metrics vi vil tracke
+    metrics = [
+        {"name": "Mål scoret", "col": "TOTAL_HOME_SCORE"}, # Skal tilpasses ift om HIF er hjemme/ude
+        {"name": "xG", "col": "HOME_XG"},
+        {"name": "Skud", "col": "HOME_SHOTS"},
+        {"name": "Touches i boks", "col": "HOME_TOUCHES"},
+        {"name": "Possession", "col": "HOME_POSS"},
+        {"name": "Forward passes", "col": "HOME_FORWARD_PASSES"}
+    ]
+
+    # Hent HIF's seneste kampe til trendline
+    hif_recent = df_stats[
+        (df_stats['CONTESTANTHOME_OPTAUUID'].str.upper() == HIF_UUID.strip().upper()) | 
+        (df_stats['CONTESTANTAWAY_OPTAUUID'].str.upper() == HIF_UUID.strip().upper())
+    ].sort_values('MATCH_DATE_FULL', ascending=True).tail(5)
+
+    for i, col in enumerate(trend_cols):
+        with col:
+            metric_cfg = metrics[i]
+            st.caption(metric_cfg['name'])
+            
+            # Lav en simpel line chart for den valgte metric
+            # Vi skal håndtere logikken for om det er HOME eller AWAY stats
+            data_to_plot = hif_recent[[metric_cfg['col']]].fillna(0)
+            st.line_chart(data_to_plot, height=80, use_container_width=True)
 # Til sidst: Sørg for at kalde funktionen, når filen indlæses
 if __name__ == "__main__":
     vis_side()
