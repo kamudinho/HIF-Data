@@ -363,8 +363,15 @@ def vis_side():
         with col:
             metric_cfg = metrics[i]
             st.caption(f"**{metric_cfg['name']}**")
-            # st.line_chart tegner nu automatisk med 1, 2, 3... på x-aksen
-            st.line_chart(hif_recent[[metric_cfg['col']]], height=100)            
+            
+            data = hif_recent[[metric_cfg['col']]].fillna(0)
+            
+            if metric_cfg['name'] == "Possession":
+                # Vi tilføjer to "skjulte" rækker med 0 og 100 for at tvinge y-aksen til at skalere korrekt
+                # eller bruger en simpel tabel-visning hvis grafen stadig driller
+                st.line_chart(data, height=100, y_min=0, y_max=100)
+            else:
+                st.line_chart(data, height=100)          
 # Til sidst: Sørg for at kalde funktionen, når filen indlæses
 if __name__ == "__main__":
     vis_side()
