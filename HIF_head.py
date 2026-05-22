@@ -136,10 +136,23 @@ def vis_transfer_dialog(df):
             return f"www.{domain}"
         except: return "www.link.dk"
 
-    # Vi laver en dedikeret kolonne til den pæne tekst
-    df_display['VIS_KILDE'] = df_display['KILDE'].apply(rens_link_hif)
+    # 4. Link-logik: Vi laver en kolonne med selve domæne-navnet (uden www her for at undgå rod)
+    def hent_domaene(url):
+        if pd.isna(url) or str(url).strip() == "": return ""
+        try:
+            u = str(url).strip()
+            if not u.startswith(('http://', 'https://')): u = 'https://' + u
+            parsed = urlparse(u)
+            # Vi tager kun domænet her (f.eks. bold.dk)
+            domain = parsed.netloc.lower().replace('www.', '')
+            if not domain: domain = parsed.path.split('/')[0].replace('www.', '')
+            return domain
+        except: return "link.dk"
 
-    # 5. Tabel visning - Den stabile løsning
+    # Lav kolonnen som vi refererer til lige om lidt
+    df_display['DOMAENE_NAVN'] = df_display['KILDE'].apply(hent_domaene)
+
+    # 5. Tabel visning
     st.dataframe(
         df_display,
         column_order=['Dato_Visning', 'NAVN', 'Skifte', 'Kontrakt_Info', 'KILDE'],
@@ -150,8 +163,9 @@ def vis_transfer_dialog(df):
             "Kontrakt_Info": "Kontrakt",
             "KILDE": st.column_config.LinkColumn(
                 "Kilde",
-                # Vi bruger 'VIS_KILDE' kolonnen som tekst for linket i 'KILDE'
-                display_text="VIS_KILDE" 
+                # HER ER TRICKET: Ved at bruge f-string formatet {kolonnenavn}, 
+                # forstår Streamlit at den skal kigge i dataene.
+                display_text="www.{DOMAENE_NAVN}" 
             ),
         },
         hide_index=True,
