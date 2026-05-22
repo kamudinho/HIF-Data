@@ -25,6 +25,46 @@ def apply_custom_style():
         </style>
     """, unsafe_allow_html=True)
 
+@st.dialog("Alle Transfers", width="large")
+def vis_transfer_dialog(df):
+    if df.empty:
+        st.write("Ingen data fundet.")
+        return
+
+    df_display = df.copy()
+    # Sikr ensartede kolonnenavne
+    df_display.columns = [str(c).upper().strip() for c in df_display.columns]
+    
+    # 1. Sortering og Dato
+    df_display['TS_SORT'] = pd.to_datetime(df_display['TIMESTAMP'], errors='coerce')
+    df_display = df_display.sort_values('TS_SORT', ascending=False)
+    df_display['Dato'] = df_display['TS_SORT'].dt.strftime('%d/%m-%Y')
+    
+    # 2. Spiller med position (Navn (Pos))
+    pos_col = 'POSITION' if 'POSITION' in df_display.columns else 'POS'
+    df_display['Spiller'] = df_display['NAVN'] + " (" + df_display.get(pos_col, '-').fillna('-') + ")"
+
+    # 3. Skifte kolonne
+    df_display['Skifte'] = df_display['SENESTE_KLUB'].fillna('?') + " ➔ " + df_display['KLUB'].fillna('?')
+
+    # 4. Kontrakt
+    # Vi bruger den eksisterende kontrakt-logik
+    df_display['Kontrakt'] = df_display.apply(lambda row: str(row.get('KONTRAKT_UDLOEB', '-')), axis=1)
+
+    # 5. Tabel visning
+    st.dataframe(
+        df_display,
+        column_order=['Dato', 'Spiller', 'Skifte', 'Kontrakt', 'KILDE'], 
+        column_config={
+            "Dato": st.column_config.Column(width="small"),
+            "Spiller": st.column_config.Column("Spiller (Pos)", width="medium"),
+            "Skifte": st.column_config.Column("Skifte", width="medium"),
+            "KILDE": st.column_config.LinkColumn("Kilde", display_text="Se kilde"),
+        },
+        hide_index=True,
+        use_container_width=True
+    )
+
 def vis_side():
     apply_custom_style()
     conn = _get_snowflake_conn()
@@ -92,31 +132,30 @@ def vis_side():
     with col2:
         with st.container(border=True):
             st.markdown('<div class="card-title"><span>TRANSFERS</span></div>', unsafe_allow_html=True)
+            
+            # Vi definerer df_t uden for try-blokken så den er tilgængelig for knappen
+            df_t = pd.DataFrame() 
+            
             try:
                 df_t = pd.read_csv("data/players/1div_overskrivning.csv")
                 df_t = df_t.dropna(subset=['TIMESTAMP'])
                 df_t['TS_SORT'] = pd.to_datetime(df_t['TIMESTAMP'], errors='coerce')
-                # Sorter og tag de 7 nyeste
                 df_display = df_t.sort_values('TS_SORT', ascending=False).head(7)
                 
                 for _, r in df_display.iterrows():
-                    # Formatering: Dato: Klub - Navn (Position)
                     dato_str = pd.to_datetime(r['TIMESTAMP']).strftime('%d/%m')
-                    klub = r['KLUB']
-                    navn = r['NAVN']
-                    pos = r.get('POSITION', '-') # Henter position hvis den findes
-                    
                     st.markdown(f"""
                         <div class='list-item'>
-                            {dato_str}: <b>{klub}</b> - {navn} ({pos})
+                            {dato_str}: <b>{r['KLUB']}</b> - {r['NAVN']} ({r.get('POSITION', '-')})
                         </div>
                     """, unsafe_allow_html=True)
-                
-                st.markdown("<div style='margin-top:15px;'></div>", unsafe_allow_html=True)
-                if st.button("Se alle transfers", use_container_width=True):
-                    vis_transfer_dialog(df_t)
             except Exception as e:
-                st.caption("Kunne ikke indlæse transfers")
+                st.caption("Ingen transferdata fundet")
+
+            # Knappen ligger nu uden for try-blokken, så den altid er synlig
+            # Hvis df_t er tom, vil dialogen blot håndtere det (som defineret i din funktion)
+            if st.button("Se alle transfers", key="transfers_btn", use_container_width=True):
+                vis_transfer_dialog(df_t)
 
     # 3. SCOUTING
     with col3:
