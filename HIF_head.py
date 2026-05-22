@@ -199,7 +199,7 @@ def vis_side():
             for i in range(3):
                 idx = row * 3 + i
                 with cols[i]:
-                    st.caption(f"***{metrics[idx]['name']}***")
+                    st.caption(f"****{metrics[idx]['name']}****")
                     
                     # 1. Definer base med data, x, y og TOOLTIP
                     base = alt.Chart(hif_recent).encode(
