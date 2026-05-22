@@ -4,27 +4,8 @@ from data.utils.team_mapping import TEAMS
 from data.data_load import _get_snowflake_conn
 import datetime
 
-def apply_custom_style():
-    st.markdown("""
-        <style>
-            [data-testid="stHeaderBlockContainer"] h1 { display: none; }
-            [data-testid="stHeader"] { background: rgba(0,0,0,0); }
-            .stApp { background-color: #FFFFFF; }
-            [data-testid="stVerticalBlockBorderWrapper"] { min-height: 350px; }
-            .card-title { color: #1a1a1a; font-size: 11px; font-weight: 700; margin-bottom: 15px; text-transform: uppercase; display: flex; justify-content: space-between; border-bottom: 1px solid #f0f0f0; padding-bottom: 8px; }
-            .title-date { color: #888; font-weight: 500; text-transform: none; font-size: 11px; }
-            .stats-table { width: 95%; font-size: 10px; border-collapse: collapse; margin-left: auto; }
-            .stats-table tr, .stats-table td { border: none !important; padding: 4px 0; }
-            .stats-label { color: #666; font-weight: 500; }
-            .stats-value { text-align: right; font-weight: 700; color: #111; }
-            .form-wrapper { display: flex; justify-content: space-between; gap: 8px; width: 100%; margin-top: 20px; }
-            .form-column { display: flex; flex-direction: column; align-items: center; flex: 1; }
-            .res-pill { width: 100%; border-radius: 4px; color: white; text-align: center; font-size: 10px; font-weight: 800; padding: 4px 0; margin-bottom: 6px; }
-            .legend-logo { width: 26px; height: 26px; object-fit: contain; }
-            .list-item { font-size: 11px; margin-bottom: 5px; color: #333; line-height: 1.2; }
-        </style>
-    """, unsafe_allow_html=True)
-
+# --- DIALOG-BOKS (Skal defineres øverst) ---
+@st.dialog("Alle Transfers", width="large")
 def vis_transfer_dialog(df):
     if df.empty:
         st.write("Ingen data fundet.")
@@ -38,97 +19,88 @@ def vis_transfer_dialog(df):
     df_display = df_display.sort_values('TS_SORT', ascending=False)
     df_display['Dato'] = df_display['TS_SORT'].dt.strftime('%d/%m-%Y')
     
-    # 2. Spiller (Navn + Pos)
+    # 2. Spiller
     pos_col = 'POSITION' if 'POSITION' in df_display.columns else 'POS'
     df_display['Spiller'] = df_display['NAVN'] + " (" + df_display.get(pos_col, '-').fillna('-') + ")"
 
     # 3. Skifte
     df_display['Skifte'] = df_display['SENESTE_KLUB'].fillna('?') + " ➔ " + df_display['KLUB'].fillna('?')
 
-    # 4. KONTRAKT-LOGIK (Her beregner vi år tilbage)
+    # 4. Kontrakt-logik
     def beregn_kontrakt(row):
         udloeb_raw = str(row.get('KONTRAKT_UDLOEB', '-'))
-        if udloeb_raw == '-' or udloeb_raw == 'nan':
-            return "-"
+        if udloeb_raw == '-' or udloeb_raw == 'nan': return "-"
         try:
-            # Vi antager formatet er en dato eller et årstal (f.eks. "31-12-2028")
             udloeb_dt = pd.to_datetime(udloeb_raw, dayfirst=True, errors='coerce')
             if pd.notnull(udloeb_dt):
-                aar_tilbage = round((udloeb_dt - datetime.datetime.now()).days / 365.25)
-                # Hvis resultatet er 0 eller derunder, skriv det, ellers vis år
-                tekst = f"{aar_tilbage} år" if aar_tilbage > 0 else "Udløber nu"
-                return f"{udloeb_raw} ({tekst})"
+                aar = round((udloeb_dt - datetime.datetime.now()).days / 365.25)
+                return f"{udloeb_raw} ({aar} år)"
             return udloeb_raw
-        except:
-            return udloeb_raw
+        except: return udloeb_raw
 
-    df_display['Kontrakt_Info'] = df_display.apply(beregn_kontrakt, axis=1)
+    df_display['Kontrakt'] = df_display.apply(beregn_kontrakt, axis=1)
 
-    # 5. Tabel visning
     st.dataframe(
-        df_display,
-        column_order=['Dato', 'Spiller', 'Skifte', 'Kontrakt_Info', 'KILDE'], 
-        column_config={
-            "Dato": st.column_config.Column(width="small"),
-            "Spiller": st.column_config.Column("Spiller (Pos)", width="medium"),
-            "Skifte": st.column_config.Column("Skifte", width="medium"),
-            "Kontrakt_Info": st.column_config.Column("Kontrakt (År tilbage)", width="medium"),
-            "KILDE": st.column_config.LinkColumn("Kilde", display_text="Se kilde"),
-        },
-        hide_index=True,
-        use_container_width=True
+        df_display[['Dato', 'Spiller', 'Skifte', 'Kontrakt', 'KILDE']],
+        column_config={"KILDE": st.column_config.LinkColumn("Kilde", display_text="Se kilde")},
+        hide_index=True, use_container_width=True
     )
+
+def apply_custom_style():
+    st.markdown("""
+        <style>
+            [data-testid="stHeaderBlockContainer"] h1 { display: none; }
+            .stApp { background-color: #FFFFFF; }
+            .card-title { color: #1a1a1a; font-size: 11px; font-weight: 700; margin-bottom: 15px; text-transform: uppercase; border-bottom: 1px solid #f0f0f0; padding-bottom: 8px; display: flex; justify-content: space-between; }
+            .title-date { color: #888; font-weight: 500; text-transform: none; font-size: 11px; }
+            .stats-table { width: 95%; font-size: 10px; border-collapse: collapse; margin-left: auto; }
+            .stats-label { color: #666; font-weight: 500; padding: 4px 0; }
+            .stats-value { text-align: right; font-weight: 700; color: #111; padding: 4px 0; }
+            .form-wrapper { display: flex; justify-content: space-between; gap: 8px; width: 100%; margin-top: 20px; }
+            .form-column { display: flex; flex-direction: column; align-items: center; flex: 1; }
+            .res-pill { width: 100%; border-radius: 4px; color: white; text-align: center; font-size: 10px; font-weight: 800; padding: 4px 0; margin-bottom: 6px; }
+            .legend-logo { width: 26px; height: 26px; object-fit: contain; }
+            .list-item { font-size: 11px; margin-bottom: 5px; color: #333; }
+        </style>
+    """, unsafe_allow_html=True)
+
 def vis_side():
     apply_custom_style()
     conn = _get_snowflake_conn()
     if not conn: return
 
     DB, LIGA_UUID, HIF_UUID = "KLUB_HVIDOVREIF.AXIS", "dyjr458hcmrcy87fsabfsy87o", "8GXD9RY2580PU1B1DD5NY9YMY"
-    sql = f"SELECT * FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'"
-    df_matches = conn.query(sql) if hasattr(conn, 'query') else pd.read_sql(sql, conn)
+    df_matches = conn.query(f"SELECT * FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'")
     df_matches.columns = [str(c).upper() for c in df_matches.columns]
-    hif_id = HIF_UUID.strip().upper()
     opta_to_name = {str(v['opta_uuid']).strip().upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
     df_matches['MATCH_DATE_FULL'] = pd.to_datetime(df_matches['MATCH_DATE_FULL'], errors='coerce')
     
     col1, col2, col3 = st.columns([1, 1, 1])
 
-    # 1. NÆSTE KAMP + METRICS + LEGENDS
+    # 1. COL1: Næste kamp, Metrics, Legends
     with col1:
         with st.container(border=True):
-            # Definer future her, så den altid eksisterer
-            hif_m = df_matches[(df_matches['CONTESTANTHOME_OPTAUUID'].str.upper() == hif_id) | (df_matches['CONTESTANTAWAY_OPTAUUID'].str.upper() == hif_id)]
+            hif_m = df_matches[(df_matches['CONTESTANTHOME_OPTAUUID'].str.upper() == HIF_UUID.strip().upper()) | (df_matches['CONTESTANTAWAY_OPTAUUID'].str.upper() == HIF_UUID.strip().upper())]
             future = hif_m[~hif_m['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].sort_values('MATCH_DATE_FULL')
             
             if not future.empty:
                 nk = future.iloc[0]
-                opp_id = nk['CONTESTANTAWAY_OPTAUUID'] if str(nk['CONTESTANTHOME_OPTAUUID']).upper() == hif_id else nk['CONTESTANTHOME_OPTAUUID']
+                opp_id = nk['CONTESTANTAWAY_OPTAUUID'] if str(nk['CONTESTANTHOME_OPTAUUID']).upper() == HIF_UUID.strip().upper() else nk['CONTESTANTHOME_OPTAUUID']
                 opp_name = opta_to_name.get(str(opp_id).upper(), "Ukendt")
                 
                 st.markdown(f"<div class='card-title'><span>NÆSTE KAMP vs. {opp_name.upper()}</span><span class='title-date'>{nk['MATCH_DATE_FULL'].strftime('%d/%m')}</span></div>", unsafe_allow_html=True)
                 
-                # Layout: Logoer (venstre) | Metrics (højre)
-                t_main_l, t_main_r = st.columns([1, 1.5])
-                
-                with t_main_l:
+                t_l, t_r = st.columns([1, 1.5])
+                with t_l:
                     c1, c2, c3 = st.columns([1, 0.5, 1])
                     c1.image(TEAMS.get("Hvidovre", {}).get("logo", ""), width=42)
-                    c2.markdown("<div style='text-align:center; padding-top:10px; font-size:10px; color:#ccc;'><b>VS</b></div>", unsafe_allow_html=True)
+                    c2.markdown("<div style='text-align:center; padding-top:10px;'>VS</div>", unsafe_allow_html=True)
                     c3.image(TEAMS.get(opp_name, {}).get("logo", ""), width=42)
+                with t_r:
+                    st.markdown(f"<table class='stats-table'><tr><td class='stats-label'>Mål f/i</td><td class='stats-value'>1.4/1.1</td></tr><tr><td class='stats-label'>xG f/i</td><td class='stats-value'>1.5/1.2</td></tr><tr><td class='stats-label'>Poss.</td><td class='stats-value'>52%</td></tr></table>", unsafe_allow_html=True)
                 
-                with t_main_r:
-                    st.markdown(f"""
-                        <table class='stats-table' style='margin-top:0px;'>
-                            <tr><td class='stats-label'>Mål f/i</td><td class='stats-value'>1.4/1.1</td></tr>
-                            <tr><td class='stats-label'>xG f/i</td><td class='stats-value'>1.5/1.2</td></tr>
-                            <tr><td class='stats-label'>Poss.</td><td class='stats-value'>52%</td></tr>
-                        </table>
-                    """, unsafe_allow_html=True)
-
-                # Form-bar med logoer
-                st.markdown(f"<div style='font-size:10px; color:#888; font-weight:700; margin-top:14px; text-transform:uppercase;'>Form: {opp_name}</div>", unsafe_allow_html=True)
+                # Legends
                 opp_m = df_matches[((df_matches['CONTESTANTHOME_OPTAUUID'] == opp_id) | (df_matches['CONTESTANTAWAY_OPTAUUID'] == opp_id)) & (df_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False))].sort_values('MATCH_DATE_FULL', ascending=False).head(5)
-                
                 if not opp_m.empty:
                     f_items = ""
                     for _, m in opp_m.iloc[::-1].iterrows():
@@ -139,39 +111,18 @@ def vis_side():
                         o_logo = TEAMS.get(opta_to_name.get(str(o_uuid).upper(), ""), {}).get("logo", "")
                         f_items += f"<div class='form-column'><div class='res-pill' style='background:{res_col};'>{h_s}-{a_s}</div><img src='{o_logo}' class='legend-logo'></div>"
                     st.markdown(f"<div class='form-wrapper'>{f_items}</div>", unsafe_allow_html=True)
-            else:
-                st.write("Ingen kommende kampe fundet.")
-    # 2. TRANSFERS 
+
+    # 2. COL2: Transfers
     with col2:
         with st.container(border=True):
             st.markdown('<div class="card-title"><span>TRANSFERS</span></div>', unsafe_allow_html=True)
-            
-            # Vi definerer df_t uden for try-blokken så den er tilgængelig for knappen
-            df_t = pd.DataFrame() 
-            
-            try:
-                df_t = pd.read_csv("data/players/1div_overskrivning.csv")
-                df_t = df_t.dropna(subset=['TIMESTAMP'])
-                df_t['TS_SORT'] = pd.to_datetime(df_t['TIMESTAMP'], errors='coerce')
-                df_display = df_t.sort_values('TS_SORT', ascending=False).head(7)
-                
-                for _, r in df_display.iterrows():
-                    dato_str = pd.to_datetime(r['TIMESTAMP']).strftime('%d/%m')
-                    st.markdown(f"""
-                        <div class='list-item'>
-                            {dato_str}: <b>{r['KLUB']}</b> - {r['NAVN']} ({r.get('POSITION', '-')})
-                        </div>
-                    """, unsafe_allow_html=True)
-            except Exception as e:
-                st.caption("Ingen transferdata fundet")
-
-            # Knappen ligger nu uden for try-blokken, så den altid er synlig
-            # Hvis df_t er tom, vil dialogen blot håndtere det (som defineret i din funktion)
+            df_t = pd.read_csv("data/players/1div_overskrivning.csv")
+            for _, r in df_t.sort_values('TIMESTAMP', ascending=False).head(7).iterrows():
+                st.markdown(f"<div class='list-item'>{pd.to_datetime(r['TIMESTAMP']).strftime('%d/%m')}: <b>{r['KLUB']}</b> - {r['NAVN']}</div>", unsafe_allow_html=True)
             if st.button("Se alle transfers", key="transfers_btn", use_container_width=True):
                 vis_transfer_dialog(df_t)
 
-    # 3. SCOUTING
+    # 3. COL3: Scouting
     with col3:
         with st.container(border=True):
             st.markdown('<div class="card-title"><span>SCOUTING</span></div>', unsafe_allow_html=True)
-            # (Din scouting logik)
