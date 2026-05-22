@@ -100,6 +100,7 @@ def vis_transfer_dialog(df):
         return
 
     df_display = df.copy()
+    # Ensret kolonnenavne
     df_display.columns = [str(c).upper().strip() for c in df_display.columns]
     df_display['TS_SORT'] = pd.to_datetime(df_display['TIMESTAMP'], errors='coerce')
     
@@ -121,7 +122,7 @@ def vis_transfer_dialog(df):
         try:
             udloeb_dt = pd.to_datetime(udloeb_str, dayfirst=True, errors='coerce')
             if pd.notnull(udloeb_dt):
-                # Beregn år fra i dag (2026-05-22)
+                # Beregn år fra dags dato
                 today = datetime.datetime.now()
                 diff_years = (udloeb_dt - today).days / 365.25
                 years = round(max(0, diff_years))
@@ -133,20 +134,28 @@ def vis_transfer_dialog(df):
 
     df_display['Kontrakt_Info'] = df_display.apply(format_contract_years, axis=1)
 
-    # 3. Link: Tving visning af www.domæne.dk
-    def format_link_text(url):
+    # 3. Link: Manuel formatering til klikbar tekst
+    def make_pretty_link(url):
         if pd.isna(url) or str(url).strip() == "": return ""
+        url_str = str(url).strip()
         try:
-            # Vi tager netloc og sikrer os at den har www.
-            netloc = urlparse(str(url)).netloc.lower()
-            display = netloc if netloc.startswith('www.') else f"www.{netloc}"
-            return display
-        except: return "Link"
+            # Sørg for at URL har protokol for at urlparse virker
+            if not url_str.startswith(('http://', 'https://')):
+                full_url = 'https://' + url_str
+            else:
+                full_url = url_str
+                
+            netloc = urlparse(full_url).netloc.lower()
+            # Tving www. foran
+            display_text = netloc if netloc.startswith('www.') else f"www.{netloc}"
+            return f"{display_text}"
+        except:
+            return "Link"
 
-    # Vi laver en dedikeret kolonne til visningsteksten
-    df_display['LINK_TEXT'] = df_display['KILDE'].apply(format_link_text)
+    # Vi gemmer den rå URL i en skjult kolonne og laver en visnings-kolonne
+    df_display['Link_Visning'] = df_display['KILDE'].apply(make_pretty_link)
 
-    # 4. Visning: Vi bruger den nye LINK_TEXT som display_text
+    # 4. Visning
     st.dataframe(
         df_display.sort_values('TS_SORT', ascending=False),
         column_order=['TIMESTAMP', 'NAVN', 'Skifte', 'Kontrakt_Info', 'KILDE'],
@@ -157,8 +166,8 @@ def vis_transfer_dialog(df):
             "Kontrakt_Info": "Kontrakt",
             "KILDE": st.column_config.LinkColumn(
                 "Link",
-                # Her henter vi teksten fra vores præ-formaterede LINK_TEXT kolonne
-                display_text=r'www\.[^/]+' 
+                # Denne regex er nu ekstremt specifik for at fange domænet
+                display_text=r'^(?:https?://)?(?:www\.)?([^/]+)'
             ),
         },
         hide_index=True,
