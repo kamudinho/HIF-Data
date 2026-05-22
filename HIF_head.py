@@ -158,26 +158,38 @@ def vis_side():
 
     st.markdown("---")
     st.caption("##### Hvidovre IF: Sæson-trends (pr. kamp)")
-    hif_recent = df_stats[((df_stats['CONTESTANTHOME_OPTAUUID'].str.upper() == HIF_UUID.strip().upper()) | (df_stats['CONTESTANTAWAY_OPTAUUID'].str.upper() == HIF_UUID.strip().upper())) & (df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False))].sort_values('MATCH_DATE_FULL', ascending=True).copy()
-    hif_recent['PLOT_GOALS'] = hif_recent.apply(lambda r: r['TOTAL_HOME_SCORE'] if r['CONTESTANTHOME_OPTAUUID'].upper() == HIF_UUID else r['TOTAL_AWAY_SCORE'], axis=1)
-    hif_recent['PLOT_XG'] = hif_recent.apply(lambda r: r['HOME_XG'] if r['CONTESTANTHOME_OPTAUUID'].upper() == HIF_UUID else r['AWAY_XG'], axis=1)
-    hif_recent['PLOT_SHOTS'] = hif_recent.apply(lambda r: r['HOME_SHOTS'] if r['CONTESTANTHOME_OPTAUUID'].upper() == HIF_UUID else r['AWAY_SHOTS'], axis=1)
-    hif_recent['PLOT_TOUCHES'] = hif_recent.apply(lambda r: r['HOME_TOUCHES'] if r['CONTESTANTHOME_OPTAUUID'].upper() == HIF_UUID else r['AWAY_TOUCHES'], axis=1)
-    hif_recent['PLOT_POSS'] = hif_recent.apply(lambda r: r['HOME_POSS'] if r['CONTESTANTHOME_OPTAUUID'].upper() == HIF_UUID else r['AWAY_POSS'], axis=1)
-    hif_recent['PLOT_FWD'] = hif_recent.apply(lambda r: r['HOME_FORWARD_PASSES'] if r['CONTESTANTHOME_OPTAUUID'].upper() == HIF_UUID else r['AWAY_FORWARD_PASSES'], axis=1)
-    for col_name in ['PLOT_GOALS', 'PLOT_XG', 'PLOT_SHOTS', 'PLOT_TOUCHES', 'PLOT_POSS', 'PLOT_FWD']: hif_recent[col_name] = pd.to_numeric(hif_recent[col_name], errors='coerce')
+    
+    # Sørg for at index er en kolonne vi kan plotte mod
     hif_recent = hif_recent.reset_index(drop=True)
-    hif_recent.index = hif_recent.index + 1
+    hif_recent['index'] = hif_recent.index + 1
     
     trend_cols = st.columns(6)
-    metrics = [{"name": "Mål", "col": "PLOT_GOALS"}, {"name": "xG", "col": "PLOT_XG"}, {"name": "Skud", "col": "PLOT_SHOTS"}, {"name": "Touches", "col": "PLOT_TOUCHES"}, {"name": "Possession", "col": "PLOT_POSS"}, {"name": "Fwd Passes", "col": "PLOT_FWD"}]
+    metrics = [
+        {"name": "Mål", "col": "PLOT_GOALS"}, 
+        {"name": "xG", "col": "PLOT_XG"}, 
+        {"name": "Skud", "col": "PLOT_SHOTS"}, 
+        {"name": "Touches", "col": "PLOT_TOUCHES"}, 
+        {"name": "Possession", "col": "PLOT_POSS"}, 
+        {"name": "Fwd Passes", "col": "PLOT_FWD"}
+    ]
+    
     for i, col in enumerate(trend_cols):
         with col:
             metric_cfg = metrics[i]
             st.caption(f"**{metric_cfg['name']}**")
             y_domain = [0, 100] if metric_cfg['name'] == "Possession" else [0, None]
-            line = alt.Chart(hif_recent).mark_line(color='#111', strokeWidth=2).encode(x=alt.X('index:Q', axis=None), y=alt.Y(f'{metric_cfg["col"]}:Q', axis=None, scale=alt.Scale(domain=y_domain, zero=True))).properties(height=100)
-            rule = alt.Chart(hif_recent).mark_rule(color='#ccc', strokeDash=[3,3]).encode(y=f'mean({metric_cfg["col"]}):Q')
+            
+            # Punkt-grafen der viser udviklingen kamp for kamp
+            line = alt.Chart(hif_recent).mark_line(point=True, color='#111', strokeWidth=2).encode(
+                x=alt.X('index:O', axis=None), # 'O' for Ordinal sikrer hvert punkt ses
+                y=alt.Y(f'{metric_cfg["col"]}:Q', axis=None, scale=alt.Scale(domain=y_domain, zero=True))
+            ).properties(height=100)
+            
+            # Gennemsnitslinjen (Stiplet)
+            rule = alt.Chart(hif_recent).mark_rule(color='#ccc', strokeDash=[3,3]).encode(
+                y=f'mean({metric_cfg["col"]}):Q'
+            )
+            
             st.altair_chart(line + rule, use_container_width=True)
 
 if __name__ == "__main__":
