@@ -47,35 +47,30 @@ def vis_transfer_dialog(df):
     )
 
 def apply_custom_style():
-    st.markdown("""
-        <style>
-            [data-testid="stHeaderBlockContainer"] h1 { display: none; }
-            .stApp { background-color: #FFFFFF; }
-            .card-title { color: #1a1a1a; font-size: 11px; font-weight: 700; margin-bottom: 15px; text-transform: uppercase; border-bottom: 1px solid #f0f0f0; padding-bottom: 8px; display: flex; justify-content: space-between; }
-            .title-date { color: #888; font-weight: 500; text-transform: none; font-size: 11px; }
-            .stats-table { width: 100%; font-size: 10px; border-collapse: collapse; table-layout: fixed; }
-            .stats-label { color: #666; font-weight: 700; width: 40%; }
-            .stats-value { text-align: right; font-weight: 700; color: #111; padding: 4px 0; }
-            .form-wrapper { display: flex; justify-content: space-between; gap: 4px; width: 100%; margin-top: 15px; }
-            .form-column { display: flex; flex-direction: column; align-items: center; flex: 1; }
-            .res-pill { width: 100%; border-radius: 4px; color: white; text-align: center; font-size: 10px; font-weight: 800; padding: 4px 0; margin-bottom: 6px; }
-            .legend-logo { width: 26px; height: 26px; object-fit: contain; }
-            
-            /* Det nye GRID layout til transfers */
-            .list-item { 
-                font-size: 11px; 
-                margin-bottom: 6px; 
-                color: #333; 
-                display: grid;
-                grid-template-columns: 1fr auto auto auto; 
-                align-items: center;
-                gap: 6px;
-                width: 100%;
-            }
-            .prev-club { color: #aaa; font-size: 10px; text-align: right; }
-            .new-club { font-weight: 700; text-align: right; }
-        </style>
-    """, unsafe_allow_html=True)
+    st.markdown("""
+        <style>
+            [data-testid="stHeaderBlockContainer"] h1 { display: none; }
+            .stApp { background-color: #FFFFFF; }
+            .card-title { color: #1a1a1a; font-size: 11px; font-weight: 700; margin-bottom: 12px; text-transform: uppercase; border-bottom: 1px solid #f0f0f0; padding-bottom: 6px; display: flex; justify-content: space-between; }
+            .title-date { color: #888; font-weight: 500; text-transform: none; font-size: 11px; }
+            .stats-table { width: 100%; font-size: 10px; border-collapse: collapse; table-layout: fixed; }
+            .stats-label { color: #666; font-weight: 700; width: 45%; padding: 2px 0; }
+            .stats-value { text-align: right; font-weight: 700; color: #111; padding: 2px 0; }
+            .form-wrapper { display: flex; justify-content: space-between; gap: 4px; width: 100%; margin-top: 12px; }
+            .form-column { display: flex; flex-direction: column; align-items: center; flex: 1; }
+            .res-pill { width: 100%; border-radius: 4px; color: white; text-align: center; font-size: 9px; font-weight: 800; padding: 3px 0; margin-bottom: 4px; }
+            .legend-logo { width: 22px; height: 22px; object-fit: contain; }
+            
+            /* Gør knappen kompakt */
+            div.stButton > button { padding: 2px 8px !important; font-size: 10px !important; height: 26px !important; margin-top: 5px; }
+            
+            /* Transfer grid */
+            .list-item { font-size: 10px; margin-bottom: 6px; color: #333; display: grid; grid-template-columns: 1fr auto auto auto; align-items: center; gap: 4px; width: 100%; }
+            .player-info { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+            .prev-club { color: #aaa; font-size: 9px; text-align: right; }
+            .new-club { font-weight: 700; text-align: right; }
+        </style>
+    """, unsafe_allow_html=True)
     
 def vis_side():
     apply_custom_style()
@@ -103,12 +98,12 @@ def vis_side():
                 
                 st.markdown(f"<div class='card-title'><span>NÆSTE KAMP vs. {opp_name.upper()}</span><span class='title-date'>{nk['MATCH_DATE_FULL'].strftime('%d/%m')}</span></div>", unsafe_allow_html=True)
                 
-                t_l, t_r = st.columns([1, 1.5])
-                with t_l:
-                    c1, c2, c3 = st.columns([1, 0.5, 1])
-                    c1.image(TEAMS.get("Hvidovre", {}).get("logo", ""), width=42)
-                    c2.markdown("<div style='text-align:center; padding-top:10px;'>VS</div>", unsafe_allow_html=True)
-                    c3.image(TEAMS.get(opp_name, {}).get("logo", ""), width=42)
+                t_l, t_r = st.columns([1, 1.2]) # Mere plads til metrics til højre
+              with t_l:
+                  c1, c2, c3 = st.columns([1, 0.8, 1]) # 0.8 giver luft mellem logoerne
+                  c1.image(TEAMS.get("Hvidovre", {}).get("logo", ""), width=38) # Logoer lidt mindre
+                  c2.markdown("<div style='text-align:center; padding-top:10px; font-size:9px; color:#888;'>VS</div>", unsafe_allow_html=True)
+                  c3.image(TEAMS.get(opp_name, {}).get("logo", ""), width=38)
                 with t_r:
                     st.markdown(f"<table class='stats-table'><tr><td class='stats-label'>Mål f/i</td><td class='stats-value'>1.4/1.1</td></tr><tr><td class='stats-label'>xG f/i</td><td class='stats-value'>1.5/1.2</td></tr><tr><td class='stats-label'>Poss.</td><td class='stats-value'>52%</td></tr></table>", unsafe_allow_html=True)
                 
