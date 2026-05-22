@@ -60,14 +60,23 @@ def apply_custom_style():
             .form-column { display: flex; flex-direction: column; align-items: center; flex: 1; }
             .res-pill { width: 100%; border-radius: 4px; color: white; text-align: center; font-size: 10px; font-weight: 800; padding: 4px 0; margin-bottom: 6px; }
             .legend-logo { width: 26px; height: 26px; object-fit: contain; }
-            .list-item { font-size: 11px; margin-bottom: 6px; color: #333; display: flex; justify-content: space-between; align-items: center; width: 100%; white-space: nowrap; }
-            .player-info { overflow: hidden; text-overflow: ellipsis; margin-right: 10px; }
-            .club-side { display: flex; align-items: center; flex-shrink: 0; }
-            .transfer-club { font-weight: 700; }
-            .prev-club { color: #888; font-size: 10px; }
+            
+            /* Det nye GRID layout til transfers */
+            .list-item { 
+                font-size: 11px; 
+                margin-bottom: 6px; 
+                color: #333; 
+                display: grid;
+                grid-template-columns: 1fr auto auto auto; 
+                align-items: center;
+                gap: 6px;
+                width: 100%;
+            }
+            .prev-club { color: #aaa; font-size: 10px; text-align: right; }
+            .new-club { font-weight: 700; text-align: right; }
         </style>
     """, unsafe_allow_html=True)
-
+    
 def vis_side():
     apply_custom_style()
     conn = _get_snowflake_conn()
