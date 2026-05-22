@@ -164,11 +164,17 @@ def vis_side():
     with col_right:
         st.caption("Holdlister")
         
-        faner = list(COMP_MAP.values()) + ["Udlandet"]
+        # Tilføj "Klubløs" til menuen
+        faner = list(COMP_MAP.values()) + ["Udlandet", "Klubløs"] 
         liga_valg = st.segmented_control("Vælg liga", faner, default="Betinia Ligaen")
-
-        if liga_valg == "Udlandet":
-            st.write("### Spillere i udlandet")
+    
+        if liga_valg == "Klubløs":
+            st.write("### Klubløse spillere")
+            trup_loese = df_csv[df_csv['KLUB'] == "Klubløs"][['NAVN', 'POSITION', 'SENESTE_KLUB', 'TIMESTAMP']]
+            if not trup_loese.empty:
+                st.dataframe(trup_loese.sort_values(by="TIMESTAMP", ascending=False), hide_index=True, use_container_width=True)
+            else:
+                st.info("Ingen spillere registreret som klubløse.")
             
             trup_udland = df_csv[df_csv['UDLANDET'].astype(str) == "True"][['NAVN', 'POSITION', 'PLAYER_WYID', 'SENESTE_KLUB', 'TIMESTAMP']]
             
