@@ -31,7 +31,7 @@ def apply_custom_style():
             /* Stats Tabel - Gør den mere luftig nu hvor der er plads */
             .stats-table {
                 width: 95%;
-                font-size: 11px;
+                font-size: 14px;
                 border-collapse: collapse;
                 margin-top: 0px;
                 margin-left: auto;
@@ -121,7 +121,7 @@ def vis_side(dp=None):
                 with t_l:
                     c1, c2, c3 = st.columns([1, 0.7, 1])
                     c1.image(TEAMS.get("Hvidovre", {}).get("logo", ""), width=42)
-                    c2.markdown(f"<div style='text-align:center; padding-top:8px;'><b>VS</b><br><small>{nk['MATCH_DATE_FULL'].strftime('%d/%m')}</small></div>", unsafe_allow_html=True)
+                    c2.markdown(f"<div style='text-align:center; padding-top:3px;'><b>VS</b><br><small>{nk['MATCH_DATE_FULL'].strftime('%d/%m')}</small></div>", unsafe_allow_html=True)
                     c3.image(TEAMS.get(opp_name, {}).get("logo", ""), width=42)
                     st.markdown(f"<div style='text-align:center; font-size:12px; font-weight:700; margin-top:8px;'>{opp_name}</div>", unsafe_allow_html=True)
                 
