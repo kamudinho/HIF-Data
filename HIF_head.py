@@ -364,15 +364,16 @@ def vis_side():
             metric_cfg = metrics[i]
             st.caption(f"**{metric_cfg['name']}**")
             
-            data = hif_recent[[metric_cfg['col']]].fillna(0).copy()
+            # 1. Hent data, men fjern alle rækker hvor værdien er 0 (eller tomme kampe)
+            # Da nogle stats (som mål) kan være 0, bør vi filtrere baseret på index/længde
+            data = hif_recent[[metric_cfg['col']]].copy()
             
-            # Possession-fix: Tilføj dummy-værdier for at låse Y-aksen til 0-100
+            # 2. Possession-fix med renset data
             if metric_cfg['name'] == "Possession":
-                # Vi opretter en midlertidig dataframe med 0 og 100
-                # Dette tvinger aksen til at skalere korrekt
-                dummy_data = pd.DataFrame({metric_cfg['col']: [0, 100]}, index=[0, 99])
-                final_data = pd.concat([data, dummy_data])
-                st.line_chart(final_data, height=100)
+                # Vi bruger kun de faktiske spillede kampe
+                plot_data = data[data[metric_cfg['col']] > 0]
+                
+                st.line_chart(plot_data, height=100)
             else:
                 st.line_chart(data, height=100)
                 
