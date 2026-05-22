@@ -188,6 +188,12 @@ def vis_side():
             {"name": "Possession", "col": "PLOT_POSS"}, {"name": "Fwd Passes", "col": "PLOT_FWD"}
         ]
 
+        # Tilføj modstander-navne til dataframe
+        hif_recent['MODSTANDER'] = hif_recent.apply(
+            lambda r: r['CONTESTANTAWAY_NAME'] if str(r['CONTESTANTHOME_OPTAUUID']).upper() == HIF_UUID.upper() else r['CONTESTANTHOME_NAME'], 
+            axis=1
+        )
+
         # OPDELE I 2 RÆKKER
         for row in range(2):
             cols = st.columns(3)
@@ -196,22 +202,19 @@ def vis_side():
                 with cols[i]:
                     st.caption(f"**{metrics[idx]['name']}**")
                     
-                    # Definer grafen med rød markør og lysere linje
-                    line = alt.Chart(hif_recent).mark_line(
-                        color='#cccccc', 
-                        strokeWidth=2
-                    ).encode(
+                    # Definer base for at dele encoding (og dermed tooltips)
+                    base = alt.Chart(hif_recent).encode(
                         x=alt.X('index:O', axis=None),
-                        y=alt.Y(f'{metrics[idx]["col"]}:Q', axis=None, scale=alt.Scale(zero=False))
-                    ).properties(height=120)
-                    
-                    # Definer punkterne separat for at få dem røde
-                    points = alt.Chart(hif_recent).mark_circle(size=60, color='#C41E3A').encode(
-                        x=alt.X('index:O', axis=None),
-                        y=alt.Y(f'{metrics[idx]["col"]}:Q', axis=None)
+                        y=alt.Y(f'{metrics[idx]["col"]}:Q', axis=None, scale=alt.Scale(zero=False)),
+                        tooltip=[
+                            alt.Tooltip('MODSTANDER', title='vs.'),
+                            alt.Tooltip(f'{metrics[idx]["col"]}', title=f'{metrics[idx]["name"]}', format='.1f')
+                        ]
                     )
                     
-                    # Gennemsnitslinjen (tydeligere)
+                    line = base.mark_line(color='#cccccc', strokeWidth=2)
+                    points = base.mark_circle(size=60, color='#C41E3A')
+                    
                     rule = alt.Chart(hif_recent).mark_rule(
                         color='#333333', 
                         strokeWidth=1.5, 
@@ -220,6 +223,7 @@ def vis_side():
                         y=f'mean({metrics[idx]["col"]}):Q'
                     )
                     
+                    # .interactive() aktiverer hover
                     st.altair_chart(line + points + rule, use_container_width=True)
                     
 if __name__ == "__main__":
