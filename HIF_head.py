@@ -90,10 +90,9 @@ def vis_transfer_dialog(df):
         return
 
     df_display = df.copy()
-    # Ensret navne til STORE for at undgå KeyError
     df_display.columns = [str(c).upper().strip() for c in df_display.columns]
     
-    # 1. Sortering og Dato
+    # 1. Sortering og Dato (DD/MM-YYYY)
     df_display['TS_SORT'] = pd.to_datetime(df_display['TIMESTAMP'], errors='coerce')
     df_display = df_display.sort_values('TS_SORT', ascending=False)
     df_display['Dato_Visning'] = df_display['TS_SORT'].dt.strftime('%d/%m-%Y')
@@ -105,7 +104,7 @@ def vis_transfer_dialog(df):
         df_display['KLUB'].fillna('?').astype(str)
     )
 
-    # 3. Kontrakt (Beregning af år fra i dag)
+    # 3. Kontrakt (Beregning af år fra maj 2026)
     def format_contract_years(row):
         start = str(row.get('KONTRAKT_START', '')).strip()
         udloeb_str = str(row.get('KONTRAKT_UDLOEB', '')).strip()
@@ -114,8 +113,7 @@ def vis_transfer_dialog(df):
         try:
             udloeb_dt = pd.to_datetime(udloeb_str, dayfirst=True, errors='coerce')
             if pd.notnull(udloeb_dt):
-                # Bruger dags dato (maj 2026)
-                today = datetime.datetime.now()
+                today = datetime.datetime.now() # Maj 2026
                 diff_years = (udloeb_dt - today).days / 365.25
                 years = round(max(0, diff_years))
                 prefix = f"{start} " if start not in ['nan', ''] else ""
@@ -125,25 +123,23 @@ def vis_transfer_dialog(df):
 
     df_display['Kontrakt_Info'] = df_display.apply(format_contract_years, axis=1)
 
-    # 4. Link-logik: Vi bruger din rens-metode
+    # 4. Link-logik: Vi bygger visnings-teksten her
     def rens_link_hif(url):
         if pd.isna(url) or str(url).strip() == "": return ""
         try:
             u = str(url).strip()
-            # Sikr protokol så urlparse virker
             if not u.startswith(('http://', 'https://')): u = 'https://' + u
             parsed = urlparse(u)
-            # Træk domæne, fjern www hvis det findes, og tving det på igen
+            # Find domæne (f.eks. vejle-boldklub.dk)
             domain = parsed.netloc.lower().replace('www.', '')
             if not domain: domain = parsed.path.split('/')[0].replace('www.', '')
             return f"www.{domain}"
-        except: return "Link"
+        except: return "www.link.dk"
 
-    # Vi overskriver KILDE med den pæne tekst (www.xxx.dk)
-    # Streamlit viser dette, men linker til den oprindelige URL
-    df_display['KILDE_TEKST'] = df_display['KILDE'].apply(rens_link_hif)
+    # Vi laver en dedikeret kolonne til den pæne tekst
+    df_display['VIS_KILDE'] = df_display['KILDE'].apply(rens_link_hif)
 
-    # 5. Tabel visning (Én tabel, ingen rod)
+    # 5. Tabel visning - Den stabile løsning
     st.dataframe(
         df_display,
         column_order=['Dato_Visning', 'NAVN', 'Skifte', 'Kontrakt_Info', 'KILDE'],
@@ -153,10 +149,9 @@ def vis_transfer_dialog(df):
             "Skifte": "Skifte",
             "Kontrakt_Info": "Kontrakt",
             "KILDE": st.column_config.LinkColumn(
-                "Link",
-                # Denne regex er nøglen: den finder domænet i URL'en 
-                # og Streamlit bruger det som display tekst.
-                display_text=r"^(?:https?://)?(?:www\.)?([^/]+)"
+                "Kilde",
+                # Vi bruger 'VIS_KILDE' kolonnen som tekst for linket i 'KILDE'
+                display_text="VIS_KILDE" 
             ),
         },
         hide_index=True,
