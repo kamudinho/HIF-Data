@@ -89,8 +89,22 @@ def vis_transfer_dialog(df):
         st.write("Ingen data fundet.")
         return
 
+    # Helper til kontrakt-beregning
+    def calculate_years(row):
+        udloeb = str(row.get('KONTRAKT_UDLOEB', '')).strip()
+        start = str(row.get('KONTRAKT_START', '')).strip()
+        if udloeb and udloeb != 'nan':
+            try:
+                dt = pd.to_datetime(udloeb, dayfirst=True, errors='coerce')
+                if pd.notnull(dt):
+                    # Beregn år fra nu
+                    diff = (dt - datetime.datetime.now()).days / 365.25
+                    aar = round(max(0, diff))
+                    return f"{start} ({aar} år)" if start and start != 'nan' else f"({aar} år)"
+            except: pass
+        return start if start != 'nan' else "-"
+
     df_display = df.copy()
-    # Sikr ensartede kolonnenavne
     df_display.columns = [str(c).upper().strip() for c in df_display.columns]
     
     # 1. Sortering og Dato
@@ -98,16 +112,14 @@ def vis_transfer_dialog(df):
     df_display = df_display.sort_values('TS_SORT', ascending=False)
     df_display['Dato'] = df_display['TS_SORT'].dt.strftime('%d/%m-%Y')
     
-    # 2. Spiller med position (Navn (Pos))
-    pos_col = 'POSITION' if 'POSITION' in df_display.columns else 'POS'
-    df_display['Spiller'] = df_display['NAVN'] + " (" + df_display.get(pos_col, '-').fillna('-') + ")"
+    # 2. Spiller (Kun navn)
+    df_display['Spiller'] = df_display['NAVN']
 
-    # 3. Skifte kolonne
+    # 3. Skifte
     df_display['Skifte'] = df_display['SENESTE_KLUB'].fillna('?') + " ➔ " + df_display['KLUB'].fillna('?')
 
-    # 4. Kontrakt
-    # Vi bruger den eksisterende kontrakt-logik
-    df_display['Kontrakt'] = df_display.apply(lambda row: str(row.get('KONTRAKT_UDLOEB', '-')), axis=1)
+    # 4. Kontrakt (Beregnet med år)
+    df_display['Kontrakt'] = df_display.apply(calculate_years, axis=1)
 
     # 5. Tabel visning
     st.dataframe(
@@ -115,8 +127,10 @@ def vis_transfer_dialog(df):
         column_order=['Dato', 'Spiller', 'Skifte', 'Kontrakt', 'KILDE'], 
         column_config={
             "Dato": st.column_config.Column(width="small"),
-            "Spiller": st.column_config.Column("Spiller (Pos)", width="medium"),
+            "Spiller": st.column_config.Column("Spiller", width="medium"),
+            "Position": st.column_config.Column("Position", width="medium"),
             "Skifte": st.column_config.Column("Skifte", width="medium"),
+            "Kontrakt": st.column_config.Column("Kontrakt", width="small"),
             "KILDE": st.column_config.LinkColumn("Kilde", display_text="Se kilde"),
         },
         hide_index=True,
