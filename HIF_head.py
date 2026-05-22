@@ -112,15 +112,26 @@ def vis_side():
                         f_items += f"<div class='form-column'><div class='res-pill' style='background:{res_col};'>{h_s}-{a_s}</div><img src='{o_logo}' class='legend-logo'></div>"
                     st.markdown(f"<div class='form-wrapper'>{f_items}</div>", unsafe_allow_html=True)
 
-    # 2. COL2: Transfers
+    # 2. COL2: Transfers (Med rettet dato-håndtering)
     with col2:
         with st.container(border=True):
             st.markdown('<div class="card-title"><span>TRANSFERS</span></div>', unsafe_allow_html=True)
-            df_t = pd.read_csv("data/players/1div_overskrivning.csv")
-            for _, r in df_t.sort_values('TIMESTAMP', ascending=False).head(7).iterrows():
-                st.markdown(f"<div class='list-item'>{pd.to_datetime(r['TIMESTAMP']).strftime('%d/%m')}: <b>{r['KLUB']}</b> - {r['NAVN']}</div>", unsafe_allow_html=True)
-            if st.button("Se alle transfers", key="transfers_btn", use_container_width=True):
-                vis_transfer_dialog(df_t)
+            try:
+                df_t = pd.read_csv("data/players/1div_overskrivning.csv")
+                
+                # Sørg for at TIMESTAMP er datetime, fjern rækker med NaT (ugyldige datoer)
+                df_t['TS_DATE'] = pd.to_datetime(df_t['TIMESTAMP'], errors='coerce')
+                df_t = df_t.dropna(subset=['TS_DATE'])
+                
+                # Sorter og tag de 7 nyeste
+                for _, r in df_t.sort_values('TS_DATE', ascending=False).head(7).iterrows():
+                    dato_str = r['TS_DATE'].strftime('%d/%m')
+                    st.markdown(f"<div class='list-item'>{dato_str}: <b>{r['KLUB']}</b> - {r['NAVN']}</div>", unsafe_allow_html=True)
+                
+                if st.button("Se alle transfers", key="transfers_btn", use_container_width=True):
+                    vis_transfer_dialog(df_t)
+            except Exception as e:
+                st.caption("Kunne ikke indlæse transfer-data")
 
     # 3. COL3: Scouting
     with col3:
