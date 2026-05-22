@@ -60,8 +60,9 @@ def apply_custom_style():
             .form-column { display: flex; flex-direction: column; align-items: center; flex: 1; }
             .res-pill { width: 100%; border-radius: 4px; color: white; text-align: center; font-size: 10px; font-weight: 800; padding: 4px 0; margin-bottom: 6px; }
             .legend-logo { width: 26px; height: 26px; object-fit: contain; }
-            .list-item { font-size: 11px; margin-bottom: 5px; color: #333; display: flex; justify-content: space-between; align-items: center; width: 100%; }
-            .club-name { font-weight: 700; text-align: right; }
+            .list-item { font-size: 11px; margin-bottom: 6px; color: #333; display: flex; justify-content: space-between; align-items: center; width: 100%; white-space: nowrap; }
+            .player-info { overflow: hidden; text-overflow: ellipsis; margin-right: 10px; }
+            .club-side { display: flex; align-items: center; flex-shrink: 0; }
         </style>
     """, unsafe_allow_html=True)
 
@@ -124,11 +125,10 @@ def vis_side():
                 
                 for _, r in df_t.sort_values('TS_DATE', ascending=False).head(7).iterrows():
                     dato_str = r['TS_DATE'].strftime('%d/%m')
-                    # Vi splitter indholdet: Spillerinfo i venstre side, klub i højre
                     st.markdown(f"""
                         <div class='list-item'>
-                            <span>{dato_str}: <b>{r['NAVN']}</b> ({r['POSITION']})</span>
-                            <span class='club-name'>➔ {r['KLUB']}</span>
+                            <span class='player-info'>{dato_str}: <b>{r['NAVN']}</b> ({r['POSITION']})</span>
+                            <span class='club-side'>➔ <b>{r['KLUB']}</b></span>
                         </div>
                     """, unsafe_allow_html=True)
                 
