@@ -25,46 +25,59 @@ def apply_custom_style():
         </style>
     """, unsafe_allow_html=True)
 
-@st.dialog("Alle Transfers", width="large")
 def vis_transfer_dialog(df):
     if df.empty:
         st.write("Ingen data fundet.")
         return
 
     df_display = df.copy()
-    # Sikr ensartede kolonnenavne
     df_display.columns = [str(c).upper().strip() for c in df_display.columns]
     
-    # 1. Sortering og Dato
+    # 1. Dato-formatering
     df_display['TS_SORT'] = pd.to_datetime(df_display['TIMESTAMP'], errors='coerce')
     df_display = df_display.sort_values('TS_SORT', ascending=False)
     df_display['Dato'] = df_display['TS_SORT'].dt.strftime('%d/%m-%Y')
     
-    # 2. Spiller med position (Navn (Pos))
+    # 2. Spiller (Navn + Pos)
     pos_col = 'POSITION' if 'POSITION' in df_display.columns else 'POS'
     df_display['Spiller'] = df_display['NAVN'] + " (" + df_display.get(pos_col, '-').fillna('-') + ")"
 
-    # 3. Skifte kolonne
+    # 3. Skifte
     df_display['Skifte'] = df_display['SENESTE_KLUB'].fillna('?') + " ➔ " + df_display['KLUB'].fillna('?')
 
-    # 4. Kontrakt
-    # Vi bruger den eksisterende kontrakt-logik
-    df_display['Kontrakt'] = df_display.apply(lambda row: str(row.get('KONTRAKT_UDLOEB', '-')), axis=1)
+    # 4. KONTRAKT-LOGIK (Her beregner vi år tilbage)
+    def beregn_kontrakt(row):
+        udloeb_raw = str(row.get('KONTRAKT_UDLOEB', '-'))
+        if udloeb_raw == '-' or udloeb_raw == 'nan':
+            return "-"
+        try:
+            # Vi antager formatet er en dato eller et årstal (f.eks. "31-12-2028")
+            udloeb_dt = pd.to_datetime(udloeb_raw, dayfirst=True, errors='coerce')
+            if pd.notnull(udloeb_dt):
+                aar_tilbage = round((udloeb_dt - datetime.datetime.now()).days / 365.25)
+                # Hvis resultatet er 0 eller derunder, skriv det, ellers vis år
+                tekst = f"{aar_tilbage} år" if aar_tilbage > 0 else "Udløber nu"
+                return f"{udloeb_raw} ({tekst})"
+            return udloeb_raw
+        except:
+            return udloeb_raw
+
+    df_display['Kontrakt_Info'] = df_display.apply(beregn_kontrakt, axis=1)
 
     # 5. Tabel visning
     st.dataframe(
         df_display,
-        column_order=['Dato', 'Spiller', 'Skifte', 'Kontrakt', 'KILDE'], 
+        column_order=['Dato', 'Spiller', 'Skifte', 'Kontrakt_Info', 'KILDE'], 
         column_config={
             "Dato": st.column_config.Column(width="small"),
             "Spiller": st.column_config.Column("Spiller (Pos)", width="medium"),
             "Skifte": st.column_config.Column("Skifte", width="medium"),
+            "Kontrakt_Info": st.column_config.Column("Kontrakt (År tilbage)", width="medium"),
             "KILDE": st.column_config.LinkColumn("Kilde", display_text="Se kilde"),
         },
         hide_index=True,
         use_container_width=True
     )
-
 def vis_side():
     apply_custom_style()
     conn = _get_snowflake_conn()
