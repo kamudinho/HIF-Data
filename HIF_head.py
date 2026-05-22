@@ -195,19 +195,19 @@ def vis_side():
             with col:
                 metric_cfg = metrics[i]
                 st.caption(f"**{metric_cfg['name']}**")
-                y_domain = [0, 100] if metric_cfg['name'] == "Possession" else [0, None]
                 
+                # Fjern det faste y_domain for at tillade automatisk zoom pr. graf
                 line = alt.Chart(hif_recent).mark_line(point=True, color='#111', strokeWidth=2).encode(
                     x=alt.X('index:O', axis=None),
-                    y=alt.Y(f'{metric_cfg["col"]}:Q', axis=None, scale=alt.Scale(domain=y_domain, zero=True))
+                    y=alt.Y(f'{metric_cfg["col"]}:Q', 
+                            axis=None, 
+                            scale=alt.Scale(zero=False)) # zero=False zoomer helt ind
                 ).properties(height=80)
                 
+                # Gennemsnitslinjen justerer sig nu også automatisk til grafens egen skala
                 rule = alt.Chart(hif_recent).mark_rule(color='#ccc', strokeDash=[3,3]).encode(
                     y=f'mean({metric_cfg["col"]}):Q'
                 )
                 st.altair_chart(line + rule, use_container_width=True)
-    else:
-        st.info("Ingen kampdata tilgængelig for trend-analyse.")
-
 if __name__ == "__main__":
     vis_side()
