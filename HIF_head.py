@@ -143,7 +143,7 @@ def vis_transfer_dialog(df):
             "Kontrakt": "Kontrakt",
             "KILDE": st.column_config.LinkColumn(
                 "Kilde",
-                display_text="Kilde_Tekst" # Streamlit viser teksten fra denne kolonne
+                display_text="Se transfer-kilde" # Streamlit viser teksten fra denne kolonne
             ),
         },
         hide_index=True,
