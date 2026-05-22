@@ -186,8 +186,8 @@ def vis_side():
                     trup_andet['SENESTE_KLUB'].fillna('?') + " ➔ " + trup_andet['STATUS_TEXT']
                 )
                 
-                # Vælg og omdøb kolonner (inkluderer nu PLAYER_WYID og det nye Skifte)
-                vis_trup = trup_andet[['NAVN', 'POSITION', 'PLAYER_WYID']].sort_values(by="NAVN", 'Skifte')
+                # Vælg og omdøb kolonner - PLAYER_WYID er nu rykket frem
+                vis_trup = trup_andet[['PLAYER_WYID', 'NAVN', 'POSITION', 'Skifte']].sort_values(by="NAVN")
                 
                 # Vis tabellen
                 st.dataframe(vis_trup, hide_index=True, use_container_width=True)
