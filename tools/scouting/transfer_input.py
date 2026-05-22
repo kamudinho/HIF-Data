@@ -166,11 +166,11 @@ def vis_side():
         st.caption("Holdlister")
         
         # Saml dem under "Andet"
-        faner = list(COMP_MAP.values()) + ["Andet"] 
+        faner = list(COMP_MAP.values()) + ["Øvrige"] 
         liga_valg = st.segmented_control("Vælg liga", faner, default="Betinia Liga")
 
-        if liga_valg == "Andet":
-            st.caption("##### Øvrige")
+        if liga_valg == "Øvrige":
+            st.caption("###### Øvrige")
             
             # Filtrer for spillere der enten er i udlandet ELLER er klubløse
             trup_andet = df_csv[(df_csv['KLUB'] == "Klubløs") | (df_csv['UDLANDET'].astype(str) == "True")].copy()
