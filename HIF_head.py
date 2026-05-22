@@ -126,7 +126,7 @@ def vis_side():
                 # Sorter og tag de 7 nyeste
                 for _, r in df_t.sort_values('TS_DATE', ascending=False).head(7).iterrows():
                     dato_str = r['TS_DATE'].strftime('%d/%m')
-                    st.markdown(f"<div class='list-item'>{dato_str}: <b>{r['KLUB']}</b> - {r['NAVN']}</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div class='list-item'>{dato_str}: <b>{r['NAVN']}</b> ({r['POSITION']}) ➔ <b>{r['KLUB']}</b> </div>", unsafe_allow_html=True)
                 
                 if st.button("Se alle transfers", key="transfers_btn", use_container_width=True):
                     vis_transfer_dialog(df_t)
