@@ -94,10 +94,25 @@ def vis_side():
             st.markdown('<div class="card-title"><span>TRANSFERS</span></div>', unsafe_allow_html=True)
             try:
                 df_t = pd.read_csv("data/players/1div_overskrivning.csv")
-                for _, r in df_t.sort_values('TIMESTAMP', ascending=False).head(7).iterrows():
-                    d = pd.to_datetime(r['TIMESTAMP']).strftime('%d/%m')
-                    st.markdown(f"<div class='list-item'>{d}: <b>{r['NAVN']}</b> ➔ <b>{r['KLUB']}</b></div>", unsafe_allow_html=True)
-            except: st.caption("Kunne ikke indlæse transfers")
+                df_t = df_t.dropna(subset=['TIMESTAMP'])
+                df_t['TS_SORT'] = pd.to_datetime(df_t['TIMESTAMP'], errors='coerce')
+                df_display = df_t.sort_values('TS_SORT', ascending=False).head(7)
+
+                for _, r in df_display.iterrows():
+                    dato_str = pd.to_datetime(r.get('TIMESTAMP')).strftime('%d/%m')
+                    navn = str(r.get('NAVN', 'Ukendt'))
+                    klub = str(r.get('KLUB', 'Ukendt'))
+                    pos = str(r.get('POSITION', r.get('POS', '-')))
+                    
+                    st.markdown(f"<div class='list-item'>{dato_str}: <b>{navn}</b> ({pos}) ➔ <b>{klub}</b></div>", unsafe_allow_html=True)
+
+                # Her bliver knappen oprettet. 
+                # Når du trykker på den, vil Streamlit trigge st.dialog funktionen.
+                if st.button("Se alle transfers", key="btn_transfers", use_container_width=True):
+                    vis_transfer_dialog(df_t)
+                    
+            except Exception as e:
+                st.caption("Kunne ikke indlæse transfers")
 
     # 3. SCOUTING
     with col3:
