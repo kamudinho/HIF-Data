@@ -102,32 +102,30 @@ def vis_transfer_dialog(df):
     df_display = df.copy()
     df_display.columns = [str(c).upper().strip() for c in df_display.columns]
     
-    # 1. Sortering
+    # --- 1. Sortering og Dato ---
     df_display['TS_SORT'] = pd.to_datetime(df_display['TIMESTAMP'], errors='coerce')
+    df_display = df_display.sort_values('TS_SORT', ascending=False)
+    df_display['Dato_Visning'] = df_display['TS_SORT'].dt.strftime('%d/%m-%Y')
     
-    # 2. Skifte: FRA → TIL
+    # --- 2. Skifte (Fra → Til) ---
     df_display['Skifte'] = (
         df_display['SENESTE_KLUB'].fillna('?').astype(str) + 
         " → " + 
         df_display['KLUB'].fillna('?').astype(str)
     )
 
-    # 3. Kontrakt: Dato (X år)
+    # --- 3. Kontrakt (Dato + Længde i år fra nu) ---
     def format_contract_years(row):
         start = str(row.get('KONTRAKT_START', '')).strip()
         udloeb_str = str(row.get('KONTRAKT_UDLOEB', '')).strip()
-        
         if not udloeb_str or udloeb_str in ['nan', '']:
             return start if start not in ['nan', ''] else ""
-            
         try:
             udloeb_dt = pd.to_datetime(udloeb_str, dayfirst=True, errors='coerce')
             if pd.notnull(udloeb_dt):
                 today = datetime.datetime.now()
-                # Beregn difference i dage og lav til år
                 diff_years = (udloeb_dt - today).days / 365.25
                 years = round(max(0, diff_years))
-                
                 prefix = f"{start} " if start not in ['nan', ''] else ""
                 return f"{prefix}({years} år)"
         except: pass
@@ -135,42 +133,41 @@ def vis_transfer_dialog(df):
 
     df_display['Kontrakt_Info'] = df_display.apply(format_contract_years, axis=1)
 
-    # 4. Link: Rens alt og tving 'www.' på
-    def force_www_link(url):
+    # --- 4. RENS_LINK LOGIK (Tvinger www.domæne.dk) ---
+    def rens_link_hif(url):
         if pd.isna(url) or str(url).strip() == "": return ""
-        url_str = str(url).strip()
         try:
-            # Sikr protokol for parsing
-            if not url_str.startswith(('http://', 'https://')):
-                temp_url = 'https://' + url_str
-            else:
-                temp_url = url_str
-                
-            netloc = urlparse(temp_url).netloc.lower()
-            # Fjern 'www.' hvis det er der, for at starte fra bunden
-            domain = netloc.replace('www.', '')
-            # Tilføj det igen så vi er 100% sikre på formatet
-            return f"www.{domain}"
+            # Sørg for protokol så urlparse virker
+            u = str(url).strip()
+            if not u.startswith(('http://', 'https://')):
+                u = 'https://' + u
+            
+            parsed = urlparse(u)
+            # Tag domænet, fjern eksisterende www, og sæt det på igen for ensartethed
+            domain = parsed.netloc.lower()
+            if not domain: domain = parsed.path.split('/')[0]
+            
+            clean_domain = domain.replace('www.', '')
+            return f"www.{clean_domain}"
         except:
             return "Link"
 
-    # Vi laver en visuel kolonne med den pæne tekst
-    df_display['LINK_VISNING'] = df_display['KILDE'].apply(force_www_link)
+    # Vi laver den pæne tekst her
+    df_display['KILDE_TEKST'] = df_display['KILDE'].apply(rens_link_hif)
 
-    # 5. Tabel visning
-    # Vi bruger 'LINK_VISNING' som den kolonne brugeren ser
+    # --- 5. Tabel visning ---
     st.dataframe(
-        df_display.sort_values('TS_SORT', ascending=False),
-        column_order=['TIMESTAMP', 'NAVN', 'Skifte', 'Kontrakt_Info', 'KILDE'],
+        df_display,
+        column_order=['Dato_Visning', 'NAVN', 'Skifte', 'Kontrakt_Info', 'KILDE'],
         column_config={
-            "TIMESTAMP": st.column_config.Column("Dato", width="small"),
+            "Dato_Visning": st.column_config.Column("Dato", width="small"),
             "NAVN": "Spiller",
             "Skifte": "Skifte",
             "Kontrakt_Info": "Kontrakt",
             "KILDE": st.column_config.LinkColumn(
                 "Kilde",
-                # Ved at sætte display_text til kolonnen med 'www.', tvinger vi visningen
-                display_text=r'www\.[^/]+'
+                # Her tvinger vi Streamlit til at bruge vores rensede tekst som visning
+                display_text=r"www\.[^/]+" 
             ),
         },
         hide_index=True,
