@@ -326,18 +326,17 @@ def vis_side():
 
 
 # --- NY RÆKKE: TRENDLINES (6 kolonner) ---
-    st.caption("##### Hvidovre IF") # En skillelinje for visuel adskillelse
-    trend_cols = st.columns(6)
-
-    # 1. Filtrer kun afviklede kampe og tag ALLE kampe i sæsonen
+    st.markdown("---")
+    st.caption("##### Hvidovre IF: Sæson-trends (pr. kamp)")
+    
+    # 1. Hent og filtrer data for HELE sæsonen (afviklede kampe)
     hif_recent = df_stats[
         ((df_stats['CONTESTANTHOME_OPTAUUID'].str.upper() == HIF_UUID.strip().upper()) | 
          (df_stats['CONTESTANTAWAY_OPTAUUID'].str.upper() == HIF_UUID.strip().upper())) &
         (df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False))
     ].sort_values('MATCH_DATE_FULL', ascending=True).copy()
 
-    # 2. Dynamisk kolonne-valg (Hjemme/Ude logik)
-    # Vi opretter midlertidige kolonner til graferne, så vi altid viser HIF's data
+    # 2. Opret PLOT-kolonner med Hjemme/Ude logik
     hif_recent['PLOT_GOALS'] = hif_recent.apply(lambda r: r['TOTAL_HOME_SCORE'] if r['CONTESTANTHOME_OPTAUUID'].upper() == HIF_UUID else r['TOTAL_AWAY_SCORE'], axis=1)
     hif_recent['PLOT_XG'] = hif_recent.apply(lambda r: r['HOME_XG'] if r['CONTESTANTHOME_OPTAUUID'].upper() == HIF_UUID else r['AWAY_XG'], axis=1)
     hif_recent['PLOT_SHOTS'] = hif_recent.apply(lambda r: r['HOME_SHOTS'] if r['CONTESTANTHOME_OPTAUUID'].upper() == HIF_UUID else r['AWAY_SHOTS'], axis=1)
@@ -345,33 +344,27 @@ def vis_side():
     hif_recent['PLOT_POSS'] = hif_recent.apply(lambda r: r['HOME_POSS'] if r['CONTESTANTHOME_OPTAUUID'].upper() == HIF_UUID else r['AWAY_POSS'], axis=1)
     hif_recent['PLOT_FWD'] = hif_recent.apply(lambda r: r['HOME_FORWARD_PASSES'] if r['CONTESTANTHOME_OPTAUUID'].upper() == HIF_UUID else r['AWAY_FORWARD_PASSES'], axis=1)
 
-    # Sæt dato som indeks
-    hif_recent = hif_recent.set_index('MATCH_DATE_FULL')
+    # 3. Nulstil indeks og brug kampnummer (1, 2, 3...) som index for x-aksen
+    hif_recent = hif_recent.reset_index(drop=True)
+    hif_recent.index = hif_recent.index + 1 
 
-    # Opdater metrik-mapping til de nye plot-kolonner
+    # 4. Vis de 6 kolonner
+    trend_cols = st.columns(6)
     metrics = [
         {"name": "Mål", "col": "PLOT_GOALS"},
         {"name": "xG", "col": "PLOT_XG"},
         {"name": "Skud", "col": "PLOT_SHOTS"},
-        {"name": "Touches i boks", "col": "PLOT_TOUCHES"},
+        {"name": "Touches", "col": "PLOT_TOUCHES"},
         {"name": "Possession", "col": "PLOT_POSS"},
-        {"name": "Fwd passes", "col": "PLOT_FWD"}
+        {"name": "Fwd Passes", "col": "PLOT_FWD"}
     ]
 
     for i, col in enumerate(trend_cols):
         with col:
             metric_cfg = metrics[i]
-            st.caption(metric_cfg['name'])
-            
-            # Vælg den korrekte kolonne (Home vs Away)
-            # Her skal vi dynamisk vælge kolonne baseret på om HIF er hjemme eller ude
-            # En nem måde er at lave en beregnet kolonne eller bruge en maske
-            data_to_plot = hif_recent[[metric_cfg['col']]].fillna(0)
-            
-            # Brug use_container_width og lad være med at bekymre dig om label-antallet
-            # Hvis du vil se alle datoer, hjælper det ofte at rotere dem (kræver dog ofte mere plads)
-            st.line_chart(data_to_plot, height=100)
-            
+            st.caption(f"**{metric_cfg['name']}**")
+            # st.line_chart tegner nu automatisk med 1, 2, 3... på x-aksen
+            st.line_chart(hif_recent[[metric_cfg['col']]], height=100)            
 # Til sidst: Sørg for at kalde funktionen, når filen indlæses
 if __name__ == "__main__":
     vis_side()
