@@ -3,6 +3,7 @@ import pandas as pd
 from data.utils.team_mapping import TEAMS
 from data.data_load import _get_snowflake_conn
 import datetime
+from data.sql.opta_queries import get_opta_queries
 
 # --- DIALOG-BOKS ---
 @st.dialog("Alle Transfers", width="large")
