@@ -91,47 +91,62 @@ def shorten_url(url):
     except:
         return str(url)
 
-# Dialog-boks funktionen med forkortede links
 @st.dialog("Alle Transfers", width="large")
 def vis_transfer_dialog(df):
-    # Præparer data
+    # 1. Præparer kopi af data
     df_display = df.copy()
     df_display['TS_SORT'] = pd.to_datetime(df_display['TIMESTAMP'], errors='coerce')
     
-    # 1. Lav en hjælpefunktion til at trække domænet ud
-    def get_domain(url):
-        if pd.isna(url) or str(url).strip() == "":
-            return ""
+    # 2. Logik: Skifte (FRA -> TIL)
+    # Vi håndterer manglende værdier med fillna for at undgå 'nan' i teksten
+    df_display['Skifte'] = (
+        df_display['FRA_KLUB'].fillna('Ukendt') + 
+        " → " + 
+        df_display['KLUB'].fillna('Ukendt')
+    )
+
+    # 3. Logik: Kontrakt (Dato (X år))
+    def format_contract(row):
+        start = str(row.get('KONTRAKT_START', '')).strip()
+        laengde = str(row.get('LÆNGDE', '')).strip()
+        if start and start != 'nan':
+            return f"{start} ({laengde} år)" if laengde and laengde != 'nan' else start
+        return ""
+
+    df_display['Kontrakt'] = df_display.apply(format_contract, axis=1)
+
+    # 4. Logik: Link (Kun domæne med www)
+    def clean_url(url):
+        if pd.isna(url) or str(url).strip() == "": return ""
         try:
-            # Fjerner protocol og www, og tager kun det første led
-            domain = urlparse(str(url)).netloc.replace('www.', '')
-            return domain
-        except:
-            return "Link"
+            netloc = urlparse(str(url)).netloc
+            # Sørg for at den starter med www. hvis muligt
+            if not netloc.startswith('www.') and netloc:
+                return f"www.{netloc}"
+            return netloc
+        except: return "Link"
 
-    # 2. Lav en kolonne med den tekst vi vil vise
-    df_display['Kilde'] = df_display['KILDE'].apply(get_domain)
+    # Vi overskriver KILDE kolonnen med den pæne tekst, men beholder URL'en som link-destination
+    df_display['Kilde_Tekst'] = df_display['KILDE'].apply(clean_url)
 
-    # 3. Definer hvilke kolonner vi vil have i hvilken rækkefølge
-    # Vi viser 'KILDE' kolonnen (som nu indeholder domænenavnet), men gør den klikbar til den oprindelige URL
+    # 5. Visning af tabellen
     st.dataframe(
         df_display.sort_values('TS_SORT', ascending=False),
-        column_order=['TIMESTAMP', 'NAVN', 'FRA_KLUB', 'KLUB', 'KONTRAKT_START', 'KILDE'],
+        column_order=['TIMESTAMP', 'NAVN', 'Skifte', 'Kontrakt', 'KILDE'],
         column_config={
-            "TIMESTAMP": "Dato",
+            "TIMESTAMP": st.column_config.Column("Dato", width="small"),
             "NAVN": "Spiller",
-            "FRA_KLUB": "Fra",
-            "KLUB": "Til",
-            "KONTRAKT_START": "Start",
+            "Skifte": st.column_config.Column("Skifte", width="medium"),
+            "Kontrakt": "Kontrakt",
             "KILDE": st.column_config.LinkColumn(
-                "Kilde",
-                # Her bruger vi selve værdien fra rækken som tekst
-                display_text=None # Når display_text er None, viser den værdien i cellen (vores domæne)
+                "Link",
+                display_text=r'https?://(?:www\.)?([^/?#]+)' # Viser kun domænet i cellen
             ),
         },
         hide_index=True,
         use_container_width=True
     )
+    
 def vis_side(dp=None):
     apply_custom_style()
     conn = _get_snowflake_conn()
