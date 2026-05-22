@@ -19,18 +19,20 @@ def apply_custom_style():
 
             .card-title {
                 color: #1a1a1a;
-                font-size: 12px;
+                font-size: 11px;
                 font-weight: 700;
-                margin-bottom: 12px;
+                margin-bottom: 15px;
                 text-transform: uppercase;
                 letter-spacing: 0.5px;
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
+                border-bottom: 1px solid #f0f0f0;
+                padding-bottom: 8px;
             }
             
             .title-date {
-                color: #666;
+                color: #888;
                 font-weight: 500;
                 text-transform: none;
                 font-size: 11px;
@@ -80,6 +82,9 @@ def apply_custom_style():
                 margin-bottom: 5px;
                 color: #333;
                 line-height: 1.2;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
             }
         </style>
     """, unsafe_allow_html=True)
@@ -89,6 +94,7 @@ def vis_side(dp=None):
     conn = _get_snowflake_conn()
     if not conn: return
 
+    # --- DATA LOAD ---
     DB = "KLUB_HVIDOVREIF.AXIS"
     LIGA_UUID = "dyjr458hcmrcy87fsabfsy87o" 
     HIF_UUID = "8GXD9RY2580PU1B1DD5NY9YMY" 
@@ -108,7 +114,7 @@ def vis_side(dp=None):
     
     col1, col2, col3 = st.columns([1, 1, 1])
 
-    # 1. NÆSTE KAMP
+    # 1. NÆSTE KAMP MODUL
     with col1:
         future = hif_m[~hif_m['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].sort_values('MATCH_DATE_FULL')
         with st.container(border=True):
@@ -118,10 +124,10 @@ def vis_side(dp=None):
                 opp_name = opta_to_name.get(opp_id, "Modstander")
                 match_date = nk['MATCH_DATE_FULL'].strftime('%d/%m')
                 
-                # Dato er nu smidt ind i titlen til højre
+                # TITEL: Næste kamp vs Modstander | Dato
                 st.markdown(f"""
                     <div class='card-title'>
-                        <span>Næste kamp • R. {int(nk['WEEK'])}</span>
+                        <span>NÆSTE KAMP vs. {opp_name.upper()}</span>
                         <span class='title-date'>{match_date}</span>
                     </div>
                 """, unsafe_allow_html=True)
@@ -130,16 +136,13 @@ def vis_side(dp=None):
                 with t_l:
                     c1, c2, c3 = st.columns([1, 0.6, 1])
                     c1.image(TEAMS.get("Hvidovre", {}).get("logo", ""), width=42)
-                    # Kun VS her nu
-                    c2.markdown(f"""
-                        <div style='text-align:center; padding-top:12px;'>
-                            <b style='font-size:10px; color:#ccc;'>VS</b>
-                        </div>
-                    """, unsafe_allow_html=True)
+                    c2.markdown("<div style='text-align:center; padding-top:12px;'><b style='font-size:10px; color:#ccc;'>VS</b></div>", unsafe_allow_html=True)
                     c3.image(TEAMS.get(opp_name, {}).get("logo", ""), width=42)
-                    st.markdown(f"<div style='text-align:center; font-size:8px; font-weight:700; margin-top:5px;'>{opp_name}</div>", unsafe_allow_html=True)
-                
+                    # Navnet er nu i titlen, så vi lader pladsen under være ren eller viser stadion/type
+                    st.markdown(f"<div style='text-align:center; font-size:9px; color:#666; margin-top:5px;'>1. Division</div>", unsafe_allow_html=True)
+
                 with t_r:
+                    # Metrics (Her kan du koble dine Snowflake beregninger på senere)
                     st.markdown(f"""
                         <table class='stats-table'>
                             <tr><td class='stats-label'>Mål for / imod</td><td class='stats-value'>1.4 / 1.1</td></tr>
@@ -163,5 +166,38 @@ def vis_side(dp=None):
                         f_items += f"<div class='form-column'><div class='res-pill' style='background:{res_col};'>{h_s}-{a_s}</div><img src='{o_logo}' class='legend-logo'></div>"
                     st.markdown(f"<div class='form-wrapper'>{f_items}</div>", unsafe_allow_html=True)
 
-    # Bevar Transfers (col2) og Scouting (col3) herunder...
-    # (Samme kode som tidligere)
+    # 2. TRANSFERS MODUL (Sorteret efter TIMESTAMP)
+    with col2:
+        with st.container(border=True):
+            st.markdown('<div class="card-title"><span>TRANSFERS</span></div>', unsafe_allow_html=True)
+            try:
+                df_t = pd.read_csv("data/players/1div_overskrivning.csv")
+                # Sørg for at TIMESTAMP er datetime objekt for korrekt sortering
+                df_t['TS_SORT'] = pd.to_datetime(df_t['TIMESTAMP'], errors='coerce')
+                df_display = df_t.sort_values('TS_SORT', ascending=False).head(6)
+                
+                for _, r in df_display.iterrows():
+                    st.markdown(f"<div class='list-item'><b>{r['KLUB']}</b>: {r['NAVN']}</div>", unsafe_allow_html=True)
+                
+                st.markdown("<div style='margin-top:15px;'></div>", unsafe_allow_html=True)
+                with st.popover("Se alle transfers", use_container_width=True):
+                    st.dataframe(df_t.sort_values('TS_SORT', ascending=False), hide_index=True)
+            except:
+                st.caption("Kunne ikke indlæse transferdata")
+
+    # 3. SCOUTING MODUL
+    with col3:
+        with st.container(border=True):
+            st.markdown('<div class="card-title"><span>SCOUTING</span></div>', unsafe_allow_html=True)
+            try:
+                # Emneliste sorteres typisk efter de sidst tilføjede (tail eller timestamp hvis findes)
+                df_e = pd.read_csv("data/scouting/emneliste.csv").tail(6)
+                if not df_e.empty:
+                    for _, r in df_e.iloc[::-1].iterrows(): # Nyeste øverst
+                        st.markdown(f"<div class='list-item'>⭐ {r.get('Navn', 'Ukendt')} ({r.get('Klub', '-')})</div>", unsafe_allow_html=True)
+                else:
+                    st.caption("Listen er tom")
+            except:
+                st.caption("Kunne ikke indlæse scouting-data")
+
+    st.divider()
