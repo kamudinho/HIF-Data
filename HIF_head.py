@@ -190,17 +190,17 @@ def vis_side():
             {"name": "Fwd Passes", "col": "PLOT_FWD", "fmt": ".0f"}
         ]
 
-        # Tilføj modstander-navne til dataframe
+        # Tilføj modstander-navne og H/U kolonne
         hif_recent['MODSTANDER'] = hif_recent.apply(
             lambda r: r['CONTESTANTAWAY_NAME'] if str(r['CONTESTANTHOME_OPTAUUID']).upper() == HIF_UUID.upper() else r['CONTESTANTHOME_NAME'], 
             axis=1
         )
-
-        # Tilføj Hjemme/Ude kolonne
         hif_recent['H_U'] = hif_recent.apply(
             lambda r: 'H' if str(r['CONTESTANTHOME_OPTAUUID']).upper() == HIF_UUID.upper() else 'U', 
             axis=1
         )
+        # Opret den kombinerede kolonne til tooltip
+        hif_recent['TOOLTIP_VS'] = hif_recent['MODSTANDER'] + " (" + hif_recent['H_U'] + ")"
 
         # OPDELE I 2 RÆKKER
         for row in range(2):
@@ -208,20 +208,19 @@ def vis_side():
             for i in range(3):
                 idx = row * 3 + i
                 col_name = metrics[idx]['col']
-                avg_val = hif_recent[col_name].mean() # Beregn gennemsnit
+                avg_val = hif_recent[col_name].mean()
                 
                 with cols[i]:
-                    # Her tvinges gennemsnittet til altid at have 2 decimaler (: .2f)
                     st.caption(f"**{metrics[idx]['name']}** (Snit: {avg_val:.2f})")
                     
                     base = alt.Chart(hif_recent).encode(
                         x=alt.X('index:O', axis=None),
                         y=alt.Y(f'{col_name}:Q', axis=None, scale=alt.Scale(zero=False)),
                         tooltip=[
-                            alt.Tooltip('MODSTANDER (H_U)', title='Modstander', 'H/U'),
+                            alt.Tooltip('TOOLTIP_VS', title='vs.'),
                             alt.Tooltip(col_name, title=metrics[idx]['name'], format=metrics[idx]['fmt'])
                         ]
-                    ).properties(height=120)
+                    ).properties(height=80) # Højden sat til 80 for kompakt layout
                     
                     line = base.mark_line(color='#cccccc', strokeWidth=2)
                     points = base.mark_circle(size=50, color='#C41E3A')
