@@ -4,6 +4,7 @@ from urllib.parse import urlparse # Til at forkorte links
 from data.utils.team_mapping import TEAMS
 from data.data_load import _get_snowflake_conn
 import datetime
+from urllib.parse import urlparse
 
 def apply_custom_style():
     st.markdown("""
@@ -98,62 +99,54 @@ def vis_transfer_dialog(df):
         st.write("Ingen data fundet.")
         return
 
-    # 1. Præparer kopi og tving kolonnenavne til STORE BOGSTAVER
     df_display = df.copy()
     df_display.columns = [str(c).upper().strip() for c in df_display.columns]
-    
-    # Lav sorterings-timestamp
     df_display['TS_SORT'] = pd.to_datetime(df_display['TIMESTAMP'], errors='coerce')
     
-    # 2. Logik: Skifte (SENESTE_KLUB -> KLUB)
+    # 1. Skifte: SENESTE_KLUB → KLUB
     df_display['Skifte'] = (
         df_display['SENESTE_KLUB'].fillna('?').astype(str) + 
         " → " + 
         df_display['KLUB'].fillna('?').astype(str)
     )
 
-    # 3. Logik: Beregn år fra udløb
-    def calculate_years(row):
+    # 2. Kontrakt: Startdato (X år)
+    def format_contract_years(row):
         start = str(row.get('KONTRAKT_START', '')).strip()
         udloeb_str = str(row.get('KONTRAKT_UDLOEB', '')).strip()
         
-        if not udloeb_str or udloeb_str == 'nan' or udloeb_str == '':
-            return start if start != 'nan' else ""
+        if not udloeb_str or udloeb_str in ['nan', '']:
+            return start if start not in ['nan', ''] else ""
             
         try:
-            # Vi forsøger at tolke datoen (antager formatet er nogenlunde standard)
             udloeb_dt = pd.to_datetime(udloeb_str, dayfirst=True, errors='coerce')
             if pd.notnull(udloeb_dt):
+                # Beregn år fra i dag (2026-05-22)
                 today = datetime.datetime.now()
-                # Beregn difference i år
                 diff_years = (udloeb_dt - today).days / 365.25
-                years_rounded = round(max(0, diff_years)) # Vi runder til nærmeste og sikrer vi ikke får negative tal
+                years = round(max(0, diff_years))
                 
-                res = f"{start}" if start and start != 'nan' else ""
-                suffix = f" ({years_rounded} år)"
-                return f"{res}{suffix}".strip()
-        except:
-            pass
-        return start if start != 'nan' else ""
+                prefix = f"{start} " if start not in ['nan', ''] else ""
+                return f"{prefix}({years} år)"
+        except: pass
+        return start
 
-    df_display['Kontrakt_Info'] = df_display.apply(calculate_years, axis=1)
+    df_display['Kontrakt_Info'] = df_display.apply(format_contract_years, axis=1)
 
-    # 4. Logik: Vis Link med tvungen 'www.'
-    # Vi bruger en funktion til at formatere visningen i LinkColumn
-    def ensure_www(url):
+    # 3. Link: Tving visning af www.domæne.dk
+    def format_link_text(url):
         if pd.isna(url) or str(url).strip() == "": return ""
         try:
-            from urllib.parse import urlparse
-            netloc = urlparse(str(url)).netloc
-            # Fjern eksisterende www. for at undgå www.www.
-            clean_netloc = netloc.replace('www.', '')
-            return f"www.{clean_netloc}"
-        except:
-            return "Link"
+            # Vi tager netloc og sikrer os at den har www.
+            netloc = urlparse(str(url)).netloc.lower()
+            display = netloc if netloc.startswith('www.') else f"www.{netloc}"
+            return display
+        except: return "Link"
 
-    df_display['LINK_VISNING'] = df_display['KILDE'].apply(ensure_www)
+    # Vi laver en dedikeret kolonne til visningsteksten
+    df_display['LINK_TEXT'] = df_display['KILDE'].apply(format_link_text)
 
-    # 5. Visning af tabellen
+    # 4. Visning: Vi bruger den nye LINK_TEXT som display_text
     st.dataframe(
         df_display.sort_values('TS_SORT', ascending=False),
         column_order=['TIMESTAMP', 'NAVN', 'Skifte', 'Kontrakt_Info', 'KILDE'],
@@ -164,8 +157,8 @@ def vis_transfer_dialog(df):
             "Kontrakt_Info": "Kontrakt",
             "KILDE": st.column_config.LinkColumn(
                 "Link",
-                # Vi bruger display_text til at overskrive med vores pæne www-format
-                display_text=r'^https?://(?:www\.)?([^/?#]+)' 
+                # Her henter vi teksten fra vores præ-formaterede LINK_TEXT kolonne
+                display_text=r'www\.[^/]+' 
             ),
         },
         hide_index=True,
