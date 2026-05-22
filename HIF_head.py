@@ -217,10 +217,10 @@ def vis_side():
                         x=alt.X('index:O', axis=None),
                         y=alt.Y(f'{col_name}:Q', axis=None, scale=alt.Scale(zero=False)),
                         tooltip=[
-                            alt.Tooltip('TOOLTIP_VS', title='vs.'),
+                            alt.Tooltip('TOOLTIP_VS', title='Modstander'), # Denne kolonne indeholder både navn og H/U
                             alt.Tooltip(col_name, title=metrics[idx]['name'], format=metrics[idx]['fmt'])
                         ]
-                    ).properties(height=80) # Højden sat til 80 for kompakt layout
+                    ).properties(height=125)
                     
                     line = base.mark_line(color='#cccccc', strokeWidth=2)
                     points = base.mark_circle(size=50, color='#C41E3A')
