@@ -157,7 +157,6 @@ def vis_side():
             st.markdown('<div class="card-title"><span>SCOUTING</span></div>', unsafe_allow_html=True)
 
     # --- TRENDLINES (2 rækker af 3) ---
-    st.markdown("---")
     st.caption("###### Sæsontrend - Hvidovre IF")
     
     # [HIF_RECENT DEFINITION SOM FØR - UDELADT FOR KORTHED]
@@ -210,7 +209,7 @@ def vis_side():
                             alt.Tooltip('MODSTANDER', title='vs.'),
                             alt.Tooltip(f'{metrics[idx]["col"]}', title=f'{metrics[idx]["name"]}', format='.1f')
                         ]
-                    ).properties(height=80)
+                    ).properties(height=140)
                     
                     # 2. Byg lagene ovenpå basen
                     line = base.mark_line(color='#cccccc', strokeWidth=2)
