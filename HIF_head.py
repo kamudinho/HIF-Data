@@ -59,8 +59,15 @@ def apply_custom_style():
             
             /* --- JUSTERET FOR AT GIVE LUFT I BUNDEN --- */
             .form-wrapper { display: flex; justify-content: space-between; gap: 4px; width: 100%; margin-top: 15px; padding-bottom: 10px; }
-            .form-column { display: flex; flex-direction: column; align-items: center; flex: 1; margin-bottom: 2px; }
-            
+            .form-column { 
+    display: flex; 
+    flex-direction: column; 
+    align-items: center; /* Centrerer horisontalt */
+    justify-content: flex-start; /* Sørger for de starter i toppen */
+    flex: 1; 
+    margin-bottom: 2px;
+}
+
             .res-pill { width: 100%; border-radius: 4px; color: white; text-align: center; font-size: 9px; font-weight: 800; padding: 3px 0; margin-bottom: 4px; }
             .legend-logo { width: 22px; height: 22px; object-fit: contain; }
             
