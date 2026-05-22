@@ -3,6 +3,7 @@ import pandas as pd
 from urllib.parse import urlparse # Til at forkorte links
 from data.utils.team_mapping import TEAMS
 from data.data_load import _get_snowflake_conn
+import datetime
 
 def apply_custom_style():
     st.markdown("""
@@ -105,28 +106,54 @@ def vis_transfer_dialog(df):
     df_display['TS_SORT'] = pd.to_datetime(df_display['TIMESTAMP'], errors='coerce')
     
     # 2. Logik: Skifte (SENESTE_KLUB -> KLUB)
-    # Vi bruger dine rigtige navne fra overblikket: SENESTE_KLUB og KLUB
     df_display['Skifte'] = (
         df_display['SENESTE_KLUB'].fillna('?').astype(str) + 
         " → " + 
         df_display['KLUB'].fillna('?').astype(str)
     )
 
-    # 3. Logik: Kontrakt (Start + Udlob)
-    def format_contract(row):
+    # 3. Logik: Beregn år fra udløb
+    def calculate_years(row):
         start = str(row.get('KONTRAKT_START', '')).strip()
-        udloeb = str(row.get('KONTRAKT_UDLOEB', '')).strip()
+        udloeb_str = str(row.get('KONTRAKT_UDLOEB', '')).strip()
         
-        # Hvis der er data, samler vi det pænt
-        if start and start != 'nan' and start != '':
-            if udloeb and udloeb != 'nan' and udloeb != '':
-                return f"{start} (Udløb: {udloeb})"
-            return start
-        return ""
+        if not udloeb_str or udloeb_str == 'nan' or udloeb_str == '':
+            return start if start != 'nan' else ""
+            
+        try:
+            # Vi forsøger at tolke datoen (antager formatet er nogenlunde standard)
+            udloeb_dt = pd.to_datetime(udloeb_str, dayfirst=True, errors='coerce')
+            if pd.notnull(udloeb_dt):
+                today = datetime.datetime.now()
+                # Beregn difference i år
+                diff_years = (udloeb_dt - today).days / 365.25
+                years_rounded = round(max(0, diff_years)) # Vi runder til nærmeste og sikrer vi ikke får negative tal
+                
+                res = f"{start}" if start and start != 'nan' else ""
+                suffix = f" ({years_rounded} år)"
+                return f"{res}{suffix}".strip()
+        except:
+            pass
+        return start if start != 'nan' else ""
 
-    df_display['Kontrakt_Info'] = df_display.apply(format_contract, axis=1)
+    df_display['Kontrakt_Info'] = df_display.apply(calculate_years, axis=1)
 
-    # 4. Visning af tabellen
+    # 4. Logik: Vis Link med tvungen 'www.'
+    # Vi bruger en funktion til at formatere visningen i LinkColumn
+    def ensure_www(url):
+        if pd.isna(url) or str(url).strip() == "": return ""
+        try:
+            from urllib.parse import urlparse
+            netloc = urlparse(str(url)).netloc
+            # Fjern eksisterende www. for at undgå www.www.
+            clean_netloc = netloc.replace('www.', '')
+            return f"www.{clean_netloc}"
+        except:
+            return "Link"
+
+    df_display['LINK_VISNING'] = df_display['KILDE'].apply(ensure_www)
+
+    # 5. Visning af tabellen
     st.dataframe(
         df_display.sort_values('TS_SORT', ascending=False),
         column_order=['TIMESTAMP', 'NAVN', 'Skifte', 'Kontrakt_Info', 'KILDE'],
@@ -137,7 +164,7 @@ def vis_transfer_dialog(df):
             "Kontrakt_Info": "Kontrakt",
             "KILDE": st.column_config.LinkColumn(
                 "Link",
-                # Regex der sikrer 'www.domæne.dk' visning
+                # Vi bruger display_text til at overskrive med vores pæne www-format
                 display_text=r'^https?://(?:www\.)?([^/?#]+)' 
             ),
         },
