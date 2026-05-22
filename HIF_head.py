@@ -53,6 +53,18 @@ def vis_alle_transfers(df):
     )
 
 def vis_side(dp=None):
+    # --- SKJUL SIDETITEL (KUN FOR DENNE SIDE) ---
+    st.markdown("""
+        <style>
+            [data-testid="stHeaderBlockContainer"] h1 {
+                display: none;
+            }
+            .stAppHeader {
+                background-color: rgba(0,0,0,0);
+            }
+        </style>
+    """, unsafe_allow_html=True)
+
     conn = _get_snowflake_conn()
     if not conn: return
 
@@ -76,6 +88,9 @@ def vis_side(dp=None):
     future = hif_m[~hif_m['MATCH_STATUS'].str.upper().str.contains('PLAY|FULL|FINISH|FT', na=False)].sort_values('MATCH_DATE_FULL', ascending=True)
 
     # --- DASHBOARD LAYOUT ---
+    # Vi bruger en markdown overskrift i stedet for st.title for at have fuld kontrol
+    st.markdown("### 🏟️ Hvidovre IF Dashboard")
+    
     col1, col2, col3 = st.columns([1.2, 1, 1])
 
     with col1:
@@ -91,7 +106,6 @@ def vis_side(dp=None):
                 opp_m = df_matches[((df_matches['HOME_ID'] == opp_id) | (df_matches['AWAY_ID'] == opp_id)) & (df_matches['MATCH_STATUS'].str.upper().str.contains('PLAY|FULL|FINISH|FT'))].sort_values('MATCH_DATE_FULL', ascending=False).head(5)
                 if not opp_m.empty:
                     m_list = opp_m.iloc[::-1]
-                    # Optimeret bredde på legends med gap control
                     f_cols = st.columns(5, gap="small")
                     for i, (_, m) in enumerate(m_list.iterrows()):
                         is_h_opp = m['HOME_ID'] == opp_id
