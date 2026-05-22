@@ -201,11 +201,15 @@ def vis_side():
                 idx = row * 3 + i
                 with cols[i]:
                     st.caption(f"**{metrics[idx]['name']}**")
-                    
-                    # Definer base for at dele encoding (og dermed tooltips)
-                    base = alt.Chart(hif_recent).encode(
+
+                    # Definer grafen med rød markør og lysere linje
+                    line = base.mark_line(
+                        color='#cccccc', 
+                        strokeWidth=2
+                    ).encode(
                         x=alt.X('index:O', axis=None),
-                        y=alt.Y(f'{metrics[idx]["col"]}:Q', axis=None, scale=alt.Scale(zero=False)),
+                        y=alt.Y(f'{metrics[idx]["col"]}:Q', axis=None, scale=alt.Scale(zero=False))
+                    ).properties(height=80), # Justeret tilbage til 80
                         tooltip=[
                             alt.Tooltip('MODSTANDER', title='vs.'),
                             alt.Tooltip(f'{metrics[idx]["col"]}', title=f'{metrics[idx]["name"]}', format='.1f')
