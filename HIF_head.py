@@ -100,7 +100,7 @@ def vis_transfer_dialog(df):
     # 2. Skifte
     df_display['Skifte'] = df_display['SENESTE_KLUB'].fillna('?') + " → " + df_display['KLUB'].fillna('?')
 
-    # 3. Kontrakt (År fra maj 2026)
+    # 3. Kontrakt
     def calculate_years(row):
         udloeb = str(row.get('KONTRAKT_UDLOEB', '')).strip()
         start = str(row.get('KONTRAKT_START', '')).strip()
@@ -116,53 +116,25 @@ def vis_transfer_dialog(df):
 
     df_display['Kontrakt'] = df_display.apply(calculate_years, axis=1)
 
-    # 4. Link-fix: Manuel formatering af URL
-    def format_kilde(url):
-        if pd.isna(url) or str(url).strip() == "": return ""
-        u = str(url).strip()
-        try:
-            # Rens domænet til visning
-            parse_u = u if u.startswith('http') else 'https://' + u
-            domaene = urlparse(parse_u).netloc.lower().replace('www.', '')
-            return f"www.{domaene}"
-        except: return "Link"
-
-    # 4. Link-logik: Vi renser selve URL'en i kolonnen først
-    def rens_link_til_visning(url):
-        if pd.isna(url) or str(url).strip() == "": return ""
-        try:
-            u = str(url).strip()
-            # Sikr protokol for parsing
-            parse_u = u if u.startswith('http') else 'https://' + u
-            domaene = urlparse(parse_u).netloc.lower().replace('www.', '')
-            if not domaene:
-                domaene = urlparse(parse_u).path.split('/')[0].replace('www.', '')
-            
-            # Vi returnerer den præcise tekst, vi vil se
-            return f"www.{domaene}"
-        except:
-            return "www.link.dk"
-
-    # Her er tricket: Vi overskriver KILDE med den rensede tekst (www.bold.dk)
-    # Streamlit vil stadig bruge den oprindelige URL som selve linket, 
-    # SÅFREMT vi har gemt den oprindelige URL et sted.
-    df_display['URL_LINK'] = df_display['KILDE'] # Gem originalen til selve klikket
-    df_display['KILDE_TEKST'] = df_display['KILDE'].apply(rens_link_til_visning)
+    # 4. Link-logik: Vi bruger din rens_link funktion
+    # Vi gemmer den rå URL i 'KILDE' og laver visningstekst i 'Kilde_Tekst'
+    df_display['Kilde_Tekst'] = df_display['KILDE'].apply(rens_link)
+    
+    # Sørg for at den rensede tekst har "www." foran, da din funktion fjerner det
+    df_display['Kilde_Tekst'] = 'www.' + df_display['Kilde_Tekst']
 
     # 5. Tabel visning
     st.dataframe(
         df_display,
-        # Sørg for at URL_LINK er med i rækkefølgen
-        column_order=['Dato', 'NAVN', 'Skifte', 'Kontrakt', 'URL_LINK'], 
+        column_order=['Dato', 'NAVN', 'Skifte', 'Kontrakt', 'KILDE'], 
         column_config={
             "Dato": st.column_config.Column(width="small"),
             "NAVN": "Spiller",
             "Skifte": "Skifte",
             "Kontrakt": "Kontrakt",
-            "URL_LINK": st.column_config.LinkColumn(
+            "KILDE": st.column_config.LinkColumn(
                 "Kilde",
-                # Her peger vi direkte på kolonnen med de rensede www-links
-                display_text="KILDE_TEKST" 
+                display_text="Kilde_Tekst" # Streamlit læser www.domæne.dk herfra
             ),
         },
         hide_index=True,
