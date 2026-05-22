@@ -103,7 +103,7 @@ def vis_side(dp=None):
     hif_m = df_matches[(df_matches['HOME_ID'] == hif_id) | (df_matches['AWAY_ID'] == hif_id)].copy()
     
     # OPPDATERET BREDDE: Col 1 fylder nu langt mere
-    col1, col2, col3 = st.columns([2.5, 1, 1])
+    col1, col2, col3 = st.columns([1, 1, 1])
 
     # 1. NÆSTE KAMP (Den brede boks)
     with col1:
