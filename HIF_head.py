@@ -230,27 +230,30 @@ def vis_side():
                 opp_id = nk['CONTESTANTAWAY_OPTAUUID'] if str(nk['CONTESTANTHOME_OPTAUUID']).upper() == HIF_UUID.strip().upper() else nk['CONTESTANTHOME_OPTAUUID']
                 opp_name = opta_to_name.get(str(opp_id).upper(), "Ukendt")
 
-                st.markdown(f"<div class='card-title'><span>NÆSTE KAMP vs. {opp_name.upper()}</span><span class='title-date'>{nk['MATCH_DATE_FULL'].strftime('%d/%m')}</span></div>", unsafe_allow_html=True)
-
-                # --- 1. CENTRERET LOGO-SEKTION ---
-                # Vi bruger usynlige spacer-kolonner i siderne for at tvinge logoerne ind mod midten
-                c_space1, c_logo_hif, c_vs, c_logo_opp, c_space2 = st.columns([1, 1.5, 1, 1.5, 1])
-                with c_logo_hif:
-                    st.image(TEAMS.get("Hvidovre", {}).get("logo", ""), width=45)
-                with c_vs:
-                    st.markdown("<div style='text-align:center; padding-top:12px; font-size:10px; font-weight:bold; color:#888;'>VS</div>", unsafe_allow_html=True)
-                with c_logo_opp:
-                    st.image(TEAMS.get(opp_name, {}).get("logo", ""), width=45)
+                # --- NYT CARD-TITLE MED LOGOER ---
+                hif_logo = TEAMS.get("Hvidovre", {}).get("logo", "")
+                opp_logo = TEAMS.get(opp_name, {}).get("logo", "")
                 
-                # --- 2. BEREGN STATS ---
+                st.markdown(f"""
+                    <div class='card-title' style='align-items: center; padding-bottom: 12px;'>
+                        <div style='display: flex; align-items: center; gap: 8px;'>
+                            <img src='{hif_logo}' style='width: 20px; height: 20px; object-fit: contain;'>
+                            <span>VS</span>
+                            <img src='{opp_logo}' style='width: 20px; height: 20px; object-fit: contain;'>
+                        </div>
+                        <span class='title-date'>{nk['MATCH_DATE_FULL'].strftime('%d/%m')}</span>
+                    </div>
+                """, unsafe_allow_html=True)
+
+                # --- BEREGN STATS ---
                 hif_stats = beregn_hold_stats(df_stats, HIF_UUID)
                 opp_stats = beregn_hold_stats(df_stats, opp_id)
 
-                # --- 3. METRICS NEDENFOR (Fuld bredde) ---
+                # --- METRICS NEDENFOR ---
                 stats_html = f"""
-                <table class='stats-table' style='margin-top: 15px; width: 100%;'>
+                <table class='stats-table' style='width: 100%;'>
                     <tr>
-                        <td class='stats-label' style='text-align: left; width: 34%; border-bottom: 1px solid #eee;'></td>
+                        <td class='stats-label' style='text-align: left; width: 34%;'></td>
                         <td class='stats-value' style='text-align: center; font-size:10px; color:#dc3545; width: 33%; border-bottom: 1px solid #eee; padding-bottom: 4px;'>HIF</td>
                         <td class='stats-value' style='text-align: center; font-size:10px; color:#666; width: 33%; border-bottom: 1px solid #eee; padding-bottom: 4px;'>{opp_name[:3].upper()}</td>
                     </tr>
@@ -273,7 +276,7 @@ def vis_side():
                 """
                 st.markdown(stats_html, unsafe_allow_html=True)
 
-                # --- 4. FORM GUIDE / LEGENDS ---
+                # --- FORM GUIDE ---
                 opp_m = df_matches[((df_matches['CONTESTANTHOME_OPTAUUID'] == opp_id) | (df_matches['CONTESTANTAWAY_OPTAUUID'] == opp_id)) & (df_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False))].sort_values('MATCH_DATE_FULL', ascending=False).head(5)
                 if not opp_m.empty:
                     f_items = ""
