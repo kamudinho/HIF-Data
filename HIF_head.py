@@ -90,6 +90,7 @@ def vis_transfer_dialog(df):
         return
 
     df_display = df.copy()
+    # Sikr ensartede kolonnenavne
     df_display.columns = [str(c).upper().strip() for c in df_display.columns]
     
     # 1. Sortering og Dato
@@ -97,41 +98,26 @@ def vis_transfer_dialog(df):
     df_display = df_display.sort_values('TS_SORT', ascending=False)
     df_display['Dato'] = df_display['TS_SORT'].dt.strftime('%d/%m-%Y')
     
-    # 2. Spiller med position (Tjek om kolonnen hedder POSITION eller POS)
+    # 2. Spiller med position (Navn (Pos))
     pos_col = 'POSITION' if 'POSITION' in df_display.columns else 'POS'
     df_display['Spiller'] = df_display['NAVN'] + " (" + df_display.get(pos_col, '-').fillna('-') + ")"
 
-    # 3. Logo-logik (Sikker opslag)
-    def get_logo(navn):
-        if pd.isna(navn): return ""
-        return TEAMS.get(navn, {}).get("logo", "")
+    # 3. Skifte kolonne
+    df_display['Skifte'] = df_display['SENESTE_KLUB'].fillna('?') + " ➔ " + df_display['KLUB'].fillna('?')
 
-    df_display['Logo_Fra'] = df_display['SENESTE_KLUB'].apply(get_logo)
-    df_display['Logo_Til'] = df_display['KLUB'].apply(get_logo)
-
-    # 4. Skifte kolonne (Visuelt: Fra -> Til)
-    df_display['SKIFTE'] = df_display['SENESTE_KLUB'] + " ➔ " + df_display['KLUB']
+    # 4. Kontrakt
+    # Vi bruger den eksisterende kontrakt-logik
+    df_display['Kontrakt'] = df_display.apply(lambda row: str(row.get('KONTRAKT_UDLOEB', '-')), axis=1)
 
     # 5. Tabel visning
     st.dataframe(
         df_display,
-        # Vi placerer dem ved siden af hinanden for at skabe flowet: Fra -> Til
-        column_order=[
-            'Dato', 
-            'Spiller', 
-            'Logo_Fra', 
-            'SENESTE_KLUB', 
-            'SKIFTE_PIL', # En ny kolonne med "➔"
-            'Logo_Til', 
-            'KLUB', 
-            'KILDE'
-        ],
+        column_order=['Dato', 'Spiller', 'Skifte', 'Kontrakt', 'KILDE'], 
         column_config={
             "Dato": st.column_config.Column(width="small"),
-            "Logo_Fra": st.column_config.ImageColumn("Fra", width="small"),
-            "Logo_Til": st.column_config.ImageColumn("Til", width="small"),
-            "SKIFTE_PIL": st.column_config.Column(""), # Gør den meget smal
-            "KILDE": st.column_config.LinkColumn("Kilde", display_text="Link"),
+            "Spiller": st.column_config.Column("Spiller (Pos)", width="medium"),
+            "Skifte": st.column_config.Column("Skifte", width="medium"),
+            "KILDE": st.column_config.LinkColumn("Kilde", display_text="Se kilde"),
         },
         hide_index=True,
         use_container_width=True
