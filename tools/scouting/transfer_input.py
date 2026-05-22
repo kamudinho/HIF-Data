@@ -187,7 +187,7 @@ def vis_side():
                 )
                 
                 # Vælg og omdøb kolonner (inkluderer nu PLAYER_WYID og det nye Skifte)
-                vis_trup = trup_andet[['NAVN', 'POSITION', 'Skifte', 'PLAYER_WYID']].sort_values(by="NAVN")
+                vis_trup = trup_andet[['NAVN', 'POSITION', 'PLAYER_WYID']].sort_values(by="NAVN", 'Skifte')
                 
                 # Vis tabellen
                 st.dataframe(vis_trup, hide_index=True, use_container_width=True)
