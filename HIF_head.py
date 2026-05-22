@@ -60,7 +60,8 @@ def apply_custom_style():
             .form-column { display: flex; flex-direction: column; align-items: center; flex: 1; }
             .res-pill { width: 100%; border-radius: 4px; color: white; text-align: center; font-size: 10px; font-weight: 800; padding: 4px 0; margin-bottom: 6px; }
             .legend-logo { width: 26px; height: 26px; object-fit: contain; }
-            .list-item { font-size: 11px; margin-bottom: 5px; color: #333; }
+            .list-item { font-size: 11px; margin-bottom: 5px; color: #333; display: flex; justify-content: space-between; align-items: center; width: 100%; }
+            .club-name { font-weight: 700; text-align: right; }
         </style>
     """, unsafe_allow_html=True)
 
@@ -112,21 +113,24 @@ def vis_side():
                         f_items += f"<div class='form-column'><div class='res-pill' style='background:{res_col};'>{h_s}-{a_s}</div><img src='{o_logo}' class='legend-logo'></div>"
                     st.markdown(f"<div class='form-wrapper'>{f_items}</div>", unsafe_allow_html=True)
 
-    # 2. COL2: Transfers (Med rettet dato-håndtering)
+    # 2. COL2: Transfers med højrejusterede klubnavne
     with col2:
         with st.container(border=True):
             st.markdown('<div class="card-title"><span>TRANSFERS</span></div>', unsafe_allow_html=True)
             try:
                 df_t = pd.read_csv("data/players/1div_overskrivning.csv")
-                
-                # Sørg for at TIMESTAMP er datetime, fjern rækker med NaT (ugyldige datoer)
                 df_t['TS_DATE'] = pd.to_datetime(df_t['TIMESTAMP'], errors='coerce')
                 df_t = df_t.dropna(subset=['TS_DATE'])
                 
-                # Sorter og tag de 7 nyeste
                 for _, r in df_t.sort_values('TS_DATE', ascending=False).head(7).iterrows():
                     dato_str = r['TS_DATE'].strftime('%d/%m')
-                    st.markdown(f"<div class='list-item'>{dato_str}: <b>{r['NAVN']}</b> ({r['POSITION']}) ➔ <b>{r['KLUB']}</b> </div>", unsafe_allow_html=True)
+                    # Vi splitter indholdet: Spillerinfo i venstre side, klub i højre
+                    st.markdown(f"""
+                        <div class='list-item'>
+                            <span>{dato_str}: <b>{r['NAVN']}</b> ({r['POSITION']})</span>
+                            <span class='club-name'>➔ {r['KLUB']}</span>
+                        </div>
+                    """, unsafe_allow_html=True)
                 
                 if st.button("Se alle transfers", key="transfers_btn", use_container_width=True):
                     vis_transfer_dialog(df_t)
