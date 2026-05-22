@@ -58,7 +58,7 @@ def apply_custom_style():
             div.stButton > button { 
                 padding: 1px 6px !important; 
                 font-size: 6px !important; 
-                height: 22px !important; 
+                height: 12px !important; 
                 width: auto !important; 
                 margin-top: 4px !important;
                 border-radius: 3px !important;
