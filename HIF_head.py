@@ -40,9 +40,13 @@ def vis_side():
     
     col1, col2, col3 = st.columns([1, 1, 1])
 
-    # 1. NÆSTE KAMP (Layout: Logoer til venstre, Metrics til højre)
+    # 1. NÆSTE KAMP + METRICS + LEGENDS
     with col1:
         with st.container(border=True):
+            # Definer future her, så den altid eksisterer
+            hif_m = df_matches[(df_matches['CONTESTANTHOME_OPTAUUID'].str.upper() == hif_id) | (df_matches['CONTESTANTAWAY_OPTAUUID'].str.upper() == hif_id)]
+            future = hif_m[~hif_m['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].sort_values('MATCH_DATE_FULL')
+            
             if not future.empty:
                 nk = future.iloc[0]
                 opp_id = nk['CONTESTANTAWAY_OPTAUUID'] if str(nk['CONTESTANTHOME_OPTAUUID']).upper() == hif_id else nk['CONTESTANTHOME_OPTAUUID']
@@ -50,18 +54,16 @@ def vis_side():
                 
                 st.markdown(f"<div class='card-title'><span>NÆSTE KAMP vs. {opp_name.upper()}</span><span class='title-date'>{nk['MATCH_DATE_FULL'].strftime('%d/%m')}</span></div>", unsafe_allow_html=True)
                 
-                # Her opdeler vi: Logoer (venstre) | Metrics (højre)
+                # Layout: Logoer (venstre) | Metrics (højre)
                 t_main_l, t_main_r = st.columns([1, 1.5])
                 
                 with t_main_l:
-                    # Logo vs Logo
                     c1, c2, c3 = st.columns([1, 0.5, 1])
                     c1.image(TEAMS.get("Hvidovre", {}).get("logo", ""), width=42)
                     c2.markdown("<div style='text-align:center; padding-top:10px; font-size:10px; color:#ccc;'><b>VS</b></div>", unsafe_allow_html=True)
                     c3.image(TEAMS.get(opp_name, {}).get("logo", ""), width=42)
                 
                 with t_main_r:
-                    # Metrics placeret til højre for logoerne
                     st.markdown(f"""
                         <table class='stats-table' style='margin-top:0px;'>
                             <tr><td class='stats-label'>Mål f/i</td><td class='stats-value'>1.4/1.1</td></tr>
@@ -70,9 +72,8 @@ def vis_side():
                         </table>
                     """, unsafe_allow_html=True)
 
-                # FORM-LEGENDS (Logoer under)
+                # Form-bar med logoer
                 st.markdown(f"<div style='font-size:10px; color:#888; font-weight:700; margin-top:14px; text-transform:uppercase;'>Form: {opp_name}</div>", unsafe_allow_html=True)
-                
                 opp_m = df_matches[((df_matches['CONTESTANTHOME_OPTAUUID'] == opp_id) | (df_matches['CONTESTANTAWAY_OPTAUUID'] == opp_id)) & (df_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False))].sort_values('MATCH_DATE_FULL', ascending=False).head(5)
                 
                 if not opp_m.empty:
@@ -85,6 +86,8 @@ def vis_side():
                         o_logo = TEAMS.get(opta_to_name.get(str(o_uuid).upper(), ""), {}).get("logo", "")
                         f_items += f"<div class='form-column'><div class='res-pill' style='background:{res_col};'>{h_s}-{a_s}</div><img src='{o_logo}' class='legend-logo'></div>"
                     st.markdown(f"<div class='form-wrapper'>{f_items}</div>", unsafe_allow_html=True)
+            else:
+                st.write("Ingen kommende kampe fundet.")
     # 2. TRANSFERS
     with col2:
         with st.container(border=True):
