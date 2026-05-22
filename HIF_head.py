@@ -56,17 +56,17 @@ def apply_custom_style():
             .stats-table { width: 100%; font-size: 10px; border-collapse: collapse; table-layout: fixed; }
             .stats-label { color: #666; font-weight: 700; width: 45%; padding: 2px 0; }
             .stats-value { text-align: right; font-weight: 700; color: #111; padding: 2px 0; }
-            .form-wrapper { display: flex; justify-content: space-between; gap: 4px; width: 100%; margin-top: 12px; }
-            .form-column { display: flex; flex-direction: column; align-items: center; flex: 1; }
+            
+            /* --- JUSTERET FOR AT GIVE LUFT I BUNDEN --- */
+            .form-wrapper { display: flex; justify-content: space-between; gap: 4px; width: 100%; margin-top: 15px; padding-bottom: 10px; }
+            .form-column { display: flex; flex-direction: column; align-items: center; flex: 1; margin-bottom: 2px; }
+            
             .res-pill { width: 100%; border-radius: 4px; color: white; text-align: center; font-size: 9px; font-weight: 800; padding: 3px 0; margin-bottom: 4px; }
             .legend-logo { width: 22px; height: 22px; object-fit: contain; }
             
-            /* Gør knappen kompakt */
             div.stButton > button { padding: 2px 8px !important; font-size: 10px !important; height: 26px !important; margin-top: 5px; }
             
-            /* Transfer grid */
             .list-item { font-size: 10px; margin-bottom: 6px; color: #333; display: grid; grid-template-columns: 1fr auto auto auto; align-items: center; gap: 4px; width: 100%; }
-            .player-info { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
             .prev-club { color: #aaa; font-size: 9px; text-align: right; }
             .new-club, .transfer-club { font-weight: 700; text-align: right; }
         </style>
