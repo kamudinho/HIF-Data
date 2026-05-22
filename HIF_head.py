@@ -326,7 +326,7 @@ def vis_side():
 
 
 # --- NY RÆKKE: TRENDLINES (6 kolonner) ---
-    st.markdown("##### Hvidovre IF") # En skillelinje for visuel adskillelse
+    st.caption("##### Hvidovre IF") # En skillelinje for visuel adskillelse
     trend_cols = st.columns(6)
 
     # Vi definerer de 6 metrics vi vil tracke
@@ -353,7 +353,7 @@ def vis_side():
             # Lav en simpel line chart for den valgte metric
             # Vi skal håndtere logikken for om det er HOME eller AWAY stats
             data_to_plot = hif_recent[[metric_cfg['col']]].fillna(0)
-            st.line_chart(data_to_plot, height=80, use_container_width=True)
+            st.line_chart(data_to_plot, height=100, use_container_width=True)
 # Til sidst: Sørg for at kalde funktionen, når filen indlæses
 if __name__ == "__main__":
     vis_side()
