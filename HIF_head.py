@@ -88,7 +88,7 @@ def vis_side():
                     st.markdown(f"<div class='form-wrapper'>{f_items}</div>", unsafe_allow_html=True)
             else:
                 st.write("Ingen kommende kampe fundet.")
-    # 2. TRANSFERS
+    # 2. TRANSFERS 
     with col2:
         with st.container(border=True):
             st.markdown('<div class="card-title"><span>TRANSFERS</span></div>', unsafe_allow_html=True)
@@ -96,21 +96,25 @@ def vis_side():
                 df_t = pd.read_csv("data/players/1div_overskrivning.csv")
                 df_t = df_t.dropna(subset=['TIMESTAMP'])
                 df_t['TS_SORT'] = pd.to_datetime(df_t['TIMESTAMP'], errors='coerce')
+                # Sorter og tag de 7 nyeste
                 df_display = df_t.sort_values('TS_SORT', ascending=False).head(7)
-
+                
                 for _, r in df_display.iterrows():
-                    dato_str = pd.to_datetime(r.get('TIMESTAMP')).strftime('%d/%m')
-                    navn = str(r.get('NAVN', 'Ukendt'))
-                    klub = str(r.get('KLUB', 'Ukendt'))
-                    pos = str(r.get('POSITION', r.get('POS', '-')))
+                    # Formatering: Dato: Klub - Navn (Position)
+                    dato_str = pd.to_datetime(r['TIMESTAMP']).strftime('%d/%m')
+                    klub = r['KLUB']
+                    navn = r['NAVN']
+                    pos = r.get('POSITION', '-') # Henter position hvis den findes
                     
-                    st.markdown(f"<div class='list-item'>{dato_str}: <b>{navn}</b> ({pos}) ➔ <b>{klub}</b></div>", unsafe_allow_html=True)
-
-                # Her bliver knappen oprettet. 
-                # Når du trykker på den, vil Streamlit trigge st.dialog funktionen.
-                if st.button("Se alle transfers", key="btn_transfers", use_container_width=True):
+                    st.markdown(f"""
+                        <div class='list-item'>
+                            {dato_str}: <b>{klub}</b> - {navn} ({pos})
+                        </div>
+                    """, unsafe_allow_html=True)
+                
+                st.markdown("<div style='margin-top:15px;'></div>", unsafe_allow_html=True)
+                if st.button("Se alle transfers", use_container_width=True):
                     vis_transfer_dialog(df_t)
-                    
             except Exception as e:
                 st.caption("Kunne ikke indlæse transfers")
 
