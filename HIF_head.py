@@ -57,7 +57,7 @@ def apply_custom_style():
             /* KNAP JUSTERINGER */
             div.stButton > button { 
                 padding: 1px 6px !important; 
-                font-size: 9px !important; 
+                font-size: 6px !important; 
                 height: 22px !important; 
                 width: auto !important; 
                 margin-top: 4px !important;
