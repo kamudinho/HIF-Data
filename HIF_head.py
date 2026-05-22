@@ -63,6 +63,8 @@ def apply_custom_style():
             .list-item { font-size: 11px; margin-bottom: 6px; color: #333; display: flex; justify-content: space-between; align-items: center; width: 100%; white-space: nowrap; }
             .player-info { overflow: hidden; text-overflow: ellipsis; margin-right: 10px; }
             .club-side { display: flex; align-items: center; flex-shrink: 0; }
+            .transfer-club { font-weight: 700; }
+            .prev-club { color: #888; font-size: 10px; }
         </style>
     """, unsafe_allow_html=True)
 
@@ -125,10 +127,16 @@ def vis_side():
                 
                 for _, r in df_t.sort_values('TS_DATE', ascending=False).head(7).iterrows():
                     dato_str = r['TS_DATE'].strftime('%d/%m')
+                    
+                    # Hent klubnavne (brug '?' hvis de mangler i CSV)
+                    fra_klub = r.get('SENESTE_KLUB', '?')
+                    til_klub = r.get('KLUB', '?')
+                    
                     st.markdown(f"""
                         <div class='list-item'>
-                            <span class='player-info'>{dato_str}: <b>{r['NAVN']}</b> ({r['POSITION']})</span>
-                            <span class='club-side'>➔ <b>{r['KLUB']}</b></span>
+                            <span>{dato_str}: <b>{r['NAVN']}</b> ({r['POSITION']})</span>
+                            <span class='prev-club'>{fra_klub}</span>
+                            <span class='transfer-club'>➔ {til_klub}</span>
                         </div>
                     """, unsafe_allow_html=True)
                 
@@ -136,7 +144,6 @@ def vis_side():
                     vis_transfer_dialog(df_t)
             except Exception as e:
                 st.caption("Kunne ikke indlæse transfer-data")
-
     # 3. COL3: Scouting
     with col3:
         with st.container(border=True):
