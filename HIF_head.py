@@ -4,67 +4,69 @@ import numpy as np
 import re
 from data.data_load import _get_snowflake_conn
 
-# --- FORBEDRET KONTRAKT-BEREGNING ---
-def beregn_aar(start, slut):
-    try:
-        s_match = re.search(r'20\d{2}', str(start))
-        e_match = re.search(r'20\d{2}', str(slut))
-        
-        if s_match and e_match:
-            s_year = int(s_match.group())
-            e_year = int(e_match.group())
-            diff = e_year - s_year
-            if 0 < diff < 10:
-                return f"{slut} ({diff} år)"
-    except:
-        pass
-    return slut
-
-# --- POPUP VINDUE ---
-@st.dialog("Alle Transfers - 1. Division", width="large")
-def vis_alle_transfers(df):
-    df_display = df.copy()
-    df_display['Dato'] = pd.to_datetime(df_display['TIMESTAMP']).dt.strftime('%d/%m-%Y')
-    df_display['Transfer'] = df_display['SENESTE_KLUB'].fillna('?') + " ➔ " + df_display['KLUB'].fillna('?')
-    
-    df_display['Kontrakt'] = df_display.apply(
-        lambda x: beregn_aar(x['KONTRAKT_START'], x['KONTRAKT_UDLOEB']), axis=1
-    )
-
-    cols_to_show = {
-        'Dato': 'Dato',
-        'NAVN': 'Spiller',
-        'POSITION': 'Pos',
-        'Transfer': 'Transfer',
-        'Kontrakt': 'Kontrakt',
-        'KILDE': 'Kilde'
-    }
-    
-    st.dataframe(
-        df_display[list(cols_to_show.keys())].rename(columns=cols_to_show),
-        use_container_width=True, 
-        hide_index=True,
-        column_config={
-            "Kilde": st.column_config.LinkColumn(
-                "Kilde",
-                display_text=r"^https?://(?:www\.)?([^/]+)"
-            )
-        }
-    )
-
-def vis_side(dp=None):
-    # --- SKJUL SIDETITEL (KUN FOR DENNE SIDE) ---
+# --- CSS TIL STYLING AF BOKSE (DARK MODE & RADIUS) ---
+def apply_custom_style():
     st.markdown("""
         <style>
-            [data-testid="stHeaderBlockContainer"] h1 {
-                display: none;
+            /* Skjul standard header */
+            [data-testid="stHeaderBlockContainer"] h1 { display: none; }
+            
+            /* Baggrund og containere */
+            .stApp { background-color: #0e1117; }
+            
+            /* Custom boks-styling */
+            .custom-card {
+                background-color: #1c1c1e;
+                border-radius: 15px;
+                padding: 20px;
+                margin-bottom: 10px;
+                border: 1px solid #2c2c2e;
             }
-            .stAppHeader {
-                background-color: rgba(0,0,0,0);
+            
+            .card-title {
+                color: #ffffff;
+                font-size: 18px;
+                font-weight: 600;
+                margin-bottom: 15px;
+            }
+            
+            /* Form-ikoner (Ligesom på billedet) */
+            .form-container {
+                display: flex;
+                gap: 10px;
+                justify-content: space-between;
+            }
+            
+            .form-item {
+                text-align: center;
+                flex: 1;
+            }
+            
+            .result-box {
+                border-radius: 8px;
+                padding: 4px 8px;
+                font-weight: bold;
+                color: white;
+                font-size: 14px;
+                margin-bottom: 8px;
+            }
+            
+            .win { background-color: #1db954; }
+            .loss { background-color: #e94444; }
+            .draw { background-color: #727274; }
+            
+            .opp-logo {
+                width: 30px;
+                height: 30px;
+                object-fit: contain;
+                filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.5));
             }
         </style>
     """, unsafe_allow_html=True)
 
+def vis_side(dp=None):
+    apply_custom_style()
+    
     conn = _get_snowflake_conn()
     if not conn: return
 
@@ -80,69 +82,75 @@ def vis_side(dp=None):
 
     df_matches.columns = [str(c).upper() for c in df_matches.columns]
     hif_id = str(HIF_UUID).strip().lower()
-    df_matches['HOME_ID'] = df_matches['CONTESTANTHOME_OPTAUUID'].astype(str).str.strip().str.lower()
-    df_matches['AWAY_ID'] = df_matches['CONTESTANTAWAY_OPTAUUID'].astype(str).str.strip().str.lower()
     df_matches['MATCH_DATE_FULL'] = pd.to_datetime(df_matches['MATCH_DATE_FULL'], errors='coerce')
     
-    hif_m = df_matches[(df_matches['HOME_ID'] == hif_id) | (df_matches['AWAY_ID'] == hif_id)].copy()
-    future = hif_m[~hif_m['MATCH_STATUS'].str.upper().str.contains('PLAY|FULL|FINISH|FT', na=False)].sort_values('MATCH_DATE_FULL', ascending=True)
-
-    # --- DASHBOARD LAYOUT ---
-    # Vi bruger en markdown overskrift i stedet for st.title for at have fuld kontrol
-    st.markdown("### 🏟️ Hvidovre IF Dashboard")
+    # --- LAYOUT ---
+    st.markdown("<h2 style='color: white; margin-bottom: 20px;'>Hvidovre IF Dashboard</h2>", unsafe_allow_html=True)
     
-    col1, col2, col3 = st.columns([1.2, 1, 1])
+    col1, col2 = st.columns([1, 1.2])
 
-    with col1:
-        st.caption("##### Næste Modstander")
-        with st.container(border=True):
-            if not future.empty:
-                nk = future.iloc[0]
-                er_hjemme = nk['HOME_ID'] == hif_id
-                opp_id, opp_name = (nk['AWAY_ID'], nk['CONTESTANTAWAY_NAME']) if er_hjemme else (nk['HOME_ID'], nk['CONTESTANTHOME_NAME'])
-                loc, dato, runde = ("H" if er_hjemme else "U"), nk['MATCH_DATE_FULL'].strftime('%d/%m'), int(nk['WEEK'])
-                st.markdown(f"<div style='display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;'><span style='font-size:16px;font-weight:bold;'>{opp_name} ({loc})</span><span style='font-size:11px;color:#666;'>R. {runde} • {dato}</span></div>", unsafe_allow_html=True)
-                
-                opp_m = df_matches[((df_matches['HOME_ID'] == opp_id) | (df_matches['AWAY_ID'] == opp_id)) & (df_matches['MATCH_STATUS'].str.upper().str.contains('PLAY|FULL|FINISH|FT'))].sort_values('MATCH_DATE_FULL', ascending=False).head(5)
-                if not opp_m.empty:
-                    m_list = opp_m.iloc[::-1]
-                    f_cols = st.columns(5, gap="small")
-                    for i, (_, m) in enumerate(m_list.iterrows()):
-                        is_h_opp = m['HOME_ID'] == opp_id
-                        h_s, a_s = int(m['TOTAL_HOME_SCORE']), int(m['TOTAL_AWAY_SCORE'])
-                        mod_kort = m['CONTESTANTAWAY_NAME'][:3] if is_h_opp else m['CONTESTANTHOME_NAME'][:3]
-                        res, col = (("U", "#999") if h_s == a_s else (("V", "#28a745") if (is_h_opp and h_s > a_s) or (not is_h_opp and a_s > h_s) else ("T", "#dc3545")))
-                        with f_cols[i]:
-                            st.markdown(f"<div style='background:{col};color:white;text-align:center;border-radius:2px;font-weight:bold;font-size:10px;padding:2px;'>{res}</div><div style='text-align:center;font-size:9px;color:#444;margin-top:3px;line-height:1.1;'>{h_s}-{a_s}<br>{mod_kort.upper()}</div>", unsafe_allow_html=True)
-            else: st.write("Sæson slut")
-
+    # MODUL: NÆSTE KAMP (Højre boks i dit billede)
     with col2:
-        st.caption("##### Transfers")
-        with st.container(border=True):
-            try:
-                df_t_raw = pd.read_csv("data/players/1div_overskrivning.csv")
-                df_t = df_t_raw.dropna(subset=['TIMESTAMP']).copy()
-                if not df_t.empty:
-                    df_t['TS_CLEAN'] = pd.to_datetime(df_t['TIMESTAMP'], errors='coerce')
-                    df_t = df_t.sort_values('TS_CLEAN', ascending=False)
-                    for _, r in df_t.head(8).iterrows():
-                        ts_txt = r['TS_CLEAN'].strftime('%d/%m')
-                        pos = f" ({r['POSITION']})" if pd.notnull(r.get('POSITION')) else ""
-                        st.markdown(f"<p style='font-size:12px;margin:0;line-height:1.4;'><span style='color:#888;'>{ts_txt}</span> <b>{r['KLUB']}</b>: {r['NAVN']}{pos}</p>", unsafe_allow_html=True)
-                    
-                    st.markdown("<div style='margin-top:12px;'></div>", unsafe_allow_html=True)
-                    if st.button("Se alle transfers", use_container_width=True):
-                        vis_alle_transfers(df_t)
-                else: st.caption("Afventer data...")
-            except: st.caption("Fejl i data")
+        hif_m = df_matches[(df_matches['CONTESTANTHOME_OPTAUUID'].str.lower() == hif_id) | (df_matches['CONTESTANTAWAY_OPTAUUID'].str.lower() == hif_id)].copy()
+        future = hif_m[~hif_m['MATCH_STATUS'].str.upper().str.contains('PLAY|FULL|FINISH|FT', na=False)].sort_values('MATCH_DATE_FULL')
+        
+        if not future.empty:
+            nk = future.iloc[0]
+            dato = nk['MATCH_DATE_FULL'].strftime('%d. maj')
+            kl = "15.00" # Eller hent fra data hvis tilgængelig
+            
+            st.markdown(f"""
+                <div class="custom-card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <span style="color: #8e8e93; font-size: 14px;">Næste kamp</span>
+                        <span style="color: #8e8e93; font-size: 14px;">1. Division Oprykningsgruppe</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-around; align-items: center; text-align: center;">
+                        <div>
+                            <img src="https://upload.wikimedia.org/wikipedia/da/thumb/6/62/Hvidovre_IF_logo.svg/1200px-Hvidovre_IF_logo.svg.png" style="width: 50px;"><br>
+                            <p style="color: white; margin-top: 10px;">Hvidovre</p>
+                        </div>
+                        <div>
+                            <h2 style="color: white; margin: 0;">{kl}</h2>
+                            <p style="color: #8e8e93; font-size: 14px;">{dato}</p>
+                        </div>
+                        <div>
+                            <img src="https://upload.wikimedia.org/wikipedia/da/thumb/0/07/Esbjerg_fB_logo.svg/1200px-Esbjerg_fB_logo.svg.png" style="width: 50px;"><br>
+                            <p style="color: white; margin-top: 10px;">{nk['CONTESTANTAWAY_NAME'] if nk['CONTESTANTHOME_OPTAUUID'].str.lower() == hif_id else nk['CONTESTANTHOME_NAME']}</p>
+                        </div>
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
 
-    with col3:
-        st.caption("##### Scouting")
-        with st.container(border=True):
-            try:
-                df_e = pd.read_csv("data/scouting/emneliste.csv").tail(8)
-                for _, r in df_e.iterrows():
-                    st.markdown(f"<p style='font-size:11px;margin:0;line-height:1.3;'>⭐ <b>{r.get('Navn', 'Ukendt')}</b> ({r.get('Klub', '-')})</p>", unsafe_allow_html=True)
-            except: st.caption("Listen er tom")
+    # MODUL: HOLDFORM (Venstre boks i dit billede)
+    with col1:
+        st.markdown('<div class="custom-card"><div class="card-title">Holdform</div>', unsafe_allow_html=True)
+        
+        # Her henter vi de seneste 5 kampe for HIF
+        played = hif_m[hif_m['MATCH_STATUS'].str.upper().str.contains('PLAY|FULL|FINISH|FT', na=False)].sort_values('MATCH_DATE_FULL', ascending=False).head(5)
+        
+        if not played.empty:
+            cols_html = ""
+            for _, m in played.iloc[::-1].iterrows():
+                is_home = m['CONTESTANTHOME_OPTAUUID'].str.lower() == hif_id
+                h_s, a_s = int(m['TOTAL_HOME_SCORE']), int(m['TOTAL_AWAY_SCORE'])
+                
+                # Resultat farve
+                if h_s == a_s: res_class = "draw"
+                elif (is_home and h_s > a_s) or (not is_home and a_s > h_s): res_class = "win"
+                else: res_class = "loss"
+                
+                # Her skal du bruge dine egne logo-URL'er eller stien til dem
+                opp_logo = "https://via.placeholder.com/30" # Placeholder
+                
+                cols_html += f"""
+                    <div class="form-item">
+                        <div class="result-box {res_class}">{h_s} - {a_s}</div>
+                        <img src="{opp_logo}" class="opp-logo">
+                    </div>
+                """
+            
+            st.markdown(f'<div class="form-container">{cols_html}</div>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
 
     st.divider()
