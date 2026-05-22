@@ -4,7 +4,7 @@ from data.utils.team_mapping import TEAMS
 from data.data_load import _get_snowflake_conn
 import datetime
 
-# --- DIALOG-BOKS (Skal defineres øverst) ---
+# --- DIALOG-BOKS ---
 @st.dialog("Alle Transfers", width="large")
 def vis_transfer_dialog(df):
     if df.empty:
@@ -14,19 +14,14 @@ def vis_transfer_dialog(df):
     df_display = df.copy()
     df_display.columns = [str(c).upper().strip() for c in df_display.columns]
     
-    # 1. Dato-formatering
     df_display['TS_SORT'] = pd.to_datetime(df_display['TIMESTAMP'], errors='coerce')
     df_display = df_display.sort_values('TS_SORT', ascending=False)
     df_display['Dato'] = df_display['TS_SORT'].dt.strftime('%d/%m-%Y')
     
-    # 2. Spiller
     pos_col = 'POSITION' if 'POSITION' in df_display.columns else 'POS'
     df_display['Spiller'] = df_display['NAVN'] + " (" + df_display.get(pos_col, '-').fillna('-') + ")"
-
-    # 3. Skifte
     df_display['Skifte'] = df_display['SENESTE_KLUB'].fillna('?') + " ➔ " + df_display['KLUB'].fillna('?')
 
-    # 4. Kontrakt-logik
     def beregn_kontrakt(row):
         udloeb_raw = str(row.get('KONTRAKT_UDLOEB', '-'))
         if udloeb_raw == '-' or udloeb_raw == 'nan': return "-"
@@ -51,40 +46,27 @@ def apply_custom_style():
         <style>
             [data-testid="stHeaderBlockContainer"] h1 { display: none; }
             .stApp { background-color: #FFFFFF; }
-            .card-title { color: #1a1a1a; font-size: 11px; font-weight: 700; margin-bottom: 15px; text-transform: uppercase; border-bottom: 1px solid #f0f0f0; padding-bottom: 8px; display: flex; justify-content: space-between; }
+            .card-title { color: #1a1a1a; font-size: 11px; font-weight: 700; margin-bottom: 12px; text-transform: uppercase; border-bottom: 1px solid #f0f0f0; padding-bottom: 6px; display: flex; justify-content: space-between; }
             .title-date { color: #888; font-weight: 500; text-transform: none; font-size: 11px; }
             .stats-table { width: 100%; font-size: 10px; border-collapse: collapse; table-layout: fixed; }
-            .stats-label { color: #666; font-weight: 700; width: 40%; }
-            .stats-value { text-align: right; font-weight: 700; color: #111; padding: 4px 0; }
-            .form-wrapper { display: flex; justify-content: space-between; gap: 4px; width: 100%; margin-top: 15px; }
+            .stats-label { color: #666; font-weight: 700; width: 45%; padding: 2px 0; }
+            .stats-value { text-align: right; font-weight: 700; color: #111; padding: 2px 0; }
+            .form-wrapper { display: flex; justify-content: space-between; gap: 4px; width: 100%; margin-top: 12px; }
             .form-column { display: flex; flex-direction: column; align-items: center; flex: 1; }
-            .res-pill { width: 100%; border-radius: 4px; color: white; text-align: center; font-size: 10px; font-weight: 800; padding: 4px 0; margin-bottom: 6px; }
-            .legend-logo { width: 26px; height: 26px; object-fit: contain; }
+            .res-pill { width: 100%; border-radius: 4px; color: white; text-align: center; font-size: 9px; font-weight: 800; padding: 3px 0; margin-bottom: 4px; }
+            .legend-logo { width: 22px; height: 22px; object-fit: contain; }
             
-            /* Det nye GRID layout til transfers */
-            .list-item { 
-                font-size: 11px; 
-                margin-bottom: 6px; 
-                color: #333; 
-                display: grid;
-                grid-template-columns: 1fr auto auto auto; 
-                align-items: center;
-                gap: 6px;
-                width: 100%;
-            }
-            .prev-club { color: #aaa; font-size: 10px; text-align: right; }
+            /* Kompakt knap */
+            div.stButton > button { padding: 2px 8px !important; font-size: 10px !important; height: 26px !important; margin-top: 5px; }
+            
+            /* Grid layout til transfers */
+            .list-item { font-size: 10px; margin-bottom: 6px; color: #333; display: grid; grid-template-columns: 1fr auto auto auto; align-items: center; gap: 4px; width: 100%; }
+            .player-info { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+            .prev-club { color: #aaa; font-size: 9px; text-align: right; }
             .new-club { font-weight: 700; text-align: right; }
         </style>
     """, unsafe_allow_html=True)
 
-div.stButton > button {
-    padding: 2px 10px !important;
-    font-size: 11px !important;
-    height: auto !important;
-    min-height: 25px !important;
-    margin-top: 5px;
-}
-    
 def vis_side():
     apply_custom_style()
     conn = _get_snowflake_conn()
@@ -98,7 +80,6 @@ def vis_side():
     
     col1, col2, col3 = st.columns([1, 1, 1])
 
-    # 1. COL1: Næste kamp, Metrics, Legends
     with col1:
         with st.container(border=True):
             hif_m = df_matches[(df_matches['CONTESTANTHOME_OPTAUUID'].str.upper() == HIF_UUID.strip().upper()) | (df_matches['CONTESTANTAWAY_OPTAUUID'].str.upper() == HIF_UUID.strip().upper())]
@@ -111,16 +92,15 @@ def vis_side():
                 
                 st.markdown(f"<div class='card-title'><span>NÆSTE KAMP vs. {opp_name.upper()}</span><span class='title-date'>{nk['MATCH_DATE_FULL'].strftime('%d/%m')}</span></div>", unsafe_allow_html=True)
                 
-                t_l, t_r = st.columns([1, 1.5])
+                t_l, t_r = st.columns([1, 1.2])
                 with t_l:
-                    c1, c2, c3 = st.columns([1, 0.5, 1])
-                    c1.image(TEAMS.get("Hvidovre", {}).get("logo", ""), width=42)
-                    c2.markdown("<div style='text-align:center; padding-top:10px;'>VS</div>", unsafe_allow_html=True)
-                    c3.image(TEAMS.get(opp_name, {}).get("logo", ""), width=42)
+                    c1, c2, c3 = st.columns([1, 0.8, 1])
+                    c1.image(TEAMS.get("Hvidovre", {}).get("logo", ""), width=38)
+                    c2.markdown("<div style='text-align:center; padding-top:10px; font-size:9px; color:#888;'>VS</div>", unsafe_allow_html=True)
+                    c3.image(TEAMS.get(opp_name, {}).get("logo", ""), width=38)
                 with t_r:
                     st.markdown(f"<table class='stats-table'><tr><td class='stats-label'>Mål f/i</td><td class='stats-value'>1.4/1.1</td></tr><tr><td class='stats-label'>xG f/i</td><td class='stats-value'>1.5/1.2</td></tr><tr><td class='stats-label'>Poss.</td><td class='stats-value'>52%</td></tr></table>", unsafe_allow_html=True)
                 
-                # Legends
                 opp_m = df_matches[((df_matches['CONTESTANTHOME_OPTAUUID'] == opp_id) | (df_matches['CONTESTANTAWAY_OPTAUUID'] == opp_id)) & (df_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False))].sort_values('MATCH_DATE_FULL', ascending=False).head(5)
                 if not opp_m.empty:
                     f_items = ""
@@ -133,7 +113,6 @@ def vis_side():
                         f_items += f"<div class='form-column'><div class='res-pill' style='background:{res_col};'>{h_s}-{a_s}</div><img src='{o_logo}' class='legend-logo'></div>"
                     st.markdown(f"<div class='form-wrapper'>{f_items}</div>", unsafe_allow_html=True)
 
-    # 2. COL2: Transfers med højrejusterede klubnavne
     with col2:
         with st.container(border=True):
             st.markdown('<div class="card-title"><span>TRANSFERS</span></div>', unsafe_allow_html=True)
@@ -141,27 +120,23 @@ def vis_side():
                 df_t = pd.read_csv("data/players/1div_overskrivning.csv")
                 df_t['TS_DATE'] = pd.to_datetime(df_t['TIMESTAMP'], errors='coerce')
                 df_t = df_t.dropna(subset=['TS_DATE'])
-                
                 for _, r in df_t.sort_values('TS_DATE', ascending=False).head(5).iterrows():
                     dato_str = r['TS_DATE'].strftime('%d/%m')
-                    
-                    # Hent klubnavne (brug '?' hvis de mangler i CSV)
-                    fra_klub = r.get('SENESTE_KLUB', '?')
-                    til_klub = r.get('KLUB', '?')
-                    
                     st.markdown(f"""
                         <div class='list-item'>
-                            <span>{dato_str}: <b>{r['NAVN']}</b> ({r['POSITION']})</span>
-                            <span class='prev-club'>{fra_klub}</span>
-                            <span class='transfer-club'>➔ {til_klub}</span>
+                            <span class='player-info'>{dato_str}: <b>{r['NAVN']}</b> ({r['POSITION']})</span>
+                            <span class='prev-club'>{r.get('SENESTE_KLUB', '?')}</span>
+                            <span>➔</span>
+                            <span class='new-club'>{r.get('KLUB', '?')}</span>
                         </div>
                     """, unsafe_allow_html=True)
-                
                 if st.button("Se alle transfers", key="transfers_btn", use_container_width=True):
                     vis_transfer_dialog(df_t)
             except Exception as e:
                 st.caption("Kunne ikke indlæse transfer-data")
-    # 3. COL3: Scouting
+
     with col3:
         with st.container(border=True):
             st.markdown('<div class="card-title"><span>SCOUTING</span></div>', unsafe_allow_html=True)
+
+vis_side()
