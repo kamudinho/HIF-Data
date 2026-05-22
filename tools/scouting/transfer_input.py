@@ -114,10 +114,11 @@ def vis_side():
         with st.form("full_transfer_form", clear_on_submit=True):
             is_disabled = not sel_id
             
-            skift_udland = st.checkbox("Skifter til udlandet", disabled=is_disabled)
-            
+            skift_udland = st.checkbox("Skifter til udlandet")
+            skift_klubloes = st.checkbox("Kontrakt ophørt / Klubløs") # NY
+
             hold_liste = sorted(df_alle_hold['TEAMNAME'].tolist()) if df_alle_hold is not None else []
-            ny_klub = st.selectbox("Ny klub", hold_liste, disabled=(is_disabled or skift_udland))
+            ny_klub = st.selectbox("Ny klub", hold_liste, disabled=(is_disabled or skift_udland or skift_klubloes))
             
             d1, d2 = st.columns(2)
             k_start = d1.date_input("Kontraktstart", value=datetime.now(), disabled=is_disabled)
@@ -135,6 +136,8 @@ def vis_side():
                 
                 if skift_udland:
                     final_klub = "Udlandet"; final_liga = 0; is_udland = "True"
+                elif skift_klubloes: # NY LOGIK
+                    final_klub = "Klubløs"; final_liga = 0; is_udland = "False"
                 else:
                     match_liga = df_alle_hold[df_alle_hold['TEAMNAME'] == ny_klub]['COMPETITION_WYID'].values
                     final_klub = ny_klub
