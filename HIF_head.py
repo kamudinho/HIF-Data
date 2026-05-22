@@ -364,14 +364,18 @@ def vis_side():
             metric_cfg = metrics[i]
             st.caption(f"**{metric_cfg['name']}**")
             
-            data = hif_recent[[metric_cfg['col']]].fillna(0)
+            data = hif_recent[[metric_cfg['col']]].fillna(0).copy()
             
+            # Possession-fix: Tilføj dummy-værdier for at låse Y-aksen til 0-100
             if metric_cfg['name'] == "Possession":
-                # Vi tilføjer to "skjulte" rækker med 0 og 100 for at tvinge y-aksen til at skalere korrekt
-                # eller bruger en simpel tabel-visning hvis grafen stadig driller
-                st.line_chart(data, height=100, y_min=0, y_max=100)
+                # Vi opretter en midlertidig dataframe med 0 og 100
+                # Dette tvinger aksen til at skalere korrekt
+                dummy_data = pd.DataFrame({metric_cfg['col']: [0, 100]}, index=[0, 99])
+                final_data = pd.concat([data, dummy_data])
+                st.line_chart(final_data, height=100)
             else:
-                st.line_chart(data, height=100)          
+                st.line_chart(data, height=100)
+                
 # Til sidst: Sørg for at kalde funktionen, når filen indlæses
 if __name__ == "__main__":
     vis_side()
