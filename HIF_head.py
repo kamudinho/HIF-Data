@@ -115,6 +115,8 @@ def vis_transfer_dialog(df):
     # 2. Spiller (Kun navn)
     df_display['Spiller'] = df_display['NAVN']
 
+    df_display['Position'] = df_display['POSITION']
+
     # 3. Skifte
     df_display['Skifte'] = df_display['SENESTE_KLUB'].fillna('?') + " ➔ " + df_display['KLUB'].fillna('?')
 
