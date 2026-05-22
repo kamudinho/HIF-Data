@@ -176,11 +176,23 @@ def vis_side():
             trup_andet = df_csv[(df_csv['KLUB'] == "Klubløs") | (df_csv['UDLANDET'].astype(str) == "True")].copy()
             
             if not trup_andet.empty:
-                # Sorterer og viser kun relevante kolonner
-                vis_trup = trup_andet[['NAVN', 'POSITION', 'SENESTE_KLUB', 'KLUB',]].sort_values(by="NAVN")
+                # Opret den kombinerede status-tekst (Udlandet/Klubløs)
+                trup_andet['STATUS_TEXT'] = trup_andet.apply(
+                    lambda x: "Udlandet" if str(x['UDLANDET']) == "True" else x['KLUB'], axis=1
+                )
+                
+                # Opret din ønskede overgangs-kolonne
+                trup_andet['Skifte'] = (
+                    trup_andet['SENESTE_KLUB'].fillna('?') + " ➔ " + trup_andet['STATUS_TEXT']
+                )
+                
+                # Vælg og omdøb kolonner (inkluderer nu PLAYER_WYID og det nye Skifte)
+                vis_trup = trup_andet[['NAVN', 'POSITION', 'Skifte', 'PLAYER_WYID']].sort_values(by="NAVN")
+                
+                # Vis tabellen
                 st.dataframe(vis_trup, hide_index=True, use_container_width=True)
             else:
-                st.info("Ingen spillere registreret i 'Andet' kategorien.")
+                st.info("Ingen spillere registreret i 'Øvrige' kategorien.")
             
             trup_udland = df_csv[df_csv['UDLANDET'].astype(str) == "True"][['NAVN', 'POSITION', 'PLAYER_WYID', 'SENESTE_KLUB', 'TIMESTAMP']]
             
