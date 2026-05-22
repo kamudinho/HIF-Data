@@ -201,24 +201,22 @@ def vis_side():
                 idx = row * 3 + i
                 with cols[i]:
                     st.caption(f"**{metrics[idx]['name']}**")
-
-                    # Definer grafen med rød markør og lysere linje
-                    line = base.mark_line(
-                        color='#cccccc', 
-                        strokeWidth=2
-                    ).encode(
+                    
+                    # 1. Definer base med data, x, y og TOOLTIP
+                    base = alt.Chart(hif_recent).encode(
                         x=alt.X('index:O', axis=None),
-                        y=alt.Y(f'{metrics[idx]["col"]}:Q', axis=None, scale=alt.Scale(zero=False))
-                    ).properties(height=80), # Justeret tilbage til 80
+                        y=alt.Y(f'{metrics[idx]["col"]}:Q', axis=None, scale=alt.Scale(zero=False)),
                         tooltip=[
                             alt.Tooltip('MODSTANDER', title='vs.'),
                             alt.Tooltip(f'{metrics[idx]["col"]}', title=f'{metrics[idx]["name"]}', format='.1f')
                         ]
-                    )
+                    ).properties(height=80)
                     
+                    # 2. Byg lagene ovenpå basen
                     line = base.mark_line(color='#cccccc', strokeWidth=2)
                     points = base.mark_circle(size=60, color='#C41E3A')
                     
+                    # 3. Regel (skal ikke have tooltip, så den defineres separat)
                     rule = alt.Chart(hif_recent).mark_rule(
                         color='#333333', 
                         strokeWidth=1.5, 
@@ -227,7 +225,7 @@ def vis_side():
                         y=f'mean({metrics[idx]["col"]}):Q'
                     )
                     
-                    # .interactive() aktiverer hover
+                    # 4. Kombiner og vis
                     st.altair_chart(line + points + rule, use_container_width=True)
                     
 if __name__ == "__main__":
