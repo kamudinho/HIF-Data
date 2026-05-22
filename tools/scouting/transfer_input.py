@@ -172,13 +172,13 @@ def vis_side():
         if liga_valg == "Andet":
             st.write("### Øvrige (Udlandet & Klubløse)")
             
-            # Filtrer for begge kategorier
-            trup_andet = df_csv[(df_csv['KLUB'] == "Klubløs") | (df_csv['UDLANDET'].astype(str) == "True")]
+            # Filtrer for spillere der enten er i udlandet ELLER er klubløse
+            trup_andet = df_csv[(df_csv['KLUB'] == "Klubløs") | (df_csv['UDLANDET'].astype(str) == "True")].copy()
             
             if not trup_andet.empty:
-                # Vis dem samlet, evt. sorteret efter status eller timestamp
-                vis_trup = trup_andet[['NAVN', 'KLUB', 'POSITION', 'TIMESTAMP']]
-                st.dataframe(vis_trup.sort_values(by="TIMESTAMP", ascending=False), hide_index=True, use_container_width=True)
+                # Sorterer og viser kun relevante kolonner
+                vis_trup = trup_andet[['NAVN', 'KLUB', 'POSITION', 'SENESTE_KLUB']].sort_values(by="NAVN")
+                st.dataframe(vis_trup, hide_index=True, use_container_width=True)
             else:
                 st.info("Ingen spillere registreret i 'Andet' kategorien.")
             
