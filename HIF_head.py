@@ -44,6 +44,14 @@ def vis_side():
     
     df_matches = conn.query(queries["opta_team_stats"])
     df_matches.columns = [str(c).upper() for c in df_matches.columns]
+    
+    # --- FEJLRETTELSE HER: RENS DATA FOR NaN FØR BRUG ---
+    for col in ['TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE']:
+        if col in df_matches.columns:
+            # Erstat NaN med 0 og tving til integer
+            df_matches[col] = pd.to_numeric(df_matches[col], errors='coerce').fillna(0).astype(int)
+    # ----------------------------------------------------
+
     opta_to_name = {str(v['opta_uuid']).strip().upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
 
     col1, col2, col3 = st.columns(3)
