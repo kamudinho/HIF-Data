@@ -211,7 +211,7 @@ def vis_side():
                 avg_val = hif_recent[col_name].mean()
                 
                 with cols[i]:
-                    st.caption(f"**{metrics[idx]['name']}** (Snit: {avg_val:.2f})")
+                    st.caption(f"{metrics[idx]['name']} (Snit: {avg_val:.2f})")
                     
                     base = alt.Chart(hif_recent).encode(
                         x=alt.X('index:O', axis=None),
