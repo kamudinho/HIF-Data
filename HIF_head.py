@@ -162,19 +162,28 @@ def vis_side(dp=None):
     with col1:
         future = hif_m[~hif_m['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].sort_values('MATCH_DATE_FULL')
         with st.container(border=True):
-            if not future.empty:
-                nk = future.iloc[0]
-                
-                # Hent home og away UUID
-                home_id = str(nk.get('CONTESTANTHOME_OPTAUUID', '')).strip().upper()
-                away_id = str(nk.get('CONTESTANTAWAY_OPTAUUID', '')).strip().upper()
-                
-                # Identificer modstanderens ID
-                # Hvis hjemmeholdet er HIF, er modstander udeholdet. Ellers er modstander hjemmeholdet.
-                opp_id = away_id if home_id == hif_id else home_id
-                
-                # Hent navn fra mapping
-                opp_name = opta_to_name.get(opp_id, "Ukendt Modstander")
+            if not opp_m.empty:
+                    f_items = ""
+                    for _, m in opp_m.iloc[::-1].iterrows():
+                        is_h = m['CONTESTANTHOME_OPTAUUID'] == opp_id
+                        h_s, a_s = int(m['TOTAL_HOME_SCORE']), int(m['TOTAL_AWAY_SCORE'])
+                        res_col = "#28a745" if (is_h and h_s > a_s) or (not is_h and a_s > h_s) else ("#6c757d" if h_s == a_s else "#dc3545")
+                        
+                        # Find modstander UUID
+                        o_uuid = m['CONTESTANTAWAY_OPTAUUID'] if is_h else m['CONTESTANTHOME_OPTAUUID']
+                        
+                        # ROBUST HENTNING AF LOGO:
+                        # 1. Find navnet fra UUID
+                        o_name = opta_to_name.get(o_uuid.upper(), "")
+                        # 2. Hent logo fra TEAMS dictionary
+                        o_logo = TEAMS.get(o_name, {}).get("logo", "")
+                        
+                        # Hvis logo mangler, brug en placeholder eller tom string
+                        logo_html = f"<img src='{o_logo}' class='legend-logo'>" if o_logo else "<div style='width:26px;'></div>"
+                        
+                        f_items += f"<div class='form-column'><div class='res-pill' style='background:{res_col};'>{h_s}-{a_s}</div>{logo_html}</div>"
+                    
+                    st.markdown(f"<div class='form-wrapper'>{f_items}</div>", unsafe_allow_html=True)
                 
                 st.markdown(f"<div class='card-title'><span>NÆSTE KAMP vs. {opp_name.upper()}</span><span class='title-date'>{nk['MATCH_DATE_FULL'].strftime('%d/%m')}</span></div>", unsafe_allow_html=True)                
                 t_l, t_r = st.columns([1, 1.2])
