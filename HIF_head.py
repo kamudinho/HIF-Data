@@ -114,9 +114,7 @@ def vis_side(dp=None):
                 c_l.image(hif_logo, width=45)
                 c_vs.markdown(f"<div style='text-align:center; padding-top:10px;'><b>VS</b><br><span style='font-size:10px;'>{nk['MATCH_DATE_FULL'].strftime('%d/%m')}</span></div>", unsafe_allow_html=True)
                 c_r.image(opp_logo, width=45)
-                
-                st.divider()
-                
+                                
                 # Modstanderens Form
                 st.caption(f"Form: {opp_name}")
                 opp_m = df_matches[((df_matches['HOME_ID'] == opp_id) | (df_matches['AWAY_ID'] == opp_id)) & 
