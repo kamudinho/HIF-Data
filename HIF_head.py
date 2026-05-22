@@ -203,7 +203,7 @@ def vis_side():
                     ).encode(
                         x=alt.X('index:O', axis=None),
                         y=alt.Y(f'{metrics[idx]["col"]}:Q', axis=None, scale=alt.Scale(zero=False))
-                    ).properties(height=80)
+                    ).properties(height=120)
                     
                     # Definer punkterne separat for at få dem røde
                     points = alt.Chart(hif_recent).mark_circle(size=60, color='#C41E3A').encode(
