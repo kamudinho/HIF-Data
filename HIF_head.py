@@ -115,19 +115,22 @@ def vis_transfer_dialog(df):
     # 5. Tabel visning
     st.dataframe(
         df_display,
+        # Vi placerer dem ved siden af hinanden for at skabe flowet: Fra -> Til
         column_order=[
             'Dato', 
             'Spiller', 
             'Logo_Fra', 
-            'SKIFTE', 
+            'SENESTE_KLUB', 
+            'SKIFTE_PIL', # En ny kolonne med "➔"
             'Logo_Til', 
+            'KLUB', 
             'KILDE'
         ],
         column_config={
             "Dato": st.column_config.Column(width="small"),
-            "Spiller": st.column_config.Column("Spiller (Pos)", width="medium"),
             "Logo_Fra": st.column_config.ImageColumn("Fra", width="small"),
             "Logo_Til": st.column_config.ImageColumn("Til", width="small"),
+            "SKIFTE_PIL": st.column_config.Column(""), # Gør den meget smal
             "KILDE": st.column_config.LinkColumn("Kilde", display_text="Link"),
         },
         hide_index=True,
