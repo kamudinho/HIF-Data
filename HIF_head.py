@@ -21,7 +21,7 @@ def apply_custom_style():
 
             .card-title {
                 color: #1a1a1a;
-                font-size: 10px;
+                font-size: 12px;
                 font-weight: 700;
                 margin-bottom: 12px;
                 text-transform: uppercase;
@@ -31,7 +31,7 @@ def apply_custom_style():
             /* Stats Tabel - Gør den mere luftig nu hvor der er plads */
             .stats-table {
                 width: 95%;
-                font-size: 14px;
+                font-size: 10px;
                 border-collapse: collapse;
                 margin-top: 0px;
                 margin-left: auto;
