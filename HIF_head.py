@@ -222,7 +222,7 @@ def vis_side(dp=None):
 
                     st.markdown(f"""
                         <div class='list-item'>
-                            {dato_str}: <b>{navn} ➔ {klub}</b> - ({pos})
+                            {dato_str}: <b>{navn}</b> ({pos}) ➔ <b>{klub}</b>
                         </div>
                     """, unsafe_allow_html=True)
                 
