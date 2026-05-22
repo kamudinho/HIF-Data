@@ -196,43 +196,40 @@ def vis_side():
             axis=1
         )
 
+        # Tilføj Hjemme/Ude kolonne
+        hif_recent['H_U'] = hif_recent.apply(
+            lambda r: 'H' if str(r['CONTESTANTHOME_OPTAUUID']).upper() == HIF_UUID.upper() else 'U', 
+            axis=1
+        )
+
         # OPDELE I 2 RÆKKER
         for row in range(2):
             cols = st.columns(3)
             for i in range(3):
                 idx = row * 3 + i
+                col_name = metrics[idx]['col']
+                avg_val = hif_recent[col_name].mean() # Beregn gennemsnit
+                
                 with cols[i]:
-                    st.caption(f"****{metrics[idx]['name']}****")
+                    # Vis navn og gennemsnit i titlen
+                    st.caption(f"**{metrics[idx]['name']}** (Snit: {avg_val:{metrics[idx]['fmt']}})")
                     
-                    # Definer base med dynamisk format
                     base = alt.Chart(hif_recent).encode(
                         x=alt.X('index:O', axis=None),
-                        y=alt.Y(f'{metrics[idx]["col"]}:Q', axis=None, scale=alt.Scale(zero=False)),
+                        y=alt.Y(f'{col_name}:Q', axis=None, scale=alt.Scale(zero=False)),
                         tooltip=[
-                            alt.Tooltip('MODSTANDER', title='vs.'),
-                            alt.Tooltip(f'{metrics[idx]["col"]}', 
-                                        title=f'{metrics[idx]["name"]}', 
-                                        format=metrics[idx]["fmt"]) # Her bruges formatet
+                            alt.Tooltip('MODSTANDER', title='Modstander'),
+                            alt.Tooltip('H_U', title='H/U'),
+                            alt.Tooltip(col_name, title=f'{metrics[idx]["name"]}', format=metrics[idx]["fmt"])
                         ]
-                    ).properties(height=120)
+                    ).properties(height=80)
                     
-                    # 2. Byg lagene ovenpå basen
                     line = base.mark_line(color='#cccccc', strokeWidth=2)
                     points = base.mark_circle(size=50, color='#C41E3A')
-                    
-                    # 3. Regel - sikr at den bruger hif_recent data
                     rule = alt.Chart(hif_recent).mark_rule(
-                        color='#333333', 
-                        strokeWidth=1.5, 
-                        strokeDash=[4, 4]
-                    ).encode(
-                        y=alt.Y(f'mean({metrics[idx]["col"]}):Q')
-                    )
+                        color='#333333', strokeWidth=1.5, strokeDash=[4, 4]
+                    ).encode(y=alt.Y(f'mean({col_name}):Q'))
                     
-                    # 4. Kombiner og gør det interaktivt (hover virker kun på lag med tooltips)
-                    chart = (line + points + rule).interactive()
-                    
-                    st.altair_chart(chart, use_container_width=True)
-                    
+                    st.altair_chart((line + points + rule).interactive(), use_container_width=True)                    
 if __name__ == "__main__":
     vis_side()
