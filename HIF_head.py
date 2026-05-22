@@ -182,9 +182,12 @@ def vis_side():
         hif_recent['index'] = hif_recent.index + 1
 
         metrics = [
-            {"name": "Mål", "col": "PLOT_GOALS"}, {"name": "xG", "col": "PLOT_XG"}, 
-            {"name": "Skud", "col": "PLOT_SHOTS"}, {"name": "Touches", "col": "PLOT_TOUCHES"}, 
-            {"name": "Possession", "col": "PLOT_POSS"}, {"name": "Fwd Passes", "col": "PLOT_FWD"}
+            {"name": "Mål", "col": "PLOT_GOALS", "fmt": ".0f"}, 
+            {"name": "xG", "col": "PLOT_XG", "fmt": ".1f"}, 
+            {"name": "Skud", "col": "PLOT_SHOTS", "fmt": ".0f"}, 
+            {"name": "Touches", "col": "PLOT_TOUCHES", "fmt": ".0f"}, 
+            {"name": "Possession", "col": "PLOT_POSS", "fmt": ".1f"}, 
+            {"name": "Fwd Passes", "col": "PLOT_FWD", "fmt": ".0f"}
         ]
 
         # Tilføj modstander-navne til dataframe
@@ -201,13 +204,15 @@ def vis_side():
                 with cols[i]:
                     st.caption(f"****{metrics[idx]['name']}****")
                     
-                    # 1. Definer base med data, x, y og TOOLTIP
+                    # Definer base med dynamisk format
                     base = alt.Chart(hif_recent).encode(
                         x=alt.X('index:O', axis=None),
                         y=alt.Y(f'{metrics[idx]["col"]}:Q', axis=None, scale=alt.Scale(zero=False)),
                         tooltip=[
                             alt.Tooltip('MODSTANDER', title='vs.'),
-                            alt.Tooltip(f'{metrics[idx]["col"]}', title=f'{metrics[idx]["name"]}', format='.1f')
+                            alt.Tooltip(f'{metrics[idx]["col"]}', 
+                                        title=f'{metrics[idx]["name"]}', 
+                                        format=metrics[idx]["fmt"]) # Her bruges formatet
                         ]
                     ).properties(height=120)
                     
