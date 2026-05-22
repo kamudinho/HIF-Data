@@ -116,7 +116,6 @@ def vis_side(dp=None):
                 c_r.image(opp_logo, width=45)
                                 
                 # Modstanderens Form
-                st.caption(f"Form: {opp_name}")
                 opp_m = df_matches[((df_matches['HOME_ID'] == opp_id) | (df_matches['AWAY_ID'] == opp_id)) & 
                                    (df_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False))].sort_values('MATCH_DATE_FULL', ascending=False).head(5)
                 
