@@ -38,20 +38,16 @@ def vis_side():
     if not conn: return
     
     HIF_UUID = "8GXD9RY2580PU1B1DD5NY9YMY"
-    
-    # Kald din eksterne funktion korrekt
     queries = get_opta_queries(liga_f="NordicBet Liga", saeson_f="2025/2026", hif_only=True)
     
     df_matches = conn.query(queries["opta_team_stats"])
     df_matches.columns = [str(c).upper() for c in df_matches.columns]
     
-    # --- FEJLRETTELSE HER: RENS DATA FOR NaN FØR BRUG ---
+    # Datarens for at undgå NaN-fejl
     for col in ['TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE']:
         if col in df_matches.columns:
-            # Erstat NaN med 0 og tving til integer
             df_matches[col] = pd.to_numeric(df_matches[col], errors='coerce').fillna(0).astype(int)
-    # ----------------------------------------------------
-
+            
     opta_to_name = {str(v['opta_uuid']).strip().upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
 
     col1, col2, col3 = st.columns(3)
@@ -76,13 +72,10 @@ def vis_side():
     with col2:
         with st.container(border=True):
             st.markdown('<div class="card-title">TRANSFERS</div>', unsafe_allow_html=True)
-            try:
-                df_t = pd.read_csv("data/players/1div_overskrivning.csv")
-                for _, r in df_t.sort_values('TIMESTAMP', ascending=False).head(5).iterrows():
-                    st.markdown(f"<div class='list-item'><span>{r['NAVN']}</span><span>{r['KLUB']}</span></div>", unsafe_allow_html=True)
-                if st.button("Se alle", key="transfers_btn"): vis_transfer_dialog(df_t)
-            except:
-                st.write("Ingen transferdata.")
+            df_t = pd.read_csv("data/players/1div_overskrivning.csv")
+            for _, r in df_t.sort_values('TIMESTAMP', ascending=False).head(5).iterrows():
+                st.markdown(f"<div class='list-item'><span>{r['NAVN']}</span><span>{r['KLUB']}</span></div>", unsafe_allow_html=True)
+            if st.button("Se alle", key="transfers_btn"): vis_transfer_dialog(df_t)
 
     with col3:
         with st.container(border=True):
