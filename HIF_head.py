@@ -59,11 +59,19 @@ def vis_side():
                 c2.markdown("<div style='text-align:center; padding-top:12px;'><b style='font-size:10px; color:#ccc;'>VS</b></div>", unsafe_allow_html=True)
                 c3.image(TEAMS.get(opp_name, {}).get("logo", ""), width=42)
                 
-                # Stats
-                st.markdown(f"<table class='stats-table'><tr><td class='stats-label'>Mål f/i</td><td class='stats-value'>1.4/1.1</td></tr></table>", unsafe_allow_html=True)
+                # HER ER DINE METRICS TILBAGE:
+                st.markdown(f"""
+                    <table class='stats-table' style='margin-top:10px;'>
+                        <tr><td class='stats-label'>Mål f/i</td><td class='stats-value'>1.4/1.1</td></tr>
+                        <tr><td class='stats-label'>xG f/i</td><td class='stats-value'>1.5/1.2</td></tr>
+                        <tr><td class='stats-label'>Poss.</td><td class='stats-value'>52%</td></tr>
+                    </table>
+                """, unsafe_allow_html=True)
                 
-                # FORM-LEGENDS
+                # FORM-LEGENDS (Logoer under)
+                st.markdown(f"<div style='font-size:10px; color:#888; font-weight:700; margin-top:14px; text-transform:uppercase;'>Form: {opp_name}</div>", unsafe_allow_html=True)
                 opp_m = df_matches[((df_matches['CONTESTANTHOME_OPTAUUID'] == opp_id) | (df_matches['CONTESTANTAWAY_OPTAUUID'] == opp_id)) & (df_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False))].sort_values('MATCH_DATE_FULL', ascending=False).head(5)
+                
                 if not opp_m.empty:
                     f_items = ""
                     for _, m in opp_m.iloc[::-1].iterrows():
