@@ -160,7 +160,14 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
 
 def beregn_hold_stats(df_stats, team_uuid):
     """Beregner sæsongennemsnit for holdet baseret på afviklede kampe"""
-    played = df_stats[df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)]
+    # Vi bruger .copy() for at undgå SettingWithCopyWarning
+    played = df_stats[df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].copy()
+    
+    # --- FIX: Tving kolonner til tal, så vi undgår string-sammensætning ---
+    cols_to_numeric = ['TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE', 'HOME_XG', 'AWAY_XG', 'HOME_POSS', 'AWAY_POSS']
+    for col in cols_to_numeric:
+        if col in played.columns:
+            played[col] = pd.to_numeric(played[col], errors='coerce')
     
     home = played[played['CONTESTANTHOME_OPTAUUID'].str.upper() == team_uuid.upper()]
     away = played[played['CONTESTANTAWAY_OPTAUUID'].str.upper() == team_uuid.upper()]
@@ -184,7 +191,6 @@ def beregn_hold_stats(df_stats, team_uuid):
         "xga": f"{xga / total_matches:.2f}",
         "poss": f"{int(round(poss_all))}%" if pd.notnull(poss_all) else "0%"
     }
-
 
 def vis_side():
     apply_custom_style()
