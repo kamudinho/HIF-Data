@@ -189,20 +189,24 @@ def vis_side():
     hif_recent = hif_recent.reset_index(drop=True)
     hif_recent['index'] = hif_recent.index + 1
 
-    # 4. Beregn gennemsnit til tabellen
-    df_avg = pd.DataFrame({
-        'Mål': [hif_recent['PLOT_GOALS'].mean()],
-        'xG': [hif_recent['PLOT_XG'].mean()],
-        'Skud': [hif_recent['PLOT_SHOTS'].mean()],
-        'Touches': [hif_recent['PLOT_TOUCHES'].mean()],
-        'Poss %': [hif_recent['PLOT_POSS'].mean()]
-    })
+    # 4. Beregn gennemsnit og Transponer (Roter) tabellen
+    data_dict = {
+        'Mål': hif_recent['PLOT_GOALS'].mean(),
+        'xG': hif_recent['PLOT_XG'].mean(),
+        'Skud': hif_recent['PLOT_SHOTS'].mean(),
+        'Touches': hif_recent['PLOT_TOUCHES'].mean(),
+        'Poss %': hif_recent['PLOT_POSS'].mean()
+    }
+    
+    # Konverter dict til DF og transponer så metrics er rækker
+    df_avg = pd.DataFrame.from_dict(data_dict, orient='index', columns=['Gennemsnit'])
 
-    # 5. Layout
+    # 5. Layout med roteret tabel
     t_col1, t_col2, t_col3 = st.columns([2, 1, 1])
     with t_col1:
         st.markdown("###### Hvidovre IF - Gennemsnit pr. kamp")
-        st.dataframe(df_avg.round(2), hide_index=True, use_container_width=True)
+        # Vis tabellen uden index-navn, men med metric-navne som rækker
+        st.dataframe(df_avg.round(2), use_container_width=True)
 
     def byg_chart(col_name, title, fmt):
         base = alt.Chart(hif_recent).encode(
