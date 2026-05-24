@@ -189,21 +189,23 @@ def vis_side():
         for name, col, target in metrics:
             with target:
                 st.caption(name)
-                st.altair_chart(alt.Chart(hif_recent).mark_line(
+                st.altair_chart(
+    alt.Chart(hif_recent).mark_line(
         color='#C41E3A', 
-        point=True,  # Tilføjer prikker så hvert match er tydeligt
-        strokeWidth=3
+        point=True, 
+        strokeWidth=2
     ).encode(
-        x=alt.X('index:O', title='Match'),
-        y=alt.Y(f'{col}:Q', 
-                title=None, 
-                scale=alt.Scale(zero=False, nice=True) # Fjerner tvungen nul-linje
-        ),
-        tooltip=['index', f'{col}:Q']
+        x=alt.X('index:O', axis=None),  # Fjerner x-akse
+        y=alt.Y(f'{col}:Q', axis=None, scale=alt.Scale(zero=False)), # Fjerner y-akse
     ).properties(
-        height=120
-    ).interactive(), # Gør det muligt at zoome/panere lidt
+        height=100
+    ).configure_view(
+        strokeWidth=0  # Fjerner kanten omkring grafen
+    ).configure_axis(
+        grid=False # Fjerner gridlines
+    ),
     use_container_width=True
-)                
+)
+                
 if __name__ == "__main__":
     vis_side()
