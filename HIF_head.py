@@ -160,10 +160,7 @@ def vis_side():
         with st.container(border=True):
             st.markdown('<div class="card-title"><span>SCOUTING</span></div>', unsafe_allow_html=True)
 
-    # Række 2: Sæson Snit (inde i border) + Trendlines grid (udenfor)
-    
-    # Række 2: Layout med Sæson Snit (ramme) til venstre og grafer (fri) til højre
-    
+    # Række 2: Sæson Snit (inde i border) + Trendlines grid (udenfor)    
     # Hovedkolonne-opdeling for hele rækken
     main_col, trend_area = st.columns([1, 2])
     
@@ -192,7 +189,21 @@ def vis_side():
         for name, col, target in metrics:
             with target:
                 st.caption(name)
-                st.altair_chart(alt.Chart(hif_recent).mark_line(color='#C41E3A').encode(x='index:O', y=f"{col}:Q").properties(height=100), use_container_width=True)
-                
+                st.altair_chart(alt.Chart(hif_recent).mark_line(
+        color='#C41E3A', 
+        point=True,  # Tilføjer prikker så hvert match er tydeligt
+        strokeWidth=3
+    ).encode(
+        x=alt.X('index:O', title='Match'),
+        y=alt.Y(f'{col}:Q', 
+                title=None, 
+                scale=alt.Scale(zero=False, nice=True) # Fjerner tvungen nul-linje
+        ),
+        tooltip=['index', f'{col}:Q']
+    ).properties(
+        height=100
+    ).interactive(), # Gør det muligt at zoome/panere lidt
+    use_container_width=True
+)                
 if __name__ == "__main__":
     vis_side()
