@@ -15,19 +15,14 @@ def vis_transfer_dialog(df):
     df_display = df.copy()
     df_display.columns = [str(c).upper().strip() for c in df_display.columns]
     
-    # 1. Dato-formatering
     df_display['TS_SORT'] = pd.to_datetime(df_display['TIMESTAMP'], errors='coerce')
     df_display = df_display.sort_values('TS_SORT', ascending=False)
     df_display['Dato'] = df_display['TS_SORT'].dt.strftime('%d/%m-%Y')
     
-    # 2. Spiller
     pos_col = 'POSITION' if 'POSITION' in df_display.columns else 'POS'
     df_display['Spiller'] = df_display['NAVN'] + " (" + df_display.get(pos_col, '-').fillna('-') + ")"
-    
-    # 3. Skifte
     df_display['Skifte'] = df_display['SENESTE_KLUB'].fillna('?') + " ➔ " + df_display['KLUB'].fillna('?')
     
-    # 4. Kontrakt-logik
     def beregn_kontrakt(row):
         udloeb_raw = str(row.get('KONTRAKT_UDLOEB', '-'))
         if udloeb_raw == '-' or udloeb_raw == 'nan': return "-"
@@ -40,7 +35,6 @@ def vis_transfer_dialog(df):
         except: return udloeb_raw
 
     df_display['Kontrakt'] = df_display.apply(beregn_kontrakt, axis=1)
-    
     st.dataframe(df_display[['Dato', 'Spiller', 'Skifte', 'Kontrakt', 'KILDE']],
                  column_config={"KILDE": st.column_config.LinkColumn("Kilde", display_text="Se kilde")},
                  hide_index=True, use_container_width=True)
@@ -97,15 +91,28 @@ def beregn_hold_stats(df_stats, team_uuid):
     poss_all = pd.concat([home['HOME_POSS'], away['AWAY_POSS']]).dropna().mean()
     return {"gf": f"{gf / total_matches:.1f}", "ga": f"{ga / total_matches:.1f}", "xgf": f"{xgf / total_matches:.2f}", "xga": f"{xga / total_matches:.2f}", "poss": f"{int(round(poss_all))}%" if pd.notnull(poss_all) else "0%"}
 
-# --- HJÆLPEFUNKTION ØVERST ---
-def clean_numeric(val):
-    try:
-        s = str(val).replace(',', '.')
-        if s.count('.') > 1: return 0.0
-        return float(s)
-    except:
-        return 0.0
-        
+def beregn_per_90(df_stats, team_uuid):
+    hif_matches = df_stats[
+        ((df_stats['CONTESTANTHOME_OPTAUUID'].str.upper() == team_uuid.upper()) | 
+         (df_stats['CONTESTANTAWAY_OPTAUUID'].str.upper() == team_uuid.upper())) &
+        (df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False))
+    ].copy()
+    
+    total_matches = len(hif_matches)
+    if total_matches == 0: return None
+    
+    # Konverter kolonner til numerisk
+    for col in ['TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE', 'HOME_XG', 'AWAY_XG', 'HOME_SHOTS', 'AWAY_SHOTS', 'HOME_TOUCHES', 'AWAY_TOUCHES']:
+        hif_matches[col] = pd.to_numeric(hif_matches[col], errors='coerce').fillna(0)
+    
+    stats = {
+        "Mål": (hif_matches.apply(lambda r: r['TOTAL_HOME_SCORE'] if r['CONTESTANTHOME_OPTAUUID'].upper() == team_uuid.upper() else r['TOTAL_AWAY_SCORE'], axis=1).sum()),
+        "xG": (hif_matches.apply(lambda r: r['HOME_XG'] if r['CONTESTANTHOME_OPTAUUID'].upper() == team_uuid.upper() else r['AWAY_XG'], axis=1).sum()),
+        "Skud": (hif_matches.apply(lambda r: r['HOME_SHOTS'] if r['CONTESTANTHOME_OPTAUUID'].upper() == team_uuid.upper() else r['AWAY_SHOTS'], axis=1).sum()),
+        "Touches (boks)": (hif_matches.apply(lambda r: r['HOME_TOUCHES'] if r['CONTESTANTHOME_OPTAUUID'].upper() == team_uuid.upper() else r['AWAY_TOUCHES'], axis=1).sum())
+    }
+    return {k: v / total_matches for k, v in stats.items()}
+
 def vis_side():
     apply_custom_style()
     conn = _get_snowflake_conn()
@@ -118,9 +125,9 @@ def vis_side():
     df_stats.columns = [str(c).upper() for c in df_stats.columns]
     opta_to_name = {str(v['opta_uuid']).strip().upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
     df_matches['MATCH_DATE_FULL'] = pd.to_datetime(df_matches['MATCH_DATE_FULL'], errors='coerce').dt.tz_localize(None)
-
-    # --- 1. ØVERSTE SEKTION (Næste kamp, Transfers, Scouting bibeholdt) ---
+    
     col1, col2, col3 = st.columns([1, 1, 1])
+    
     with col1:
         with st.container(border=True):
             hif_m = df_matches[(df_matches['CONTESTANTHOME_OPTAUUID'].str.upper() == HIF_UUID.strip().upper()) | (df_matches['CONTESTANTAWAY_OPTAUUID'].str.upper() == HIF_UUID.strip().upper())]
@@ -165,70 +172,67 @@ def vis_side():
         with st.container(border=True):
             st.markdown('<div class="card-title"><span>SCOUTING</span></div>', unsafe_allow_html=True)
 
-    # --- 2. NEDERSTE SEKTION ---
+    # --- PER 90 SEKTION ---
     st.divider()
+    st.markdown("##### Hvidovre IF - Gennemsnit pr. 90 min")
+    hif_per90 = beregn_per_90(df_stats, HIF_UUID)
+    if hif_per90:
+        cols = st.columns(4)
+        for i, (key, val) in enumerate(hif_per90.items()):
+            cols[i].metric(label=key, value=f"{val:.2f}")
 
-    # 1. DEFINER DATA (Sørg for at denne del kører før graferne)
-    # Hent og rens data
-    hif_recent = df_stats[((df_stats['CONTESTANTHOME_OPTAUUID'].str.upper() == HIF_UUID.strip().upper()) | (df_stats['CONTESTANTAWAY_OPTAUUID'].str.upper() == HIF_UUID.strip().upper())) & (df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False))].copy()
-    
-    # RENSNING
-    cols_to_clean = ['TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE', 'HOME_XG', 'AWAY_XG', 'HOME_SHOTS', 'AWAY_SHOTS', 'HOME_TOUCHES', 'AWAY_TOUCHES', 'HOME_POSS', 'AWAY_POSS', 'HOME_FORWARD_PASSES', 'AWAY_FORWARD_PASSES']
-    for col in cols_to_clean:
-        if col in hif_recent.columns:
-            hif_recent[col] = hif_recent[col].apply(clean_numeric)
+    # --- TRENDLINES ---
+    st.caption("##### Sæsontrend - Hvidovre IF")
+    hif_recent = df_stats[
+        ((df_stats['CONTESTANTHOME_OPTAUUID'].str.upper() == HIF_UUID.strip().upper()) | 
+         (df_stats['CONTESTANTAWAY_OPTAUUID'].str.upper() == HIF_UUID.strip().upper())) & 
+        (df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False))
+    ].sort_values('MATCH_DATE_FULL', ascending=True).copy()
 
-    # PLOT-kolonner
-    hif_recent['PLOT_GOALS'] = hif_recent.apply(lambda r: r['TOTAL_HOME_SCORE'] if r['CONTESTANTHOME_OPTAUUID'].upper() == HIF_UUID else r['TOTAL_AWAY_SCORE'], axis=1)
-    hif_recent['PLOT_XG'] = hif_recent.apply(lambda r: r['HOME_XG'] if r['CONTESTANTHOME_OPTAUUID'].upper() == HIF_UUID else r['AWAY_XG'], axis=1)
-    hif_recent['PLOT_SHOTS'] = hif_recent.apply(lambda r: r['HOME_SHOTS'] if r['CONTESTANTHOME_OPTAUUID'].upper() == HIF_UUID else r['AWAY_SHOTS'], axis=1)
-    hif_recent['PLOT_TOUCHES'] = hif_recent.apply(lambda r: r['HOME_TOUCHES'] if r['CONTESTANTHOME_OPTAUUID'].upper() == HIF_UUID else r['AWAY_TOUCHES'], axis=1)
-    hif_recent['PLOT_POSS'] = hif_recent.apply(lambda r: r['HOME_POSS'] if r['CONTESTANTHOME_OPTAUUID'].upper() == HIF_UUID else r['AWAY_POSS'], axis=1)
-    
-    hif_recent = hif_recent.reset_index(drop=True)
-    hif_recent['index'] = hif_recent.index + 1
-    hif_recent['TOOLTIP_VS'] = hif_recent.apply(lambda r: (r['CONTESTANTAWAY_NAME'] if r['CONTESTANTHOME_OPTAUUID'].upper() == HIF_UUID else r['CONTESTANTHOME_NAME']) + (" (H)" if r['CONTESTANTHOME_OPTAUUID'].upper() == HIF_UUID else " (U)"), axis=1)
+    if not hif_recent.empty:
+        for col in ['TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE', 'HOME_XG', 'AWAY_XG', 'HOME_SHOTS', 'AWAY_SHOTS', 'HOME_TOUCHES', 'AWAY_TOUCHES', 'HOME_POSS', 'AWAY_POSS', 'HOME_FORWARD_PASSES', 'AWAY_FORWARD_PASSES']:
+            hif_recent[col] = pd.to_numeric(hif_recent[col], errors='coerce')
+            
+        hif_recent['PLOT_GOALS'] = hif_recent.apply(lambda r: r['TOTAL_HOME_SCORE'] if r['CONTESTANTHOME_OPTAUUID'].upper() == HIF_UUID else r['TOTAL_AWAY_SCORE'], axis=1)
+        hif_recent['PLOT_XG'] = hif_recent.apply(lambda r: r['HOME_XG'] if r['CONTESTANTHOME_OPTAUUID'].upper() == HIF_UUID else r['AWAY_XG'], axis=1)
+        hif_recent['PLOT_SHOTS'] = hif_recent.apply(lambda r: r['HOME_SHOTS'] if r['CONTESTANTHOME_OPTAUUID'].upper() == HIF_UUID else r['AWAY_SHOTS'], axis=1)
+        hif_recent['PLOT_TOUCHES'] = hif_recent.apply(lambda r: r['HOME_TOUCHES'] if r['CONTESTANTHOME_OPTAUUID'].upper() == HIF_UUID else r['AWAY_TOUCHES'], axis=1)
+        hif_recent['PLOT_POSS'] = hif_recent.apply(lambda r: r['HOME_POSS'] if r['CONTESTANTHOME_OPTAUUID'].upper() == HIF_UUID else r['AWAY_POSS'], axis=1)
+        hif_recent['PLOT_FWD'] = hif_recent.apply(lambda r: r['HOME_FORWARD_PASSES'] if r['CONTESTANTHOME_OPTAUUID'].upper() == HIF_UUID else r['AWAY_FORWARD_PASSES'], axis=1)
+        
+        hif_recent = hif_recent.reset_index(drop=True)
+        hif_recent['index'] = hif_recent.index + 1
 
-    # 2. TABEL (HTML)
-    stats = {
-        'Mål': hif_recent['PLOT_GOALS'].mean(),
-        'xG': hif_recent['PLOT_XG'].mean(),
-        'Skud': hif_recent['PLOT_SHOTS'].mean(),
-        'Touches': hif_recent['PLOT_TOUCHES'].mean(),
-        'Possession': hif_recent['PLOT_POSS'].mean()
-    }
+        metrics = [
+            {"name": "Mål", "col": "PLOT_GOALS", "fmt": ".0f"}, 
+            {"name": "xG", "col": "PLOT_XG", "fmt": ".2f"}, 
+            {"name": "Skud", "col": "PLOT_SHOTS", "fmt": ".0f"}, 
+            {"name": "Touches", "col": "PLOT_TOUCHES", "fmt": ".0f"}, 
+            {"name": "Possession", "col": "PLOT_POSS", "fmt": ".1f"}, 
+            {"name": "Fwd Passes", "col": "PLOT_FWD", "fmt": ".0f"}
+        ]
 
-    t_col1, t_col2, t_col3 = st.columns([1, 1, 1])
-    with t_col1:
-        st.markdown('<div class="card-title"><span>SÆSON GENNEMSNIT</span></div>', unsafe_allow_html=True)
-        html_tabel = "<table class='stats-table' style='width: 100%;'>"
-        for label, val in stats.items():
-            fmt = "%.1f" if label != "xG" else "%.2f"
-            html_tabel += f"<tr><td class='stats-label' style='text-align: left; width: 60%;'>{label}</td><td class='stats-value' style='text-align: right;'>{fmt % val}</td></tr>"
-        html_tabel += "</table>"
-        st.markdown(html_tabel, unsafe_allow_html=True)
+        hif_recent['MODSTANDER'] = hif_recent.apply(lambda r: r['CONTESTANTAWAY_NAME'] if str(r['CONTESTANTHOME_OPTAUUID']).upper() == HIF_UUID.upper() else r['CONTESTANTHOME_NAME'], axis=1)
+        hif_recent['H_U'] = hif_recent.apply(lambda r: 'H' if str(r['CONTESTANTHOME_OPTAUUID']).upper() == HIF_UUID.upper() else 'U', axis=1)
+        hif_recent['TOOLTIP_VS'] = hif_recent['MODSTANDER'] + " (" + hif_recent['H_U'] + ")"
 
-    # 3. GRAFER
-    def byg_chart(col_name, title, fmt):
-        base = alt.Chart(hif_recent).encode(
-            x='index:O', 
-            y=f'{col_name}:Q', 
-            tooltip=['TOOLTIP_VS', alt.Tooltip(col_name, title=title, format=fmt)]
-        ).properties(height=100)
-        return (base.mark_line(color='#cccccc', strokeWidth=2) + 
-                base.mark_circle(size=50, color='#C41E3A') + 
-                alt.Chart(hif_recent).mark_rule(color='#333333', strokeDash=[4,4]).encode(y=f'mean({col_name}):Q')).interactive()
+        for row in range(2):
+            cols = st.columns(3)
+            for i in range(3):
+                idx = row * 3 + i
+                col_name = metrics[idx]['col']
+                avg_val = hif_recent[col_name].mean()
+                with cols[i]:
+                    st.caption(f"{metrics[idx]['name']} (Snit: {avg_val:.2f})")
+                    base = alt.Chart(hif_recent).encode(
+                        x=alt.X('index:O', axis=None),
+                        y=alt.Y(f'{col_name}:Q', axis=None, scale=alt.Scale(zero=False)),
+                        tooltip=[alt.Tooltip('TOOLTIP_VS', title='Modstander'), alt.Tooltip(col_name, title=metrics[idx]['name'], format=metrics[idx]['fmt'])]
+                    ).properties(height=125)
+                    line = base.mark_line(color='#cccccc', strokeWidth=2)
+                    points = base.mark_circle(size=50, color='#C41E3A')
+                    rule = alt.Chart(hif_recent).mark_rule(color='#333333', strokeWidth=1.5, strokeDash=[4, 4]).encode(y=alt.Y(f'mean({col_name}):Q'))
+                    st.altair_chart((line + points + rule).interactive(), use_container_width=True)
 
-    with t_col2:
-        st.caption("xG")
-        st.altair_chart(byg_chart('PLOT_XG', 'xG', '.2f'), use_container_width=True)
-        st.caption("Skud")
-        st.altair_chart(byg_chart('PLOT_SHOTS', 'Skud', '.0f'), use_container_width=True)
-
-    with t_col3:
-        st.caption("Touches")
-        st.altair_chart(byg_chart('PLOT_TOUCHES', 'Touches', '.0f'), use_container_width=True)
-        st.caption("Possession")
-        st.altair_chart(byg_chart('PLOT_POSS', 'Poss %', '.1f'), use_container_width=True)        
 if __name__ == "__main__":
     vis_side()
