@@ -126,30 +126,50 @@ def beregn_hold_stats(df_stats, team_uuid):
     return {"gf": f"{gf / total_matches:.1f}", "ga": f"{ga / total_matches:.1f}", "xgf": f"{xgf / total_matches:.2f}", "xga": f"{xga / total_matches:.2f}", "poss": f"{int(round(poss_all))}%" if pd.notnull(poss_all) else "0%"}
 
 def beregn_per_90(df_stats, team_uuid):
-    hif_matches = df_stats[((df_stats['CONTESTANTHOME_OPTAUUID'].str.upper() == team_uuid.upper()) | 
-                           (df_stats['CONTESTANTAWAY_OPTAUUID'].str.upper() == team_uuid.upper())) & 
-                          (df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False))].copy()
+    # 1. Filter for gennemførte kampe
+    played = df_stats[df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].copy()
+    
+    # 2. Sørg for at kolonner er numeriske for HELE datasættet (ligaen)
+    cols = ['TOTAL_HOME_SCORE', 'HOME_XG', 'HOME_SHOTS', 'HOME_TOUCHES', 'HOME_PASSES', 'HOME_CORNERS', 'HOME_CROSSES',
+            'TOTAL_AWAY_SCORE', 'AWAY_XG', 'AWAY_SHOTS', 'AWAY_TOUCHES', 'AWAY_PASSES', 'AWAY_CORNERS', 'AWAY_CROSSES']
+    
+    for col in cols:
+        if col in played.columns:
+            played[col] = pd.to_numeric(played[col], errors='coerce').fillna(0)
+
+    # 3. HIF-specifikke kampe
+    hif_matches = played[((played['CONTESTANTHOME_OPTAUUID'].str.upper() == team_uuid.upper()) | 
+                          (played['CONTESTANTAWAY_OPTAUUID'].str.upper() == team_uuid.upper()))]
     
     if len(hif_matches) == 0: return None
-    
-    # Konverter kolonner til numeriske
-    for col in ['TOTAL_HOME_SCORE', 'HOME_XG', 'HOME_SHOTS', 'HOME_TOUCHES', 'HOME_PASSES', 'HOME_CORNERS', 'HOME_CROSSES',
-                'TOTAL_AWAY_SCORE', 'AWAY_XG', 'AWAY_SHOTS', 'AWAY_TOUCHES', 'AWAY_PASSES', 'AWAY_CORNERS', 'AWAY_CROSSES']:
-        if col in hif_matches.columns: hif_matches[col] = pd.to_numeric(hif_matches[col], errors='coerce').fillna(0)
-    
-    # Hjælpefunktion til at hente stats baseret på om HIF er Home eller Away
-    def get_val(r, home_col, away_col):
-        return r[home_col] if str(r['CONTESTANTHOME_OPTAUUID']).upper() == team_uuid.upper() else r[away_col]
 
-    return {
-        "Mål": hif_matches.apply(lambda r: get_val(r, 'TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE'), axis=1).mean(),
-        "xG": hif_matches.apply(lambda r: get_val(r, 'HOME_XG', 'AWAY_XG'), axis=1).mean(),
-        "Skud": hif_matches.apply(lambda r: get_val(r, 'HOME_SHOTS', 'AWAY_SHOTS'), axis=1).mean(),
-        "Touches": hif_matches.apply(lambda r: get_val(r, 'HOME_TOUCHES', 'AWAY_TOUCHES'), axis=1).mean(),
-        "Pasninger": hif_matches.apply(lambda r: get_val(r, 'HOME_PASSES', 'AWAY_PASSES'), axis=1).mean(),
-        "Hjørnespark": hif_matches.apply(lambda r: get_val(r, 'HOME_CORNERS', 'AWAY_CORNERS'), axis=1).mean(),
-        "Indlæg": hif_matches.apply(lambda r: get_val(r, 'HOME_CROSSES', 'AWAY_CROSSES'), axis=1).mean()
+    # 4. Definition af stats til sammenligning
+    stats_map = {
+        "Mål": ('TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE'),
+        "xG": ('HOME_XG', 'AWAY_XG'),
+        "Skud": ('HOME_SHOTS', 'AWAY_SHOTS'),
+        "Touches": ('HOME_TOUCHES', 'AWAY_TOUCHES'),
+        "Pasninger": ('HOME_PASSES', 'AWAY_PASSES'),
+        "Hjørnespark": ('HOME_CORNERS', 'AWAY_CORNERS'),
+        "Indlæg": ('HOME_CROSSES', 'AWAY_CROSSES')
     }
+
+    results = []
+    for name, (h_col, a_col) in stats_map.items():
+        # HIF snit
+        hif_val = hif_matches.apply(lambda r: r[h_col] if str(r['CONTESTANTHOME_OPTAUUID']).upper() == team_uuid.upper() else r[a_col], axis=1).mean()
+        
+        # Liga snit (mean af både hjemme og ude for alle hold i ligaen)
+        liga_val = pd.concat([played[h_col], played[a_col]]).mean()
+        
+        results.append({
+            "Stat": name,
+            "HIF": hif_val,
+            "Liga": liga_val,
+            "Diff": hif_val - liga_val
+        })
+    
+    return pd.DataFrame(results)
 
 def vis_side():
     apply_custom_style()
@@ -214,15 +234,23 @@ def vis_side():
     main_col, trend_area = st.columns([1, 2])
     
     with main_col:
-        with st.container(border=True): # Denne skal være indrykket under 'with main_col:'
-            st.markdown('<div class="card-title"><span>SÆSON SNIT (PR. KAMP)</span></div>', unsafe_allow_html=True)
-            stats = beregn_per_90(df_stats, HIF_UUID)
-            if stats:
-                html = "<table class='stats-table'>"
-                for k, v in stats.items():
-                    html += f"<tr><td class='stats-label'>{k}</td><td class='stats-value'>{v:.1f}</td></tr>"
-                html += "</table>"
-                st.markdown(html, unsafe_allow_html=True)
+    with st.container(border=True):
+        st.markdown('<div class="card-title"><span>SÆSON SNIT vs. LIGA</span></div>', unsafe_allow_html=True)
+        df_stats_comp = beregn_per_90(df_stats, HIF_UUID)
+        
+        if df_stats_comp is not None:
+            html = "<table class='stats-table'><thead><tr><th>Stat</th><th>HIF</th><th>Liga</th><th>Diff</th></tr></thead>"
+            for _, r in df_stats_comp.iterrows():
+                # Tilføj farve til differencen
+                diff_color = "#28a745" if r['Diff'] > 0 else "#dc3545"
+                html += f"""<tr>
+                    <td class='stats-label'>{r['Stat']}</td>
+                    <td class='stats-value'>{r['HIF']:.1f}</td>
+                    <td class='stats-value'>{r['Liga']:.1f}</td>
+                    <td class='stats-value' style='color:{diff_color}; font-weight:800;'>{r['Diff']:+.1f}</td>
+                </tr>"""
+            html += "</table>"
+            st.markdown(html, unsafe_allow_html=True)
             
     with trend_area:
         # 1. Filtrering af data til graferne
