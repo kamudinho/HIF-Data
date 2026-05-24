@@ -159,7 +159,7 @@ def vis_side():
     # --- 2. NEDERSTE SEKTION: Gennemsnitsdata pr. kamp ---
     st.divider()
 
-    def clean_numeric(val):
+def clean_numeric(val):
     try:
         # Konverter til streng, fjern alt undtagen tal og punktum, konverter til float
         s = str(val).replace(',', '.')
