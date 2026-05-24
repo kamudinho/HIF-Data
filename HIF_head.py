@@ -97,6 +97,15 @@ def beregn_hold_stats(df_stats, team_uuid):
     poss_all = pd.concat([home['HOME_POSS'], away['AWAY_POSS']]).dropna().mean()
     return {"gf": f"{gf / total_matches:.1f}", "ga": f"{ga / total_matches:.1f}", "xgf": f"{xgf / total_matches:.2f}", "xga": f"{xga / total_matches:.2f}", "poss": f"{int(round(poss_all))}%" if pd.notnull(poss_all) else "0%"}
 
+# --- HJÆLPEFUNKTION ØVERST ---
+def clean_numeric(val):
+    try:
+        s = str(val).replace(',', '.')
+        if s.count('.') > 1: return 0.0
+        return float(s)
+    except:
+        return 0.0
+        
 def vis_side():
     apply_custom_style()
     conn = _get_snowflake_conn()
@@ -158,16 +167,6 @@ def vis_side():
 
     # --- 2. NEDERSTE SEKTION: Gennemsnitsdata pr. kamp ---
     st.divider()
-
-def clean_numeric(val):
-    try:
-        # Konverter til streng, fjern alt undtagen tal og punktum, konverter til float
-        s = str(val).replace(',', '.')
-        # Hvis der er for mange punktummer (som i din fejl), tag kun den første del eller konverter til 0
-        if s.count('.') > 1: return 0.0 
-        return float(s)
-    except:
-        return 0.0
     
     hif_recent = df_stats[((df_stats['CONTESTANTHOME_OPTAUUID'].str.upper() == HIF_UUID.strip().upper()) | (df_stats['CONTESTANTAWAY_OPTAUUID'].str.upper() == HIF_UUID.strip().upper())) & (df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False))].copy()
     
