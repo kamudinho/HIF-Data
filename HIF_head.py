@@ -171,41 +171,34 @@ def vis_side():
             per90 = beregn_per_90(df_stats, HIF_UUID)
             st.metric("Nyt Snit", f"{sum(per90.values())/len(per90):.2f}" if per90 else "0.0")
 
-    # 2. Trendlines (2x2 grid) placeret i trend_area (Højre kolonne, uden border)
-    with trend_area:
-        r1_c1, r1_c2 = st.columns(2)
-        r2_c1, r2_c2 = st.columns(2)
-        
-        # Trend data beregning
-        hif_recent = df_stats[((df_stats['CONTESTANTHOME_OPTAUUID'].str.upper() == HIF_UUID.strip().upper()) | (df_stats['CONTESTANTAWAY_OPTAUUID'].str.upper() == HIF_UUID.strip().upper()))].copy()
+    # 1. Filtrering: Kun kampe der er "played", "full" eller "finish"
+        hif_recent = df_stats[
+            ((df_stats['CONTESTANTHOME_OPTAUUID'].str.upper() == HIF_UUID.strip().upper()) | 
+             (df_stats['CONTESTANTAWAY_OPTAUUID'].str.upper() == HIF_UUID.strip().upper())) & 
+            (df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False))
+        ].sort_values('MATCH_DATE_FULL', ascending=True).copy()
+
+        # 2. Beregn kolonner
         hif_recent['PLOT_GOALS'] = hif_recent.apply(lambda r: r['TOTAL_HOME_SCORE'] if r['CONTESTANTHOME_OPTAUUID'].upper() == HIF_UUID else r['TOTAL_AWAY_SCORE'], axis=1)
         hif_recent['PLOT_XG'] = hif_recent.apply(lambda r: r['HOME_XG'] if r['CONTESTANTHOME_OPTAUUID'].upper() == HIF_UUID else r['AWAY_XG'], axis=1)
         hif_recent['PLOT_SHOTS'] = hif_recent.apply(lambda r: r['HOME_SHOTS'] if r['CONTESTANTHOME_OPTAUUID'].upper() == HIF_UUID else r['AWAY_SHOTS'], axis=1)
         hif_recent['PLOT_TOUCHES'] = hif_recent.apply(lambda r: r['HOME_TOUCHES'] if r['CONTESTANTHOME_OPTAUUID'].upper() == HIF_UUID else r['AWAY_TOUCHES'], axis=1)
         hif_recent['index'] = range(1, len(hif_recent) + 1)
         
+        # 3. Layout og Grafer
+        r1_c1, r1_c2 = st.columns(2)
+        r2_c1, r2_c2 = st.columns(2)
+        
         metrics = [("Mål", "PLOT_GOALS", r1_c1), ("xG", "PLOT_XG", r1_c2), ("Skud", "PLOT_SHOTS", r2_c1), ("Touches", "PLOT_TOUCHES", r2_c2)]
         
         for name, col, target in metrics:
             with target:
                 st.caption(name)
-                st.altair_chart(
-    alt.Chart(hif_recent).mark_line(
-        color='#C41E3A', 
-        point=True, 
-        strokeWidth=2
-    ).encode(
-        x=alt.X('index:O', axis=None),  # Fjerner x-akse
-        y=alt.Y(f'{col}:Q', axis=None, scale=alt.Scale(zero=False)), # Fjerner y-akse
-    ).properties(
-        height=100
-    ).configure_view(
-        strokeWidth=0  # Fjerner kanten omkring grafen
-    ).configure_axis(
-        grid=False # Fjerner gridlines
-    ),
-    use_container_width=True
-)
+                chart = alt.Chart(hif_recent).mark_line(color='#C41E3A', point=True).encode(
+                    x=alt.X('index:O', axis=None),
+                    y=alt.Y(f'{col}:Q', axis=None, scale=alt.Scale(zero=False))
+                ).properties(height=100).configure_view(strokeWidth=0).configure_axis(grid=False)
+                st.altair_chart(chart, use_container_width=True)
                 
 if __name__ == "__main__":
     vis_side()
