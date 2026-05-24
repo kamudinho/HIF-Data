@@ -202,7 +202,7 @@ def vis_side():
     df_avg = pd.DataFrame.from_dict(data_dict, orient='index', columns=['Gennemsnit'])
 
     # 5. Layout med roteret tabel
-    t_col1, t_col2, t_col3 = st.columns([2, 1, 1])
+    t_col1, t_col2, t_col3 = st.columns([1, 1, 1])
     with t_col1:
         st.markdown("###### Hvidovre IF - Gennemsnit pr. kamp")
         # Vis tabellen uden index-navn, men med metric-navne som rækker
