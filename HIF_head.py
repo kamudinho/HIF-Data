@@ -160,34 +160,33 @@ def vis_side():
         with st.container(border=True):
             st.markdown('<div class="card-title"><span>SCOUTING</span></div>', unsafe_allow_html=True)
 
-    # Række 2: Sæson Snit + Trendlines grid
+    # Række 2: Sæson Snit (inde i border) + Trendlines grid (udenfor)
+    
+    # 1. Sæson Snit-feltet alene i en border
     with st.container(border=True):
-        st.markdown('<div class="card-title"><span>SÆSON SNIT & TRENDS</span></div>', unsafe_allow_html=True)
-        # Hovedinddeling: 1 kolonne til Snit, 2 kolonner til Trends
-        main_col, trend_area = st.columns([1, 2])
-        
+        st.markdown('<div class="card-title"><span>SÆSON SNIT (PR. 90)</span></div>', unsafe_allow_html=True)
         per90 = beregn_per_90(df_stats, HIF_UUID)
-        with main_col:
-            st.metric("Nyt Snit", f"{sum(per90.values())/len(per90):.2f}" if per90 else "0.0")
-        
-        with trend_area:
-            # 2x2 grid til grafer
-            r1_c1, r1_c2 = st.columns(2)
-            r2_c1, r2_c2 = st.columns(2)
-            
-            # Trend data beregning
-            hif_recent = df_stats[((df_stats['CONTESTANTHOME_OPTAUUID'].str.upper() == HIF_UUID.strip().upper()) | (df_stats['CONTESTANTAWAY_OPTAUUID'].str.upper() == HIF_UUID.strip().upper()))].copy()
-            hif_recent['PLOT_GOALS'] = hif_recent.apply(lambda r: r['TOTAL_HOME_SCORE'] if r['CONTESTANTHOME_OPTAUUID'].upper() == HIF_UUID else r['TOTAL_AWAY_SCORE'], axis=1)
-            hif_recent['PLOT_XG'] = hif_recent.apply(lambda r: r['HOME_XG'] if r['CONTESTANTHOME_OPTAUUID'].upper() == HIF_UUID else r['AWAY_XG'], axis=1)
-            hif_recent['PLOT_SHOTS'] = hif_recent.apply(lambda r: r['HOME_SHOTS'] if r['CONTESTANTHOME_OPTAUUID'].upper() == HIF_UUID else r['AWAY_SHOTS'], axis=1)
-            hif_recent['PLOT_TOUCHES'] = hif_recent.apply(lambda r: r['HOME_TOUCHES'] if r['CONTESTANTHOME_OPTAUUID'].upper() == HIF_UUID else r['AWAY_TOUCHES'], axis=1)
-            hif_recent['index'] = range(1, len(hif_recent) + 1)
-            
-            metrics = [("Mål", "PLOT_GOALS", r1_c1), ("xG", "PLOT_XG", r1_c2), ("Skud", "PLOT_SHOTS", r2_c1), ("Touches", "PLOT_TOUCHES", r2_c2)]
-            for name, col, target in metrics:
-                with target:
-                    st.caption(name)
-                    st.altair_chart(alt.Chart(hif_recent).mark_line(color='#C41E3A').encode(x='index:O', y=f"{col}:Q").properties(height=100), use_container_width=True)
+        st.metric("Nyt Snit", f"{sum(per90.values())/len(per90):.2f}" if per90 else "0.0")
 
+    # 2. Trendlines grid (udenfor border)
+    st.markdown('<div class="card-title" style="margin-top: 20px;"><span>SÆSON TRENDS</span></div>', unsafe_allow_html=True)
+    
+    r1_c1, r1_c2 = st.columns(2)
+    r2_c1, r2_c2 = st.columns(2)
+    
+    # Trend data beregning
+    hif_recent = df_stats[((df_stats['CONTESTANTHOME_OPTAUUID'].str.upper() == HIF_UUID.strip().upper()) | (df_stats['CONTESTANTAWAY_OPTAUUID'].str.upper() == HIF_UUID.strip().upper()))].copy()
+    hif_recent['PLOT_GOALS'] = hif_recent.apply(lambda r: r['TOTAL_HOME_SCORE'] if r['CONTESTANTHOME_OPTAUUID'].upper() == HIF_UUID else r['TOTAL_AWAY_SCORE'], axis=1)
+    hif_recent['PLOT_XG'] = hif_recent.apply(lambda r: r['HOME_XG'] if r['CONTESTANTHOME_OPTAUUID'].upper() == HIF_UUID else r['AWAY_XG'], axis=1)
+    hif_recent['PLOT_SHOTS'] = hif_recent.apply(lambda r: r['HOME_SHOTS'] if r['CONTESTANTHOME_OPTAUUID'].upper() == HIF_UUID else r['AWAY_SHOTS'], axis=1)
+    hif_recent['PLOT_TOUCHES'] = hif_recent.apply(lambda r: r['HOME_TOUCHES'] if r['CONTESTANTHOME_OPTAUUID'].upper() == HIF_UUID else r['AWAY_TOUCHES'], axis=1)
+    hif_recent['index'] = range(1, len(hif_recent) + 1)
+    
+    metrics = [("Mål", "PLOT_GOALS", r1_c1), ("xG", "PLOT_XG", r1_c2), ("Skud", "PLOT_SHOTS", r2_c1), ("Touches", "PLOT_TOUCHES", r2_c2)]
+    
+    for name, col, target in metrics:
+        with target:
+            st.caption(name)
+            st.altair_chart(alt.Chart(hif_recent).mark_line(color='#C41E3A').encode(x='index:O', y=f"{col}:Q").properties(height=100), use_container_width=True)
 if __name__ == "__main__":
     vis_side()
