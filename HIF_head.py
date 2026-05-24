@@ -281,13 +281,24 @@ def vis_side():
                 
                 # Beregn gennemsnit
                 hif_avg = hif_recent[col].mean()
-                # Find korresponderende liga-kolonne (HOME/AWAY)
-                liga_col = col.replace("PLOT_", "HOME_") if "PLOT_GOALS" in col else col.replace("PLOT_", "HOME_")
-                # Forenklet liga-snit
-                liga_avg = pd.concat([played[col.replace("PLOT_", "HOME_")], played[col.replace("PLOT_", "AWAY_")]]).mean()
+                
+                # RETTELSE HER: Definer korrekte kolonnenavne for liga-snit
+                # Vi skal mappe vores plot-kolonner tilbage til de originale kolonner
+                map_dict = {
+                    "PLOT_GOALS": ('TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE'),
+                    "PLOT_XG": ('HOME_XG', 'AWAY_XG'),
+                    "PLOT_SHOTS": ('HOME_SHOTS', 'AWAY_SHOTS'),
+                    "PLOT_TOUCHES": ('HOME_TOUCHES', 'AWAY_TOUCHES')
+                }
+                
+                h_col, a_col = map_dict.get(col)
+                liga_avg = pd.concat([played[h_col], played[a_col]]).mean()
 
-                # Basis linje
-                line = alt.Chart(hif_recent).mark_line(color='#AAAAAA', point=alt.MarkConfig(color='#C41E3A', filled=True)).encode(
+                # Basis linje (Grå linje, røde prikker)
+                line = alt.Chart(hif_recent).mark_line(
+                    color='#AAAAAA', 
+                    point=alt.MarkConfig(color='#C41E3A', filled=True)
+                ).encode(
                     x=alt.X('index:O', axis=None),
                     y=alt.Y(f'{col}:Q', axis=None, scale=alt.Scale(zero=False))
                 )
@@ -295,7 +306,7 @@ def vis_side():
                 # HIF gennemsnitslinje (stiplet rød)
                 hif_rule = alt.Chart(pd.DataFrame({'y': [hif_avg]})).mark_rule(color='#C41E3A', strokeDash=[3,3]).encode(y='y:Q')
                 
-                # Liga gennemsnitslinje (stiplet grå/blå)
+                # Liga gennemsnitslinje (stiplet sort)
                 liga_rule = alt.Chart(pd.DataFrame({'y': [liga_avg]})).mark_rule(color='#000000', strokeDash=[2,2], opacity=0.4).encode(y='y:Q')
                 
                 st.altair_chart(line + hif_rule + liga_rule, use_container_width=True)
