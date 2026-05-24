@@ -245,8 +245,8 @@ def vis_side():
                     diff_color = "#28a745" if r['Diff'] > 0 else "#dc3545"
                     html += f"""<tr>
                         <td class='stats-label'>{r['Stat']}</td>
-                        <td class='stats-value'>{r['HIF']:.1f}</td>
-                        <td class='stats-value'>{r['Liga']:.1f}</td>
+                        <td class='stats-value'>{r['HIF']:.2f}</td>
+                        <td class='stats-value'>{r['Liga']:.2f}</td>
                         <td class='stats-value' style='color:{diff_color}; font-weight:800;'>{r['Diff']:+.2f}</td>
                     </tr>"""
                 html += "</table>"
