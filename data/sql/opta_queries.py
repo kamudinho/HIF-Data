@@ -66,6 +66,8 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
                     MATCH_OPTAUUID, CONTESTANT_OPTAUUID,
                     MAX(CASE WHEN STAT_TYPE = 'possessionPercentage' THEN STAT_TOTAL END) AS POSSESSION,
                     MAX(CASE WHEN STAT_TYPE = 'totalPass' THEN STAT_TOTAL END) AS TOTAL_PASSES,
+                    MAX(CASE WHEN STAT_TYPE = 'wonCorners' THEN STAT_TOTAL END) AS CORNERS,  # NY
+                    MAX(CASE WHEN STAT_TYPE = 'totalCross' THEN STAT_TOTAL END) AS CROSSES,   # NY
                     MAX(CASE WHEN STAT_TYPE = 'totalYellowCard' THEN STAT_TOTAL END) AS YELLOW_CARDS,
                     MAX(FORMATIONUSED) AS FORMATION
                 FROM {DB}.OPTA_MATCHSTATS
