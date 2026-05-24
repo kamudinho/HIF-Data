@@ -282,8 +282,6 @@ def vis_side():
                 # Beregn gennemsnit
                 hif_avg = hif_recent[col].mean()
                 
-                # RETTELSE HER: Definer korrekte kolonnenavne for liga-snit
-                # Vi skal mappe vores plot-kolonner tilbage til de originale kolonner
                 map_dict = {
                     "PLOT_GOALS": ('TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE'),
                     "PLOT_XG": ('HOME_XG', 'AWAY_XG'),
@@ -294,14 +292,14 @@ def vis_side():
                 h_col, a_col = map_dict.get(col)
                 liga_avg = pd.concat([played[h_col], played[a_col]]).mean()
 
-                # Basis linje (Grå linje, røde prikker)
+                # Basis linje med height=120
                 line = alt.Chart(hif_recent).mark_line(
                     color='#AAAAAA', 
                     point=alt.MarkConfig(color='#C41E3A', filled=True)
                 ).encode(
                     x=alt.X('index:O', axis=None),
                     y=alt.Y(f'{col}:Q', axis=None, scale=alt.Scale(zero=False))
-                )
+                ).properties(height=120) # Højden er opdateret her
                 
                 # HIF gennemsnitslinje (stiplet rød)
                 hif_rule = alt.Chart(pd.DataFrame({'y': [hif_avg]})).mark_rule(color='#C41E3A', strokeDash=[3,3]).encode(y='y:Q')
