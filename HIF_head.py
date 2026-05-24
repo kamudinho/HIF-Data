@@ -201,7 +201,7 @@ def vis_side():
         ),
         tooltip=['index', f'{col}:Q']
     ).properties(
-        height=100
+        height=120
     ).interactive(), # Gør det muligt at zoome/panere lidt
     use_container_width=True
 )                
