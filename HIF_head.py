@@ -276,10 +276,15 @@ def vis_side():
         for name, col, target in metrics:
             with target:
                 st.caption(name)
-                chart = alt.Chart(hif_recent).mark_line(color='#C41E3A', point=True).encode(
+                # Ændret: color='#AAAAAA' for linjen og point=alt.MarkConfig(color='#C41E3A')
+                chart = alt.Chart(hif_recent).mark_line(
+                    color='#AAAAAA', 
+                    point=alt.MarkConfig(color='#C41E3A', filled=True)
+                ).encode(
                     x=alt.X('index:O', axis=None),
                     y=alt.Y(f'{col}:Q', axis=None, scale=alt.Scale(zero=False))
                 ).properties(height=80).configure_view(strokeWidth=0)
+                
                 st.altair_chart(chart, use_container_width=True)
                 
 if __name__ == "__main__":
