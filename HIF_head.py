@@ -89,17 +89,30 @@ def beregn_hold_stats(df_stats, team_uuid):
     return {"gf": f"{gf / total_matches:.1f}", "ga": f"{ga / total_matches:.1f}", "xgf": f"{xgf / total_matches:.2f}", "xga": f"{xga / total_matches:.2f}", "poss": f"{int(round(poss_all))}%" if pd.notnull(poss_all) else "0%"}
 
 def beregn_per_90(df_stats, team_uuid):
-    hif_matches = df_stats[((df_stats['CONTESTANTHOME_OPTAUUID'].str.upper() == team_uuid.upper()) | (df_stats['CONTESTANTAWAY_OPTAUUID'].str.upper() == team_uuid.upper())) & (df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False))].copy()
+    hif_matches = df_stats[((df_stats['CONTESTANTHOME_OPTAUUID'].str.upper() == team_uuid.upper()) | 
+                           (df_stats['CONTESTANTAWAY_OPTAUUID'].str.upper() == team_uuid.upper())) & 
+                          (df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False))].copy()
+    
     if len(hif_matches) == 0: return None
-    for col in ['TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE', 'HOME_XG', 'AWAY_XG', 'HOME_SHOTS', 'AWAY_SHOTS', 'HOME_TOUCHES', 'AWAY_TOUCHES']:
-        hif_matches[col] = pd.to_numeric(hif_matches[col], errors='coerce').fillna(0)
-    stats = {
-        "Mål": hif_matches.apply(lambda r: r['TOTAL_HOME_SCORE'] if r['CONTESTANTHOME_OPTAUUID'].upper() == team_uuid.upper() else r['TOTAL_AWAY_SCORE'], axis=1).sum(),
-        "xG": hif_matches.apply(lambda r: r['HOME_XG'] if r['CONTESTANTHOME_OPTAUUID'].upper() == team_uuid.upper() else r['AWAY_XG'], axis=1).sum(),
-        "Skud": hif_matches.apply(lambda r: r['HOME_SHOTS'] if r['CONTESTANTHOME_OPTAUUID'].upper() == team_uuid.upper() else r['AWAY_SHOTS'], axis=1).sum(),
-        "Touches": hif_matches.apply(lambda r: r['HOME_TOUCHES'] if r['CONTESTANTHOME_OPTAUUID'].upper() == team_uuid.upper() else r['AWAY_TOUCHES'], axis=1).sum()
+    
+    # Konverter kolonner til numeriske
+    for col in ['TOTAL_HOME_SCORE', 'HOME_XG', 'HOME_SHOTS', 'HOME_TOUCHES', 'HOME_PASSES', 'HOME_CORNERS', 'HOME_CROSSES',
+                'TOTAL_AWAY_SCORE', 'AWAY_XG', 'AWAY_SHOTS', 'AWAY_TOUCHES', 'AWAY_PASSES', 'AWAY_CORNERS', 'AWAY_CROSSES']:
+        if col in hif_matches.columns: hif_matches[col] = pd.to_numeric(hif_matches[col], errors='coerce').fillna(0)
+    
+    # Hjælpefunktion til at hente stats baseret på om HIF er Home eller Away
+    def get_val(r, home_col, away_col):
+        return r[home_col] if str(r['CONTESTANTHOME_OPTAUUID']).upper() == team_uuid.upper() else r[away_col]
+
+    return {
+        "Mål": hif_matches.apply(lambda r: get_val(r, 'TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE'), axis=1).mean(),
+        "xG": hif_matches.apply(lambda r: get_val(r, 'HOME_XG', 'AWAY_XG'), axis=1).mean(),
+        "Skud": hif_matches.apply(lambda r: get_val(r, 'HOME_SHOTS', 'AWAY_SHOTS'), axis=1).mean(),
+        "Touches": hif_matches.apply(lambda r: get_val(r, 'HOME_TOUCHES', 'AWAY_TOUCHES'), axis=1).mean(),
+        "Pasninger": hif_matches.apply(lambda r: get_val(r, 'HOME_PASSES', 'AWAY_PASSES'), axis=1).mean(),
+        "Hjørnespark": hif_matches.apply(lambda r: get_val(r, 'HOME_CORNERS', 'AWAY_CORNERS'), axis=1).mean(),
+        "Indlæg": hif_matches.apply(lambda r: get_val(r, 'HOME_CROSSES', 'AWAY_CROSSES'), axis=1).mean()
     }
-    return {k: v / len(hif_matches) for k, v in stats.items()}
 
 def vis_side():
     apply_custom_style()
@@ -164,16 +177,16 @@ def vis_side():
     main_col, trend_area = st.columns([1, 2])
     
     with main_col:
-        with st.container(border=True):
-            st.markdown('<div class="card-title"><span>SÆSON SNIT (PR. 90)</span></div>', unsafe_allow_html=True)
-            per90 = beregn_per_90(df_stats, HIF_UUID)
-            # Vis alle 4 stats i en pænere liste frem for ét gennemsnitstal
-            if per90:
-                for k, v in per90.items():
-                    st.metric(k, f"{v:.2f}")
-            else:
-                st.metric("Nyt Snit", "0.0")
-
+    with st.container(border=True):
+        st.markdown('<div class="card-title"><span>SÆSON SNIT (PR. KAMP)</span></div>', unsafe_allow_html=True)
+        stats = beregn_per_90(df_stats, HIF_UUID)
+        if stats:
+            html = "<table class='stats-table'>"
+            for k, v in stats.items():
+                html += f"<tr><td class='stats-label'>{k}</td><td class='stats-value'>{v:.1f}</td></tr>"
+            html += "</table>"
+            st.markdown(html, unsafe_allow_html=True)
+            
     with trend_area:
         # 1. Filtrering af data til graferne
         hif_recent = df_stats[
