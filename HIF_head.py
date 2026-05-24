@@ -247,7 +247,7 @@ def vis_side():
                         <td class='stats-label'>{r['Stat']}</td>
                         <td class='stats-value'>{r['HIF']:.1f}</td>
                         <td class='stats-value'>{r['Liga']:.1f}</td>
-                        <td class='stats-value' style='color:{diff_color}; font-weight:800;'>{r['Diff']:+.1f}</td>
+                        <td class='stats-value' style='color:{diff_color}; font-weight:800;'>{r['Diff']:+.2f}</td>
                     </tr>"""
                 html += "</table>"
                 st.markdown(html, unsafe_allow_html=True)
