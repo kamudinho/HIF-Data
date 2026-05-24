@@ -177,15 +177,15 @@ def vis_side():
     main_col, trend_area = st.columns([1, 2])
     
     with main_col:
-    with st.container(border=True):
-        st.markdown('<div class="card-title"><span>SÆSON SNIT (PR. KAMP)</span></div>', unsafe_allow_html=True)
-        stats = beregn_per_90(df_stats, HIF_UUID)
-        if stats:
-            html = "<table class='stats-table'>"
-            for k, v in stats.items():
-                html += f"<tr><td class='stats-label'>{k}</td><td class='stats-value'>{v:.1f}</td></tr>"
-            html += "</table>"
-            st.markdown(html, unsafe_allow_html=True)
+        with st.container(border=True): # Denne skal være indrykket under 'with main_col:'
+            st.markdown('<div class="card-title"><span>SÆSON SNIT (PR. KAMP)</span></div>', unsafe_allow_html=True)
+            stats = beregn_per_90(df_stats, HIF_UUID)
+            if stats:
+                html = "<table class='stats-table'>"
+                for k, v in stats.items():
+                    html += f"<tr><td class='stats-label'>{k}</td><td class='stats-value'>{v:.1f}</td></tr>"
+                html += "</table>"
+                st.markdown(html, unsafe_allow_html=True)
             
     with trend_area:
         # 1. Filtrering af data til graferne
