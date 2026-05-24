@@ -91,7 +91,7 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
             MAX(CASE WHEN STAT_TYPE = 'totalCross' THEN STAT_TOTAL END) AS CROSSES,
             MAX(CASE WHEN STAT_TYPE = 'totalYellowCard' THEN STAT_TOTAL END) AS YELLOW_CARDS, 
             MAX(FORMATIONUSED) AS FORMATION 
-            FROM {DB}.OPTA_OPTA_MATCHSTATS WHERE MATCH_OPTAUUID IN ({match_id_subquery}) GROUP BY 1, 2
+            FROM {DB}.OPTA_MATCHSTATS WHERE MATCH_OPTAUUID IN ({match_id_subquery}) GROUP BY 1, 2
         )
         SELECT b.*, 
         sh.XG AS HOME_XG, sh.SHOTS AS HOME_SHOTS, sh.TOUCHES_IN_BOX AS HOME_TOUCHES, 
