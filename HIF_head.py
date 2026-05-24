@@ -47,8 +47,8 @@ def apply_custom_style():
             .card-title { color: #1a1a1a; font-size: 11px; font-weight: 700; margin-bottom: 12px; text-transform: uppercase; border-bottom: 1px solid #f0f0f0; padding-bottom: 6px; display: flex; justify-content: space-between; }
             .title-date { color: #888; font-weight: 500; text-transform: none; font-size: 11px; }
             .stats-table { width: 100%; font-size: 10px; border-collapse: collapse; table-layout: fixed; }
-            .stats-label { color: #666; font-weight: 700; width: 45%; padding: 2px 0; }
-            .stats-value { text-align: right; font-weight: 700; color: #111; padding: 2px 0; }
+            .stats-label { color: #666; font-weight: 700; width: 60%; padding: 4px 0; }
+            .stats-value { text-align: right; font-weight: 700; color: #111; padding: 4px 0; }
             .form-wrapper { display: flex; justify-content: space-between; gap: 4px; width: 100%; margin-top: 15px; padding-bottom: 10px; }
             .form-column { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; flex: 1; margin-bottom: 2px; }
             .res-pill { width: 100%; border-radius: 4px; color: white; text-align: center; font-size: 9px; font-weight: 800; padding: 3px 0; margin-bottom: 4px; }
@@ -101,7 +101,6 @@ def beregn_per_90(df_stats, team_uuid):
     total_matches = len(hif_matches)
     if total_matches == 0: return None
     
-    # Konverter kolonner til numerisk
     for col in ['TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE', 'HOME_XG', 'AWAY_XG', 'HOME_SHOTS', 'AWAY_SHOTS', 'HOME_TOUCHES', 'AWAY_TOUCHES']:
         hif_matches[col] = pd.to_numeric(hif_matches[col], errors='coerce').fillna(0)
     
@@ -126,7 +125,7 @@ def vis_side():
     opta_to_name = {str(v['opta_uuid']).strip().upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
     df_matches['MATCH_DATE_FULL'] = pd.to_datetime(df_matches['MATCH_DATE_FULL'], errors='coerce').dt.tz_localize(None)
     
-    col1, col2, col3 = st.columns([1, 1, 1])
+    col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
     
     with col1:
         with st.container(border=True):
@@ -144,17 +143,6 @@ def vis_side():
                 opp_logo = TEAMS.get(opp_name, {}).get("logo", "")
                 stats_html = f"""<table class='stats-table' style='width: 100%;'><tr><td style='width: 34%;'></td><td style='text-align: center; width: 33%; border-bottom: 1px solid #eee; padding-bottom: 4px;'><img src='{hif_logo}' style='width: 22px; height: 22px; object-fit: contain;'></td><td style='text-align: center; width: 33%; border-bottom: 1px solid #eee; padding-bottom: 4px;'><img src='{opp_logo}' style='width: 22px; height: 22px; object-fit: contain;'></td></tr><tr><td class='stats-label' style='text-align: left;'>Possession</td><td class='stats-value' style='text-align: center;'>{hif_stats['poss']}</td><td class='stats-value' style='text-align: center;'>{opp_stats['poss']}</td></tr><tr><td class='stats-label' style='text-align: left;'>Mål for/imod</td><td class='stats-value' style='text-align: center;'>{hif_stats['gf']}/{hif_stats['ga']}</td><td class='stats-value' style='text-align: center;'>{opp_stats['gf']}/{opp_stats['ga']}</td></tr><tr><td class='stats-label' style='text-align: left;'>xG for/imod</td><td class='stats-value' style='text-align: center;'>{hif_stats['xgf']}/{hif_stats['xga']}</td><td class='stats-value' style='text-align: center;'>{opp_stats['xgf']}/{opp_stats['xga']}</td></tr></table>"""
                 st.markdown(stats_html, unsafe_allow_html=True)
-                opp_m = df_matches[((df_matches['CONTESTANTHOME_OPTAUUID'] == opp_id) | (df_matches['CONTESTANTAWAY_OPTAUUID'] == opp_id)) & (df_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False))].sort_values('MATCH_DATE_FULL', ascending=False).head(5)
-                if not opp_m.empty:
-                    f_items = ""
-                    for _, m in opp_m.iloc[::-1].iterrows():
-                        is_h = str(m['CONTESTANTHOME_OPTAUUID']).upper() == str(opp_id).upper()
-                        h_s, a_s = int(m['TOTAL_HOME_SCORE']), int(m['TOTAL_AWAY_SCORE'])
-                        res_col = "#28a745" if (is_h and h_s > a_s) or (not is_h and a_s > h_s) else ("#6c757d" if h_s == a_s else "#dc3545")
-                        o_uuid = m['CONTESTANTAWAY_OPTAUUID'] if is_h else m['CONTESTANTHOME_OPTAUUID']
-                        o_logo = TEAMS.get(opta_to_name.get(str(o_uuid).upper(), ""), {}).get("logo", "")
-                        f_items += f"<div class='form-column'><div class='res-pill' style='background:{res_col};'>{h_s}-{a_s}</div><img src='{o_logo}' class='legend-logo'></div>"
-                    st.markdown(f"<div class='form-wrapper'>{f_items}</div>", unsafe_allow_html=True)
 
     with col2:
         with st.container(border=True):
@@ -163,23 +151,25 @@ def vis_side():
                 df_t = pd.read_csv("data/players/1div_overskrivning.csv")
                 df_t['TS_DATE'] = pd.to_datetime(df_t['TIMESTAMP'], errors='coerce')
                 df_t = df_t.dropna(subset=['TS_DATE'])
-                for _, r in df_t.sort_values('TS_DATE', ascending=False).head(7).iterrows():
+                for _, r in df_t.sort_values('TS_DATE', ascending=False).head(5).iterrows():
                     st.markdown(f"<div class='list-item'><span>{r['TS_DATE'].strftime('%d/%m')}: <b>{r['NAVN']}</b></span><span class='prev-club'>{r.get('SENESTE_KLUB', '?')}</span><span class='transfer-club'>➔ {r.get('KLUB', '?')}</span></div>", unsafe_allow_html=True)
-                if st.button("Se alle transfers", key="transfers_btn", use_container_width=True): vis_transfer_dialog(df_t)
-            except: st.caption("Kunne ikke indlæse transfer-data")
+                if st.button("Se alle", key="transfers_btn", use_container_width=True): vis_transfer_dialog(df_t)
+            except: st.caption("Kunne ikke indlæse data")
 
     with col3:
         with st.container(border=True):
             st.markdown('<div class="card-title"><span>SCOUTING</span></div>', unsafe_allow_html=True)
 
-    # --- PER 90 SEKTION ---
-    st.divider()
-    st.markdown("##### Hvidovre IF - Gennemsnit pr. 90 min")
-    hif_per90 = beregn_per_90(df_stats, HIF_UUID)
-    if hif_per90:
-        cols = st.columns(4)
-        for i, (key, val) in enumerate(hif_per90.items()):
-            cols[i].metric(label=key, value=f"{val:.2f}")
+    with col4:
+        with st.container(border=True):
+            st.markdown('<div class="card-title"><span>SÆSON SNIT (PR. 90)</span></div>', unsafe_allow_html=True)
+            per90 = beregn_per_90(df_stats, HIF_UUID)
+            if per90:
+                stats_html = "<table class='stats-table' style='width: 100%;'>"
+                for k, v in per90.items():
+                    stats_html += f"<tr><td class='stats-label'>{k}</td><td class='stats-value'>{v:.2f}</td></tr>"
+                stats_html += "</table>"
+                st.markdown(stats_html, unsafe_allow_html=True)
 
     # --- TRENDLINES ---
     st.caption("##### Sæsontrend - Hvidovre IF")
