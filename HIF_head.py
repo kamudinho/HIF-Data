@@ -163,14 +163,14 @@ def vis_side():
     # Række 2: Sæson Snit (4 kolonner)
     with st.container(border=True):
         st.markdown('<div class="card-title"><span>SÆSON SNIT (PR. 90)</span></div>', unsafe_allow_html=True)
-        t_col1, col1, col2, col3 = st.columns(4)
+        t_col1, t_col2, t_col3, t_col4 = st.columns(4)
         # Beregn værdier dynamisk
         per90 = beregn_per_90(df_stats, HIF_UUID)
         if per90:
             with t_col1: st.metric("Nyt Snit", f"{sum(per90.values())/len(per90):.2f}")
-            with col1: st.metric("Mål", f"{per90.get('Mål', 0):.2f}")
-            with col2: st.metric("xG", f"{per90.get('xG', 0):.2f}")
-            with col3: st.metric("Skud", f"{per90.get('Skud', 0):.2f}")
+            with t_col2: st.metric("Mål", f"{per90.get('Mål', 0):.2f}")
+            with t_col3: st.metric("xG", f"{per90.get('xG', 0):.2f}")
+            with t_col4: st.metric("Skud", f"{per90.get('Skud', 0):.2f}")
 
     # --- TRENDLINES BEREGNING OG PLOT ---
     st.caption("##### Sæsontrend - Hvidovre IF")
