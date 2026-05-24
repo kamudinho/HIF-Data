@@ -195,7 +195,7 @@ def vis_side():
         'xG': hif_recent['PLOT_XG'].mean(),
         'Skud': hif_recent['PLOT_SHOTS'].mean(),
         'Touches': hif_recent['PLOT_TOUCHES'].mean(),
-        'Poss %': hif_recent['PLOT_POSS'].mean()
+        'Possession': hif_recent['PLOT_POSS'].mean()
     }
     
     # Konverter dict til DF og transponer så metrics er rækker
@@ -204,7 +204,7 @@ def vis_side():
     # 5. Layout med roteret tabel
     t_col1, t_col2, t_col3 = st.columns([1, 1, 1])
     with t_col1:
-        st.markdown("###### Hvidovre IF - Gennemsnit pr. kamp")
+        st.caption("###### Hvidovre IF - Gennemsnit pr. kamp")
         # Vis tabellen uden index-navn, men med metric-navne som rækker
         st.dataframe(df_avg.round(2), use_container_width=True)
 
@@ -213,7 +213,7 @@ def vis_side():
             x='index:O', 
             y=f'{col_name}:Q', 
             tooltip=[alt.Tooltip(col_name, title=title, format=fmt)]
-        ).properties(height=100)
+        ).properties(height=120)
         return (base.mark_line(color='#cccccc', strokeWidth=2) + 
                 base.mark_circle(size=50, color='#C41E3A') + 
                 alt.Chart(hif_recent).mark_rule(color='#333333', strokeDash=[4,4]).encode(y=f'mean({col_name}):Q')).interactive()
@@ -228,6 +228,7 @@ def vis_side():
         st.caption(f"Touches (Snit: {hif_recent['PLOT_TOUCHES'].mean():.0f})")
         st.altair_chart(byg_chart('PLOT_TOUCHES', 'Touches', '.0f'), use_container_width=True)
         st.caption(f"Possession (Snit: {hif_recent['PLOT_POSS'].mean():.1f})")
-        st.altair_chart(byg_chart('PLOT_POSS', 'Poss %', '.1f'), use_container_width=True)                    
+        st.altair_chart(byg_chart('PLOT_POSS', 'Poss %', '.1f'), use_container_width=True) 
+        
 if __name__ == "__main__":
     vis_side()
