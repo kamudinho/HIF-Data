@@ -160,18 +160,19 @@ def vis_side():
         with st.container(border=True):
             st.markdown('<div class="card-title"><span>SCOUTING</span></div>', unsafe_allow_html=True)
 
-    with col4:
-        with st.container(border=True):
-            st.markdown('<div class="card-title"><span>SÆSON SNIT (PR. 90)</span></div>', unsafe_allow_html=True)
-            per90 = beregn_per_90(df_stats, HIF_UUID)
-            if per90:
-                stats_html = "<table class='stats-table' style='width: 100%;'>"
-                for k, v in per90.items():
-                    stats_html += f"<tr><td class='stats-label'>{k}</td><td class='stats-value'>{v:.2f}</td></tr>"
-                stats_html += "</table>"
-                st.markdown(stats_html, unsafe_allow_html=True)
+    # Række 2: Sæson Snit (4 kolonner)
+    with st.container(border=True):
+        st.markdown('<div class="card-title"><span>SÆSON SNIT (PR. 90)</span></div>', unsafe_allow_html=True)
+        t_col1, col1, col2, col3 = st.columns(4)
+        # Beregn værdier dynamisk
+        per90 = beregn_per_90(df_stats, HIF_UUID)
+        if per90:
+            with t_col1: st.metric("Nyt Snit", f"{sum(per90.values())/len(per90):.2f}")
+            with col1: st.metric("Mål", f"{per90.get('Mål', 0):.2f}")
+            with col2: st.metric("xG", f"{per90.get('xG', 0):.2f}")
+            with col3: st.metric("Skud", f"{per90.get('Skud', 0):.2f}")
 
-    # --- TRENDLINES ---
+    # --- TRENDLINES BEREGNING OG PLOT ---
     st.caption("##### Sæsontrend - Hvidovre IF")
     hif_recent = df_stats[
         ((df_stats['CONTESTANTHOME_OPTAUUID'].str.upper() == HIF_UUID.strip().upper()) | 
@@ -180,49 +181,32 @@ def vis_side():
     ].sort_values('MATCH_DATE_FULL', ascending=True).copy()
 
     if not hif_recent.empty:
-        for col in ['TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE', 'HOME_XG', 'AWAY_XG', 'HOME_SHOTS', 'AWAY_SHOTS', 'HOME_TOUCHES', 'AWAY_TOUCHES', 'HOME_POSS', 'AWAY_POSS', 'HOME_FORWARD_PASSES', 'AWAY_FORWARD_PASSES']:
+        # Datarensning til plotting
+        for col in ['TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE', 'HOME_XG', 'AWAY_XG', 'HOME_SHOTS', 'AWAY_SHOTS', 'HOME_TOUCHES', 'AWAY_TOUCHES']:
             hif_recent[col] = pd.to_numeric(hif_recent[col], errors='coerce')
             
         hif_recent['PLOT_GOALS'] = hif_recent.apply(lambda r: r['TOTAL_HOME_SCORE'] if r['CONTESTANTHOME_OPTAUUID'].upper() == HIF_UUID else r['TOTAL_AWAY_SCORE'], axis=1)
         hif_recent['PLOT_XG'] = hif_recent.apply(lambda r: r['HOME_XG'] if r['CONTESTANTHOME_OPTAUUID'].upper() == HIF_UUID else r['AWAY_XG'], axis=1)
         hif_recent['PLOT_SHOTS'] = hif_recent.apply(lambda r: r['HOME_SHOTS'] if r['CONTESTANTHOME_OPTAUUID'].upper() == HIF_UUID else r['AWAY_SHOTS'], axis=1)
-        hif_recent['PLOT_TOUCHES'] = hif_recent.apply(lambda r: r['HOME_TOUCHES'] if r['CONTESTANTHOME_OPTAUUID'].upper() == HIF_UUID else r['AWAY_TOUCHES'], axis=1)
-        hif_recent['PLOT_POSS'] = hif_recent.apply(lambda r: r['HOME_POSS'] if r['CONTESTANTHOME_OPTAUUID'].upper() == HIF_UUID else r['AWAY_POSS'], axis=1)
-        hif_recent['PLOT_FWD'] = hif_recent.apply(lambda r: r['HOME_FORWARD_PASSES'] if r['CONTESTANTHOME_OPTAUUID'].upper() == HIF_UUID else r['AWAY_FORWARD_PASSES'], axis=1)
-        
         hif_recent = hif_recent.reset_index(drop=True)
         hif_recent['index'] = hif_recent.index + 1
 
         metrics = [
             {"name": "Mål", "col": "PLOT_GOALS", "fmt": ".0f"}, 
             {"name": "xG", "col": "PLOT_XG", "fmt": ".2f"}, 
-            {"name": "Skud", "col": "PLOT_SHOTS", "fmt": ".0f"}, 
-            {"name": "Touches", "col": "PLOT_TOUCHES", "fmt": ".0f"}, 
-            {"name": "Possession", "col": "PLOT_POSS", "fmt": ".1f"}, 
-            {"name": "Fwd Passes", "col": "PLOT_FWD", "fmt": ".0f"}
+            {"name": "Skud", "col": "PLOT_SHOTS", "fmt": ".0f"}
         ]
 
-        hif_recent['MODSTANDER'] = hif_recent.apply(lambda r: r['CONTESTANTAWAY_NAME'] if str(r['CONTESTANTHOME_OPTAUUID']).upper() == HIF_UUID.upper() else r['CONTESTANTHOME_NAME'], axis=1)
-        hif_recent['H_U'] = hif_recent.apply(lambda r: 'H' if str(r['CONTESTANTHOME_OPTAUUID']).upper() == HIF_UUID.upper() else 'U', axis=1)
-        hif_recent['TOOLTIP_VS'] = hif_recent['MODSTANDER'] + " (" + hif_recent['H_U'] + ")"
-
-        for row in range(2):
-            cols = st.columns(3)
-            for i in range(3):
-                idx = row * 3 + i
-                col_name = metrics[idx]['col']
-                avg_val = hif_recent[col_name].mean()
-                with cols[i]:
-                    st.caption(f"{metrics[idx]['name']} (Snit: {avg_val:.2f})")
-                    base = alt.Chart(hif_recent).encode(
-                        x=alt.X('index:O', axis=None),
-                        y=alt.Y(f'{col_name}:Q', axis=None, scale=alt.Scale(zero=False)),
-                        tooltip=[alt.Tooltip('TOOLTIP_VS', title='Modstander'), alt.Tooltip(col_name, title=metrics[idx]['name'], format=metrics[idx]['fmt'])]
-                    ).properties(height=125)
-                    line = base.mark_line(color='#cccccc', strokeWidth=2)
-                    points = base.mark_circle(size=50, color='#C41E3A')
-                    rule = alt.Chart(hif_recent).mark_rule(color='#333333', strokeWidth=1.5, strokeDash=[4, 4]).encode(y=alt.Y(f'mean({col_name}):Q'))
-                    st.altair_chart((line + points + rule).interactive(), use_container_width=True)
+        # Render trends
+        cols = st.columns(3)
+        for i, m in enumerate(metrics):
+            avg_val = hif_recent[m['col']].mean()
+            with cols[i]:
+                st.caption(f"{m['name']} (Snit: {avg_val:.2f})")
+                chart = alt.Chart(hif_recent).mark_line(color='#C41E3A').encode(
+                    x='index:O', y=f"{m['col']}:Q"
+                )
+                st.altair_chart(chart, use_container_width=True)
 
 if __name__ == "__main__":
     vis_side()
