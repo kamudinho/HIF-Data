@@ -167,68 +167,54 @@ def vis_side():
 
     # --- 2. NEDERSTE SEKTION: Gennemsnitsdata pr. kamp ---
     st.divider()
-    
-    # 1. Definer kolonner der skal renses
-    cols_to_clean = ['TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE', 'HOME_XG', 'AWAY_XG', 
-                     'HOME_SHOTS', 'AWAY_SHOTS', 'HOME_TOUCHES', 'AWAY_TOUCHES', 
-                     'HOME_POSS', 'AWAY_POSS', 'HOME_FORWARD_PASSES', 'AWAY_FORWARD_PASSES']
 
-    # 2. Hent data og rens med det samme
-    hif_recent = df_stats[((df_stats['CONTESTANTHOME_OPTAUUID'].str.upper() == HIF_UUID.strip().upper()) | (df_stats['CONTESTANTAWAY_OPTAUUID'].str.upper() == HIF_UUID.strip().upper())) & (df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False))].copy()
-    
-    for col in cols_to_clean:
-        if col in hif_recent.columns:
-            hif_recent[col] = hif_recent[col].apply(clean_numeric)
+    # 1. Sikr TOOLTIP_VS eksisterer (nødvendig for grafer)
+    hif_recent['TOOLTIP_VS'] = hif_recent.apply(lambda r: (r['CONTESTANTAWAY_NAME'] if r['CONTESTANTHOME_OPTAUUID'].upper() == HIF_UUID else r['CONTESTANTHOME_NAME']) + (" (H)" if r['CONTESTANTHOME_OPTAUUID'].upper() == HIF_UUID else " (U)"), axis=1)
 
-    # 3. Opret PLOT-kolonner (NØDVENDIGT for både tabel og grafer)
-    hif_recent['PLOT_GOALS'] = hif_recent.apply(lambda r: r['TOTAL_HOME_SCORE'] if r['CONTESTANTHOME_OPTAUUID'].upper() == HIF_UUID else r['TOTAL_AWAY_SCORE'], axis=1)
-    hif_recent['PLOT_XG'] = hif_recent.apply(lambda r: r['HOME_XG'] if r['CONTESTANTHOME_OPTAUUID'].upper() == HIF_UUID else r['AWAY_XG'], axis=1)
-    hif_recent['PLOT_SHOTS'] = hif_recent.apply(lambda r: r['HOME_SHOTS'] if r['CONTESTANTHOME_OPTAUUID'].upper() == HIF_UUID else r['AWAY_SHOTS'], axis=1)
-    hif_recent['PLOT_TOUCHES'] = hif_recent.apply(lambda r: r['HOME_TOUCHES'] if r['CONTESTANTHOME_OPTAUUID'].upper() == HIF_UUID else r['AWAY_TOUCHES'], axis=1)
-    hif_recent['PLOT_POSS'] = hif_recent.apply(lambda r: r['HOME_POSS'] if r['CONTESTANTHOME_OPTAUUID'].upper() == HIF_UUID else r['AWAY_POSS'], axis=1)
-    hif_recent = hif_recent.reset_index(drop=True)
-    hif_recent['index'] = hif_recent.index + 1
-
-    # 4. Beregn gennemsnit og Transponer (Roter) tabellen
-    data_dict = {
+    # 2. Beregn gennemsnit (dictionary til HTML)
+    stats = {
         'Mål': hif_recent['PLOT_GOALS'].mean(),
         'xG': hif_recent['PLOT_XG'].mean(),
         'Skud': hif_recent['PLOT_SHOTS'].mean(),
         'Touches': hif_recent['PLOT_TOUCHES'].mean(),
         'Possession': hif_recent['PLOT_POSS'].mean()
     }
-    
-    # Konverter dict til DF og transponer så metrics er rækker
-    df_avg = pd.DataFrame.from_dict(data_dict, orient='index', columns=['Gennemsnit'])
 
-    # 5. Layout med roteret tabel
+    # 3. Layout: Tabel til venstre, grafer til højre
     t_col1, t_col2, t_col3 = st.columns([1, 1, 1])
-    with t_col1:
-        st.caption("###### Hvidovre IF - Gennemsnit pr. kamp")
-        # Vis tabellen uden index-navn, men med metric-navne som rækker
-        st.dataframe(df_avg.round(2), use_container_width=True)
 
+    with t_col1:
+        st.markdown('<div class="card-title"><span>SÆSON GENNEMSNIT</span></div>', unsafe_allow_html=True)
+        # HTML tabel der matcher din Næste Kamp stil
+        html_tabel = "<table class='stats-table' style='width: 100%;'>"
+        for label, val in stats.items():
+            fmt = "%.1f" if label != "xG" else "%.2f"
+            html_tabel += f"<tr><td class='stats-label' style='text-align: left; width: 60%;'>{label}</td><td class='stats-value' style='text-align: right;'>{fmt % val}</td></tr>"
+        html_tabel += "</table>"
+        st.markdown(html_tabel, unsafe_allow_html=True)
+
+    # 4. Opdateret Graf-funktion med TOOLTIP
     def byg_chart(col_name, title, fmt):
         base = alt.Chart(hif_recent).encode(
             x='index:O', 
             y=f'{col_name}:Q', 
-            tooltip=[alt.Tooltip(col_name, title=title, format=fmt)]
-        ).properties(height=120)
+            tooltip=['TOOLTIP_VS', alt.Tooltip(col_name, title=title, format=fmt)]
+        ).properties(height=100)
         return (base.mark_line(color='#cccccc', strokeWidth=2) + 
                 base.mark_circle(size=50, color='#C41E3A') + 
                 alt.Chart(hif_recent).mark_rule(color='#333333', strokeDash=[4,4]).encode(y=f'mean({col_name}):Q')).interactive()
 
     with t_col2:
-        st.caption(f"xG (Snit: {hif_recent['PLOT_XG'].mean():.2f})")
+        st.caption("xG")
         st.altair_chart(byg_chart('PLOT_XG', 'xG', '.2f'), use_container_width=True)
-        st.caption(f"Skud (Snit: {hif_recent['PLOT_SHOTS'].mean():.0f})")
+        st.caption("Skud")
         st.altair_chart(byg_chart('PLOT_SHOTS', 'Skud', '.0f'), use_container_width=True)
 
     with t_col3:
-        st.caption(f"Touches (Snit: {hif_recent['PLOT_TOUCHES'].mean():.0f})")
+        st.caption("Touches")
         st.altair_chart(byg_chart('PLOT_TOUCHES', 'Touches', '.0f'), use_container_width=True)
-        st.caption(f"Possession (Snit: {hif_recent['PLOT_POSS'].mean():.1f})")
-        st.altair_chart(byg_chart('PLOT_POSS', 'Poss %', '.1f'), use_container_width=True) 
+        st.caption("Possession")
+        st.altair_chart(byg_chart('PLOT_POSS', 'Poss %', '.1f'), use_container_width=True)
         
 if __name__ == "__main__":
     vis_side()
