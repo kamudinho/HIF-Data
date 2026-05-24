@@ -230,27 +230,27 @@ def vis_side():
         with st.container(border=True):
             st.markdown('<div class="card-title"><span>SCOUTING</span></div>', unsafe_allow_html=True)
 
-    # Række 2: Sæson Snit (Venstre) + Trendlines (Højre)
+# Række 2: Sæson Snit (Venstre) + Trendlines (Højre)
     main_col, trend_area = st.columns([1, 2])
     
     with main_col:
-    with st.container(border=True):
-        st.markdown('<div class="card-title"><span>SÆSON SNIT vs. LIGA</span></div>', unsafe_allow_html=True)
-        df_stats_comp = beregn_per_90(df_stats, HIF_UUID)
-        
-        if df_stats_comp is not None:
-            html = "<table class='stats-table'><thead><tr><th>Stat</th><th>HIF</th><th>Liga</th><th>Diff</th></tr></thead>"
-            for _, r in df_stats_comp.iterrows():
-                # Tilføj farve til differencen
-                diff_color = "#28a745" if r['Diff'] > 0 else "#dc3545"
-                html += f"""<tr>
-                    <td class='stats-label'>{r['Stat']}</td>
-                    <td class='stats-value'>{r['HIF']:.1f}</td>
-                    <td class='stats-value'>{r['Liga']:.1f}</td>
-                    <td class='stats-value' style='color:{diff_color}; font-weight:800;'>{r['Diff']:+.1f}</td>
-                </tr>"""
-            html += "</table>"
-            st.markdown(html, unsafe_allow_html=True)
+        with st.container(border=True): # Denne linje skal være rykket ind
+            st.markdown('<div class="card-title"><span>SÆSON SNIT vs. LIGA</span></div>', unsafe_allow_html=True)
+            df_stats_comp = beregn_per_90(df_stats, HIF_UUID)
+            
+            if df_stats_comp is not None:
+                html = "<table class='stats-table'><thead><tr><th>Stat</th><th>HIF</th><th>Liga</th><th>Diff</th></tr></thead>"
+                for _, r in df_stats_comp.iterrows():
+                    # Tilføj farve til differencen
+                    diff_color = "#28a745" if r['Diff'] > 0 else "#dc3545"
+                    html += f"""<tr>
+                        <td class='stats-label'>{r['Stat']}</td>
+                        <td class='stats-value'>{r['HIF']:.1f}</td>
+                        <td class='stats-value'>{r['Liga']:.1f}</td>
+                        <td class='stats-value' style='color:{diff_color}; font-weight:800;'>{r['Diff']:+.1f}</td>
+                    </tr>"""
+                html += "</table>"
+                st.markdown(html, unsafe_allow_html=True)
             
     with trend_area:
         # 1. Filtrering af data til graferne
