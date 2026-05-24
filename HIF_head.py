@@ -260,7 +260,7 @@ def vis_side():
             (df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False))
         ].sort_values('MATCH_DATE_FULL', ascending=True).copy()
 
-        # 2. Beregn plot-kolonner
+        # 2. Beregn plot-kolonner (samme som før)
         hif_recent['PLOT_GOALS'] = hif_recent.apply(lambda r: r['TOTAL_HOME_SCORE'] if str(r['CONTESTANTHOME_OPTAUUID']).upper() == HIF_UUID.upper() else r['TOTAL_AWAY_SCORE'], axis=1)
         hif_recent['PLOT_XG'] = hif_recent.apply(lambda r: r['HOME_XG'] if str(r['CONTESTANTHOME_OPTAUUID']).upper() == HIF_UUID.upper() else r['AWAY_XG'], axis=1)
         hif_recent['PLOT_SHOTS'] = hif_recent.apply(lambda r: r['HOME_SHOTS'] if str(r['CONTESTANTHOME_OPTAUUID']).upper() == HIF_UUID.upper() else r['AWAY_SHOTS'], axis=1)
@@ -270,22 +270,35 @@ def vis_side():
         # 3. Layout og Grafer
         r1_c1, r1_c2 = st.columns(2)
         r2_c1, r2_c2 = st.columns(2)
-        
         metrics = [("Mål", "PLOT_GOALS", r1_c1), ("xG", "PLOT_XG", r1_c2), ("Skud", "PLOT_SHOTS", r2_c1), ("Touches", "PLOT_TOUCHES", r2_c2)]
+        
+        # Hent liga-data for gennemsnit (genbruger logik fra beregn_per_90)
+        played = df_stats[df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)]
         
         for name, col, target in metrics:
             with target:
                 st.caption(name)
-                # Ændret: color='#AAAAAA' for linjen og point=alt.MarkConfig(color='#C41E3A')
-                chart = alt.Chart(hif_recent).mark_line(
-                    color='#AAAAAA', 
-                    point=alt.MarkConfig(color='#C41E3A', filled=True)
-                ).encode(
+                
+                # Beregn gennemsnit
+                hif_avg = hif_recent[col].mean()
+                # Find korresponderende liga-kolonne (HOME/AWAY)
+                liga_col = col.replace("PLOT_", "HOME_") if "PLOT_GOALS" in col else col.replace("PLOT_", "HOME_")
+                # Forenklet liga-snit
+                liga_avg = pd.concat([played[col.replace("PLOT_", "HOME_")], played[col.replace("PLOT_", "AWAY_")]]).mean()
+
+                # Basis linje
+                line = alt.Chart(hif_recent).mark_line(color='#AAAAAA', point=alt.MarkConfig(color='#C41E3A', filled=True)).encode(
                     x=alt.X('index:O', axis=None),
                     y=alt.Y(f'{col}:Q', axis=None, scale=alt.Scale(zero=False))
-                ).properties(height=80).configure_view(strokeWidth=0)
+                )
                 
-                st.altair_chart(chart, use_container_width=True)
+                # HIF gennemsnitslinje (stiplet rød)
+                hif_rule = alt.Chart(pd.DataFrame({'y': [hif_avg]})).mark_rule(color='#C41E3A', strokeDash=[3,3]).encode(y='y:Q')
+                
+                # Liga gennemsnitslinje (stiplet grå/blå)
+                liga_rule = alt.Chart(pd.DataFrame({'y': [liga_avg]})).mark_rule(color='#000000', strokeDash=[2,2], opacity=0.4).encode(y='y:Q')
+                
+                st.altair_chart(line + hif_rule + liga_rule, use_container_width=True)
                 
 if __name__ == "__main__":
     vis_side()
