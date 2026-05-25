@@ -130,8 +130,8 @@ def beregn_per_90(df_stats, team_uuid):
     played = df_stats[df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].copy()
     
     # 2. Sørg for at kolonner er numeriske for HELE datasættet (ligaen)
-    cols = ['TOTAL_HOME_SCORE', 'HOME_XG', 'HOME_SHOTS', 'HOME_TOUCHES', 'HOME_PASSES', 'HOME_CORNERS', 'HOME_CROSSES',
-            'TOTAL_AWAY_SCORE', 'AWAY_XG', 'AWAY_SHOTS', 'AWAY_TOUCHES', 'AWAY_PASSES', 'AWAY_CORNERS', 'AWAY_CROSSES']
+    cols = ['TOTAL_HOME_SCORE', 'HOME_XG', 'HOME_SHOTS', 'HOME_TOUCHES', 'HOME_PASSES', 'HOME_CORNERS', 'HOME_TACKLES',
+            'TOTAL_AWAY_SCORE', 'AWAY_XG', 'AWAY_SHOTS', 'AWAY_TOUCHES', 'AWAY_PASSES', 'AWAY_CORNERS', 'AWAY_TACKLES']
     
     for col in cols:
         if col in played.columns:
