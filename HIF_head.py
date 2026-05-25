@@ -4,6 +4,7 @@ import datetime
 import altair as alt
 from data.utils.team_mapping import TEAMS
 from data.data_load import _get_snowflake_conn
+from data.utils.stattype_map import STAT_TYPE_MAP
 
 # --- DIALOG-BOKS ---
 @st.dialog("Alle Transfers", width="large")
@@ -107,6 +108,13 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
         LEFT JOIN MatchStatsPivot msh ON b.MATCH_OPTAUUID = msh.MATCH_OPTAUUID AND b.CONTESTANTHOME_OPTAUUID = msh.CONTESTANT_OPTAUUID 
         LEFT JOIN MatchStatsPivot msa ON b.MATCH_OPTAUUID = msa.MATCH_OPTAUUID AND b.CONTESTANTAWAY_OPTAUUID = msa.CONTESTANT_OPTAUUID 
         ORDER BY b.MATCH_DATE_FULL DESC"""}
+
+def generate_case_statements(stats_list):
+    # stats_list = ["totalPass", "wonCorners", ...]
+    statements = []
+    for stat in stats_list:
+        statements.append(f"SUM(CASE WHEN STAT_TYPE = '{stat}' THEN STAT_VALUE ELSE 0 END) AS {stat.upper()}")
+    return ",\n".join(statements)
     
 def beregn_hold_stats(df_stats, team_uuid):
     played = df_stats[df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].copy()
