@@ -348,7 +348,7 @@ def vis_side():
                 ("OFFENSIV", "Offensiv", "xG, Skud, Touches", r1_c1), 
                 ("DEFENSIV", "Defensiv", "Mål imod, tacklinger", r2_c1), 
                 ("OFF. STD", "Off_Std", "Hjørnespark", r1_c2), 
-                ("DEF. STD", "Def_Std", "Modstander hjørne", r2_c2)
+                ("DEF. STD", "Def_Std", "Hjørnespark", r2_c2)
             ]
 
             for title, col, desc, target in categories:
