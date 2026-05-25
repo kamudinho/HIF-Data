@@ -44,7 +44,7 @@ def apply_custom_style():
             .card-title { color: #1a1a1a; font-size: 11px; font-weight: 700; margin-bottom: 12px; text-transform: uppercase; border-bottom: 1px solid #f0f0f0; padding-bottom: 6px; display: flex; justify-content: space-between; }
             .title-date { color: #888; font-weight: 500; text-transform: none; font-size: 11px; }
             .stats-table { width: 100%; font-size: 11px; border-collapse: collapse; table-layout: fixed; }
-            .stats-label { color: #666; font-weight: 700; width: 45%; padding: 2px 0; }
+            .stats-label { color: #666; font-weight: 700; width: 50%; padding: 2px 0; }
             .stats-value { text-align: right; font-weight: 700; color: #111; padding: 2px 0; }
             .form-wrapper { display: flex; justify-content: space-between; gap: 4px; width: 100%; margin-top: 15px; padding-bottom: 10px; }
             .form-column { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; flex: 1; margin-bottom: 2px; }
