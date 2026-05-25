@@ -123,8 +123,6 @@ def generate_case_statements(stats_list):
 def beregn_per_90(df_stats, team_uuid):
     played = df_stats[df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].copy()
     
-    # Konverter alle relevante kolonner til numeriske for at undgå fejl
-    # Sørg for at tilføje de kolonner, du bruger i dit stats_map
     numeric_cols = [
         'TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE', 
         'HOME_XG', 'AWAY_XG', 
@@ -133,7 +131,10 @@ def beregn_per_90(df_stats, team_uuid):
         'HOME_THROWS', 'AWAY_THROWS', 
         'HOME_FREEKICKS', 'AWAY_FREEKICKS', 
         'HOME_CORNERS', 'AWAY_CORNERS', 
-        'HOME_TACKLES', 'AWAY_TACKLES'
+        'HOME_TACKLES', 'AWAY_TACKLES',
+        'HOME_CROSSES', 'AWAY_CROSSES',
+        'HOME_CLEARANCES', 'AWAY_CLEARANCES',
+        'HOME_PASSES', 'AWAY_PASSES'
     ]
     
     for col in numeric_cols:
@@ -153,25 +154,24 @@ def beregn_per_90(df_stats, team_uuid):
         STAT_TYPE_MAP["goals"]: ('TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE'),
         STAT_TYPE_MAP["expectedGoals"]: ('HOME_XG', 'AWAY_XG'),
         STAT_TYPE_MAP["possessionPercentage"]: ('HOME_POSSESSION', 'AWAY_POSSESSION'),
+        STAT_TYPE_MAP["totalPass"]: ('HOME_PASSES', 'AWAY_PASSES'),
+        STAT_TYPE_MAP["totalTackle"]: ('HOME_TACKLES', 'AWAY_TACKLES'),
+        STAT_TYPE_MAP["totalClearance"]: ('HOME_CLEARANCES', 'AWAY_CLEARANCES'),
+        STAT_TYPE_MAP["totalCross"]: ('HOME_CROSSES', 'AWAY_CROSSES'),
+        STAT_TYPE_MAP["wonCorners"]: ('HOME_CORNERS', 'AWAY_CORNERS'),
         STAT_TYPE_MAP["shotOffTarget"]: ('HOME_OFF_TARGET', 'AWAY_OFF_TARGET'),
         STAT_TYPE_MAP["totalThrows"]: ('HOME_THROWS', 'AWAY_THROWS'),
-        STAT_TYPE_MAP["fkFoulLost"]: ('HOME_FREEKICKS', 'AWAY_FREEKICKS'),
-        STAT_TYPE_MAP["wonCorners"]: ('HOME_CORNERS', 'AWAY_CORNERS'),
-        STAT_TYPE_MAP["totalTackle"]: ('HOME_TACKLES', 'AWAY_TACKLES')
+        STAT_TYPE_MAP["fkFoulLost"]: ('HOME_FREEKICKS', 'AWAY_FREEKICKS')
     }
 
     results = []
     for display_name, (h_col, a_col) in stats_map.items():
-        # Beregn HIF gennemsnit
         hif_val = hif_matches.apply(
             lambda r: r[h_col] if str(r['CONTESTANTHOME_OPTAUUID']).upper() == team_uuid.upper() else r[a_col], 
             axis=1
         ).mean()
         
-        # Beregn Liga gennemsnit
         liga_val = pd.concat([played[h_col], played[a_col]]).mean()
-        
-        # Seneste kamp værdi
         last_val = last_match[h_col] if is_home else last_match[a_col]
         
         results.append({
