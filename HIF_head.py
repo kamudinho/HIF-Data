@@ -219,6 +219,8 @@ def vis_side():
     df_stats.columns = [str(c).upper() for c in df_stats.columns]
     opta_to_name = {str(v['opta_uuid']).strip().upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
     df_matches['MATCH_DATE_FULL'] = pd.to_datetime(df_matches['MATCH_DATE_FULL'], errors='coerce').dt.tz_localize(None)
+
+    st.write(df_stats.columns.tolist())
     
     col1, col2, col3 = st.columns([1, 1, 1])
     
