@@ -288,26 +288,27 @@ def vis_side():
                 opp_navn = df_stats_comp.iloc[0]['Opponent']
                 opp_header = f"vs. {opp_navn}"
                 
+                # Sørg for at din HTML-streng ser således ud:
                 html = f"""<table class='stats-table'>
                     <thead><tr>
                         <th></th>
-                        <th style='text-align:right;'>{opp_header}</th>
+                        <th>{opp_header}</th>
                         <th>HIF</th>
                         <th>Liga</th>
                         <th>Diff</th>
-                    </tr></thead>"""
+                    </tr></thead>
+                    <tbody>"""
                     
                 for _, r in df_stats_comp.iterrows():
                     diff_color = "#28a745" if r['Diff'] > 0 else "#dc3545"
                     html += f"""<tr>
                         <td class='stats-label'>{r['Stat']}</td>
-                        <td class='stats-value' style='text-align:right; color:#1a1a1a;'>{r['Seneste']:.0f}</td>
+                        <td class='stats-value'>{r['Seneste']:.0f}</td>
                         <td class='stats-value'>{r['HIF']:.2f}</td>
                         <td class='stats-value'>{r['Liga']:.2f}</td>
                         <td class='stats-value' style='color:{diff_color}; font-weight:800;'>{r['Diff']:+.2f}</td>
                     </tr>"""
-                html += "</table>"
-                st.markdown(html, unsafe_allow_html=True)
+                html += "</tbody></table>"
             
     with trend_area:
         # 1. Hent og forbered data
