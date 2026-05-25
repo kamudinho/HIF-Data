@@ -277,37 +277,46 @@ def vis_side():
                 st.markdown(html, unsafe_allow_html=True)
             
     with trend_area:
-        # 1. Beregn indices for alle kampe (vi tilføjer nu også liga-snittet for hvert index)
-        indices = hif_recent.apply(lambda row: beregn_kategori_indices(row, HIF_UUID), axis=1)
-        hif_recent = pd.concat([hif_recent, indices], axis=1)
-        
-        # 2. Layout
-        r1_c1, r1_c2 = st.columns(2) # Vi bruger 2 kolonner nu
-        
-        # Kategorier vi vil vise
-        # Vi grupperer dem, så vi kan plotte dem sammen
-        display_groups = [
-            ("OFFENSIV VS. DEFENSIV", ["Offensiv", "Defensiv"], r1_c1),
-            ("OFF. STD VS. DEF. STD", ["Off_Std", "Def_Std"], r1_c2)
-        ]
-        
-        for title, cols, target in display_groups:
-            with target:
-                st.caption(title)
-                
-                # Omdan data til "long format" for at Altair kan tegne to linjer
-                df_long = hif_recent.melt(id_vars=['index'], value_vars=cols, var_name='Type', value_name='Score')
-                
-                # Farvekoder
-                color_scale = alt.Scale(domain=cols, range=['#C41E3A', '#333333'])
-                
-                chart = alt.Chart(df_long).mark_line(point=True).encode(
-                    x=alt.X('index:O', axis=None),
-                    y=alt.Y('Score:Q', axis=None),
-                    color=alt.Color('Type:N', scale=color_scale, legend=alt.Legend(orient="bottom"))
-                ).properties(height=120).configure_view(strokeWidth=0)
-                
-                st.altair_chart(chart, use_container_width=True)
+        # 1. Sikr dig at hif_recent bliver defineret korrekt
+        hif_recent = df_stats[
+            ((df_stats['CONTESTANTHOME_OPTAUUID'].str.upper() == HIF_UUID.strip().upper()) | 
+             (df_stats['CONTESTANTAWAY_OPTAUUID'].str.upper() == HIF_UUID.strip().upper())) & 
+            (df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False))
+        ].sort_values('MATCH_DATE_FULL', ascending=True).copy()
+
+        # Tilføj index kolonne til plotting
+        hif_recent['index'] = range(1, len(hif_recent) + 1)
+
+        # 2. Tjek om der er data før vi beregner
+        if not hif_recent.empty:
+            # Beregn indices ved hjælp af din tidligere definerede funktion
+            indices = hif_recent.apply(lambda row: beregn_kategori_indices(row, HIF_UUID), axis=1)
+            hif_recent = pd.concat([hif_recent, indices], axis=1)
+            
+            # 3. Layout og Grafer
+            r1_c1, r1_c2 = st.columns(2)
+            
+            display_groups = [
+                ("OFFENSIV VS. DEFENSIV", ["Offensiv", "Defensiv"], r1_c1),
+                ("OFF. STD VS. DEF. STD", ["Off_Std", "Def_Std"], r1_c2)
+            ]
+            
+            for title, cols, target in display_groups:
+                with target:
+                    st.caption(title)
+                    df_long = hif_recent.melt(id_vars=['index'], value_vars=cols, var_name='Type', value_name='Score')
+                    
+                    color_scale = alt.Scale(domain=cols, range=['#C41E3A', '#333333'])
+                    
+                    chart = alt.Chart(df_long).mark_line(point=True).encode(
+                        x=alt.X('index:O', axis=None),
+                        y=alt.Y('Score:Q', axis=None),
+                        color=alt.Color('Type:N', scale=color_scale, legend=alt.Legend(orient="bottom"))
+                    ).properties(height=120).configure_view(strokeWidth=0)
+                    
+                    st.altair_chart(chart, use_container_width=True)
+        else:
+            st.info("Ingen kampdata tilgængelige til trendanalyse.")
                 
 if __name__ == "__main__":
     vis_side()
