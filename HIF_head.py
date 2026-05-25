@@ -89,7 +89,7 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
             MAX(CASE WHEN STAT_TYPE = 'totalPass' THEN STAT_TOTAL END) AS TOTAL_PASSES, 
             MAX(CASE WHEN STAT_TYPE = 'wonCorners' THEN STAT_TOTAL END) AS CORNERS,
             MAX(CASE WHEN STAT_TYPE = 'totalCross' THEN STAT_TOTAL END) AS CROSSES,
-            MAX(CASE WHEN STAT_TYPE = 'totalYellowCard' THEN STAT_TOTAL END) AS YELLOW_CARDS, 
+            MAX(CASE WHEN STAT_TYPE = 'totalTackle' THEN STAT_TOTAL END) AS TACKLES, 
             MAX(FORMATIONUSED) AS FORMATION 
             FROM {DB}.OPTA_MATCHSTATS WHERE MATCH_OPTAUUID IN ({match_id_subquery}) GROUP BY 1, 2
         )
@@ -151,7 +151,7 @@ def beregn_per_90(df_stats, team_uuid):
         "Touches": ('HOME_TOUCHES', 'AWAY_TOUCHES'),
         "Pasninger": ('HOME_PASSES', 'AWAY_PASSES'),
         "Hjørnespark": ('HOME_CORNERS', 'AWAY_CORNERS'),
-        "Indlæg": ('HOME_CROSSES', 'AWAY_CROSSES')
+        "Tacklinger": ('HOME_TACKLES', 'AWAY_TACKLES')
     }
 
     results = []
@@ -298,7 +298,7 @@ def vis_side():
 
         if not hif_recent.empty:
             num_cols = ['HOME_XG', 'AWAY_XG', 'HOME_SHOTS', 'AWAY_SHOTS', 'HOME_TOUCHES', 'AWAY_TOUCHES', 
-                        'TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE', 'HOME_CORNERS', 'AWAY_CORNERS', 'HOME_CROSSES', 'AWAY_CROSSES']
+                        'TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE', 'HOME_CORNERS', 'AWAY_CORNERS', 'HOME_TACKLES', 'AWAY_TACKLES']
             for col in num_cols:
                 hif_recent[col] = pd.to_numeric(hif_recent[col], errors='coerce').fillna(0)
 
