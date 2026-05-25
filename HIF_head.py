@@ -112,7 +112,8 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
         LEFT JOIN MatchStatsPivot msh ON b.MATCH_OPTAUUID = msh.MATCH_OPTAUUID AND b.CONTESTANTHOME_OPTAUUID = msh.CONTESTANT_OPTAUUID 
         LEFT JOIN MatchStatsPivot msa ON b.MATCH_OPTAUUID = msa.MATCH_OPTAUUID AND b.CONTESTANTAWAY_OPTAUUID = msa.CONTESTANT_OPTAUUID 
         ORDER BY b.MATCH_DATE_FULL DESC
-        )
+        ),
+        
 def generate_case_statements(stats_list):
     # stats_list = ["totalPass", "wonCorners", ...]
     statements = []
