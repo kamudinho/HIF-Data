@@ -41,12 +41,20 @@ def apply_custom_style():
         <style>
             [data-testid="stHeaderBlockContainer"] h1 { display: none; }
             .stApp { background-color: #FFFFFF; }
-            .card-title { color: #1a1a1a; font-size: 11px; font-weight: 700; margin-bottom: 12px; text-transform: uppercase; border-bottom: 1px solid #f0f0f0; padding-bottom: 6px; display: flex; justify-content: space-between; }
-            .title-date { color: #888; font-weight: 500; text-transform: none; font-size: 11px; }
-            .stats-table { text-align: center; width: 100%; font-size: 10.5px; border-collapse: collapse; table-layout: fixed; }
-            .stats-label { text-align: left; color: #666; font-weight: 700; width: 50%; padding: 1px 0; }
-            .stats-value { text-align: center; font-weight: 700; color: #111; padding: 1px 0; }
-            .form-wrapper { display: flex; justify-content: space-between; gap: 4px; width: 100%; margin-top: 15px; padding-bottom: 10px; }
+            
+            /* Tabel styling */
+            .stats-table { width: 100%; font-size: 11px; border-collapse: collapse; table-layout: auto; }
+            
+            /* Overskrifter - Centreret, men med padding */
+            .stats-table th { text-align: center; padding: 4px; color: #888; font-weight: 600; white-space: nowrap; }
+            
+            /* Label - Giv den plads (40%) og venstrestil */
+            .stats-label { text-align: left !important; color: #666; font-weight: 700; width: 40%; padding: 4px 8px 4px 0; }
+            
+            /* Værdier - Centreret og ensartet bredde */
+            .stats-value { text-align: center !important; font-weight: 700; color: #111; padding: 4px 4px; min-width: 40px; }
+            
+            .card-title { color: #1a1a1a; font-size: 11px; font-weight: 700; margin-bottom: 12px; text-transform: uppercase; border-bottom: 1px solid #f0f0f0; padding-bottom: 6px; display: flex; justify-content: space-between; }            .form-wrapper { display: flex; justify-content: space-between; gap: 4px; width: 100%; margin-top: 15px; padding-bottom: 10px; }
             .form-column { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; flex: 1; margin-bottom: 2px; }
             .res-pill { width: 100%; border-radius: 4px; color: white; text-align: center; font-size: 9px; font-weight: 800; padding: 3px 0; margin-bottom: 4px; }
             .legend-logo { width: 22px; height: 22px; object-fit: contain; }
