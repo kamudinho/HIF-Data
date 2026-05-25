@@ -138,7 +138,6 @@ def beregn_per_90(df_stats, team_uuid):
         STAT_TYPE_MAP["totalPass"]: ('HOME_PASSES', 'AWAY_PASSES'),
         STAT_TYPE_MAP["totalTackle"]: ('HOME_TACKLES', 'AWAY_TACKLES'),
         STAT_TYPE_MAP["totalClearance"]: ('HOME_CLEARANCES', 'AWAY_CLEARANCES'),
-        STAT_TYPE_MAP["totalCross"]: ('HOME_CROSSES', 'AWAY_CROSSES'),
         STAT_TYPE_MAP["wonCorners"]: ('HOME_CORNERS', 'AWAY_CORNERS'),
         STAT_TYPE_MAP["shotOffTarget"]: ('HOME_OFF_TARGET', 'AWAY_OFF_TARGET'),
         STAT_TYPE_MAP["totalThrows"]: ('HOME_THROWS', 'AWAY_THROWS'),
