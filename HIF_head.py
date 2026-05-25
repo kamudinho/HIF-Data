@@ -319,10 +319,16 @@ def vis_side():
 
             for title, col, desc, target in categories:
                 with target:
-                    st.markdown(f"**{title}**")
-                    st.caption(desc)
+                    # Justeret Markdown med mindre afstand (ingen ekstra linjeskift)
+                    st.markdown(f"<div style='font-weight:700; font-size:14px; margin-bottom:0px;'>{title}</div>", unsafe_allow_html=True)
+                    st.caption(f"<div style='margin-top:-5px;'>{desc}</div>", unsafe_allow_html=True)
                     
                     hif_avg = hif_recent[col].mean()
+                    
+                    # Tooltip forberedelse: Formatér som 'vs. Modstander Score (H/U)'
+                    hif_recent['tooltip_header'] = hif_recent.apply(
+                        lambda r: f"vs. {r['OPPONENT_NAME']} {int(r['TOTAL_HOME_SCORE'])}-{int(r['TOTAL_AWAY_SCORE'])} ({r['HOME_OR_AWAY']})", axis=1
+                    )
                     hif_recent['diff_label'] = hif_recent[col].apply(lambda x: f"{x - hif_avg:+.1f}")
                     
                     line = alt.Chart(hif_recent).mark_line(
@@ -332,9 +338,8 @@ def vis_side():
                         x=alt.X('index:O', axis=None),
                         y=alt.Y(f'{col}:Q', axis=None, scale=alt.Scale(zero=False)),
                         tooltip=[
-                            alt.Tooltip('OPPONENT_NAME', title='Modstander'),
-                            alt.Tooltip('HOME_OR_AWAY', title='H/U'),
-                            alt.Tooltip('SCORE_DISPLAY', title='Score'),
+                            alt.Tooltip('tooltip_header', title='Kamp'),
+                            alt.Tooltip(f'{col}', title='Score', format='.1f'),
                             alt.Tooltip('diff_label', title='Diff vs Snit')
                         ]
                     ).properties(height=120)
