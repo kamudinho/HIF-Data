@@ -148,61 +148,32 @@ def beregn_hold_stats(df_stats, team_uuid):
         "poss": f"{int(round(poss_all))}%" if pd.notnull(poss_all) else "0%"
     }
     
-def beregn_per_90(df_stats, team_uuid):
-    played = df_stats[df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].copy()
+def beregn_kategori_indices(row, hif_uuid):
+    is_home = str(row['CONTESTANTHOME_OPTAUUID']).upper() == hif_uuid.upper()
     
-    # Konverter alle relevante kolonner til numeriske
-    numeric_cols = ['TOTAL_HOME_SCORE', 'HOME_XG', 'HOME_SHOTS', 'HOME_TOUCHES', 'HOME_POSSESSION', 'HOME_OFF_TARGET', 'HOME_THROWS', 'HOME_FREEKICKS',
-                    'TOTAL_AWAY_SCORE', 'AWAY_XG', 'AWAY_SHOTS', 'AWAY_TOUCHES', 'AWAY_POSSESSION', 'AWAY_OFF_TARGET', 'AWAY_THROWS', 'AWAY_FREEKICKS']
+    # Brug .get() eller tjek om kolonnen eksisterer
+    def get_val(col_h, col_a):
+        val = row[col_h] if is_home else row[col_a]
+        return float(val) if pd.notnull(val) else 0.0
+
+    xg = get_val('HOME_XG', 'AWAY_XG')
+    shots = get_val('HOME_SHOTS', 'AWAY_SHOTS')
+    touches = get_val('HOME_TOUCHES', 'AWAY_TOUCHES')
+    tackles = get_val('HOME_TACKLES', 'AWAY_TACKLES')
+    goals_con = get_val('TOTAL_AWAY_SCORE', 'TOTAL_HOME_SCORE')
+    corners = get_val('HOME_CORNERS', 'AWAY_CORNERS')
+    opp_corners = get_val('AWAY_CORNERS', 'HOME_CORNERS')
     
-    for col in numeric_cols:
-        if col in played.columns:
-            played[col] = pd.to_numeric(played[col], errors='coerce').fillna(0)
-
-    hif_matches = played[((played['CONTESTANTHOME_OPTAUUID'].str.upper() == team_uuid.upper()) | 
-                          (played['CONTESTANTAWAY_OPTAUUID'].str.upper() == team_uuid.upper()))].sort_values('MATCH_DATE_FULL')
+    # Håndter manglende 'CROSSES' kolonne sikkert
+    crosses = get_val('HOME_CROSSES', 'AWAY_CROSSES') if 'HOME_CROSSES' in row else 0.0
     
-    if len(hif_matches) == 0: return None
-
-    last_match = hif_matches.iloc[-1]
-    is_home = str(last_match['CONTESTANTHOME_OPTAUUID']).upper() == team_uuid.upper()
-    opp_name = last_match['CONTESTANTAWAY_NAME'] if is_home else last_match['CONTESTANTHOME_NAME']
-
-    stats_map = {
-        STAT_TYPE_MAP["goals"]: ('TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE'),
-        STAT_TYPE_MAP["expectedGoals"]: ('HOME_XG', 'AWAY_XG'),
-        STAT_TYPE_MAP["possessionPercentage"]: ('HOME_POSSESSION', 'AWAY_POSSESSION'),
-        STAT_TYPE_MAP["shotOffTarget"]: ('HOME_OFF_TARGET', 'AWAY_OFF_TARGET'),
-        STAT_TYPE_MAP["totalThrows"]: ('HOME_THROWS', 'AWAY_THROWS'),
-        STAT_TYPE_MAP["fkFoulLost"]: ('HOME_FREEKICKS', 'AWAY_FREEKICKS'),
-        STAT_TYPE_MAP["wonCorners"]: ('HOME_CORNERS', 'AWAY_CORNERS'),
-        STAT_TYPE_MAP["totalTackle"]: ('HOME_TACKLES', 'AWAY_TACKLES')
-    }
-
-    results = []
-    for display_name, (h_col, a_col) in stats_map.items():
-        # Beregn HIF gennemsnit
-        hif_val = hif_matches.apply(
-            lambda r: r[h_col] if str(r['CONTESTANTHOME_OPTAUUID']).upper() == team_uuid.upper() else r[a_col], 
-            axis=1
-        ).mean()
-        
-        # Beregn Liga gennemsnit
-        liga_val = pd.concat([played[h_col], played[a_col]]).mean()
-        
-        # Seneste kamp værdi
-        last_val = last_match[h_col] if is_home else last_match[a_col]
-        
-        results.append({
-            "Stat": display_name,  # Her bruges det pæne navn fra STAT_TYPE_MAP
-            "HIF": hif_val,
-            "Liga": liga_val,
-            "Diff": hif_val - liga_val,
-            "Seneste": last_val,
-            "Opponent": opp_name
-        })
-        
-        return pd.DataFrame(results)
+    # Beregninger
+    off_idx = (xg * 1.5) + (shots * 0.3) + (touches * 0.05)
+    def_idx = -(goals_con * 2.0) + (tackles * 0.2)
+    off_std = (corners * 0.5) + (crosses * 0.2)
+    def_std = -(opp_corners * 0.3)
+    
+    return pd.Series({'Offensiv': off_idx, 'Defensiv': def_idx, 'Off_Std': off_std, 'Def_Std': def_std})
 
 def beregn_kategori_indices(row, hif_uuid):
     is_home = str(row['CONTESTANTHOME_OPTAUUID']).upper() == hif_uuid.upper()
