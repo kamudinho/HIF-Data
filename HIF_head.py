@@ -290,17 +290,26 @@ def vis_side():
             for col in num_cols:
                 hif_recent[col] = pd.to_numeric(hif_recent[col], errors='coerce').fillna(0)
 
-            # Tilføj Tooltip-data
-            hif_recent['OPPONENT_NAME'] = hif_recent.apply(lambda r: opta_to_name.get(r['CONTESTANTAWAY_OPTAUUID'] if str(r['CONTESTANTHOME_OPTAUUID']).upper() == HIF_UUID.upper() else r['CONTESTANTHOME_OPTAUUID'], "Ukendt"), axis=1)
-            hif_recent['HOME_OR_AWAY'] = hif_recent.apply(lambda r: "H" if str(r['CONTESTANTHOME_OPTAUUID']).upper() == HIF_UUID.upper() else "U", axis=1)
-            hif_recent['SCORE_DISPLAY'] = hif_recent.apply(lambda r: f"{int(r['TOTAL_HOME_SCORE'])}-{int(r['TOTAL_AWAY_SCORE'])}", axis=1)
+            # --- KORREKT HENTNING AF NAVNE VIA TEAMS ORDBOGEN ---
+            # Vi laver en map fra UUID til Navn baseret på din TEAMS dictionary
+            uuid_to_name = {str(v.get('opta_uuid')).strip().upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
+            
+            hif_recent['OPPONENT_NAME'] = hif_recent.apply(
+                lambda r: uuid_to_name.get(
+                    str(r['CONTESTANTAWAY_OPTAUUID']).strip().upper() if str(r['CONTESTANTHOME_OPTAUUID']).strip().upper() == HIF_UUID.strip().upper() 
+                    else str(r['CONTESTANTHOME_OPTAUUID']).strip().upper(), 
+                    "Ukendt"
+                ), axis=1
+            )
+            
+            hif_recent['HOME_OR_AWAY'] = hif_recent.apply(lambda r: "H" if str(r['CONTESTANTHOME_OPTAUUID']).strip().upper() == HIF_UUID.strip().upper() else "U", axis=1)
 
             # Beregn indices
             indices = hif_recent.apply(lambda row: beregn_kategori_indices(row, HIF_UUID), axis=1)
             hif_recent = pd.concat([hif_recent, indices], axis=1)
             hif_recent['index'] = range(1, len(hif_recent) + 1)
 
-            # Liga-snit
+            # Liga-snit (samme som før)
             played = df_stats[df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].copy()
             for col in num_cols: played[col] = pd.to_numeric(played[col], errors='coerce').fillna(0)
             liga_indices = played.apply(lambda row: beregn_kategori_indices(row, "DUMMY_UUID"), axis=1)
@@ -319,13 +328,12 @@ def vis_side():
 
             for title, col, desc, target in categories:
                 with target:
-                    # Justeret Markdown med mindre afstand (ingen ekstra linjeskift)
                     st.markdown(f"<div style='font-weight:700; font-size:14px; margin-bottom:0px;'>{title}</div>", unsafe_allow_html=True)
                     st.caption(f"<div style='margin-top:-5px;'>{desc}</div>", unsafe_allow_html=True)
                     
                     hif_avg = hif_recent[col].mean()
                     
-                    # Tooltip forberedelse: Formatér som 'vs. Modstander Score (H/U)'
+                    # Tooltip header: vs. Esbjerg 2-2 (H)
                     hif_recent['tooltip_header'] = hif_recent.apply(
                         lambda r: f"vs. {r['OPPONENT_NAME']} {int(r['TOTAL_HOME_SCORE'])}-{int(r['TOTAL_AWAY_SCORE'])} ({r['HOME_OR_AWAY']})", axis=1
                     )
