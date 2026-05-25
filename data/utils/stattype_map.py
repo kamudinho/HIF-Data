@@ -14,12 +14,12 @@ STAT_TYPE_MAP = {
     # Afleveringer & Spilopbygning
     "totalPass": "Afleveringer",
     "accuratePass": "Succesfulde afleveringer",
-    "possessionPercentage": "Besiddelse %",
+    "possessionPercentage": "Boldbesiddelse %",
     "totalThrows": "Indkast",
     "goalKicks": "Målspark",
-    "cornerTaken": "Hjørnespark taget",
-    "wonCorners": "Hjørnespark vundet",
-    "lostCorners": "Hjørnespark tabt",
+    "cornerTaken": "Hjørnespark",
+    "wonCorners": "Hjørnespark",
+    "lostCorners": "Hjørnespark, mod",
     
     # Defensiv
     "totalTackle": "Tacklinger",
