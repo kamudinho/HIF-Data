@@ -279,24 +279,25 @@ def vis_side():
     main_col, trend_area = st.columns([1, 2])
     
     with main_col:
-        with st.container(border=True): # Start container
+        with st.container(border=True):
             st.markdown('<div class="card-title"><span>HVIDOVRE IF vs. LIGA</span></div>', unsafe_allow_html=True)
             df_stats_comp = beregn_per_90(df_stats, HIF_UUID)
             
-            # Sørg for at alt dette er indrykket under 'with'
             if df_stats_comp is not None:
                 opp_navn = df_stats_comp.iloc[0]['Opponent']
                 opp_header = f"vs. {opp_navn}"
                 
-                # Sørg for at din HTML-streng ser således ud:
+                # Byg HTML strengen samlet
                 html = f"""<table class='stats-table'>
-                    <thead><tr>
-                        <th></th>
-                        <th>{opp_header}</th>
-                        <th>HIF</th>
-                        <th>Liga</th>
-                        <th>Diff</th>
-                    </tr></thead>
+                    <thead>
+                        <tr>
+                            <th></th>
+                            <th>{opp_header}</th>
+                            <th>HIF</th>
+                            <th>Liga</th>
+                            <th>Diff</th>
+                        </tr>
+                    </thead>
                     <tbody>"""
                     
                 for _, r in df_stats_comp.iterrows():
@@ -308,7 +309,11 @@ def vis_side():
                         <td class='stats-value'>{r['Liga']:.2f}</td>
                         <td class='stats-value' style='color:{diff_color}; font-weight:800;'>{r['Diff']:+.2f}</td>
                     </tr>"""
+                
                 html += "</tbody></table>"
+                
+                # Render HTML
+                st.markdown(html, unsafe_allow_html=True)
             
     with trend_area:
         # 1. Hent og forbered data
