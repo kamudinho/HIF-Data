@@ -231,7 +231,6 @@ def vis_side():
         with st.container(border=True):
             st.markdown('<div class="card-title"><span>SCOUTING</span></div>', unsafe_allow_html=True)
 
-    st.markdown("---")
     main_col, trend_area = st.columns([1, 2])
 
     with main_col:
