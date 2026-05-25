@@ -283,7 +283,7 @@ def vis_side():
             st.markdown('<div class="card-title"><span>HVIDOVRE IF vs. LIGA</span></div>', unsafe_allow_html=True)
             df_stats_comp = beregn_per_90(df_stats, HIF_UUID)
             
-            if df_stats_comp is not None:
+        if df_stats_comp is not None:
             opp_navn = df_stats_comp.iloc[0]['Opponent']
             opp_header = f"vs. {opp_navn}"
             
