@@ -118,20 +118,35 @@ def generate_case_statements(stats_list):
     
 def beregn_hold_stats(df_stats, team_uuid):
     played = df_stats[df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].copy()
-    cols_to_numeric = ['TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE', 'HOME_XG', 'AWAY_XG', 'HOME_POSS', 'AWAY_POSS']
+    
+    # RETELSE: Brug de korrekte navne fra dit SQL-query (HOME_POSSESSION i stedet for HOME_POSS)
+    cols_to_numeric = ['TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE', 'HOME_XG', 'AWAY_XG', 'HOME_POSSESSION', 'AWAY_POSSESSION']
+    
     for col in cols_to_numeric:
         if col in played.columns: played[col] = pd.to_numeric(played[col], errors='coerce')
+        
     home = played[played['CONTESTANTHOME_OPTAUUID'].str.upper() == team_uuid.upper()]
     away = played[played['CONTESTANTAWAY_OPTAUUID'].str.upper() == team_uuid.upper()]
+    
     total_matches = len(home) + len(away)
     if total_matches == 0: return {"gf": "0.0", "ga": "0.0", "xgf": "0.0", "xga": "0.0", "poss": "0%"}
+    
     gf = home['TOTAL_HOME_SCORE'].sum() + away['TOTAL_AWAY_SCORE'].sum()
     ga = home['TOTAL_AWAY_SCORE'].sum() + away['TOTAL_HOME_SCORE'].sum()
     xgf = home['HOME_XG'].fillna(0).sum() + away['AWAY_XG'].fillna(0).sum()
     xga = home['AWAY_XG'].fillna(0).sum() + away['HOME_XG'].fillna(0).sum()
-    poss_all = pd.concat([home['HOME_POSS'], away['AWAY_POSS']]).dropna().mean()
-    return {"gf": f"{gf / total_matches:.1f}", "ga": f"{ga / total_matches:.1f}", "xgf": f"{xgf / total_matches:.2f}", "xga": f"{xga / total_matches:.2f}", "poss": f"{int(round(poss_all))}%" if pd.notnull(poss_all) else "0%"}
-
+    
+    # RETELSE: Brug de korrekte kolonnenavne her også
+    poss_all = pd.concat([home['HOME_POSSESSION'], away['AWAY_POSSESSION']]).dropna().mean()
+    
+    return {
+        "gf": f"{gf / total_matches:.1f}", 
+        "ga": f"{ga / total_matches:.1f}", 
+        "xgf": f"{xgf / total_matches:.2f}", 
+        "xga": f"{xga / total_matches:.2f}", 
+        "poss": f"{int(round(poss_all))}%" if pd.notnull(poss_all) else "0%"
+    }
+    
 def beregn_per_90(df_stats, team_uuid):
     played = df_stats[df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].copy()
     
