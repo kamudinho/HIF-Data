@@ -277,21 +277,28 @@ def vis_side():
                 st.markdown(html, unsafe_allow_html=True)
             
     with trend_area:
-        # 1. Sikr dig at hif_recent bliver defineret korrekt
+        # 1. Hent data
         hif_recent = df_stats[
             ((df_stats['CONTESTANTHOME_OPTAUUID'].str.upper() == HIF_UUID.strip().upper()) | 
              (df_stats['CONTESTANTAWAY_OPTAUUID'].str.upper() == HIF_UUID.strip().upper())) & 
             (df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False))
         ].sort_values('MATCH_DATE_FULL', ascending=True).copy()
 
-        # Tilføj index kolonne til plotting
-        hif_recent['index'] = range(1, len(hif_recent) + 1)
-
-        # 2. Tjek om der er data før vi beregner
         if not hif_recent.empty:
-            # Beregn indices ved hjælp af din tidligere definerede funktion
+            # --- LØSNING: Konverter alle relevante kolonner til numeriske værdier ---
+            num_cols = ['HOME_XG', 'AWAY_XG', 'HOME_SHOTS', 'AWAY_SHOTS', 
+                        'HOME_TOUCHES', 'AWAY_TOUCHES', 'TOTAL_HOME_SCORE', 
+                        'TOTAL_AWAY_SCORE', 'HOME_CORNERS', 'AWAY_CORNERS', 
+                        'HOME_CROSSES', 'AWAY_CROSSES']
+            
+            for col in num_cols:
+                if col in hif_recent.columns:
+                    hif_recent[col] = pd.to_numeric(hif_recent[col], errors='coerce').fillna(0)
+
+            # 2. Beregn indices
             indices = hif_recent.apply(lambda row: beregn_kategori_indices(row, HIF_UUID), axis=1)
             hif_recent = pd.concat([hif_recent, indices], axis=1)
+            hif_recent['index'] = range(1, len(hif_recent) + 1)
             
             # 3. Layout og Grafer
             r1_c1, r1_c2 = st.columns(2)
