@@ -171,6 +171,30 @@ def beregn_per_90(df_stats, team_uuid):
     
     return pd.DataFrame(results)
 
+def beregn_kategori_indices(row, hif_uuid):
+    is_home = str(row['CONTESTANTHOME_OPTAUUID']).upper() == hif_uuid.upper()
+    
+    # Offensiv: Positivt fokus
+    xg = row['HOME_XG'] if is_home else row['AWAY_XG']
+    shots = row['HOME_SHOTS'] if is_home else row['AWAY_SHOTS']
+    touches = row['HOME_TOUCHES'] if is_home else row['AWAY_TOUCHES']
+    off_idx = (xg * 1.5) + (shots * 0.3) + (touches * 0.05)
+    
+    # Defensiv: Mål imod straffer (-2.0), blokeringer og tacklinger tæller positivt
+    goals_con = row['TOTAL_AWAY_SCORE'] if is_home else row['TOTAL_HOME_SCORE']
+    def_idx = -(goals_con * 2.0)
+    
+    # Off. Standard: Fokus på hjørnespark og indlæg
+    corners = row['HOME_CORNERS'] if is_home else row['AWAY_CORNERS']
+    crosses = row['HOME_CROSSES'] if is_home else row['AWAY_CROSSES']
+    off_std = (corners * 0.5) + (crosses * 0.2)
+    
+    # Def. Standard: Fokus på modstanders hjørner (omvendt)
+    opp_corners = row['AWAY_CORNERS'] if is_home else row['HOME_CORNERS']
+    def_std = -(opp_corners * 0.3)
+    
+    return pd.Series({'Offensiv': off_idx, 'Defensiv': def_idx, 'Off_Std': off_std, 'Def_Std': def_std})
+
 def vis_side():
     apply_custom_style()
     conn = _get_snowflake_conn()
@@ -253,61 +277,37 @@ def vis_side():
                 st.markdown(html, unsafe_allow_html=True)
             
     with trend_area:
-        # 1. Filtrering af data til graferne
-        hif_recent = df_stats[
-            ((df_stats['CONTESTANTHOME_OPTAUUID'].str.upper() == HIF_UUID.strip().upper()) | 
-             (df_stats['CONTESTANTAWAY_OPTAUUID'].str.upper() == HIF_UUID.strip().upper())) & 
-            (df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False))
-        ].sort_values('MATCH_DATE_FULL', ascending=True).copy()
-
-        # 2. Beregn plot-kolonner (samme som før)
-        hif_recent['PLOT_GOALS'] = hif_recent.apply(lambda r: r['TOTAL_HOME_SCORE'] if str(r['CONTESTANTHOME_OPTAUUID']).upper() == HIF_UUID.upper() else r['TOTAL_AWAY_SCORE'], axis=1)
-        hif_recent['PLOT_XG'] = hif_recent.apply(lambda r: r['HOME_XG'] if str(r['CONTESTANTHOME_OPTAUUID']).upper() == HIF_UUID.upper() else r['AWAY_XG'], axis=1)
-        hif_recent['PLOT_SHOTS'] = hif_recent.apply(lambda r: r['HOME_SHOTS'] if str(r['CONTESTANTHOME_OPTAUUID']).upper() == HIF_UUID.upper() else r['AWAY_SHOTS'], axis=1)
-        hif_recent['PLOT_TOUCHES'] = hif_recent.apply(lambda r: r['HOME_TOUCHES'] if str(r['CONTESTANTHOME_OPTAUUID']).upper() == HIF_UUID.upper() else r['AWAY_TOUCHES'], axis=1)
-        hif_recent['index'] = range(1, len(hif_recent) + 1)
+        # 1. Beregn indices for alle kampe
+        indices = hif_recent.apply(lambda row: beregn_kategori_indices(row, HIF_UUID), axis=1)
+        hif_recent = pd.concat([hif_recent, indices], axis=1)
         
-        # 3. Layout og Grafer
+        # 2. Layout
         r1_c1, r1_c2 = st.columns(2)
         r2_c1, r2_c2 = st.columns(2)
-        metrics = [("Mål", "PLOT_GOALS", r1_c1), ("xG", "PLOT_XG", r1_c2), ("Skud", "PLOT_SHOTS", r2_c1), ("Touches", "PLOT_TOUCHES", r2_c2)]
         
-        # Hent liga-data for gennemsnit (genbruger logik fra beregn_per_90)
-        played = df_stats[df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)]
+        # Vi definerer nu kategorierne her
+        categories = [("OFFENSIV", "Offensiv", r1_c1), ("DEFENSIV", "Defensiv", r1_c2), 
+                      ("OFF. STANDARD", "Off_Std", r2_c1), ("DEF. STANDARD", "Def_Std", r2_c2)]
         
-        for name, col, target in metrics:
+        for title, col, target in categories:
             with target:
-                st.caption(name)
+                st.caption(title)
+                avg_val = hif_recent[col].mean()
                 
-                # Beregn gennemsnit
-                hif_avg = hif_recent[col].mean()
-                
-                map_dict = {
-                    "PLOT_GOALS": ('TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE'),
-                    "PLOT_XG": ('HOME_XG', 'AWAY_XG'),
-                    "PLOT_SHOTS": ('HOME_SHOTS', 'AWAY_SHOTS'),
-                    "PLOT_TOUCHES": ('HOME_TOUCHES', 'AWAY_TOUCHES')
-                }
-                
-                h_col, a_col = map_dict.get(col)
-                liga_avg = pd.concat([played[h_col], played[a_col]]).mean()
-
-                # Basis linje med height=120
+                # Basis linje (Grå)
                 line = alt.Chart(hif_recent).mark_line(
-                    color='#AAAAAA', 
-                    point=alt.MarkConfig(color='#C41E3A', filled=True)
+                    color='#AAAAAA', point=alt.MarkConfig(color='#C41E3A', filled=True)
                 ).encode(
                     x=alt.X('index:O', axis=None),
-                    y=alt.Y(f'{col}:Q', axis=None, scale=alt.Scale(zero=False))
-                ).properties(height=120) # Højden er opdateret her
+                    y=alt.Y(f'{col}:Q', axis=None)
+                ).properties(height=120)
                 
-                # HIF gennemsnitslinje (stiplet rød)
-                hif_rule = alt.Chart(pd.DataFrame({'y': [hif_avg]})).mark_rule(color='#C41E3A', strokeDash=[3,3]).encode(y='y:Q')
+                # Gennemsnitslinje
+                rule = alt.Chart(pd.DataFrame({'y': [avg_val]})).mark_rule(
+                    color='#C41E3A', strokeDash=[3,3]
+                ).encode(y='y:Q')
                 
-                # Liga gennemsnitslinje (stiplet sort)
-                liga_rule = alt.Chart(pd.DataFrame({'y': [liga_avg]})).mark_rule(color='#000000', strokeDash=[2,2], opacity=0.4).encode(y='y:Q')
-                
-                st.altair_chart(line + hif_rule + liga_rule, use_container_width=True)
+                st.altair_chart(line + rule, use_container_width=True)
                 
 if __name__ == "__main__":
     vis_side()
