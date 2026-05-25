@@ -38,9 +38,10 @@ def vis_transfer_dialog(df):
                  hide_index=True, use_container_width=True)
 
 def apply_custom_style():
+    # Fjern 'f' foran """ hvis der ikke er variabler, 
+    # eller skriv {{ og }} for CSS-parenteser
     st.markdown("""
         <style>
-            /* Escape krøllede parenteser ved at skrive dem dobbelt */
             [data-testid="stHeaderBlockContainer"] h1 { display: none; }
             .stApp { background-color: #FFFFFF; }
             
@@ -49,7 +50,7 @@ def apply_custom_style():
             .stats-label { text-align: left !important; color: #666; font-weight: 700; width: 40%; padding: 4px 8px 4px 0; }
             .stats-value { text-align: center !important; font-weight: 700; color: #111; padding: 4px 4px; min-width: 40px; }
             
-            .card-title { color: #1a1a1a; font-size: 11px; font-weight: 700; margin-bottom: 12px; text-transform: uppercase; border-bottom: 1px solid #f0f0f0; padding-bottom: 6px; display: flex; justify-content: space-between; }            
+            .card-title { color: #1a1a1a; font-size: 11px; font-weight: 700; margin-bottom: 12px; text-transform: uppercase; border-bottom: 1px solid #f0f0f0; padding-bottom: 6px; display: flex; justify-content: space-between; }
             .form-wrapper { display: flex; justify-content: space-between; gap: 4px; width: 100%; margin-top: 15px; padding-bottom: 10px; }
             .form-column { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; flex: 1; margin-bottom: 2px; }
             .res-pill { width: 100%; border-radius: 4px; color: white; text-align: center; font-size: 9px; font-weight: 800; padding: 3px 0; margin-bottom: 4px; }
