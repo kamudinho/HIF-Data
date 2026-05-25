@@ -116,6 +116,71 @@ def generate_case_statements(stats_list):
     for stat in stats_list:
         statements.append(f"SUM(CASE WHEN STAT_TYPE = '{stat}' THEN STAT_VALUE ELSE 0 END) AS {stat.upper()}")
     return ",\n".join(statements)
+
+def beregn_per_90(df_stats, team_uuid):
+    played = df_stats[df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].copy()
+    
+    # Konverter alle relevante kolonner til numeriske for at undgå fejl
+    # Sørg for at tilføje de kolonner, du bruger i dit stats_map
+    numeric_cols = [
+        'TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE', 
+        'HOME_XG', 'AWAY_XG', 
+        'HOME_POSSESSION', 'AWAY_POSSESSION',
+        'HOME_OFF_TARGET', 'AWAY_OFF_TARGET', 
+        'HOME_THROWS', 'AWAY_THROWS', 
+        'HOME_FREEKICKS', 'AWAY_FREEKICKS', 
+        'HOME_CORNERS', 'AWAY_CORNERS', 
+        'HOME_TACKLES', 'AWAY_TACKLES'
+    ]
+    
+    for col in numeric_cols:
+        if col in played.columns:
+            played[col] = pd.to_numeric(played[col], errors='coerce').fillna(0)
+
+    hif_matches = played[((played['CONTESTANTHOME_OPTAUUID'].str.upper() == team_uuid.upper()) | 
+                          (played['CONTESTANTAWAY_OPTAUUID'].str.upper() == team_uuid.upper()))].sort_values('MATCH_DATE_FULL')
+    
+    if len(hif_matches) == 0: return None
+
+    last_match = hif_matches.iloc[-1]
+    is_home = str(last_match['CONTESTANTHOME_OPTAUUID']).upper() == team_uuid.upper()
+    opp_name = last_match['CONTESTANTAWAY_NAME'] if is_home else last_match['CONTESTANTHOME_NAME']
+
+    stats_map = {
+        STAT_TYPE_MAP["goals"]: ('TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE'),
+        STAT_TYPE_MAP["expectedGoals"]: ('HOME_XG', 'AWAY_XG'),
+        STAT_TYPE_MAP["possessionPercentage"]: ('HOME_POSSESSION', 'AWAY_POSSESSION'),
+        STAT_TYPE_MAP["shotOffTarget"]: ('HOME_OFF_TARGET', 'AWAY_OFF_TARGET'),
+        STAT_TYPE_MAP["totalThrows"]: ('HOME_THROWS', 'AWAY_THROWS'),
+        STAT_TYPE_MAP["fkFoulLost"]: ('HOME_FREEKICKS', 'AWAY_FREEKICKS'),
+        STAT_TYPE_MAP["wonCorners"]: ('HOME_CORNERS', 'AWAY_CORNERS'),
+        STAT_TYPE_MAP["totalTackle"]: ('HOME_TACKLES', 'AWAY_TACKLES')
+    }
+
+    results = []
+    for display_name, (h_col, a_col) in stats_map.items():
+        # Beregn HIF gennemsnit
+        hif_val = hif_matches.apply(
+            lambda r: r[h_col] if str(r['CONTESTANTHOME_OPTAUUID']).upper() == team_uuid.upper() else r[a_col], 
+            axis=1
+        ).mean()
+        
+        # Beregn Liga gennemsnit
+        liga_val = pd.concat([played[h_col], played[a_col]]).mean()
+        
+        # Seneste kamp værdi
+        last_val = last_match[h_col] if is_home else last_match[a_col]
+        
+        results.append({
+            "Stat": display_name,
+            "HIF": hif_val,
+            "Liga": liga_val,
+            "Diff": hif_val - liga_val,
+            "Seneste": last_val,
+            "Opponent": opp_name
+        })
+        
+    return pd.DataFrame(results)
     
 def beregn_hold_stats(df_stats, team_uuid):
     played = df_stats[df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].copy()
@@ -175,38 +240,7 @@ def beregn_kategori_indices(row, hif_uuid):
     
     return pd.Series({'Offensiv': off_idx, 'Defensiv': def_idx, 'Off_Std': off_std, 'Def_Std': def_std})
 
-def beregn_kategori_indices(row, hif_uuid):
-    is_home = str(row['CONTESTANTHOME_OPTAUUID']).upper() == hif_uuid.upper()
-    
-    # Hent værdier og sørg for at de er tal (konverter None/NaN til 0)
-    xg = (row['HOME_XG'] if is_home else row['AWAY_XG'])
-    shots = (row['HOME_SHOTS'] if is_home else row['AWAY_SHOTS'])
-    touches = (row['HOME_TOUCHES'] if is_home else row['AWAY_TOUCHES'])
-    
-    # Defensiv data
-    tackles = (row['HOME_TACKLES'] if is_home else row['AWAY_TACKLES'])
-    goals_con = (row['TOTAL_AWAY_SCORE'] if is_home else row['TOTAL_HOME_SCORE'])
-    
-    # Standard situationer
-    corners = (row['HOME_CORNERS'] if is_home else row['AWAY_CORNERS'])
-    crosses = (row['HOME_CROSSES'] if is_home else row['AWAY_CROSSES'])
-    opp_corners = (row['AWAY_CORNERS'] if is_home else row['HOME_CORNERS'])
-    
-    # --- FIX: Sørg for at alle værdier behandles som tal ved at bruge .fillna(0) ---
-    # Vi bruger en lokal funktion til at sikre tal-format
-    def v(val):
-        try:
-            return float(val) if pd.notnull(val) else 0.0
-        except:
-            return 0.0
 
-    # Beregninger med sikker konvertering
-    off_idx = (v(xg) * 1.5) + (v(shots) * 0.3) + (v(touches) * 0.05)
-    def_idx = -(float(goals_con) * 2.0) + (float(tackles) * 0.2)
-    off_std = (v(corners) * 0.5) + (v(crosses) * 0.2)
-    def_std = -(v(opp_corners) * 0.3)
-    
-    return pd.Series({'Offensiv': off_idx, 'Defensiv': def_idx, 'Off_Std': off_std, 'Def_Std': def_std})
 def get_team_name(uuid, home_name, away_name, is_home):
     # Opret map fra din TEAMS dictionary
     uuid_to_name = {str(v.get('opta_uuid')).strip().upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
