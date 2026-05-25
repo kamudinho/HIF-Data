@@ -195,6 +195,18 @@ def beregn_kategori_indices(row, hif_uuid):
     
     return pd.Series({'Offensiv': off_idx, 'Defensiv': def_idx, 'Off_Std': off_std, 'Def_Std': def_std})
 
+def get_team_name(uuid, home_name, away_name, is_home):
+    # Opret map fra din TEAMS dictionary
+    uuid_to_name = {str(v.get('opta_uuid')).strip().upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
+    
+    # Prøv at finde navnet via UUID
+    name = uuid_to_name.get(str(uuid).strip().upper())
+    if name:
+        return name
+    
+    # Fallback: Brug navnet direkte fra databasen, hvis UUID ikke er mappet
+    return home_name if not is_home else away_name
+    
 def vis_side():
     apply_custom_style()
     conn = _get_snowflake_conn()
@@ -295,10 +307,15 @@ def vis_side():
             uuid_to_name = {str(v.get('opta_uuid')).strip().upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
             
             hif_recent['OPPONENT_NAME'] = hif_recent.apply(
-                lambda r: uuid_to_name.get(
-                    str(r['CONTESTANTAWAY_OPTAUUID']).strip().upper() if str(r['CONTESTANTHOME_OPTAUUID']).strip().upper() == HIF_UUID.strip().upper() 
-                    else str(r['CONTESTANTHOME_OPTAUUID']).strip().upper(), 
-                    "Ukendt"
+                lambda r: get_team_name(
+                    # Hvis vi er hjemme, så tag away_uuid, ellers tag home_uuid
+                    r['CONTESTANTAWAY_OPTAUUID'] if str(r['CONTESTANTHOME_OPTAUUID']).strip().upper() == HIF_UUID.strip().upper() 
+                    else r['CONTESTANTHOME_OPTAUUID'],
+                    # Send navnene med som fallback
+                    r['CONTESTANTHOME_NAME'],
+                    r['CONTESTANTAWAY_NAME'],
+                    # Er vi hjemme?
+                    str(r['CONTESTANTHOME_OPTAUUID']).strip().upper() == HIF_UUID.strip().upper()
                 ), axis=1
             )
             
