@@ -85,41 +85,27 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
             SUM(CASE WHEN STAT_TYPE = 'touchesInOppBox' THEN STAT_VALUE ELSE 0 END) AS TOUCHES_IN_BOX 
             FROM {DB}.OPTA_MATCHEXPECTEDGOALS WHERE MATCH_ID IN ({match_id_subquery}) GROUP BY 1, 2
         ),
-        ForwardPassesPivot AS (
-            SELECT MATCH_OPTAUUID, EVENT_CONTESTANT_OPTAUUID, 
-            COUNT(CASE WHEN EVENT_TYPEID = 1 AND EVENT_OUTCOME = 1 AND LEAD_X > (EVENT_X + 10) THEN 1 END) AS FORWARD_PASSES 
-            FROM (SELECT MATCH_OPTAUUID, EVENT_CONTESTANT_OPTAUUID, EVENT_TYPEID, EVENT_OUTCOME, EVENT_X, LEAD(EVENT_X) OVER (PARTITION BY MATCH_OPTAUUID, EVENT_CONTESTANT_OPTAUUID ORDER BY EVENT_TIMESTAMP, EVENT_EVENTID) as LEAD_X FROM {DB}.OPTA_EVENTS WHERE MATCH_OPTAUUID IN ({match_id_subquery}) AND EVENT_TYPEID = 1) 
-            GROUP BY 1, 2
-        ),
         MatchStatsPivot AS (
             SELECT MATCH_OPTAUUID, CONTESTANT_OPTAUUID, 
             MAX(CASE WHEN STAT_TYPE = 'possessionPercentage' THEN STAT_TOTAL END) AS POSSESSION, 
             MAX(CASE WHEN STAT_TYPE = 'totalPass' THEN STAT_TOTAL END) AS TOTAL_PASSES, 
             MAX(CASE WHEN STAT_TYPE = 'wonCorners' THEN STAT_TOTAL END) AS CORNERS,
-            MAX(CASE WHEN STAT_TYPE = 'totalCross' THEN STAT_TOTAL END) AS CROSSES,
-            MAX(CASE WHEN STAT_TYPE = 'totalTackle' THEN STAT_TOTAL END) AS TACKLES,
-            MAX(CASE WHEN STAT_TYPE = 'possessionPercentage' THEN STAT_TOTAL END) AS POSSESSION,
-            MAX(CASE WHEN STAT_TYPE = 'totalPass' THEN STAT_TOTAL END) AS TOTAL_PASSES,
-            MAX(CASE WHEN STAT_TYPE = 'totalThrows' THEN STAT_TOTAL END) AS THROWS,        -- Tilføjet
-            MAX(CASE WHEN STAT_TYPE = 'totalFreeKick' THEN STAT_TOTAL END) AS FREEKICKS,    -- Tilføjet
-            MAX(CASE WHEN STAT_TYPE = 'totalOffside' THEN STAT_TOTAL END) AS OFFSIDES,
-            MAX(FORMATIONUSED) AS FORMATION 
+            MAX(CASE WHEN STAT_TYPE = 'attemptsOffTarget' THEN STAT_TOTAL END) AS OFF_TARGET,
+            MAX(CASE WHEN STAT_TYPE = 'totalThrows' THEN STAT_TOTAL END) AS THROWS,
+            MAX(CASE WHEN STAT_TYPE = 'totalFreeKick' THEN STAT_TOTAL END) AS FREEKICKS,
+            MAX(CASE WHEN STAT_TYPE = 'totalTackle' THEN STAT_TOTAL END) AS TACKLES
             FROM {DB}.OPTA_MATCHSTATS WHERE MATCH_OPTAUUID IN ({match_id_subquery}) GROUP BY 1, 2
         )
         SELECT b.*, 
         sh.XG AS HOME_XG, sh.SHOTS AS HOME_SHOTS, sh.TOUCHES_IN_BOX AS HOME_TOUCHES, 
-        msh.POSSESSION AS HOME_POSS, msh.TOTAL_PASSES AS HOME_PASSES, msh.CORNERS AS HOME_CORNERS, msh.CROSSES AS HOME_CROSSES, msh.TACKLES AS HOME_TACKLES, msh.FORMATION AS HOME_FORMATION, 
-        fp_h.FORWARD_PASSES AS HOME_FORWARD_PASSES, 
+        msh.POSSESSION AS HOME_POSSESSION, msh.OFF_TARGET AS HOME_OFF_TARGET, msh.THROWS AS HOME_THROWS, msh.FREEKICKS AS HOME_FREEKICKS, msh.CORNERS AS HOME_CORNERS, msh.TACKLES AS HOME_TACKLES,
         sa.XG AS AWAY_XG, sa.SHOTS AS AWAY_SHOTS, sa.TOUCHES_IN_BOX AS AWAY_TOUCHES, 
-        msa.POSSESSION AS AWAY_POSS, msa.TOTAL_PASSES AS AWAY_PASSES, msa.CORNERS AS AWAY_CORNERS, msa.CROSSES AS AWAY_CROSSES, msa.TACKLES AS AWAY_TACKLES, msa.FORMATION AS AWAY_FORMATION, 
-        fp_a.FORWARD_PASSES AS AWAY_FORWARD_PASSES 
+        msa.POSSESSION AS AWAY_POSSESSION, msa.OFF_TARGET AS AWAY_OFF_TARGET, msa.THROWS AS AWAY_THROWS, msa.FREEKICKS AS AWAY_FREEKICKS, msa.CORNERS AS AWAY_CORNERS, msa.TACKLES AS AWAY_TACKLES
         FROM MatchBase b
         LEFT JOIN ExpectedGoalsPivot sh ON b.MATCH_OPTAUUID = sh.MATCH_ID AND b.CONTESTANTHOME_OPTAUUID = sh.CONTESTANT_OPTAUUID 
         LEFT JOIN ExpectedGoalsPivot sa ON b.MATCH_OPTAUUID = sa.MATCH_ID AND b.CONTESTANTAWAY_OPTAUUID = sa.CONTESTANT_OPTAUUID 
         LEFT JOIN MatchStatsPivot msh ON b.MATCH_OPTAUUID = msh.MATCH_OPTAUUID AND b.CONTESTANTHOME_OPTAUUID = msh.CONTESTANT_OPTAUUID 
         LEFT JOIN MatchStatsPivot msa ON b.MATCH_OPTAUUID = msa.MATCH_OPTAUUID AND b.CONTESTANTAWAY_OPTAUUID = msa.CONTESTANT_OPTAUUID 
-        LEFT JOIN ForwardPassesPivot fp_h ON b.MATCH_OPTAUUID = fp_h.MATCH_OPTAUUID AND b.CONTESTANTHOME_OPTAUUID = fp_h.EVENT_CONTESTANT_OPTAUUID 
-        LEFT JOIN ForwardPassesPivot fp_a ON b.MATCH_OPTAUUID = fp_a.MATCH_OPTAUUID AND b.CONTESTANTAWAY_OPTAUUID = fp_a.EVENT_CONTESTANT_OPTAUUID 
         ORDER BY b.MATCH_DATE_FULL DESC"""}
     
 def beregn_hold_stats(df_stats, team_uuid):
@@ -141,10 +127,11 @@ def beregn_hold_stats(df_stats, team_uuid):
 def beregn_per_90(df_stats, team_uuid):
     played = df_stats[df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].copy()
     
-    # Sørg for numeriske værdier
-    cols = ['TOTAL_HOME_SCORE', 'HOME_XG', 'HOME_SHOTS', 'HOME_TOUCHES', 'HOME_PASSES', 'HOME_CORNERS', 'HOME_TACKLES',
-            'TOTAL_AWAY_SCORE', 'AWAY_XG', 'AWAY_SHOTS', 'AWAY_TOUCHES', 'AWAY_PASSES', 'AWAY_CORNERS', 'AWAY_TACKLES']
-    for col in cols:
+    # Konverter alle relevante kolonner til numeriske
+    numeric_cols = ['TOTAL_HOME_SCORE', 'HOME_XG', 'HOME_SHOTS', 'HOME_TOUCHES', 'HOME_POSSESSION', 'HOME_OFF_TARGET', 'HOME_THROWS', 'HOME_FREEKICKS',
+                    'TOTAL_AWAY_SCORE', 'AWAY_XG', 'AWAY_SHOTS', 'AWAY_TOUCHES', 'AWAY_POSSESSION', 'AWAY_OFF_TARGET', 'AWAY_THROWS', 'AWAY_FREEKICKS']
+    
+    for col in numeric_cols:
         if col in played.columns:
             played[col] = pd.to_numeric(played[col], errors='coerce').fillna(0)
 
@@ -153,7 +140,6 @@ def beregn_per_90(df_stats, team_uuid):
     
     if len(hif_matches) == 0: return None
 
-    # Hent seneste kamp data
     last_match = hif_matches.iloc[-1]
     is_home = str(last_match['CONTESTANTHOME_OPTAUUID']).upper() == team_uuid.upper()
     opp_name = last_match['CONTESTANTAWAY_NAME'] if is_home else last_match['CONTESTANTHOME_NAME']
@@ -161,12 +147,7 @@ def beregn_per_90(df_stats, team_uuid):
     stats_map = {
         "Mål": ('TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE'),
         "xG": ('HOME_XG', 'AWAY_XG'),
-        "Skud": ('HOME_SHOTS', 'AWAY_SHOTS'),
-        "Touches in box": ('HOME_TOUCHES', 'AWAY_TOUCHES'),
-        "Pasninger": ('HOME_PASSES', 'AWAY_PASSES'),
-        "Hjørnespark": ('HOME_CORNERS', 'AWAY_CORNERS'),
-        "Tacklinger": ('HOME_TACKLES', 'AWAY_TACKLES'),
-        "Possession": ('HOME_POSSESSION', 'AWAY_POSSESSION'), # Tilføj disse
+        "Possession": ('HOME_POSSESSION', 'AWAY_POSSESSION'),
         "Skud forbi": ('HOME_OFF_TARGET', 'AWAY_OFF_TARGET'),
         "Indkast": ('HOME_THROWS', 'AWAY_THROWS'),
         "Frispark": ('HOME_FREEKICKS', 'AWAY_FREEKICKS')
