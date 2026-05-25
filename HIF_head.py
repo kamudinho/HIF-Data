@@ -90,7 +90,7 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
             MAX(CASE WHEN LOWER(TRIM(STAT_TYPE)) = 'totaltackle' THEN STAT_TOTAL END) AS TACKLES,
             MAX(CASE WHEN LOWER(TRIM(STAT_TYPE)) = 'totalcross' THEN STAT_TOTAL END) AS CROSSES,
             MAX(CASE WHEN LOWER(TRIM(STAT_TYPE)) = 'totalclearance' THEN STAT_TOTAL END) AS CLEARANCES
-            FROM KLUB_HVIDOVREIF.AXIS.OPTA_MATCHSTATS 
+            FROM {DB}.OPTA_MATCHSTATS 
             WHERE MATCH_OPTAUUID IN ({match_id_subquery}) 
             GROUP BY 1, 2
         )
@@ -104,8 +104,8 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
         LEFT JOIN ExpectedGoalsPivot sa ON b.MATCH_OPTAUUID = sa.MATCH_ID AND b.CONTESTANTAWAY_OPTAUUID = sa.CONTESTANT_OPTAUUID 
         LEFT JOIN MatchStatsPivot msh ON b.MATCH_OPTAUUID = msh.MATCH_OPTAUUID AND b.CONTESTANTHOME_OPTAUUID = msh.CONTESTANT_OPTAUUID 
         LEFT JOIN MatchStatsPivot msa ON b.MATCH_OPTAUUID = msa.MATCH_OPTAUUID AND b.CONTESTANTAWAY_OPTAUUID = msa.CONTESTANT_OPTAUUID 
-        ORDER BY b.MATCH_DATE_FULL DESC"}
-
+        ORDER BY b.MATCH_DATE_FULL DESC"""}
+    
 def beregn_per_90(df_stats, team_uuid):
     played = df_stats[df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].copy()
     numeric_cols = ['TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE', 'HOME_XG', 'AWAY_XG', 'HOME_POSSESSION', 'AWAY_POSSESSION', 'HOME_OFF_TARGET', 'AWAY_OFF_TARGET', 'HOME_THROWS', 'AWAY_THROWS', 'HOME_FREEKICKS', 'AWAY_FREEKICKS', 'HOME_CORNERS', 'AWAY_CORNERS', 'HOME_TACKLES', 'AWAY_TACKLES', 'HOME_CROSSES', 'AWAY_CROSSES', 'HOME_CLEARANCES', 'AWAY_CLEARANCES', 'HOME_PASSES', 'AWAY_PASSES']
