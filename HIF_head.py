@@ -67,44 +67,58 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
     match_id_subquery = f"SELECT DISTINCT MATCH_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = '{current_tournament_uuid}'"
     hif_filter_matchinfo = f"AND (CONTESTANTHOME_OPTAUUID = '{HIF_UUID}' OR CONTESTANTAWAY_OPTAUUID = '{HIF_UUID}')" if hif_only else ""
 
+    # Opdateret SQL-query uden cross-referencer
     return {"opta_team_stats": f"""
-        WITH MatchBase AS (
+        WITH CombinedStats AS (
+            SELECT MATCH_OPTAUUID, CONTESTANT_OPTAUUID, STAT_TYPE, TRY_CAST(STAT_TOTAL AS FLOAT) AS STAT_VALUE
+            FROM {DB}.OPTA_MATCHSTATS
+            UNION ALL
+            SELECT MATCH_ID, CONTESTANT_OPTAUUID, STAT_TYPE, TRY_CAST(STAT_VALUE AS FLOAT)
+            FROM {DB}.OPTA_MATCHEXPECTEDGOALS
+        ),
+        MatchBase AS (
             SELECT MATCH_OPTAUUID, MATCH_DATE_FULL, WEEK, MATCH_STATUS, CONTESTANTHOME_OPTAUUID, CONTESTANTHOME_NAME, CONTESTANTAWAY_OPTAUUID, CONTESTANTAWAY_NAME, TOTAL_HOME_SCORE, TOTAL_AWAY_SCORE 
             FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = '{current_tournament_uuid}' {hif_filter_matchinfo}
         ),
-        ExpectedGoalsPivot AS (
-            SELECT MATCH_ID, CONTESTANT_OPTAUUID, 
-            SUM(CASE WHEN STAT_TYPE = 'expectedGoals' THEN STAT_VALUE ELSE 0 END) AS XG, 
-            SUM(CASE WHEN STAT_TYPE = 'totalScoringAtt' THEN STAT_VALUE ELSE 0 END) AS SHOTS, 
-            SUM(CASE WHEN STAT_TYPE = 'touchesInOppBox' THEN STAT_VALUE ELSE 0 END) AS TOUCHES_IN_BOX 
-            FROM {DB}.OPTA_MATCHEXPECTEDGOALS WHERE MATCH_ID IN ({match_id_subquery}) GROUP BY 1, 2
-        ),
-        MatchStatsPivot AS (
-            SELECT MATCH_OPTAUUID, CONTESTANT_OPTAUUID, 
-            MAX(CASE WHEN LOWER(TRIM(STAT_TYPE)) = 'possessionpercentage' THEN STAT_TOTAL END) AS POSSESSION, 
-            MAX(CASE WHEN LOWER(TRIM(STAT_TYPE)) = 'totalpass' THEN STAT_TOTAL END) AS TOTAL_PASSES, 
-            MAX(CASE WHEN LOWER(TRIM(STAT_TYPE)) = 'woncorners' THEN STAT_TOTAL END) AS CORNERS,
-            MAX(CASE WHEN LOWER(TRIM(STAT_TYPE)) = 'shotofftarget' THEN STAT_TOTAL END) AS OFF_TARGET,
-            MAX(CASE WHEN LOWER(TRIM(STAT_TYPE)) = 'totalthrows' THEN STAT_TOTAL END) AS THROWS,
-            MAX(CASE WHEN LOWER(TRIM(STAT_TYPE)) = 'fkfoullost' THEN STAT_TOTAL END) AS FREEKICKS,
-            MAX(CASE WHEN LOWER(TRIM(STAT_TYPE)) = 'totaltackle' THEN STAT_TOTAL END) AS TACKLES,
-            MAX(CASE WHEN LOWER(TRIM(STAT_TYPE)) = 'totalcross' THEN STAT_TOTAL END) AS CROSSES,
-            MAX(CASE WHEN LOWER(TRIM(STAT_TYPE)) = 'totalclearance' THEN STAT_TOTAL END) AS CLEARANCES
-            FROM {DB}.OPTA_MATCHSTATS 
-            WHERE MATCH_OPTAUUID IN ({match_id_subquery}) 
+        PivotStats AS (
+            SELECT MATCH_OPTAUUID, CONTESTANT_OPTAUUID,
+            SUM(CASE WHEN STAT_TYPE = 'expectedGoals' THEN STAT_VALUE ELSE 0 END) AS XG,
+            SUM(CASE WHEN STAT_TYPE = 'totalScoringAtt' THEN STAT_VALUE ELSE 0 END) AS SHOTS,
+            SUM(CASE WHEN STAT_TYPE = 'touchesInOppBox' THEN STAT_VALUE ELSE 0 END) AS TOUCHES_IN_BOX,
+            MAX(CASE WHEN STAT_TYPE = 'possessionPercentage' THEN STAT_VALUE END) AS POSSESSION,
+            SUM(CASE WHEN STAT_TYPE = 'totalPass' THEN STAT_VALUE ELSE 0 END) AS PASSES,
+            SUM(CASE WHEN STAT_TYPE = 'wonCorners' THEN STAT_VALUE ELSE 0 END) AS CORNERS,
+            SUM(CASE WHEN STAT_TYPE = 'shotOffTarget' THEN STAT_VALUE ELSE 0 END) AS OFF_TARGET,
+            SUM(CASE WHEN STAT_TYPE = 'totalThrows' THEN STAT_VALUE ELSE 0 END) AS THROWS,
+            SUM(CASE WHEN STAT_TYPE = 'fkFoulLost' THEN STAT_VALUE ELSE 0 END) AS FREEKICKS,
+            SUM(CASE WHEN STAT_TYPE = 'totalTackle' THEN STAT_VALUE ELSE 0 END) AS TACKLES,
+            SUM(CASE WHEN STAT_TYPE = 'totalClearance' THEN STAT_VALUE ELSE 0 END) AS CLEARANCES
+            FROM CombinedStats
             GROUP BY 1, 2
         )
         SELECT b.*, 
-        sh.XG AS HOME_XG, sh.SHOTS AS HOME_SHOTS, sh.TOUCHES_IN_BOX AS HOME_TOUCHES, 
-        msh.POSSESSION AS HOME_POSSESSION, msh.CROSSES AS HOME_CROSSES, msh.OFF_TARGET AS HOME_OFF_TARGET, msh.THROWS AS HOME_THROWS, msh.FREEKICKS AS HOME_FREEKICKS, msh.CORNERS AS HOME_CORNERS, msh.TACKLES AS HOME_TACKLES, msh.CLEARANCES AS HOME_CLEARANCES, msh.TOTAL_PASSES AS HOME_PASSES,
-        sa.XG AS AWAY_XG, sa.SHOTS AS AWAY_SHOTS, sa.TOUCHES_IN_BOX AS AWAY_TOUCHES, 
-        msa.POSSESSION AS AWAY_POSSESSION, msa.CROSSES AS AWAY_CROSSES, msa.OFF_TARGET AS AWAY_OFF_TARGET, msa.THROWS AS AWAY_THROWS, msa.FREEKICKS AS AWAY_FREEKICKS, msa.CORNERS AS AWAY_CORNERS, msa.TACKLES AS AWAY_TACKLES, msa.CLEARANCES AS AWAY_CLEARANCES, msa.TOTAL_PASSES AS AWAY_PASSES
+        s1.XG AS HOME_XG, s1.SHOTS AS HOME_SHOTS, s1.TOUCHES_IN_BOX AS HOME_TOUCHES, s1.POSSESSION AS HOME_POSSESSION, s1.PASSES AS HOME_PASSES, s1.CORNERS AS HOME_CORNERS, s1.OFF_TARGET AS HOME_OFF_TARGET, s1.THROWS AS HOME_THROWS, s1.FREEKICKS AS HOME_FREEKICKS, s1.TACKLES AS HOME_TACKLES, s1.CLEARANCES AS HOME_CLEARANCES,
+        s2.XG AS AWAY_XG, s2.SHOTS AS AWAY_SHOTS, s2.TOUCHES_IN_BOX AS AWAY_TOUCHES, s2.POSSESSION AS AWAY_POSSESSION, s2.PASSES AS AWAY_PASSES, s2.CORNERS AS AWAY_CORNERS, s2.OFF_TARGET AS AWAY_OFF_TARGET, s2.THROWS AS AWAY_THROWS, s2.FREEKICKS AS AWAY_FREEKICKS, s2.TACKLES AS AWAY_TACKLES, s2.CLEARANCES AS AWAY_CLEARANCES
         FROM MatchBase b
-        LEFT JOIN ExpectedGoalsPivot sh ON b.MATCH_OPTAUUID = sh.MATCH_ID AND b.CONTESTANTHOME_OPTAUUID = sh.CONTESTANT_OPTAUUID 
-        LEFT JOIN ExpectedGoalsPivot sa ON b.MATCH_OPTAUUID = sa.MATCH_ID AND b.CONTESTANTAWAY_OPTAUUID = sa.CONTESTANT_OPTAUUID 
-        LEFT JOIN MatchStatsPivot msh ON b.MATCH_OPTAUUID = msh.MATCH_OPTAUUID AND b.CONTESTANTHOME_OPTAUUID = msh.CONTESTANT_OPTAUUID 
-        LEFT JOIN MatchStatsPivot msa ON b.MATCH_OPTAUUID = msa.MATCH_OPTAUUID AND b.CONTESTANTAWAY_OPTAUUID = msa.CONTESTANT_OPTAUUID 
+        LEFT JOIN PivotStats s1 ON b.MATCH_OPTAUUID = s1.MATCH_OPTAUUID AND b.CONTESTANTHOME_OPTAUUID = s1.CONTESTANT_OPTAUUID
+        LEFT JOIN PivotStats s2 ON b.MATCH_OPTAUUID = s2.MATCH_OPTAUUID AND b.CONTESTANTAWAY_OPTAUUID = s2.CONTESTANT_OPTAUUID
         ORDER BY b.MATCH_DATE_FULL DESC"""}
+
+def beregn_kategori_indices(row, hif_uuid):
+    is_home = str(row['CONTESTANTHOME_OPTAUUID']).upper() == hif_uuid.upper()
+    def get_val(col_h, col_a):
+        val = row[col_h] if is_home else row[col_a]
+        return float(val) if pd.notnull(val) else 0.0
+    
+    xg, shots, touches = get_val('HOME_XG', 'AWAY_XG'), get_val('HOME_SHOTS', 'AWAY_SHOTS'), get_val('HOME_TOUCHES', 'AWAY_TOUCHES')
+    tackles, goals_con = get_val('HOME_TACKLES', 'AWAY_TACKLES'), get_val('TOTAL_AWAY_SCORE', 'TOTAL_HOME_SCORE')
+    corners, opp_corners = get_val('HOME_CORNERS', 'AWAY_CORNERS'), get_val('AWAY_CORNERS', 'HOME_CORNERS')
+    
+    off_idx = (xg * 1.5) + (shots * 0.3) + (touches * 0.05)
+    def_idx = -(goals_con * 2.0) + (tackles * 0.2)
+    off_std = (corners * 0.5) 
+    def_std = -(opp_corners * 0.3)
+    return pd.Series({'Offensiv': off_idx, 'Defensiv': def_idx, 'Off_Std': off_std, 'Def_Std': def_std})
     
 def beregn_per_90(df_stats, team_uuid):
     played = df_stats[df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].copy()
@@ -153,21 +167,6 @@ def beregn_hold_stats(df_stats, team_uuid):
     xga = home['AWAY_XG'].fillna(0).sum() + away['HOME_XG'].fillna(0).sum()
     poss_all = pd.concat([home['HOME_POSSESSION'], away['AWAY_POSSESSION']]).dropna().mean()
     return {"gf": f"{gf / total_matches:.1f}", "ga": f"{ga / total_matches:.1f}", "xgf": f"{xgf / total_matches:.2f}", "xga": f"{xga / total_matches:.2f}", "poss": f"{int(round(poss_all))}%" if pd.notnull(poss_all) else "0%"}
-
-def beregn_kategori_indices(row, hif_uuid):
-    is_home = str(row['CONTESTANTHOME_OPTAUUID']).upper() == hif_uuid.upper()
-    def get_val(col_h, col_a):
-        val = row[col_h] if is_home else row[col_a]
-        return float(val) if pd.notnull(val) else 0.0
-    xg, shots, touches = get_val('HOME_XG', 'AWAY_XG'), get_val('HOME_SHOTS', 'AWAY_SHOTS'), get_val('HOME_TOUCHES', 'AWAY_TOUCHES')
-    tackles, goals_con = get_val('HOME_TACKLES', 'AWAY_TACKLES'), get_val('TOTAL_AWAY_SCORE', 'TOTAL_HOME_SCORE')
-    corners, opp_corners = get_val('HOME_CORNERS', 'AWAY_CORNERS'), get_val('AWAY_CORNERS', 'HOME_CORNERS')
-    crosses = get_val('HOME_CROSSES', 'AWAY_CROSSES') if 'HOME_CROSSES' in row else 0.0
-    off_idx = (xg * 1.5) + (shots * 0.3) + (touches * 0.05)
-    def_idx = -(goals_con * 2.0) + (tackles * 0.2)
-    off_std = (corners * 0.5) + (crosses * 0.2)
-    def_std = -(opp_corners * 0.3)
-    return pd.Series({'Offensiv': off_idx, 'Defensiv': def_idx, 'Off_Std': off_std, 'Def_Std': def_std})
 
 def get_team_name(uuid, home_name, away_name, is_home):
     uuid_to_name = {str(v.get('opta_uuid')).strip().upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
