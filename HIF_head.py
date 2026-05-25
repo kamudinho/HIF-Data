@@ -149,7 +149,7 @@ def beregn_per_90(df_stats, team_uuid):
         "Mål": ('TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE'),
         "xG": ('HOME_XG', 'AWAY_XG'),
         "Skud": ('HOME_SHOTS', 'AWAY_SHOTS'),
-        "Touches": ('HOME_TOUCHES', 'AWAY_TOUCHES'),
+        "Touches in box": ('HOME_TOUCHES', 'AWAY_TOUCHES'),
         "Pasninger": ('HOME_PASSES', 'AWAY_PASSES'),
         "Hjørnespark": ('HOME_CORNERS', 'AWAY_CORNERS'),
         "Tacklinger": ('HOME_TACKLES', 'AWAY_TACKLES')
