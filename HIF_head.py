@@ -283,18 +283,31 @@ def vis_side():
             df_stats_comp = beregn_per_90(df_stats, HIF_UUID)
             
             if df_stats_comp is not None:
-                html = "<table class='stats-table'><thead><tr><th></th><th>HIF</th><th>Liga</th><th>Diff</th></tr></thead>"
-                for _, r in df_stats_comp.iterrows():
-                    # Tilføj farve til differencen
-                    diff_color = "#28a745" if r['Diff'] > 0 else "#dc3545"
-                    html += f"""<tr>
-                        <td class='stats-label'>{r['Stat']}</td>
-                        <td class='stats-value'>{r['HIF']:.2f}</td>
-                        <td class='stats-value'>{r['Liga']:.2f}</td>
-                        <td class='stats-value' style='color:{diff_color}; font-weight:800;'>{r['Diff']:+.2f}</td>
-                    </tr>"""
-                html += "</table>"
-                st.markdown(html, unsafe_allow_html=True)
+            opp_navn = df_stats_comp.iloc[0]['Opponent']
+            opp_header = f"vs. {opp_navn}"
+            
+            # Rækkefølge i header: Stat -> vs. Modstander -> HIF -> Liga -> Diff
+            html = f"""<table class='stats-table'>
+                <thead><tr>
+                    <th>Stat</th>
+                    <th style='text-align:right;'>{opp_header}</th>
+                    <th>HIF</th>
+                    <th>Liga</th>
+                    <th>Diff</th>
+                </tr></thead>"""
+                
+            for _, r in df_stats_comp.iterrows():
+                diff_color = "#28a745" if r['Diff'] > 0 else "#dc3545"
+                # Rækkefølge i rækker: Stat -> Seneste -> HIF -> Liga -> Diff
+                html += f"""<tr>
+                    <td class='stats-label'>{r['Stat']}</td>
+                    <td class='stats-value' style='text-align:right; color:#1a1a1a;'>{r['Seneste']:.1f}</td>
+                    <td class='stats-value'>{r['HIF']:.2f}</td>
+                    <td class='stats-value'>{r['Liga']:.2f}</td>
+                    <td class='stats-value' style='color:{diff_color}; font-weight:800;'>{r['Diff']:+.2f}</td>
+                </tr>"""
+            html += "</table>"
+            st.markdown(html, unsafe_allow_html=True)
             
     with trend_area:
         # 1. Hent og forbered data
