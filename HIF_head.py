@@ -180,6 +180,7 @@ def beregn_kategori_indices(row, hif_uuid):
     touches = (row['HOME_TOUCHES'] if is_home else row['AWAY_TOUCHES'])
     
     # Defensiv data
+    tackles = (row['HOME_TACKLES'] if is_home else row['AWAY_TACKLES'])
     goals_con = (row['TOTAL_AWAY_SCORE'] if is_home else row['TOTAL_HOME_SCORE'])
     
     # Standard situationer
@@ -197,7 +198,7 @@ def beregn_kategori_indices(row, hif_uuid):
 
     # Beregninger med sikker konvertering
     off_idx = (v(xg) * 1.5) + (v(shots) * 0.3) + (v(touches) * 0.05)
-    def_idx = -(v(goals_con) * 2.0)
+    def_idx = -(float(goals_con) * 2.0) + (float(tackles) * 0.2)
     off_std = (v(corners) * 0.5) + (v(crosses) * 0.2)
     def_std = -(v(opp_corners) * 0.3)
     
@@ -226,8 +227,6 @@ def vis_side():
     df_stats.columns = [str(c).upper() for c in df_stats.columns]
     opta_to_name = {str(v['opta_uuid']).strip().upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
     df_matches['MATCH_DATE_FULL'] = pd.to_datetime(df_matches['MATCH_DATE_FULL'], errors='coerce').dt.tz_localize(None)
-
-    st.write(df_stats.columns.tolist())
     
     col1, col2, col3 = st.columns([1, 1, 1])
     
@@ -347,9 +346,9 @@ def vis_side():
             
             categories = [
                 ("OFFENSIV", "Offensiv", "xG, Skud, Touches", r1_c1), 
-                ("DEFENSIV", "Defensiv", "Mål imod", r2_c1), 
-                ("OFF. STD", "Off_Std", "Hjørnespark, Indlæg", r1_c2), 
-                ("DEF. STD", "Def_Std", "Modstander hjørner", r2_c2)
+                ("DEFENSIV", "Defensiv", "Mål imod, tacklinger", r2_c1), 
+                ("OFF. STD", "Off_Std", "Hjørnespark", r1_c2), 
+                ("DEF. STD", "Def_Std", "Modstander hjørne", r2_c2)
             ]
 
             for title, col, desc, target in categories:
