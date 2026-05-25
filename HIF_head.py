@@ -290,7 +290,7 @@ def vis_side():
                 
                 html = f"""<table class='stats-table'>
                     <thead><tr>
-                        <th>Stat</th>
+                        <th></th>
                         <th style='text-align:right;'>{opp_header}</th>
                         <th>HIF</th>
                         <th>Liga</th>
@@ -300,7 +300,7 @@ def vis_side():
                 for _, r in df_stats_comp.iterrows():
                     diff_color = "#28a745" if r['Diff'] > 0 else "#dc3545"
                     html += f"""<tr>
-                        <td class='stats-label'>{r['']}</td>
+                        <td class='stats-label'>{r['Stat']}</td>
                         <td class='stats-value' style='text-align:right; color:#1a1a1a;'>{r['Seneste']:.0f}</td>
                         <td class='stats-value'>{r['HIF']:.2f}</td>
                         <td class='stats-value'>{r['Liga']:.2f}</td>
