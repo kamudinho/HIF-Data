@@ -277,7 +277,7 @@ def vis_side():
                 st.markdown(html, unsafe_allow_html=True)
             
     with trend_area:
-        # 1. Hent data og konverter til numerisk (vigtigt for at undgå fejl)
+        # 1. Hent og forbered data
         hif_recent = df_stats[
             ((df_stats['CONTESTANTHOME_OPTAUUID'].str.upper() == HIF_UUID.strip().upper()) | 
              (df_stats['CONTESTANTAWAY_OPTAUUID'].str.upper() == HIF_UUID.strip().upper())) & 
@@ -290,39 +290,57 @@ def vis_side():
             for col in num_cols:
                 hif_recent[col] = pd.to_numeric(hif_recent[col], errors='coerce').fillna(0)
 
-            # 2. Beregn indices for både HIF og hele ligaen (played)
-            # Vi genbruger din beregn_kategori_indices funktion her
+            # Tilføj Tooltip-data
+            hif_recent['OPPONENT_NAME'] = hif_recent.apply(lambda r: opta_to_name.get(r['CONTESTANTAWAY_OPTAUUID'] if str(r['CONTESTANTHOME_OPTAUUID']).upper() == HIF_UUID.upper() else r['CONTESTANTHOME_OPTAUUID'], "Ukendt"), axis=1)
+            hif_recent['HOME_OR_AWAY'] = hif_recent.apply(lambda r: "H" if str(r['CONTESTANTHOME_OPTAUUID']).upper() == HIF_UUID.upper() else "U", axis=1)
+            hif_recent['SCORE_DISPLAY'] = hif_recent.apply(lambda r: f"{int(r['TOTAL_HOME_SCORE'])}-{int(r['TOTAL_AWAY_SCORE'])}", axis=1)
+
+            # Beregn indices
             indices = hif_recent.apply(lambda row: beregn_kategori_indices(row, HIF_UUID), axis=1)
             hif_recent = pd.concat([hif_recent, indices], axis=1)
             hif_recent['index'] = range(1, len(hif_recent) + 1)
 
-            # Beregn Liga-gennemsnit for de 4 kategorier
+            # Liga-snit
             played = df_stats[df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].copy()
-            for col in num_cols:
-                played[col] = pd.to_numeric(played[col], errors='coerce').fillna(0)
-            
+            for col in num_cols: played[col] = pd.to_numeric(played[col], errors='coerce').fillna(0)
             liga_indices = played.apply(lambda row: beregn_kategori_indices(row, "DUMMY_UUID"), axis=1)
             liga_means = liga_indices.mean()
 
-            # 3. Layout med 4 grafer
+            # 3. Layout og Grafer
             r1_c1, r1_c2 = st.columns(2)
             r2_c1, r2_c2 = st.columns(2)
-            categories = [("OFFENSIV", "Offensiv", r1_c1), ("DEFENSIV", "Defensiv", r1_c2), 
-                          ("OFF. STANDARD", "Off_Std", r2_c1), ("DEF. STANDARD", "Def_Std", r2_c2)]
+            
+            categories = [
+                ("OFFENSIV", "Offensiv", "xG, Skud, Touches", r1_c1), 
+                ("DEFENSIV", "Defensiv", "Mål imod", r2_c1), 
+                ("OFF. STD", "Off_Std", "Hjørnespark, Indlæg", r1_c2), 
+                ("DEF. STD", "Def_Std", "Modstander hjørner", r2_c2)
+            ]
 
-            for title, col, target in categories:
+            for title, col, desc, target in categories:
                 with target:
-                    st.caption(title)
+                    st.markdown(f"**{title}**")
+                    st.caption(desc)
+                    
                     hif_avg = hif_recent[col].mean()
-                    liga_avg = liga_means[col]
-
-                    # Linje + Gennemsnit
-                    line = alt.Chart(hif_recent).mark_line(color='#AAAAAA', point=True).encode(
-                        x=alt.X('index:O', axis=None), y=alt.Y(f'{col}:Q', axis=None)
+                    hif_recent['diff_label'] = hif_recent[col].apply(lambda x: f"{x - hif_avg:+.1f}")
+                    
+                    line = alt.Chart(hif_recent).mark_line(
+                        color='#AAAAAA', 
+                        point=alt.MarkConfig(color='#C41E3A', filled=True)
+                    ).encode(
+                        x=alt.X('index:O', axis=None),
+                        y=alt.Y(f'{col}:Q', axis=None, scale=alt.Scale(zero=False)),
+                        tooltip=[
+                            alt.Tooltip('OPPONENT_NAME', title='Modstander'),
+                            alt.Tooltip('HOME_OR_AWAY', title='H/U'),
+                            alt.Tooltip('SCORE_DISPLAY', title='Score'),
+                            alt.Tooltip('diff_label', title='Diff vs Snit')
+                        ]
                     ).properties(height=120)
 
                     hif_rule = alt.Chart(pd.DataFrame({'y': [hif_avg]})).mark_rule(color='#C41E3A', strokeDash=[3,3]).encode(y='y:Q')
-                    liga_rule = alt.Chart(pd.DataFrame({'y': [liga_avg]})).mark_rule(color='#000000', strokeDash=[2,2], opacity=0.4).encode(y='y:Q')
+                    liga_rule = alt.Chart(pd.DataFrame({'y': [liga_means[col]]})).mark_rule(color='#000000', strokeDash=[2,2], opacity=0.4).encode(y='y:Q')
                     
                     st.altair_chart(line + hif_rule + liga_rule, use_container_width=True)
                 
