@@ -97,7 +97,12 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
             MAX(CASE WHEN STAT_TYPE = 'totalPass' THEN STAT_TOTAL END) AS TOTAL_PASSES, 
             MAX(CASE WHEN STAT_TYPE = 'wonCorners' THEN STAT_TOTAL END) AS CORNERS,
             MAX(CASE WHEN STAT_TYPE = 'totalCross' THEN STAT_TOTAL END) AS CROSSES,
-            MAX(CASE WHEN STAT_TYPE = 'totalTackle' THEN STAT_TOTAL END) AS TACKLES, 
+            MAX(CASE WHEN STAT_TYPE = 'totalTackle' THEN STAT_TOTAL END) AS TACKLES,
+            MAX(CASE WHEN STAT_TYPE = 'possessionPercentage' THEN STAT_TOTAL END) AS POSSESSION,
+            MAX(CASE WHEN STAT_TYPE = 'totalPass' THEN STAT_TOTAL END) AS TOTAL_PASSES,
+            MAX(CASE WHEN STAT_TYPE = 'totalThrows' THEN STAT_TOTAL END) AS THROWS,        -- Tilføjet
+            MAX(CASE WHEN STAT_TYPE = 'totalFreeKick' THEN STAT_TOTAL END) AS FREEKICKS,    -- Tilføjet
+            MAX(CASE WHEN STAT_TYPE = 'totalOffside' THEN STAT_TOTAL END) AS OFFSIDES,
             MAX(FORMATIONUSED) AS FORMATION 
             FROM {DB}.OPTA_MATCHSTATS WHERE MATCH_OPTAUUID IN ({match_id_subquery}) GROUP BY 1, 2
         )
