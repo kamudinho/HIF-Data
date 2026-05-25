@@ -10,6 +10,7 @@ STAT_TYPE_MAP = {
     "blockedScoringAtt": "Blokerede afslutninger",
     "expectedGoals": "xG",
     "penaltyWon": "Straffespark fremprovokeret",
+    "subsGoals": "Mål af indskiftere", # TILFØJET
     
     # Afleveringer & Spilopbygning
     "totalPass": "Afleveringer",
@@ -20,6 +21,7 @@ STAT_TYPE_MAP = {
     "cornerTaken": "Hjørnespark",
     "wonCorners": "Hjørnespark",
     "lostCorners": "Hjørnespark, mod",
+    "formationUsed": "Formation", # TILFØJET
     
     # Defensiv
     "totalTackle": "Tacklinger",
@@ -33,9 +35,12 @@ STAT_TYPE_MAP = {
     # Målmand & Disciplin
     "saves": "Redninger",
     "goalsConceded": "Mål lukket ind",
+    "cleanSheet": "Clean sheets", # TILFØJET
     "penaltySave": "Straffespark reddet",
     "penaltyFaced": "Straffespark imod",
     "penaltyConceded": "Straffespark begået",
+    "penGoalsConceded": "Mål på straffe imod", # TILFØJET
     "totalYellowCard": "Gule kort",
+    "totalRedCard": "Røde kort", # TILFØJET
     "subsMade": "Udskiftninger foretaget"
 }
