@@ -126,24 +126,25 @@ def beregn_hold_stats(df_stats, team_uuid):
     return {"gf": f"{gf / total_matches:.1f}", "ga": f"{ga / total_matches:.1f}", "xgf": f"{xgf / total_matches:.2f}", "xga": f"{xga / total_matches:.2f}", "poss": f"{int(round(poss_all))}%" if pd.notnull(poss_all) else "0%"}
 
 def beregn_per_90(df_stats, team_uuid):
-    # 1. Filter for gennemførte kampe
     played = df_stats[df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].copy()
     
-    # 2. Sørg for at kolonner er numeriske for HELE datasættet (ligaen)
+    # Sørg for numeriske værdier
     cols = ['TOTAL_HOME_SCORE', 'HOME_XG', 'HOME_SHOTS', 'HOME_TOUCHES', 'HOME_PASSES', 'HOME_CORNERS', 'HOME_TACKLES',
             'TOTAL_AWAY_SCORE', 'AWAY_XG', 'AWAY_SHOTS', 'AWAY_TOUCHES', 'AWAY_PASSES', 'AWAY_CORNERS', 'AWAY_TACKLES']
-    
     for col in cols:
         if col in played.columns:
             played[col] = pd.to_numeric(played[col], errors='coerce').fillna(0)
 
-    # 3. HIF-specifikke kampe
     hif_matches = played[((played['CONTESTANTHOME_OPTAUUID'].str.upper() == team_uuid.upper()) | 
-                          (played['CONTESTANTAWAY_OPTAUUID'].str.upper() == team_uuid.upper()))]
+                          (played['CONTESTANTAWAY_OPTAUUID'].str.upper() == team_uuid.upper()))].sort_values('MATCH_DATE_FULL')
     
     if len(hif_matches) == 0: return None
 
-    # 4. Definition af stats til sammenligning
+    # Hent seneste kamp data
+    last_match = hif_matches.iloc[-1]
+    is_home = str(last_match['CONTESTANTHOME_OPTAUUID']).upper() == team_uuid.upper()
+    opp_name = last_match['CONTESTANTAWAY_NAME'] if is_home else last_match['CONTESTANTHOME_NAME']
+
     stats_map = {
         "Mål": ('TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE'),
         "xG": ('HOME_XG', 'AWAY_XG'),
@@ -156,17 +157,17 @@ def beregn_per_90(df_stats, team_uuid):
 
     results = []
     for name, (h_col, a_col) in stats_map.items():
-        # HIF snit
         hif_val = hif_matches.apply(lambda r: r[h_col] if str(r['CONTESTANTHOME_OPTAUUID']).upper() == team_uuid.upper() else r[a_col], axis=1).mean()
-        
-        # Liga snit (mean af både hjemme og ude for alle hold i ligaen)
         liga_val = pd.concat([played[h_col], played[a_col]]).mean()
+        last_val = last_match[h_col] if is_home else last_match[a_col]
         
         results.append({
             "Stat": name,
             "HIF": hif_val,
             "Liga": liga_val,
-            "Diff": hif_val - liga_val
+            "Diff": hif_val - liga_val,
+            "Seneste": last_val,
+            "Opponent": opp_name
         })
     
     return pd.DataFrame(results)
