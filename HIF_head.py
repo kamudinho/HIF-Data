@@ -174,27 +174,34 @@ def beregn_per_90(df_stats, team_uuid):
 def beregn_kategori_indices(row, hif_uuid):
     is_home = str(row['CONTESTANTHOME_OPTAUUID']).upper() == hif_uuid.upper()
     
-    # Offensiv: Positivt fokus
-    xg = row['HOME_XG'] if is_home else row['AWAY_XG']
-    shots = row['HOME_SHOTS'] if is_home else row['AWAY_SHOTS']
-    touches = row['HOME_TOUCHES'] if is_home else row['AWAY_TOUCHES']
-    off_idx = (xg * 1.5) + (shots * 0.3) + (touches * 0.05)
+    # Hent værdier og sørg for at de er tal (konverter None/NaN til 0)
+    xg = (row['HOME_XG'] if is_home else row['AWAY_XG'])
+    shots = (row['HOME_SHOTS'] if is_home else row['AWAY_SHOTS'])
+    touches = (row['HOME_TOUCHES'] if is_home else row['AWAY_TOUCHES'])
     
-    # Defensiv: Mål imod straffer (-2.0), blokeringer og tacklinger tæller positivt
-    goals_con = row['TOTAL_AWAY_SCORE'] if is_home else row['TOTAL_HOME_SCORE']
-    def_idx = -(goals_con * 2.0)
+    # Defensiv data
+    goals_con = (row['TOTAL_AWAY_SCORE'] if is_home else row['TOTAL_HOME_SCORE'])
     
-    # Off. Standard: Fokus på hjørnespark og indlæg
-    corners = row['HOME_CORNERS'] if is_home else row['AWAY_CORNERS']
-    crosses = row['HOME_CROSSES'] if is_home else row['AWAY_CROSSES']
-    off_std = (corners * 0.5) + (crosses * 0.2)
+    # Standard situationer
+    corners = (row['HOME_CORNERS'] if is_home else row['AWAY_CORNERS'])
+    crosses = (row['HOME_CROSSES'] if is_home else row['AWAY_CROSSES'])
+    opp_corners = (row['AWAY_CORNERS'] if is_home else row['HOME_CORNERS'])
     
-    # Def. Standard: Fokus på modstanders hjørner (omvendt)
-    opp_corners = row['AWAY_CORNERS'] if is_home else row['HOME_CORNERS']
-    def_std = -(opp_corners * 0.3)
+    # --- FIX: Sørg for at alle værdier behandles som tal ved at bruge .fillna(0) ---
+    # Vi bruger en lokal funktion til at sikre tal-format
+    def v(val):
+        try:
+            return float(val) if pd.notnull(val) else 0.0
+        except:
+            return 0.0
+
+    # Beregninger med sikker konvertering
+    off_idx = (v(xg) * 1.5) + (v(shots) * 0.3) + (v(touches) * 0.05)
+    def_idx = -(v(goals_con) * 2.0)
+    off_std = (v(corners) * 0.5) + (v(crosses) * 0.2)
+    def_std = -(v(opp_corners) * 0.3)
     
     return pd.Series({'Offensiv': off_idx, 'Defensiv': def_idx, 'Off_Std': off_std, 'Def_Std': def_std})
-
 def get_team_name(uuid, home_name, away_name, is_home):
     # Opret map fra din TEAMS dictionary
     uuid_to_name = {str(v.get('opta_uuid')).strip().upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
