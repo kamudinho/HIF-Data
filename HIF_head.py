@@ -153,30 +153,40 @@ def beregn_per_90(df_stats, team_uuid):
     opp_name = last_match['CONTESTANTAWAY_NAME'] if is_home else last_match['CONTESTANTHOME_NAME']
 
     stats_map = {
-        "Mål": ('TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE'),
-        "xG": ('HOME_XG', 'AWAY_XG'),
-        "Possession": ('HOME_POSSESSION', 'AWAY_POSSESSION'),
-        "Skud forbi": ('HOME_OFF_TARGET', 'AWAY_OFF_TARGET'),
-        "Indkast": ('HOME_THROWS', 'AWAY_THROWS'),
-        "Frispark": ('HOME_FREEKICKS', 'AWAY_FREEKICKS')
+        STAT_TYPE_MAP["goals"]: ('TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE'),
+        STAT_TYPE_MAP["expectedGoals"]: ('HOME_XG', 'AWAY_XG'),
+        STAT_TYPE_MAP["possessionPercentage"]: ('HOME_POSSESSION', 'AWAY_POSSESSION'),
+        STAT_TYPE_MAP["shotOffTarget"]: ('HOME_OFF_TARGET', 'AWAY_OFF_TARGET'),
+        STAT_TYPE_MAP["totalThrows"]: ('HOME_THROWS', 'AWAY_THROWS'),
+        STAT_TYPE_MAP["fkFoulLost"]: ('HOME_FREEKICKS', 'AWAY_FREEKICKS'),
+        STAT_TYPE_MAP["wonCorners"]: ('HOME_CORNERS', 'AWAY_CORNERS'),
+        STAT_TYPE_MAP["totalTackle"]: ('HOME_TACKLES', 'AWAY_TACKLES')
     }
 
     results = []
-    for name, (h_col, a_col) in stats_map.items():
-        hif_val = hif_matches.apply(lambda r: r[h_col] if str(r['CONTESTANTHOME_OPTAUUID']).upper() == team_uuid.upper() else r[a_col], axis=1).mean()
+    for display_name, (h_col, a_col) in stats_map.items():
+        # Beregn HIF gennemsnit
+        hif_val = hif_matches.apply(
+            lambda r: r[h_col] if str(r['CONTESTANTHOME_OPTAUUID']).upper() == team_uuid.upper() else r[a_col], 
+            axis=1
+        ).mean()
+        
+        # Beregn Liga gennemsnit
         liga_val = pd.concat([played[h_col], played[a_col]]).mean()
+        
+        # Seneste kamp værdi
         last_val = last_match[h_col] if is_home else last_match[a_col]
         
         results.append({
-            "Stat": name,
+            "Stat": display_name,  # Her bruges det pæne navn fra STAT_TYPE_MAP
             "HIF": hif_val,
             "Liga": liga_val,
             "Diff": hif_val - liga_val,
             "Seneste": last_val,
             "Opponent": opp_name
         })
-    
-    return pd.DataFrame(results)
+        
+        return pd.DataFrame(results)
 
 def beregn_kategori_indices(row, hif_uuid):
     is_home = str(row['CONTESTANTHOME_OPTAUUID']).upper() == hif_uuid.upper()
