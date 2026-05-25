@@ -132,14 +132,14 @@ def beregn_per_90(df_stats, team_uuid):
     is_home = str(last_match['CONTESTANTHOME_OPTAUUID']).upper() == team_uuid.upper()
     opp_name = last_match['CONTESTANTAWAY_NAME'] if is_home else last_match['CONTESTANTHOME_NAME']
     stats_map = {
-        STAT_TYPE_MAP["goals"]: ('TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE'),
-        STAT_TYPE_MAP["expectedGoals"]: ('HOME_XG', 'AWAY_XG'),
         STAT_TYPE_MAP["possessionPercentage"]: ('HOME_POSSESSION', 'AWAY_POSSESSION'),
         STAT_TYPE_MAP["totalPass"]: ('HOME_PASSES', 'AWAY_PASSES'),
+        STAT_TYPE_MAP["shotOffTarget"]: ('HOME_OFF_TARGET', 'AWAY_OFF_TARGET'),
+        STAT_TYPE_MAP["goals"]: ('TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE'),
+        STAT_TYPE_MAP["expectedGoals"]: ('HOME_XG', 'AWAY_XG'),
         STAT_TYPE_MAP["totalTackle"]: ('HOME_TACKLES', 'AWAY_TACKLES'),
         STAT_TYPE_MAP["totalClearance"]: ('HOME_CLEARANCES', 'AWAY_CLEARANCES'),
         STAT_TYPE_MAP["wonCorners"]: ('HOME_CORNERS', 'AWAY_CORNERS'),
-        STAT_TYPE_MAP["shotOffTarget"]: ('HOME_OFF_TARGET', 'AWAY_OFF_TARGET'),
         STAT_TYPE_MAP["totalThrows"]: ('HOME_THROWS', 'AWAY_THROWS'),
         STAT_TYPE_MAP["fkFoulLost"]: ('HOME_FREEKICKS', 'AWAY_FREEKICKS')
     }
