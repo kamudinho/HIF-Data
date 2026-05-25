@@ -100,7 +100,7 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
             FROM KLUB_HVIDOVREIF.AXIS.OPTA_MATCHSTATS 
             WHERE MATCH_OPTAUUID IN ({match_id_subquery}) 
             GROUP BY 1, 2
-        ),
+        )
         SELECT b.*, 
         sh.XG AS HOME_XG, sh.SHOTS AS HOME_SHOTS, sh.TOUCHES_IN_BOX AS HOME_TOUCHES, 
         msh.POSSESSION AS HOME_POSSESSION, msh.CROSSES AS HOME_CROSSES, msh.OFF_TARGET AS HOME_OFF_TARGET, msh.THROWS AS HOME_THROWS, msh.FREEKICKS AS HOME_FREEKICKS, msh.CORNERS AS HOME_CORNERS, msh.TACKLES AS HOME_TACKLES, msh.CLEARANCES AS HOME_CLEARANCES, msh.TOTAL_PASSES AS HOME_PASSES,
@@ -111,8 +111,7 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
         LEFT JOIN ExpectedGoalsPivot sa ON b.MATCH_OPTAUUID = sa.MATCH_ID AND b.CONTESTANTAWAY_OPTAUUID = sa.CONTESTANT_OPTAUUID 
         LEFT JOIN MatchStatsPivot msh ON b.MATCH_OPTAUUID = msh.MATCH_OPTAUUID AND b.CONTESTANTHOME_OPTAUUID = msh.CONTESTANT_OPTAUUID 
         LEFT JOIN MatchStatsPivot msa ON b.MATCH_OPTAUUID = msa.MATCH_OPTAUUID AND b.CONTESTANTAWAY_OPTAUUID = msa.CONTESTANT_OPTAUUID 
-        ORDER BY b.MATCH_DATE_FULL DESC
-        ),
+        ORDER BY b.MATCH_DATE_FULL DESC"}
         
 def generate_case_statements(stats_list):
     # stats_list = ["totalPass", "wonCorners", ...]
