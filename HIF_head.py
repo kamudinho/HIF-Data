@@ -87,26 +87,27 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
             MAX(CASE WHEN LOWER(TRIM(STAT_TYPE)) = 'totalthrows' THEN STAT_TOTAL END) AS THROWS,
             MAX(CASE WHEN LOWER(TRIM(STAT_TYPE)) = 'fkfoullost' THEN STAT_TOTAL END) AS FREEKICKS,
             MAX(CASE WHEN LOWER(TRIM(STAT_TYPE)) = 'totaltackle' THEN STAT_TOTAL END) AS TACKLES,
-            MAX(CASE WHEN LOWER(TRIM(STAT_TYPE)) = 'cross' THEN STAT_TOTAL END) AS CROSSES
+            MAX(CASE WHEN LOWER(TRIM(STAT_TYPE)) = 'totalcross' THEN STAT_TOTAL END) AS CROSSES,
+            MAX(CASE WHEN LOWER(TRIM(STAT_TYPE)) = 'totalclearance' THEN STAT_TOTAL END) AS CLEARANCES
             FROM KLUB_HVIDOVREIF.AXIS.OPTA_MATCHSTATS 
             WHERE MATCH_OPTAUUID IN ({match_id_subquery}) 
             GROUP BY 1, 2
         )
         SELECT b.*, 
         sh.XG AS HOME_XG, sh.SHOTS AS HOME_SHOTS, sh.TOUCHES_IN_BOX AS HOME_TOUCHES, 
-        msh.POSSESSION AS HOME_POSSESSION, msh.CROSSES AS HOME_CROSSES, msh.OFF_TARGET AS HOME_OFF_TARGET, msh.THROWS AS HOME_THROWS, msh.FREEKICKS AS HOME_FREEKICKS, msh.CORNERS AS HOME_CORNERS, msh.TACKLES AS HOME_TACKLES,
+        msh.POSSESSION AS HOME_POSSESSION, msh.CROSSES AS HOME_CROSSES, msh.OFF_TARGET AS HOME_OFF_TARGET, msh.THROWS AS HOME_THROWS, msh.FREEKICKS AS HOME_FREEKICKS, msh.CORNERS AS HOME_CORNERS, msh.TACKLES AS HOME_TACKLES, msh.CLEARANCES AS HOME_CLEARANCES, msh.TOTAL_PASSES AS HOME_PASSES,
         sa.XG AS AWAY_XG, sa.SHOTS AS AWAY_SHOTS, sa.TOUCHES_IN_BOX AS AWAY_TOUCHES, 
-        msa.POSSESSION AS AWAY_POSSESSION, msa.CROSSES AS AWAY_CROSSES, msa.OFF_TARGET AS AWAY_OFF_TARGET, msa.THROWS AS AWAY_THROWS, msa.FREEKICKS AS AWAY_FREEKICKS, msa.CORNERS AS AWAY_CORNERS, msa.TACKLES AS AWAY_TACKLES
+        msa.POSSESSION AS AWAY_POSSESSION, msa.CROSSES AS AWAY_CROSSES, msa.OFF_TARGET AS AWAY_OFF_TARGET, msa.THROWS AS AWAY_THROWS, msa.FREEKICKS AS AWAY_FREEKICKS, msa.CORNERS AS AWAY_CORNERS, msa.TACKLES AS AWAY_TACKLES, msa.CLEARANCES AS AWAY_CLEARANCES, msa.TOTAL_PASSES AS AWAY_PASSES
         FROM MatchBase b
         LEFT JOIN ExpectedGoalsPivot sh ON b.MATCH_OPTAUUID = sh.MATCH_ID AND b.CONTESTANTHOME_OPTAUUID = sh.CONTESTANT_OPTAUUID 
         LEFT JOIN ExpectedGoalsPivot sa ON b.MATCH_OPTAUUID = sa.MATCH_ID AND b.CONTESTANTAWAY_OPTAUUID = sa.CONTESTANT_OPTAUUID 
         LEFT JOIN MatchStatsPivot msh ON b.MATCH_OPTAUUID = msh.MATCH_OPTAUUID AND b.CONTESTANTHOME_OPTAUUID = msh.CONTESTANT_OPTAUUID 
         LEFT JOIN MatchStatsPivot msa ON b.MATCH_OPTAUUID = msa.MATCH_OPTAUUID AND b.CONTESTANTAWAY_OPTAUUID = msa.CONTESTANT_OPTAUUID 
-        ORDER BY b.MATCH_DATE_FULL DESC"""}
+        ORDER BY b.MATCH_DATE_FULL DESC"}
 
 def beregn_per_90(df_stats, team_uuid):
     played = df_stats[df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].copy()
-    numeric_cols = ['TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE', 'HOME_XG', 'AWAY_XG', 'HOME_POSSESSION', 'AWAY_POSSESSION', 'HOME_OFF_TARGET', 'AWAY_OFF_TARGET', 'HOME_THROWS', 'AWAY_THROWS', 'HOME_FREEKICKS', 'AWAY_FREEKICKS', 'HOME_CORNERS', 'AWAY_CORNERS', 'HOME_TACKLES', 'AWAY_TACKLES']
+    numeric_cols = ['TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE', 'HOME_XG', 'AWAY_XG', 'HOME_POSSESSION', 'AWAY_POSSESSION', 'HOME_OFF_TARGET', 'AWAY_OFF_TARGET', 'HOME_THROWS', 'AWAY_THROWS', 'HOME_FREEKICKS', 'AWAY_FREEKICKS', 'HOME_CORNERS', 'AWAY_CORNERS', 'HOME_TACKLES', 'AWAY_TACKLES', 'HOME_CROSSES', 'AWAY_CROSSES', 'HOME_CLEARANCES', 'AWAY_CLEARANCES', 'HOME_PASSES', 'AWAY_PASSES']
     for col in numeric_cols:
         if col in played.columns:
             played[col] = pd.to_numeric(played[col], errors='coerce').fillna(0)
@@ -119,11 +120,14 @@ def beregn_per_90(df_stats, team_uuid):
         STAT_TYPE_MAP["goals"]: ('TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE'),
         STAT_TYPE_MAP["expectedGoals"]: ('HOME_XG', 'AWAY_XG'),
         STAT_TYPE_MAP["possessionPercentage"]: ('HOME_POSSESSION', 'AWAY_POSSESSION'),
+        STAT_TYPE_MAP["totalPass"]: ('HOME_PASSES', 'AWAY_PASSES'),
+        STAT_TYPE_MAP["totalTackle"]: ('HOME_TACKLES', 'AWAY_TACKLES'),
+        STAT_TYPE_MAP["totalClearance"]: ('HOME_CLEARANCES', 'AWAY_CLEARANCES'),
+        STAT_TYPE_MAP["totalCross"]: ('HOME_CROSSES', 'AWAY_CROSSES'),
+        STAT_TYPE_MAP["wonCorners"]: ('HOME_CORNERS', 'AWAY_CORNERS'),
         STAT_TYPE_MAP["shotOffTarget"]: ('HOME_OFF_TARGET', 'AWAY_OFF_TARGET'),
         STAT_TYPE_MAP["totalThrows"]: ('HOME_THROWS', 'AWAY_THROWS'),
-        STAT_TYPE_MAP["fkFoulLost"]: ('HOME_FREEKICKS', 'AWAY_FREEKICKS'),
-        STAT_TYPE_MAP["wonCorners"]: ('HOME_CORNERS', 'AWAY_CORNERS'),
-        STAT_TYPE_MAP["totalTackle"]: ('HOME_TACKLES', 'AWAY_TACKLES')
+        STAT_TYPE_MAP["fkFoulLost"]: ('HOME_FREEKICKS', 'AWAY_FREEKICKS')
     }
     results = []
     for display_name, (h_col, a_col) in stats_map.items():
@@ -154,13 +158,9 @@ def beregn_kategori_indices(row, hif_uuid):
     def get_val(col_h, col_a):
         val = row[col_h] if is_home else row[col_a]
         return float(val) if pd.notnull(val) else 0.0
-    xg = get_val('HOME_XG', 'AWAY_XG')
-    shots = get_val('HOME_SHOTS', 'AWAY_SHOTS')
-    touches = get_val('HOME_TOUCHES', 'AWAY_TOUCHES')
-    tackles = get_val('HOME_TACKLES', 'AWAY_TACKLES')
-    goals_con = get_val('TOTAL_AWAY_SCORE', 'TOTAL_HOME_SCORE')
-    corners = get_val('HOME_CORNERS', 'AWAY_CORNERS')
-    opp_corners = get_val('AWAY_CORNERS', 'HOME_CORNERS')
+    xg, shots, touches = get_val('HOME_XG', 'AWAY_XG'), get_val('HOME_SHOTS', 'AWAY_SHOTS'), get_val('HOME_TOUCHES', 'AWAY_TOUCHES')
+    tackles, goals_con = get_val('HOME_TACKLES', 'AWAY_TACKLES'), get_val('TOTAL_AWAY_SCORE', 'TOTAL_HOME_SCORE')
+    corners, opp_corners = get_val('HOME_CORNERS', 'AWAY_CORNERS'), get_val('AWAY_CORNERS', 'HOME_CORNERS')
     crosses = get_val('HOME_CROSSES', 'AWAY_CROSSES') if 'HOME_CROSSES' in row else 0.0
     off_idx = (xg * 1.5) + (shots * 0.3) + (touches * 0.05)
     def_idx = -(goals_con * 2.0) + (tackles * 0.2)
@@ -171,8 +171,7 @@ def beregn_kategori_indices(row, hif_uuid):
 def get_team_name(uuid, home_name, away_name, is_home):
     uuid_to_name = {str(v.get('opta_uuid')).strip().upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
     name = uuid_to_name.get(str(uuid).strip().upper())
-    if name: return name
-    return home_name if not is_home else away_name
+    return name if name else (home_name if not is_home else away_name)
 
 def vis_side():
     apply_custom_style()
@@ -186,7 +185,9 @@ def vis_side():
     df_stats.columns = [str(c).upper() for c in df_stats.columns]
     opta_to_name = {str(v['opta_uuid']).strip().upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
     df_matches['MATCH_DATE_FULL'] = pd.to_datetime(df_matches['MATCH_DATE_FULL'], errors='coerce').dt.tz_localize(None)
+
     col1, col2, col3 = st.columns([1, 1, 1])
+
     with col1:
         with st.container(border=True):
             hif_m = df_matches[(df_matches['CONTESTANTHOME_OPTAUUID'].str.upper() == HIF_UUID.strip().upper()) | (df_matches['CONTESTANTAWAY_OPTAUUID'].str.upper() == HIF_UUID.strip().upper())]
@@ -201,7 +202,8 @@ def vis_side():
                 opp_stats = beregn_hold_stats(df_stats, opp_id)
                 hif_logo = TEAMS.get("Hvidovre", {}).get("logo", "")
                 opp_logo = TEAMS.get(opp_name, {}).get("logo", "")
-                st.markdown(f"<table class='stats-table' style='width: 100%;'><tr><td style='width: 34%;'></td><td style='text-align: center; width: 33%; border-bottom: 1px solid #eee; padding-bottom: 4px;'><img src='{hif_logo}' style='width: 22px; height: 22px; object-fit: contain;'></td><td style='text-align: center; width: 33%; border-bottom: 1px solid #eee; padding-bottom: 4px;'><img src='{opp_logo}' style='width: 22px; height: 22px; object-fit: contain;'></td></tr><tr><td class='stats-label'>Possession</td><td class='stats-value'>{hif_stats['poss']}</td><td class='stats-value'>{opp_stats['poss']}</td></tr><tr><td class='stats-label'>Mål for/imod</td><td class='stats-value'>{hif_stats['gf']}/{hif_stats['ga']}</td><td class='stats-value'>{opp_stats['gf']}/{opp_stats['ga']}</td></tr><tr><td class='stats-label'>xG for/imod</td><td class='stats-value'>{hif_stats['xgf']}/{hif_stats['xga']}</td><td class='stats-value'>{opp_stats['xgf']}/{opp_stats['xga']}</td></tr></table>", unsafe_allow_html=True)
+                stats_html = f"""<table class='stats-table' style='width: 100%;'><tr><td style='width: 34%;'></td><td style='text-align: center; width: 33%; border-bottom: 1px solid #eee; padding-bottom: 4px;'><img src='{hif_logo}' style='width: 22px; height: 22px; object-fit: contain;'></td><td style='text-align: center; width: 33%; border-bottom: 1px solid #eee; padding-bottom: 4px;'><img src='{opp_logo}' style='width: 22px; height: 22px; object-fit: contain;'></td></tr><tr><td class='stats-label' style='text-align: left;'>Possession</td><td class='stats-value' style='text-align: center;'>{hif_stats['poss']}</td><td class='stats-value' style='text-align: center;'>{opp_stats['poss']}</td></tr><tr><td class='stats-label' style='text-align: left;'>Mål for/imod</td><td class='stats-value' style='text-align: center;'>{hif_stats['gf']}/{hif_stats['ga']}</td><td class='stats-value' style='text-align: center;'>{opp_stats['gf']}/{opp_stats['ga']}</td></tr><tr><td class='stats-label' style='text-align: left;'>xG for/imod</td><td class='stats-value' style='text-align: center;'>{hif_stats['xgf']}/{hif_stats['xga']}</td><td class='stats-value' style='text-align: center;'>{opp_stats['xgf']}/{opp_stats['xga']}</td></tr></table>"""
+                st.markdown(stats_html, unsafe_allow_html=True)
                 opp_m = df_matches[((df_matches['CONTESTANTHOME_OPTAUUID'] == opp_id) | (df_matches['CONTESTANTAWAY_OPTAUUID'] == opp_id)) & (df_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False))].sort_values('MATCH_DATE_FULL', ascending=False).head(5)
                 if not opp_m.empty:
                     f_items = ""
@@ -213,6 +215,7 @@ def vis_side():
                         o_logo = TEAMS.get(opta_to_name.get(str(o_uuid).upper(), ""), {}).get("logo", "")
                         f_items += f"<div class='form-column'><div class='res-pill' style='background:{res_col};'>{h_s}-{a_s}</div><img src='{o_logo}' class='legend-logo'></div>"
                     st.markdown(f"<div class='form-wrapper'>{f_items}</div>", unsafe_allow_html=True)
+
     with col2:
         with st.container(border=True):
             st.markdown('<div class="card-title"><span>TRANSFERS</span></div>', unsafe_allow_html=True)
@@ -224,45 +227,55 @@ def vis_side():
                     st.markdown(f"<div class='list-item'><span>{r['TS_DATE'].strftime('%d/%m')}: <b>{r['NAVN']}</b></span><span class='prev-club'>{r.get('SENESTE_KLUB', '?')}</span><span class='transfer-club'>➔ {r.get('KLUB', '?')}</span></div>", unsafe_allow_html=True)
                 if st.button("Se alle transfers", key="transfers_btn", use_container_width=True): vis_transfer_dialog(df_t)
             except: st.caption("Kunne ikke indlæse transfer-data")
+
     with col3:
         with st.container(border=True):
             st.markdown('<div class="card-title"><span>SCOUTING</span></div>', unsafe_allow_html=True)
-            main_col, trend_area = st.columns([1, 2])
-            with main_col:
-                with st.container(border=True):
-                    st.markdown('<div class="card-title"><span>HVIDOVRE IF vs. LIGA</span></div>', unsafe_allow_html=True)
-                    df_stats_comp = beregn_per_90(df_stats, HIF_UUID)
-                    if df_stats_comp is not None:
-                        opp_navn = df_stats_comp.iloc[0]['Opponent']
-                        html = f"<table class='stats-table'><thead><tr><th></th><th>vs. {opp_navn}</th><th>HIF</th><th>Liga</th><th>Diff</th></tr></thead><tbody>"
-                        for _, r in df_stats_comp.iterrows():
-                            diff_color = "#28a745" if r['Diff'] > 0 else "#dc3545"
-                            html += f"<tr><td class='stats-label'>{r['Stat']}</td><td class='stats-value'>{r['Seneste']:.0f}</td><td class='stats-value'>{r['HIF']:.2f}</td><td class='stats-value'>{r['Liga']:.2f}</td><td class='stats-value' style='color:{diff_color}; font-weight:800;'>{r['Diff']:+.2f}</td></tr>"
-                        st.markdown(html + "</tbody></table>", unsafe_allow_html=True)
-            with trend_area:
-                hif_recent = df_stats[((df_stats['CONTESTANTHOME_OPTAUUID'].str.upper() == HIF_UUID.strip().upper()) | (df_stats['CONTESTANTAWAY_OPTAUUID'].str.upper() == HIF_UUID.strip().upper())) & (df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False))].sort_values('MATCH_DATE_FULL', ascending=True).copy()
-                if not hif_recent.empty:
-                    num_cols = ['HOME_XG', 'AWAY_XG', 'HOME_SHOTS', 'AWAY_SHOTS', 'HOME_TOUCHES', 'AWAY_TOUCHES', 'TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE', 'HOME_CORNERS', 'AWAY_CORNERS', 'HOME_TACKLES', 'AWAY_TACKLES']
-                    for col in num_cols: hif_recent[col] = pd.to_numeric(hif_recent[col], errors='coerce').fillna(0)
-                    hif_recent['OPPONENT_NAME'] = hif_recent.apply(lambda r: get_team_name(r['CONTESTANTAWAY_OPTAUUID'] if str(r['CONTESTANTHOME_OPTAUUID']).strip().upper() == HIF_UUID.strip().upper() else r['CONTESTANTHOME_OPTAUUID'], r['CONTESTANTHOME_NAME'], r['CONTESTANTAWAY_NAME'], str(r['CONTESTANTHOME_OPTAUUID']).strip().upper() == HIF_UUID.strip().upper()), axis=1)
-                    hif_recent['HOME_OR_AWAY'] = hif_recent.apply(lambda r: "H" if str(r['CONTESTANTHOME_OPTAUUID']).strip().upper() == HIF_UUID.strip().upper() else "U", axis=1)
-                    hif_recent = pd.concat([hif_recent, hif_recent.apply(lambda row: beregn_kategori_indices(row, HIF_UUID), axis=1)], axis=1)
-                    hif_recent['index'] = range(1, len(hif_recent) + 1)
-                    played = df_stats[df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].copy()
-                    for col in num_cols: played[col] = pd.to_numeric(played[col], errors='coerce').fillna(0)
-                    liga_means = played.apply(lambda row: beregn_kategori_indices(row, "DUMMY_UUID"), axis=1).mean()
-                    r1_c1, r1_c2 = st.columns(2)
-                    r2_c1, r2_c2 = st.columns(2)
-                    categories = [("OFFENSIV", "Offensiv", "xG, Skud, Touches", r1_c1), ("DEFENSIV", "Defensiv", "Mål imod, tacklinger", r2_c1), ("OFF. STD", "Off_Std", "Hjørnespark", r1_c2), ("DEF. STD", "Def_Std", "Hjørnespark", r2_c2)]
-                    for title, col, desc, target in categories:
-                        with target:
-                            st.markdown(f"<div style='font-weight:700; font-size:14px; margin-bottom:0px;'>{title}</div>", unsafe_allow_html=True)
-                            st.caption(f"<div style='margin-top:-5px;'>{desc}</div>", unsafe_allow_html=True)
-                            hif_avg = hif_recent[col].mean()
-                            hif_recent['tooltip_header'] = hif_recent.apply(lambda r: f"vs. {r['OPPONENT_NAME']} {int(r['TOTAL_HOME_SCORE'])}-{int(r['TOTAL_AWAY_SCORE'])} ({r['HOME_OR_AWAY']})", axis=1)
-                            hif_recent['diff_label'] = hif_recent[col].apply(lambda x: f"{x - hif_avg:+.1f}")
-                            line = alt.Chart(hif_recent).mark_line(color='#AAAAAA', point=alt.MarkConfig(color='#C41E3A', filled=True)).encode(x=alt.X('index:O', axis=None), y=alt.Y(f'{col}:Q', axis=None, scale=alt.Scale(zero=False)), tooltip=[alt.Tooltip('tooltip_header', title='Kamp'), alt.Tooltip(f'{col}', title='Score', format='.1f'), alt.Tooltip('diff_label', title='Diff vs Snit')]).properties(height=120)
-                            st.altair_chart(line + alt.Chart(pd.DataFrame({'y': [hif_avg]})).mark_rule(color='#C41E3A', strokeDash=[3,3]).encode(y='y:Q') + alt.Chart(pd.DataFrame({'y': [liga_means[col]]})).mark_rule(color='#000000', strokeDash=[2,2], opacity=0.4).encode(y='y:Q'), use_container_width=True)
+
+    # Række 2: Sæson Snit (Venstre) + Trendlines (Højre)
+    st.markdown("---")
+    main_col, trend_area = st.columns([1, 2])
+
+    with main_col:
+        with st.container(border=True):
+            st.markdown('<div class="card-title"><span>HVIDOVRE IF vs. LIGA</span></div>', unsafe_allow_html=True)
+            df_stats_comp = beregn_per_90(df_stats, HIF_UUID)
+            if df_stats_comp is not None:
+                opp_navn = df_stats_comp.iloc[0]['Opponent']
+                opp_header = f"vs. {opp_navn}"
+                html = f"<table class='stats-table'><thead><tr><th></th><th>{opp_header}</th><th>HIF</th><th>Liga</th><th>Diff</th></tr></thead><tbody>"
+                for _, r in df_stats_comp.iterrows():
+                    diff_color = "#28a745" if r['Diff'] > 0 else "#dc3545"
+                    html += f"<tr><td class='stats-label'>{r['Stat']}</td><td class='stats-value'>{r['Seneste']:.0f}</td><td class='stats-value'>{r['HIF']:.2f}</td><td class='stats-value'>{r['Liga']:.2f}</td><td class='stats-value' style='color:{diff_color}; font-weight:800;'>{r['Diff']:+.2f}</td></tr>"
+                html += "</tbody></table>"
+                st.markdown(html, unsafe_allow_html=True)
+
+    with trend_area:
+        hif_recent = df_stats[((df_stats['CONTESTANTHOME_OPTAUUID'].str.upper() == HIF_UUID.strip().upper()) | (df_stats['CONTESTANTAWAY_OPTAUUID'].str.upper() == HIF_UUID.strip().upper())) & (df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False))].sort_values('MATCH_DATE_FULL', ascending=True).copy()
+        if not hif_recent.empty:
+            num_cols = ['HOME_XG', 'AWAY_XG', 'HOME_SHOTS', 'AWAY_SHOTS', 'HOME_TOUCHES', 'AWAY_TOUCHES', 'TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE', 'HOME_CORNERS', 'AWAY_CORNERS', 'HOME_TACKLES', 'AWAY_TACKLES']
+            for col in num_cols: hif_recent[col] = pd.to_numeric(hif_recent[col], errors='coerce').fillna(0)
+            hif_recent['OPPONENT_NAME'] = hif_recent.apply(lambda r: get_team_name(r['CONTESTANTAWAY_OPTAUUID'] if str(r['CONTESTANTHOME_OPTAUUID']).strip().upper() == HIF_UUID.strip().upper() else r['CONTESTANTHOME_OPTAUUID'], r['CONTESTANTHOME_NAME'], r['CONTESTANTAWAY_NAME'], str(r['CONTESTANTHOME_OPTAUUID']).strip().upper() == HIF_UUID.strip().upper()), axis=1)
+            hif_recent['HOME_OR_AWAY'] = hif_recent.apply(lambda r: "H" if str(r['CONTESTANTHOME_OPTAUUID']).strip().upper() == HIF_UUID.strip().upper() else "U", axis=1)
+            indices = hif_recent.apply(lambda row: beregn_kategori_indices(row, HIF_UUID), axis=1)
+            hif_recent = pd.concat([hif_recent, indices], axis=1)
+            hif_recent['index'] = range(1, len(hif_recent) + 1)
+            played = df_stats[df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].copy()
+            for col in num_cols: played[col] = pd.to_numeric(played[col], errors='coerce').fillna(0)
+            liga_indices = played.apply(lambda row: beregn_kategori_indices(row, "DUMMY_UUID"), axis=1)
+            liga_means = liga_indices.mean()
+            r1_c1, r1_c2 = st.columns(2)
+            r2_c1, r2_c2 = st.columns(2)
+            categories = [("OFFENSIV", "Offensiv", "xG, Skud, Touches", r1_c1), ("DEFENSIV", "Defensiv", "Mål imod, tacklinger", r2_c1), ("OFF. STD", "Off_Std", "Hjørnespark", r1_c2), ("DEF. STD", "Def_Std", "Hjørnespark", r2_c2)]
+            for title, col, desc, target in categories:
+                with target:
+                    st.markdown(f"<div style='font-weight:700; font-size:14px; margin-bottom:0px;'>{title}</div>", unsafe_allow_html=True)
+                    st.caption(f"<div style='margin-top:-5px;'>{desc}</div>", unsafe_allow_html=True)
+                    hif_avg = hif_recent[col].mean()
+                    hif_recent['tooltip_header'] = hif_recent.apply(lambda r: f"vs. {r['OPPONENT_NAME']} {int(r['TOTAL_HOME_SCORE'])}-{int(r['TOTAL_AWAY_SCORE'])} ({r['HOME_OR_AWAY']})", axis=1)
+                    hif_recent['diff_label'] = hif_recent[col].apply(lambda x: f"{x - hif_avg:+.1f}")
+                    line = alt.Chart(hif_recent).mark_line(color='#AAAAAA', point=alt.MarkConfig(color='#C41E3A', filled=True)).encode(x=alt.X('index:O', axis=None), y=alt.Y(f'{col}:Q', axis=None, scale=alt.Scale(zero=False)), tooltip=[alt.Tooltip('tooltip_header', title='Kamp'), alt.Tooltip(f'{col}', title='Score', format='.1f'), alt.Tooltip('diff_label', title='Diff vs Snit')]).properties(height=120)
+                    st.altair_chart(line + alt.Chart(pd.DataFrame({'y': [hif_avg]})).mark_rule(color='#C41E3A', strokeDash=[3,3]).encode(y='y:Q') + alt.Chart(pd.DataFrame({'y': [liga_means[col]]})).mark_rule(color='#000000', strokeDash=[2,2], opacity=0.4).encode(y='y:Q'), use_container_width=True)
 
 if __name__ == "__main__":
     vis_side()
