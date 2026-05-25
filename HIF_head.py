@@ -160,7 +160,11 @@ def beregn_per_90(df_stats, team_uuid):
         "Touches in box": ('HOME_TOUCHES', 'AWAY_TOUCHES'),
         "Pasninger": ('HOME_PASSES', 'AWAY_PASSES'),
         "Hjørnespark": ('HOME_CORNERS', 'AWAY_CORNERS'),
-        "Tacklinger": ('HOME_TACKLES', 'AWAY_TACKLES')
+        "Tacklinger": ('HOME_TACKLES', 'AWAY_TACKLES'),
+        "Possession": ('HOME_POSSESSION', 'AWAY_POSSESSION'), # Tilføj disse
+        "Skud forbi": ('HOME_OFF_TARGET', 'AWAY_OFF_TARGET'),
+        "Indkast": ('HOME_THROWS', 'AWAY_THROWS'),
+        "Frispark": ('HOME_FREEKICKS', 'AWAY_FREEKICKS')
     }
 
     results = []
