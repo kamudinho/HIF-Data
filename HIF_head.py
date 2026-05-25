@@ -277,7 +277,7 @@ def vis_side():
                 st.markdown(html, unsafe_allow_html=True)
             
     with trend_area:
-        # 1. Hent data
+        # 1. Hent data og konverter til numerisk (vigtigt for at undgå fejl)
         hif_recent = df_stats[
             ((df_stats['CONTESTANTHOME_OPTAUUID'].str.upper() == HIF_UUID.strip().upper()) | 
              (df_stats['CONTESTANTAWAY_OPTAUUID'].str.upper() == HIF_UUID.strip().upper())) & 
@@ -285,45 +285,46 @@ def vis_side():
         ].sort_values('MATCH_DATE_FULL', ascending=True).copy()
 
         if not hif_recent.empty:
-            # --- LØSNING: Konverter alle relevante kolonner til numeriske værdier ---
-            num_cols = ['HOME_XG', 'AWAY_XG', 'HOME_SHOTS', 'AWAY_SHOTS', 
-                        'HOME_TOUCHES', 'AWAY_TOUCHES', 'TOTAL_HOME_SCORE', 
-                        'TOTAL_AWAY_SCORE', 'HOME_CORNERS', 'AWAY_CORNERS', 
-                        'HOME_CROSSES', 'AWAY_CROSSES']
-            
+            num_cols = ['HOME_XG', 'AWAY_XG', 'HOME_SHOTS', 'AWAY_SHOTS', 'HOME_TOUCHES', 'AWAY_TOUCHES', 
+                        'TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE', 'HOME_CORNERS', 'AWAY_CORNERS', 'HOME_CROSSES', 'AWAY_CROSSES']
             for col in num_cols:
-                if col in hif_recent.columns:
-                    hif_recent[col] = pd.to_numeric(hif_recent[col], errors='coerce').fillna(0)
+                hif_recent[col] = pd.to_numeric(hif_recent[col], errors='coerce').fillna(0)
 
-            # 2. Beregn indices
+            # 2. Beregn indices for både HIF og hele ligaen (played)
+            # Vi genbruger din beregn_kategori_indices funktion her
             indices = hif_recent.apply(lambda row: beregn_kategori_indices(row, HIF_UUID), axis=1)
             hif_recent = pd.concat([hif_recent, indices], axis=1)
             hif_recent['index'] = range(1, len(hif_recent) + 1)
+
+            # Beregn Liga-gennemsnit for de 4 kategorier
+            played = df_stats[df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].copy()
+            for col in num_cols:
+                played[col] = pd.to_numeric(played[col], errors='coerce').fillna(0)
             
-            # 3. Layout og Grafer
+            liga_indices = played.apply(lambda row: beregn_kategori_indices(row, "DUMMY_UUID"), axis=1)
+            liga_means = liga_indices.mean()
+
+            # 3. Layout med 4 grafer
             r1_c1, r1_c2 = st.columns(2)
-            
-            display_groups = [
-                ("OFFENSIV VS. DEFENSIV", ["Offensiv", "Defensiv"], r1_c1),
-                ("OFF. STD VS. DEF. STD", ["Off_Std", "Def_Std"], r1_c2)
-            ]
-            
-            for title, cols, target in display_groups:
+            r2_c1, r2_c2 = st.columns(2)
+            categories = [("OFFENSIV", "Offensiv", r1_c1), ("DEFENSIV", "Defensiv", r1_c2), 
+                          ("OFF. STANDARD", "Off_Std", r2_c1), ("DEF. STANDARD", "Def_Std", r2_c2)]
+
+            for title, col, target in categories:
                 with target:
                     st.caption(title)
-                    df_long = hif_recent.melt(id_vars=['index'], value_vars=cols, var_name='Type', value_name='Score')
+                    hif_avg = hif_recent[col].mean()
+                    liga_avg = liga_means[col]
+
+                    # Linje + Gennemsnit
+                    line = alt.Chart(hif_recent).mark_line(color='#AAAAAA', point=True).encode(
+                        x=alt.X('index:O', axis=None), y=alt.Y(f'{col}:Q', axis=None)
+                    ).properties(height=120)
+
+                    hif_rule = alt.Chart(pd.DataFrame({'y': [hif_avg]})).mark_rule(color='#C41E3A', strokeDash=[3,3]).encode(y='y:Q')
+                    liga_rule = alt.Chart(pd.DataFrame({'y': [liga_avg]})).mark_rule(color='#000000', strokeDash=[2,2], opacity=0.4).encode(y='y:Q')
                     
-                    color_scale = alt.Scale(domain=cols, range=['#C41E3A', '#333333'])
-                    
-                    chart = alt.Chart(df_long).mark_line(point=True).encode(
-                        x=alt.X('index:O', axis=None),
-                        y=alt.Y('Score:Q', axis=None),
-                        color=alt.Color('Type:N', scale=color_scale, legend=alt.Legend(orient="bottom"))
-                    ).properties(height=120).configure_view(strokeWidth=0)
-                    
-                    st.altair_chart(chart, use_container_width=True)
-        else:
-            st.info("Ingen kampdata tilgængelige til trendanalyse.")
+                    st.altair_chart(line + hif_rule + liga_rule, use_container_width=True)
                 
 if __name__ == "__main__":
     vis_side()
