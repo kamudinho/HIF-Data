@@ -581,7 +581,7 @@ def vis_side(dp=None):
                     # --- RETTELSE: Tekstværdier med enhed ---
                     text_vals = y_vals.apply(lambda x: f"{x:.0f} {suffix}" if x > 100 else f"{x:.1f} {suffix}")
 
-                    color_map = {"Fuld tid": "#df003b", "Delvis": "#f39c12", "Ikke spillet": "#808080"}
+                    color_map = {"Fuld tid": "#df003b", "Indskiftet/udskiftet": "grey", "Ikke spillet": "#808080"}
                     
                     fig = go.Figure()
 
