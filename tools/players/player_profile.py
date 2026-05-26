@@ -548,6 +548,9 @@ def vis_side(dp=None):
             m3.metric("Topfart", f"{round(latest['top_speed'], 1)} km/t")
             m4.metric("Højintense Akt.", int(latest['hi_runs']))
 
+            st.write(f"DEBUG - Data-typer: {df_phys['minutes'].dtype}")
+            st.write(f"DEBUG - Første 5 rækker af minutter: {df_phys['minutes'].head().values}")
+
             t_sub_log, t_sub_charts = st.tabs(["Kampoversigt", "Grafer"])
 
             with t_sub_charts:
