@@ -524,8 +524,13 @@ def vis_side(dp=None):
         df_phys = get_physical_data(valgt_spiller, valgt_player_uuid, valgt_hold, conn)
         
         if df_phys is not None and not df_phys.empty:
-            # 1. Konverter DATO med det samme, og tving den til datetime
+            # --- LØSNING PÅ FEJLEN ---
+            # Sørg for at 'minutes' er et tal
+            df_phys['minutes'] = pd.to_numeric(df_phys['minutes'], errors='coerce').fillna(0)
+            # -------------------------
+    
             df_phys['match_date'] = pd.to_datetime(df_phys['match_date'], errors='coerce')
+            df_phys = df_phys.dropna(subset=['match_date'])
             
             # 2. Fjern evt. rækker hvor datoen ikke kunne konverteres (hvis der er nulls)
             df_phys = df_phys.dropna(subset=['match_date'])
