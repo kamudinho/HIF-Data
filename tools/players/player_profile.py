@@ -604,16 +604,18 @@ def vis_side(dp=None):
                     fig.update_layout(
                         plot_bgcolor="white", 
                         height=400, 
-                        margin=dict(t=80, b=80, l=10, r=10), # t=80 giver plads til legenden
+                        # Vi øger 't' (top margin) markant for at give plads til legenden i toppen
+                        margin=dict(t=100, b=50, l=10, r=10), 
                         xaxis=dict(showgrid=False, tickangle=-45, type='category'),
                         yaxis=dict(showgrid=True, gridcolor='#f0f0f0', showticklabels=False, zeroline=False),
-                        # --- HER SÆTTES LEGENDEN ---
                         legend=dict(
                             orientation="h",
+                            # y=1.25 skubber legenden helt op over graf-området
                             yanchor="bottom",
-                            y=1.1,
+                            y=1.25, 
                             xanchor="right",
-                            x=1
+                            x=1,
+                            font=dict(size=12)
                         )
                     )
                     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
