@@ -104,18 +104,20 @@ def get_physical_data(player_name, player_opta_uuid, valgt_hold_navn, db_conn):
 
     sql = f"""
         SELECT 
-            p.MATCH_DATE,
-            any_value(p.MATCH_TEAMS) as MATCH_TEAMS,
-            MAX(
-    TRY_CAST(SPLIT_PART(p.MINUTES, ':', 1) AS FLOAT) + 
-    (TRY_CAST(NULLIF(SPLIT_PART(p.MINUTES, ':', 2), '') AS FLOAT) / 60)
-) as MINUTES
-            SUM(p.DISTANCE) as DISTANCE,
-            SUM(p."HIGH SPEED RUNNING") as HSR,
-            SUM(p.SPRINTING) as SPRINTING,
-            MAX(p.TOP_SPEED) as TOP_SPEED,
-            SUM(p.NO_OF_HIGH_INTENSITY_RUNS) as HI_RUNS
-        FROM {DB}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS p
+    p.MATCH_DATE,
+    any_value(p.MATCH_TEAMS) as MATCH_TEAMS,
+    -- Herunder er kommaet vigtigt!
+    MAX(
+        TRY_CAST(SPLIT_PART(p.MINUTES, ':', 1) AS FLOAT) + 
+        (TRY_CAST(NULLIF(SPLIT_PART(p.MINUTES, ':', 2), '') AS FLOAT) / 60)
+    ) as MINUTES, 
+    -- <--- KOMMA HER!
+    SUM(p.DISTANCE) as DISTANCE,
+    SUM(p."HIGH SPEED RUNNING") as HSR,
+    SUM(p.SPRINTING) as SPRINTING,
+    MAX(p.TOP_SPEED) as TOP_SPEED,
+    SUM(p.NO_OF_HIGH_INTENSITY_RUNS) as HI_RUNS
+FROM {DB}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS p
         WHERE (({name_conditions}) OR ("optaId" LIKE '%{clean_id}%'))
           AND p.MATCH_DATE BETWEEN '2025-07-01' AND '2026-06-30'
           AND p.MATCH_SSIID IN (
