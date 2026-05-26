@@ -106,7 +106,10 @@ def get_physical_data(player_name, player_opta_uuid, valgt_hold_navn, db_conn):
         SELECT 
             p.MATCH_DATE,
             any_value(p.MATCH_TEAMS) as MATCH_TEAMS,
-            MAX(TRY_CAST(SPLIT_PART(p.MINUTES, ':', 1) AS INT)) as MINUTES,
+            MAX(
+            TRY_CAST(SPLIT_PART(p.MINUTES, ':', 1) AS FLOAT) + 
+            (TRY_CAST(NULLIF(SPLIT_PART(p.MINUTES, ':', 2), '') AS FLOAT) / 60)
+        ) as MINUTES,
             SUM(p.DISTANCE) as DISTANCE,
             SUM(p."HIGH SPEED RUNNING") as HSR,
             SUM(p.SPRINTING) as SPRINTING,
