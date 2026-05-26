@@ -618,11 +618,12 @@ def vis_side(dp=None):
                             y=1.25, 
                             xanchor="right",
                             x=1,
-                            # --- HER ER LØSNINGEN ---
-                            itemclick="toggle", 
+                            itemclick="toggle",
                             itemdoubleclick="toggleothers"
                         ),
-                        barmode='group' 
+                        # --- ÆNDRING HER ---
+                        barmode='relative', # 'relative' er mere stabil til filtrering end 'group'
+                        bargap=0.2          # Giver luft mellem kategorierne
                     )
                     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
