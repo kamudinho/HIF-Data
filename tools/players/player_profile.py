@@ -567,9 +567,13 @@ def vis_side(dp=None):
                 if not df_chart.empty:
                     # 1. Definer status logikken herinde
                     def get_status(minutter):
-                        if minutter >= 85: return "Fuld tid"
-                        if minutter > 0: return "Delvis"
-                        return "Ikke spillet"
+                        try:
+                            val = float(minutter)
+                            if val >= 85: return "Fuld tid"
+                            if val > 0: return "Delvis"
+                            return "Ikke spillet"
+                        except:
+                            return "Ikke spillet"
 
                     df_chart['Status'] = df_chart['minutes'].apply(get_status)
 
