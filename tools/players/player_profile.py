@@ -553,6 +553,8 @@ def vis_side(dp=None):
             m3.metric("Topfart", f"{round(latest['top_speed'], 1)} km/t")
             m4.metric("Seneste Tid", format_minutes(latest['minutes'])) # Ny metric
 
+            st.caption("Definitioner: HSR (20-25 km/t), Sprint (≥25 km/t)")
+            
             t_sub_log, t_sub_charts = st.tabs(["Kampoversigt", "Grafer"])
 
             with t_sub_charts:
