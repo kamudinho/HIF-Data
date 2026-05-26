@@ -571,7 +571,7 @@ def vis_side(dp=None):
                 df_chart = df_chart.sort_values('match_date', ascending=True)
 
                 if not df_chart.empty:
-                    df_chart['Status'] = df_chart['minutes'].apply(lambda x: "Fuld tid" if x >= 85 else "Delvis" if x > 0 else "Ikke spillet")
+                    df_chart['Status'] = df_chart['minutes'].apply(lambda x: "Fuld tid" if x >= 85 else "Indskiftet/udskiftet" if x > 0 else "Ikke spillet")
                     df_chart['Opponent'] = df_chart['match_teams'].apply(lambda x: str(x).split('-')[1] if '-' in str(x) else str(x))
                     df_chart['Label'] = df_chart['Opponent'] + "<br>" + df_chart['match_date'].dt.strftime('%d/%m')
                     
