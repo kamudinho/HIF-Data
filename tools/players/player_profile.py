@@ -558,23 +558,21 @@ def vis_side(dp=None):
             t_sub_log, t_sub_charts = st.tabs(["Kampoversigt", "Grafer"])
 
             with t_sub_charts:
-                # 1. Brug en container til at holde input-elementerne samlet
+                # --- CSS for at fjerne ekstra luft ---
+                st.markdown("""
+                    <style>
+                    /* Fjerner luft mellem elementer i denne container */
+                    .compact-container { margin-top: -20px; }
+                    /* Justerer placering af caption */
+                    div[data-testid="stCaption"] { margin-bottom: 5px !important; }
+                    </style>
+                """, unsafe_allow_html=True)
+            
                 with st.container():
-                    cat_choice = st.segmented_control(
-                        "Vælg metrik", 
-                        options=["HSR (m)", "Sprint (m)", "Distance (km)", "Topfart (km/t)"], 
-                        default="HSR (m)", 
-                        key="phys_graph_control"
-                    )
+                    cat_choice = st.segmented_control("Vælg metrik", options=["HSR (m)", "Sprint (m)", "Distance (km)", "Topfart (km/t)"], default="HSR (m)", key="phys_graph_control")
                     
-                    # Definer definitioner som en dictionary for renere kode
-                    defs = {
-                        "HSR": "HSR (High Speed Running): 20 - 25 km/t",
-                        "Sprint": "Sprint: ≥ 25 km/t",
-                        "Distance": "Samlede distance",
-                        "Topfart": "Højeste fart målt"
-                    }
-                    # Find den relevante definition
+                    # Definitioner
+                    defs = {"HSR": "HSR: 20-25 km/t", "Sprint": "Sprint: ≥ 25 km/t", "Distance": "Samlet distance", "Topfart": "Højeste fart målt"}
                     match = next((v for k, v in defs.items() if k in cat_choice), "")
                     st.caption(match)
 
