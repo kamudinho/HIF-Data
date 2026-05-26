@@ -522,8 +522,15 @@ def vis_side(dp=None):
 
     with t_phys:
         df_phys = get_physical_data(valgt_spiller, valgt_player_uuid, valgt_hold, conn)
+        
         if df_phys is not None and not df_phys.empty:
-            df_phys['match_date'] = pd.to_datetime(df_phys['match_date'])
+            # 1. Konverter DATO med det samme, og tving den til datetime
+            df_phys['match_date'] = pd.to_datetime(df_phys['match_date'], errors='coerce')
+            
+            # 2. Fjern evt. rækker hvor datoen ikke kunne konverteres (hvis der er nulls)
+            df_phys = df_phys.dropna(subset=['match_date'])
+            
+            # 3. Resten af din logik
             df_phys = df_phys.sort_values('match_date', ascending=False)
             avg_dist = df_phys['distance'].mean()
             avg_hsr = df_phys['hsr'].mean()
