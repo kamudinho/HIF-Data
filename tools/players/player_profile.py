@@ -107,9 +107,9 @@ def get_physical_data(player_name, player_opta_uuid, valgt_hold_navn, db_conn):
             p.MATCH_DATE,
             any_value(p.MATCH_TEAMS) as MATCH_TEAMS,
             MAX(
-            TRY_CAST(SPLIT_PART(p.MINUTES, ':', 1) AS FLOAT) + 
-            (TRY_CAST(NULLIF(SPLIT_PART(p.MINUTES, ':', 2), '') AS FLOAT) / 60)
-        ) as MINUTES,
+    TRY_CAST(SPLIT_PART(p.MINUTES, ':', 1) AS FLOAT) + 
+    (TRY_CAST(NULLIF(SPLIT_PART(p.MINUTES, ':', 2), '') AS FLOAT) / 60)
+) as MINUTES
             SUM(p.DISTANCE) as DISTANCE,
             SUM(p."HIGH SPEED RUNNING") as HSR,
             SUM(p.SPRINTING) as SPRINTING,
@@ -583,6 +583,13 @@ def vis_side(dp=None):
                         if val > 0: return "Delvis"
                         return "Ikke spillet"
 
+                    def format_minutes(val):
+                        if pd.isna(val) or val == 0:
+                            return "00:00"
+                        minutes = int(val)
+                        seconds = int(round((val - minutes) * 60))
+                        return f"{minutes:02d}:{seconds:02d}"
+
                     df_chart['Status'] = df_chart['minutes'].apply(get_status)
 
                     def get_opponent(teams_str, my_team):
@@ -634,8 +641,10 @@ def vis_side(dp=None):
                     st.warning("Ingen data fundet efter 01/07/2025. Tjek datofiltre.")
                     
             with t_sub_log:
+                # Lav en kopi så vi ikke ødelægger de rå tal til graferne
                 df_display = df_phys.copy()
-                
+                df_display['minutes'] = df_display['minutes'].apply(format_minutes)
+                                
                 # 1. Formater dato
                 df_display['match_date'] = pd.to_datetime(df_display['match_date']).dt.strftime('%d/%m/%Y')
                 
