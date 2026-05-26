@@ -585,7 +585,26 @@ def vis_side(dp=None):
                     st.info("Ingen fysiske data fundet for denne sæson.")
 
             with t_sub_log:
-                st.data_editor(df_phys, hide_index=True, use_container_width=True, disabled=True)
+                    # Lav en kopi til visning og omdøb kolonner
+                    df_display = df_phys.copy()
+                    
+                    # Formater dato
+                    df_display['match_date'] = pd.to_datetime(df_display['match_date']).dt.strftime('%d/%m/%Y')
+                    
+                    # Omdøb kolonner til noget læsbart
+                    df_display = df_display.rename(columns={
+                        'match_date': 'Dato',
+                        'match_teams': 'Kamp',
+                        'minutes': 'Minutter',
+                        'distance': 'Distance (m)',
+                        'hsr': 'HSR (m)',
+                        'sprinting': 'Sprint (m)',
+                        'top_speed': 'Topfart (km/t)',
+                        'hi_runs': 'Højintense løb'
+                    })
+                    
+                    # Vis tabellen
+                    st.data_editor(df_display, hide_index=True, use_container_width=True, disabled=True)
 
 if __name__ == "__main__":
     vis_side()
