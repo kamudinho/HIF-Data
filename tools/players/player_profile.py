@@ -603,10 +603,25 @@ def vis_side(dp=None):
                                   line=dict(color="#D3D3D3", width=2, dash="dash"), layer="below")
 
                     fig.update_layout(
-                        plot_bgcolor="white", height=400, margin=dict(t=100, b=50, l=10, r=10),
-                        xaxis=dict(showgrid=False, tickangle=-45, type='category', categoryorder='array', categoryarray=df_chart['Label'].tolist()),
+                        plot_bgcolor="white", 
+                        height=400, 
+                        margin=dict(t=100, b=50, l=10, r=10),
+                        xaxis=dict(
+                            showgrid=False, tickangle=-45, type='category',
+                            categoryorder='array',
+                            categoryarray=df_chart['Label'].tolist()
+                        ),
                         yaxis=dict(showgrid=True, gridcolor='#f0f0f0', showticklabels=False, zeroline=False, range=[0, y_vals.max() * 1.2]),
-                        legend=dict(orientation="h", yanchor="bottom", y=1.25, xanchor="right", x=1),
+                        legend=dict(
+                            orientation="h",
+                            yanchor="bottom",
+                            y=1.25, 
+                            xanchor="right",
+                            x=1,
+                            # --- HER ER LØSNINGEN ---
+                            itemclick="toggle", 
+                            itemdoubleclick="toggleothers"
+                        ),
                         barmode='group' 
                     )
                     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
