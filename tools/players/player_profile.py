@@ -548,10 +548,11 @@ def vis_side(dp=None):
 
             # TOP METRICS
             m1, m2, m3, m4 = st.columns(4)
-            m1.metric("Seneste Distance", f"{round(latest['distance']/1000, 2)} km", delta=f"{round((latest['distance'] - avg_dist)/1000, 2)} km")
+            st.caption("Seneste kamp")
+            m1.metric("Distance", f"{round(latest['distance']/1000, 2)} km", delta=f"{round((latest['distance'] - avg_dist)/1000, 2)} km")
             m2.metric("HSR", f"{int(latest['hsr'])} m", delta=f"{int(latest['hsr'] - avg_hsr)} m")
             m3.metric("Topfart", f"{round(latest['top_speed'], 1)} km/t")
-            m4.metric("Seneste Tid", format_minutes(latest['minutes'])) # Ny metric
+            m4.metric("Minutter", format_minutes(latest['minutes'])) # Ny metric
             
             t_sub_log, t_sub_charts = st.tabs(["Kampoversigt", "Grafer"])
 
@@ -560,9 +561,13 @@ def vis_side(dp=None):
                 
                 # --- VIS DEFINITION BASERET PÅ VALG ---
                 if "HSR" in cat_choice:
-                    st.caption("ℹ️ HSR (High Speed Running): 20 - 25 km/t")
+                    st.caption("HSR (High Speed Running): 20 - 25 km/t")
                 elif "Sprint" in cat_choice:
-                    st.caption("ℹ️ Sprint: ≥ 25 km/t")
+                    st.caption("Sprint: ≥ 25 km/t")
+                elif "Distance" in cat_choice:
+                    st.caption("Sprint: ≥ 25 km/t")
+                elif "Topfart" in cat_choice:
+                    st.caption("Sprint: ≥ 25 km/t")
                 
                 mapping = {
                     "HSR (m)": ("hsr", 1, "m"), 
