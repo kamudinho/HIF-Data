@@ -560,51 +560,56 @@ def vis_side(dp=None):
                 }
                 col, div, suffix = mapping[cat_choice]
                 
-                df_chart = df_phys[df_phys['match_date'] >= '2025-07-01'].copy()
+                # SIKKER FILTRERING: Brug pd.to_datetime til sammenligningen
+                start_date = pd.to_datetime('2025-07-01')
+                df_chart = df_phys[df_phys['match_date'] >= start_date].copy()
                 df_chart = df_chart.drop_duplicates(subset=['match_date', 'match_teams'])
                 df_chart = df_chart.sort_values('match_date', ascending=True)
 
                 if not df_chart.empty:
-                    # 1. Definer status logikken herinde
+                    # Status logik
                     def get_status(minutter):
-                        try:
-                            val = float(minutter)
-                            if val >= 85: return "Fuld tid"
-                            if val > 0: return "Delvis"
-                            return "Ikke spillet"
-                        except:
-                            return "Ikke spillet"
+                        val = float(minutter) if minutter is not None else 0
+                        if val >= 85: return "Fuld tid"
+                        if val > 0: return "Delvis"
+                        return "Ikke spillet"
 
                     df_chart['Status'] = df_chart['minutes'].apply(get_status)
 
                     def get_opponent(teams_str, my_team):
                         if not teams_str: return "?"
-                        parts = [p.strip() for p in teams_str.split('-')]
-                        if len(parts) < 2: return teams_str
-                        return parts[1] if parts[0].lower() in my_team.lower() else parts[0]
+                        parts = [p.strip() for p in str(teams_str).split('-')]
+                        if len(parts) < 2: return str(teams_str)
+                        return parts[1] if parts[0].lower() in str(my_team).lower() else parts[0]
 
                     df_chart['Opponent'] = df_chart['match_teams'].apply(lambda x: get_opponent(x, valgt_hold))
                     df_chart['Label'] = df_chart['Opponent'] + "<br>" + df_chart['match_date'].dt.strftime('%d/%m')
+                    
                     y_vals = df_chart[col] / div
                     season_avg = y_vals.mean()
                     text_vals = y_vals.apply(lambda x: f"{x:.0f} {suffix}" if x > 100 else f"{x:.1f} {suffix}")
 
-                    # 2. Plot med status-opdeling
-                    color_map = {"Fuld tid": "#cc0000", "Delvis": "#f39c12"}
+                    # Plot
                     fig = go.Figure()
                     
-                    for status, color in color_map.items():
-                        df_subset = df_chart[df_chart['Status'] == status]
-                        if not df_subset.empty:
-                            fig.add_trace(go.Bar(
-                                x=df_subset['Label'], 
-                                y=y_vals.loc[df_subset.index],
-                                text=text_vals.loc[df_subset.index],
-                                name=status,
-                                marker_color=color,
-                                textposition='outside',
-                                cliponaxis=False
-                            ))
+                    # Definer farver
+                    color_map = {"Fuld tid": "#cc0000", "Delvis": "#f39c12"}
+                    
+                    # Vi tegner alle rækker for at sikre, at grafen altid vises
+                    for i, row in df_chart.iterrows():
+                        status = row['Status']
+                        color = color_map.get(status, "#808080") # Grå hvis ingen status matcher
+                        
+                        fig.add_trace(go.Bar(
+                            x=[row['Label']], 
+                            y=[y_vals.loc[i]],
+                            text=[text_vals.loc[i]],
+                            marker_color=color,
+                            name=status, # Dette giver legende
+                            showlegend=(status in ["Fuld tid", "Delvis"]),
+                            textposition='outside',
+                            cliponaxis=False
+                        ))
 
                     fig.add_shape(type="line", x0=-0.5, x1=len(df_chart)-0.5, y0=season_avg, y1=season_avg, 
                                   line=dict(color="#D3D3D3", width=2, dash="dash"))
@@ -613,11 +618,11 @@ def vis_side(dp=None):
                         plot_bgcolor="white", height=400, margin=dict(t=50, b=80, l=10, r=10),
                         xaxis=dict(showgrid=False, tickangle=-45, tickfont=dict(size=10), type='category'),
                         yaxis=dict(showgrid=True, gridcolor='#f0f0f0', showticklabels=False, zeroline=False, range=[0, y_vals.max() * 1.3]),
-                        showlegend=True # Sæt til True nu så man kan se hvad farverne betyder
+                        showlegend=True
                     )
                     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
                 else:
-                    st.info("Ingen fysiske data fundet for denne sæson.")
+                    st.warning("Ingen data fundet efter 01/07/2025. Tjek datofiltre.")
                     
             with t_sub_log:
                 df_display = df_phys.copy()
