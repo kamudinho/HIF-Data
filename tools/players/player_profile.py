@@ -524,22 +524,22 @@ def vis_side(dp=None):
             st.pyplot(fig, use_container_width=True)
 
     with t_phys:
+        # Helper funktion til MM:SS formatering
+        def format_minutes(val):
+            if pd.isna(val) or val <= 0: return "00:00"
+            minutes = int(val)
+            seconds = int(round((val - minutes) * 60))
+            if seconds == 60: minutes += 1; seconds = 0
+            return f"{minutes:02d}:{seconds:02d}"
+
         df_phys = get_physical_data(valgt_spiller, valgt_player_uuid, valgt_hold, conn)
         
         if df_phys is not None and not df_phys.empty:
-            # --- LØSNING PÅ FEJLEN ---
-            # Sørg for at 'minutes' er et tal
             df_phys['minutes'] = pd.to_numeric(df_phys['minutes'], errors='coerce').fillna(0)
-            # -------------------------
-    
             df_phys['match_date'] = pd.to_datetime(df_phys['match_date'], errors='coerce')
             df_phys = df_phys.dropna(subset=['match_date'])
-            
-            # 2. Fjern evt. rækker hvor datoen ikke kunne konverteres (hvis der er nulls)
-            df_phys = df_phys.dropna(subset=['match_date'])
-            
-            # 3. Resten af din logik
             df_phys = df_phys.sort_values('match_date', ascending=False)
+            
             avg_dist = df_phys['distance'].mean()
             avg_hsr = df_phys['hsr'].mean()
             latest = df_phys.iloc[0]
@@ -549,14 +549,8 @@ def vis_side(dp=None):
             m1.metric("Seneste Distance", f"{round(latest['distance']/1000, 2)} km", delta=f"{round((latest['distance'] - avg_dist)/1000, 2)} km")
             m2.metric("HSR", f"{int(latest['hsr'])} m", delta=f"{int(latest['hsr'] - avg_hsr)} m")
             m3.metric("Topfart", f"{round(latest['top_speed'], 1)} km/t")
-            m4.metric("Højintense Akt.", int(latest['hi_runs']))
+            m4.metric("Seneste Tid", format_minutes(latest['minutes'])) # Ny metric
 
-            st.write("--- DEBUG: Fysisk Data ---")
-            st.write(f"Antal rækker i df_phys: {len(df_phys)}")
-            if not df_phys.empty:
-                st.write("Kolonner i df_phys:", df_phys.columns.tolist())
-                st.write("Minutter værdier (første 10):", df_phys['minutes'].head(10).tolist())
-            
             t_sub_log, t_sub_charts = st.tabs(["Kampoversigt", "Grafer"])
 
             with t_sub_charts:
@@ -569,105 +563,49 @@ def vis_side(dp=None):
                 }
                 col, div, suffix = mapping[cat_choice]
                 
-                # SIKKER FILTRERING: Brug pd.to_datetime til sammenligningen
                 start_date = pd.to_datetime('2025-07-01')
                 df_chart = df_phys[df_phys['match_date'] >= start_date].copy()
                 df_chart = df_chart.drop_duplicates(subset=['match_date', 'match_teams'])
                 df_chart = df_chart.sort_values('match_date', ascending=True)
 
                 if not df_chart.empty:
-                    # Status logik
-                    def get_status(minutter):
-                        val = float(minutter) if minutter is not None else 0
-                        if val >= 85: return "Fuld tid"
-                        if val > 0: return "Delvis"
-                        return "Ikke spillet"
-
-                    def format_minutes(val):
-                        if pd.isna(val) or val == 0:
-                            return "00:00"
-                        minutes = int(val)
-                        seconds = int(round((val - minutes) * 60))
-                        return f"{minutes:02d}:{seconds:02d}"
-
-                    df_chart['Status'] = df_chart['minutes'].apply(get_status)
-
-                    def get_opponent(teams_str, my_team):
-                        if not teams_str: return "?"
-                        parts = [p.strip() for p in str(teams_str).split('-')]
-                        if len(parts) < 2: return str(teams_str)
-                        return parts[1] if parts[0].lower() in str(my_team).lower() else parts[0]
-
-                    df_chart['Opponent'] = df_chart['match_teams'].apply(lambda x: get_opponent(x, valgt_hold))
+                    df_chart['Status'] = df_chart['minutes'].apply(lambda x: "Fuld tid" if x >= 85 else "Delvis" if x > 0 else "Ikke spillet")
+                    df_chart['Opponent'] = df_chart['match_teams'].apply(lambda x: str(x).split('-')[1] if '-' in str(x) else str(x))
                     df_chart['Label'] = df_chart['Opponent'] + "<br>" + df_chart['match_date'].dt.strftime('%d/%m')
                     
                     y_vals = df_chart[col] / div
                     season_avg = y_vals.mean()
                     text_vals = y_vals.apply(lambda x: f"{x:.0f} {suffix}" if x > 100 else f"{x:.1f} {suffix}")
 
-                    # Plot
+                    # Plotting med farveoptimering
+                    color_map = {"Fuld tid": "#df003b", "Delvis": "#f39c12", "Ikke spillet": "#808080"}
+                    
                     fig = go.Figure()
-                    
-                    # Definer farver
-                    color_map = {"Fuld tid": "red", "Delvis": "#f39c12"}
-                    
-                    # Vi tegner alle rækker for at sikre, at grafen altid vises
-                    for i, row in df_chart.iterrows():
-                        status = row['Status']
-                        color = color_map.get(status, "#808080") # Grå hvis ingen status matcher
-                        
-                        fig.add_trace(go.Bar(
-                            x=[row['Label']], 
-                            y=[y_vals.loc[i]],
-                            text=[text_vals.loc[i]],
-                            marker_color=color,
-                            name=status, # Dette giver legende
-                            showlegend=(status in ["Fuld tid", "Delvis"]),
-                            textposition='outside',
-                            cliponaxis=False
-                        ))
-
+                    fig.add_trace(go.Bar(
+                        x=df_chart['Label'], 
+                        y=y_vals,
+                        text=text_vals,
+                        marker_color=df_chart['Status'].map(color_map),
+                        textposition='outside',
+                        cliponaxis=False
+                    ))
                     fig.add_shape(type="line", x0=-0.5, x1=len(df_chart)-0.5, y0=season_avg, y1=season_avg, 
                                   line=dict(color="#D3D3D3", width=2, dash="dash"))
-
-                    fig.update_layout(
-                        plot_bgcolor="white", height=400, margin=dict(t=50, b=80, l=10, r=10),
-                        xaxis=dict(showgrid=False, tickangle=-45, tickfont=dict(size=10), type='category'),
-                        yaxis=dict(showgrid=True, gridcolor='#f0f0f0', showticklabels=False, zeroline=False, range=[0, y_vals.max() * 1.3]),
-                        showlegend=True
-                    )
-                    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-                else:
-                    st.warning("Ingen data fundet efter 01/07/2025. Tjek datofiltre.")
                     
+                    fig.update_layout(plot_bgcolor="white", height=400, margin=dict(t=50, b=80, l=10, r=10),
+                                      xaxis=dict(showgrid=False, tickangle=-45, type='category'),
+                                      yaxis=dict(showgrid=True, gridcolor='#f0f0f0', showticklabels=False, zeroline=False))
+                    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+
             with t_sub_log:
-                # Lav en kopi så vi ikke ødelægger de rå tal til graferne
                 df_display = df_phys.copy()
                 df_display['minutes'] = df_display['minutes'].apply(format_minutes)
-                                
-                # 1. Formater dato
-                df_display['match_date'] = pd.to_datetime(df_display['match_date']).dt.strftime('%d/%m/%Y')
-                
-                # 2. Tilføj suffix til de relevante kolonner
-                df_display['distance'] = df_display['distance'].apply(lambda x: f"{int(x)} m")
-                df_display['hsr'] = df_display['hsr'].apply(lambda x: f"{int(x)} m")
-                df_display['sprinting'] = df_display['sprinting'].apply(lambda x: f"{int(x)} m")
-                df_display['top_speed'] = df_display['top_speed'].apply(lambda x: f"{x:.1f} km/t")
-                
-                # 3. Omdøb kolonner til visning
+                df_display['match_date'] = df_display['match_date'].dt.strftime('%d/%m/%Y')
                 df_display = df_display.rename(columns={
-                    'match_date': 'Dato',
-                    'match_teams': 'Kamp',
-                    'minutes': 'Minutter',
-                    'distance': 'Distance',
-                    'hsr': 'HSR',
-                    'sprinting': 'Sprint',
-                    'top_speed': 'Topfart',
-                    'hi_runs': 'Højintense løb'
+                    'match_date': 'Dato', 'match_teams': 'Kamp', 'minutes': 'Minutter',
+                    'distance': 'Distance', 'hsr': 'HSR', 'sprinting': 'Sprint', 
+                    'top_speed': 'Topfart', 'hi_runs': 'Højintense løb'
                 })
-                
-                # 4. Vis tabellen
                 st.data_editor(df_display, hide_index=True, use_container_width=True, disabled=True)
-
 if __name__ == "__main__":
     vis_side()
