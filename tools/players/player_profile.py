@@ -633,25 +633,24 @@ def vis_side(dp=None):
                     fig.update_layout(
                         plot_bgcolor="white", 
                         height=400, 
-                        margin=dict(t=50, b=50, l=10, r=10),
-                        xaxis=dict(
-                            showgrid=False, tickangle=-45, type='category',
-                            categoryorder='array',
-                            categoryarray=df_chart['Label'].tolist()
-                        ),
-                        yaxis=dict(showgrid=True, gridcolor='#f0f0f0', showticklabels=False, zeroline=False, range=[0, y_vals.max() * 1.2]),
+                        # t=40 er nøglen til at rykke grafen op
+                        margin=dict(t=40, b=50, l=10, r=10), 
+                        xaxis=dict(showgrid=False, tickangle=-45, type='category', 
+                                   categoryorder='array', categoryarray=df_chart['Label'].tolist()),
+                        yaxis=dict(showgrid=True, gridcolor='#f0f0f0', showticklabels=False, zeroline=False, 
+                                   range=[0, y_vals.max() * 1.15]),
                         legend=dict(
                             orientation="h",
                             yanchor="bottom",
-                            y=1.25, 
+                            # y=1.1 placerer legenden lige over grafen fremfor langt oppe
+                            y=1.12, 
                             xanchor="right",
                             x=1,
-                            itemclick=False,       # Gør legenden ikke-klikbar
-                            itemdoubleclick=False  # Gør legenden ikke-klikbar
+                            itemclick=False, 
+                            itemdoubleclick=False
                         ),
-                        # --- ÆNDRING HER ---
-                        barmode='relative', # 'relative' er mere stabil til filtrering end 'group'
-                        bargap=0.2          # Giver luft mellem kategorierne
+                        barmode='relative',
+                        bargap=0.2
                     )
                     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
