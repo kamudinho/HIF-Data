@@ -579,24 +579,43 @@ def vis_side(dp=None):
                     season_avg = y_vals.mean()
                     text_vals = y_vals.apply(lambda x: f"{x:.0f} {suffix}" if x > 100 else f"{x:.1f} {suffix}")
 
-                    # Plotting med farveoptimering
+                    # Definer farver (Sørg for at de matcher dit Plot)
                     color_map = {"Fuld tid": "#df003b", "Delvis": "#f39c12", "Ikke spillet": "#808080"}
                     
                     fig = go.Figure()
-                    fig.add_trace(go.Bar(
-                        x=df_chart['Label'], 
-                        y=y_vals,
-                        text=text_vals,
-                        marker_color=df_chart['Status'].map(color_map),
-                        textposition='outside',
-                        cliponaxis=False
-                    ))
+                    
+                    # Loop igennem status-typerne for at tilføje dem som "traces" med navne,
+                    # så de automatisk kommer i legenden
+                    for status in ["Fuld tid", "Delvis"]:
+                        mask = df_chart['Status'] == status
+                        fig.add_trace(go.Bar(
+                            x=df_chart.loc[mask, 'Label'], 
+                            y=y_vals[mask],
+                            text=text_vals[mask],
+                            name=status, # Dette navn vises i legenden
+                            marker_color=color_map.get(status),
+                            textposition='outside',
+                            cliponaxis=False
+                        ))
+
                     fig.add_shape(type="line", x0=-0.5, x1=len(df_chart)-0.5, y0=season_avg, y1=season_avg, 
                                   line=dict(color="#D3D3D3", width=2, dash="dash"))
                     
-                    fig.update_layout(plot_bgcolor="white", height=400, margin=dict(t=50, b=80, l=10, r=10),
-                                      xaxis=dict(showgrid=False, tickangle=-45, type='category'),
-                                      yaxis=dict(showgrid=True, gridcolor='#f0f0f0', showticklabels=False, zeroline=False))
+                    fig.update_layout(
+                        plot_bgcolor="white", 
+                        height=400, 
+                        margin=dict(t=80, b=80, l=10, r=10), # t=80 giver plads til legenden
+                        xaxis=dict(showgrid=False, tickangle=-45, type='category'),
+                        yaxis=dict(showgrid=True, gridcolor='#f0f0f0', showticklabels=False, zeroline=False),
+                        # --- HER SÆTTES LEGENDEN ---
+                        legend=dict(
+                            orientation="h",
+                            yanchor="bottom",
+                            y=1.1,
+                            xanchor="right",
+                            x=1
+                        )
+                    )
                     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
             with t_sub_log:
