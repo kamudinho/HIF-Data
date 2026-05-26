@@ -583,40 +583,42 @@ def vis_side(dp=None):
                     color_map = {"Fuld tid": "#df003b", "Delvis": "#f39c12", "Ikke spillet": "#808080"}
                     
                     fig = go.Figure()
-                    
-                    # Loop igennem status-typerne for at tilføje dem som "traces" med navne,
-                    # så de automatisk kommer i legenden
-                    for status in ["Fuld tid", "Delvis"]:
-                        mask = df_chart['Status'] == status
+
+                    # 1. Tegn selve dataene som én samlet gruppe (så rækkefølgen bevares)
+                    fig.add_trace(go.Bar(
+                        x=df_chart['Label'], 
+                        y=y_vals,
+                        text=text_vals,
+                        marker_color=df_chart['Status'].map(color_map),
+                        textposition='outside',
+                        cliponaxis=False,
+                        showlegend=False # Skjul fra legend så vi styrer den manuelt
+                    ))
+
+                    # 2. Tilføj manuelle "dummy" traces for legenden
+                    for status, color in color_map.items():
                         fig.add_trace(go.Bar(
-                            x=df_chart.loc[mask, 'Label'], 
-                            y=y_vals[mask],
-                            text=text_vals[mask],
-                            name=status, # Dette navn vises i legenden
-                            marker_color=color_map.get(status),
-                            textposition='outside',
-                            cliponaxis=False
+                            x=[None], y=[None], # Ingen data
+                            name=status,
+                            marker_color=color,
+                            showlegend=True
                         ))
 
-                    fig.add_shape(type="line", x0=-0.5, x1=len(df_chart)-0.5, y0=season_avg, y1=season_avg, 
-                                  line=dict(color="#D3D3D3", width=2, dash="dash"))
-                    
+                    # 3. Opsæt layout
                     fig.update_layout(
                         plot_bgcolor="white", 
                         height=400, 
-                        # Vi øger 't' (top margin) markant for at give plads til legenden i toppen
-                        margin=dict(t=100, b=50, l=10, r=10), 
+                        margin=dict(t=100, b=50, l=10, r=10),
                         xaxis=dict(showgrid=False, tickangle=-45, type='category'),
                         yaxis=dict(showgrid=True, gridcolor='#f0f0f0', showticklabels=False, zeroline=False),
                         legend=dict(
                             orientation="h",
-                            # y=1.25 skubber legenden helt op over graf-området
                             yanchor="bottom",
                             y=1.25, 
                             xanchor="right",
-                            x=1,
-                            font=dict(size=12)
-                        )
+                            x=1
+                        ),
+                        barmode='group' # Sikrer at de ikke bliver stablet
                     )
                     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
