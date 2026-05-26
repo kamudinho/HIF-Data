@@ -584,32 +584,36 @@ def vis_side(dp=None):
                     
                     fig = go.Figure()
 
-                    # 1. Tegn selve dataene som én samlet gruppe (så rækkefølgen bevares)
-                    fig.add_trace(go.Bar(
-                        x=df_chart['Label'], 
-                        y=y_vals,
-                        text=text_vals,
-                        marker_color=df_chart['Status'].map(color_map),
-                        textposition='outside',
-                        cliponaxis=False,
-                        showlegend=False # Skjul fra legend så vi styrer den manuelt
-                    ))
-
-                    # 2. Tilføj manuelle "dummy" traces for legenden
+                    # 1. Tilføj hver status som sin egen trace (bevarer klik-interaktivitet)
                     for status, color in color_map.items():
+                        df_subset = df_chart[df_chart['Status'] == status]
                         fig.add_trace(go.Bar(
-                            x=[None], y=[None], # Ingen data
+                            x=df_subset['Label'], 
+                            y=y_vals[df_chart['Status'] == status],
                             name=status,
                             marker_color=color,
-                            showlegend=True
+                            textposition='outside',
+                            cliponaxis=False
                         ))
 
-                    # 3. Opsæt layout
+                    # 2. Tilføj gennemsnitslinje (vigtigt: læg den til EFTER bars)
+                    fig.add_shape(type="line", x0=-0.5, x1=len(df_chart)-0.5, y0=season_avg, y1=season_avg, 
+                                  line=dict(color="#D3D3D3", width=2, dash="dash"),
+                                  layer="below") # Sørg for linjen ligger bag søjlerne
+
+                    # 3. TVING sortering ved at definere xaxis kategorier manuelt
+                    # Dette sikrer at dato-rækkefølgen overstyrer Plotly's automatiske sortering
                     fig.update_layout(
                         plot_bgcolor="white", 
                         height=400, 
                         margin=dict(t=100, b=50, l=10, r=10),
-                        xaxis=dict(showgrid=False, tickangle=-45, type='category'),
+                        xaxis=dict(
+                            showgrid=False, 
+                            tickangle=-45, 
+                            type='category',
+                            categoryorder='array',
+                            categoryarray=df_chart['Label'].tolist() # Tvinger rækkefølgen fra din dataframe
+                        ),
                         yaxis=dict(showgrid=True, gridcolor='#f0f0f0', showticklabels=False, zeroline=False),
                         legend=dict(
                             orientation="h",
@@ -618,7 +622,7 @@ def vis_side(dp=None):
                             xanchor="right",
                             x=1
                         ),
-                        barmode='group' # Sikrer at de ikke bliver stablet
+                        barmode='group' 
                     )
                     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
