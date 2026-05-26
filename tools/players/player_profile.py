@@ -552,13 +552,18 @@ def vis_side(dp=None):
             m2.metric("HSR", f"{int(latest['hsr'])} m", delta=f"{int(latest['hsr'] - avg_hsr)} m")
             m3.metric("Topfart", f"{round(latest['top_speed'], 1)} km/t")
             m4.metric("Seneste Tid", format_minutes(latest['minutes'])) # Ny metric
-
-            st.caption("Definitioner: HSR (20-25 km/t), Sprint (≥25 km/t)")
             
             t_sub_log, t_sub_charts = st.tabs(["Kampoversigt", "Grafer"])
 
             with t_sub_charts:
                 cat_choice = st.segmented_control("Vælg metrik", options=["HSR (m)", "Sprint (m)", "Distance (km)", "Topfart (km/t)"], default="HSR (m)", key="phys_graph_control")
+                
+                # --- VIS DEFINITION BASERET PÅ VALG ---
+                if "HSR" in cat_choice:
+                    st.caption("ℹ️ HSR (High Speed Running): 20 - 25 km/t")
+                elif "Sprint" in cat_choice:
+                    st.caption("ℹ️ Sprint: ≥ 25 km/t")
+                
                 mapping = {
                     "HSR (m)": ("hsr", 1, "m"), 
                     "Sprint (m)": ("sprinting", 1, "m"), 
