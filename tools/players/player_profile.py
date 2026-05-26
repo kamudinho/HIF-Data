@@ -546,9 +546,10 @@ def vis_side(dp=None):
             avg_hsr = df_phys['hsr'].mean()
             latest = df_phys.iloc[0]
 
+            st.caption("Seneste kamp")
+
             # TOP METRICS
             m1, m2, m3, m4 = st.columns(4)
-            st.caption("Seneste kamp")
             m1.metric("Distance", f"{round(latest['distance']/1000, 2)} km", delta=f"{round((latest['distance'] - avg_dist)/1000, 2)} km")
             m2.metric("HSR", f"{int(latest['hsr'])} m", delta=f"{int(latest['hsr'] - avg_hsr)} m")
             m3.metric("Topfart", f"{round(latest['top_speed'], 1)} km/t")
@@ -565,9 +566,9 @@ def vis_side(dp=None):
                 elif "Sprint" in cat_choice:
                     st.caption("Sprint: ≥ 25 km/t")
                 elif "Distance" in cat_choice:
-                    st.caption("Sprint: ≥ 25 km/t")
+                    st.caption("Samlede distance")
                 elif "Topfart" in cat_choice:
-                    st.caption("Sprint: ≥ 25 km/t")
+                    st.caption("Højeste fart målt")
                 
                 mapping = {
                     "HSR (m)": ("hsr", 1, "m"), 
