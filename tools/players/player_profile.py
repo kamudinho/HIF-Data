@@ -558,17 +558,32 @@ def vis_side(dp=None):
             t_sub_log, t_sub_charts = st.tabs(["Kampoversigt", "Grafer"])
 
             with t_sub_charts:
-                cat_choice = st.segmented_control("Vælg metrik", options=["HSR (m)", "Sprint (m)", "Distance (km)", "Topfart (km/t)"], default="HSR (m)", key="phys_graph_control")
-                
-                # --- VIS DEFINITION BASERET PÅ VALG ---
-                if "HSR" in cat_choice:
-                    st.caption("HSR (High Speed Running): 20 - 25 km/t")
-                elif "Sprint" in cat_choice:
-                    st.caption("Sprint: ≥ 25 km/t")
-                elif "Distance" in cat_choice:
-                    st.caption("Samlede distance")
-                elif "Topfart" in cat_choice:
-                    st.caption("Højeste fart målt")
+                # 1. Brug en container til at holde input-elementerne samlet
+                with st.container():
+                    cat_choice = st.segmented_control(
+                        "Vælg metrik", 
+                        options=["HSR (m)", "Sprint (m)", "Distance (km)", "Topfart (km/t)"], 
+                        default="HSR (m)", 
+                        key="phys_graph_control"
+                    )
+                    
+                    # Definer definitioner som en dictionary for renere kode
+                    defs = {
+                        "HSR": "HSR (High Speed Running): 20 - 25 km/t",
+                        "Sprint": "Sprint: ≥ 25 km/t",
+                        "Distance": "Samlede distance",
+                        "Topfart": "Højeste fart målt"
+                    }
+                    # Find den relevante definition
+                    match = next((v for k, v in defs.items() if k in cat_choice), "")
+                    st.caption(match)
+
+                # 2. CSS-hack for at reducere afstanden mellem caption og graf
+                st.markdown("""
+                    <style>
+                    div[data-testid="stCaption"] { margin-bottom: -10px !important; }
+                    </style>
+                """, unsafe_allow_html=True)
                 
                 mapping = {
                     "HSR (m)": ("hsr", 1, "m"), 
@@ -618,7 +633,7 @@ def vis_side(dp=None):
                     fig.update_layout(
                         plot_bgcolor="white", 
                         height=400, 
-                        margin=dict(t=100, b=50, l=10, r=10),
+                        margin=dict(t=50, b=50, l=10, r=10),
                         xaxis=dict(
                             showgrid=False, tickangle=-45, type='category',
                             categoryorder='array',
