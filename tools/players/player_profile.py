@@ -93,6 +93,14 @@ def draw_player_info_box(ax, team_logo, player_name, season_str, category_str):
     ax.text(0.10, 0.89, f"{season_str} | {category_str}", transform=ax.transAxes, 
             fontsize=8, color='#666666', va='center')
 
+# Definér status baseret på minutter (f.eks. antaget 90 min for fuld tid)
+def get_status(minutter):
+    if minutter >= 85: return "Fuld tid"
+    if minutter > 0 and minutter < 85: return "Delvis"
+    return "Ikke spillet"
+
+df_chart['Status'] = df_chart['minutes'].apply(get_status)
+
 def get_physical_data(player_name, player_opta_uuid, valgt_hold_navn, db_conn):
     target_ssiid = TEAMS.get(valgt_hold_navn, {}).get('ssid')
     if not target_ssiid:
@@ -567,16 +575,23 @@ def vis_side(dp=None):
                     # Opret formateret tekst med suffix
                     text_vals = y_vals.apply(lambda x: f"{x:.0f} {suffix}" if x > 100 else f"{x:.1f} {suffix}")
 
+                    # Farve-map
+                    color_map = {"Fuld tid": "#cc0000", "Delvis": "#f39c12"}
+                    
+                    # I dit bar-plot:
                     fig = go.Figure()
-                    fig.add_trace(go.Bar(
-                        x=df_chart['Label'], 
-                        y=y_vals,
-                        text=text_vals,
-                        textposition='outside', 
-                        marker_color='#cc0000', 
-                        textfont=dict(size=9, color="black"),
-                        cliponaxis=False
-                    ))
+                    
+                    for status, color in color_map.items():
+                        df_subset = df_chart[df_chart['Status'] == status]
+                        fig.add_trace(go.Bar(
+                            x=df_subset['Label'], 
+                            y=y_vals.loc[df_subset.index],
+                            text=text_vals.loc[df_subset.index],
+                            name=status, # Dette gør det muligt at se status i hover
+                            marker_color=color,
+                            textposition='outside',
+                            cliponaxis=False
+                        ))
 
                     fig.add_shape(type="line", x0=-0.5, x1=len(df_chart)-0.5, y0=season_avg, y1=season_avg, 
                                   line=dict(color="#D3D3D3", width=2, dash="dash"))
