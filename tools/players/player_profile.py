@@ -529,9 +529,10 @@ def vis_side(dp=None):
             avg_hsr = df_phys['hsr'].mean()
             latest = df_phys.iloc[0]
 
+            # TOP METRICS
             m1, m2, m3, m4 = st.columns(4)
             m1.metric("Seneste Distance", f"{round(latest['distance']/1000, 2)} km", delta=f"{round((latest['distance'] - avg_dist)/1000, 2)} km")
-            m2.metric("HSR Meter", f"{int(latest['hsr'])} m", delta=f"{int(latest['hsr'] - avg_hsr)} m")
+            m2.metric("HSR", f"{int(latest['hsr'])} m", delta=f"{int(latest['hsr'] - avg_hsr)} m")
             m3.metric("Topfart", f"{round(latest['top_speed'], 1)} km/t")
             m4.metric("Højintense Akt.", int(latest['hi_runs']))
 
@@ -539,9 +540,14 @@ def vis_side(dp=None):
 
             with t_sub_charts:
                 cat_choice = st.segmented_control("Vælg metrik", options=["HSR (m)", "Sprint (m)", "Distance (km)", "Topfart (km/t)"], default="HSR (m)", key="phys_graph_control")
-                mapping = {"HSR (m)": ("hsr", 1, "m"), "Sprint (m)": ("sprinting", 1, "m"), "Distance (km)": ("distance", 1000, "km"), "Topfart (km/t)": ("top_speed", 1, "km/t")}
+                mapping = {
+                    "HSR (m)": ("hsr", 1, "m"), 
+                    "Sprint (m)": ("sprinting", 1, "m"), 
+                    "Distance (km)": ("distance", 1000, "km"), 
+                    "Topfart (km/t)": ("top_speed", 1, "km/t")
+                }
                 col, div, suffix = mapping[cat_choice]
-
+                
                 df_chart = df_phys[df_phys['match_date'] >= '2025-07-01'].copy()
                 df_chart = df_chart.drop_duplicates(subset=['match_date', 'match_teams'])
                 df_chart = df_chart.sort_values('match_date', ascending=True)
@@ -558,11 +564,14 @@ def vis_side(dp=None):
                     y_vals = df_chart[col] / div
                     season_avg = y_vals.mean()
 
+                    # Opret formateret tekst med suffix
+                    text_vals = y_vals.apply(lambda x: f"{x:.0f} {suffix}" if x > 100 else f"{x:.1f} {suffix}")
+
                     fig = go.Figure()
                     fig.add_trace(go.Bar(
                         x=df_chart['Label'], 
                         y=y_vals,
-                        text=y_vals.apply(lambda x: f"{x:.0f}" if x > 100 else f"{x:.1f}"),
+                        text=text_vals,
                         textposition='outside', 
                         marker_color='#cc0000', 
                         textfont=dict(size=9, color="black"),
@@ -573,9 +582,7 @@ def vis_side(dp=None):
                                   line=dict(color="#D3D3D3", width=2, dash="dash"))
 
                     fig.update_layout(
-                        plot_bgcolor="white", 
-                        height=400, 
-                        margin=dict(t=50, b=80, l=10, r=10),
+                        plot_bgcolor="white", height=400, margin=dict(t=50, b=80, l=10, r=10),
                         xaxis=dict(showgrid=False, tickangle=-45, tickfont=dict(size=10), type='category'),
                         yaxis=dict(showgrid=True, gridcolor='#f0f0f0', showticklabels=False, zeroline=False, range=[0, y_vals.max() * 1.3]),
                         showlegend=False
@@ -585,26 +592,21 @@ def vis_side(dp=None):
                     st.info("Ingen fysiske data fundet for denne sæson.")
 
             with t_sub_log:
-                    # Lav en kopi til visning og omdøb kolonner
-                    df_display = df_phys.copy()
-                    
-                    # Formater dato
-                    df_display['match_date'] = pd.to_datetime(df_display['match_date']).dt.strftime('%d/%m/%Y')
-                    
-                    # Omdøb kolonner til noget læsbart
-                    df_display = df_display.rename(columns={
-                        'match_date': 'Dato',
-                        'match_teams': 'Kamp',
-                        'minutes': 'Minutter',
-                        'distance': 'Distance (m)',
-                        'hsr': 'HSR (m)',
-                        'sprinting': 'Sprint (m)',
-                        'top_speed': 'Topfart (km/t)',
-                        'hi_runs': 'Højintense løb'
-                    })
-                    
-                    # Vis tabellen
-                    st.data_editor(df_display, hide_index=True, use_container_width=True, disabled=True)
+                df_display = df_phys.copy()
+                df_display['match_date'] = pd.to_datetime(df_display['match_date']).dt.strftime('%d/%m/%Y')
+                
+                # Omdøb kolonner til visning
+                df_display = df_display.rename(columns={
+                    'match_date': 'Dato',
+                    'match_teams': 'Kamp',
+                    'minutes': 'Minutter',
+                    'distance': 'Distance (m)',
+                    'hsr': 'HSR (m)',
+                    'sprinting': 'Sprint (m)',
+                    'top_speed': 'Topfart (km/t)',
+                    'hi_runs': 'Højintense løb'
+                })
+                st.data_editor(df_display, hide_index=True, use_container_width=True, disabled=True)
 
 if __name__ == "__main__":
     vis_side()
