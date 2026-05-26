@@ -618,8 +618,8 @@ def vis_side(dp=None):
                             y=1.25, 
                             xanchor="right",
                             x=1,
-                            itemclick="toggle",
-                            itemdoubleclick="toggleothers"
+                            itemclick=False,       # Gør legenden ikke-klikbar
+                            itemdoubleclick=False  # Gør legenden ikke-klikbar
                         ),
                         # --- ÆNDRING HER ---
                         barmode='relative', # 'relative' er mere stabil til filtrering end 'group'
