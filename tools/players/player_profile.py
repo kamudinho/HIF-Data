@@ -593,19 +593,29 @@ def vis_side(dp=None):
 
             with t_sub_log:
                 df_display = df_phys.copy()
+                
+                # 1. Formater dato
                 df_display['match_date'] = pd.to_datetime(df_display['match_date']).dt.strftime('%d/%m/%Y')
                 
-                # Omdøb kolonner til visning
+                # 2. Tilføj suffix til de relevante kolonner
+                df_display['distance'] = df_display['distance'].apply(lambda x: f"{int(x)} m")
+                df_display['hsr'] = df_display['hsr'].apply(lambda x: f"{int(x)} m")
+                df_display['sprinting'] = df_display['sprinting'].apply(lambda x: f"{int(x)} m")
+                df_display['top_speed'] = df_display['top_speed'].apply(lambda x: f"{x:.1f} km/t")
+                
+                # 3. Omdøb kolonner til visning
                 df_display = df_display.rename(columns={
                     'match_date': 'Dato',
                     'match_teams': 'Kamp',
                     'minutes': 'Minutter',
-                    'distance': 'Distance (m)',
-                    'hsr': 'HSR (m)',
-                    'sprinting': 'Sprint (m)',
-                    'top_speed': 'Topfart (km/t)',
+                    'distance': 'Distance',
+                    'hsr': 'HSR',
+                    'sprinting': 'Sprint',
+                    'top_speed': 'Topfart',
                     'hi_runs': 'Højintense løb'
                 })
+                
+                # 4. Vis tabellen
                 st.data_editor(df_display, hide_index=True, use_container_width=True, disabled=True)
 
 if __name__ == "__main__":
