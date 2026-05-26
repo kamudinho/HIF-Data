@@ -593,7 +593,7 @@ def vis_side(dp=None):
                     fig = go.Figure()
                     
                     # Definer farver
-                    color_map = {"Fuld tid": "#cc0000", "Delvis": "#f39c12"}
+                    color_map = {"Fuld tid": "red", "Delvis": "#f39c12"}
                     
                     # Vi tegner alle rækker for at sikre, at grafen altid vises
                     for i, row in df_chart.iterrows():
