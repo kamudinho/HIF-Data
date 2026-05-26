@@ -93,14 +93,6 @@ def draw_player_info_box(ax, team_logo, player_name, season_str, category_str):
     ax.text(0.10, 0.89, f"{season_str} | {category_str}", transform=ax.transAxes, 
             fontsize=8, color='#666666', va='center')
 
-# Definér status baseret på minutter (f.eks. antaget 90 min for fuld tid)
-def get_status(minutter):
-    if minutter >= 85: return "Fuld tid"
-    if minutter > 0 and minutter < 85: return "Delvis"
-    return "Ikke spillet"
-
-df_chart['Status'] = df_chart['minutes'].apply(get_status)
-
 def get_physical_data(player_name, player_opta_uuid, valgt_hold_navn, db_conn):
     target_ssiid = TEAMS.get(valgt_hold_navn, {}).get('ssid')
     if not target_ssiid:
@@ -561,6 +553,14 @@ def vis_side(dp=None):
                 df_chart = df_chart.sort_values('match_date', ascending=True)
 
                 if not df_chart.empty:
+                    # 1. Definer status logikken herinde
+                    def get_status(minutter):
+                        if minutter >= 85: return "Fuld tid"
+                        if minutter > 0: return "Delvis"
+                        return "Ikke spillet"
+
+                    df_chart['Status'] = df_chart['minutes'].apply(get_status)
+
                     def get_opponent(teams_str, my_team):
                         if not teams_str: return "?"
                         parts = [p.strip() for p in teams_str.split('-')]
@@ -571,27 +571,24 @@ def vis_side(dp=None):
                     df_chart['Label'] = df_chart['Opponent'] + "<br>" + df_chart['match_date'].dt.strftime('%d/%m')
                     y_vals = df_chart[col] / div
                     season_avg = y_vals.mean()
-
-                    # Opret formateret tekst med suffix
                     text_vals = y_vals.apply(lambda x: f"{x:.0f} {suffix}" if x > 100 else f"{x:.1f} {suffix}")
 
-                    # Farve-map
+                    # 2. Plot med status-opdeling
                     color_map = {"Fuld tid": "#cc0000", "Delvis": "#f39c12"}
-                    
-                    # I dit bar-plot:
                     fig = go.Figure()
                     
                     for status, color in color_map.items():
                         df_subset = df_chart[df_chart['Status'] == status]
-                        fig.add_trace(go.Bar(
-                            x=df_subset['Label'], 
-                            y=y_vals.loc[df_subset.index],
-                            text=text_vals.loc[df_subset.index],
-                            name=status, # Dette gør det muligt at se status i hover
-                            marker_color=color,
-                            textposition='outside',
-                            cliponaxis=False
-                        ))
+                        if not df_subset.empty:
+                            fig.add_trace(go.Bar(
+                                x=df_subset['Label'], 
+                                y=y_vals.loc[df_subset.index],
+                                text=text_vals.loc[df_subset.index],
+                                name=status,
+                                marker_color=color,
+                                textposition='outside',
+                                cliponaxis=False
+                            ))
 
                     fig.add_shape(type="line", x0=-0.5, x1=len(df_chart)-0.5, y0=season_avg, y1=season_avg, 
                                   line=dict(color="#D3D3D3", width=2, dash="dash"))
@@ -600,12 +597,12 @@ def vis_side(dp=None):
                         plot_bgcolor="white", height=400, margin=dict(t=50, b=80, l=10, r=10),
                         xaxis=dict(showgrid=False, tickangle=-45, tickfont=dict(size=10), type='category'),
                         yaxis=dict(showgrid=True, gridcolor='#f0f0f0', showticklabels=False, zeroline=False, range=[0, y_vals.max() * 1.3]),
-                        showlegend=False
+                        showlegend=True # Sæt til True nu så man kan se hvad farverne betyder
                     )
                     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
                 else:
                     st.info("Ingen fysiske data fundet for denne sæson.")
-
+                    
             with t_sub_log:
                 df_display = df_phys.copy()
                 
