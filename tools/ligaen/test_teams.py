@@ -20,7 +20,40 @@ def style_form(f):
         res += f'<span style="color:{color}; font-weight:bold; margin-right:3px;">{char}</span>'
     return res
 
-# --- TABEL LOGIK ---
+# --- 2. DATA LOADING ---
+@st.cache_data(ttl=3600)
+def load_liga_data():
+    conn = _get_snowflake_conn()
+    db = "KLUB_HVIDOVREIF.AXIS"
+    query = f"SELECT * FROM {db}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = 'dyjr458hcmrcy87fsabfsy87o'"
+    df = conn.query(query)
+    df.columns = [c.upper() for c in df.columns]
+    df['MATCH_DATE_FULL'] = pd.to_datetime(df['MATCH_DATE_FULL'])
+    return df
+
+@st.cache_data(ttl=3600)
+def get_wyscout_stats():
+    conn = _get_snowflake_conn()
+    db = "KLUB_HVIDOVREIF.AXIS"
+    query = f"""
+        SELECT t.TEAMNAME, AVG(adv.XG) as XG, AVG(adv.SHOTS) as SHOTS, AVG(adv.GOALS) as GOALS, 
+               AVG(adv.XGPERSHOT) as XGPERSHOT, AVG(adv.SHOTSONTARGET) as SHOTSONTARGET, 
+               AVG(adv.SHOTSBLOCKED) as SHOTSBLOCKED, AVG(adv.SHOTSFROMBOX) as SHOTSFROMBOX, 
+               AVG(adv.SHOTSFROMDANGERZONE) as SHOTSFROMDANGERZONE, AVG(md.INTERCEPTIONS) as INTERCEPTIONS, 
+               AVG(md.TACKLES) as TACKLES, AVG(md.CLEARANCES) as CLEARANCES, AVG(mp.PASSES) as PASSES, 
+               AVG(mp.CROSSESTOTAL) as CROSSESTOTAL, AVG(mp.PROGRESSIVEPASSES) as PROGRESSIVEPASSES, 
+               AVG(mp.PASSTOFINALTHIRDS) as PASSTOFINALTHIRDS, AVG(mp.MATCHTEMPO) as MATCHTEMPO
+        FROM {db}.WYSCOUT_TEAMMATCHES tm 
+        JOIN {db}.WYSCOUT_TEAMS t ON tm.TEAM_WYID = t.TEAM_WYID 
+        LEFT JOIN {db}.WYSCOUT_MATCHADVANCEDSTATS_GENERAL adv ON tm.MATCH_WYID = adv.MATCH_WYID AND tm.TEAM_WYID = adv.TEAM_WYID 
+        LEFT JOIN {db}.WYSCOUT_MATCHADVANCEDSTATS_DEFENCE md ON tm.MATCH_WYID = md.MATCH_WYID AND tm.TEAM_WYID = md.TEAM_WYID 
+        LEFT JOIN {db}.WYSCOUT_MATCHADVANCEDSTATS_PASSES mp ON tm.MATCH_WYID = mp.MATCH_WYID AND tm.TEAM_WYID = mp.TEAM_WYID 
+        WHERE tm.COMPETITION_WYID = 328
+        GROUP BY t.TEAMNAME
+    """
+    return conn.query(query)
+
+# --- 3. TABEL OG CHART FUNKTIONER ---
 def beregn_tabel(df_matches, hold_filter=None):
     stats = {}
     for hold_navn, info in TEAMS.items():
@@ -49,7 +82,6 @@ def beregn_tabel(df_matches, hold_filter=None):
     df.insert(0, '#', df.index + 1)
     return df
 
-# --- CHART FUNKTION (HEAD-TO-HEAD) ---
 def draw_h2h_chart(team1, team2, metrics, labels, df_wy, chart_key, df_liga):
     fig = go.Figure()
     col_width = 0.18; gap = 0.05
@@ -65,7 +97,7 @@ def draw_h2h_chart(team1, team2, metrics, labels, df_wy, chart_key, df_liga):
     fig.update_layout(height=350, margin=dict(t=50, b=50), plot_bgcolor='rgba(0,0,0,0)')
     st.plotly_chart(fig, use_container_width=True, key=chart_key)
 
-# --- HOVEDFUNKTION ---
+# --- 4. HOVEDFUNKTION ---
 def vis_side():
     df_opta = load_liga_data()
     df_wy = get_wyscout_stats()
