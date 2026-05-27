@@ -558,86 +558,86 @@ def vis_side(dp=None):
             t_sub_log, t_sub_charts = st.tabs(["Kampoversigt", "Grafer"])
 
             with t_sub_charts:
-            # 1. Samlet CSS for at minimere afstande
-            st.markdown("""
-                <style>
-                [data-testid="stVerticalBlock"] > div:has(> [data-testid="stCaption"]) {
-                    margin-top: -20px;
+                # 1. Samlet CSS for at minimere afstande
+                st.markdown("""
+                    <style>
+                    [data-testid="stVerticalBlock"] > div:has(> [data-testid="stCaption"]) {
+                        margin-top: -20px;
+                    }
+                    div[data-testid="stCaption"] { margin-bottom: 5px !important; }
+                    </style>
+                """, unsafe_allow_html=True)
+    
+                cat_choice = st.segmented_control("Vælg metrik", options=["HSR (m)", "Sprint (m)", "Distance (km)", "Topfart (km/t)"], default="HSR (m)", key="phys_graph_control")
+                
+                # Definitioner
+                defs = {"HSR": "HSR (High Speed Running): 20-25 km/t", "Sprint": "Sprint: ≥ 25 km/t", "Distance": "Samlet distance", "Topfart": "Højeste fart målt"}
+                match = next((v for k, v in defs.items() if k in cat_choice), "")
+                st.caption(match)
+                
+                mapping = {
+                    "HSR (m)": ("hsr", 1, "m"), 
+                    "Sprint (m)": ("sprinting", 1, "m"), 
+                    "Distance (km)": ("distance", 1000, "km"), 
+                    "Topfart (km/t)": ("top_speed", 1, "km/t")
                 }
-                div[data-testid="stCaption"] { margin-bottom: 5px !important; }
-                </style>
-            """, unsafe_allow_html=True)
-
-            cat_choice = st.segmented_control("Vælg metrik", options=["HSR (m)", "Sprint (m)", "Distance (km)", "Topfart (km/t)"], default="HSR (m)", key="phys_graph_control")
-            
-            # Definitioner
-            defs = {"HSR": "HSR (High Speed Running): 20-25 km/t", "Sprint": "Sprint: ≥ 25 km/t", "Distance": "Samlet distance", "Topfart": "Højeste fart målt"}
-            match = next((v for k, v in defs.items() if k in cat_choice), "")
-            st.caption(match)
-            
-            mapping = {
-                "HSR (m)": ("hsr", 1, "m"), 
-                "Sprint (m)": ("sprinting", 1, "m"), 
-                "Distance (km)": ("distance", 1000, "km"), 
-                "Topfart (km/t)": ("top_speed", 1, "km/t")
-            }
-            col, div, suffix = mapping[cat_choice]
-            
-            start_date = pd.to_datetime('2025-07-01')
-            df_chart = df_phys[df_phys['match_date'] >= start_date].copy()
-            df_chart = df_chart.drop_duplicates(subset=['match_date', 'match_teams'])
-            df_chart = df_chart.sort_values('match_date', ascending=True)
-
-            if not df_chart.empty:
-                df_chart['Status'] = df_chart['minutes'].apply(lambda x: "Fuld tid" if x >= 85 else "Indskiftet/udskiftet" if x > 0 else "Ikke spillet")
+                col, div, suffix = mapping[cat_choice]
                 
-                # --- ROBUST LOGIK TIL MODSTANDER ---
-                def get_opponent(teams_str):
-                    parts = [p.strip() for p in str(teams_str).split('-')]
-                    # Filtrer Hvidovre fra, uanset hvor det står i strengen
-                    opponents = [p for p in parts if "hvidovre" not in p.lower()]
-                    return opponents[0] if opponents else parts[0]
-                
-                df_chart['Opponent'] = df_chart['match_teams'].apply(get_opponent)
-                # -----------------------------------
-                
-                df_chart['Label'] = df_chart['Opponent'] + "<br>" + df_chart['match_date'].dt.strftime('%d/%m')
-                
-                y_vals = df_chart[col] / div
-                season_avg = y_vals.mean()
-                text_vals = y_vals.apply(lambda x: f"{x:.0f} {suffix}" if x > 100 else f"{x:.1f} {suffix}")
-
-                color_map = {"Fuld tid": "#df003b", "Indskiftet/udskiftet": "#808080", "Ikke spillet": "#808080"}
-                
-                fig = go.Figure()
-
-                for status, color in color_map.items():
-                    df_subset = df_chart[df_chart['Status'] == status]
-                    subset_indices = df_subset.index
-                    fig.add_trace(go.Bar(
-                        x=df_subset['Label'], 
-                        y=y_vals.loc[subset_indices],
-                        text=text_vals.loc[subset_indices],
-                        name=status,
-                        marker_color=color,
-                        textposition='outside',
-                        cliponaxis=False
-                    ))
-
-                fig.add_shape(type="line", x0=-0.5, x1=len(df_chart)-0.5, y0=season_avg, y1=season_avg, 
-                              line=dict(color="#D3D3D3", width=2, dash="dash"), layer="below")
-
-                fig.update_layout(
-                    plot_bgcolor="white", height=400, 
-                    margin=dict(t=40, b=50, l=10, r=10), 
-                    xaxis=dict(showgrid=False, tickangle=-45, type='category', 
-                               categoryorder='array', categoryarray=df_chart['Label'].tolist()),
-                    yaxis=dict(showgrid=True, gridcolor='#f0f0f0', showticklabels=False, zeroline=False, 
-                               range=[0, y_vals.max() * 1.25]), # Øget range for at give plads til tekst
-                    legend=dict(orientation="h", yanchor="bottom", y=1.1, xanchor="right", x=1, itemclick=False, itemdoubleclick=False),
-                    barmode='relative', bargap=0.2
-                )
-                st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+                start_date = pd.to_datetime('2025-07-01')
+                df_chart = df_phys[df_phys['match_date'] >= start_date].copy()
+                df_chart = df_chart.drop_duplicates(subset=['match_date', 'match_teams'])
+                df_chart = df_chart.sort_values('match_date', ascending=True)
+    
+                if not df_chart.empty:
+                    df_chart['Status'] = df_chart['minutes'].apply(lambda x: "Fuld tid" if x >= 85 else "Indskiftet/udskiftet" if x > 0 else "Ikke spillet")
+                    
+                    # --- ROBUST LOGIK TIL MODSTANDER ---
+                    def get_opponent(teams_str):
+                        parts = [p.strip() for p in str(teams_str).split('-')]
+                        # Filtrer Hvidovre fra, uanset hvor det står i strengen
+                        opponents = [p for p in parts if "hvidovre" not in p.lower()]
+                        return opponents[0] if opponents else parts[0]
+                    
+                    df_chart['Opponent'] = df_chart['match_teams'].apply(get_opponent)
+                    # -----------------------------------
+                    
+                    df_chart['Label'] = df_chart['Opponent'] + "<br>" + df_chart['match_date'].dt.strftime('%d/%m')
+                    
+                    y_vals = df_chart[col] / div
+                    season_avg = y_vals.mean()
+                    text_vals = y_vals.apply(lambda x: f"{x:.0f} {suffix}" if x > 100 else f"{x:.1f} {suffix}")
+    
+                    color_map = {"Fuld tid": "#df003b", "Indskiftet/udskiftet": "#808080", "Ikke spillet": "#808080"}
+                    
+                    fig = go.Figure()
+    
+                    for status, color in color_map.items():
+                        df_subset = df_chart[df_chart['Status'] == status]
+                        subset_indices = df_subset.index
+                        fig.add_trace(go.Bar(
+                            x=df_subset['Label'], 
+                            y=y_vals.loc[subset_indices],
+                            text=text_vals.loc[subset_indices],
+                            name=status,
+                            marker_color=color,
+                            textposition='outside',
+                            cliponaxis=False
+                        ))
+    
+                    fig.add_shape(type="line", x0=-0.5, x1=len(df_chart)-0.5, y0=season_avg, y1=season_avg, 
+                                  line=dict(color="#D3D3D3", width=2, dash="dash"), layer="below")
+    
+                    fig.update_layout(
+                        plot_bgcolor="white", height=400, 
+                        margin=dict(t=40, b=50, l=10, r=10), 
+                        xaxis=dict(showgrid=False, tickangle=-45, type='category', 
+                                   categoryorder='array', categoryarray=df_chart['Label'].tolist()),
+                        yaxis=dict(showgrid=True, gridcolor='#f0f0f0', showticklabels=False, zeroline=False, 
+                                   range=[0, y_vals.max() * 1.25]), # Øget range for at give plads til tekst
+                        legend=dict(orientation="h", yanchor="bottom", y=1.1, xanchor="right", x=1, itemclick=False, itemdoubleclick=False),
+                        barmode='relative', bargap=0.2
+                    )
+                    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
             with t_sub_log:
                 df_display = df_phys.copy()
