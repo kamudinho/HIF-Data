@@ -53,28 +53,31 @@ def get_wyscout_stats():
     return conn.query(query)
 
 # --- 3. BEREGNINGS LOGIK ---
-def beregn_tabel(df_matches, hold_filter=None):
+def beregn_tabel_data(df_matches):
+    """Beregner stilling for et givent datasæt af kampe"""
     stats = {}
-    for hold_navn, info in TEAMS.items():
-        o_uuid = str(info.get('opta_uuid', '')).upper()
-        if o_uuid:
-            stats[o_uuid] = {'HOLD': hold_navn, 'UUID': o_uuid, 'K': 0, 'V': 0, 'U': 0, 'T': 0, 'M+': 0, 'M-': 0, 'P': 0, 'FORM': ""}
-    for _, row in df_matches.iterrows():
-        h_uuid, a_uuid = str(row['CONTESTANTHOME_OPTAUUID']).upper(), str(row['CONTESTANTAWAY_OPTAUUID']).upper()
-        h_g, a_g = int(row['TOTAL_HOME_SCORE'] or 0), int(row['TOTAL_AWAY_SCORE'] or 0)
-        for uuid, g_for, g_against in [(h_uuid, h_g, a_g), (a_uuid, a_g, h_g)]:
-            if uuid in stats:
-                stats[uuid]['K'] += 1; stats[uuid]['M+'] += g_for; stats[uuid]['M-'] += g_against
-                if g_for > g_against: stats[uuid]['P'] += 3; stats[uuid]['V'] += 1; stats[uuid]['FORM'] += 'V'
-                elif g_for == g_against: stats[uuid]['P'] += 1; stats[uuid]['U'] += 1; stats[uuid]['FORM'] += 'U'
-                else: stats[uuid]['T'] += 1; stats[uuid]['FORM'] += 'T'
+    for _, row in df_matches.sort_values('MATCH_DATE_FULL').iterrows():
+        h_uuid, a_uuid = row['CONTESTANTHOME_OPTAUUID'], row['CONTESTANTAWAY_OPTAUUID']
+        for uuid, name in [(h_uuid, row['CONTESTANTHOME_NAME']), (a_uuid, row['CONTESTANTAWAY_NAME'])]:
+            if uuid not in stats:
+                stats[uuid] = {'HOLD': name, 'K': 0, 'V': 0, 'U': 0, 'T': 0, 'M+': 0, 'M-': 0, 'P': 0, 'FORM': "", 'UUID': uuid}
+
+        status = str(row['MATCH_STATUS']).strip().lower()
+        if status in ['played', 'full-time', 'finished']:
+            h_g, a_g = int(row['TOTAL_HOME_SCORE'] or 0), int(row['TOTAL_AWAY_SCORE'] or 0)
+            stats[h_uuid]['K'] += 1; stats[a_uuid]['K'] += 1
+            stats[h_uuid]['M+'] += h_g; stats[h_uuid]['M-'] += a_g
+            stats[a_uuid]['M+'] += a_g; stats[a_uuid]['M-'] += h_g
+            if h_g > a_g:
+                stats[h_uuid]['P'] += 3; stats[h_uuid]['V'] += 1; stats[h_uuid]['FORM'] += 'V'; stats[a_uuid]['T'] += 1; stats[a_uuid]['FORM'] += 'T'
+            elif a_g > h_g:
+                stats[a_uuid]['P'] += 3; stats[a_uuid]['V'] += 1; stats[a_uuid]['FORM'] += 'V'; stats[h_uuid]['T'] += 1; stats[h_uuid]['FORM'] += 'T'
+            else:
+                stats[h_uuid]['P'] += 1; stats[a_uuid]['P'] += 1; stats[h_uuid]['U'] += 1; stats[a_uuid]['U'] += 1; stats[h_uuid]['FORM'] += 'U'; stats[a_uuid]['FORM'] += 'U'
+    
     df = pd.DataFrame(stats.values())
-    df = df[df['K'] > 0].copy()
-    if hold_filter: df = df[df['UUID'].isin(hold_filter)]
     df['MD'] = df['M+'] - df['M-']
-    df = df.sort_values(['P', 'MD', 'M+'], ascending=False).reset_index(drop=True)
-    df.insert(0, '#', df.index + 1)
-    return df
+    return df.sort_values(['P', 'MD', 'M+'], ascending=False).reset_index(drop=True)
 
 def draw_h2h_chart(team1, team2, metrics, labels, df_wy, chart_key, df_liga):
     fig = go.Figure()
@@ -106,22 +109,39 @@ def draw_h2h_chart(team1, team2, metrics, labels, df_wy, chart_key, df_liga):
 # --- 4. HOVEDFUNKTION ---
 def vis_side():
     df_opta = load_liga_data()
-    df_wy = get_wyscout_stats()
-    played = df_opta[df_opta['MATCH_STATUS'].str.lower().isin(['played', 'full-time', 'finished'])].sort_values('MATCH_DATE_FULL')
+    df_opta.columns = [c.upper() for c in df_opta.columns]
     
-    gs_tabel = beregn_tabel(played.head(132)) 
-    top6 = gs_tabel.head(6)['UUID'].tolist()
-    bund6 = gs_tabel.tail(6)['UUID'].tolist()
+    # 1. Grundspil (Første 22 runder pr. hold = 132 kampe i en 12-holds liga)
+    # Vi sorterer på dato og tager de første 132 kampe
+    played_all = df_opta[df_opta['MATCH_STATUS'].str.lower().isin(['played', 'full-time', 'finished'])].sort_values('MATCH_DATE_FULL')
+    grundspil_kampe = played_all.head(132) 
     
+    # 2. Beregn stillingen efter grundspillet for at finde top/bund 6
+    df_grund = beregn_tabel_data(grundspil_kampe)
+    top6_uuids = df_grund.head(6)['UUID'].tolist()
+    bund6_uuids = df_grund.tail(6)['UUID'].tolist()
+    
+    # 3. Beregn Slutspil (Hele sæsonen)
+    df_slut = beregn_tabel_data(played_all)
+    
+    # Tabs struktur
     t_gs, t_op, t_ned, t_h2h = st.tabs(["Grundspil", "Oprykningsspil", "Nedrykningsspil", "Head-to-head"])
 
-    def render_tabel(df):
-        d = df.copy(); d.insert(1, 'Logo', [get_logo_html(u) for u in d['UUID']]); d['FORM'] = d['FORM'].apply(style_form)
-        st.write(d[['#', 'Logo', 'HOLD', 'K', 'V', 'U', 'T', 'MD', 'P', 'FORM']].to_html(escape=False, index=False, classes='league-table'), unsafe_allow_html=True)
+    def render_tabel(df_in, filter_uuids=None):
+        df = df_in.copy()
+        if filter_uuids:
+            df = df[df['UUID'].isin(filter_uuids)]
+        
+        df.insert(0, '#', range(1, len(df) + 1))
+        df.insert(1, ' ', [get_logo_html(u) for u in df['UUID']])
+        df['FORM'] = df['FORM'].apply(style_form)
+        
+        st.write(df[['#', ' ', 'HOLD', 'K', 'V', 'U', 'T', 'MD', 'P', 'FORM']].to_html(
+            escape=False, index=False, classes='league-table'), unsafe_allow_html=True)
 
-    with t_gs: render_tabel(gs_tabel)
-    with t_op: render_tabel(beregn_tabel(played, hold_filter=top6))
-    with t_ned: render_tabel(beregn_tabel(played, hold_filter=bund6))
+    with t_gs: render_tabel(df_grund)
+    with t_op: render_tabel(df_slut, filter_uuids=top6_uuids)
+    with t_ned: render_tabel(df_slut, filter_uuids=bund6_uuids)
     with t_h2h:
         h_list = sorted(gs_tabel['HOLD'].tolist())
         c1, c2 = st.columns(2); t1 = c1.selectbox("Hold 1", h_list, index=0); t2 = c2.selectbox("Hold 2", [h for h in h_list if h != t1], index=0)
