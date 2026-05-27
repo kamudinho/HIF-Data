@@ -5,7 +5,6 @@ from data.utils.team_mapping import TEAMS, TEAM_COLORS
 from data.data_load import _get_snowflake_conn
 
 def vis_side(dp=None):
-    # --- 1. DATA LOAD (Uændret SQL) ---
     conn = _get_snowflake_conn()
     if not conn:
         st.error("Kunne ikke forbinde til Snowflake.")
@@ -43,32 +42,33 @@ def vis_side(dp=None):
             FROM {DB}.OPTA_MATCHEXPECTEDGOALS
             GROUP BY 1, 2
         ),
-        ForwardPasses AS (
+        AdvancedEvents AS (
             SELECT 
                 MATCH_OPTAUUID, EVENT_CONTESTANT_OPTAUUID,
+                COUNT(CASE WHEN EVENT_TYPEID = 16 AND EVENT_X > 75 AND EVENT_Y BETWEEN 25 AND 75 THEN 1 END) AS DANGERZONE_SHOTS,
+                COUNT(CASE WHEN EVENT_TYPEID = 1 AND EVENT_OUTCOME = 1 AND EVENT_X > 66.6 THEN 1 END) AS PASSES_FINAL_THIRD,
                 COUNT(CASE WHEN EVENT_TYPEID = 1 AND EVENT_OUTCOME = 1 AND LEAD_X > (EVENT_X + 10) THEN 1 END) AS FORWARD_PASSES
             FROM (
                 SELECT 
-                    MATCH_OPTAUUID, EVENT_CONTESTANT_OPTAUUID, EVENT_TYPEID, EVENT_OUTCOME, EVENT_X,
+                    MATCH_OPTAUUID, EVENT_CONTESTANT_OPTAUUID, EVENT_TYPEID, EVENT_OUTCOME, EVENT_X, EVENT_Y,
                     LEAD(EVENT_X) OVER (PARTITION BY MATCH_OPTAUUID, EVENT_CONTESTANT_OPTAUUID ORDER BY EVENT_TIMESTAMP, EVENT_EVENTID) as LEAD_X
                 FROM {DB}.OPTA_EVENTS
-                WHERE EVENT_TYPEID = 1
             )
             GROUP BY 1, 2
         )
         SELECT 
             b.*,
             h.POSSESSION AS HOME_POSS, h.TOUCHES_IN_BOX AS HOME_TOUCHES, hx.XG AS HOME_XG, hx.XGNP AS HOME_XGNP, hx.BIG_CHANCES AS HOME_BIG_CHANCES, 
-            h.PASSES AS HOME_PASSES, h.SHOTS AS HOME_SHOTS, hf.FORWARD_PASSES AS HOME_FORWARD_PASSES,
+            h.PASSES AS HOME_PASSES, h.SHOTS AS HOME_SHOTS, ae_h.FORWARD_PASSES AS HOME_FORWARD_PASSES, ae_h.DANGERZONE_SHOTS AS HOME_DZ_SHOTS, ae_h.PASSES_FINAL_THIRD AS HOME_PASSES_FT,
             a.POSSESSION AS AWAY_POSS, a.TOUCHES_IN_BOX AS AWAY_TOUCHES, ax.XG AS AWAY_XG, ax.XGNP AS AWAY_XGNP, ax.BIG_CHANCES AS AWAY_BIG_CHANCES, 
-            a.PASSES AS AWAY_PASSES, a.SHOTS AS AWAY_SHOTS, af.FORWARD_PASSES AS AWAY_FORWARD_PASSES
+            a.PASSES AS AWAY_PASSES, a.SHOTS AS AWAY_SHOTS, ae_a.FORWARD_PASSES AS AWAY_FORWARD_PASSES, ae_a.DANGERZONE_SHOTS AS AWAY_DZ_SHOTS, ae_a.PASSES_FINAL_THIRD AS AWAY_PASSES_FT
         FROM MatchBase b
         LEFT JOIN StatsPivot h ON b.MATCH_OPTAUUID = h.MATCH_OPTAUUID AND b.CONTESTANTHOME_OPTAUUID = h.CONTESTANT_OPTAUUID
         LEFT JOIN StatsPivot a ON b.MATCH_OPTAUUID = a.MATCH_OPTAUUID AND b.CONTESTANTAWAY_OPTAUUID = a.CONTESTANT_OPTAUUID
         LEFT JOIN XGPivot hx ON b.MATCH_OPTAUUID = hx.MATCH_ID AND b.CONTESTANTHOME_OPTAUUID = hx.CONTESTANT_OPTAUUID
         LEFT JOIN XGPivot ax ON b.MATCH_OPTAUUID = ax.MATCH_ID AND b.CONTESTANTAWAY_OPTAUUID = ax.CONTESTANT_OPTAUUID
-        LEFT JOIN ForwardPasses hf ON b.MATCH_OPTAUUID = hf.MATCH_OPTAUUID AND b.CONTESTANTHOME_OPTAUUID = hf.EVENT_CONTESTANT_OPTAUUID
-        LEFT JOIN ForwardPasses af ON b.MATCH_OPTAUUID = af.MATCH_OPTAUUID AND b.CONTESTANTAWAY_OPTAUUID = af.EVENT_CONTESTANT_OPTAUUID
+        LEFT JOIN AdvancedEvents ae_h ON b.MATCH_OPTAUUID = ae_h.MATCH_OPTAUUID AND b.CONTESTANTHOME_OPTAUUID = ae_h.EVENT_CONTESTANT_OPTAUUID
+        LEFT JOIN AdvancedEvents ae_a ON b.MATCH_OPTAUUID = ae_a.MATCH_OPTAUUID AND b.CONTESTANTAWAY_OPTAUUID = ae_a.EVENT_CONTESTANT_OPTAUUID
     """
 
     with st.spinner("Henter data..."):
@@ -156,7 +156,15 @@ def vis_side(dp=None):
 
     row2[1].markdown(f"<div class='stat-box' style='background:#eee;'><div class='stat-label'>SNIT</div><div class='stat-val' style='font-size:9px;'>{valgt_side.upper()}</div></div>", unsafe_allow_html=True)
 
-    avg_map = [("POSS", "POSS %", 1, "%"), ("XG", "xG", 2, ""), ("XGNP", "xGnp", 2, ""), ("BIG_CHANCES", "STORE CHANCER", 0, ""), ("PASSES", "PASSES", 0, ""), ("FORWARD_PASSES", "FREMADRETTEDE", 0, "")]
+    # OPPDATERET AVG_MAP
+    avg_map = [
+        ("POSS", "POSS %", 1, "%"), 
+        ("XG", "xG", 2, ""), 
+        ("BIG_CHANCES", "STORE CHANCER", 0, ""), 
+        ("DZ_SHOTS", "SKUD FRA DZ", 0, ""), 
+        ("PASSES_FT", "AFS. SIDSTE 1/3", 0, ""), 
+        ("TOUCHES", "TOUCHES I BOKS", 0, "")
+    ]
     for i, (key, label, dec, suffix) in enumerate(avg_map):
         vals = []
         for _, m in played_p.iterrows():
@@ -206,7 +214,10 @@ def vis_side(dp=None):
                     ("HOME_POSS", "AWAY_POSS", "POSS", "Boldbesiddelse", 1, "%"),
                     ("HOME_PASSES", "AWAY_PASSES", "PASSES", "Afleveringer", 0, ""),
                     ("HOME_FORWARD_PASSES", "AWAY_FORWARD_PASSES", "FORWARD_PASSES", "Fremadrettede", 0, ""),
+                    ("HOME_PASSES_FT", "AWAY_PASSES_FT", "PASSES_FT", "Afs. Sidste 1/3", 0, ""),
+                    ("HOME_TOUCHES", "AWAY_TOUCHES", "TOUCHES", "Touches i boks", 0, "")
                     ("HOME_SHOTS", "AWAY_SHOTS", "SHOTS", "Afslutninger", 0, ""),
+                    ("HOME_DZ_SHOTS", "AWAY_DZ_SHOTS", "DZ_SHOTS", "Skud fra DZ", 0, ""),
                     ("HOME_BIG_CHANCES", "AWAY_BIG_CHANCES", "BIG_CHANCES", "Store chancer", 0, ""),
                     ("HOME_XG", "AWAY_XG", "XG", "xG", 2, ""),
                     ("HOME_XGNP", "AWAY_XGNP", "XGNP", "xGnp", 2, "")
