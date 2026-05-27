@@ -219,7 +219,7 @@ def vis_side(dp=None):
                     ("HOME_PASSES", "AWAY_PASSES", "PASSES", "Afleveringer", 0, ""),
                     ("HOME_FORWARD_PASSES", "AWAY_FORWARD_PASSES", "FORWARD_PASSES", "Fremadrettede", 0, ""),
                     ("HOME_PASSES_FT", "AWAY_PASSES_FT", "PASSES_FT", "Afs. Sidste 1/3", 0, ""),
-                    ("HOME_TOUCHES", "AWAY_TOUCHES", "TOUCHES_IN_BOX", "Touches i boks", 0, ""),
+                    ("HOME_TOUCHES_IN_BOX", "AWAY_TOUCHES_IN_BOX", "TOUCHES_IN_BOX", "Touches i boks", 0, ""),
                     ("HOME_SHOTS", "AWAY_SHOTS", "SHOTS", "Afslutninger", 0, ""),
                     ("HOME_DZ_SHOTS", "AWAY_DZ_SHOTS", "DZ_SHOTS", "Skud fra DZ", 0, ""),
                     ("HOME_BIG_CHANCES", "AWAY_BIG_CHANCES", "BIG_CHANCES", "Store chancer", 0, ""),
