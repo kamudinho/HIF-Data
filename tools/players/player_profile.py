@@ -539,7 +539,19 @@ def vis_side(dp=None):
         if df_phys is not None and not df_phys.empty:
             df_phys['minutes'] = pd.to_numeric(df_phys['minutes'], errors='coerce').fillna(0)
             df_phys['match_date'] = pd.to_datetime(df_phys['match_date'], errors='coerce')
-            df_phys = df_phys.dropna(subset=['match_date'])
+            
+            # --- AGGREGERING HER ---
+            # Vi lægger numeriske kolonner sammen, og tager gennemsnit eller første værdi for andre
+            df_phys = df_phys.groupby(['match_date', 'match_teams'], as_index=False).agg({
+                'minutes': 'sum',      # Læg minutter sammen
+                'distance': 'sum',     # Læg distance sammen
+                'hsr': 'sum',          # Læg HSR sammen
+                'sprinting': 'sum',    # Læg Sprint sammen
+                'top_speed': 'max',    # Tag den højeste topfart målt i kampen
+                'hi_runs': 'sum'       # Læg højintense løb sammen
+            })
+            # -----------------------
+            
             df_phys = df_phys.sort_values('match_date', ascending=False)
             
             avg_dist = df_phys['distance'].mean()
