@@ -180,16 +180,17 @@ def vis_side(dp=None):
         ("PASSES_FT", "AFS. SIDSTE 1/3", 0, ""), 
         ("TOUCHES_IN_BOX", "TOUCHES I BOKS", 0, "") # 4 elementer
     ]
+    # Sektion 4 - Datahentning og beregning af gennemsnit (avg_map)
     for i, (key, label, dec, suffix) in enumerate(avg_map):
         vals = []
         for _, m in played_p.iterrows():
             pref = "HOME_" if m['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else "AWAY_"
             col_name = f"{pref}{key}"
             vals.append(pd.to_numeric(m.get(col_name), errors='coerce'))
+        # HER ER SYNDEREN:
         avg_val = np.nanmean(vals) if vals and not np.all(np.isnan(vals)) else 0
         fmt = f"{avg_val:.{dec}f}{suffix}" if dec > 0 else f"{int(round(avg_val))}{suffix}"
-        row2[i+2].markdown(f"<div class='stat-box'><div class='stat-label'>{label}</div><div class='stat-val'>{fmt}</div></div>", unsafe_allow_html=True)
-
+        row2[i+2].markdown(...)
     # --- 5. TABS ---
     tab1, tab2 = st.tabs(["RESULTATER", "KOMMENDE"])
 
