@@ -162,13 +162,14 @@ def vis_side(dp=None):
     row2[1].markdown(f"<div class='stat-box' style='background:#eee;'><div class='stat-label'>SNIT</div><div class='stat-val' style='font-size:9px;'>{valgt_side.upper()}</div></div>", unsafe_allow_html=True)
 
     # OPPDATERET AVG_MAP
+    # OPPDATERET AVG_MAP
     avg_map = [
         ("POSS", "POSS %", 1, "%"), 
         ("XG", "xG", 2, ""), 
         ("BIG_CHANCES", "STORE CHANCER", 0, ""), 
         ("DZ_SHOTS", "SKUD FRA DZ", 0, ""), 
         ("PASSES_FT", "AFS. SIDSTE 1/3", 0, ""), 
-        ("HOME_TOUCHES_IN_BOX", "AWAY_TOUCHES_IN_BOX", "TOUCHES_IN_BOX", "Touches i boks", 0, ""),
+        ("TOUCHES_IN_BOX", "TOUCHES I BOKS", 0, "")
     ]
     for i, (key, label, dec, suffix) in enumerate(avg_map):
         vals = []
