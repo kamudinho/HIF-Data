@@ -588,24 +588,21 @@ def vis_side(dp=None):
                     
                     # Dynamisk modstander-logik baseret på valgt_hold
                     # --- DYNAMISK LOGIK: Filtrer altid spillerens eget hold fra ---
-                    def get_opponent(teams_str):
-                        # Vi bruger 'valgt_hold' som referencepunkt
-                        my_team = str(valgt_hold).lower()
-                        parts = [p.strip() for p in str(teams_str).split('-')]
-                        
-                        # Hvis vi har to dele (fx "ARF - AAB"), skal vi finde den, der IKKE er os
-                        if len(parts) == 2:
-                            # Tjek om første del er os
-                            if my_team in parts[0].lower():
-                                return parts[1] # Returner del 2 (modstander)
-                            # Tjek om anden del er os
-                            elif my_team in parts[1].lower():
-                                return parts[0] # Returner del 1 (modstander)
-                        
-                        # Hvis kun ét hold findes, eller navnet ikke matcher 'valgt_hold', returner navnet
-                        return teams_str
+                    def get_opponent_data(teams_str, current_team_name):
+                    parts = [p.strip() for p in str(teams_str).split('-')]
+                    # Find modstander-navnet
+                    opponent_name = next((p for p in parts if p.lower() != current_team_name.lower()), parts[0])
                     
-                    df_chart['Opponent'] = df_chart['match_teams'].apply(get_opponent)
+                    # Prøv at finde logo i din TEAMS mapping
+                    # Vi bruger en fuzzy match eller direkte opslag
+                    opp_data = next((data for name, data in TEAMS.items() if name.lower() in opponent_name.lower() or opponent_name.lower() in name.lower()), None)
+                    
+                    return opponent_name, opp_data.get('logo') if opp_data else None
+                
+                # Anvendelse på din df_chart
+                df_chart[['Opponent', 'Opponent_Logo']] = df_chart['match_teams'].apply(
+                    lambda x: pd.Series(get_opponent_data(x, valgt_hold))
+                )
                 # --------------------------------------------------------------
                     df_chart['Label'] = df_chart['Opponent'] + "<br>" + df_chart['match_date'].dt.strftime('%d/%m')
                     
