@@ -526,7 +526,7 @@ def vis_side(dp=None):
             st.pyplot(fig, use_container_width=True)
 
     with t_phys:
-        # Helper funktion til MM:SS formatering
+    # Helper funktion til MM:SS formatering
         def format_minutes(val):
             if pd.isna(val) or val <= 0: return "00:00"
             minutes = int(val)
@@ -540,8 +540,7 @@ def vis_side(dp=None):
             df_phys['minutes'] = pd.to_numeric(df_phys['minutes'], errors='coerce').fillna(0)
             df_phys['match_date'] = pd.to_datetime(df_phys['match_date'], errors='coerce')
             
-            # --- RYD OP I DATA: Vælg den mest komplette række pr. kamp ---
-            # Sorterer efter dato og minutter, så vi beholder den række med mest data
+            # Ryd op: Behold kun den mest komplette række pr. kamp
             df_phys = df_phys.sort_values(['match_date', 'minutes'], ascending=[False, False])
             df_phys = df_phys.drop_duplicates(subset=['match_date', 'match_teams'], keep='first')
             
@@ -561,17 +560,16 @@ def vis_side(dp=None):
             t_sub_log, t_sub_charts = st.tabs(["Kampoversigt", "Grafer"])
     
             with t_sub_charts:
-                # CSS for at minimere afstande
+                # OPTIMERET CSS: Fjerner al unødig luft mellem elementerne
                 st.markdown("""
                     <style>
-                    [data-testid="stVerticalBlock"] > div:has(> [data-testid="stCaption"]) { margin-top: -20px; }
-                    div[data-testid="stCaption"] { margin-bottom: 5px !important; }
+                    div[data-testid="stSegmentedControl"] { margin-bottom: 0px !important; }
+                    div[data-testid="stCaption"] { margin-top: -10px !important; margin-bottom: 5px !important; }
                     </style>
                 """, unsafe_allow_html=True)
     
                 cat_choice = st.segmented_control("Vælg metrik", options=["HSR (m)", "Sprint (m)", "Distance (km)", "Topfart (km/t)"], default="HSR (m)", key="phys_graph_control")
                 
-                # Definitioner
                 defs = {"HSR": "HSR (High Speed Running): 20-25 km/t", "Sprint": "Sprint: ≥ 25 km/t", "Distance": "Samlet distance", "Topfart": "Højeste fart målt"}
                 st.caption(next((v for k, v in defs.items() if k in cat_choice), ""))
                 
@@ -588,11 +586,13 @@ def vis_side(dp=None):
                 if not df_chart.empty:
                     df_chart['Status'] = df_chart['minutes'].apply(lambda x: "Fuld tid" if x >= 85 else "Indskiftet/udskiftet" if x > 0 else "Ikke spillet")
                     
-                    # Robust modstander-logik
+                    # Dynamisk modstander-logik baseret på valgt_hold
                     def get_opponent(teams_str):
+                        my_team = str(valgt_hold).lower()
                         parts = [p.strip() for p in str(teams_str).split('-')]
-                        opponents = [p for p in parts if "hvidovre" not in p.lower()]
-                        return opponents[0] if opponents else parts[0]
+                        if len(parts) == 2:
+                            return parts[1] if my_team in parts[0].lower() else parts[0]
+                        return teams_str
                     
                     df_chart['Opponent'] = df_chart['match_teams'].apply(get_opponent)
                     df_chart['Label'] = df_chart['Opponent'] + "<br>" + df_chart['match_date'].dt.strftime('%d/%m')
@@ -615,7 +615,7 @@ def vis_side(dp=None):
                                   line=dict(color="#D3D3D3", width=2, dash="dash"), layer="below")
     
                     fig.update_layout(
-                        plot_bgcolor="white", height=400, margin=dict(t=40, b=50, l=10, r=10),
+                        plot_bgcolor="white", height=400, margin=dict(t=20, b=50, l=10, r=10),
                         xaxis=dict(showgrid=False, tickangle=-45, type='category', categoryorder='array', categoryarray=df_chart['Label'].tolist()),
                         yaxis=dict(showgrid=True, gridcolor='#f0f0f0', showticklabels=False, zeroline=False, range=[0, y_vals.max() * 1.25]),
                         legend=dict(orientation="h", yanchor="bottom", y=1.1, xanchor="right", x=1, itemclick=False, itemdoubleclick=False),
