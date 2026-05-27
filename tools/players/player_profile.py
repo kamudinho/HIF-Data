@@ -526,148 +526,109 @@ def vis_side(dp=None):
             st.pyplot(fig, use_container_width=True)
 
     with t_phys:
-        # Helper funktion til MM:SS formatering
-        def format_minutes(val):
-            if pd.isna(val) or val <= 0: return "00:00"
-            minutes = int(val)
-            seconds = int(round((val - minutes) * 60))
-            if seconds == 60: minutes += 1; seconds = 0
-            return f"{minutes:02d}:{seconds:02d}"
+    # Helper funktion til MM:SS formatering
+    def format_minutes(val):
+        if pd.isna(val) or val <= 0: return "00:00"
+        minutes = int(val)
+        seconds = int(round((val - minutes) * 60))
+        if seconds == 60: minutes += 1; seconds = 0
+        return f"{minutes:02d}:{seconds:02d}"
 
-        df_phys = get_physical_data(valgt_spiller, valgt_player_uuid, valgt_hold, conn)
+    df_phys = get_physical_data(valgt_spiller, valgt_player_uuid, valgt_hold, conn)
+    
+    if df_phys is not None and not df_phys.empty:
+        df_phys['minutes'] = pd.to_numeric(df_phys['minutes'], errors='coerce').fillna(0)
+        df_phys['match_date'] = pd.to_datetime(df_phys['match_date'], errors='coerce')
         
-        if df_phys is not None and not df_phys.empty:
-            df_phys['minutes'] = pd.to_numeric(df_phys['minutes'], errors='coerce').fillna(0)
-            df_phys['match_date'] = pd.to_datetime(df_phys['match_date'], errors='coerce')
-            
-            # --- AGGREGERING HER ---
-            # Vi lægger numeriske kolonner sammen, og tager gennemsnit eller første værdi for andre
-            df_phys = df_phys.groupby(['match_date', 'match_teams'], as_index=False).agg({
-                'minutes': 'sum',      # Læg minutter sammen
-                'distance': 'sum',     # Læg distance sammen
-                'hsr': 'sum',          # Læg HSR sammen
-                'sprinting': 'sum',    # Læg Sprint sammen
-                'top_speed': 'max',    # Tag den højeste topfart målt i kampen
-                'hi_runs': 'sum'       # Læg højintense løb sammen
-            })
-            # -----------------------
-            
-            df_phys = df_phys.sort_values('match_date', ascending=False)
-            
-            avg_dist = df_phys['distance'].mean()
-            avg_hsr = df_phys['hsr'].mean()
-            latest = df_phys.iloc[0]
+        # --- RYD OP I DATA: Vælg den mest komplette række pr. kamp ---
+        # Sorterer efter dato og minutter, så vi beholder den række med mest data
+        df_phys = df_phys.sort_values(['match_date', 'minutes'], ascending=[False, False])
+        df_phys = df_phys.drop_duplicates(subset=['match_date', 'match_teams'], keep='first')
+        
+        avg_dist = df_phys['distance'].mean()
+        avg_hsr = df_phys['hsr'].mean()
+        latest = df_phys.iloc[0]
 
-            st.caption("Seneste kamp")
+        st.caption("Seneste kamp")
 
-            # TOP METRICS
-            m1, m2, m3, m4 = st.columns(4)
-            m1.metric("Distance", f"{round(latest['distance']/1000, 2)} km", delta=f"{round((latest['distance'] - avg_dist)/1000, 2)} km")
-            m2.metric("HSR", f"{int(latest['hsr'])} m", delta=f"{int(latest['hsr'] - avg_hsr)} m")
-            m3.metric("Topfart", f"{round(latest['top_speed'], 1)} km/t")
-            m4.metric("Minutter", format_minutes(latest['minutes'])) # Ny metric
+        # TOP METRICS
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Distance", f"{round(latest['distance']/1000, 2)} km", delta=f"{round((latest['distance'] - avg_dist)/1000, 2)} km")
+        m2.metric("HSR", f"{int(latest['hsr'])} m", delta=f"{int(latest['hsr'] - avg_hsr)} m")
+        m3.metric("Topfart", f"{round(latest['top_speed'], 1)} km/t")
+        m4.metric("Minutter", format_minutes(latest['minutes']))
+        
+        t_sub_log, t_sub_charts = st.tabs(["Kampoversigt", "Grafer"])
+
+        with t_sub_charts:
+            # CSS for at minimere afstande
+            st.markdown("""
+                <style>
+                [data-testid="stVerticalBlock"] > div:has(> [data-testid="stCaption"]) { margin-top: -20px; }
+                div[data-testid="stCaption"] { margin-bottom: 5px !important; }
+                </style>
+            """, unsafe_allow_html=True)
+
+            cat_choice = st.segmented_control("Vælg metrik", options=["HSR (m)", "Sprint (m)", "Distance (km)", "Topfart (km/t)"], default="HSR (m)", key="phys_graph_control")
             
-            t_sub_log, t_sub_charts = st.tabs(["Kampoversigt", "Grafer"])
+            # Definitioner
+            defs = {"HSR": "HSR (High Speed Running): 20-25 km/t", "Sprint": "Sprint: ≥ 25 km/t", "Distance": "Samlet distance", "Topfart": "Højeste fart målt"}
+            st.caption(next((v for k, v in defs.items() if k in cat_choice), ""))
+            
+            mapping = {
+                "HSR (m)": ("hsr", 1, "m"), 
+                "Sprint (m)": ("sprinting", 1, "m"), 
+                "Distance (km)": ("distance", 1000, "km"), 
+                "Topfart (km/t)": ("top_speed", 1, "km/t")
+            }
+            col, div, suffix = mapping[cat_choice]
+            
+            df_chart = df_phys.sort_values('match_date', ascending=True).copy()
 
-            with t_sub_charts:
-                # 1. Samlet CSS for at minimere afstande
-                st.markdown("""
-                    <style>
-                    [data-testid="stVerticalBlock"] > div:has(> [data-testid="stCaption"]) {
-                        margin-top: -20px;
-                    }
-                    div[data-testid="stCaption"] { margin-bottom: 5px !important; }
-                    </style>
-                """, unsafe_allow_html=True)
-    
-                cat_choice = st.segmented_control("Vælg metrik", options=["HSR (m)", "Sprint (m)", "Distance (km)", "Topfart (km/t)"], default="HSR (m)", key="phys_graph_control")
+            if not df_chart.empty:
+                df_chart['Status'] = df_chart['minutes'].apply(lambda x: "Fuld tid" if x >= 85 else "Indskiftet/udskiftet" if x > 0 else "Ikke spillet")
                 
-                # Definitioner
-                defs = {"HSR": "HSR (High Speed Running): 20-25 km/t", "Sprint": "Sprint: ≥ 25 km/t", "Distance": "Samlet distance", "Topfart": "Højeste fart målt"}
-                match = next((v for k, v in defs.items() if k in cat_choice), "")
-                st.caption(match)
+                # Robust modstander-logik
+                def get_opponent(teams_str):
+                    parts = [p.strip() for p in str(teams_str).split('-')]
+                    opponents = [p for p in parts if "hvidovre" not in p.lower()]
+                    return opponents[0] if opponents else parts[0]
                 
-                mapping = {
-                    "HSR (m)": ("hsr", 1, "m"), 
-                    "Sprint (m)": ("sprinting", 1, "m"), 
-                    "Distance (km)": ("distance", 1000, "km"), 
-                    "Topfart (km/t)": ("top_speed", 1, "km/t")
-                }
-                col, div, suffix = mapping[cat_choice]
+                df_chart['Opponent'] = df_chart['match_teams'].apply(get_opponent)
+                df_chart['Label'] = df_chart['Opponent'] + "<br>" + df_chart['match_date'].dt.strftime('%d/%m')
                 
-                start_date = pd.to_datetime('2025-07-01')
-                df_chart = df_phys[df_phys['match_date'] >= start_date].copy()
-                df_chart = df_chart.drop_duplicates(subset=['match_date', 'match_teams'])
-                df_chart = df_chart.sort_values('match_date', ascending=True)
-    
-                if not df_chart.empty:
-                    df_chart['Status'] = df_chart['minutes'].apply(lambda x: "Fuld tid" if x >= 85 else "Indskiftet/udskiftet" if x > 0 else "Ikke spillet")
-                    
-                    # --- ROBUST LOGIK TIL MODSTANDER ---
-                    def get_opponent(teams_str):
-                        parts = [p.strip() for p in str(teams_str).split('-')]
-                        # Filtrer Hvidovre fra, uanset hvor det står i strengen
-                        opponents = [p for p in parts if "hvidovre" not in p.lower()]
-                        return opponents[0] if opponents else parts[0]
-                    
-                    df_chart['Opponent'] = df_chart['match_teams'].apply(get_opponent)
-                    # -----------------------------------
-                    
-                    df_chart['Label'] = df_chart['Opponent'] + "<br>" + df_chart['match_date'].dt.strftime('%d/%m')
-                    
-                    y_vals = df_chart[col] / div
-                    season_avg = y_vals.mean()
-                    text_vals = y_vals.apply(lambda x: f"{x:.0f} {suffix}" if x > 100 else f"{x:.1f} {suffix}")
-    
-                    color_map = {"Fuld tid": "#df003b", "Indskiftet/udskiftet": "#808080", "Ikke spillet": "#808080"}
-                    
-                    fig = go.Figure()
-    
-                    for status, color in color_map.items():
-                        df_subset = df_chart[df_chart['Status'] == status]
-                        subset_indices = df_subset.index
-                        fig.add_trace(go.Bar(
-                            x=df_subset['Label'], 
-                            y=y_vals.loc[subset_indices],
-                            text=text_vals.loc[subset_indices],
-                            name=status,
-                            marker_color=color,
-                            textposition='outside',
-                            cliponaxis=False
-                        ))
-    
-                    fig.add_shape(type="line", x0=-0.5, x1=len(df_chart)-0.5, y0=season_avg, y1=season_avg, 
-                                  line=dict(color="#D3D3D3", width=2, dash="dash"), layer="below")
-    
-                    fig.update_layout(
-                        plot_bgcolor="white", height=400, 
-                        margin=dict(t=40, b=50, l=10, r=10), 
-                        xaxis=dict(showgrid=False, tickangle=-45, type='category', 
-                                   categoryorder='array', categoryarray=df_chart['Label'].tolist()),
-                        yaxis=dict(showgrid=True, gridcolor='#f0f0f0', showticklabels=False, zeroline=False, 
-                                   range=[0, y_vals.max() * 1.25]), # Øget range for at give plads til tekst
-                        legend=dict(orientation="h", yanchor="bottom", y=1.1, xanchor="right", x=1, itemclick=False, itemdoubleclick=False),
-                        barmode='relative', bargap=0.2
-                    )
-                    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+                y_vals = df_chart[col] / div
+                season_avg = y_vals.mean()
+                text_vals = y_vals.apply(lambda x: f"{x:.0f} {suffix}" if x > 100 else f"{x:.1f} {suffix}")
+                color_map = {"Fuld tid": "#df003b", "Indskiftet/udskiftet": "#808080", "Ikke spillet": "#808080"}
+                
+                fig = go.Figure()
+                for status, color in color_map.items():
+                    df_subset = df_chart[df_chart['Status'] == status]
+                    fig.add_trace(go.Bar(
+                        x=df_subset['Label'], y=y_vals.loc[df_subset.index],
+                        text=text_vals.loc[df_subset.index], name=status,
+                        marker_color=color, textposition='outside', cliponaxis=False
+                    ))
 
-            with t_sub_log:
-                df_display = df_phys.copy()
-                df_display['minutes'] = df_display['minutes'].apply(format_minutes)
-                df_display['match_date'] = df_display['match_date'].dt.strftime('%d/%m/%Y')
-                
-                # --- RETTELSE: Suffix i tabellen ---
-                df_display['distance'] = df_display['distance'].apply(lambda x: f"{int(x)} m")
-                df_display['hsr'] = df_display['hsr'].apply(lambda x: f"{int(x)} m")
-                df_display['sprinting'] = df_display['sprinting'].apply(lambda x: f"{int(x)} m")
-                df_display['top_speed'] = df_display['top_speed'].apply(lambda x: f"{x:.1f} km/t")
-                df_display['hi_runs'] = df_display['hi_runs'].apply(lambda x: f"{int(x)}")
-                
-                df_display = df_display.rename(columns={
-                    'match_date': 'Dato', 'match_teams': 'Kamp', 'minutes': 'Minutter',
-                    'distance': 'Distance', 'hsr': 'HSR', 'sprinting': 'Sprint', 
-                    'top_speed': 'Topfart', 'hi_runs': 'Højintense løb'
-                })
-                st.data_editor(df_display, hide_index=True, use_container_width=True, disabled=True)
+                fig.add_shape(type="line", x0=-0.5, x1=len(df_chart)-0.5, y0=season_avg, y1=season_avg, 
+                              line=dict(color="#D3D3D3", width=2, dash="dash"), layer="below")
+
+                fig.update_layout(
+                    plot_bgcolor="white", height=400, margin=dict(t=40, b=50, l=10, r=10),
+                    xaxis=dict(showgrid=False, tickangle=-45, type='category', categoryorder='array', categoryarray=df_chart['Label'].tolist()),
+                    yaxis=dict(showgrid=True, gridcolor='#f0f0f0', showticklabels=False, zeroline=False, range=[0, y_vals.max() * 1.25]),
+                    legend=dict(orientation="h", yanchor="bottom", y=1.1, xanchor="right", x=1, itemclick=False, itemdoubleclick=False),
+                    barmode='relative', bargap=0.2
+                )
+                st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+
+        with t_sub_log:
+            df_display = df_phys.copy()
+            df_display['minutes'] = df_display['minutes'].apply(format_minutes)
+            df_display['match_date'] = df_display['match_date'].dt.strftime('%d/%m/%Y')
+            df_display.rename(columns={'match_date': 'Dato', 'match_teams': 'Kamp', 'minutes': 'Minutter', 'distance': 'Distance', 'hsr': 'HSR', 'sprinting': 'Sprint', 'top_speed': 'Topfart', 'hi_runs': 'Højintense løb'}, inplace=True)
+            st.data_editor(df_display, hide_index=True, use_container_width=True, disabled=True)
+            
 if __name__ == "__main__":
     vis_side()
