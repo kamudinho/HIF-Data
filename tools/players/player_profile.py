@@ -560,77 +560,76 @@ def vis_side(dp=None):
             t_sub_log, t_sub_charts = st.tabs(["Kampoversigt", "Grafer"])
     
             with t_sub_charts:
-                # OPTIMERET CSS: Fjerner al unødig luft mellem elementerne
-                st.markdown("""
-                    <style>
-                    div[data-testid="stSegmentedControl"] { margin-bottom: 0px !important; }
-                    div[data-testid="stCaption"] { margin-top: -10px !important; margin-bottom: 5px !important; }
-                    </style>
-                """, unsafe_allow_html=True)
-    
-                cat_choice = st.segmented_control("Vælg metrik", options=["HSR (m)", "Sprint (m)", "Distance (km)", "Topfart (km/t)"], default="HSR (m)", key="phys_graph_control")
+            # CSS for at minimere afstande
+            st.markdown("""
+                <style>
+                div[data-testid="stSegmentedControl"] { margin-bottom: 0px !important; }
+                div[data-testid="stCaption"] { margin-top: -10px !important; margin-bottom: 5px !important; }
+                </style>
+            """, unsafe_allow_html=True)
+
+            cat_choice = st.segmented_control("Vælg metrik", options=["HSR (m)", "Sprint (m)", "Distance (km)", "Topfart (km/t)"], default="HSR (m)", key="phys_graph_control")
+            
+            defs = {"HSR": "HSR (High Speed Running): 20-25 km/t", "Sprint": "Sprint: ≥ 25 km/t", "Distance": "Samlet distance", "Topfart": "Højeste fart målt"}
+            st.caption(next((v for k, v in defs.items() if k in cat_choice), ""))
+            
+            mapping = {
+                "HSR (m)": ("hsr", 1, "m"), 
+                "Sprint (m)": ("sprinting", 1, "m"), 
+                "Distance (km)": ("distance", 1000, "km"), 
+                "Topfart (km/t)": ("top_speed", 1, "km/t")
+            }
+            col, div, suffix = mapping[cat_choice]
+            
+            df_chart = df_phys.sort_values('match_date', ascending=True).copy()
+
+            if not df_chart.empty:
+                df_chart['Status'] = df_chart['minutes'].apply(lambda x: "Fuld tid" if x >= 85 else "Indskiftet/udskiftet" if x > 0 else "Ikke spillet")
                 
-                defs = {"HSR": "HSR (High Speed Running): 20-25 km/t", "Sprint": "Sprint: ≥ 25 km/t", "Distance": "Samlet distance", "Topfart": "Højeste fart målt"}
-                st.caption(next((v for k, v in defs.items() if k in cat_choice), ""))
-                
-                mapping = {
-                    "HSR (m)": ("hsr", 1, "m"), 
-                    "Sprint (m)": ("sprinting", 1, "m"), 
-                    "Distance (km)": ("distance", 1000, "km"), 
-                    "Topfart (km/t)": ("top_speed", 1, "km/t")
-                }
-                col, div, suffix = mapping[cat_choice]
-                
-                df_chart = df_phys.sort_values('match_date', ascending=True).copy()
-    
-                if not df_chart.empty:
-                    df_chart['Status'] = df_chart['minutes'].apply(lambda x: "Fuld tid" if x >= 85 else "Indskiftet/udskiftet" if x > 0 else "Ikke spillet")
-                    
-                    # Dynamisk modstander-logik baseret på valgt_hold
-                    # --- DYNAMISK LOGIK: Filtrer altid spillerens eget hold fra ---
-                    def get_opponent_data(teams_str, current_team_name):
+                # --- DYNAMISK LOGIK: Find modstander ---
+                def get_opponent_data(teams_str, current_team_name):
                     parts = [p.strip() for p in str(teams_str).split('-')]
-                    # Find modstander-navnet
-                    opponent_name = next((p for p in parts if p.lower() != current_team_name.lower()), parts[0])
+                    # Filtrer det hold fra, som matcher valgt_hold
+                    opponent_name = next((p for p in parts if current_team_name.lower() not in p.lower()), parts[0])
                     
-                    # Prøv at finde logo i din TEAMS mapping
-                    # Vi bruger en fuzzy match eller direkte opslag
+                    # Opslag i din TEAMS dictionary for logo
                     opp_data = next((data for name, data in TEAMS.items() if name.lower() in opponent_name.lower() or opponent_name.lower() in name.lower()), None)
-                    
                     return opponent_name, opp_data.get('logo') if opp_data else None
                 
-                # Anvendelse på din df_chart
+                # Anvend logik
                 df_chart[['Opponent', 'Opponent_Logo']] = df_chart['match_teams'].apply(
                     lambda x: pd.Series(get_opponent_data(x, valgt_hold))
                 )
-                # --------------------------------------------------------------
-                    df_chart['Label'] = df_chart['Opponent'] + "<br>" + df_chart['match_date'].dt.strftime('%d/%m')
-                    
-                    y_vals = df_chart[col] / div
-                    season_avg = y_vals.mean()
-                    text_vals = y_vals.apply(lambda x: f"{x:.0f} {suffix}" if x > 100 else f"{x:.1f} {suffix}")
-                    color_map = {"Fuld tid": "#df003b", "Indskiftet/udskiftet": "#808080", "Ikke spillet": "#808080"}
-                    
-                    fig = go.Figure()
-                    for status, color in color_map.items():
-                        df_subset = df_chart[df_chart['Status'] == status]
-                        fig.add_trace(go.Bar(
-                            x=df_subset['Label'], y=y_vals.loc[df_subset.index],
-                            text=text_vals.loc[df_subset.index], name=status,
-                            marker_color=color, textposition='outside', cliponaxis=False
-                        ))
-    
-                    fig.add_shape(type="line", x0=-0.5, x1=len(df_chart)-0.5, y0=season_avg, y1=season_avg, 
-                                  line=dict(color="#D3D3D3", width=2, dash="dash"), layer="below")
-    
-                    fig.update_layout(
-                        plot_bgcolor="white", height=400, margin=dict(t=20, b=50, l=10, r=10),
-                        xaxis=dict(showgrid=False, tickangle=-45, type='category', categoryorder='array', categoryarray=df_chart['Label'].tolist()),
-                        yaxis=dict(showgrid=True, gridcolor='#f0f0f0', showticklabels=False, zeroline=False, range=[0, y_vals.max() * 1.25]),
-                        legend=dict(orientation="h", yanchor="bottom", y=1.1, xanchor="right", x=1, itemclick=False, itemdoubleclick=False),
-                        barmode='relative', bargap=0.2
-                    )
-                    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+                
+                # Label skal KUN være modstander + dato
+                df_chart['Label'] = df_chart['Opponent'] + "<br>" + df_chart['match_date'].dt.strftime('%d/%m')
+                # ----------------------------------------
+                
+                y_vals = df_chart[col] / div
+                season_avg = y_vals.mean()
+                text_vals = y_vals.apply(lambda x: f"{x:.0f} {suffix}" if x > 100 else f"{x:.1f} {suffix}")
+                color_map = {"Fuld tid": "#df003b", "Indskiftet/udskiftet": "#808080", "Ikke spillet": "#808080"}
+                
+                fig = go.Figure()
+                for status, color in color_map.items():
+                    df_subset = df_chart[df_chart['Status'] == status]
+                    fig.add_trace(go.Bar(
+                        x=df_subset['Label'], y=y_vals.loc[df_subset.index],
+                        text=text_vals.loc[df_subset.index], name=status,
+                        marker_color=color, textposition='outside', cliponaxis=False
+                    ))
+
+                fig.add_shape(type="line", x0=-0.5, x1=len(df_chart)-0.5, y0=season_avg, y1=season_avg, 
+                              line=dict(color="#D3D3D3", width=2, dash="dash"), layer="below")
+
+                fig.update_layout(
+                    plot_bgcolor="white", height=400, margin=dict(t=20, b=50, l=10, r=10),
+                    xaxis=dict(showgrid=False, tickangle=-45, type='category', categoryorder='array', categoryarray=df_chart['Label'].tolist()),
+                    yaxis=dict(showgrid=True, gridcolor='#f0f0f0', showticklabels=False, zeroline=False, range=[0, y_vals.max() * 1.25]),
+                    legend=dict(orientation="h", yanchor="bottom", y=1.1, xanchor="right", x=1, itemclick=False, itemdoubleclick=False),
+                    barmode='relative', bargap=0.2
+                )
+                st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
     
             with t_sub_log:
                 df_display = df_phys.copy()
