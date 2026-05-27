@@ -190,7 +190,7 @@ def vis_side(dp=None):
         # HER ER SYNDEREN:
         avg_val = np.nanmean(vals) if vals and not np.all(np.isnan(vals)) else 0
         fmt = f"{avg_val:.{dec}f}{suffix}" if dec > 0 else f"{int(round(avg_val))}{suffix}"
-        row2[i+2].markdown(...)
+        row2[i+2].markdown(f"<div class='stat-box'><div class='stat-label'>{label}</div><div class='stat-val'>{fmt}</div></div>", unsafe_allow_html=True)
     # --- 5. TABS ---
     tab1, tab2 = st.tabs(["RESULTATER", "KOMMENDE"])
 
