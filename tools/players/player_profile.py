@@ -586,23 +586,33 @@ def vis_side(dp=None):
                 if not df_chart.empty:
                     df_chart['Status'] = df_chart['minutes'].apply(lambda x: "Fuld tid" if x >= 85 else "Indskiftet/udskiftet" if x > 0 else "Ikke spillet")
                     
-                    # --- DYNAMISK LOGIK: Find modstander ---
-                    def get_opponent_data(teams_str, current_team_name):
-                        parts = [p.strip() for p in str(teams_str).split('-')]
-                        # Filtrer det hold fra, som matcher valgt_hold
-                        opponent_name = next((p for p in parts if current_team_name.lower() not in p.lower()), parts[0])
+                    ## --- MERE ROBUST DYNAMISK LOGIK ---
+                def get_opponent_data(teams_str, current_team_name):
+                    try:
+                        # Håndter hvis data er NaN/tom
+                        if pd.isna(teams_str): return "Ukendt", None
                         
-                        # Opslag i din TEAMS dictionary for logo
-                        opp_data = next((data for name, data in TEAMS.items() if name.lower() in opponent_name.lower() or opponent_name.lower() in name.lower()), None)
-                        return opponent_name, opp_data.get('logo') if opp_data else None
+                        parts = [p.strip() for p in str(teams_str).split('-')]
+                        
+                        # Find modstander: Tag den del der IKKE ligner holdnavnet
+                        opponent_name = next((p for p in parts if current_team_name.lower() not in p.lower()), parts[0] if len(parts) > 0 else "Ukendt")
+                        
+                        # Opslag i TEAMS
+                        opp_data = next((data for name, data in TEAMS.items() 
+                                       if name.lower() in opponent_name.lower() 
+                                       or opponent_name.lower() in name.lower()), None)
+                        
+                        return opponent_name, (opp_data.get('logo') if opp_data else None)
+                    except Exception as e:
+                        return "Fejl i navn", None
+
+                # Anvendelse med debug-tjek
+                if not df_chart.empty:
+                    data_mapped = df_chart['match_teams'].apply(lambda x: get_opponent_data(x, valgt_hold))
+                    df_chart[['Opponent', 'Opponent_Logo']] = pd.DataFrame(data_mapped.tolist(), index=df_chart.index)
                     
-                    # Anvend logik
-                    df_chart[['Opponent', 'Opponent_Logo']] = df_chart['match_teams'].apply(
-                        lambda x: pd.Series(get_opponent_data(x, valgt_hold))
-                    )
-                    
-                    # Label skal KUN være modstander + dato
                     df_chart['Label'] = df_chart['Opponent'] + "<br>" + df_chart['match_date'].dt.strftime('%d/%m')
+                # ----------------------------------
                     # ----------------------------------------
                     
                     y_vals = df_chart[col] / div
