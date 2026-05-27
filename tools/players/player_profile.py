@@ -579,7 +579,7 @@ def vis_side(dp=None):
                 # 2. CSS-hack for at reducere afstanden mellem caption og graf
                 st.markdown("""
                     <style>
-                    div[data-testid="stCaption"] { margin-bottom: -10px !important; }
+                    div[data-testid="stCaption"] { margin-bottom: -40px !important; }
                     </style>
                 """, unsafe_allow_html=True)
                 
