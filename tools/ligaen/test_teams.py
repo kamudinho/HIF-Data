@@ -22,31 +22,35 @@ def style_form(f):
 
 def beregn_tabel(df_matches):
     stats = {}
-    for uuid, info in TEAMS.items():
+    # Sørg for at initialisere med ALLE hold fra dit TEAMS mapping
+    for hold_navn, info in TEAMS.items():
         o_uuid = str(info.get('opta_uuid', '')).upper()
         if o_uuid:
-            stats[o_uuid] = {'HOLD': info.get('name', 'Ukendt'), 'K': 0, 'V': 0, 'U': 0, 'T': 0, 'M+': 0, 'M-': 0, 'P': 0, 'FORM': "", 'UUID': o_uuid}
+            stats[o_uuid] = {'HOLD': hold_navn, 'K': 0, 'V': 0, 'U': 0, 'T': 0, 'M+': 0, 'M-': 0, 'P': 0, 'FORM': "", 'UUID': o_uuid}
 
     for _, row in df_matches.iterrows():
         h_uuid, a_uuid = str(row['CONTESTANTHOME_OPTAUUID']).upper(), str(row['CONTESTANTAWAY_OPTAUUID']).upper()
         h_g, a_g = int(row['TOTAL_HOME_SCORE'] or 0), int(row['TOTAL_AWAY_SCORE'] or 0)
         
+        # Opdater stats for begge hold i kampen
         for uuid, g_for, g_against in [(h_uuid, h_g, a_g), (a_uuid, a_g, h_g)]:
-            if uuid not in stats: continue
-            stats[uuid]['K'] += 1
-            stats[uuid]['M+'] += g_for
-            stats[uuid]['M-'] += g_against
-            if g_for > g_against:
-                stats[uuid]['P'] += 3; stats[uuid]['V'] += 1; stats[uuid]['FORM'] += 'V'
-            elif g_for == g_against:
-                stats[uuid]['P'] += 1; stats[uuid]['U'] += 1; stats[uuid]['FORM'] += 'U'
-            else:
-                stats[uuid]['T'] += 1; stats[uuid]['FORM'] += 'T'
+            if uuid in stats:
+                stats[uuid]['K'] += 1
+                stats[uuid]['M+'] += g_for
+                stats[uuid]['M-'] += g_against
+                if g_for > g_against:
+                    stats[uuid]['P'] += 3; stats[uuid]['V'] += 1; stats[uuid]['FORM'] += 'V'
+                elif g_for == g_against:
+                    stats[uuid]['P'] += 1; stats[uuid]['U'] += 1; stats[uuid]['FORM'] += 'U'
+                else:
+                    stats[uuid]['T'] += 1; stats[uuid]['FORM'] += 'T'
     
-    df = pd.DataFrame(stats.values())
+    # Filtrer kun hold, der har spillet kampe, og konverter til dataframe
+    res = [s for s in stats.values() if s['K'] > 0]
+    df = pd.DataFrame(res)
     df['MD'] = df['M+'] - df['M-']
-    return df[df['K'] > 0].sort_values(['P', 'MD', 'M+'], ascending=False).reset_index(drop=True)
-
+    return df.sort_values(['P', 'MD', 'M+'], ascending=False).reset_index(drop=True)
+    
 # --- 2. DATA LOADING ---
 @st.cache_data(ttl=3600)
 def load_data():
