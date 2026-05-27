@@ -59,12 +59,14 @@ def vis_side(dp=None):
         )
         SELECT 
             b.*,
-            h.POSSESSION AS HOME_POSS, h.TOUCHES_IN_BOX AS HOME_TOUCHES, hx.XG AS HOME_XG, hx.XGNP AS HOME_XGNP, hx.BIG_CHANCES AS HOME_BIG_CHANCES, 
-            h.PASSES AS HOME_PASSES, h.SHOTS AS HOME_SHOTS, ae_h.FORWARD_PASSES AS HOME_FORWARD_PASSES, ae_h.DANGERZONE_SHOTS AS HOME_DZ_SHOTS, ae_h.PASSES_FINAL_THIRD AS HOME_PASSES_FT,
-            a.POSSESSION AS AWAY_POSS, a.TOUCHES_IN_BOX AS AWAY_TOUCHES, ax.XG AS AWAY_XG, ax.XGNP AS AWAY_XGNP, ax.BIG_CHANCES AS AWAY_BIG_CHANCES, 
-            a.PASSES AS AWAY_PASSES, a.SHOTS AS AWAY_SHOTS, ae_a.FORWARD_PASSES AS AWAY_FORWARD_PASSES, ae_a.DANGERZONE_SHOTS AS AWAY_DZ_SHOTS, ae_a.PASSES_FINAL_THIRD AS AWAY_PASSES_FT,
-            ae_h.TOUCHES_IN_BOX AS HOME_TOUCHES_IN_BOX, ae_h.DANGERZONE_SHOTS AS HOME_DZ_SHOTS, ae_h.PASSES_FINAL_THIRD AS HOME_PASSES_FT,
-            ae_a.TOUCHES_IN_BOX AS AWAY_TOUCHES_IN_BOX, ae_a.DANGERZONE_SHOTS AS AWAY_DZ_SHOTS, ae_a.PASSES_FINAL_THIRD AS AWAY_PASSES_FT
+            h.POSSESSION AS HOME_POSS, hx.XG AS HOME_XG, hx.XGNP AS HOME_XGNP, hx.BIG_CHANCES AS HOME_BIG_CHANCES, 
+            h.PASSES AS HOME_PASSES, h.SHOTS AS HOME_SHOTS, 
+            ae_h.FORWARD_PASSES AS HOME_FORWARD_PASSES, ae_h.DANGERZONE_SHOTS AS HOME_DZ_SHOTS, 
+            ae_h.PASSES_FINAL_THIRD AS HOME_PASSES_FT, ae_h.TOUCHES_IN_BOX AS HOME_TOUCHES_IN_BOX,
+            a.POSSESSION AS AWAY_POSS, ax.XG AS AWAY_XG, ax.XGNP AS AWAY_XGNP, ax.BIG_CHANCES AS AWAY_BIG_CHANCES, 
+            a.PASSES AS AWAY_PASSES, a.SHOTS AS AWAY_SHOTS, 
+            ae_a.FORWARD_PASSES AS AWAY_FORWARD_PASSES, ae_a.DANGERZONE_SHOTS AS AWAY_DZ_SHOTS, 
+            ae_a.PASSES_FINAL_THIRD AS AWAY_PASSES_FT, ae_a.TOUCHES_IN_BOX AS AWAY_TOUCHES_IN_BOX
         FROM MatchBase b
         LEFT JOIN StatsPivot h ON b.MATCH_OPTAUUID = h.MATCH_OPTAUUID AND b.CONTESTANTHOME_OPTAUUID = h.CONTESTANT_OPTAUUID
         LEFT JOIN StatsPivot a ON b.MATCH_OPTAUUID = a.MATCH_OPTAUUID AND b.CONTESTANTAWAY_OPTAUUID = a.CONTESTANT_OPTAUUID
@@ -166,7 +168,7 @@ def vis_side(dp=None):
         ("BIG_CHANCES", "STORE CHANCER", 0, ""), 
         ("DZ_SHOTS", "SKUD FRA DZ", 0, ""), 
         ("PASSES_FT", "AFS. SIDSTE 1/3", 0, ""), 
-        ("TOUCHES", "TOUCHES I BOKS", 0, "")
+        ("HOME_TOUCHES_IN_BOX", "AWAY_TOUCHES_IN_BOX", "TOUCHES_IN_BOX", "Touches i boks", 0, ""),
     ]
     for i, (key, label, dec, suffix) in enumerate(avg_map):
         vals = []
@@ -187,7 +189,7 @@ def vis_side(dp=None):
         
         all_played = df_matches[df_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].copy()
         team_avgs = {}
-        stat_keys = ["POSS", "PASSES", "FORWARD_PASSES", "SHOTS", "BIG_CHANCES", "XG", "XGNP"]
+        stat_keys = ["POSS", "PASSES", "FORWARD_PASSES", "SHOTS", "BIG_CHANCES", "XG", "XGNP", "TOUCHES_IN_BOX", "DZ_SHOTS", "PASSES_FT"]
 
         for t_name, t_info in TEAMS.items():
             t_uuid = str(t_info.get('opta_uuid', '')).strip().upper()
