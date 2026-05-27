@@ -21,35 +21,44 @@ def style_form(f):
     return res
 
 def beregn_tabel(df_matches):
-    stats = {}
-    # Sørg for at initialisere med ALLE hold fra dit TEAMS mapping
+    stats = []
+    # Vi henter alle holdnavne og UUID'er fra din TEAMS mapping
     for hold_navn, info in TEAMS.items():
         o_uuid = str(info.get('opta_uuid', '')).upper()
         if o_uuid:
-            stats[o_uuid] = {'HOLD': hold_navn, 'K': 0, 'V': 0, 'U': 0, 'T': 0, 'M+': 0, 'M-': 0, 'P': 0, 'FORM': "", 'UUID': o_uuid}
-
-    for _, row in df_matches.iterrows():
-        h_uuid, a_uuid = str(row['CONTESTANTHOME_OPTAUUID']).upper(), str(row['CONTESTANTAWAY_OPTAUUID']).upper()
-        h_g, a_g = int(row['TOTAL_HOME_SCORE'] or 0), int(row['TOTAL_AWAY_SCORE'] or 0)
-        
-        # Opdater stats for begge hold i kampen
-        for uuid, g_for, g_against in [(h_uuid, h_g, a_g), (a_uuid, a_g, h_g)]:
-            if uuid in stats:
-                stats[uuid]['K'] += 1
-                stats[uuid]['M+'] += g_for
-                stats[uuid]['M-'] += g_against
-                if g_for > g_against:
-                    stats[uuid]['P'] += 3; stats[uuid]['V'] += 1; stats[uuid]['FORM'] += 'V'
-                elif g_for == g_against:
-                    stats[uuid]['P'] += 1; stats[uuid]['U'] += 1; stats[uuid]['FORM'] += 'U'
-                else:
-                    stats[uuid]['T'] += 1; stats[uuid]['FORM'] += 'T'
+            stats.append({
+                'HOLD': hold_navn, 'UUID': o_uuid,
+                'K': 0, 'V': 0, 'U': 0, 'T': 0, 
+                'M+': 0, 'M-': 0, 'P': 0, 'FORM': ""
+            })
     
-    # Filtrer kun hold, der har spillet kampe, og konverter til dataframe
-    res = [s for s in stats.values() if s['K'] > 0]
-    df = pd.DataFrame(res)
-    df['MD'] = df['M+'] - df['M-']
-    return df.sort_values(['P', 'MD', 'M+'], ascending=False).reset_index(drop=True)
+    df_stats = pd.DataFrame(stats)
+    
+    # Opdater stats baseret på kampe
+    for _, row in df_matches.iterrows():
+        h_uuid = str(row['CONTESTANTHOME_OPTAUUID']).upper()
+        a_uuid = str(row['CONTESTANTAWAY_OPTAUUID']).upper()
+        h_g = int(row['TOTAL_HOME_SCORE'] or 0)
+        a_g = int(row['TOTAL_AWAY_SCORE'] or 0)
+        
+        for uuid, g_for, g_against in [(h_uuid, h_g, a_g), (a_uuid, a_g, h_g)]:
+            idx = df_stats[df_stats['UUID'] == uuid].index
+            if not idx.empty:
+                i = idx[0]
+                df_stats.at[i, 'K'] += 1
+                df_stats.at[i, 'M+'] += g_for
+                df_stats.at[i, 'M-'] += g_against
+                if g_for > g_against:
+                    df_stats.at[i, 'P'] += 3; df_stats.at[i, 'V'] += 1; df_stats.at[i, 'FORM'] += 'V'
+                elif g_for == g_against:
+                    df_stats.at[i, 'P'] += 1; df_stats.at[i, 'U'] += 1; df_stats.at[i, 'FORM'] += 'U'
+                else:
+                    df_stats.at[i, 'T'] += 1; df_stats.at[i, 'FORM'] += 'T'
+    
+    # Beregn MD og filtrer
+    df_stats = df_stats[df_stats['K'] > 0].copy()
+    df_stats['MD'] = df_stats['M+'] - df_stats['M-']
+    return df_stats.sort_values(['P', 'MD', 'M+'], ascending=False).reset_index(drop=True)
     
 # --- 2. DATA LOADING ---
 @st.cache_data(ttl=3600)
