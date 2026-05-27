@@ -20,12 +20,11 @@ def style_form(f):
         res += f'<span style="color:{color}; font-weight:bold; margin-right:3px;">{char}</span>'
     return res
 
-# --- 2. DATA LOADING (Defineret før de kaldes) ---
+# --- 2. DATA LOADING ---
 @st.cache_data(ttl=3600)
 def load_liga_data():
     conn = _get_snowflake_conn()
-    db = "KLUB_HVIDOVREIF.AXIS"
-    df = conn.query(f"SELECT * FROM {db}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = 'dyjr458hcmrcy87fsabfsy87o'")
+    df = conn.query("SELECT * FROM KLUB_HVIDOVREIF.AXIS.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = 'dyjr458hcmrcy87fsabfsy87o'")
     df.columns = [c.upper() for c in df.columns]
     df['MATCH_DATE_FULL'] = pd.to_datetime(df['MATCH_DATE_FULL'])
     return df
@@ -79,19 +78,27 @@ def beregn_tabel(df_matches, hold_filter=None):
 def draw_h2h_chart(team1, team2, metrics, labels, df_wy, chart_key, df_liga):
     fig = go.Figure()
     col_width, gap = 0.18, 0.05
-    t1_data = df_liga[df_liga['HOLD'] == team1]
-    t2_data = df_liga[df_liga['HOLD'] == team2]
-    u1, u2 = t1_data['UUID'].values[0] if not t1_data.empty else None, t2_data['UUID'].values[0] if not t2_data.empty else None
+    t1_data = df_liga[df_liga['HOLD'] == team1]; t2_data = df_liga[df_liga['HOLD'] == team2]
+    u1 = t1_data['UUID'].values[0] if not t1_data.empty else None
+    u2 = t2_data['UUID'].values[0] if not t2_data.empty else None
     l1, l2 = get_logo_url(u1), get_logo_url(u2)
+    
     for i, m in enumerate(metrics):
         suffix = f"{i+1}" if i > 0 else ""
         d1 = df_wy[df_wy['TEAMNAME'].str.contains(team1, case=False, na=False)]
         d2 = df_wy[df_wy['TEAMNAME'].str.contains(team2, case=False, na=False)]
         v1, v2 = float(d1[m.upper()].iloc[0] if not d1.empty and m.upper() in d1.columns else 0), float(d2[m.upper()].iloc[0] if not d2.empty and m.upper() in d2.columns else 0)
+        
         fig.add_trace(go.Bar(x=[0, 1], y=[v1, v2], marker_color=[TEAM_COLORS.get(team1, {}).get("primary", "#df003b"), TEAM_COLORS.get(team2, {}).get("primary", "#0056a3")], width=0.7, xaxis=f"x{suffix}", yaxis=f"y{suffix}"))
+        fig.add_annotation(dict(x=0, y=v1, xref=f"x{suffix}", yref=f"y{suffix}", text=f"<b>{v1:.1f}</b>", showarrow=False, yshift=15))
+        fig.add_annotation(dict(x=1, y=v2, xref=f"x{suffix}", yref=f"y{suffix}", text=f"<b>{v2:.1f}</b>", showarrow=False, yshift=15))
         fig.add_annotation(dict(x=0.5, y=-0.2, xref=f"x{suffix} domain", yref=f"y{suffix} domain", text=f"<b>{labels[i]}</b>", showarrow=False))
         fig.update_layout({f"xaxis{suffix}": dict(domain=[i*(col_width+gap), i*(col_width+gap)+col_width], showticklabels=False), f"yaxis{suffix}": dict(visible=False)})
-    fig.update_layout(height=350, margin=dict(t=80, b=50), plot_bgcolor='rgba(0,0,0,0)')
+        
+        if l1: fig.add_layout_image(dict(source=l1, xref=f"x{suffix}", yref="paper", x=0, y=1.2, sizex=0.25, sizey=0.25, xanchor="center", yanchor="bottom"))
+        if l2: fig.add_layout_image(dict(source=l2, xref=f"x{suffix}", yref="paper", x=1, y=1.2, sizex=0.25, sizey=0.25, xanchor="center", yanchor="bottom"))
+        
+    fig.update_layout(height=380, margin=dict(t=100, b=50), plot_bgcolor='rgba(0,0,0,0)')
     st.plotly_chart(fig, use_container_width=True, key=chart_key)
 
 # --- 4. HOVEDFUNKTION ---
@@ -116,7 +123,12 @@ def vis_side():
     with t_h2h:
         h_list = sorted(gs_tabel['HOLD'].tolist())
         c1, c2 = st.columns(2); t1 = c1.selectbox("Hold 1", h_list, index=0); t2 = c2.selectbox("Hold 2", [h for h in h_list if h != t1], index=0)
-        draw_h2h_chart(t1, t2, ['SHOTS', 'GOALS', 'XG'], ['Skud', 'Mål', 'xG'], df_wy, "h2h", gs_tabel)
+        tabs = st.tabs(["Generelt", "xG Stats", "Afslutninger", "Defensivt", "Spilopbygning"])
+        with tabs[0]: draw_h2h_chart(t1, t2, ['SHOTS', 'GOALS', 'PPDA', 'MATCHTEMPO'], ['Skud', 'Mål', 'PPDA', 'Tempo'], df_wy, "gen", gs_tabel)
+        with tabs[1]: draw_h2h_chart(t1, t2, ['XG', 'XGPERSHOT'], ['Total xG', 'xG pr. skud'], df_wy, "xg", gs_tabel)
+        with tabs[2]: draw_h2h_chart(t1, t2, ['SHOTSONTARGET', 'SHOTSBLOCKED', 'SHOTSFROMBOX', 'SHOTSFROMDANGERZONE'], ['På mål', 'Blokeret', 'I feltet', 'Danger Zone'], df_wy, "shot", gs_tabel)
+        with tabs[3]: draw_h2h_chart(t1, t2, ['INTERCEPTIONS', 'TACKLES', 'CLEARANCES'], ['Interc.', 'Tackler', 'Clearing'], df_wy, "def", gs_tabel)
+        with tabs[4]: draw_h2h_chart(t1, t2, ['PASSES', 'CROSSESTOTAL', 'PROGRESSIVEPASSES', 'PASSTOFINALTHIRDS'], ['Aflev.', 'Indlæg', 'Progr.', 'Sidste 1/3'], df_wy, "pass", gs_tabel)
 
 if __name__ == "__main__":
     st.markdown("<style>.league-table { width: 100%; }</style>", unsafe_allow_html=True)
