@@ -58,7 +58,7 @@ def vis_side(dp=None):
         FROM {DB}.OPTA_EVENTS
     )
     GROUP BY 1, 2
-)
+),
         XGPivot AS (
             SELECT 
                 MATCH_ID, CONTESTANT_OPTAUUID,
