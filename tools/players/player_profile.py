@@ -587,14 +587,26 @@ def vis_side(dp=None):
                     df_chart['Status'] = df_chart['minutes'].apply(lambda x: "Fuld tid" if x >= 85 else "Indskiftet/udskiftet" if x > 0 else "Ikke spillet")
                     
                     # Dynamisk modstander-logik baseret på valgt_hold
+                    # --- DYNAMISK LOGIK: Filtrer altid spillerens eget hold fra ---
                     def get_opponent(teams_str):
+                        # Vi bruger 'valgt_hold' som referencepunkt
                         my_team = str(valgt_hold).lower()
                         parts = [p.strip() for p in str(teams_str).split('-')]
+                        
+                        # Hvis vi har to dele (fx "ARF - AAB"), skal vi finde den, der IKKE er os
                         if len(parts) == 2:
-                            return parts[1] if my_team in parts[0].lower() else parts[0]
+                            # Tjek om første del er os
+                            if my_team in parts[0].lower():
+                                return parts[1] # Returner del 2 (modstander)
+                            # Tjek om anden del er os
+                            elif my_team in parts[1].lower():
+                                return parts[0] # Returner del 1 (modstander)
+                        
+                        # Hvis kun ét hold findes, eller navnet ikke matcher 'valgt_hold', returner navnet
                         return teams_str
                     
                     df_chart['Opponent'] = df_chart['match_teams'].apply(get_opponent)
+                # --------------------------------------------------------------
                     df_chart['Label'] = df_chart['Opponent'] + "<br>" + df_chart['match_date'].dt.strftime('%d/%m')
                     
                     y_vals = df_chart[col] / div
