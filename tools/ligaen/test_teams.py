@@ -10,7 +10,8 @@ def get_logo_url(opta_uuid):
 
 def get_logo_html(uuid):
     url = get_logo_url(uuid)
-    return f'<img src="{url}" width="20">' if url else ""
+    # Tilføjet en onerror for at skjule ødelagte links
+    return f'<img src="{url}" width="25" style="border-radius: 50%;" onerror="this.style.display=\'none\'">' if url else ""
 
 def style_form(f):
     if not f: return ""
@@ -85,8 +86,9 @@ def draw_h2h_chart(team1, team2, metrics, labels, df_wy, chart_key, df_liga):
     
     for i, m in enumerate(metrics):
         suffix = f"{i+1}" if i > 0 else ""
-        d1 = df_wy[df_wy['TEAMNAME'].str.contains(team1, case=False, na=False)]
-        d2 = df_wy[df_wy['TEAMNAME'].str.contains(team2, case=False, na=False)]
+        # Præcis matchning (B.93 fix)
+        d1 = df_wy[df_wy['TEAMNAME'].str.strip().str.lower() == team1.lower()]
+        d2 = df_wy[df_wy['TEAMNAME'].str.strip().str.lower() == team2.lower()]
         v1, v2 = float(d1[m.upper()].iloc[0] if not d1.empty and m.upper() in d1.columns else 0), float(d2[m.upper()].iloc[0] if not d2.empty and m.upper() in d2.columns else 0)
         
         fig.add_trace(go.Bar(x=[0, 1], y=[v1, v2], marker_color=[TEAM_COLORS.get(team1, {}).get("primary", "#df003b"), TEAM_COLORS.get(team2, {}).get("primary", "#0056a3")], width=0.7, xaxis=f"x{suffix}", yaxis=f"y{suffix}"))
@@ -95,10 +97,10 @@ def draw_h2h_chart(team1, team2, metrics, labels, df_wy, chart_key, df_liga):
         fig.add_annotation(dict(x=0.5, y=-0.2, xref=f"x{suffix} domain", yref=f"y{suffix} domain", text=f"<b>{labels[i]}</b>", showarrow=False))
         fig.update_layout({f"xaxis{suffix}": dict(domain=[i*(col_width+gap), i*(col_width+gap)+col_width], showticklabels=False), f"yaxis{suffix}": dict(visible=False)})
         
-        if l1: fig.add_layout_image(dict(source=l1, xref=f"x{suffix}", yref="paper", x=0, y=1.2, sizex=0.25, sizey=0.25, xanchor="center", yanchor="bottom"))
-        if l2: fig.add_layout_image(dict(source=l2, xref=f"x{suffix}", yref="paper", x=1, y=1.2, sizex=0.25, sizey=0.25, xanchor="center", yanchor="bottom"))
+        if l1: fig.add_layout_image(dict(source=l1, xref=f"x{suffix}", yref="paper", x=0, y=1.2, sizex=0.2, sizey=0.2, xanchor="center", yanchor="bottom"))
+        if l2: fig.add_layout_image(dict(source=l2, xref=f"x{suffix}", yref="paper", x=1, y=1.2, sizex=0.2, sizey=0.2, xanchor="center", yanchor="bottom"))
         
-    fig.update_layout(height=380, margin=dict(t=100, b=50), plot_bgcolor='rgba(0,0,0,0)')
+    fig.update_layout(height=400, margin=dict(t=120, b=50), plot_bgcolor='rgba(0,0,0,0)')
     st.plotly_chart(fig, use_container_width=True, key=chart_key)
 
 # --- 4. HOVEDFUNKTION ---
@@ -114,8 +116,8 @@ def vis_side():
     t_gs, t_op, t_ned, t_h2h = st.tabs(["Grundspil", "Oprykningsspil", "Nedrykningsspil", "Head-to-head"])
 
     def render_tabel(df):
-        d = df.copy(); d.insert(1, ' ', [get_logo_html(u) for u in d['UUID']]); d['FORM'] = d['FORM'].apply(style_form)
-        st.write(d[['#', ' ', 'HOLD', 'K', 'V', 'U', 'T', 'MD', 'P', 'FORM']].to_html(escape=False, index=False, classes='league-table'), unsafe_allow_html=True)
+        d = df.copy(); d.insert(1, 'Logo', [get_logo_html(u) for u in d['UUID']]); d['FORM'] = d['FORM'].apply(style_form)
+        st.write(d[['#', 'Logo', 'HOLD', 'K', 'V', 'U', 'T', 'MD', 'P', 'FORM']].to_html(escape=False, index=False, classes='league-table'), unsafe_allow_html=True)
 
     with t_gs: render_tabel(gs_tabel)
     with t_op: render_tabel(beregn_tabel(played, hold_filter=top6))
@@ -131,5 +133,5 @@ def vis_side():
         with tabs[4]: draw_h2h_chart(t1, t2, ['PASSES', 'CROSSESTOTAL', 'PROGRESSIVEPASSES', 'PASSTOFINALTHIRDS'], ['Aflev.', 'Indlæg', 'Progr.', 'Sidste 1/3'], df_wy, "pass", gs_tabel)
 
 if __name__ == "__main__":
-    st.markdown("<style>.league-table { width: 100%; }</style>", unsafe_allow_html=True)
+    st.markdown("<style>.league-table { width: 100%; border-collapse: collapse; } .league-table td { padding: 10px; border-bottom: 1px solid #ddd; }</style>", unsafe_allow_html=True)
     vis_side()
