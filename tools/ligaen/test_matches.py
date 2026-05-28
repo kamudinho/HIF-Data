@@ -99,6 +99,19 @@ def vis_side(dp=None):
     st.markdown("""
         <style>
         .stat-box { text-align: center; background: #f8f9fa; border-radius: 6px; padding: 8px 4px; border-bottom: 2px solid #cc0000; height: 52px; display: flex; flex-direction: column; justify-content: center; }
+        .stat-box2 { text-align: center; 
+        background: #f8f9fa; 
+        border-radius: 6px; 
+        padding: 8px 4px; 
+        border-bottom: 2px solid #cc0000; 
+        height: 52px; 
+        display: flex; 
+        flex-direction: column; 
+        justify-content: center;
+        width: 120px; /* Her kan du justere bredden (f.eks. 100px, 150px eller 100%) */
+        margin: 0 auto; /* Centrerer boksen i den kolonne den står i */
+    }
+
         .stat-label { font-size: 10px; color: #666; text-transform: uppercase; font-weight: 600; line-height: 1.1; margin-bottom: 2px; }
         .stat-val { font-weight: 800; font-size: 16px; color: #111; line-height: 1.1; }
         .score-pill { background: #222; color: white; border-radius: 4px; padding: 4px 12px; font-weight: bold; font-size: 18px; display: inline-block; min-width: 80px; text-align: center; }
@@ -254,14 +267,14 @@ def vis_side(dp=None):
             val_opp = opp_stats.get(s_key, 0)
             
             with c1:
-                st.markdown(f"<div class='stat-box'><div class='stat-label'>Vores</div><div class='stat-val'>{val_us:.{dec}f}{suf}</div></div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='stat-box2'><div class='stat-label'>Vores</div><div class='stat-val'>{val_us:.{dec}f}{suf}</div></div>", unsafe_allow_html=True)
             
             with c2:
                 # En lille bar-visualisering i midten
                 st.markdown(f"<div style='margin-top:15px; font-size:10px; text-align:center; color:#666;'>{lbl.upper()}</div>", unsafe_allow_html=True)
                 
             with c3:
-                st.markdown(f"<div class='stat-box'><div class='stat-label'>Modstander</div><div class='stat-val'>{val_opp:.{dec}f}{suf}</div></div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='stat-box2'><div class='stat-label'>Modstander</div><div class='stat-val'>{val_opp:.{dec}f}{suf}</div></div>", unsafe_allow_html=True)
         
     with tab4:
         # 1. Beregn LIGA-snit (FAST reference til tabellen)
