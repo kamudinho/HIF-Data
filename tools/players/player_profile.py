@@ -93,44 +93,40 @@ def draw_player_info_box(ax, team_logo, player_name, season_str, category_str):
     ax.text(0.10, 0.89, f"{season_str} | {category_str}", transform=ax.transAxes, 
             fontsize=8, color='#666666', va='center')
 
-def get_physical_data(player_name, player_opta_uuid, valgt_hold_navn, db_conn):
-    target_ssiid = TEAMS.get(valgt_hold_navn, {}).get('ssid')
-    if not target_ssiid:
-        target_ssiid = '56fa29c7-3a48-4186-9d14-dbf45fbc78d9'
-
-    clean_id = str(player_opta_uuid).lower().replace('p', '').strip()
-    navne_dele = [n.strip() for n in player_name.split(' ') if len(n.strip()) > 2]
-    name_conditions = " OR ".join([f"PLAYER_NAME ILIKE '%{n}%'" for n in navne_dele])
-
+def get_physical_data(player_opta_uuid, target_ssiid, db_conn):
+    # Din SQL med target_ssiid variabel
     sql = f"""
-        SELECT 
-           p.MATCH_DATE,
-           any_value(p.MATCH_TEAMS) as MATCH_TEAMS,
-           MAX(
-               TRY_CAST(SPLIT_PART(p.MINUTES, ':', 1) AS FLOAT) + 
-               (TRY_CAST(NULLIF(SPLIT_PART(p.MINUTES, ':', 2), '') AS FLOAT) / 60)
-           ) as MINUTES, 
-           SUM(p.DISTANCE) as DISTANCE,
-           SUM(p."HIGH SPEED RUNNING") as HSR,
-           SUM(p.SPRINTING) as SPRINTING,
-           MAX(p.TOP_SPEED) as TOP_SPEED,
-           SUM(p.NO_OF_HIGH_INTENSITY_RUNS) as HI_RUNS
-        FROM {DB}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS p
-        WHERE (({name_conditions}) OR ("optaId" LIKE '%{clean_id}%'))
-          AND p.MATCH_DATE BETWEEN '2025-07-01' AND '2026-06-30'
-          AND p.MATCH_SSIID IN (
-              SELECT MATCH_SSIID 
-              FROM {DB}.SECONDSPECTRUM_GAME_METADATA
-              WHERE HOME_SSIID = '{target_ssiid}' 
-                 OR AWAY_SSIID = '{target_ssiid}'
-          )
-        GROUP BY p.MATCH_DATE, p.PLAYER_NAME
-        ORDER BY p.MATCH_DATE DESC
+    WITH hvidovre_ids AS (
+        SELECT DISTINCT
+            m.MATCH_SSIID, 
+            f.value:"optaId"::string AS opta_id
+        FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_GAME_METADATA m,
+        LATERAL FLATTEN(input => CASE 
+            WHEN m.HOME_SSIID = '{target_ssiid}' THEN m.HOME_PLAYERS 
+            ELSE m.AWAY_PLAYERS 
+        END) f
+        WHERE m.HOME_SSIID = '{target_ssiid}' 
+           OR m.AWAY_SSIID = '{target_ssiid}'
+    )
+    SELECT 
+        p.MATCH_DATE,
+        p.PLAYER_NAME,
+        p.MINUTES,
+        p.DISTANCE,
+        p."HIGH SPEED RUNNING" AS DISTANCE_HSR,
+        p.SPRINTING AS DISTANCE_SPRINT,
+        p.TOP_SPEED,
+        p.NO_OF_HIGH_INTENSITY_RUNS AS HI_RUNS_TOTAL,
+        p.MATCH_SSIID
+    FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS p
+    INNER JOIN hvidovre_ids h 
+        ON p.MATCH_SSIID = h.MATCH_SSIID 
+        AND p."optaId" = h.opta_id
+    WHERE p."optaId" = '{player_opta_uuid}'
+      AND p.MATCH_DATE BETWEEN '2025-07-01' AND '2026-06-30'
+    ORDER BY p.MATCH_DATE DESC
     """
-    df = db_conn.query(sql)
-    if df is not None:
-        df.columns = df.columns.str.lower()
-    return df
+    return db_conn.query(sql)
 
 def vis_side(dp=None):
     # --- NYT: INDLÆS OVERSKRIVNINGSFIL ---
