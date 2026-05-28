@@ -94,40 +94,40 @@ def draw_player_info_box(ax, team_logo, player_name, season_str, category_str):
             fontsize=8, color='#666666', va='center')
 
 def get_physical_data(player_name, player_opta_uuid, valgt_hold_navn, db_conn):
-    target_ssiid = TEAMS.get(valgt_hold_navn, {}).get('ssid')
+    # 1. Hent det korrekte SSID fra din mapping-fil
+    # Vi bruger .get() med en backup, så koden ikke crasher
+    team_info = TEAMS.get(valgt_hold_navn, {})
+    target_ssiid = team_info.get('ssid')
+    
     if not target_ssiid:
-        target_ssiid = '56fa29c7-3a48-4186-9d14-dbf45fbc78d9'
+        st.error(f"Kunne ikke finde SSID for holdet: {valgt_hold_navn}")
+        return pd.DataFrame()
 
+    # 2. Rens spiller-ID og navne-logik
     clean_id = str(player_opta_uuid).lower().replace('p', '').strip()
-    navne_dele = [n.strip() for n in player_name.split(' ') if len(n.strip()) > 2]
-    name_conditions = " OR ".join([f"PLAYER_NAME ILIKE '%{n}%'" for n in navne_dele])
-
+    
+    # 3. SQL-query der JOINER korrekt på Metadata (som indeholder spillerne)
     sql = f"""
+        WITH Hvidovre_Hold_Kampe AS (
+            SELECT MATCH_SSIID 
+            FROM {DB}.SECONDSPECTRUM_GAME_METADATA
+            WHERE HOME_SSIID = '{target_ssiid}' OR AWAY_SSIID = '{target_ssiid}'
+        )
         SELECT 
             p.MATCH_DATE,
             any_value(p.MATCH_TEAMS) as MATCH_TEAMS,
-            MAX(p.MINUTES) as MINUTES,
             SUM(p.DISTANCE) as DISTANCE,
             SUM(p."HIGH SPEED RUNNING") as HSR,
             SUM(p.SPRINTING) as SPRINTING,
             MAX(p.TOP_SPEED) as TOP_SPEED,
             SUM(p.NO_OF_HIGH_INTENSITY_RUNS) as HI_RUNS
         FROM {DB}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS p
-        WHERE (({name_conditions}) OR ("optaId" LIKE '%{clean_id}%'))
-          AND p.MATCH_DATE BETWEEN '2025-07-01' AND '2026-06-30'
-          AND p.MATCH_SSIID IN (
-              SELECT MATCH_SSIID 
-              FROM {DB}.SECONDSPECTRUM_GAME_METADATA
-              WHERE HOME_SSIID = '{target_ssiid}' 
-                 OR AWAY_SSIID = '{target_ssiid}'
-          )
-        GROUP BY p.MATCH_DATE, p.PLAYER_NAME
+        INNER JOIN Hvidovre_Hold_Kampe k ON p.MATCH_SSIID = k.MATCH_SSIID
+        WHERE p."optaId" = '{clean_id}'
+        GROUP BY p.MATCH_DATE
         ORDER BY p.MATCH_DATE DESC
     """
-    df = db_conn.query(sql)
-    if df is not None:
-        df.columns = df.columns.str.lower()
-    return df
+    return db_conn.query(sql)
 
 def vis_side(dp=None):
     # --- NYT: INDLÆS OVERSKRIVNINGSFIL ---
