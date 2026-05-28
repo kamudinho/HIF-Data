@@ -156,7 +156,7 @@ def vis_side():
     st.markdown("""
 <style>
     .league-table { 
-        width: 80%; 
+        width: 100%; 
         border-collapse: collapse; 
         table-layout: fixed; /* Dette låser bredden! */
     }
