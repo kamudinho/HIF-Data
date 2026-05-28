@@ -577,7 +577,21 @@ def vis_side(dp=None):
 
                 if not df_chart.empty:
                     df_chart['Status'] = df_chart['minutes'].apply(lambda x: "Fuld tid" if x >= 85 else "Indskiftet/udskiftet" if x > 0 else "Ikke spillet")
-                    df_chart['Opponent'] = df_chart['match_teams'].apply(lambda x: str(x).split('-')[1] if '-' in str(x) else str(x))
+                    
+                    # DYNAMISK LOGIK: Find modstander
+                    def find_modstander(row):
+                        teams = str(row['match_teams']).split('-')
+                        # Hvis vi har to hold, fjern det valgte hold og returnér det andet
+                        if len(teams) == 2:
+                            hold1, hold2 = teams[0].strip(), teams[1].strip()
+                            # Fjern det hold der er valgt i dropdown
+                            if valgt_hold.lower() in hold1.lower():
+                                return hold2
+                            elif valgt_hold.lower() in hold2.lower():
+                                return hold1
+                        return str(row['match_teams']) # Fallback
+                
+                    df_chart['Opponent'] = df_chart.apply(find_modstander, axis=1)
                     df_chart['Label'] = df_chart['Opponent'] + "<br>" + df_chart['match_date'].dt.strftime('%d/%m')
 
                     y_vals = df_chart[col] / div
