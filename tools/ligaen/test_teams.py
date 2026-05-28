@@ -91,7 +91,7 @@ def vis_side():
     played = load_data()
     df_wy = get_wyscout_stats()
     
-    gs_df = beregn_tabel(played.head(132))
+    gs_df = beregn_tabel(played.head(138))
     slut_df = beregn_tabel(played)
     
     top6_uuids = gs_df.head(6)['UUID'].tolist()
