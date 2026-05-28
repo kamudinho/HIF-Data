@@ -93,48 +93,36 @@ def draw_player_info_box(ax, team_logo, player_name, season_str, category_str):
     ax.text(0.10, 0.89, f"{season_str} | {category_str}", transform=ax.transAxes, 
             fontsize=8, color='#666666', va='center')
 
-def get_physical_data(player_name, player_opta_uuid, valgt_hold_navn, db_conn):
+def get_physical_data(player_opta_uuid, valgt_hold_navn, db_conn):
     # 1. Hent SSID
     team_info = TEAMS.get(valgt_hold_navn, {})
-    target_ssiid = team_info.get('ssid')
-    
-    if not target_ssiid:
+    ssid = team_info.get('ssid')
+    if not ssid:
         return pd.DataFrame()
 
-    # 2. Rens ID (Sikrer streng-format)
+    # 2. Rens UUID (fjern 'p' hvis det er Opta-format)
     clean_id = str(player_opta_uuid).lower().replace('p', '').strip()
-    
-    # 3. SQL - Bruger en LEFT JOIN for at undgå at crashe hvis der mangler data
+
+    # 3. SQL - Her bruger vi den gennemprøvede logik fra din fungerende side
+    # Vi henter alt fysisk data for holdets kampe og filtrerer først i Python
     sql = f"""
-        WITH Hvidovre_Hold_Kampe AS (
-            SELECT MATCH_SSIID 
-            FROM {DB}.SECONDSPECTRUM_GAME_METADATA
-            WHERE HOME_SSIID = '{target_ssiid}' OR AWAY_SSIID = '{target_ssiid}'
+        WITH team_player_ids AS (
+            SELECT DISTINCT m.MATCH_SSIID,
+            REPLACE(f.value:"optaId"::string, 'p', '') AS player_opta_id
+            FROM {DB}.SECONDSPECTRUM_GAME_METADATA m,
+            LATERAL FLATTEN(input => CASE WHEN m.HOME_SSIID = '{ssid}' THEN m.HOME_PLAYERS ELSE m.AWAY_PLAYERS END) f
+            WHERE m.HOME_SSIID = '{ssid}' OR m.AWAY_SSIID = '{ssid}'
         )
-        SELECT 
-            p.MATCH_DATE,
-            p.MATCH_TEAMS,
-            p.DISTANCE,
-            p."HIGH SPEED RUNNING" as HSR,
-            p.SPRINTING,
-            p.TOP_SPEED,
-            p.NO_OF_HIGH_INTENSITY_RUNS as HI_RUNS
+        SELECT p.*
         FROM {DB}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS p
-        INNER JOIN Hvidovre_Hold_Kampe k ON p.MATCH_SSIID = k.MATCH_SSIID
-        WHERE p."optaId" = '{clean_id}'
+        INNER JOIN team_player_ids h ON p.MATCH_SSIID = h.MATCH_SSIID AND REPLACE(p."optaId"::string, 'p', '') = h.player_opta_id
+        WHERE p.MATCH_DATE >= '2025-07-01' 
+        AND REPLACE(p."optaId"::string, 'p', '') = '{clean_id}'
     """
     
-    try:
-        df = db_conn.query(sql)
-        if df is not None and not df.empty:
-            df.columns = df.columns.str.lower()
-            return df
-    except Exception as e:
-        # Log fejlen til terminalen
-        print(f"Fejl i SQL: {e}")
-        return pd.DataFrame()
-        
-    return pd.DataFrame()
+    return db_conn.query(sql)
+
+
         
 def vis_side(dp=None):
     # --- NYT: INDLÆS OVERSKRIVNINGSFIL ---
