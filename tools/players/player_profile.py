@@ -510,7 +510,11 @@ def vis_side(dp=None):
 
     with t_phys:
         df_phys = get_physical_data(valgt_spiller, valgt_player_uuid, valgt_hold, conn)
-        
+
+        if st.button("Vis rå data fra fysisk tabel (første 10 rækker)"):
+            # Vi henter alt, så vi kan se kolonne-strukturen og indholdet
+            df_debug = conn.query("SELECT * FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS LIMIT 10")
+            st.write(df_debug)
         if df_phys is None or df_phys.empty:
             st.warning("Ingen fysiske data fundet for denne spiller.")
         else:
