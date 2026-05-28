@@ -61,17 +61,15 @@ def render_kamp_boks(kamp):
     home_logo = get_logo_html(kamp['CONTESTANTHOME_OPTAUUID'])
     away_logo = get_logo_html(kamp['CONTESTANTAWAY_OPTAUUID'])
     
-    # Fjerner .0 ved at konvertere til int, hvis værdien findes
-    h_score = int(kamp['TOTAL_HOME_SCORE']) if pd.notnull(kamp['TOTAL_HOME_SCORE']) else ""
-    a_score = int(kamp['TOTAL_AWAY_SCORE']) if pd.notnull(kamp['TOTAL_AWAY_SCORE']) else ""
-    res = f"{h_score}-{a_score}" if h_score != "" else "vs"
+    # Håndtering af resultat (sikrer ingen .0)
+    h_score = int(kamp['TOTAL_HOME_SCORE']) if pd.notnull(kamp['TOTAL_HOME_SCORE']) else None
+    a_score = int(kamp['TOTAL_AWAY_SCORE']) if pd.notnull(kamp['TOTAL_AWAY_SCORE']) else None
+    res = f"{h_score}-{a_score}" if h_score is not None else "vs"
     
     st.markdown(f"""
-    <div style="display: flex; align-items: center; justify-content: space-between; 
-                width: 100%; background: white; border: 1px solid #ddd; 
-                border-radius: 8px; padding: 10px; margin-bottom: 5px;">
-        <span style="font-weight:bold; flex: 1;">{home_logo} {home_name}</span>
-        <span style="background: #333; color: white; padding: 4px 12px; border-radius: 6px; font-weight: bold; min-width: 50px; text-align: center;">{res}</span>
+    <div class="kamp-container">
+        <span style="font-weight:bold; flex: 1; text-align: left;">{home_logo} {home_name}</span>
+        <span style="background: #333; color: white; padding: 4px 12px; border-radius: 5px; font-weight: bold; margin: 0 10px;">{res}</span>
         <span style="font-weight:bold; flex: 1; text-align: right;">{away_name} {away_logo}</span>
     </div>
     """, unsafe_allow_html=True)
