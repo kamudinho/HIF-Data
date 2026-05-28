@@ -94,20 +94,27 @@ def draw_player_info_box(ax, team_logo, player_name, season_str, category_str):
             fontsize=8, color='#666666', va='center')
 
 def get_physical_data(player_name, player_opta_uuid, valgt_hold_navn, db_conn):
-    # Bemærk: Vi behøver ikke længere clean_id / opta_uuid her, 
-    # da vi filtrerer direkte på navnet fra din app.
+    # Vi bruger en mere fleksibel søgning. 
+    # Hvis 'player_name' er "Matthew Hoppe", søger vi efter navne, 
+    # der indeholder både "Matthew" og "Hoppe" i samme felt.
     
+    # Vi henter alt data for spilleren
     sql = f"""
         SELECT *
         FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
-        WHERE UPPER(PLAYER_NAME) = UPPER('{player_name}')
-        AND MATCH_DATE >= '2025-07-01'
+        WHERE UPPER(PLAYER_NAME) LIKE UPPER('%{player_name.split()[-1]}%')
         ORDER BY MATCH_DATE DESC
     """
     
     df = db_conn.query(sql)
+    
     if df is not None and not df.empty:
         df.columns = df.columns.str.lower()
+        # Her logger vi lige hvilke navne vi rent faktisk ramte
+        # st.write(f"Søgning på {player_name} gav match: {df['player_name'].unique()}")
+    else:
+        st.warning(f"Ingen data fundet for spiller: {player_name} (Søgte på efternavn)")
+        
     return df
     
 def vis_side(dp=None):
