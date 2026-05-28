@@ -119,7 +119,7 @@ def vis_side():
     top6_uuids = gs_df.head(6)['UUID'].tolist()
     bund6_uuids = gs_df.tail(6)['UUID'].tolist()
     
-    t_gs, t_op, t_ned, t_h2h = st.tabs(["Grundspil", "Oprykningsspil", "Nedrykningsspil", "Head-to-head"])
+    t_gs, t_slut, t_h2h = st.tabs(["Grundspil", "Slutspil", "Head-to-head"])
 
     def render_tabel(df_in, filter_list=None):
         df = df_in.copy()
@@ -129,9 +129,17 @@ def vis_side():
         df['FORM'] = df['FORM'].apply(style_form)
         st.write(df[['#', ' ', 'HOLD', 'K', 'V', 'U', 'T', 'MD', 'P', 'FORM']].to_html(escape=False, index=False, classes='league-table'), unsafe_allow_html=True)
 
-    with t_gs: render_tabel(gs_df)
-    with t_op: render_tabel(slut_df, top6_uuids)
-    with t_ned: render_tabel(slut_df, bund6_uuids)
+    with t_gs: 
+        render_tabel(gs_df)
+
+    with t_slut:
+        c1, c2 = st.columns(2)
+        with c1:
+            st.subheader("Oprykningsspil")
+            render_tabel(slut_df, top6_uuids)
+        with c2:
+            st.subheader("Nedrykningsspil")
+            render_tabel(slut_df, bund6_uuids)
     with t_h2h:
         h_list = sorted(gs_df['HOLD'].tolist())
         c1, c2 = st.columns(2); t1 = c1.selectbox("Hold 1", h_list, index=0); t2 = c2.selectbox("Hold 2", [h for h in h_list if h != t1], index=0)
