@@ -94,19 +94,13 @@ def draw_player_info_box(ax, team_logo, player_name, season_str, category_str):
             fontsize=8, color='#666666', va='center')
 
 def get_physical_data(player_name, player_opta_uuid, valgt_hold_navn, db_conn):
-    # Hent SSID direkte fra din eksisterende TEAMS import
     target_ssiid = TEAMS.get(valgt_hold_navn, {}).get('ssid')
-    
-    # Hvis vi ikke kan finde SSID, giver vi en fejlmeddelelse frem for at hardkode
     if not target_ssiid:
-        st.error(f"Kunne ikke finde SSID for holdet: {valgt_hold_navn}")
         return None
 
     clean_id = str(player_opta_uuid).lower().replace('p', '').strip()
-    navne_dele = [n.strip() for n in player_name.split(' ') if len(n.strip()) > 2]
-    name_conditions = " OR ".join([f"PLAYER_NAME ILIKE '%{n}%'" for n in navne_dele])
-
-    # SQL uden at ramme den ikke-eksisterende MAPPING tabel
+    
+    # Vi grupperer nu benhårdt på DATO og PLAYER_NAME for at tvinge alle segmenter sammen
     sql = f"""
         SELECT 
             MATCH_DATE,
@@ -118,7 +112,7 @@ def get_physical_data(player_name, player_opta_uuid, valgt_hold_navn, db_conn):
             MAX(TOP_SPEED) as TOP_SPEED,
             SUM(NO_OF_HIGH_INTENSITY_RUNS) as HI_RUNS
         FROM {DB}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
-        WHERE (({name_conditions}) OR ("optaId" LIKE '%{clean_id}%'))
+        WHERE ("optaId" LIKE '%{clean_id}%')
           AND MATCH_DATE BETWEEN '2025-07-01' AND '2026-06-30'
           AND MATCH_SSIID IN (
               SELECT MATCH_SSIID 
@@ -127,6 +121,7 @@ def get_physical_data(player_name, player_opta_uuid, valgt_hold_navn, db_conn):
                  OR AWAY_SSIID = '{target_ssiid}'
           )
         GROUP BY MATCH_DATE, PLAYER_NAME
+        HAVING SUM(DISTANCE) > 0  -- Fjerner potentielle tomme rækker
         ORDER BY MATCH_DATE DESC
     """
     df = db_conn.query(sql)
