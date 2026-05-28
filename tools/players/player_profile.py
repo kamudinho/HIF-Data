@@ -94,42 +94,47 @@ def draw_player_info_box(ax, team_logo, player_name, season_str, category_str):
             fontsize=8, color='#666666', va='center')
 
 def get_physical_data(player_name, player_opta_uuid, valgt_hold_navn, db_conn):
-    try:
-        team_info = TEAMS.get(valgt_hold_navn, {})
-        target_ssiid = team_info.get('ssid')
-        
-        if not target_ssiid:
-            return pd.DataFrame()
-
-        clean_id = str(player_opta_uuid).lower().replace('p', '').strip()
-        
-        sql = f"""
-            WITH Hvidovre_Hold_Kampe AS (
-                SELECT MATCH_SSIID 
-                FROM {DB}.SECONDSPECTRUM_GAME_METADATA
-                WHERE HOME_SSIID = '{target_ssiid}' OR AWAY_SSIID = '{target_ssiid}'
-            )
-            SELECT 
-                p.MATCH_DATE,
-                any_value(p.MATCH_TEAMS) as MATCH_TEAMS,
-                SUM(p.DISTANCE) as DISTANCE,
-                SUM(p."HIGH SPEED RUNNING") as HSR,
-                SUM(p.SPRINTING) as SPRINTING,
-                MAX(p.TOP_SPEED) as TOP_SPEED,
-                SUM(p.NO_OF_HIGH_INTENSITY_RUNS) as HI_RUNS
-            FROM {DB}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS p
-            INNER JOIN Hvidovre_Hold_Kampe k ON p.MATCH_SSIID = k.MATCH_SSIID
-            WHERE p."optaId" = '{clean_id}'
-            GROUP BY p.MATCH_DATE
-            ORDER BY p.MATCH_DATE DESC
-        """
-        df = db_conn.query(sql)
-        if df is not None:
-            df.columns = df.columns.str.lower()
-        return df if df is not None else pd.DataFrame()
-    except Exception as e:
-        st.error(f"Fejl ved hentning af fysisk data: {e}")
+    # 1. Hent SSID
+    team_info = TEAMS.get(valgt_hold_navn, {})
+    target_ssiid = team_info.get('ssid')
+    
+    if not target_ssiid:
         return pd.DataFrame()
+
+    # 2. Rens ID (Sikrer streng-format)
+    clean_id = str(player_opta_uuid).lower().replace('p', '').strip()
+    
+    # 3. SQL - Bruger en LEFT JOIN for at undgå at crashe hvis der mangler data
+    sql = f"""
+        WITH Hvidovre_Hold_Kampe AS (
+            SELECT MATCH_SSIID 
+            FROM {DB}.SECONDSPECTRUM_GAME_METADATA
+            WHERE HOME_SSIID = '{target_ssiid}' OR AWAY_SSIID = '{target_ssiid}'
+        )
+        SELECT 
+            p.MATCH_DATE,
+            p.MATCH_TEAMS,
+            p.DISTANCE,
+            p."HIGH SPEED RUNNING" as HSR,
+            p.SPRINTING,
+            p.TOP_SPEED,
+            p.NO_OF_HIGH_INTENSITY_RUNS as HI_RUNS
+        FROM {DB}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS p
+        INNER JOIN Hvidovre_Hold_Kampe k ON p.MATCH_SSIID = k.MATCH_SSIID
+        WHERE p."optaId" = '{clean_id}'
+    """
+    
+    try:
+        df = db_conn.query(sql)
+        if df is not None and not df.empty:
+            df.columns = df.columns.str.lower()
+            return df
+    except Exception as e:
+        # Log fejlen til terminalen
+        print(f"Fejl i SQL: {e}")
+        return pd.DataFrame()
+        
+    return pd.DataFrame()
         
 def vis_side(dp=None):
     # --- NYT: INDLÆS OVERSKRIVNINGSFIL ---
