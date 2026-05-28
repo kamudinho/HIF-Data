@@ -526,7 +526,7 @@ def vis_side(dp=None):
             st.pyplot(fig, use_container_width=True)
 
     with t_phys:
-        df_phys = get_physical_data(valgt_spiller, valgt_player_uuid, valgt_hold, conn, valgt_uuid_hold)
+        df_phys = get_physical_data(valgt_spiller, valgt_player_uuid, valgt_hold, conn)
         
         if df_phys is not None and not df_phys.empty:
             df_phys['match_date'] = pd.to_datetime(df_phys['match_date'])
