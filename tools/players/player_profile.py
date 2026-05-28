@@ -97,6 +97,9 @@ def get_physical_data(player_name, player_opta_uuid, valgt_hold_navn, db_conn):
     ssid = TEAMS.get(valgt_hold_navn, {}).get('ssid', '56fa29c7-3a48-4186-9d14-dbf45fbc78d9')
     clean_id = str(player_opta_uuid).lower().replace('p', '').strip()
 
+    # Opdateret SQL: Jeg bruger her 'OPTAID' som kolonnenavn. 
+    # Hvis den stadig fejler, så tjek om kolonnenavnet i din liste 
+    # måske er forkortet eller hedder noget andet.
     sql = f"""
         WITH team_player_ids AS (
             SELECT DISTINCT m.MATCH_SSIID, 
@@ -105,11 +108,11 @@ def get_physical_data(player_name, player_opta_uuid, valgt_hold_navn, db_conn):
             LATERAL FLATTEN(input => CASE WHEN m.HOME_SSIID = '{ssid}' THEN m.HOME_PLAYERS ELSE m.AWAY_PLAYERS END) f
             WHERE m.HOME_SSIID = '{ssid}' OR m.AWAY_SSIID = '{ssid}'
         )
-        SELECT p.*, h.player_opta_id
+        SELECT p.*
         FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS p
-        INNER JOIN team_player_ids h ON p.MATCH_SSIID = h.MATCH_SSIID AND LOWER(p.OPTAID) = '{clean_id}'
-        WHERE p.MATCH_DATE >= '2025-07-01'
-        AND LOWER(p.OPTAID) = '{clean_id}'
+        INNER JOIN team_player_ids h ON p.MATCH_SSIID = h.MATCH_SSIID 
+        WHERE LOWER(p.OPTAID) = '{clean_id}'
+        AND p.MATCH_DATE >= '2025-07-01'
     """
     
     df = db_conn.query(sql)
