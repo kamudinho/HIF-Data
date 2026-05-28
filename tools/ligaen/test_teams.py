@@ -130,27 +130,24 @@ def vis_tabel(df_in, filter_list):
     st.write(df[['#', ' ', 'HOLD', 'K', 'V', 'U', 'T', 'MD', 'P', 'FORM']].to_html(escape=False, index=False, classes='league-table'), unsafe_allow_html=True)
 
 def render_kampe_dynamisk(df_opta, filter_uuids):
-    relevante_kampe = df_opta[
-        (df_opta['CONTESTANTHOME_OPTAUUID'].isin(filter_uuids)) | 
-        (df_opta['CONTESTANTAWAY_OPTAUUID'].isin(filter_uuids))
-    ]
+    # Vi filtrerer ud fra at enten hjemme- ELLER udeholdet er i vores liste af UUIDs
+    maske = (df_opta['CONTESTANTHOME_OPTAUUID'].isin(filter_uuids)) | \
+            (df_opta['CONTESTANTAWAY_OPTAUUID'].isin(filter_uuids))
     
-    # 1. Vis sidste runde (Played)
-    played_df = relevante_kampe[relevante_kampe['MATCH_STATUS'].str.lower().isin(['played', 'full-time', 'finished'])]
-    if not played_df.empty:
-        seneste_dato = played_df['MATCH_DATE_FULL'].dt.date.max()
+    relevante_kampe = df_opta[maske]
+    
+    # Gruppér efter dato
+    unikke_datoer = sorted(relevante_kampe['MATCH_DATE_FULL'].dt.date.unique(), reverse=True)
+    
+    # Vis kun den absolut seneste dato, hvor der blev spillet kamp for disse hold
+    if unikke_datoer:
+        seneste_dato = unikke_datoer[0]
         st.markdown(f"##### Seneste spillerunde: {seneste_dato}")
-        for _, kamp in played_df[played_df['MATCH_DATE_FULL'].dt.date == seneste_dato].iterrows():
+        dagens_kampe = relevante_kampe[relevante_kampe['MATCH_DATE_FULL'].dt.date == seneste_dato]
+        
+        for _, kamp in dagens_kampe.iterrows():
             render_kamp_boks(kamp)
             
-    # 2. Vis næste runde (Future)
-    future_df = relevante_kampe[~relevante_kampe['MATCH_STATUS'].str.lower().isin(['played', 'full-time', 'finished'])]
-    if not future_df.empty:
-        naeste_dato = future_df['MATCH_DATE_FULL'].dt.date.min()
-        st.markdown(f"##### Kommende spillerunde: {naeste_dato}")
-        for _, kamp in future_df[future_df['MATCH_DATE_FULL'].dt.date == naeste_dato].iterrows():
-            render_kamp_boks(kamp)
-
 def vis_side():
     
     df_opta = load_liga_data()
