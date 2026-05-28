@@ -256,9 +256,7 @@ def vis_side(dp=None):
             if (i + 1) % 3 == 0:
                 cols = st.columns(3) # Næste række
         
-    with tab4:
-        st.caption(f"**Gennemsnitlig præstation for {valgt_navn}**")
-        
+    with tab4:        
         # 1. Beregn liga-gennemsnit for alle stat_keys
         all_played = df_matches[df_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].copy()
         league_avgs = {}
@@ -279,7 +277,7 @@ def vis_side(dp=None):
 
         # 3. Visuelle container (samme stil som i tab1)
         with st.container(border=True):
-            st.markdown(f"**Gennemsnitlig præstation for {valgt_navn}**")
+            st.caption(f"**Gennemsnitlig præstation for {valgt_navn}**")
             
             stats_conf = [
                 ("POSS", "Boldbesiddelse", 1, "%"), ("PASSES", "Afleveringer: Samlet", 0, ""), 
