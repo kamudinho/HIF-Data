@@ -109,19 +109,19 @@ def vis_side(dp=None):
     col_layout = [2.2, 0.5, 0.5, 0.5, 0.5, 0.6, 0.6, 0.6]
     row1 = st.columns(col_layout)
     with row1[0]:
-        valgt_navn = st.selectbox("Hold", h_list, index=hif_idx, label_visibility="collapsed", key="u_t_sel")
+        valgt_navn = st.selectbox("Hold", h_list, index=hif_idx, label_visibility="collapsed", key="team_select_main")
         valgt_uuid = str(liga_hold_options[valgt_navn]).strip().upper()
-
+        
     team_matches = df_matches[(df_matches['CONTESTANTHOME_OPTAUUID'] == valgt_uuid) | (df_matches['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid)].copy()
 
     row2 = st.columns(col_layout)
     with row2[0]:
         c_period, c_side = st.columns(2)
         with c_period:
-            valgt_periode = st.selectbox("Periode", ["Sæson 25/26", "Efterår 25", "Forår 26"], label_visibility="collapsed", key="u_p_sel")
+            valgt_periode = st.selectbox("Periode", ["Sæson 25/26", "Efterår 25", "Forår 26"], label_visibility="collapsed", key="period_select_main")
         with c_side:
-            valgt_side = st.selectbox("Side", ["Samlet", "Hjemme", "Ude"], label_visibility="collapsed", key="u_s_sel")
-
+            valgt_side = st.selectbox("Side", ["Samlet", "Hjemme", "Ude"], label_visibility="collapsed", key="side_select_main")
+            
     if valgt_periode == "Efterår 25": f_matches = team_matches[(team_matches['MATCH_DATE_FULL'] >= '2025-07-01') & (team_matches['MATCH_DATE_FULL'] <= '2025-12-31')]
     elif valgt_periode == "Forår 26": f_matches = team_matches[(team_matches['MATCH_DATE_FULL'] >= '2026-01-01') & (team_matches['MATCH_DATE_FULL'] <= '2026-06-30')]
     else: f_matches = team_matches
