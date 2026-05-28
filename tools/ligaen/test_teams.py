@@ -166,8 +166,8 @@ def vis_side():
         white-space: nowrap;
     }
     /* Definer faste bredder for kolonnerne */
-    .league-table th:nth-child(1), .league-table td:nth-child(1) { width: 20px; }  /* # kolonne */
-    .league-table th:nth-child(2), .league-table td:nth-child(2) { width: 30px; }  /* Logo */
+    .league-table th:nth-child(1), .league-table td:nth-child(1) { width: 30px; }  /* # kolonne */
+    .league-table th:nth-child(2), .league-table td:nth-child(2) { width: 60px; }  /* Logo */
     .league-table th:nth-child(3), .league-table td:nth-child(3) { width: 150px; } /* HOLD kolonne */
 </style>
 """, unsafe_allow_html=True)
