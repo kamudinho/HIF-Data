@@ -589,14 +589,26 @@ def vis_side(dp=None):
                     st.error(f"Kolonne '{col}' fundet ikke! Findes: {list(df_chart.columns)}")
                 else:
                     # Mapper modstander
+                    # 1. NY OG FORBEDRET OPPSLAGSFUNKTION
                     def get_opponent_data(teams_str, current_team_name):
                         try:
-                            parts = [p.strip() for p in str(teams_str).split('-')]
-                            opp = next((p for p in parts if current_team_name.lower() not in p.lower()), parts[0])
-                            return opp
+                            if pd.isna(teams_str): return "Ukendt"
+                            parts = [p.strip().lower() for p in str(teams_str).split('-')]
+                            
+                            # Find det hold i TEAMS-dict, der IKKE er os selv
+                            for team_name, team_info in TEAMS.items():
+                                if any(team_name.lower() in p for p in parts):
+                                    if current_team_name.lower() not in team_name.lower():
+                                        return team_info.get('abbr', team_name)
+                            
+                            # Fallback hvis intet findes i listen
+                            return [p for p in parts if current_team_name.lower() not in p][0].capitalize()
                         except: return "Ukendt"
 
+                    # 2. BRUG FUNKTIONEN HER
                     df_chart['Label'] = df_chart['match_teams'].apply(lambda x: get_opponent_data(x, valgt_hold)) + "<br>" + df_chart['match_date'].dt.strftime('%d/%m')
+                    
+                    # (Resten af din kode forbliver uændret...)
                     df_chart['Status'] = df_chart['minutes'].apply(lambda x: "Fuld tid" if x >= 85 else "Indskiftet/udskiftet" if x > 0 else "Ikke spillet")
                     
                     y_vals = df_chart[col] / div
