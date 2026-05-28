@@ -279,25 +279,25 @@ def vis_side(dp=None):
             hold_stats[k] = vals.mean() if not vals.empty else 0
 
         with st.container(border=True):
-        # Layout: Logo + Navn (Venstre) | Visning/Periode (Højre)
-        c_left, c_right = st.columns([1, 1])
-        
-        with c_left:
-            # Vi bruger en flex-container for at sikre logo og tekst står helt tæt
-            st.markdown(f"""
-                <div style='display:flex; align-items:center; gap:10px;'>
-                    <img src='{TEAMS.get(valgt_navn, {}).get('logo', '')}' width='30'>
-                    <div style='font-size:16px; font-weight:bold;'>{valgt_navn}</div>
-                </div>
-            """, unsafe_allow_html=True)
+            # Layout: Logo + Navn (Venstre) | Visning/Periode (Højre)
+            c_left, c_right = st.columns([1, 1])
             
-        with c_right:
-            st.markdown(f"<div style='text-align:right; font-size:11px; color:#666; padding-top:5px;'>Visning: <b>{valgt_side}</b> | Periode: <b>{valgt_periode}</b></div>", unsafe_allow_html=True)
-        
-        # En strammere divider med negativ margin for at mindske luft
-        st.markdown("<hr style='margin-top:5px; margin-bottom:10px;'>", unsafe_allow_html=True)
-        
-        st.divider(---)
+            with c_left:
+                # Vi bruger en flex-container for at sikre logo og tekst står helt tæt
+                st.markdown(f"""
+                    <div style='display:flex; align-items:center; gap:10px;'>
+                        <img src='{TEAMS.get(valgt_navn, {}).get('logo', '')}' width='30'>
+                        <div style='font-size:16px; font-weight:bold;'>{valgt_navn}</div>
+                    </div>
+                """, unsafe_allow_html=True)
+                
+            with c_right:
+                st.markdown(f"<div style='text-align:right; font-size:11px; color:#666; padding-top:5px;'>Visning: <b>{valgt_side}</b> | Periode: <b>{valgt_periode}</b></div>", unsafe_allow_html=True)
+            
+            # En strammere divider med negativ margin for at mindske luft
+            st.markdown("<hr style='margin-top:5px; margin-bottom:10px;'>", unsafe_allow_html=True)
+            
+            st.divider()
             # Stats-listen
             stats_conf = [
                 ("POSS", "Boldbesiddelse", 1, "%"), ("PASSES", "Afleveringer: Samlet", 0, ""), 
