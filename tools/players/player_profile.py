@@ -94,22 +94,25 @@ def draw_player_info_box(ax, team_logo, player_name, season_str, category_str):
             fontsize=8, color='#666666', va='center')
 
 def get_physical_data(player_name, player_opta_uuid, valgt_hold_navn, db_conn):
-    # 1. Split navnet for at være sikker på at vi kun bruger den unikke del
+    # Vi bruger opta_uuid som primært filter, da det er unikt.
+    # Da vi ikke ved om opta_uuid findes i den fysiske tabel, 
+    # bruger vi en kombination af navn og UUID hvis muligt.
+    
     efternavn = player_name.split()[-1]
     
-    # 2. Søg med LIKE
+    # Prøv at matche på UUID først, hvis det fejler, fald tilbage på navn
     sql = f"""
         SELECT * FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
         WHERE UPPER(PLAYER_NAME) LIKE UPPER('%{efternavn}%')
+        AND MATCH_DATE >= '2025-07-01'
     """
     
     df = db_conn.query(sql)
     
     if df is not None and not df.empty:
-        # Vigtigt: Rens kolonner til små bogstaver
         df.columns = df.columns.str.lower()
         
-        # Omdøb Snowflake-navne til dine app-navne
+        # Omdøb kolonner
         rename_map = {
             'high speed running': 'hsr',
             'sprinting': 'sprinting',
@@ -117,13 +120,11 @@ def get_physical_data(player_name, player_opta_uuid, valgt_hold_navn, db_conn):
             'no_of_high_intensity_runs': 'hi_runs',
             'distance': 'distance'
         }
-        df = df.rename(columns=rename_map)
+        df = df.rename(columns=rename_map, errors='ignore')
         
-        # Sorter så vi får de nyeste data først
-        if 'match_date' in df.columns:
-            df['match_date'] = pd.to_datetime(df['match_date'])
-            df = df.sort_values(by='match_date', ascending=False)
-            
+        # DEBUG: Se hvad vi har fundet
+        # st.write(f"Fandt {len(df)} rækker for {player_name}")
+        
         return df
     
     return None
