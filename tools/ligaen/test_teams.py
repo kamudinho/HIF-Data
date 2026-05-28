@@ -72,7 +72,7 @@ def render_kamp_boks(kamp):
         display: flex; 
         align-items: center; 
         justify-content: space-between; 
-        width: 100%; 
+        width: 80%; 
         background-color: #ffffff; 
         border: 1px solid #e0e0e0; 
         border-radius: 10px; 
