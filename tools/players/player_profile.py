@@ -514,23 +514,34 @@ def vis_side(dp=None):
         if df_phys is None or df_phys.empty:
             st.warning("Ingen fysiske data fundet for denne spiller.")
         else:
+            # 1. Konverter alle kolonnenavne til små bogstaver én gang for alle
+            df_phys.columns = df_phys.columns.str.lower()
+            
             # Sørg for at datoer er rigtige
             df_phys['match_date'] = pd.to_datetime(df_phys['match_date'])
             df_phys = df_phys.sort_values('match_date', ascending=False)
             
-            # HSR beregning med fallback hvis kolonner mangler
-            cols = [c.upper() for c in df_phys.columns]
-            hsr_val = df_phys['high speed running'] if 'high speed running' in df_phys.columns else 0
-            spr_val = df_phys['sprinting'] if 'sprinting' in df_phys.columns else 0
-            df_phys['hsr'] = hsr_val + spr_val
+            # 2. HSR beregning - Brug .get(kolonne, 0) for at undgå fejl
+            # Vi bruger de navne, som vi forventer (i små bogstaver)
+            hsr_col = 'high speed running' if 'high speed running' in df_phys.columns else 'hsr'
+            spr_col = 'sprinting' if 'sprinting' in df_phys.columns else 'sprint'
+            
+            hsr_val = df_phys.get(hsr_col, 0)
+            spr_val = df_phys.get(spr_col, 0)
+            df_phys['hsr_total'] = hsr_val + spr_val
             
             latest = df_phys.iloc[0]
             
+            # Debug: Hvis tallene stadig er 0, så udskriv kolonnerne
+            # st.write(f"Kolonner fundet: {df_phys.columns.tolist()}") 
+
             m1, m2, m3, m4 = st.columns(4)
             m1.metric("Distance", f"{round(latest.get('distance', 0)/1000, 2)} km")
-            m2.metric("HSR", f"{int(latest.get('hsr', 0))} m")
+            m2.metric("HSR", f"{int(latest.get('hsr_total', 0))} m")
             m3.metric("Topfart", f"{round(float(latest.get('top_speed', 0)), 1)} km/t")
             m4.metric("Højintense", int(latest.get('hi_runs', 0)))
+
+            # ... resten af din fane-logik ...
 
             t_sub_log, t_sub_charts = st.tabs(["Kampoversigt", "Grafer"])
 
