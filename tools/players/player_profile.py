@@ -94,36 +94,35 @@ def draw_player_info_box(ax, team_logo, player_name, season_str, category_str):
             fontsize=8, color='#666666', va='center')
 
 def get_physical_data(player_name, player_opta_uuid, valgt_hold_navn, db_conn):
-    # Vi henter rådata fra Snowflake
-    sql = "SELECT * FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS"
-    df_raw = db_conn.query(sql)
+    # Hent data
+    sql = f"""
+        SELECT *
+        FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
+        WHERE UPPER(PLAYER_NAME) = UPPER('{player_name}')
+        AND MATCH_DATE >= '2025-07-01'
+    """
+    df = db_conn.query(sql)
     
-    if df_raw is None or df_raw.empty:
-        return None
-
-    # Her er tricket: Vi antager at din første kolonne indeholder "grøden"
-    # Vi splitter ID og Navn ved at bruge regex
-    # Eksempel: '426384Matthew Hoppe' -> ID: 426384, Navn: Matthew Hoppe
-    import re
-    
-    def parse_row(row):
-        val = str(row.iloc[0]) # Den første kolonne med "grøden"
-        # Finder det første tal-stykke (ID) og resten (Navn)
-        match = re.match(r'^(\d+)(.*)', val)
-        if match:
-            return pd.Series([match.group(1), match.group(2)])
-        return pd.Series([None, val])
-
-    df_parsed = df_raw.apply(parse_row, axis=1)
-    df_parsed.columns = ['ssid', 'player_name']
-    
-    # Nu kan vi filtrere på navnet
-    df_parsed['player_name'] = df_parsed['player_name'].str.strip()
-    df_final = df_parsed[df_parsed['player_name'].str.contains(player_name.split()[-1], case=False, na=False)]
-    
-    return df_final
-    
-    return df
+    if df is not None and not df.empty:
+        # Vi renser kolonnenavne til små bogstaver
+        df.columns = df.columns.str.lower()
+        
+        # Omdøb dem til det din app forventer
+        # Appen forventer 'hsr', 'sprinting', 'top_speed', 'hi_runs'
+        rename_map = {
+            'high speed running': 'hsr',
+            'sprinting': 'sprinting',
+            'top_speed': 'top_speed',
+            'no_of_high_intensity_runs': 'hi_runs',
+            'distance': 'distance'
+        }
+        df = df.rename(columns=rename_map)
+        
+        # Beregn hsr_total (High Speed + Sprint)
+        df['hsr_total'] = df.get('hsr', 0) + df.get('sprinting', 0)
+        
+        return df
+    return None
     
 def vis_side(dp=None):
     # --- NYT: INDLÆS OVERSKRIVNINGSFIL ---
