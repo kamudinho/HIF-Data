@@ -619,7 +619,10 @@ def vis_side(dp=None):
                     'distance': 'Distance', 'hsr': 'HSR', 'sprinting': 'Sprint', 
                     'top_speed': 'Topfart', 'hi_runs': 'Højintense løb'
                 })
-                st.data_editor(df_display, hide_index=True, use_container_width=True, disabled=True)
+                
+                # --- HER INDSÆTTER DU BEGRÆNSNINGEN ---
+                cols_to_show = ['Dato', 'Kamp', 'Minutter', 'Distance', 'HSR', 'Topfart', 'Højintense løb']
+                st.data_editor(df_display[cols_to_show], hide_index=True, use_container_width=True, disabled=True)
 
 if __name__ == "__main__":
     vis_side()
