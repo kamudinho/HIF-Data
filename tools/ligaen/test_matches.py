@@ -282,21 +282,27 @@ def vis_side(dp=None):
         with st.container(border=True):
             st.caption(f"Sæsonoversigt: {valgt_navn} | Visning: {valgt_side} | Periode: {valgt_periode}")
             
+            # Vi bruger den samme struktur som i din tab1
+            stats_conf = [("POSS", "Boldbesiddelse", 1, "%"), ("PASSES", "Afleveringer: Samlet", 0, ""), 
+                          ("FORWARD_PASSES", "Afleveringer: Fremadrettede", 0, ""), ("PASSES_FT", "Afleveringer: Sidste 1/3", 0, ""), 
+                          ("TOUCHES_IN_BOX", "Touches in box", 0, ""), ("SHOTS", "Afslutninger", 0, ""), 
+                          ("DZ_SHOTS", "Skud fra DZ", 0, ""), ("XG", "xG", 2, ""), 
+                          ("XGNP", "xGnp", 2, ""), ("BIG_CHANCES", "Store chancer", 0, "")]
+            
+            # HER VAR FEJL: Vi skal matche de 4 elementer vi har i listen nu
             for s_key, lbl, dec, suf in stats_conf:
-                hv = hold_stats.get(s_key, 0)      # Det vi kigger på nu (f.eks. Hjemme)
-                av_liga = league_avgs.get(s_key, 0) # Liga-snit (Visning)
-                av_total = team_total_snit.get(s_key, 0) # Holdets samlede snit (Diff)
+                hv = hold_stats.get(s_key, 0)
+                av_liga = league_avgs.get(s_key, 0)
+                av_total = team_total_snit.get(s_key, 0)
                 
-                # Diff måles mod Holdets samlede snit
                 diff = hv - av_total
                 
-                # Hvis vi ser på "Samlet", skal diff være 0 (da vi sammenligner os selv med os selv)
+                # Hvis vi ser på "Samlet" og hele sæsonen, vis neutral diff
                 if valgt_side == "Samlet" and valgt_periode == "Sæson 25/26":
                     diff_str = f" <span style='color:gray; font-size:10px;'>(0.0{suf})</span>"
                 else:
                     diff_str = f" <span style='color:{'green' if diff>=0 else 'red'}; font-size:10px;'>({diff:+.{dec}f}{suf})</span>"
                 
-                # Progress bar baseret på holdets aktuelle værdi ift. ligaen
                 max_scale = av_liga * 2 if av_liga > 0 else 10
                 h_pct = min((hv / max_scale) * 100, 100)
                 
@@ -310,5 +316,4 @@ def vis_side(dp=None):
                         <div style='width:{h_pct}%; background:{TEAM_COLORS.get(valgt_navn, {}).get("primary", "#cc0000")};'></div>
                     </div>
                 """, unsafe_allow_html=True)
-        
 vis_side()
