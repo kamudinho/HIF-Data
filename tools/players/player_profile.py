@@ -99,9 +99,8 @@ def get_physical_data(player_name, player_opta_uuid, valgt_hold_navn, db_conn):
         ssid = '56fa29c7-3a48-4186-9d14-dbf45fbc78d9'
 
     clean_id = str(player_opta_uuid).lower().replace('p', '').strip()
-    navne_dele = [n.strip() for n in player_name.split(' ') if len(n.strip()) > 2]
-    name_conditions = " OR ".join([f"PLAYER_NAME ILIKE '%{n}%'" for n in navne_dele])
 
+    # Vi tilføjer en WHERE-klausul, der filtrerer på 'optaId' direkte i SQL
     sql = f"""
         WITH team_player_ids AS (
             SELECT DISTINCT m.MATCH_SSIID, m.HOME_SSIID, m.AWAY_SSIID,
@@ -114,12 +113,14 @@ def get_physical_data(player_name, player_opta_uuid, valgt_hold_navn, db_conn):
         FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS p
         INNER JOIN team_player_ids h ON p.MATCH_SSIID = h.MATCH_SSIID AND p."optaId" = h.player_opta_id
         WHERE p.MATCH_DATE >= '2025-07-01'
+        AND p."optaId" = '{clean_id}' 
         """
+    
     df = db_conn.query(sql)
     if df is not None:
         df.columns = df.columns.str.lower()
     return df
-
+    
 def vis_side(dp=None):
     # --- NYT: INDLÆS OVERSKRIVNINGSFIL ---
     try:
@@ -513,7 +514,11 @@ def vis_side(dp=None):
 
     with t_phys:
         df_phys = get_physical_data(valgt_spiller, valgt_player_uuid, valgt_hold, conn)
+        
+        # DEBUG: Udskriv hvor mange unikke spillere der er i den hentede data
         if df_phys is not None and not df_phys.empty:
+            st.write(f"Antal unikke spillere i data: {df_phys['optaid'].nunique()}")
+            st.write(f"Spillere fundet: {df_phys['optaid'].unique()}")
             df_phys['match_date'] = pd.to_datetime(df_phys['match_date'])
             df_phys = df_phys.sort_values('match_date', ascending=False)
             # Beregn HSR og eventuelle andre kolonner der mangler
