@@ -226,56 +226,57 @@ def vis_side(dp=None):
     with tab3:
         st.subheader(f"Sæsonoverblik: {valgt_navn} (pr. 90 min)")
         
-        # 1. Definér stat-nøgler og hvilke vi vil vise
-        stats_to_show = [
-            ("POSS", "Boldbesiddelse", 1, "%"), 
-            ("XG", "xG", 2, ""), 
-            ("SHOTS", "Afslutninger", 0, ""), 
-            ("BIG_CHANCES", "Store chancer", 0, ""), 
-            ("PASSES_FT", "Afs. Sidste 1/3", 0, ""), 
-            ("TOUCHES_IN_BOX", "Touches i boks", 0, "")
-        ]
+        # Opdateret CSS til bredere, strammere bokse
+        st.markdown("""
+            <style>
+            .stat-box2 { 
+                text-align: center; background: #f8f9fa; border-radius: 6px; 
+                padding: 10px 5px; border-bottom: 2px solid #cc0000; 
+                height: 65px; display: flex; flex-direction: column; 
+                justify-content: center; width: 100%; margin-bottom: 10px;
+            }
+            </style>
+        """, unsafe_allow_html=True)
 
-        # 2. Beregn stats pr. hold og pr. modstander
-        # Vi skal bruge en kolonne for minutter (her antaget 90 hvis ikke tilgængelig)
-        def get_stats_per_90(df, is_us=True):
-            data = {}
-            for k in [s[0] for s in stats_to_show]:
-                # Find kolonnenavne baseret på om det er Hjemme eller Ude
-                vals = []
-                for _, m in df.iterrows():
-                    # Er vi hjemme eller ude i denne specifikke kamp?
-                    is_h = m['CONTESTANTHOME_OPTAUUID'] == valgt_uuid
-                    
-                    if is_us:
-                        val = m[f"HOME_{k}"] if is_h else m[f"AWAY_{k}"]
-                    else:
-                        val = m[f"AWAY_{k}"] if is_h else m[f"HOME_{k}"]
-                    vals.append(pd.to_numeric(val, errors='coerce'))
-                
-                data[k] = np.nanmean(vals) if vals else 0
-            return data
-
-        my_stats = get_stats_per_90(played_p, is_us=True)
-        opp_stats = get_stats_per_90(played_p, is_us=False)
-
-        # 3. Visning i grid (2 kolonner: Vores vs Modstander)
-        for s_key, lbl, dec, suf in stats_to_show:
-            c1, c2, c3 = st.columns([1, 2, 1])
-            
-            val_us = my_stats.get(s_key, 0)
-            val_opp = opp_stats.get(s_key, 0)
-            
-            with c1:
-                st.markdown(f"<div class='stat-box2'><div class='stat-label'>Vores</div><div class='stat-val'>{val_us:.{dec}f}{suf}</div></div>", unsafe_allow_html=True)
-            
-            with c2:
-                # En lille bar-visualisering i midten
-                st.markdown(f"<div style='margin-top:15px; font-size:10px; text-align:center; color:#666;'>{lbl.upper()}</div>", unsafe_allow_html=True)
-                
-            with c3:
-                st.markdown(f"<div class='stat-box2'><div class='stat-label'>Modstander</div><div class='stat-val'>{val_opp:.{dec}f}{suf}</div></div>", unsafe_allow_html=True)
+        # Hoved-kolonner: Offensivt vs Modstander
+        c_off, c_def = st.columns(2)
         
+        # Stats vi vil vise (skal være deleligt med 4)
+        stat_keys = ["POSS", "XG", "SHOTS", "BIG_CHANCES", "PASSES_FT", "TOUCHES_IN_BOX", "FORWARD_PASSES", "DZ_SHOTS"]
+        
+        # Hjælpefunktion til at hente data
+        def get_stats_90(is_us):
+            stats = {}
+            for k in stat_keys:
+                vals = []
+                for _, m in played_p.iterrows():
+                    is_h = m['CONTESTANTHOME_OPTAUUID'] == valgt_uuid
+                    col = f"{'HOME_' if (is_h if is_us else not is_h) else 'AWAY_'}{k}"
+                    vals.append(pd.to_numeric(m.get(col), errors='coerce'))
+                stats[k] = np.nanmean(vals) if vals else 0
+            return stats
+
+        off_stats = get_stats_90(True)
+        def_stats = get_stats_90(False)
+
+        # Rendering
+        for col_name, data, target in [("OFFENSIVT", off_stats, c_off), ("MODSTANDER", def_stats, c_def)]:
+            with target:
+                st.markdown(f"**{col_name}**")
+                # Lav rækker af 4 bokse
+                cols = st.columns(4)
+                for i, k in enumerate(stat_keys):
+                    val = data.get(k, 0)
+                    with cols[i % 4]:
+                        st.markdown(f"""
+                            <div class='stat-box2'>
+                                <div class='stat-label'>{k.replace('_', ' ')}</div>
+                                <div class='stat-val'>{val:.1f}</div>
+                            </div>
+                        """, unsafe_allow_html=True)
+                    # Hvis vi har fyldt 4, og der er flere stats, laver vi et nyt sæt kolonner (hvis nødvendigt)
+                    if (i + 1) % 4 == 0 and i < len(stat_keys) - 1:
+                        cols = st.columns(4)        
     with tab4:
         # 1. Beregn LIGA-snit (FAST reference til tabellen)
         all_played = df_matches[df_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)]
