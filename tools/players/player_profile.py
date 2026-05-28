@@ -94,35 +94,26 @@ def draw_player_info_box(ax, team_logo, player_name, season_str, category_str):
             fontsize=8, color='#666666', va='center')
 
 def get_physical_data(player_name, player_opta_uuid, valgt_hold_navn, db_conn):
-    # Hent data
+    # Vi søger på efternavnet alene med LIKE for at omgå formaterings-forskelle
+    efternavn = player_name.split()[-1]
+    
     sql = f"""
-        SELECT *
-        FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
-        WHERE UPPER(PLAYER_NAME) = UPPER('{player_name}')
-        AND MATCH_DATE >= '2025-07-01'
+        SELECT * FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
+        WHERE UPPER(PLAYER_NAME) LIKE UPPER('%{efternavn}%')
     """
+    
     df = db_conn.query(sql)
     
     if df is not None and not df.empty:
-        # Vi renser kolonnenavne til små bogstaver
-        df.columns = df.columns.str.lower()
+        # Debug: Vis os hvad vi fandt
+        st.write(f"Fandt {len(df)} rækker ved søgning på '{efternavn}':")
+        st.write(df[['PLAYER_NAME']].head()) # Vis kun navne-kolonnen
         
-        # Omdøb dem til det din app forventer
-        # Appen forventer 'hsr', 'sprinting', 'top_speed', 'hi_runs'
-        rename_map = {
-            'high speed running': 'hsr',
-            'sprinting': 'sprinting',
-            'top_speed': 'top_speed',
-            'no_of_high_intensity_runs': 'hi_runs',
-            'distance': 'distance'
-        }
-        df = df.rename(columns=rename_map)
-        
-        # Beregn hsr_total (High Speed + Sprint)
-        df['hsr_total'] = df.get('hsr', 0) + df.get('sprinting', 0)
-        
+        # Resten af din logik (rename, beregning...)
         return df
-    return None
+    else:
+        st.error(f"Søgning på '{efternavn}' gav intet resultat i databasen.")
+        return None
     
 def vis_side(dp=None):
     # --- NYT: INDLÆS OVERSKRIVNINGSFIL ---
