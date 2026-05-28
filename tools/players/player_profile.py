@@ -516,7 +516,7 @@ def vis_side(dp=None):
             st.pyplot(fig, use_container_width=True)
 
     with t_phys:
-        df_phys = get_physical_data(valgt_spiller, valgt_player_uuid, valgt_hold, conn)
+        df_phys = get_physical_data(valgt_player_uuid, valgt_hold, conn)
         
         # SIKKERHEDS-CHECK: Er der overhovedet data?
         if df_phys is None or df_phys.empty:
