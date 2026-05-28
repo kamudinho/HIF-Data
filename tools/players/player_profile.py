@@ -529,13 +529,22 @@ def vis_side(dp=None):
 
     with t_phys:
         df_phys = get_physical_data(valgt_spiller, valgt_player_uuid, valgt_hold, conn)
-        if df_phys is not None and not df_phys.empty:
+        
+        # SIKKERHEDS-CHECK: Er der overhovedet data?
+        if df_phys is None or df_phys.empty:
+            st.warning(f"Ingen fysisk data fundet for {valgt_spiller} på holdet {valgt_hold}.")
+            st.info("Tjek venligst om spilleren har registreret fysisk data i databasen.")
+        else:
+            # Nu ved vi, at df_phys indeholder data
             df_phys['match_date'] = pd.to_datetime(df_phys['match_date'])
             df_phys = df_phys.sort_values('match_date', ascending=False)
+            
+            # Beregninger
             avg_dist = df_phys['distance'].mean()
             avg_hsr = df_phys['hsr'].mean()
             latest = df_phys.iloc[0]
 
+            # Dine metrics
             m1, m2, m3, m4 = st.columns(4)
             m1.metric("Seneste Distance", f"{round(latest['distance']/1000, 2)} km", delta=f"{round((latest['distance'] - avg_dist)/1000, 2)} km")
             m2.metric("HSR Meter", f"{int(latest['hsr'])} m", delta=f"{int(latest['hsr'] - avg_hsr)} m")
