@@ -152,6 +152,28 @@ def render_kampe_dynamisk(df_opta, filter_uuids):
             render_kamp_boks(kamp)
 
 def vis_side():
+
+    st.markdown("""
+<style>
+    .league-table { 
+        width: 100%; 
+        border-collapse: collapse; 
+        table-layout: fixed; /* Dette låser bredden! */
+    }
+    .league-table th, .league-table td {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    /* Definer faste bredder for kolonnerne */
+    .league-table th:nth-child(1), .league-table td:nth-child(1) { width: 30px; }  /* # kolonne */
+    .league-table th:nth-child(2), .league-table td:nth-child(2) { width: 30px; }  /* Logo */
+    .league-table th:nth-child(3), .league-table td:nth-child(3) { width: 150px; } /* HOLD kolonne */
+    .league-table th:nth-child(4), .league-table td:nth-child(4) { width: 40px; }  /* K */
+    .league-table th:nth-child(9), .league-table td:nth-child(9) { width: 40px; }  /* P */
+</style>
+""", unsafe_allow_html=True)
+    
     df_opta = load_liga_data()
     df_wy = get_wyscout_stats()
     played = df_opta[df_opta['MATCH_STATUS'].str.lower().isin(['played', 'full-time', 'finished'])].sort_values('MATCH_DATE_FULL')
