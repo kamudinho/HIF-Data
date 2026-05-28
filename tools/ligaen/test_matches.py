@@ -256,48 +256,55 @@ def vis_side(dp=None):
             if (i + 1) % 3 == 0:
                 cols = st.columns(3) # Næste række
         
-    with tab4:        
-        # 1. Hent liga-gennemsnit (Globalt, så det er en fast reference)
-        all_played = df_matches[df_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].copy()
-        league_avgs = {}
+    with tab4:
+        # 1. Definér baselines (Hvad sammenligner vi med?)
+        # Hvis valgt_side er "Samlet", bruger vi liga-snit som reference.
+        # Hvis valgt_side er "Hjemme/Ude", bruger vi holdets "Samlet"-snit som reference.
+        
+        # Hent alle kampe for holdet uden "Side"-filter for at få holdets samlede snit
+        team_all_side = team_matches[team_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)]
+        
+        baseline_stats = {}
         for k in stat_keys:
-            all_vals = pd.concat([pd.to_numeric(all_played[f"HOME_{k}"], errors='coerce'), 
-                                  pd.to_numeric(all_played[f"AWAY_{k}"], errors='coerce')])
-            league_avgs[k] = all_vals.mean()
+            if valgt_side == "Samlet":
+                # Reference er Liga-snit
+                all_played = df_matches[df_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)]
+                all_vals = pd.concat([pd.to_numeric(all_played[f"HOME_{k}"], errors='coerce'), pd.to_numeric(all_played[f"AWAY_{k}"], errors='coerce')])
+                baseline_stats[k] = all_vals.mean()
+            else:
+                # Reference er holdets eget samlede snit
+                vals = pd.to_numeric(team_all_side[f"HOME_{k}"].where(team_all_side['CONTESTANTHOME_OPTAUUID'] == valgt_uuid, team_all_side[f"AWAY_{k}"]), errors='coerce')
+                baseline_stats[k] = vals.mean() if not vals.empty else 0
 
-        # 2. BEREGN HOLDETS SNIT UD FRA DE FILTREREDE KAMPE (f_matches)
-        # Her opdateres det hver gang du skifter hold/periode/side!
+        # 2. Beregn holdets aktuelle snit (fra f_matches)
         hold_stats = {}
         for k in stat_keys:
             vals = pd.to_numeric(f_matches[f"HOME_{k}"].where(f_matches['CONTESTANTHOME_OPTAUUID'] == valgt_uuid, f_matches[f"AWAY_{k}"]), errors='coerce')
             hold_stats[k] = vals.mean() if not vals.empty else 0
 
-        # 3. Visuelle container (samme stil som tab1)
+        # 3. Visuelle container
         with st.container(border=True):
-            st.caption(f"Sæsonoversigt: {valgt_navn}")
-            stats_conf = [
-                ("POSS", "Boldbesiddelse", 1, "%"), ("PASSES", "Afleveringer: Samlet", 0, ""), 
-                ("FORWARD_PASSES", "Afleveringer: Fremadrettede", 0, ""), ("PASSES_FT", "Afleveringer: Sidste 1/3", 0, ""), 
-                ("TOUCHES_IN_BOX", "Touches in box", 0, ""), ("SHOTS", "Afslutninger", 0, ""), 
-                ("DZ_SHOTS", "Skud fra DZ", 0, ""), ("XG", "xG", 2, ""), 
-                ("XGNP", "xGnp", 2, ""), ("BIG_CHANCES", "Store chancer", 0, "")
-            ]
-
+            st.caption(f"Sæsonoversigt: {valgt_navn} | Periode: {valgt_periode} | Visning: {valgt_side}")
+            
             for s_key, lbl, dec, suf in stats_conf:
                 hv = hold_stats.get(s_key, 0)
-                av = league_avgs.get(s_key, 0)
+                av = baseline_stats.get(s_key, 0)
                 
                 diff = hv - av
-                diff_str = f" <span style='color:{'green' if diff>=0 else 'red'}; font-size:10px;'>({'+' if diff>=0 else ''}{diff:.{dec}f}{suf})</span>"
+                # Hvis Samlet og vi kigger på liga, eller hvis hv == av, vis 0.0
+                diff_str = f" <span style='color:{'gray' if abs(diff) < 0.01 else ('green' if diff>=0 else 'red')}; font-size:10px;'>({'+' if diff>=0 else ''}{diff:.{dec}f}{suf})</span>"
                 
                 max_scale = av * 2 if av > 0 else 10
                 h_pct = min((hv / max_scale) * 100, 100)
+                
+                # Label til højre side: Skifter navn baseret på kontekst
+                ref_label = "LIGA" if valgt_side == "Samlet" else "HOLD (SNIT)"
                 
                 st.markdown(f"""
                     <div style='display:flex; justify-content:space-between; font-size:11px; margin-top:8px;'>
                         <div style='text-align:left;'><b>{hv:.{dec}f}{suf}</b>{diff_str}</div>
                         <div style='color:#888;'>{lbl.upper()}</div>
-                        <div style='text-align:right;'><b>{av:.{dec}f}{suf}</b> <span style='color:#888; font-size:10px;'>(LIGA)</span></div>
+                        <div style='text-align:right;'><b>{av:.{dec}f}{suf}</b> <span style='color:#888; font-size:10px;'>({ref_label})</span></div>
                     </div>
                     <div style='display:flex; height:7px; background:#eee; border-radius:3px; overflow:hidden; margin-bottom:10px;'>
                         <div style='width:{h_pct}%; background:{TEAM_COLORS.get(valgt_navn, {}).get("primary", "#cc0000")};'></div>
