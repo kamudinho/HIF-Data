@@ -70,6 +70,24 @@ def draw_h2h_chart(team1, team2, metrics, labels, df_wy, chart_key, df_liga):
     fig.update_layout(height=380, margin=dict(t=50, b=50), plot_bgcolor='rgba(0,0,0,0)')
     st.plotly_chart(fig, use_container_width=True, key=chart_key)
 
+def render_kamp_boks(kamp):
+    # Logoer og navne
+    home_name = kamp['CONTESTANTHOME_NAME']
+    away_name = kamp['CONTESTANTAWAY_NAME']
+    home_logo = get_logo_html(kamp['CONTESTANTHOME_OPTAUUID'])
+    away_logo = get_logo_html(kamp['CONTESTANTAWAY_OPTAUUID'])
+    
+    # Resultat eller tidspunkt
+    res = f"{kamp['TOTAL_HOME_SCORE']}-{kamp['TOTAL_AWAY_SCORE']}" if pd.notnull(kamp['TOTAL_HOME_SCORE']) else "vs"
+    
+    st.markdown(f"""
+    <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px; background: #f0f2f6; border-radius: 8px; margin-bottom: 5px;">
+        <span style="font-weight:bold;">{home_logo} {home_name}</span>
+        <span style="background: #333; color: white; padding: 5px 10px; border-radius: 5px; font-weight: bold;">{res}</span>
+        <span style="font-weight:bold;">{away_name} {away_logo}</span>
+    </div>
+    """, unsafe_allow_html=True)
+
 # --- 3. DATA LOADING ---
 @st.cache_data(ttl=3600)
 def load_liga_data():
@@ -107,6 +125,7 @@ def vis_side():
     df_wy = get_wyscout_stats()
     played = df_opta[df_opta['MATCH_STATUS'].str.lower().isin(['played', 'full-time', 'finished'])].sort_values('MATCH_DATE_FULL')
     
+    # Præcis 22 runder logik
     kamp_count = {}; cutoff_index = 0
     for i, row in played.iterrows():
         h, a = row['CONTESTANTHOME_OPTAUUID'], row['CONTESTANTAWAY_OPTAUUID']
@@ -117,26 +136,38 @@ def vis_side():
     slut_df = beregn_tabel(played)
     top6, bund6 = gs_df.head(6)['UUID'].tolist(), gs_df.tail(6)['UUID'].tolist()
     
-    def render_tabel_med_kampe(df_in, filter_list):
+    # Hjælpefunktion til at vise tabel
+    def vis_tabel(df_in, filter_list):
         df = df_in.copy()
         if filter_list is not None: df = df[df['UUID'].isin(filter_list)]
         df.insert(0, '#', range(1, len(df) + 1))
         df.insert(1, ' ', [get_logo_html(u) for u in df['UUID']])
         df['FORM'] = df['FORM'].apply(style_form)
         st.write(df[['#', ' ', 'HOLD', 'K', 'V', 'U', 'T', 'MD', 'P', 'FORM']].to_html(escape=False, index=False, classes='league-table'), unsafe_allow_html=True)
-        st.markdown("##### Sidste og næste kamp")
-        kampe_data = []
-        for uuid in df['UUID']:
-            s, n = hent_kampe(uuid, df_opta)
-            kampe_data.append({"HOLD": df[df['UUID']==uuid]['HOLD'].values[0], "SIDSTE": format_kamp(s, uuid), "NÆSTE": format_kamp(n, uuid)})
-        st.table(pd.DataFrame(kampe_data))
+
+    # Hjælpefunktion til at vise kampe grafisk
+    def render_kampe_for_runde(df_opta, runde_nr):
+        runde_kampe = df_opta[df_opta['ROUND'] == runde_nr] 
+        st.markdown(f"#### Runde {runde_nr}")
+        for _, kamp in runde_kampe.iterrows():
+            render_kamp_boks(kamp)
 
     t_gs, t_slut, t_h2h = st.tabs(["Grundspil", "Slutspil", "Head-to-head"])
-    with t_gs: render_tabel_med_kampe(gs_df, None)
+    
+    with t_gs: 
+        vis_tabel(gs_df, None)
+        
     with t_slut:
         c1, c2 = st.columns(2)
-        with c1: st.subheader("Oprykningsspil"); render_tabel_med_kampe(slut_df, top6)
-        with c2: st.subheader("Nedrykningsspil"); render_tabel_med_kampe(slut_df, bund6)
+        with c1: 
+            st.subheader("Oprykningsspil")
+            vis_tabel(slut_df, top6)
+            # Kald kampvisning her (Kræver at din df_opta har en 'ROUND' kolonne)
+            render_kampe_for_runde(df_opta, 31) 
+        with c2: 
+            st.subheader("Nedrykningsspil")
+            vis_tabel(slut_df, bund6)
+            render_kampe_for_runde(df_opta, 31)
     with t_h2h:
         h_list = sorted(gs_df['HOLD'].tolist())
         c1, c2 = st.columns(2); t1 = c1.selectbox("Hold 1", h_list, index=0); t2 = c2.selectbox("Hold 2", [h for h in h_list if h != t1], index=0)
