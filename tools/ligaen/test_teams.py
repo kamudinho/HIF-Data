@@ -146,10 +146,20 @@ def vis_side():
         st.write(df[['#', ' ', 'HOLD', 'K', 'V', 'U', 'T', 'MD', 'P', 'FORM']].to_html(escape=False, index=False, classes='league-table'), unsafe_allow_html=True)
 
     # Hjælpefunktion til at vise kampe grafisk
-    def render_kampe_for_runde(df_opta, runde_nr):
-        runde_kampe = df_opta[df_opta['ROUND'] == runde_nr] 
-        st.markdown(f"#### Runde {runde_nr}")
-        for _, kamp in runde_kampe.iterrows():
+    def render_kampe_dynamisk(df_opta, filter_uuids):
+    # Filtrer kun kampe for de hold, der er relevante (top6 eller bund6)
+    relevante_kampe = df_opta[
+        (df_opta['CONTESTANTHOME_OPTAUUID'].isin(filter_uuids)) | 
+        (df_opta['CONTESTANTAWAY_OPTAUUID'].isin(filter_uuids))
+    ]
+    
+    # Gruppér efter dato - vi tager de 2 nyeste spilledage (runder)
+    unikke_datoer = sorted(relevante_kampe['MATCH_DATE_FULL'].dt.date.unique(), reverse=True)
+    
+    for dato in unikke_datoer[:2]: # Vis de 2 seneste runder
+        st.markdown(f"##### Spillerunde: {dato}")
+        dagens_kampe = relevante_kampe[relevante_kampe['MATCH_DATE_FULL'].dt.date == dato]
+        for _, kamp in dagens_kampe.iterrows():
             render_kamp_boks(kamp)
 
     t_gs, t_slut, t_h2h = st.tabs(["Grundspil", "Slutspil", "Head-to-head"])
@@ -162,12 +172,11 @@ def vis_side():
         with c1: 
             st.subheader("Oprykningsspil")
             vis_tabel(slut_df, top6)
-            # Kald kampvisning her (Kræver at din df_opta har en 'ROUND' kolonne)
-            render_kampe_for_runde(df_opta, 31) 
+            render_kampe_dynamisk(played, top6) # Finder selv datoer for top6
         with c2: 
             st.subheader("Nedrykningsspil")
             vis_tabel(slut_df, bund6)
-            render_kampe_for_runde(df_opta, 31)
+            render_kampe_dynamisk(played, bund6) # Finder selv datoer for bund6
     with t_h2h:
         h_list = sorted(gs_df['HOLD'].tolist())
         c1, c2 = st.columns(2); t1 = c1.selectbox("Hold 1", h_list, index=0); t2 = c2.selectbox("Hold 2", [h for h in h_list if h != t1], index=0)
