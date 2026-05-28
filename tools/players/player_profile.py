@@ -98,10 +98,9 @@ def get_physical_data(player_name, player_opta_uuid, valgt_hold_navn, db_conn):
     if not target_ssiid:
         return None
 
-    # Vi renser ID, men vi beholder både 'p' og rå versioner til sammenligning
     clean_id = str(player_opta_uuid).lower().replace('p', '').strip()
     
-    # Vi prøver at matche på både 'optaId' som streng og eventuelt andre felter
+    # Vi bruger citationstegn omkring "optaId" for at tvinge Snowflake til at læse det korrekt
     sql = f"""
         SELECT 
             MATCH_DATE,
@@ -113,7 +112,7 @@ def get_physical_data(player_name, player_opta_uuid, valgt_hold_navn, db_conn):
             TOP_SPEED,
             NO_OF_HIGH_INTENSITY_RUNS as HI_RUNS
         FROM {DB}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
-        WHERE (CAST(optaId AS VARCHAR) LIKE '%{clean_id}%' OR CAST(optaId AS VARCHAR) = '{str(player_opta_uuid)}')
+        WHERE ("optaId" LIKE '%{clean_id}%')
           AND MATCH_DATE BETWEEN '2025-07-01' AND '2026-06-30'
           AND MATCH_SSIID IN (
               SELECT MATCH_SSIID 
@@ -124,9 +123,7 @@ def get_physical_data(player_name, player_opta_uuid, valgt_hold_navn, db_conn):
     """
     df = db_conn.query(sql)
     
-    # DEBUG: Tilføj denne linje midlertidigt for at se om du overhovedet får data fra Snowflake
-    # st.write(f"DEBUG: Antal rækker fundet: {len(df) if df is not None else 0}")
-    
+    # Debug: Se hvad vi får retur
     if df is not None:
         df.columns = df.columns.str.lower()
     return df
