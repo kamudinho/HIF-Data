@@ -20,20 +20,6 @@ def style_form(f):
         res += f'<span style="color:{color}; font-weight:bold; margin-right:3px;">{char}</span>'
     return res
 
-def hent_kampe(uuid, df_opta):
-    hold_kampe = df_opta[(df_opta['CONTESTANTHOME_OPTAUUID'] == uuid) | (df_opta['CONTESTANTAWAY_OPTAUUID'] == uuid)]
-    played = hold_kampe[hold_kampe['MATCH_STATUS'].str.lower().isin(['played', 'full-time', 'finished'])].sort_values('MATCH_DATE_FULL', ascending=False)
-    future = hold_kampe[~hold_kampe['MATCH_STATUS'].str.lower().isin(['played', 'full-time', 'finished'])].sort_values('MATCH_DATE_FULL', ascending=True)
-    return (played.iloc[0] if not played.empty else None), (future.iloc[0] if not future.empty else None)
-
-def format_kamp(kamp, hold_uuid):
-    if kamp is None: return "-"
-    is_home = kamp['CONTESTANTHOME_OPTAUUID'] == hold_uuid
-    modstander = kamp['CONTESTANTAWAY_NAME'] if is_home else kamp['CONTESTANTHOME_NAME']
-    res = f"{kamp['TOTAL_HOME_SCORE']}-{kamp['TOTAL_AWAY_SCORE']}" if 'TOTAL_HOME_SCORE' in kamp and pd.notnull(kamp['TOTAL_HOME_SCORE']) else "vs"
-    return f"{modstander} ({res})"
-
-# --- 2. BEREGNINGS FUNKTIONER & GRAF ---
 def beregn_tabel(df_matches):
     stats = {}
     for _, row in df_matches.iterrows():
@@ -59,7 +45,6 @@ def draw_h2h_chart(team1, team2, metrics, labels, df_wy, chart_key, df_liga):
     
     for i, m in enumerate(metrics):
         suffix = f"{i+1}" if i > 0 else ""
-        # Her tjekker vi om kolonnen eksisterer, ellers returneres 0
         v1 = float(d1[m.upper()].iloc[0]) if not d1.empty and m.upper() in d1.columns else 0.0
         v2 = float(d2[m.upper()].iloc[0]) if not d2.empty and m.upper() in d2.columns else 0.0
         
@@ -71,15 +56,11 @@ def draw_h2h_chart(team1, team2, metrics, labels, df_wy, chart_key, df_liga):
     st.plotly_chart(fig, use_container_width=True, key=chart_key)
 
 def render_kamp_boks(kamp):
-    # Logoer og navne
     home_name = kamp['CONTESTANTHOME_NAME']
     away_name = kamp['CONTESTANTAWAY_NAME']
     home_logo = get_logo_html(kamp['CONTESTANTHOME_OPTAUUID'])
     away_logo = get_logo_html(kamp['CONTESTANTAWAY_OPTAUUID'])
-    
-    # Resultat eller tidspunkt
     res = f"{kamp['TOTAL_HOME_SCORE']}-{kamp['TOTAL_AWAY_SCORE']}" if pd.notnull(kamp['TOTAL_HOME_SCORE']) else "vs"
-    
     st.markdown(f"""
     <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px; background: #f0f2f6; border-radius: 8px; margin-bottom: 5px;">
         <span style="font-weight:bold;">{home_logo} {home_name}</span>
@@ -88,7 +69,6 @@ def render_kamp_boks(kamp):
     </div>
     """, unsafe_allow_html=True)
 
-# --- 3. DATA LOADING ---
 @st.cache_data(ttl=3600)
 def load_liga_data():
     conn = _get_snowflake_conn()
@@ -119,13 +99,31 @@ def get_wyscout_stats():
     """
     return conn.query(query)
 
-# --- 4. HOVEDFUNKTION ---
+def vis_tabel(df_in, filter_list):
+    df = df_in.copy()
+    if filter_list is not None: df = df[df['UUID'].isin(filter_list)]
+    df.insert(0, '#', range(1, len(df) + 1))
+    df.insert(1, ' ', [get_logo_html(u) for u in df['UUID']])
+    df['FORM'] = df['FORM'].apply(style_form)
+    st.write(df[['#', ' ', 'HOLD', 'K', 'V', 'U', 'T', 'MD', 'P', 'FORM']].to_html(escape=False, index=False, classes='league-table'), unsafe_allow_html=True)
+
+def render_kampe_dynamisk(df_opta, filter_uuids):
+    relevante_kampe = df_opta[
+        (df_opta['CONTESTANTHOME_OPTAUUID'].isin(filter_uuids)) | 
+        (df_opta['CONTESTANTAWAY_OPTAUUID'].isin(filter_uuids))
+    ]
+    unikke_datoer = sorted(relevante_kampe['MATCH_DATE_FULL'].dt.date.unique(), reverse=True)
+    for dato in unikke_datoer[:2]:
+        st.markdown(f"##### Spillerunde: {dato}")
+        dagens_kampe = relevante_kampe[relevante_kampe['MATCH_DATE_FULL'].dt.date == dato]
+        for _, kamp in dagens_kampe.iterrows():
+            render_kamp_boks(kamp)
+
 def vis_side():
     df_opta = load_liga_data()
     df_wy = get_wyscout_stats()
     played = df_opta[df_opta['MATCH_STATUS'].str.lower().isin(['played', 'full-time', 'finished'])].sort_values('MATCH_DATE_FULL')
     
-    # Præcis 22 runder logik
     kamp_count = {}; cutoff_index = 0
     for i, row in played.iterrows():
         h, a = row['CONTESTANTHOME_OPTAUUID'], row['CONTESTANTAWAY_OPTAUUID']
@@ -136,47 +134,20 @@ def vis_side():
     slut_df = beregn_tabel(played)
     top6, bund6 = gs_df.head(6)['UUID'].tolist(), gs_df.tail(6)['UUID'].tolist()
     
-    # Hjælpefunktion til at vise tabel
-    def vis_tabel(df_in, filter_list):
-        df = df_in.copy()
-        if filter_list is not None: df = df[df['UUID'].isin(filter_list)]
-        df.insert(0, '#', range(1, len(df) + 1))
-        df.insert(1, ' ', [get_logo_html(u) for u in df['UUID']])
-        df['FORM'] = df['FORM'].apply(style_form)
-        st.write(df[['#', ' ', 'HOLD', 'K', 'V', 'U', 'T', 'MD', 'P', 'FORM']].to_html(escape=False, index=False, classes='league-table'), unsafe_allow_html=True)
-
-    # Hjælpefunktion til at vise kampe grafisk
-    def render_kampe_dynamisk(df_opta, filter_uuids):
-    # Filtrer kun kampe for de hold, der er relevante (top6 eller bund6)
-    relevante_kampe = df_opta[
-        (df_opta['CONTESTANTHOME_OPTAUUID'].isin(filter_uuids)) | 
-        (df_opta['CONTESTANTAWAY_OPTAUUID'].isin(filter_uuids))
-    ]
-    
-    # Gruppér efter dato - vi tager de 2 nyeste spilledage (runder)
-    unikke_datoer = sorted(relevante_kampe['MATCH_DATE_FULL'].dt.date.unique(), reverse=True)
-    
-    for dato in unikke_datoer[:2]: # Vis de 2 seneste runder
-        st.markdown(f"##### Spillerunde: {dato}")
-        dagens_kampe = relevante_kampe[relevante_kampe['MATCH_DATE_FULL'].dt.date == dato]
-        for _, kamp in dagens_kampe.iterrows():
-            render_kamp_boks(kamp)
-
     t_gs, t_slut, t_h2h = st.tabs(["Grundspil", "Slutspil", "Head-to-head"])
     
     with t_gs: 
         vis_tabel(gs_df, None)
-        
     with t_slut:
         c1, c2 = st.columns(2)
         with c1: 
             st.subheader("Oprykningsspil")
             vis_tabel(slut_df, top6)
-            render_kampe_dynamisk(played, top6) # Finder selv datoer for top6
+            render_kampe_dynamisk(played, top6)
         with c2: 
             st.subheader("Nedrykningsspil")
             vis_tabel(slut_df, bund6)
-            render_kampe_dynamisk(played, bund6) # Finder selv datoer for bund6
+            render_kampe_dynamisk(played, bund6)
     with t_h2h:
         h_list = sorted(gs_df['HOLD'].tolist())
         c1, c2 = st.columns(2); t1 = c1.selectbox("Hold 1", h_list, index=0); t2 = c2.selectbox("Hold 2", [h for h in h_list if h != t1], index=0)
