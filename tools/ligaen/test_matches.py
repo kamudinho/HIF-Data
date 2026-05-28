@@ -253,7 +253,7 @@ def vis_side(dp=None):
         c_off, c_def = st.columns(2)
         
         # Stats vi vil vise (skal være deleligt med 4)
-        stat_keys = ["POSS", "XG", "SHOTS", "BIG_CHANCES", "PASSES_FT", "TOUCHES_IN_BOX", "FORWARD_PASSES", "DZ_SHOTS"]
+        stat_keys = ["POSS", "XG", "SHOTS", "PASSES", "BIG_CHANCES", "PASSES_FT", "TOUCHES_IN_BOX", "FORWARD_PASSES", "DZ_SHOTS"]
         
         # Hjælpefunktion til at hente data
         def get_stats_90(is_us):
