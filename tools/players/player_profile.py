@@ -93,8 +93,8 @@ def draw_player_info_box(ax, team_logo, player_name, season_str, category_str):
     ax.text(0.10, 0.89, f"{season_str} | {category_str}", transform=ax.transAxes, 
             fontsize=8, color='#666666', va='center')
 
-def get_physical_data(valgt_hold_ssid, db_conn):
-    # Vi bruger dit nye, præcise join-format
+def get_physical_data(valgt_spiller, valgt_player_uuid, valgt_hold_ssid, db_conn):
+    # Vi bruger nu det præcise join, vi lige har oprettet
     sql = f"""
     WITH hvidovre_ids AS (
         SELECT DISTINCT
@@ -105,20 +105,17 @@ def get_physical_data(valgt_hold_ssid, db_conn):
             WHEN m.HOME_SSIID = '{valgt_hold_ssid}' THEN m.HOME_PLAYERS 
             ELSE m.AWAY_PLAYERS 
         END) f
-        WHERE m.HOME_SSIID = '{valgt_hold_ssid}' 
-           OR m.AWAY_SSIID = '{valgt_hold_ssid}'
+        WHERE (m.HOME_SSIID = '{valgt_hold_ssid}' OR m.AWAY_SSIID = '{valgt_hold_ssid}')
+          AND f.value:"optaId"::string = '{str(valgt_player_uuid)}'
     )
     SELECT 
         p.MATCH_DATE,
         p.MATCH_TEAMS,
-        p.PLAYER_NAME,
         p.DISTANCE,
         p."HIGH SPEED RUNNING" AS HSR,
         p.SPRINTING,
         p.TOP_SPEED,
-        p.NO_OF_HIGH_INTENSITY_RUNS AS HI_RUNS,
-        p.DISTANCE_TIP,
-        p.DISTANCE_OTIP
+        p.NO_OF_HIGH_INTENSITY_RUNS AS HI_RUNS
     FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS p
     INNER JOIN hvidovre_ids h 
         ON p.MATCH_SSIID = h.MATCH_SSIID 
