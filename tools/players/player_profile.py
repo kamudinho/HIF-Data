@@ -94,25 +94,15 @@ def draw_player_info_box(ax, team_logo, player_name, season_str, category_str):
             fontsize=8, color='#666666', va='center')
 
 def get_physical_data(player_name, player_opta_uuid, valgt_hold_navn, db_conn):
-    ssid = TEAMS.get(valgt_hold_navn, {}).get('ssid', '56fa29c7-3a48-4186-9d14-dbf45fbc78d9')
-    clean_id = str(player_opta_uuid).lower().replace('p', '').strip()
-
-    # Opdateret SQL: Jeg bruger her 'OPTAID' som kolonnenavn. 
-    # Hvis den stadig fejler, så tjek om kolonnenavnet i din liste 
-    # måske er forkortet eller hedder noget andet.
+    # Bemærk: Vi behøver ikke længere clean_id / opta_uuid her, 
+    # da vi filtrerer direkte på navnet fra din app.
+    
     sql = f"""
-        WITH team_player_ids AS (
-            SELECT DISTINCT m.MATCH_SSIID, 
-            f.value:"optaId"::string AS player_opta_id
-            FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_GAME_METADATA m,
-            LATERAL FLATTEN(input => CASE WHEN m.HOME_SSIID = '{ssid}' THEN m.HOME_PLAYERS ELSE m.AWAY_PLAYERS END) f
-            WHERE m.HOME_SSIID = '{ssid}' OR m.AWAY_SSIID = '{ssid}'
-        )
-        SELECT p.*
-        FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS p
-        INNER JOIN team_player_ids h ON p.MATCH_SSIID = h.MATCH_SSIID 
-        WHERE LOWER(p.OPTAID) = '{clean_id}'
-        AND p.MATCH_DATE >= '2025-07-01'
+        SELECT *
+        FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
+        WHERE UPPER(PLAYER_NAME) = UPPER('{player_name}')
+        AND MATCH_DATE >= '2025-07-01'
+        ORDER BY MATCH_DATE DESC
     """
     
     df = db_conn.query(sql)
@@ -529,7 +519,7 @@ def vis_side(dp=None):
             hsr_col = 'high speed running' if 'high speed running' in df_phys.columns else 'hsr'
             spr_col = 'sprinting' if 'sprinting' in df_phys.columns else 'sprint'
             
-            hsr_val = df_phys.get(hsr_col, 0)
+            hsr_val = df_phys['high speed running']
             spr_val = df_phys.get(spr_col, 0)
             df_phys['hsr_total'] = hsr_val + spr_val
             
