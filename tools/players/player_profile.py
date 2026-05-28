@@ -541,8 +541,9 @@ def vis_side(dp=None):
             hsr_col = 'high speed running' if 'high speed running' in df_phys.columns else 'hsr'
             spr_col = 'sprinting' if 'sprinting' in df_phys.columns else 'sprint'
             
-            hsr_val = df_phys['high speed running']
-            spr_val = df_phys.get(spr_col, 0)
+            hsr_val = df_phys.get('hsr', pd.Series(0, index=df_phys.index))
+            spr_val = df_phys.get('sprinting', pd.Series(0, index=df_phys.index))
+            
             df_phys['hsr_total'] = hsr_val + spr_val
             
             latest = df_phys.iloc[0]
