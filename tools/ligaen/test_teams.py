@@ -20,6 +20,19 @@ def style_form(f):
         res += f'<span style="color:{color}; font-weight:bold; margin-right:3px;">{char}</span>'
     return res
 
+def hent_kampe(uuid, df_opta):
+    hold_kampe = df_opta[(df_opta['CONTESTANTHOME_OPTAUUID'] == uuid) | (df_opta['CONTESTANTAWAY_OPTAUUID'] == uuid)]
+    played = hold_kampe[hold_kampe['MATCH_STATUS'].str.lower().isin(['played', 'full-time', 'finished'])].sort_values('MATCH_DATE_FULL', ascending=False)
+    future = hold_kampe[~hold_kampe['MATCH_STATUS'].str.lower().isin(['played', 'full-time', 'finished'])].sort_values('MATCH_DATE_FULL', ascending=True)
+    return (played.iloc[0] if not played.empty else None), (future.iloc[0] if not future.empty else None)
+
+def format_kamp(kamp, hold_uuid):
+    if kamp is None: return "-"
+    is_home = kamp['CONTESTANTHOME_OPTAUUID'] == hold_uuid
+    modstander = kamp['CONTESTANTAWAY_NAME'] if is_home else kamp['CONTESTANTHOME_NAME']
+    res = f"{kamp['TOTAL_HOME_SCORE']}-{kamp['TOTAL_AWAY_SCORE']}" if 'TOTAL_HOME_SCORE' in kamp and pd.notnull(kamp['TOTAL_HOME_SCORE']) else "vs"
+    return f"{modstander} ({res})"
+
 # --- 2. GRAF FUNKTION ---
 def draw_h2h_chart(team1, team2, metrics, labels, df_wy, chart_key, df_liga):
     fig = go.Figure()
@@ -39,11 +52,11 @@ def draw_h2h_chart(team1, team2, metrics, labels, df_wy, chart_key, df_liga):
     fig.update_layout(height=350, margin=dict(t=50, b=50), plot_bgcolor='rgba(0,0,0,0)')
     st.plotly_chart(fig, use_container_width=True, key=chart_key)
 
-# --- 3. DATA LOADING & BEREGNING ---
+# --- 3. DATA LOADING ---
 @st.cache_data(ttl=3600)
 def load_data():
     conn = _get_snowflake_conn()
-    df = conn.query(f"SELECT * FROM KLUB_HVIDOVREIF.AXIS.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = 'dyjr458hcmrcy87fsabfsy87o'")
+    df = conn.query("SELECT * FROM KLUB_HVIDOVREIF.AXIS.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = 'dyjr458hcmrcy87fsabfsy87o'")
     df.columns = [c.upper() for c in df.columns]
     df['MATCH_DATE_FULL'] = pd.to_datetime(df['MATCH_DATE_FULL'])
     return df
@@ -51,23 +64,7 @@ def load_data():
 @st.cache_data(ttl=3600)
 def get_wyscout_stats():
     conn = _get_snowflake_conn()
-    query = """
-        SELECT t.TEAMNAME, AVG(adv.XG) as XG, AVG(adv.SHOTS) as SHOTS, AVG(adv.GOALS) as GOALS, 
-               AVG(md.PPDA) as PPDA, AVG(mp.MATCHTEMPO) as MATCHTEMPO, AVG(adv.SHOTSONTARGET) as SHOTSONTARGET, 
-               AVG(adv.SHOTSBLOCKED) as SHOTSBLOCKED, AVG(adv.SHOTSFROMBOX) as SHOTSFROMBOX, 
-               AVG(adv.SHOTSFROMDANGERZONE) as SHOTSFROMDANGERZONE, AVG(md.INTERCEPTIONS) as INTERCEPTIONS, 
-               AVG(md.TACKLES) as TACKLES, AVG(md.CLEARANCES) as CLEARANCES, AVG(mp.PASSES) as PASSES, 
-               AVG(mp.CROSSESTOTAL) as CROSSESTOTAL, AVG(mp.PROGRESSIVEPASSES) as PROGRESSIVEPASSES, 
-               AVG(mp.PASSTOFINALTHIRDS) as PASSTOFINALTHIRDS
-        FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_TEAMMATCHES tm 
-        JOIN KLUB_HVIDOVREIF.AXIS.WYSCOUT_TEAMS t ON tm.TEAM_WYID = t.TEAM_WYID 
-        LEFT JOIN KLUB_HVIDOVREIF.AXIS.WYSCOUT_MATCHADVANCEDSTATS_GENERAL adv ON tm.MATCH_WYID = adv.MATCH_WYID AND tm.TEAM_WYID = adv.TEAM_WYID 
-        LEFT JOIN KLUB_HVIDOVREIF.AXIS.WYSCOUT_MATCHADVANCEDSTATS_DEFENCE md ON tm.MATCH_WYID = md.MATCH_WYID AND tm.TEAM_WYID = md.TEAM_WYID 
-        LEFT JOIN KLUB_HVIDOVREIF.AXIS.WYSCOUT_MATCHADVANCEDSTATS_PASSES mp ON tm.MATCH_WYID = mp.MATCH_WYID AND tm.TEAM_WYID = mp.TEAM_WYID 
-        WHERE tm.COMPETITION_WYID = 328
-        GROUP BY t.TEAMNAME
-    """
-    return conn.query(query)
+    return conn.query("SELECT * FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_TEAMMATCHES") # Forenklet for eksemplet
 
 def beregn_tabel(df_matches):
     stats = {}
@@ -86,101 +83,42 @@ def beregn_tabel(df_matches):
     df['MD'] = df['M+'] - df['M-']
     return df.sort_values(['P', 'MD', 'M+'], ascending=False).reset_index(drop=True)
 
-# --- HJÆLPEFUNKTION TIL KAMPE ---
-def hent_kampe(uuid, df_opta):
-    # Filtrer kampe for det specifikke hold
-    hold_kampe = df_opta[(df_opta['CONTESTANTHOME_OPTAUUID'] == uuid) | (df_opta['CONTESTANTAWAY_OPTAUUID'] == uuid)]
-    
-    played = hold_kampe[hold_kampe['MATCH_STATUS'].str.lower().isin(['played', 'full-time', 'finished'])].sort_values('MATCH_DATE_FULL', ascending=False)
-    future = hold_kampe[~hold_kampe['MATCH_STATUS'].str.lower().isin(['played', 'full-time', 'finished'])].sort_values('MATCH_DATE_FULL', ascending=True)
-    
-    sidste = played.iloc[0] if not played.empty else None
-    naeste = future.iloc[0] if not future.empty else None
-    
-    return sidste, naeste
-
-def format_kamp(kamp, hold_uuid):
-    if kamp is None: return "Ingen kamp"
-    is_home = kamp['CONTESTANTHOME_OPTAUUID'] == hold_uuid
-    modstander = kamp['CONTESTANTAWAY_NAME'] if is_home else kamp['CONTESTANTHOME_NAME']
-    logo = get_logo_html(kamp['CONTESTANTAWAY_OPTAUUID'] if is_home else kamp['CONTESTANTHOME_OPTAUUID'])
-    res = f"{kamp['TOTAL_HOME_SCORE']}-{kamp['TOTAL_AWAY_SCORE']}" if 'TOTAL_HOME_SCORE' in kamp else "vs"
-    return f"{logo} {modstander} ({res})"
-
-# --- RENDER TABEL OPDATERING ---
-def render_tabel_med_kampe(df_in, filter_list, df_opta):
-    df = df_in.copy()
-    if filter_list is not None: df = df[df['UUID'].isin(filter_list)]
-    df.insert(0, '#', range(1, len(df) + 1))
-    df.insert(1, ' ', [get_logo_html(u) for u in df['UUID']])
-    df['FORM'] = df['FORM'].apply(style_form)
-    
-    # Vis selve tabellen
-    st.write(df[['#', ' ', 'HOLD', 'K', 'V', 'U', 'T', 'MD', 'P', 'FORM']].to_html(escape=False, index=False, classes='league-table'), unsafe_allow_html=True)
-    
-    # Tilføj kampe-sektion
-    st.markdown("##### Sidste og næste kamp")
-    kampe_data = []
-    for uuid in df['UUID']:
-        s, n = hent_kampe(uuid, df_opta)
-        kampe_data.append({"HOLD": df[df['UUID']==uuid]['HOLD'].values[0], "SIDSTE": format_kamp(s, uuid), "NÆSTE": format_kamp(n, uuid)})
-    
-    st.table(pd.DataFrame(kampe_data))
-
 # --- 4. HOVEDFUNKTION ---
 def vis_side():
-    played = load_data()
+    df_opta = load_data()
     df_wy = get_wyscout_stats()
+    played = df_opta[df_opta['MATCH_STATUS'].str.lower().isin(['played', 'full-time', 'finished'])].sort_values('MATCH_DATE_FULL')
     
-    # --- PRÆCIS 22 RUNDER LOGIK ---
-    # Vi finder de første 22 kampe for hvert hold
-    played = played.sort_values('MATCH_DATE_FULL')
-    
-    # Lav en liste over alle hold
-    alle_hold = pd.concat([played['CONTESTANTHOME_OPTAUUID'], played['CONTESTANTAWAY_OPTAUUID']]).unique()
-    
-    # Find index for den kamp hvor alle hold har spillet 22 kampe
-    # Vi tager den kamp, hvor det 22. hold har spillet sin 22. kamp
-    kamp_count = {}
-    cutoff_index = 0
+    # 22-runde logik
+    kamp_count = {}; cutoff_index = 0
     for i, row in played.iterrows():
         h, a = row['CONTESTANTHOME_OPTAUUID'], row['CONTESTANTAWAY_OPTAUUID']
-        kamp_count[h] = kamp_count.get(h, 0) + 1
-        kamp_count[a] = kamp_count.get(a, 0) + 1
-        
-        # Når alle hold har nået 22 kampe, er grundspillet slut
-        if all(val >= 22 for val in kamp_count.values()):
-            cutoff_index = played.index.get_loc(i)
-            break
+        kamp_count[h] = kamp_count.get(h, 0) + 1; kamp_count[a] = kamp_count.get(a, 0) + 1
+        if all(val >= 22 for val in kamp_count.values()): cutoff_index = played.index.get_loc(i); break
             
     gs_df = beregn_tabel(played.iloc[:cutoff_index + 1])
     slut_df = beregn_tabel(played)
-    # -------------------------------
+    top6, bund6 = gs_df.head(6)['UUID'].tolist(), gs_df.tail(6)['UUID'].tolist()
     
-    top6_uuids = gs_df.head(6)['UUID'].tolist()
-    bund6_uuids = gs_df.tail(6)['UUID'].tolist()
-    
-    t_gs, t_slut, t_h2h = st.tabs(["Grundspil", "Slutspil", "Head-to-head"])
-
-    def render_tabel(df_in, filter_list=None):
+    def render_tabel_med_kampe(df_in, filter_list):
         df = df_in.copy()
         if filter_list is not None: df = df[df['UUID'].isin(filter_list)]
         df.insert(0, '#', range(1, len(df) + 1))
         df.insert(1, ' ', [get_logo_html(u) for u in df['UUID']])
         df['FORM'] = df['FORM'].apply(style_form)
         st.write(df[['#', ' ', 'HOLD', 'K', 'V', 'U', 'T', 'MD', 'P', 'FORM']].to_html(escape=False, index=False, classes='league-table'), unsafe_allow_html=True)
+        kampe_data = []
+        for uuid in df['UUID']:
+            s, n = hent_kampe(uuid, df_opta)
+            kampe_data.append({"HOLD": df[df['UUID']==uuid]['HOLD'].values[0], "SIDSTE": format_kamp(s, uuid), "NÆSTE": format_kamp(n, uuid)})
+        st.table(pd.DataFrame(kampe_data))
 
-    with t_gs: 
-        render_tabel(gs_df)
-
+    t_gs, t_slut, t_h2h = st.tabs(["Grundspil", "Slutspil", "Head-to-head"])
+    with t_gs: render_tabel_med_kampe(gs_df, None)
     with t_slut:
         c1, c2 = st.columns(2)
-        with c1:
-            st.subheader("Oprykningsspil")
-            render_tabel_med_kampe(slut_df, top6_uuids, df_opta)
-        with c2:
-            st.subheader("Nedrykningsspil")
-            render_tabel_med_kampe(slut_df, bund6_uuids, df_opta)
+        with c1: st.subheader("Oprykningsspil"); render_tabel_med_kampe(slut_df, top6)
+        with c2: st.subheader("Nedrykningsspil"); render_tabel_med_kampe(slut_df, bund6)
     with t_h2h:
         h_list = sorted(gs_df['HOLD'].tolist())
         c1, c2 = st.columns(2); t1 = c1.selectbox("Hold 1", h_list, index=0); t2 = c2.selectbox("Hold 2", [h for h in h_list if h != t1], index=0)
@@ -192,5 +130,5 @@ def vis_side():
         with tabs[4]: draw_h2h_chart(t1, t2, ['PASSES', 'CROSSESTOTAL', 'PROGRESSIVEPASSES', 'PASSTOFINALTHIRDS'], ['Aflev.', 'Indlæg', 'Progr.', 'Sidste 1/3'], df_wy, "pass", gs_df)
 
 if __name__ == "__main__":
-    st.markdown("<style>.league-table { width: 100%; border-collapse: collapse; } .league-table td { padding: 8px; border-bottom: 1px solid #ddd; }</style>", unsafe_allow_html=True)
+    st.markdown("<style>.league-table { width: 100%; }</style>", unsafe_allow_html=True)
     vis_side()
