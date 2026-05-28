@@ -215,35 +215,43 @@ def vis_side(dp=None):
         st.write("Sæsonoverblik logik her")
         
     with tab4:
-        st.subheader(f"Kampoverblik: {valgt_navn} vs. Liga-snit")
+        st.subheader(f"Kampoverblik: {valgt_navn} (pr. 90 min) vs. Liga-snit")
         
-        # Sørg for at data er numerisk og rens korrupte strenge
-        stat_keys = ["POSS", "PASSES", "SHOTS", "XG", "XGNP", "BIG_CHANCES", "TOUCHES_IN_BOX"]
-        for k in stat_keys:
-            df_matches[f"HOME_{k}"] = pd.to_numeric(df_matches[f"HOME_{k}"], errors='coerce').fillna(0)
-            df_matches[f"AWAY_{k}"] = pd.to_numeric(df_matches[f"AWAY_{k}"], errors='coerce').fillna(0)
-
+        # 1. Hent dine eksisterende beregninger (fra tab1-logikken)
         all_played = df_matches[df_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].copy()
+        stat_keys = ["POSS", "PASSES", "FORWARD_PASSES", "SHOTS", "BIG_CHANCES", "XG", "XGNP", "TOUCHES_IN_BOX", "DZ_SHOTS", "PASSES_FT"]
         
-        liga_stats = {}
+        # Beregn liga-gennemsnit for alle statistikker
+        league_avgs = {}
         for k in stat_keys:
-            all_vals = pd.concat([all_played[f"HOME_{k}"], all_played[f"AWAY_{k}"]])
-            liga_stats[k] = all_vals.mean()
+            # Vi tager alle værdier fra både hjemme og ude for at få det sande liga-snit
+            all_vals = pd.concat([pd.to_numeric(all_played[f"HOME_{k}"], errors='coerce'), 
+                                  pd.to_numeric(all_played[f"AWAY_{k}"], errors='coerce')])
+            league_avgs[k] = all_vals.mean()
 
-        for _, row in played_p.sort_values('MATCH_DATE_FULL', ascending=False).iterrows():
-            is_home = row['CONTESTANTHOME_OPTAUUID'] == valgt_uuid
-            modstander_navn = opta_to_name.get(row['CONTESTANTAWAY_OPTAUUID'] if is_home else row['CONTESTANTHOME_OPTAUUID'])
+        # 2. Hent dit holds gennemsnit (brug den eksisterende team_avgs ordbog)
+        # Sørg for at valgt_uuid er korrekt (som du har defineret øverst i din kode)
+        hold_stats = team_avgs.get(valgt_uuid, {k: 0 for k in stat_keys})
+
+        # 3. Vis oversigten som en tabel/liste uden expanders
+        st.markdown(f"---")
+        for k in stat_keys:
+            hold_val = hold_stats.get(k, 0)
+            liga_val = league_avgs.get(k, 0)
             
-            with st.expander(f"{row['MATCH_DATE_FULL'].strftime('%d. %b')} vs {modstander_navn} ({int(row['TOTAL_HOME_SCORE'])}-{int(row['TOTAL_AWAY_SCORE'])})"):
-                for k in stat_keys:
-                    hold_val = float(row[f"HOME_{k}"] if is_home else row[f"AWAY_{k}"])
-                    liga_avg = liga_stats[k]
-                    
-                    # Dynamisk skala: Vi sætter max til 2x liga-snittet for at give en god visuel reference
-                    max_scale = liga_avg * 2 if liga_avg > 0 else 10
-                    
-                    c1, c2, c3 = st.columns([1, 2, 1])
-                    c1.write(f"**{valgt_navn}**: {hold_val:.1f}")
-                    c2.progress(min(hold_val / max_scale, 1.0)) 
-                    c3.write(f"**Liga**: {liga_avg:.1f}")
+            # Dynamisk progressbar (max er sat til 2x liga-snittet for visuel reference)
+            max_scale = liga_val * 2 if liga_val > 0 else 10
+            
+            c1, c2, c3 = st.columns([1.5, 3, 1])
+            c1.write(f"**{k.replace('_', ' ')}**")
+            
+            # Progress bar for holdet
+            c2.progress(min(hold_val / max_scale, 1.0))
+            
+            # Vis tal (Hold vs Liga)
+            c3.write(f"{hold_val:.1f} / {liga_val:.1f}")
+
+        st.markdown(f"---")
+        st.caption("Viser holdets gennemsnit pr. kamp holdt op mod hele ligaens gennemsnit.")
+        
 vis_side()
