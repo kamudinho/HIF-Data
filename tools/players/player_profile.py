@@ -94,30 +94,26 @@ def draw_player_info_box(ax, team_logo, player_name, season_str, category_str):
             fontsize=8, color='#666666', va='center')
 
 def get_physical_data(player_name, player_opta_uuid, valgt_hold_navn, db_conn):
-    ssid = TEAMS.get(valgt_hold_navn, {}).get('ssid')
-    if not ssid:
-        ssid = '56fa29c7-3a48-4186-9d14-dbf45fbc78d9'
-
+    ssid = TEAMS.get(valgt_hold_navn, {}).get('ssid', '56fa29c7-3a48-4186-9d14-dbf45fbc78d9')
     clean_id = str(player_opta_uuid).lower().replace('p', '').strip()
 
-    # Vi tilføjer en WHERE-klausul, der filtrerer på 'optaId' direkte i SQL
     sql = f"""
         WITH team_player_ids AS (
-            SELECT DISTINCT m.MATCH_SSIID, m.HOME_SSIID, m.AWAY_SSIID,
+            SELECT DISTINCT m.MATCH_SSIID, 
             f.value:"optaId"::string AS player_opta_id
             FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_GAME_METADATA m,
             LATERAL FLATTEN(input => CASE WHEN m.HOME_SSIID = '{ssid}' THEN m.HOME_PLAYERS ELSE m.AWAY_PLAYERS END) f
             WHERE m.HOME_SSIID = '{ssid}' OR m.AWAY_SSIID = '{ssid}'
         )
-        SELECT p.*, h.player_opta_id, h.HOME_SSIID, h.AWAY_SSIID
+        SELECT p.*, h.player_opta_id
         FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS p
-        INNER JOIN team_player_ids h ON p.MATCH_SSIID = h.MATCH_SSIID AND p."optaId" = h.player_opta_id
+        INNER JOIN team_player_ids h ON p.MATCH_SSIID = h.MATCH_SSIID AND LOWER(p.OPTAID) = '{clean_id}'
         WHERE p.MATCH_DATE >= '2025-07-01'
-        AND p."optaId" = '{clean_id}' 
-        """
+        AND LOWER(p.OPTAID) = '{clean_id}'
+    """
     
     df = db_conn.query(sql)
-    if df is not None:
+    if df is not None and not df.empty:
         df.columns = df.columns.str.lower()
     return df
     
@@ -515,31 +511,26 @@ def vis_side(dp=None):
     with t_phys:
         df_phys = get_physical_data(valgt_spiller, valgt_player_uuid, valgt_hold, conn)
         
-        # DEBUG: Udskriv hvor mange unikke spillere der er i den hentede data
-        if df_phys is not None and not df_phys.empty:
-            st.write(f"Antal unikke spillere i data: {df_phys['optaid'].nunique()}")
-            st.write(f"Spillere fundet: {df_phys['optaid'].unique()}")
+        if df_phys is None or df_phys.empty:
+            st.warning("Ingen fysiske data fundet for denne spiller.")
+        else:
+            # Sørg for at datoer er rigtige
             df_phys['match_date'] = pd.to_datetime(df_phys['match_date'])
             df_phys = df_phys.sort_values('match_date', ascending=False)
-            # Beregn HSR og eventuelle andre kolonner der mangler
-            if 'HIGH SPEED RUNNING' in df_phys.columns and 'SPRINTING' in df_phys.columns:
-                df_phys['hsr'] = df_phys['HIGH SPEED RUNNING'] + df_phys['SPRINTING']
-            else:
-                # Hvis kolonnerne hedder noget andet i din database, så ret navne her
-                df_phys['hsr'] = 0 
             
-            # Beregn hi_runs hvis den mangler (eksempel: hvis det er en anden kombination)
-            if 'hi_runs' not in df_phys.columns:
-                df_phys['hi_runs'] = df_phys.get('HIGH SPEED RUNNING', 0) # Tilpas efter dit behov
-            avg_dist = df_phys['distance'].mean()
-            avg_hsr = df_phys['hsr'].mean()
+            # HSR beregning med fallback hvis kolonner mangler
+            cols = [c.upper() for c in df_phys.columns]
+            hsr_val = df_phys['high speed running'] if 'high speed running' in df_phys.columns else 0
+            spr_val = df_phys['sprinting'] if 'sprinting' in df_phys.columns else 0
+            df_phys['hsr'] = hsr_val + spr_val
+            
             latest = df_phys.iloc[0]
-
+            
             m1, m2, m3, m4 = st.columns(4)
-            m1.metric("Seneste Distance", f"{round(latest['distance']/1000, 2)} km", delta=f"{round((latest['distance'] - avg_dist)/1000, 2)} km")
-            m2.metric("HSR Meter", f"{int(latest['hsr'])} m", delta=f"{int(latest['hsr'] - avg_hsr)} m")
-            m3.metric("Topfart", f"{round(latest['top_speed'], 1)} km/t")
-            m4.metric("Højintense Akt.", int(latest['hi_runs']))
+            m1.metric("Distance", f"{round(latest.get('distance', 0)/1000, 2)} km")
+            m2.metric("HSR", f"{int(latest.get('hsr', 0))} m")
+            m3.metric("Topfart", f"{round(float(latest.get('top_speed', 0)), 1)} km/t")
+            m4.metric("Højintense", int(latest.get('hi_runs', 0)))
 
             t_sub_log, t_sub_charts = st.tabs(["Kampoversigt", "Grafer"])
 
