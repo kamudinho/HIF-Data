@@ -211,11 +211,7 @@ def vis_side(dp=None):
                 c5.markdown(f"<div style='font-weight:bold; padding-top:8px;'>{a_n}</div>", unsafe_allow_html=True)
 
     with tab3:
-        st.subheader("Sæsonoverblik")
-        st.write("Sæsonoverblik logik her")
-        
-    with tab4:
-        st.subheader(f"Kampoverblik: {valgt_navn} (pr. 90 min) vs. Liga-snit")
+        st.subheader(f"Sæsonoverblik: {valgt_navn} (pr. 90 min) vs. Liga-snit")
         
         # 1. Hent statistik-nøgler
         stat_keys = ["POSS", "PASSES", "FORWARD_PASSES", "SHOTS", "BIG_CHANCES", "XG", "XGNP", "TOUCHES_IN_BOX", "DZ_SHOTS", "PASSES_FT"]
@@ -259,5 +255,61 @@ def vis_side(dp=None):
                 
             if (i + 1) % 3 == 0:
                 cols = st.columns(3) # Næste række
+        
+    with tab4:
+        st.subheader(f"Sæsonoversigt: {valgt_navn} (snit pr. kamp) vs. Liga")
+        
+        # 1. Beregn liga-gennemsnit for alle stat_keys
+        all_played = df_matches[df_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].copy()
+        league_avgs = {}
+        for k in stat_keys:
+            # Beregn gennemsnit for hvert hold først, derefter gennemsnit af alle hold
+            all_vals = []
+            for t_name, t_info in TEAMS.items():
+                t_uuid = str(t_info.get('opta_uuid', '')).strip().upper()
+                if not t_uuid: continue
+                t_m = all_played[(all_played['CONTESTANTHOME_OPTAUUID'] == t_uuid) | (all_played['CONTESTANTAWAY_OPTAUUID'] == t_uuid)]
+                if not t_m.empty:
+                    vals = pd.to_numeric(t_m[f"HOME_{k}"].where(t_m['CONTESTANTHOME_OPTAUUID'] == t_uuid, t_m[f"AWAY_{k}"]), errors='coerce')
+                    all_vals.append(vals.mean())
+            league_avgs[k] = np.mean(all_vals) if all_vals else 0
+
+        # 2. Hent holdets stats (fra team_avgs beregnet i tab1)
+        hold_stats = team_avgs.get(valgt_uuid, {k: 0 for k in stat_keys})
+
+        # 3. Visuelle container (samme stil som i tab1)
+        with st.container(border=True):
+            st.markdown(f"**Gennemsnitlig præstation for {valgt_navn}**")
+            
+            stats_conf = [
+                ("POSS", "Boldbesiddelse", 1, "%"), ("PASSES", "Afleveringer: Samlet", 0, ""), 
+                ("FORWARD_PASSES", "Afleveringer: Fremadrettede", 0, ""), ("PASSES_FT", "Afleveringer: Sidste 1/3", 0, ""), 
+                ("TOUCHES_IN_BOX", "Touches in box", 0, ""), ("SHOTS", "Afslutninger", 0, ""), 
+                ("DZ_SHOTS", "Skud fra DZ", 0, ""), ("XG", "xG", 2, ""), 
+                ("XGNP", "xGnp", 2, ""), ("BIG_CHANCES", "Store chancer", 0, "")
+            ]
+
+            for s_key, lbl, dec, suf in stats_conf:
+                hv = hold_stats.get(s_key, 0)
+                av = league_avgs.get(s_key, 0)
+                
+                # Beregn forskel og bar-procent (hvis holdet er > liga, skal baren fylde mere)
+                diff = hv - av
+                diff_str = f" <span style='color:{'green' if diff>=0 else 'red'}; font-size:10px;'>({'+' if diff>=0 else ''}{diff:.{dec}f}{suf})</span>"
+                
+                # Procentvis visualisering (max 2x liga-snit som reference)
+                max_scale = av * 2 if av > 0 else 10
+                h_pct = min((hv / max_scale) * 100, 100)
+                
+                st.markdown(f"""
+                    <div style='display:flex; justify-content:space-between; font-size:11px; margin-top:8px;'>
+                        <div style='text-align:left;'><b>{hv:.{dec}f}{suf}</b>{diff_str}</div>
+                        <div style='color:#888;'>{lbl.upper()}</div>
+                        <div style='text-align:right;'><b>{av:.{dec}f}{suf}</b> <span style='color:#888; font-size:10px;'>(LIGA)</span></div>
+                    </div>
+                    <div style='display:flex; height:7px; background:#eee; border-radius:3px; overflow:hidden; margin-bottom:10px;'>
+                        <div style='width:{h_pct}%; background:{TEAM_COLORS.get(valgt_navn, {}).get("primary", "#cc0000")};'></div>
+                    </div>
+                """, unsafe_allow_html=True)
         
 vis_side()
