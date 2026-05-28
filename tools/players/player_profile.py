@@ -93,38 +93,24 @@ def draw_player_info_box(ax, team_logo, player_name, season_str, category_str):
     ax.text(0.10, 0.89, f"{season_str} | {category_str}", transform=ax.transAxes, 
             fontsize=8, color='#666666', va='center')
 
-def get_physical_data(player_opta_uuid, target_ssiid, db_conn):
-    # Din SQL med target_ssiid variabel
+def get_physical_data(spiller_navn, player_opta_uuid, valgt_hold, db_conn):
+    # SQL der grupperer pr. kamp (MATCH_SSIID) for at undgå dubletter fra SS-splits
     sql = f"""
-    WITH hvidovre_ids AS (
-        SELECT DISTINCT
-            m.MATCH_SSIID, 
-            f.value:"optaId"::string AS opta_id
-        FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_GAME_METADATA m,
-        LATERAL FLATTEN(input => CASE 
-            WHEN m.HOME_SSIID = '{target_ssiid}' THEN m.HOME_PLAYERS 
-            ELSE m.AWAY_PLAYERS 
-        END) f
-        WHERE m.HOME_SSIID = '{target_ssiid}' 
-           OR m.AWAY_SSIID = '{target_ssiid}'
-    )
     SELECT 
-        p.MATCH_DATE,
-        p.PLAYER_NAME,
-        p.MINUTES,
-        p.DISTANCE,
-        p."HIGH SPEED RUNNING" AS DISTANCE_HSR,
-        p.SPRINTING AS DISTANCE_SPRINT,
-        p.TOP_SPEED,
-        p.NO_OF_HIGH_INTENSITY_RUNS AS HI_RUNS_TOTAL,
-        p.MATCH_SSIID
-    FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS p
-    INNER JOIN hvidovre_ids h 
-        ON p.MATCH_SSIID = h.MATCH_SSIID 
-        AND p."optaId" = h.opta_id
-    WHERE p."optaId" = '{player_opta_uuid}'
-      AND p.MATCH_DATE BETWEEN '2025-07-01' AND '2026-06-30'
-    ORDER BY p.MATCH_DATE DESC
+        MATCH_DATE,
+        MAX(MATCH_TEAMS) as MATCH_TEAMS,
+        MAX(TRY_CAST(SPLIT_PART(MINUTES, ':', 1) AS FLOAT) + 
+            (TRY_CAST(NULLIF(SPLIT_PART(MINUTES, ':', 2), '') AS FLOAT) / 60)) as MINUTES,
+        MAX(DISTANCE) as DISTANCE,
+        MAX("HIGH SPEED RUNNING") as HSR,
+        MAX(SPRINTING) as SPRINTING,
+        MAX(TOP_SPEED) as TOP_SPEED,
+        MAX(NO_OF_HIGH_INTENSITY_RUNS) as HI_RUNS_TOTAL
+    FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
+    WHERE "optaId" = '{player_opta_uuid}'
+      AND MATCH_DATE BETWEEN '2025-07-01' AND '2026-06-30'
+    GROUP BY MATCH_DATE, MATCH_SSIID
+    ORDER BY MATCH_DATE DESC
     """
     return db_conn.query(sql)
 
@@ -529,9 +515,10 @@ def vis_side(dp=None):
         df_phys = get_physical_data(valgt_spiller, valgt_player_uuid, valgt_hold, conn)
 
         if df_phys is not None and not df_phys.empty:
+            # SQL'en har allerede sørget for at gruppere, så du behøver ikke længere 
+            # kompliceret drop_duplicates logik her
             df_phys['minutes'] = pd.to_numeric(df_phys['minutes'], errors='coerce').fillna(0)
             df_phys['match_date'] = pd.to_datetime(df_phys['match_date'], errors='coerce')
-            df_phys = df_phys.dropna(subset=['match_date'])
             df_phys = df_phys.sort_values('match_date', ascending=False)
 
             avg_dist = df_phys['distance'].mean()
