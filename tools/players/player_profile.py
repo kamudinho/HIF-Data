@@ -93,7 +93,7 @@ def draw_player_info_box(ax, team_logo, player_name, season_str, category_str):
     ax.text(0.10, 0.89, f"{season_str} | {category_str}", transform=ax.transAxes, 
             fontsize=8, color='#666666', va='center')
 
-def get_physical_data(player_name, player_opta_uuid, valgt_hold_navn, db_conn, valgt_hold_optauuid):
+def get_physical_data(player_name, player_opta_uuid, valgt_hold_navn, db_conn, valgt_hold_optauuid=None):
     # Vi fjerner hardcodingen og bruger opta_uuid til at finde det korrekte ssiid i databasen
     clean_id = str(player_opta_uuid).lower().replace('p', '').strip()
     
