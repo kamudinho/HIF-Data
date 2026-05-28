@@ -215,7 +215,35 @@ def vis_side(dp=None):
         st.write("Sæsonoverblik logik her")
         
     with tab4:
-        st.subheader("Kampoverblik")
-        st.write("Kampoverblik logik her")
+        st.subheader(f"Kampoverblik: {valgt_navn} vs. Liga-snit (pr. 90 min)")
+        
+        # 1. Beregn liga-snit for alle hold (for at have en baseline)
+        # Vi tager alle spillede kampe i ligaen
+        all_played = df_matches[df_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].copy()
+        
+        # Vi laver et globalt snit for alle hold i den valgte periode
+        liga_stats = {}
+        stat_keys = ["POSS", "PASSES", "SHOTS", "XG", "XGNP", "BIG_CHANCES", "TOUCHES_IN_BOX"]
+        
+        for k in stat_keys:
+            # Beregn gennemsnit for alle teams samlet i ligaen
+            all_vals = pd.concat([all_played[f"HOME_{k}"], all_played[f"AWAY_{k}"]])
+            liga_stats[k] = all_vals.mean()
+
+        # 2. Vis hver kamp og sammenlign
+        for _, row in played_p.sort_values('MATCH_DATE_FULL', ascending=False).iterrows():
+            is_home = row['CONTESTANTHOME_OPTAUUID'] == valgt_uuid
+            modstander_navn = opta_to_name.get(row['CONTESTANTAWAY_OPTAUUID'] if is_home else row['CONTESTANTHOME_OPTAUUID'])
+            
+            with st.expander(f"{row['MATCH_DATE_FULL'].date()} vs {modstander_navn} ({int(row['TOTAL_HOME_SCORE'])}-{int(row['TOTAL_AWAY_SCORE'])})"):
+                for k in stat_keys:
+                    hold_val = row[f"HOME_{k}"] if is_home else row[f"AWAY_{k}"]
+                    modstander_val = row[f"AWAY_{k}"] if is_home else row[f"HOME_{k}"]
+                    
+                    c1, c2, c3 = st.columns([1, 2, 1])
+                    c1.write(f"**{valgt_navn}**: {hold_val:.1f}")
+                    # Progress bar der viser holdets præstation ift. liga-snittet (f.eks. sat til skala 0-20 som eksempel)
+                    c2.progress(min(hold_val / 20, 1.0)) 
+                    c3.write(f"**Liga**: {liga_stats[k]:.1f}")
 
 vis_side()
