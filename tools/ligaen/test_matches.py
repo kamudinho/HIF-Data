@@ -74,82 +74,53 @@ def vis_side(dp=None):
         LEFT JOIN AdvancedEvents ae_a ON b.MATCH_OPTAUUID = ae_a.MATCH_OPTAUUID AND b.CONTESTANTAWAY_OPTAUUID = ae_a.EVENT_CONTESTANT_OPTAUUID
     """
 
-    with st.spinner("Henter data..."):
-        df_matches = conn.query(sql) if hasattr(conn, 'query') else pd.read_sql(sql, conn)
-
-    if df_matches is None or df_matches.empty:
-        st.warning("Ingen data fundet.")
-        return
-
-    # --- 2. DATA PREP ---
+    df_matches = conn.query(sql) if hasattr(conn, 'query') else pd.read_sql(sql, conn)
     df_matches.columns = [str(c).upper() for c in df_matches.columns]
-    df_matches['MATCH_DATE_FULL'] = pd.to_datetime(df_matches['MATCH_DATE_FULL'], errors='coerce')
-    df_matches['TOTAL_HOME_SCORE'] = pd.to_numeric(df_matches['TOTAL_HOME_SCORE'], errors='coerce').fillna(0)
-    df_matches['TOTAL_AWAY_SCORE'] = pd.to_numeric(df_matches['TOTAL_AWAY_SCORE'], errors='coerce').fillna(0)
     
     opta_to_name = {str(v['opta_uuid']).strip().upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
     liga_hold_options = {n: i.get("opta_uuid") for n, i in TEAMS.items() if i.get("league") == "1. Division"}
     h_list = sorted(liga_hold_options.keys())
-    hif_idx = h_list.index("Hvidovre") if "Hvidovre" in h_list else 0
-
-    # --- 3. UI STYLING ---
-    st.markdown("""
-        <style>
-        .stat-box { text-align: center; background: #f8f9fa; border-radius: 6px; padding: 8px 4px; border-bottom: 2px solid #cc0000; height: 52px; display: flex; flex-direction: column; justify-content: center; }
-        .stat-label { font-size: 10px; color: #666; text-transform: uppercase; font-weight: 600; line-height: 1.1; margin-bottom: 2px; }
-        .stat-val { font-weight: 800; font-size: 16px; color: #111; line-height: 1.1; }
-        .score-pill { background: #222; color: white; border-radius: 4px; padding: 4px 12px; font-weight: bold; font-size: 18px; }
-        .date-header { background: #f0f0f0; padding: 6px 12px; border-radius: 4px; font-size: 13px; font-weight: bold; margin-top: 15px; border-left: 5px solid #cc0000; color: #333; }
-        </style>
-    """, unsafe_allow_html=True)
-
-    # --- 4. TOP LAYOUT ---
+    
+    # UI Layout
     col_layout = [2.2, 0.5, 0.5, 0.5, 0.5, 0.6, 0.6, 0.6]
     row1 = st.columns(col_layout)
-    valgt_navn = row1[0].selectbox("Hold", h_list, index=hif_idx, label_visibility="collapsed", key="t_sel")
+    valgt_navn = row1[0].selectbox("Hold", h_list, key="sel_team_v2")
     valgt_uuid = str(liga_hold_options[valgt_navn]).strip().upper()
-
-    row2 = st.columns(col_layout)
-    valgt_periode = row2[0].selectbox("Periode", ["Sæson 25/26", "Efterår 25", "Forår 26"], label_visibility="collapsed", key="p_sel")
-    valgt_side = row2[1].selectbox("Side", ["Samlet", "Hjemme", "Ude"], label_visibility="collapsed", key="s_sel")
-
-    # FILTRERING
-    team_matches = df_matches[(df_matches['CONTESTANTHOME_OPTAUUID'] == valgt_uuid) | (df_matches['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid)].copy()
-    if valgt_periode == "Efterår 25": f_matches = team_matches[(team_matches['MATCH_DATE_FULL'] >= '2025-07-01') & (team_matches['MATCH_DATE_FULL'] <= '2025-12-31')]
-    elif valgt_periode == "Forår 26": f_matches = team_matches[(team_matches['MATCH_DATE_FULL'] >= '2026-01-01') & (team_matches['MATCH_DATE_FULL'] <= '2026-06-30')]
-    else: f_matches = team_matches
-    if valgt_side == "Hjemme": f_matches = f_matches[f_matches['CONTESTANTHOME_OPTAUUID'] == valgt_uuid]
-    elif valgt_side == "Ude": f_matches = f_matches[f_matches['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid]
-
-    played_p = f_matches[f_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].copy()
     
-    # --- 5. TABS ---
+    row2 = st.columns(col_layout)
+    valgt_periode = row2[0].selectbox("Periode", ["Sæson 25/26", "Efterår 25", "Forår 26"], key="sel_p_v2")
+    valgt_side = row2[1].selectbox("Side", ["Samlet", "Hjemme", "Ude"], key="sel_s_v2")
+
+    # Filter logik
+    f_matches = df_matches[(df_matches['CONTESTANTHOME_OPTAUUID'] == valgt_uuid) | (df_matches['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid)]
+    played_p = f_matches[f_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].copy()
+
+    # TABS
     tab1, tab2, tab3, tab4 = st.tabs(["RESULTATER", "KOMMENDE", "SÆSONOVERBLIK", "KAMPOVERBLIK"])
 
     with tab1:
-        # (Din eksisterende logik for Resultater)
+        st.subheader("Resultater")
         for _, row in played_p.sort_values('MATCH_DATE_FULL', ascending=False).iterrows():
-            st.markdown(f"**{opta_to_name.get(row['CONTESTANTHOME_OPTAUUID'])} {int(row['TOTAL_HOME_SCORE'])} - {int(row['TOTAL_AWAY_SCORE'])} {opta_to_name.get(row['CONTESTANTAWAY_OPTAUUID'])}**")
+            st.write(f"{row['MATCH_DATE_FULL'].date()}: {opta_to_name.get(row['CONTESTANTHOME_OPTAUUID'])} {int(row['TOTAL_HOME_SCORE'])} - {int(row['TOTAL_AWAY_SCORE'])} {opta_to_name.get(row['CONTESTANTAWAY_OPTAUUID'])}")
 
     with tab2:
-        # (Din eksisterende logik for Kommende)
-        st.write("Kommende kampe...")
+        st.subheader("Kommende kampe")
+        future = f_matches[~f_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)]
+        st.write(future[['MATCH_DATE_FULL', 'CONTESTANTHOME_NAME', 'CONTESTANTAWAY_NAME']])
 
     with tab3:
         st.subheader("Sæsonoverblik")
-        # Offensiv/Defensiv logik
-        col1, col2 = st.columns(2)
-        with col1:
-            st.markdown("### Offensivt")
-            # Beregn snit for holdet
-        with col2:
-            st.markdown("### Defensivt (Modstanders snit)")
-            # Beregn snit mod holdet
+        st.info("Statistisk gennemsnit for hele perioden.")
+        # Her indsætter du din logik for beregning af sæson-snit
+        if not played_p.empty:
+            st.write(f"Antal spillede kampe: {len(played_p)}")
 
     with tab4:
-        st.subheader("Kampoverblik (Hold vs Liga)")
-        st.info("Her sammenlignes dit valgte holds præstation pr. 90 min mod liga-gennemsnittet.")
-        # Logik for sammenligning pr 90 min
+        st.subheader("Kampoverblik")
+        st.info("Holdets præstation vs liga-gennemsnit.")
+        # Her indsætter du din logik for sammenligning mod liga-snit
+        stat_keys = ["POSS", "XG", "SHOTS"]
+        for k in stat_keys:
+            st.write(f"Metric: {k}")
 
-# Kald hovedfunktion
 vis_side()
