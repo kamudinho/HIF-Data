@@ -94,9 +94,9 @@ def draw_player_info_box(ax, team_logo, player_name, season_str, category_str):
             fontsize=8, color='#666666', va='center')
 
 def get_physical_data(player_name, player_opta_uuid, valgt_hold_navn, db_conn):
-    target_ssiid = TEAMS.get(valgt_hold_navn, {}).get('ssid')
-    if not target_ssiid:
-        target_ssiid = '56fa29c7-3a48-4186-9d14-dbf45fbc78d9'
+    ssiid = TEAMS.get(valgt_hold_navn, {}).get('ssid')
+    if not ssiid:
+        ssiid = '56fa29c7-3a48-4186-9d14-dbf45fbc78d9'
 
     clean_id = str(player_opta_uuid).lower().replace('p', '').strip()
     navne_dele = [n.strip() for n in player_name.split(' ') if len(n.strip()) > 2]
