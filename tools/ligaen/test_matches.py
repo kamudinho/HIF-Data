@@ -278,20 +278,26 @@ def vis_side(dp=None):
             vals = pd.to_numeric(f_matches[f"HOME_{k}"].where(f_matches['CONTESTANTHOME_OPTAUUID'] == valgt_uuid, f_matches[f"AWAY_{k}"]), errors='coerce')
             hold_stats[k] = vals.mean() if not vals.empty else 0
 
-        # 4. Visuel rendering
-        # Visuel container
         with st.container(border=True):
-            # Layout: Venstre (Oversigt + Logo + Navn) | Højre (Visning/Periode)
-            c_left, c_right = st.columns([2, 1])
+        # Layout: Logo + Navn (Venstre) | Visning/Periode (Højre)
+        c_left, c_right = st.columns([1, 1])
+        
+        with c_left:
+            # Vi bruger en flex-container for at sikre logo og tekst står helt tæt
+            st.markdown(f"""
+                <div style='display:flex; align-items:center; gap:10px;'>
+                    <img src='{TEAMS.get(valgt_navn, {}).get('logo', '')}' width='30'>
+                    <div style='font-size:16px; font-weight:bold;'>{valgt_navn}</div>
+                </div>
+            """, unsafe_allow_html=True)
             
-            with c_left:
-                c_logo, c_text = st.columns([0.3, 1])
-                c_logo.image(TEAMS.get(valgt_navn, {}).get('logo', ''), width=25)
-                c_text.markdown(f"**Sæsonoversigt: {valgt_navn}**")
-            
-            with c_right:
-                st.markdown(f"<div style='text-align:right; font-size:12px; color:#666;'>Visning: <b>{valgt_side}</b><br>Periode: <b>{valgt_periode}</b></div>", unsafe_allow_html=True)
-                        
+        with c_right:
+            st.markdown(f"<div style='text-align:right; font-size:11px; color:#666; padding-top:5px;'>Visning: <b>{valgt_side}</b> | Periode: <b>{valgt_periode}</b></div>", unsafe_allow_html=True)
+        
+        # En strammere divider med negativ margin for at mindske luft
+        st.markdown("<hr style='margin-top:5px; margin-bottom:10px;'>", unsafe_allow_html=True)
+        
+        st.divider(---)
             # Stats-listen
             stats_conf = [
                 ("POSS", "Boldbesiddelse", 1, "%"), ("PASSES", "Afleveringer: Samlet", 0, ""), 
