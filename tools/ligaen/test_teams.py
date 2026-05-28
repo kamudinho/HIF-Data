@@ -83,7 +83,7 @@ def get_wyscout_stats():
     conn = _get_snowflake_conn()
     db = "KLUB_HVIDOVREIF.AXIS"
     query = f"""
-        SELECT t.TEAMNAME, AVG(adv.XG) as XG, AVG(adv.SHOTS) as SHOTS, AVG(adv.GOALS) as GOALS, 
+        SELECT t.TEAMNAME, AVG(adv.XGSHOT) as XG, AVG(adv.SHOTS) as SHOTS, AVG(adv.GOALS) as GOALS, 
                AVG(md.PPDA) as PPDA, AVG(mp.MATCHTEMPO) as MATCHTEMPO, AVG(adv.SHOTSONTARGET) as SHOTSONTARGET, 
                AVG(adv.SHOTSBLOCKED) as SHOTSBLOCKED, AVG(adv.SHOTSFROMBOX) as SHOTSFROMBOX, 
                AVG(adv.SHOTSFROMDANGERZONE) as SHOTSFROMDANGERZONE, AVG(md.INTERCEPTIONS) as INTERCEPTIONS, 
