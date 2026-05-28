@@ -512,14 +512,15 @@ def vis_side(dp=None):
             if seconds == 60: minutes += 1; seconds = 0
             return f"{minutes:02d}:{seconds:02d}"
 
-        df_phys = get_physical_data(valgt_spiller, valgt_player_uuid, valgt_hold, conn)
-
-        if df_phys is not None and not df_phys.empty:
-            # SQL'en har allerede sørget for at gruppere, så du behøver ikke længere 
-            # kompliceret drop_duplicates logik her
-            df_phys['minutes'] = pd.to_numeric(df_phys['minutes'], errors='coerce').fillna(0)
-            df_phys['match_date'] = pd.to_datetime(df_phys['match_date'], errors='coerce')
-            df_phys = df_phys.sort_values('match_date', ascending=False)
+            df_phys = get_physical_data(valgt_spiller, valgt_player_uuid, valgt_hold, conn)
+            
+            # --- DEBUGGING ---
+            if df_phys is None:
+                st.warning("Debug: df_phys er None. Tjek get_physical_data funktionen.")
+            elif df_phys.empty:
+                st.warning(f"Debug: df_phys er tom for {valgt_spiller} ({valgt_player_uuid}).")
+            else:
+                st.success(f"Debug: Hentede {len(df_phys)} rækker data.")
 
             avg_dist = df_phys['distance'].mean()
             avg_hsr = df_phys['hsr'].mean()
