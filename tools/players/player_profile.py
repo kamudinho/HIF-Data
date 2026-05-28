@@ -589,23 +589,22 @@ def vis_side(dp=None):
                     ## --- MERE ROBUST DYNAMISK LOGIK ---
                 def get_opponent_data(teams_str, current_team_name):
                     try:
-                        # Håndter hvis data er NaN/tom
                         if pd.isna(teams_str): return "Ukendt", None
-                        
                         parts = [p.strip() for p in str(teams_str).split('-')]
+                        opponent_name = next((p for p in parts if current_team_name.lower() not in p.lower()), parts[0])
                         
-                        # Find modstander: Tag den del der IKKE ligner holdnavnet
-                        opponent_name = next((p for p in parts if current_team_name.lower() not in p.lower()), parts[0] if len(parts) > 0 else "Ukendt")
+                        # --- DEBUG LINJE ---
+                        print(f"DEBUG: Forsøger at matche: '{opponent_name}'") 
                         
-                        # Opslag i TEAMS
                         opp_data = next((data for name, data in TEAMS.items() 
-                                       if name.lower() in opponent_name.lower() 
-                                       or opponent_name.lower() in name.lower()), None)
+                                         if name.lower() in opponent_name.lower() 
+                                         or opponent_name.lower() in name.lower()), None)
                         
-                        return opponent_name, (opp_data.get('logo') if opp_data else None)
-                    except Exception as e:
-                        return "Fejl i navn", None
-
+                        display_name = opp_data.get('abbr', opponent_name) if opp_data else opponent_name
+                        return display_name, (opp_data.get('logo') if opp_data else None)
+                    except Exception:
+                        return "Fejl", None
+                        
                 # Anvendelse med debug-tjek
                 if not df_chart.empty:
                     data_mapped = df_chart['match_teams'].apply(lambda x: get_opponent_data(x, valgt_hold))
