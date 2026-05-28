@@ -100,17 +100,16 @@ def get_physical_data(player_name, player_opta_uuid, valgt_hold_navn, db_conn):
 
     clean_id = str(player_opta_uuid).lower().replace('p', '').strip()
     
-    # Vi grupperer nu benhårdt på DATO og PLAYER_NAME for at tvinge alle segmenter sammen
     sql = f"""
         SELECT 
             MATCH_DATE,
-            ANY_VALUE(MATCH_TEAMS) as MATCH_TEAMS,
-            MAX(MINUTES) as MINUTES,
-            SUM(DISTANCE) as DISTANCE,
-            SUM("HIGH SPEED RUNNING") as HSR,
-            SUM(SPRINTING) as SPRINTING,
-            MAX(TOP_SPEED) as TOP_SPEED,
-            SUM(NO_OF_HIGH_INTENSITY_RUNS) as HI_RUNS
+            MATCH_TEAMS,
+            MINUTES,
+            DISTANCE,
+            "HIGH SPEED RUNNING" as HSR,
+            SPRINTING,
+            TOP_SPEED,
+            NO_OF_HIGH_INTENSITY_RUNS as HI_RUNS
         FROM {DB}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
         WHERE ("optaId" LIKE '%{clean_id}%')
           AND MATCH_DATE BETWEEN '2025-07-01' AND '2026-06-30'
@@ -120,15 +119,11 @@ def get_physical_data(player_name, player_opta_uuid, valgt_hold_navn, db_conn):
               WHERE HOME_SSIID = '{target_ssiid}' 
                  OR AWAY_SSIID = '{target_ssiid}'
           )
-        GROUP BY MATCH_DATE, PLAYER_NAME
-        HAVING SUM(DISTANCE) > 0  -- Fjerner potentielle tomme rækker
-        ORDER BY MATCH_DATE DESC
     """
     df = db_conn.query(sql)
     if df is not None:
         df.columns = df.columns.str.lower()
     return df
-
 def vis_side(dp=None):
     # --- NYT: INDLÆS OVERSKRIVNINGSFIL ---
     try:
@@ -521,10 +516,21 @@ def vis_side(dp=None):
             st.pyplot(fig, use_container_width=True)
 
     with t_phys:
-        df_phys = get_physical_data(valgt_spiller, valgt_player_uuid, valgt_hold, conn)
+        df_phys_raw = get_physical_data(valgt_spiller, valgt_player_uuid, valgt_hold, conn)
         
-        if df_phys is not None and not df_phys.empty:
-            df_phys['match_date'] = pd.to_datetime(df_phys['match_date'])
+        if df_phys_raw is not None and not df_phys_raw.empty:
+            # Konverter dato og træk kun selve dato-delen ud (fjerner tid)
+            df_phys_raw['match_date'] = pd.to_datetime(df_phys_raw['match_date']).dt.date
+            
+            # Grupper og summer
+            df_phys = df_phys_raw.groupby(['match_date', 'match_teams']).agg({
+                'minutes': 'max',
+                'distance': 'sum',
+                'hsr': 'sum',
+                'sprinting': 'sum',
+                'top_speed': 'max',
+                'hi_runs': 'sum'
+            }).reset_index()
             
             # --- KONVERTERING AF "98:21" TIL PRÆCISE MINUTTER ---
             def parse_minutes(val):
