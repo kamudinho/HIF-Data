@@ -103,27 +103,18 @@ def get_physical_data(player_name, player_opta_uuid, valgt_hold_navn, db_conn):
     name_conditions = " OR ".join([f"PLAYER_NAME ILIKE '%{n}%'" for n in navne_dele])
 
     sql = f"""
-        SELECT 
-            p.MATCH_DATE,
-            any_value(p.MATCH_TEAMS) as MATCH_TEAMS,
-            MAX(p.MINUTES) as MINUTES,
-            SUM(p.DISTANCE) as DISTANCE,
-            SUM(p."HIGH SPEED RUNNING") as HSR,
-            SUM(p.SPRINTING) as SPRINTING,
-            MAX(p.TOP_SPEED) as TOP_SPEED,
-            SUM(p.NO_OF_HIGH_INTENSITY_RUNS) as HI_RUNS
-        FROM {DB}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS p
-        WHERE (({name_conditions}) OR ("optaId" LIKE '%{clean_id}%'))
-          AND p.MATCH_DATE BETWEEN '2025-07-01' AND '2026-06-30'
-          AND p.MATCH_SSIID IN (
-              SELECT MATCH_SSIID 
-              FROM {DB}.SECONDSPECTRUM_GAME_METADATA
-              WHERE HOME_SSIID = '{target_ssiid}' 
-                 OR AWAY_SSIID = '{target_ssiid}'
-          )
-        GROUP BY p.MATCH_DATE, p.PLAYER_NAME
-        ORDER BY p.MATCH_DATE DESC
-    """
+        WITH team_player_ids AS (
+            SELECT DISTINCT m.MATCH_SSIID, m.HOME_SSIID, m.AWAY_SSIID,
+            f.value:"optaId"::string AS player_opta_id
+            FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_GAME_METADATA m,
+            LATERAL FLATTEN(input => CASE WHEN m.HOME_SSIID = '{ssid}' THEN m.HOME_PLAYERS ELSE m.AWAY_PLAYERS END) f
+            WHERE m.HOME_SSIID = '{ssid}' OR m.AWAY_SSIID = '{ssid}'
+        )
+        SELECT p.*, h.player_opta_id, h.HOME_SSIID, h.AWAY_SSIID
+        FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS p
+        INNER JOIN team_player_ids h ON p.MATCH_SSIID = h.MATCH_SSIID AND p."optaId" = h.player_opta_id
+        WHERE p.MATCH_DATE >= '2025-07-01'
+        """
     df = db_conn.query(sql)
     if df is not None:
         df.columns = df.columns.str.lower()
