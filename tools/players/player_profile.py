@@ -526,7 +526,7 @@ def vis_side(dp=None):
             st.pyplot(fig, use_container_width=True)
 
     with t_phys:
-    # Helper funktion til MM:SS formatering
+        # Helper funktion til MM:SS formatering
         def format_minutes(val):
             if pd.isna(val) or val <= 0: return "00:00"
             minutes = int(val)
@@ -534,9 +534,12 @@ def vis_side(dp=None):
             if seconds == 60: minutes += 1; seconds = 0
             return f"{minutes:02d}:{seconds:02d}"
     
+        # Hent data
         df_phys = get_physical_data(valgt_spiller, valgt_player_uuid, valgt_hold, conn)
         
         if df_phys is not None and not df_phys.empty:
+            # SIKRING: Sørg for lowercase kolonner
+            df_phys.columns = df_phys.columns.str.lower()
             df_phys['minutes'] = pd.to_numeric(df_phys['minutes'], errors='coerce').fillna(0)
             df_phys['match_date'] = pd.to_datetime(df_phys['match_date'], errors='coerce')
             
@@ -560,18 +563,14 @@ def vis_side(dp=None):
             t_sub_log, t_sub_charts = st.tabs(["Kampoversigt", "Grafer"])
     
             with t_sub_charts:
-                # CSS for at minimere afstande
                 st.markdown("""
                     <style>
-                    div[data-testid="stSegmentedControl"] { margin-bottom: 0px !important; }
-                    div[data-testid="stCaption"] { margin-top: -10px !important; margin-bottom: 5px !important; }
+                        div[data-testid="stSegmentedControl"] { margin-bottom: 0px !important; }
+                        div[data-testid="stCaption"] { margin-top: -10px !important; margin-bottom: 5px !important; }
                     </style>
                 """, unsafe_allow_html=True)
     
                 cat_choice = st.segmented_control("Vælg metrik", options=["HSR (m)", "Sprint (m)", "Distance (km)", "Topfart (km/t)"], default="HSR (m)", key="phys_graph_control")
-                
-                defs = {"HSR": "HSR (High Speed Running): 20-25 km/t", "Sprint": "Sprint: ≥ 25 km/t", "Distance": "Samlet distance", "Topfart": "Højeste fart målt"}
-                st.caption(next((v for k, v in defs.items() if k in cat_choice), ""))
                 
                 mapping = {
                     "HSR (m)": ("hsr", 1, "m"), 
@@ -579,73 +578,54 @@ def vis_side(dp=None):
                     "Distance (km)": ("distance", 1000, "km"), 
                     "Topfart (km/t)": ("top_speed", 1, "km/t")
                 }
+                
                 col, div, suffix = mapping[cat_choice]
                 
+                # Forbered graf-data
                 df_chart = df_phys.sort_values('match_date', ascending=True).copy()
-    
-                if not df_chart.empty:
+                
+                # Debug tjek: Er kolonnen der?
+                if col not in df_chart.columns:
+                    st.error(f"Kolonne '{col}' fundet ikke! Findes: {list(df_chart.columns)}")
+                else:
+                    # Mapper modstander
+                    def get_opponent_data(teams_str, current_team_name):
+                        try:
+                            parts = [p.strip() for p in str(teams_str).split('-')]
+                            opp = next((p for p in parts if current_team_name.lower() not in p.lower()), parts[0])
+                            return opp
+                        except: return "Ukendt"
+
+                    df_chart['Label'] = df_chart['match_teams'].apply(lambda x: get_opponent_data(x, valgt_hold)) + "<br>" + df_chart['match_date'].dt.strftime('%d/%m')
                     df_chart['Status'] = df_chart['minutes'].apply(lambda x: "Fuld tid" if x >= 85 else "Indskiftet/udskiftet" if x > 0 else "Ikke spillet")
-                    
-                    ## --- MERE ROBUST DYNAMISK LOGIK ---
-                def get_opponent_data(teams_str, current_team_name):
-                    try:
-                        if pd.isna(teams_str): return "Ukendt", None
-                        parts = [p.strip() for p in str(teams_str).split('-')]
-                        opponent_name = next((p for p in parts if current_team_name.lower() not in p.lower()), parts[0])
-                        
-                        # --- DEBUG LINJE ---
-                        print(f"DEBUG: Forsøger at matche: '{opponent_name}'") 
-                        
-                        opp_data = next((data for name, data in TEAMS.items() 
-                                         if name.lower() in opponent_name.lower() 
-                                         or opponent_name.lower() in name.lower()), None)
-                        
-                        display_name = opp_data.get('abbr', opponent_name) if opp_data else opponent_name
-                        return display_name, (opp_data.get('logo') if opp_data else None)
-                    except Exception:
-                        return "Fejl", None
-                        
-                # Anvendelse med debug-tjek
-                if not df_chart.empty:
-                    data_mapped = df_chart['match_teams'].apply(lambda x: get_opponent_data(x, valgt_hold))
-                    df_chart[['Opponent', 'Opponent_Logo']] = pd.DataFrame(data_mapped.tolist(), index=df_chart.index)
-                    
-                    df_chart['Label'] = df_chart['Opponent'] + "<br>" + df_chart['match_date'].dt.strftime('%d/%m')
-                # ----------------------------------
-                    # ----------------------------------------
                     
                     y_vals = df_chart[col] / div
                     season_avg = y_vals.mean()
-                    text_vals = y_vals.apply(lambda x: f"{x:.0f} {suffix}" if x > 100 else f"{x:.1f} {suffix}")
-                    color_map = {"Fuld tid": "#df003b", "Indskiftet/udskiftet": "#808080", "Ikke spillet": "#808080"}
                     
                     fig = go.Figure()
+                    color_map = {"Fuld tid": "#df003b", "Indskiftet/udskiftet": "#808080", "Ikke spillet": "#808080"}
+                    
                     for status, color in color_map.items():
                         df_subset = df_chart[df_chart['Status'] == status]
-                        fig.add_trace(go.Bar(
-                            x=df_subset['Label'], y=y_vals.loc[df_subset.index],
-                            text=text_vals.loc[df_subset.index], name=status,
-                            marker_color=color, textposition='outside', cliponaxis=False
-                        ))
+                        if not df_subset.empty:
+                            fig.add_trace(go.Bar(
+                                x=df_subset['Label'], y=y_vals.loc[df_subset.index],
+                                name=status, marker_color=color
+                            ))
     
                     fig.add_shape(type="line", x0=-0.5, x1=len(df_chart)-0.5, y0=season_avg, y1=season_avg, 
-                                  line=dict(color="#D3D3D3", width=2, dash="dash"), layer="below")
-    
-                    fig.update_layout(
-                        plot_bgcolor="white", height=400, margin=dict(t=20, b=50, l=10, r=10),
-                        xaxis=dict(showgrid=False, tickangle=-45, type='category', categoryorder='array', categoryarray=df_chart['Label'].tolist()),
-                        yaxis=dict(showgrid=True, gridcolor='#f0f0f0', showticklabels=False, zeroline=False, range=[0, y_vals.max() * 1.25]),
-                        legend=dict(orientation="h", yanchor="bottom", y=1.1, xanchor="right", x=1, itemclick=False, itemdoubleclick=False),
-                        barmode='relative', bargap=0.2
-                    )
+                                  line=dict(color="#D3D3D3", width=2, dash="dash"))
+                    
+                    fig.update_layout(height=400, plot_bgcolor="white", barmode='relative', bargap=0.2, margin=dict(t=20, b=50, l=10, r=10))
                     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-        
+            
             with t_sub_log:
                 df_display = df_phys.copy()
-                df_display['minutes'] = df_display['minutes'].apply(format_minutes)
-                df_display['match_date'] = df_display['match_date'].dt.strftime('%d/%m/%Y')
-                df_display.rename(columns={'match_date': 'Dato', 'match_teams': 'Kamp', 'minutes': 'Minutter', 'distance': 'Distance', 'hsr': 'HSR', 'sprinting': 'Sprint', 'top_speed': 'Topfart', 'hi_runs': 'Højintense løb'}, inplace=True)
-                st.data_editor(df_display, hide_index=True, use_container_width=True, disabled=True)
+                df_display['minutter'] = df_display['minutes'].apply(format_minutes)
+                df_display.rename(columns={'match_date': 'Dato', 'match_teams': 'Kamp', 'minutter': 'Minutter', 'distance': 'Distance', 'hsr': 'HSR', 'sprinting': 'Sprint', 'top_speed': 'Topfart'}, inplace=True)
+                st.data_editor(df_display[['Dato', 'Kamp', 'Minutter', 'Distance', 'HSR', 'Sprint', 'Topfart']], hide_index=True, use_container_width=True, disabled=True)
+        else:
+            st.warning("Ingen fysisk data fundet for denne spiller.")
             
 if __name__ == "__main__":
     vis_side()
