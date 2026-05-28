@@ -297,7 +297,6 @@ def vis_side(dp=None):
             # En strammere divider med negativ margin for at mindske luft
             st.markdown("<hr style='margin-top:5px; margin-bottom:10px;'>", unsafe_allow_html=True)
             
-            st.divider()
             # Stats-listen
             stats_conf = [
                 ("POSS", "Boldbesiddelse", 1, "%"), ("PASSES", "Afleveringer: Samlet", 0, ""), 
