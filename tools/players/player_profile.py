@@ -94,9 +94,12 @@ def draw_player_info_box(ax, team_logo, player_name, season_str, category_str):
             fontsize=8, color='#666666', va='center')
 
 def get_physical_data(player_name, player_opta_uuid, valgt_hold_navn, db_conn):
-    # Vi søger på efternavnet alene med LIKE for at omgå formaterings-forskelle
+    # 1. Split navnet for at være sikker på at vi kun bruger den unikke del
+    # Vi bruger det sidste ord i navnet (efternavnet), da det er det mest sikre
     efternavn = player_name.split()[-1]
     
+    # 2. Søg med LIKE, så vi finder ham uanset om han hedder 
+    # "Jasson, F." eller "Fornavn Jasson" i databasen
     sql = f"""
         SELECT * FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
         WHERE UPPER(PLAYER_NAME) LIKE UPPER('%{efternavn}%')
@@ -105,15 +108,58 @@ def get_physical_data(player_name, player_opta_uuid, valgt_hold_navn, db_conn):
     df = db_conn.query(sql)
     
     if df is not None and not df.empty:
-        # Debug: Vis os hvad vi fandt
-        st.write(f"Fandt {len(df)} rækker ved søgning på '{efternavn}':")
-        st.write(df[['PLAYER_NAME']].head()) # Vis kun navne-kolonnen
+        # Vigtigt: Rens kolonner som vi fandt ud af før
+        df.columns = df.columns.str.lower()
         
-        # Resten af din logik (rename, beregning...)
+        # Omdøb Snowflake-navne til dine app-navne (hvis nødvendigt)
+        rename_map = {
+            'high speed running': 'hsr',
+            'sprinting': 'sprinting',
+            'top_speed': 'top_speed',
+            'no_of_high_intensity_runs': 'hi_runs'
+        }
+        df = df.rename(columns=rename_map)
+        
+        # Sorter så vi får de nyeste data først
+        if 'match_date' in df.columns:
+            df = df.sort_values(by='match_date', ascending=False)
+            
         return df
-    else:
-        st.error(f"Søgning på '{efternavn}' gav intet resultat i databasen.")
-        return None
+    
+    return Nonedef get_physical_data(player_name, player_opta_uuid, valgt_hold_navn, db_conn):
+    # 1. Split navnet for at være sikker på at vi kun bruger den unikke del
+    # Vi bruger det sidste ord i navnet (efternavnet), da det er det mest sikre
+    efternavn = player_name.split()[-1]
+    
+    # 2. Søg med LIKE, så vi finder ham uanset om han hedder 
+    # "Jasson, F." eller "Fornavn Jasson" i databasen
+    sql = f"""
+        SELECT * FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
+        WHERE UPPER(PLAYER_NAME) LIKE UPPER('%{efternavn}%')
+    """
+    
+    df = db_conn.query(sql)
+    
+    if df is not None and not df.empty:
+        # Vigtigt: Rens kolonner som vi fandt ud af før
+        df.columns = df.columns.str.lower()
+        
+        # Omdøb Snowflake-navne til dine app-navne (hvis nødvendigt)
+        rename_map = {
+            'high speed running': 'hsr',
+            'sprinting': 'sprinting',
+            'top_speed': 'top_speed',
+            'no_of_high_intensity_runs': 'hi_runs'
+        }
+        df = df.rename(columns=rename_map)
+        
+        # Sorter så vi får de nyeste data først
+        if 'match_date' in df.columns:
+            df = df.sort_values(by='match_date', ascending=False)
+            
+        return df
+    
+    return None
     
 def vis_side(dp=None):
     # --- NYT: INDLÆS OVERSKRIVNINGSFIL ---
