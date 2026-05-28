@@ -286,14 +286,12 @@ def vis_side(dp=None):
             
             with c_left:
                 c_logo, c_text = st.columns([0.3, 1])
-                c_logo.image(TEAMS.get(valgt_navn, {}).get('logo', ''), width=35)
+                c_logo.image(TEAMS.get(valgt_navn, {}).get('logo', ''), width=25)
                 c_text.markdown(f"**Sæsonoversigt: {valgt_navn}**")
             
             with c_right:
                 st.markdown(f"<div style='text-align:right; font-size:12px; color:#666;'>Visning: <b>{valgt_side}</b><br>Periode: <b>{valgt_periode}</b></div>", unsafe_allow_html=True)
-            
-            st.divider() # En fin skillelinje før tallene starter
-            
+                        
             # Stats-listen
             stats_conf = [
                 ("POSS", "Boldbesiddelse", 1, "%"), ("PASSES", "Afleveringer: Samlet", 0, ""), 
