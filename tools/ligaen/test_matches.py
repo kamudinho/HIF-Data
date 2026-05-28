@@ -74,53 +74,148 @@ def vis_side(dp=None):
         LEFT JOIN AdvancedEvents ae_a ON b.MATCH_OPTAUUID = ae_a.MATCH_OPTAUUID AND b.CONTESTANTAWAY_OPTAUUID = ae_a.EVENT_CONTESTANT_OPTAUUID
     """
 
-    df_matches = conn.query(sql) if hasattr(conn, 'query') else pd.read_sql(sql, conn)
+    with st.spinner("Henter data..."):
+        df_matches = conn.query(sql) if hasattr(conn, 'query') else pd.read_sql(sql, conn)
+
+    if df_matches is None or df_matches.empty:
+        st.warning("Ingen data fundet.")
+        return
+
     df_matches.columns = [str(c).upper() for c in df_matches.columns]
-    
+    df_matches['MATCH_DATE_FULL'] = pd.to_datetime(df_matches['MATCH_DATE_FULL'], errors='coerce')
+    df_matches['TOTAL_HOME_SCORE'] = pd.to_numeric(df_matches['TOTAL_HOME_SCORE'], errors='coerce').fillna(0)
+    df_matches['TOTAL_AWAY_SCORE'] = pd.to_numeric(df_matches['TOTAL_AWAY_SCORE'], errors='coerce').fillna(0)
+
+    if 'MATCH_LOCALTIME' in df_matches.columns:
+        df_matches['MATCH_LOCALTIME'] = df_matches['MATCH_LOCALTIME'].astype(str)
+    for col in ['CONTESTANTHOME_OPTAUUID', 'CONTESTANTAWAY_OPTAUUID']:
+        df_matches[col] = df_matches[col].astype(str).str.strip().str.upper()
+
     opta_to_name = {str(v['opta_uuid']).strip().upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
     liga_hold_options = {n: i.get("opta_uuid") for n, i in TEAMS.items() if i.get("league") == "1. Division"}
     h_list = sorted(liga_hold_options.keys())
-    
-    # UI Layout
+    hif_idx = h_list.index("Hvidovre") if "Hvidovre" in h_list else 0
+
+    st.markdown("""
+        <style>
+        .stat-box { text-align: center; background: #f8f9fa; border-radius: 6px; padding: 8px 4px; border-bottom: 2px solid #cc0000; height: 52px; display: flex; flex-direction: column; justify-content: center; }
+        .stat-label { font-size: 10px; color: #666; text-transform: uppercase; font-weight: 600; line-height: 1.1; margin-bottom: 2px; }
+        .stat-val { font-weight: 800; font-size: 16px; color: #111; line-height: 1.1; }
+        .score-pill { background: #222; color: white; border-radius: 4px; padding: 4px 12px; font-weight: bold; font-size: 18px; display: inline-block; min-width: 80px; text-align: center; }
+        .date-header { background: #f0f0f0; padding: 6px 12px; border-radius: 4px; font-size: 13px; font-weight: bold; margin-top: 15px; border-left: 5px solid #cc0000; color: #333; }
+        </style>
+    """, unsafe_allow_html=True)
+
     col_layout = [2.2, 0.5, 0.5, 0.5, 0.5, 0.6, 0.6, 0.6]
     row1 = st.columns(col_layout)
-    valgt_navn = row1[0].selectbox("Hold", h_list, key="sel_team_v2")
-    valgt_uuid = str(liga_hold_options[valgt_navn]).strip().upper()
-    
+    with row1[0]:
+        valgt_navn = st.selectbox("Hold", h_list, index=hif_idx, label_visibility="collapsed", key="u_t_sel")
+        valgt_uuid = str(liga_hold_options[valgt_navn]).strip().upper()
+
+    team_matches = df_matches[(df_matches['CONTESTANTHOME_OPTAUUID'] == valgt_uuid) | (df_matches['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid)].copy()
+
     row2 = st.columns(col_layout)
-    valgt_periode = row2[0].selectbox("Periode", ["Sæson 25/26", "Efterår 25", "Forår 26"], key="sel_p_v2")
-    valgt_side = row2[1].selectbox("Side", ["Samlet", "Hjemme", "Ude"], key="sel_s_v2")
+    with row2[0]:
+        c_period, c_side = st.columns(2)
+        with c_period:
+            valgt_periode = st.selectbox("Periode", ["Sæson 25/26", "Efterår 25", "Forår 26"], label_visibility="collapsed", key="u_p_sel")
+        with c_side:
+            valgt_side = st.selectbox("Side", ["Samlet", "Hjemme", "Ude"], label_visibility="collapsed", key="u_s_sel")
 
-    # Filter logik
-    f_matches = df_matches[(df_matches['CONTESTANTHOME_OPTAUUID'] == valgt_uuid) | (df_matches['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid)]
+    if valgt_periode == "Efterår 25": f_matches = team_matches[(team_matches['MATCH_DATE_FULL'] >= '2025-07-01') & (team_matches['MATCH_DATE_FULL'] <= '2025-12-31')]
+    elif valgt_periode == "Forår 26": f_matches = team_matches[(team_matches['MATCH_DATE_FULL'] >= '2026-01-01') & (team_matches['MATCH_DATE_FULL'] <= '2026-06-30')]
+    else: f_matches = team_matches
+
+    if valgt_side == "Hjemme": f_matches = f_matches[f_matches['CONTESTANTHOME_OPTAUUID'] == valgt_uuid]
+    elif valgt_side == "Ude": f_matches = f_matches[f_matches['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid]
+
     played_p = f_matches[f_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].copy()
+    
+    summary = {"K": len(played_p), "S": 0, "U": 0, "N": 0, "M+": 0, "M-": 0}
+    for _, m in played_p.iterrows():
+        is_h = m['CONTESTANTHOME_OPTAUUID'] == valgt_uuid
+        h_s, a_s = int(m['TOTAL_HOME_SCORE']), int(m['TOTAL_AWAY_SCORE'])
+        summary["M+"] += h_s if is_h else a_s
+        summary["M-"] += a_s if is_h else h_s
+        if h_s == a_s: summary["U"] += 1
+        elif (is_h and h_s > a_s) or (not is_h and a_s > h_s): summary["S"] += 1
+        else: summary["N"] += 1
 
-    # TABS
+    stats_r1 = [("Kampe", summary["K"]), ("Sejr", summary["S"]), ("Uafgjort", summary["U"]), ("Nederlag", summary["N"]), ("Mål +", summary["M+"]), ("Mål -", summary["M-"]), ("+/-", summary["M+"]-summary["M-"])]
+    for i, (l, v) in enumerate(stats_r1):
+        row1[i+1].markdown(f"<div class='stat-box'><div class='stat-label'>{l}</div><div class='stat-val'>{v}</div></div>", unsafe_allow_html=True)
+
+    row2[1].markdown(f"<div class='stat-box' style='background:#eee;'><div class='stat-label'>SNIT</div><div class='stat-val' style='font-size:9px;'>{valgt_side.upper()}</div></div>", unsafe_allow_html=True)
+
+    avg_map = [("POSS", "POSS %", 1, "%"), ("XG", "xG", 2, ""), ("BIG_CHANCES", "STORE CHANCER", 0, ""), ("DZ_SHOTS", "SKUD FRA DZ", 0, ""), ("PASSES_FT", "AFS. SIDSTE 1/3", 0, ""), ("TOUCHES_IN_BOX", "TOUCHES I BOKS", 0, "")]
+    for i, (key, label, dec, suffix) in enumerate(avg_map):
+        vals = []
+        for _, m in played_p.iterrows():
+            pref = "HOME_" if m['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else "AWAY_"
+            col_name = f"{pref}{key}"
+            vals.append(pd.to_numeric(m.get(col_name), errors='coerce'))
+        avg_val = np.nanmean(vals) if vals and not np.all(np.isnan(vals)) else 0
+        fmt = f"{avg_val:.{dec}f}{suffix}" if dec > 0 else f"{int(round(avg_val))}{suffix}"
+        row2[i+2].markdown(f"<div class='stat-box'><div class='stat-label'>{label}</div><div class='stat-val'>{fmt}</div></div>", unsafe_allow_html=True)
+
     tab1, tab2, tab3, tab4 = st.tabs(["RESULTATER", "KOMMENDE", "SÆSONOVERBLIK", "KAMPOVERBLIK"])
 
     with tab1:
-        st.subheader("Resultater")
+        all_played = df_matches[df_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].copy()
+        team_avgs = {}
+        stat_keys = ["POSS", "PASSES", "FORWARD_PASSES", "SHOTS", "BIG_CHANCES", "XG", "XGNP", "TOUCHES_IN_BOX", "DZ_SHOTS", "PASSES_FT"]
+        for t_name, t_info in TEAMS.items():
+            t_uuid = str(t_info.get('opta_uuid', '')).strip().upper()
+            if not t_uuid: continue
+            t_m = all_played[(all_played['CONTESTANTHOME_OPTAUUID'] == t_uuid) | (all_played['CONTESTANTAWAY_OPTAUUID'] == t_uuid)]
+            avgs = {}
+            for k in stat_keys:
+                vals = pd.to_numeric(t_m[f"HOME_{k}"].where(t_m['CONTESTANTHOME_OPTAUUID'] == t_uuid, t_m[f"AWAY_{k}"]), errors='coerce')
+                avgs[k] = vals.mean() if not vals.empty else 0
+            team_avgs[t_uuid] = avgs
+
         for _, row in played_p.sort_values('MATCH_DATE_FULL', ascending=False).iterrows():
-            st.write(f"{row['MATCH_DATE_FULL'].date()}: {opta_to_name.get(row['CONTESTANTHOME_OPTAUUID'])} {int(row['TOTAL_HOME_SCORE'])} - {int(row['TOTAL_AWAY_SCORE'])} {opta_to_name.get(row['CONTESTANTAWAY_OPTAUUID'])}")
+            st.markdown(f"<div class='date-header'>RUNDE {int(row['WEEK']) if pd.notnull(row['WEEK']) else 0} — {row['MATCH_DATE_FULL'].strftime('%d. %b %Y').upper()}</div>", unsafe_allow_html=True)
+            with st.container(border=True):
+                h_uuid, a_uuid = row['CONTESTANTHOME_OPTAUUID'], row['CONTESTANTAWAY_OPTAUUID']
+                h_n, a_n = opta_to_name.get(h_uuid, "Hjemme"), opta_to_name.get(a_uuid, "Ude")
+                c1, c2, c3, c4, c5 = st.columns([2, 0.4, 1.2, 0.4, 2])
+                c1.markdown(f"<div style='text-align:right; font-weight:bold; padding-top:8px;'>{h_n}</div>", unsafe_allow_html=True)
+                c2.image(TEAMS.get(h_n, {}).get('logo', ''), width=35)
+                c3.markdown(f"<div style='text-align:center;'><span class='score-pill'>{int(row['TOTAL_HOME_SCORE'])} - {int(row['TOTAL_AWAY_SCORE'])}</span></div>", unsafe_allow_html=True)
+                c4.image(TEAMS.get(a_n, {}).get('logo', ''), width=35)
+                c5.markdown(f"<div style='font-weight:bold; padding-top:8px;'>{a_n}</div>", unsafe_allow_html=True)
+                stats_conf = [("HOME_POSS", "AWAY_POSS", "POSS", "Boldbesiddelse", 1, "%"), ("HOME_PASSES", "AWAY_PASSES", "PASSES", "Afleveringer: Samlet", 0, ""), ("HOME_FORWARD_PASSES", "AWAY_FORWARD_PASSES", "FORWARD_PASSES", "Afleveringer: Fremadrettede", 0, ""), ("HOME_PASSES_FT", "AWAY_PASSES_FT", "PASSES_FT", "Afleveringer: Sidste 1/3", 0, ""), ("HOME_TOUCHES_IN_BOX", "AWAY_TOUCHES_IN_BOX", "TOUCHES_IN_BOX", "Touches in box", 0, ""), ("HOME_SHOTS", "AWAY_SHOTS", "SHOTS", "Afslutninger", 0, ""), ("HOME_DZ_SHOTS", "AWAY_DZ_SHOTS", "DZ_SHOTS", "Skud fra DZ", 0, ""), ("HOME_XG", "AWAY_XG", "XG", "xG", 2, ""), ("HOME_XGNP", "AWAY_XGNP", "XGNP", "xGnp", 2, ""), ("HOME_BIG_CHANCES", "AWAY_BIG_CHANCES", "BIG_CHANCES", "Store chancer", 0, "")]
+                for hc, ac, s_key, lbl, dec, suf in stats_conf:
+                    hv_raw, av_raw = pd.to_numeric(row.get(hc), errors='coerce'), pd.to_numeric(row.get(ac), errors='coerce')
+                    if pd.isna(hv_raw) and pd.isna(av_raw): continue
+                    hv, av = float(hv_raw or 0), float(av_raw or 0)
+                    h_avg, a_avg = team_avgs.get(h_uuid, {}).get(s_key, 0), team_avgs.get(a_uuid, {}).get(s_key, 0)
+                    hd, ad = hv - h_avg, av - a_avg
+                    h_diff_str = f" <span style='color:{'green' if hd>=0 else 'red'}; font-size:10px;'>({'+' if hd>=0 else ''}{hd:.{dec}f}{suf})</span>"
+                    a_diff_str = f"<span style='color:{'green' if ad>=0 else 'red'}; font-size:10px;'>({'+' if ad>=0 else ''}{ad:.{dec}f}{suf})</span> "
+                    h_pct = (hv / (hv + av) * 100) if (hv + av) > 0 else 50
+                    st.markdown(f"<div style='display:flex; justify-content:space-between; font-size:11px; margin-top:8px;'><div style='text-align:left;'><b>{hv:.{dec}f}{suf}</b>{h_diff_str}</div><div style='color:#888;'>{lbl.upper()}</div><div style='text-align:right;'>{a_diff_str}<b>{av:.{dec}f}{suf}</b></div></div><div style='display:flex; height:7px; background:#eee; border-radius:3px; overflow:hidden; margin-bottom:10px;'><div style='width:{h_pct}%; background:{TEAM_COLORS.get(h_n, {}).get('primary', '#ccc') if h_uuid==valgt_uuid else '#ddd'};'></div><div style='width:{100-h_pct}%; background:{TEAM_COLORS.get(a_n, {}).get('primary', '#ccc') if a_uuid==valgt_uuid else '#ddd'};'></div></div>", unsafe_allow_html=True)
 
     with tab2:
-        st.subheader("Kommende kampe")
         future = f_matches[~f_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)]
-        st.write(future[['MATCH_DATE_FULL', 'CONTESTANTHOME_NAME', 'CONTESTANTAWAY_NAME']])
+        for _, row in future.sort_values('MATCH_DATE_FULL').iterrows():
+            st.markdown(f"<div class='date-header'>RUNDE {int(row['WEEK']) if pd.notnull(row['WEEK']) else 0} — {row['MATCH_DATE_FULL'].strftime('%d. %b %Y').upper()}</div>", unsafe_allow_html=True)
+            with st.container(border=True):
+                h_n, a_n = opta_to_name.get(row['CONTESTANTHOME_OPTAUUID'], "Hjemme"), opta_to_name.get(row['CONTESTANTAWAY_OPTAUUID'], "Ude")
+                c1, c2, c3, c4, c5 = st.columns([2, 0.4, 1.2, 0.4, 2])
+                c1.markdown(f"<div style='text-align:right; font-weight:bold; padding-top:8px;'>{h_n}</div>", unsafe_allow_html=True)
+                c2.image(TEAMS.get(h_n, {}).get('logo', ''), width=35)
+                c3.markdown(f"<div style='text-align:center; padding-top:4px;'><span class='score-pill' style='background:#eee; color:#333; font-size:14px;'>{str(row.get('MATCH_LOCALTIME'))[:5] if pd.notnull(row.get('MATCH_LOCALTIME')) else 'TBA'}</span></div>", unsafe_allow_html=True)
+                c4.image(TEAMS.get(a_n, {}).get('logo', ''), width=35)
+                c5.markdown(f"<div style='font-weight:bold; padding-top:8px;'>{a_n}</div>", unsafe_allow_html=True)
 
     with tab3:
         st.subheader("Sæsonoverblik")
-        st.info("Statistisk gennemsnit for hele perioden.")
-        # Her indsætter du din logik for beregning af sæson-snit
-        if not played_p.empty:
-            st.write(f"Antal spillede kampe: {len(played_p)}")
-
+        st.write("Sæsonoverblik logik her")
+        
     with tab4:
         st.subheader("Kampoverblik")
-        st.info("Holdets præstation vs liga-gennemsnit.")
-        # Her indsætter du din logik for sammenligning mod liga-snit
-        stat_keys = ["POSS", "XG", "SHOTS"]
-        for k in stat_keys:
-            st.write(f"Metric: {k}")
+        st.write("Kampoverblik logik her")
 
 vis_side()
