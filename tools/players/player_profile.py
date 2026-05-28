@@ -516,6 +516,16 @@ def vis_side(dp=None):
         if df_phys is not None and not df_phys.empty:
             df_phys['match_date'] = pd.to_datetime(df_phys['match_date'])
             df_phys = df_phys.sort_values('match_date', ascending=False)
+            # Beregn HSR og eventuelle andre kolonner der mangler
+            if 'HIGH SPEED RUNNING' in df_phys.columns and 'SPRINTING' in df_phys.columns:
+                df_phys['hsr'] = df_phys['HIGH SPEED RUNNING'] + df_phys['SPRINTING']
+            else:
+                # Hvis kolonnerne hedder noget andet i din database, så ret navne her
+                df_phys['hsr'] = 0 
+            
+            # Beregn hi_runs hvis den mangler (eksempel: hvis det er en anden kombination)
+            if 'hi_runs' not in df_phys.columns:
+                df_phys['hi_runs'] = df_phys.get('HIGH SPEED RUNNING', 0) # Tilpas efter dit behov
             avg_dist = df_phys['distance'].mean()
             avg_hsr = df_phys['hsr'].mean()
             latest = df_phys.iloc[0]
