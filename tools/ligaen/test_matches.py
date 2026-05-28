@@ -217,41 +217,47 @@ def vis_side(dp=None):
     with tab4:
         st.subheader(f"Kampoverblik: {valgt_navn} (pr. 90 min) vs. Liga-snit")
         
-        # 1. Hent dine eksisterende beregninger (fra tab1-logikken)
-        all_played = df_matches[df_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].copy()
+        # 1. Hent statistik-nøgler
         stat_keys = ["POSS", "PASSES", "FORWARD_PASSES", "SHOTS", "BIG_CHANCES", "XG", "XGNP", "TOUCHES_IN_BOX", "DZ_SHOTS", "PASSES_FT"]
         
-        # Beregn liga-gennemsnit for alle statistikker
+        # 2. Beregn liga-snit (baseret på alle kampe, der er spillet)
+        all_played = df_matches[df_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].copy()
         league_avgs = {}
         for k in stat_keys:
-            # Vi tager alle værdier fra både hjemme og ude for at få det sande liga-snit
             all_vals = pd.concat([pd.to_numeric(all_played[f"HOME_{k}"], errors='coerce'), 
                                   pd.to_numeric(all_played[f"AWAY_{k}"], errors='coerce')])
             league_avgs[k] = all_vals.mean()
 
-        # 2. Hent dit holds gennemsnit (brug den eksisterende team_avgs ordbog)
-        # Sørg for at valgt_uuid er korrekt (som du har defineret øverst i din kode)
-        hold_stats = team_avgs.get(valgt_uuid, {k: 0 for k in stat_keys})
-
-        # 3. Vis oversigten som en tabel/liste uden expanders
-        st.markdown(f"---")
+        # 3. Beregn holdets snit (baseret på f_matches, som er filtreret af dine dropdowns)
+        # Vi genbruger logikken fra dit setup
+        hold_stats = {}
         for k in stat_keys:
-            hold_val = hold_stats.get(k, 0)
-            liga_val = league_avgs.get(k, 0)
-            
-            # Dynamisk progressbar (max er sat til 2x liga-snittet for visuel reference)
-            max_scale = liga_val * 2 if liga_val > 0 else 10
-            
-            c1, c2, c3 = st.columns([1.5, 3, 1])
-            c1.write(f"**{k.replace('_', ' ')}**")
-            
-            # Progress bar for holdet
-            c2.progress(min(hold_val / max_scale, 1.0))
-            
-            # Vis tal (Hold vs Liga)
-            c3.write(f"{hold_val:.1f} / {liga_val:.1f}")
+            vals = pd.to_numeric(f_matches[f"HOME_{k}"].where(f_matches['CONTESTANTHOME_OPTAUUID'] == valgt_uuid, f_matches[f"AWAY_{k}"]), errors='coerce')
+            hold_stats[k] = vals.mean() if not vals.empty else 0
 
-        st.markdown(f"---")
-        st.caption("Viser holdets gennemsnit pr. kamp holdt op mod hele ligaens gennemsnit.")
+        # 4. Render som 'stat-box' grid (samme stil som tab1)
+        # Vi opdeler i rækker af 3 for at holde det pænt
+        cols = st.columns(3)
+        for i, k in enumerate(stat_keys):
+            h_val = hold_stats.get(k, 0)
+            l_val = league_avgs.get(k, 0)
+            
+            # Valg af farve (grøn hvis bedre, rød hvis dårligere end snit - undtagen for XG/POSS hvor højere er bedre)
+            # Her kan du justere logikken alt efter hvilken vej tallene skal vende
+            diff = h_val - l_val
+            color = "green" if diff >= 0 else "red"
+            
+            # Visning i stat-box stil
+            with cols[i % 3]:
+                st.markdown(f"""
+                    <div class='stat-box'>
+                        <div class='stat-label'>{k.replace('_', ' ')}</div>
+                        <div class='stat-val'>{h_val:.1f} <span style='font-size:10px; color:{color};'>({diff:+.1f})</span></div>
+                        <div style='font-size:9px; color:#888;'>Liga: {l_val:.1f}</div>
+                    </div>
+                """, unsafe_allow_html=True)
+                
+            if (i + 1) % 3 == 0:
+                cols = st.columns(3) # Næste række
         
 vis_side()
