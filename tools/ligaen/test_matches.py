@@ -111,7 +111,18 @@ def vis_side(dp=None):
         width: 120px; /* Her kan du justere bredden (f.eks. 100px, 150px eller 100%) */
         margin: 0 auto; /* Centrerer boksen i den kolonne den står i */
     }
-
+        .stat-box3 { text-align: center; 
+        background: #c8c8c8; 
+        border-radius: 6px; 
+        padding: 8px 4px; 
+        border-bottom: 2px solid #cc0000; 
+        height: 52px; 
+        display: flex; 
+        flex-direction: column; 
+        justify-content: center;
+        width: 120px; /* Her kan du justere bredden (f.eks. 100px, 150px eller 100%) */
+        margin: 0 auto; /* Centrerer boksen i den kolonne den står i */
+    }
         .stat-label { font-size: 10px; color: #666; text-transform: uppercase; font-weight: 600; line-height: 1.1; margin-bottom: 2px; }
         .stat-val { font-weight: 800; font-size: 16px; color: #111; line-height: 1.1; }
         .score-pill { background: #222; color: white; border-radius: 4px; padding: 4px 12px; font-weight: bold; font-size: 18px; display: inline-block; min-width: 80px; text-align: center; }
@@ -224,7 +235,7 @@ def vis_side(dp=None):
                 c5.markdown(f"<div style='font-weight:bold; padding-top:8px;'>{a_n}</div>", unsafe_allow_html=True)
 
     with tab3:
-        st.subheader(f"Sæsonoverblik: {valgt_navn} (pr. 90 min)")
+        st.caption(f"Sæsonoverblik: {valgt_navn}")
         
         # Opdateret CSS til bredere, strammere bokse
         st.markdown("""
