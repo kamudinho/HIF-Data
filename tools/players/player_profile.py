@@ -127,7 +127,13 @@ def get_physical_data(player_name, player_opta_uuid, valgt_hold_navn, db_conn):
         GROUP BY p.MATCH_DATE
         ORDER BY p.MATCH_DATE DESC
     """
-    return db_conn.query(sql)
+    df = db_conn.query(sql)
+
+    if df is not None:
+
+        df.columns = df.columns.str.lower()
+
+    return df
 
 def vis_side(dp=None):
     # --- NYT: INDLÆS OVERSKRIVNINGSFIL ---
