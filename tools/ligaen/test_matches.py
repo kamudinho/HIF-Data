@@ -211,50 +211,57 @@ def vis_side(dp=None):
                 c5.markdown(f"<div style='font-weight:bold; padding-top:8px;'>{a_n}</div>", unsafe_allow_html=True)
 
     with tab3:
-        st.subheader(f"Sæsonoverblik: {valgt_navn} (pr. 90 min) vs. Liga-snit")
+        st.subheader(f"Sæsonoverblik: {valgt_navn} (pr. 90 min)")
         
-        # 1. Hent statistik-nøgler
-        stat_keys = ["POSS", "PASSES", "FORWARD_PASSES", "SHOTS", "BIG_CHANCES", "XG", "XGNP", "TOUCHES_IN_BOX", "DZ_SHOTS", "PASSES_FT"]
-        
-        # 2. Beregn liga-snit (baseret på alle kampe, der er spillet)
-        all_played = df_matches[df_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].copy()
-        league_avgs = {}
-        for k in stat_keys:
-            all_vals = pd.concat([pd.to_numeric(all_played[f"HOME_{k}"], errors='coerce'), 
-                                  pd.to_numeric(all_played[f"AWAY_{k}"], errors='coerce')])
-            league_avgs[k] = all_vals.mean()
+        # 1. Definér stat-nøgler og hvilke vi vil vise
+        stats_to_show = [
+            ("POSS", "Boldbesiddelse", 1, "%"), 
+            ("XG", "xG", 2, ""), 
+            ("SHOTS", "Afslutninger", 0, ""), 
+            ("BIG_CHANCES", "Store chancer", 0, ""), 
+            ("PASSES_FT", "Afs. Sidste 1/3", 0, ""), 
+            ("TOUCHES_IN_BOX", "Touches i boks", 0, "")
+        ]
 
-        # 3. Beregn holdets snit (baseret på f_matches, som er filtreret af dine dropdowns)
-        # Vi genbruger logikken fra dit setup
-        hold_stats = {}
-        for k in stat_keys:
-            vals = pd.to_numeric(f_matches[f"HOME_{k}"].where(f_matches['CONTESTANTHOME_OPTAUUID'] == valgt_uuid, f_matches[f"AWAY_{k}"]), errors='coerce')
-            hold_stats[k] = vals.mean() if not vals.empty else 0
-
-        # 4. Render som 'stat-box' grid (samme stil som tab1)
-        # Vi opdeler i rækker af 3 for at holde det pænt
-        cols = st.columns(3)
-        for i, k in enumerate(stat_keys):
-            h_val = hold_stats.get(k, 0)
-            l_val = league_avgs.get(k, 0)
-            
-            # Valg af farve (grøn hvis bedre, rød hvis dårligere end snit - undtagen for XG/POSS hvor højere er bedre)
-            # Her kan du justere logikken alt efter hvilken vej tallene skal vende
-            diff = h_val - l_val
-            color = "green" if diff >= 0 else "red"
-            
-            # Visning i stat-box stil
-            with cols[i % 3]:
-                st.markdown(f"""
-                    <div class='stat-box'>
-                        <div class='stat-label'>{k.replace('_', ' ')}</div>
-                        <div class='stat-val'>{h_val:.1f} <span style='font-size:10px; color:{color};'>({diff:+.1f})</span></div>
-                        <div style='font-size:9px; color:#888;'>Liga: {l_val:.1f}</div>
-                    </div>
-                """, unsafe_allow_html=True)
+        # 2. Beregn stats pr. hold og pr. modstander
+        # Vi skal bruge en kolonne for minutter (her antaget 90 hvis ikke tilgængelig)
+        def get_stats_per_90(df, is_us=True):
+            data = {}
+            for k in [s[0] for s in stats_to_show]:
+                # Find kolonnenavne baseret på om det er Hjemme eller Ude
+                vals = []
+                for _, m in df.iterrows():
+                    # Er vi hjemme eller ude i denne specifikke kamp?
+                    is_h = m['CONTESTANTHOME_OPTAUUID'] == valgt_uuid
+                    
+                    if is_us:
+                        val = m[f"HOME_{k}"] if is_h else m[f"AWAY_{k}"]
+                    else:
+                        val = m[f"AWAY_{k}"] if is_h else m[f"HOME_{k}"]
+                    vals.append(pd.to_numeric(val, errors='coerce'))
                 
-            if (i + 1) % 3 == 0:
-                cols = st.columns(3) # Næste række
+                data[k] = np.nanmean(vals) if vals else 0
+            return data
+
+        my_stats = get_stats_per_90(played_p, is_us=True)
+        opp_stats = get_stats_per_90(played_p, is_us=False)
+
+        # 3. Visning i grid (2 kolonner: Vores vs Modstander)
+        for s_key, lbl, dec, suf in stats_to_show:
+            c1, c2, c3 = st.columns([1, 2, 1])
+            
+            val_us = my_stats.get(s_key, 0)
+            val_opp = opp_stats.get(s_key, 0)
+            
+            with c1:
+                st.markdown(f"<div class='stat-box'><div class='stat-label'>Vores</div><div class='stat-val'>{val_us:.{dec}f}{suf}</div></div>", unsafe_allow_html=True)
+            
+            with c2:
+                # En lille bar-visualisering i midten
+                st.markdown(f"<div style='margin-top:15px; font-size:10px; text-align:center; color:#666;'>{lbl.upper()}</div>", unsafe_allow_html=True)
+                
+            with c3:
+                st.markdown(f"<div class='stat-box'><div class='stat-label'>Modstander</div><div class='stat-val'>{val_opp:.{dec}f}{suf}</div></div>", unsafe_allow_html=True)
         
     with tab4:
         # 1. Beregn LIGA-snit (FAST reference til tabellen)
