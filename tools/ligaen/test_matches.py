@@ -257,57 +257,54 @@ def vis_side(dp=None):
                 cols = st.columns(3) # Næste række
         
     with tab4:
-        # 1. Samme logik for baseline som før
-        team_all_side = team_matches[team_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)]
-        
-        baseline_stats = {}
+        # 1. Beregn LIGA-snit (FAST reference til tabellen)
+        all_played = df_matches[df_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)]
+        league_avgs = {}
         for k in stat_keys:
-            if valgt_side == "Samlet":
-                all_played = df_matches[df_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)]
-                all_vals = pd.concat([pd.to_numeric(all_played[f"HOME_{k}"], errors='coerce'), pd.to_numeric(all_played[f"AWAY_{k}"], errors='coerce')])
-                baseline_stats[k] = all_vals.mean()
-            else:
-                vals = pd.to_numeric(team_all_side[f"HOME_{k}"].where(team_all_side['CONTESTANTHOME_OPTAUUID'] == valgt_uuid, team_all_side[f"AWAY_{k}"]), errors='coerce')
-                baseline_stats[k] = vals.mean() if not vals.empty else 0
+            all_vals = pd.concat([pd.to_numeric(all_played[f"HOME_{k}"], errors='coerce'), 
+                                  pd.to_numeric(all_played[f"AWAY_{k}"], errors='coerce')])
+            league_avgs[k] = all_vals.mean()
 
+        # 2. Beregn HOLDETS SAMLEDE SNIT (Fast reference til parentes-diff)
+        team_all_season = team_matches[team_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)]
+        team_total_snit = {}
+        for k in stat_keys:
+            vals = pd.to_numeric(team_all_season[f"HOME_{k}"].where(team_all_season['CONTESTANTHOME_OPTAUUID'] == valgt_uuid, team_all_season[f"AWAY_{k}"]), errors='coerce')
+            team_total_snit[k] = vals.mean() if not vals.empty else 0
+
+        # 3. Beregn det AKTUELLE (filtrerede) snit (f_matches)
         hold_stats = {}
         for k in stat_keys:
             vals = pd.to_numeric(f_matches[f"HOME_{k}"].where(f_matches['CONTESTANTHOME_OPTAUUID'] == valgt_uuid, f_matches[f"AWAY_{k}"]), errors='coerce')
             hold_stats[k] = vals.mean() if not vals.empty else 0
 
-        # 2. Definer stats_conf præcis som i din fungerende tab1
-        stats_conf = [
-            ("POSS", "Boldbesiddelse", 1, "%"), ("PASSES", "Afleveringer: Samlet", 0, ""), 
-            ("FORWARD_PASSES", "Afleveringer: Fremadrettede", 0, ""), ("PASSES_FT", "Afleveringer: Sidste 1/3", 0, ""), 
-            ("TOUCHES_IN_BOX", "Touches in box", 0, ""), ("SHOTS", "Afslutninger", 0, ""), 
-            ("DZ_SHOTS", "Skud fra DZ", 0, ""), ("XG", "xG", 2, ""), 
-            ("XGNP", "xGnp", 2, ""), ("BIG_CHANCES", "Store chancer", 0, "")
-        ]
-
-        # 3. Visuelle container
+        # 4. Visuel rendering
         with st.container(border=True):
-            st.caption(f"Sæsonoversigt: {valgt_navn} | Periode: {valgt_periode} | Visning: {valgt_side}")
+            st.caption(f"Sæsonoversigt: {valgt_navn} | Visning: {valgt_side} | Periode: {valgt_periode}")
             
-            # Vi bruger her koden fra din tab1, så vi er sikre på den passer med kolonne-antal
-            # Da vi har 4 elementer i stats_conf-linjerne, bruger vi de 4 variable:
             for s_key, lbl, dec, suf in stats_conf:
-                hv = hold_stats.get(s_key, 0)
-                av = baseline_stats.get(s_key, 0)
+                hv = hold_stats.get(s_key, 0)      # Det vi kigger på nu (f.eks. Hjemme)
+                av_liga = league_avgs.get(s_key, 0) # Liga-snit (Visning)
+                av_total = team_total_snit.get(s_key, 0) # Holdets samlede snit (Diff)
                 
-                diff = hv - av
-                # 0-visning når diff er tæt på 0
-                diff_str = f" <span style='color:gray; font-size:10px;'>({diff:+.{dec}f}{suf})</span>" if abs(diff) < 0.01 else f" <span style='color:{'green' if diff>=0 else 'red'}; font-size:10px;'>({diff:+.{dec}f}{suf})</span>"
+                # Diff måles mod Holdets samlede snit
+                diff = hv - av_total
                 
-                max_scale = av * 2 if av > 0 else 10
+                # Hvis vi ser på "Samlet", skal diff være 0 (da vi sammenligner os selv med os selv)
+                if valgt_side == "Samlet" and valgt_periode == "Sæson 25/26":
+                    diff_str = f" <span style='color:gray; font-size:10px;'>(0.0{suf})</span>"
+                else:
+                    diff_str = f" <span style='color:{'green' if diff>=0 else 'red'}; font-size:10px;'>({diff:+.{dec}f}{suf})</span>"
+                
+                # Progress bar baseret på holdets aktuelle værdi ift. ligaen
+                max_scale = av_liga * 2 if av_liga > 0 else 10
                 h_pct = min((hv / max_scale) * 100, 100)
-                
-                ref_label = "LIGA" if valgt_side == "Samlet" else "HOLD (SNIT)"
                 
                 st.markdown(f"""
                     <div style='display:flex; justify-content:space-between; font-size:11px; margin-top:8px;'>
                         <div style='text-align:left;'><b>{hv:.{dec}f}{suf}</b>{diff_str}</div>
                         <div style='color:#888;'>{lbl.upper()}</div>
-                        <div style='text-align:right;'><b>{av:.{dec}f}{suf}</b> <span style='color:#888; font-size:10px;'>({ref_label})</span></div>
+                        <div style='text-align:right;'><b>{av_liga:.{dec}f}{suf}</b> <span style='color:#888; font-size:10px;'>(LIGA)</span></div>
                     </div>
                     <div style='display:flex; height:7px; background:#eee; border-radius:3px; overflow:hidden; margin-bottom:10px;'>
                         <div style='width:{h_pct}%; background:{TEAM_COLORS.get(valgt_navn, {}).get("primary", "#cc0000")};'></div>
