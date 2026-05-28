@@ -86,6 +86,47 @@ def beregn_tabel(df_matches):
     df['MD'] = df['M+'] - df['M-']
     return df.sort_values(['P', 'MD', 'M+'], ascending=False).reset_index(drop=True)
 
+# --- HJÆLPEFUNKTION TIL KAMPE ---
+def hent_kampe(uuid, df_opta):
+    # Filtrer kampe for det specifikke hold
+    hold_kampe = df_opta[(df_opta['CONTESTANTHOME_OPTAUUID'] == uuid) | (df_opta['CONTESTANTAWAY_OPTAUUID'] == uuid)]
+    
+    played = hold_kampe[hold_kampe['MATCH_STATUS'].str.lower().isin(['played', 'full-time', 'finished'])].sort_values('MATCH_DATE_FULL', ascending=False)
+    future = hold_kampe[~hold_kampe['MATCH_STATUS'].str.lower().isin(['played', 'full-time', 'finished'])].sort_values('MATCH_DATE_FULL', ascending=True)
+    
+    sidste = played.iloc[0] if not played.empty else None
+    naeste = future.iloc[0] if not future.empty else None
+    
+    return sidste, naeste
+
+def format_kamp(kamp, hold_uuid):
+    if kamp is None: return "Ingen kamp"
+    is_home = kamp['CONTESTANTHOME_OPTAUUID'] == hold_uuid
+    modstander = kamp['CONTESTANTAWAY_NAME'] if is_home else kamp['CONTESTANTHOME_NAME']
+    logo = get_logo_html(kamp['CONTESTANTAWAY_OPTAUUID'] if is_home else kamp['CONTESTANTHOME_OPTAUUID'])
+    res = f"{kamp['TOTAL_HOME_SCORE']}-{kamp['TOTAL_AWAY_SCORE']}" if 'TOTAL_HOME_SCORE' in kamp else "vs"
+    return f"{logo} {modstander} ({res})"
+
+# --- RENDER TABEL OPDATERING ---
+def render_tabel_med_kampe(df_in, filter_list, df_opta):
+    df = df_in.copy()
+    if filter_list is not None: df = df[df['UUID'].isin(filter_list)]
+    df.insert(0, '#', range(1, len(df) + 1))
+    df.insert(1, ' ', [get_logo_html(u) for u in df['UUID']])
+    df['FORM'] = df['FORM'].apply(style_form)
+    
+    # Vis selve tabellen
+    st.write(df[['#', ' ', 'HOLD', 'K', 'V', 'U', 'T', 'MD', 'P', 'FORM']].to_html(escape=False, index=False, classes='league-table'), unsafe_allow_html=True)
+    
+    # Tilføj kampe-sektion
+    st.markdown("##### Sidste og næste kamp")
+    kampe_data = []
+    for uuid in df['UUID']:
+        s, n = hent_kampe(uuid, df_opta)
+        kampe_data.append({"HOLD": df[df['UUID']==uuid]['HOLD'].values[0], "SIDSTE": format_kamp(s, uuid), "NÆSTE": format_kamp(n, uuid)})
+    
+    st.table(pd.DataFrame(kampe_data))
+
 # --- 4. HOVEDFUNKTION ---
 def vis_side():
     played = load_data()
@@ -136,10 +177,10 @@ def vis_side():
         c1, c2 = st.columns(2)
         with c1:
             st.subheader("Oprykningsspil")
-            render_tabel(slut_df, top6_uuids)
+            render_tabel_med_kampe(slut_df, top6_uuids, df_opta)
         with c2:
             st.subheader("Nedrykningsspil")
-            render_tabel(slut_df, bund6_uuids)
+            render_tabel_med_kampe(slut_df, bund6_uuids, df_opta)
     with t_h2h:
         h_list = sorted(gs_df['HOLD'].tolist())
         c1, c2 = st.columns(2); t1 = c1.selectbox("Hold 1", h_list, index=0); t2 = c2.selectbox("Hold 2", [h for h in h_list if h != t1], index=0)
