@@ -60,12 +60,19 @@ def render_kamp_boks(kamp):
     away_name = kamp['CONTESTANTAWAY_NAME']
     home_logo = get_logo_html(kamp['CONTESTANTHOME_OPTAUUID'])
     away_logo = get_logo_html(kamp['CONTESTANTAWAY_OPTAUUID'])
-    res = f"{kamp['TOTAL_HOME_SCORE']}-{kamp['TOTAL_AWAY_SCORE']}" if pd.notnull(kamp['TOTAL_HOME_SCORE']) else "vs"
+    
+    # Fjerner .0 ved at konvertere til int, hvis værdien findes
+    h_score = int(kamp['TOTAL_HOME_SCORE']) if pd.notnull(kamp['TOTAL_HOME_SCORE']) else ""
+    a_score = int(kamp['TOTAL_AWAY_SCORE']) if pd.notnull(kamp['TOTAL_AWAY_SCORE']) else ""
+    res = f"{h_score}-{a_score}" if h_score != "" else "vs"
+    
     st.markdown(f"""
-    <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px; background: #f0f2f6; border-radius: 8px; margin-bottom: 5px;">
-        <span style="font-weight:bold;">{home_logo} {home_name}</span>
-        <span style="background: #333; color: white; padding: 5px 10px; border-radius: 5px; font-weight: bold;">{res}</span>
-        <span style="font-weight:bold;">{away_name} {away_logo}</span>
+    <div style="display: flex; align-items: center; justify-content: space-between; 
+                width: 100%; background: white; border: 1px solid #ddd; 
+                border-radius: 8px; padding: 10px; margin-bottom: 5px;">
+        <span style="font-weight:bold; flex: 1;">{home_logo} {home_name}</span>
+        <span style="background: #333; color: white; padding: 4px 12px; border-radius: 6px; font-weight: bold; min-width: 50px; text-align: center;">{res}</span>
+        <span style="font-weight:bold; flex: 1; text-align: right;">{away_name} {away_logo}</span>
     </div>
     """, unsafe_allow_html=True)
 
@@ -112,11 +119,21 @@ def render_kampe_dynamisk(df_opta, filter_uuids):
         (df_opta['CONTESTANTHOME_OPTAUUID'].isin(filter_uuids)) | 
         (df_opta['CONTESTANTAWAY_OPTAUUID'].isin(filter_uuids))
     ]
-    unikke_datoer = sorted(relevante_kampe['MATCH_DATE_FULL'].dt.date.unique(), reverse=True)
-    for dato in unikke_datoer[:2]:
-        st.markdown(f"##### Spillerunde: {dato}")
-        dagens_kampe = relevante_kampe[relevante_kampe['MATCH_DATE_FULL'].dt.date == dato]
-        for _, kamp in dagens_kampe.iterrows():
+    
+    # 1. Vis sidste runde (Played)
+    played_df = relevante_kampe[relevante_kampe['MATCH_STATUS'].str.lower().isin(['played', 'full-time', 'finished'])]
+    if not played_df.empty:
+        seneste_dato = played_df['MATCH_DATE_FULL'].dt.date.max()
+        st.markdown(f"##### Seneste spillerunde: {seneste_dato}")
+        for _, kamp in played_df[played_df['MATCH_DATE_FULL'].dt.date == seneste_dato].iterrows():
+            render_kamp_boks(kamp)
+            
+    # 2. Vis næste runde (Future)
+    future_df = relevante_kampe[~relevante_kampe['MATCH_STATUS'].str.lower().isin(['played', 'full-time', 'finished'])]
+    if not future_df.empty:
+        naeste_dato = future_df['MATCH_DATE_FULL'].dt.date.min()
+        st.markdown(f"##### Kommende spillerunde: {naeste_dato}")
+        for _, kamp in future_df[future_df['MATCH_DATE_FULL'].dt.date == naeste_dato].iterrows():
             render_kamp_boks(kamp)
 
 def vis_side():
