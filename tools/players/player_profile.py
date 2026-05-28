@@ -512,15 +512,16 @@ def vis_side(dp=None):
             if seconds == 60: minutes += 1; seconds = 0
             return f"{minutes:02d}:{seconds:02d}"
 
-            df_phys = get_physical_data(valgt_spiller, valgt_player_uuid, valgt_hold, conn)
-            
-            # --- DEBUGGING ---
-            if df_phys is None:
-                st.warning("Debug: df_phys er None. Tjek get_physical_data funktionen.")
-            elif df_phys.empty:
-                st.warning(f"Debug: df_phys er tom for {valgt_spiller} ({valgt_player_uuid}).")
-            else:
-                st.success(f"Debug: Hentede {len(df_phys)} rækker data.")
+        df_phys = get_physical_data(valgt_spiller, valgt_player_uuid, valgt_hold, conn)
+        
+        if df_phys is None:
+            st.warning("Kunne ikke hente fysisk data.")
+        elif df_phys.empty:
+            st.info("Ingen fysisk data tilgængelig for denne spiller.")
+        else:
+            df_phys['minutes'] = pd.to_numeric(df_phys['minutes'], errors='coerce').fillna(0)
+            df_phys['match_date'] = pd.to_datetime(df_phys['match_date'], errors='coerce')
+            df_phys = df_phys.sort_values('match_date', ascending=False)
 
             avg_dist = df_phys['distance'].mean()
             avg_hsr = df_phys['hsr'].mean()
@@ -544,8 +545,6 @@ def vis_side(dp=None):
                     match = next((v for k, v in defs.items() if k in cat_choice), "")
                     st.caption(match)
 
-                st.markdown("""<style>div[data-testid="stCaption"] { margin-bottom: -10px !important; }</style>""", unsafe_allow_html=True)
-
                 mapping = {
                     "HSR (m)": ("hsr", 1, "m"), 
                     "Sprint (m)": ("sprinting", 1, "m"), 
@@ -562,19 +561,14 @@ def vis_side(dp=None):
                 if not df_chart.empty:
                     df_chart['Status'] = df_chart['minutes'].apply(lambda x: "Fuld tid" if x >= 85 else "Indskiftet/udskiftet" if x > 0 else "Ikke spillet")
                     
-                    # DYNAMISK LOGIK: Find modstander
                     def find_modstander(row):
                         teams = str(row['match_teams']).split('-')
-                        # Hvis vi har to hold, fjern det valgte hold og returnér det andet
                         if len(teams) == 2:
                             hold1, hold2 = teams[0].strip(), teams[1].strip()
-                            # Fjern det hold der er valgt i dropdown
-                            if valgt_hold.lower() in hold1.lower():
-                                return hold2
-                            elif valgt_hold.lower() in hold2.lower():
-                                return hold1
-                        return str(row['match_teams']) # Fallback
-                
+                            if valgt_hold.lower() in hold1.lower(): return hold2
+                            elif valgt_hold.lower() in hold2.lower(): return hold1
+                        return str(row['match_teams'])
+                    
                     df_chart['Opponent'] = df_chart.apply(find_modstander, axis=1)
                     df_chart['Label'] = df_chart['Opponent'] + "<br>" + df_chart['match_date'].dt.strftime('%d/%m')
 
@@ -586,16 +580,12 @@ def vis_side(dp=None):
                     fig = go.Figure()
                     for status, color in color_map.items():
                         df_subset = df_chart[df_chart['Status'] == status]
-                        subset_indices = df_subset.index
-                        fig.add_trace(go.Bar(
-                            x=df_chart.loc[subset_indices, 'Label'], 
-                            y=y_vals.loc[subset_indices],
-                            text=text_vals.loc[subset_indices], 
-                            name=status,
-                            marker_color=color,
-                            textposition='outside',
-                            cliponaxis=False
-                        ))
+                        if not df_subset.empty:
+                            fig.add_trace(go.Bar(
+                                x=df_subset['Label'], y=y_vals.loc[df_subset.index],
+                                text=text_vals.loc[df_subset.index], name=status,
+                                marker_color=color, textposition='outside', cliponaxis=False
+                            ))
 
                     fig.add_shape(type="line", x0=-0.5, x1=len(df_chart)-0.5, y0=season_avg, y1=season_avg, 
                                   line=dict(color="#D3D3D3", width=2, dash="dash"), layer="below")
@@ -621,7 +611,6 @@ def vis_side(dp=None):
                     'top_speed': 'Topfart', 'hi_runs': 'Højintense løb'
                 })
                 
-                # --- HER INDSÆTTER DU BEGRÆNSNINGEN ---
                 cols_to_show = ['Dato', 'Kamp', 'Minutter', 'Distance', 'HSR', 'Topfart', 'Højintense løb']
                 st.data_editor(df_display[cols_to_show], hide_index=True, use_container_width=True, disabled=True)
 
