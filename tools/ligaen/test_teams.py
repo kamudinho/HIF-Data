@@ -152,16 +152,6 @@ def render_kampe_dynamisk(df_opta, filter_uuids):
             render_kamp_boks(kamp)
 
 def vis_side():
-
-    st.markdown("""
-<style>
-    .league-table { 
-        width: 100%; 
-        border-collapse: collapse; 
-        table-layout: fixed; /* Dette låser bredden! */
-    }
-</style>
-""", unsafe_allow_html=True)
     
     df_opta = load_liga_data()
     df_wy = get_wyscout_stats()
