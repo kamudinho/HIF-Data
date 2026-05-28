@@ -279,25 +279,37 @@ def vis_side(dp=None):
             hold_stats[k] = vals.mean() if not vals.empty else 0
 
         # 4. Visuel rendering
+        # Visuel container
         with st.container(border=True):
-            st.caption(f"Sæsonoversigt: {valgt_navn} | Visning: {valgt_side} | Periode: {valgt_periode}")
+            # Layout: Venstre (Oversigt + Logo + Navn) | Højre (Visning/Periode)
+            c_left, c_right = st.columns([2, 1])
             
-            # Vi bruger den samme struktur som i din tab1
-            stats_conf = [("POSS", "Boldbesiddelse", 1, "%"), ("PASSES", "Afleveringer: Samlet", 0, ""), 
-                          ("FORWARD_PASSES", "Afleveringer: Fremadrettede", 0, ""), ("PASSES_FT", "Afleveringer: Sidste 1/3", 0, ""), 
-                          ("TOUCHES_IN_BOX", "Touches in box", 0, ""), ("SHOTS", "Afslutninger", 0, ""), 
-                          ("DZ_SHOTS", "Skud fra DZ", 0, ""), ("XG", "xG", 2, ""), 
-                          ("XGNP", "xGnp", 2, ""), ("BIG_CHANCES", "Store chancer", 0, "")]
+            with c_left:
+                c_logo, c_text = st.columns([0.3, 1])
+                c_logo.image(TEAMS.get(valgt_navn, {}).get('logo', ''), width=35)
+                c_text.markdown(f"**Sæsonoversigt: {valgt_navn}**")
             
-            # HER VAR FEJL: Vi skal matche de 4 elementer vi har i listen nu
+            with c_right:
+                st.markdown(f"<div style='text-align:right; font-size:12px; color:#666;'>Visning: <b>{valgt_side}</b><br>Periode: <b>{valgt_periode}</b></div>", unsafe_allow_html=True)
+            
+            st.divider() # En fin skillelinje før tallene starter
+            
+            # Stats-listen
+            stats_conf = [
+                ("POSS", "Boldbesiddelse", 1, "%"), ("PASSES", "Afleveringer: Samlet", 0, ""), 
+                ("FORWARD_PASSES", "Afleveringer: Fremadrettede", 0, ""), ("PASSES_FT", "Afleveringer: Sidste 1/3", 0, ""), 
+                ("TOUCHES_IN_BOX", "Touches in box", 0, ""), ("SHOTS", "Afslutninger", 0, ""), 
+                ("DZ_SHOTS", "Skud fra DZ", 0, ""), ("XG", "xG", 2, ""), 
+                ("XGNP", "xGnp", 2, ""), ("BIG_CHANCES", "Store chancer", 0, "")
+            ]
+            
             for s_key, lbl, dec, suf in stats_conf:
                 hv = hold_stats.get(s_key, 0)
                 av_liga = league_avgs.get(s_key, 0)
                 av_total = team_total_snit.get(s_key, 0)
                 
                 diff = hv - av_total
-                
-                # Hvis vi ser på "Samlet" og hele sæsonen, vis neutral diff
+                # Logik: Hvis det er 'Samlet' periode/side, så nulstil diff
                 if valgt_side == "Samlet" and valgt_periode == "Sæson 25/26":
                     diff_str = f" <span style='color:gray; font-size:10px;'>(0.0{suf})</span>"
                 else:
@@ -316,4 +328,5 @@ def vis_side(dp=None):
                         <div style='width:{h_pct}%; background:{TEAM_COLORS.get(valgt_navn, {}).get("primary", "#cc0000")};'></div>
                     </div>
                 """, unsafe_allow_html=True)
+                
 vis_side()
