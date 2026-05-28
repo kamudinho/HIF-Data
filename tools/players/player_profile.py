@@ -522,21 +522,26 @@ def vis_side(dp=None):
 
     with t_phys:
         df_phys = get_physical_data(valgt_spiller, valgt_player_uuid, valgt_hold, conn)
+        
         if df_phys is not None and not df_phys.empty:
+            # Sørg for at dato er et rigtigt datetime objekt
             df_phys['match_date'] = pd.to_datetime(df_phys['match_date'])
+            
+            # 3. Status: Fuld tid / Indskiftet / Udskiftet
+            # Vi antager at 90 min er fuld tid
+            def get_status(min):
+                if min >= 90: return "Fuld tid"
+                elif min > 0: return "Ind/Udskiftet"
+                else: return "Bænken"
+            df_phys['Status'] = df_phys['minutes'].apply(get_status)
+            
             df_phys = df_phys.sort_values('match_date', ascending=False)
             
-            # Beregn status for hver kamp (Fuld tid, Indskiftet, Udskiftet)
-            def beregn_status(min):
-                if min >= 90: return "Fuld tid"
-                return "Ind/Udskiftet"
-            
-            df_phys['Status'] = df_phys['minutes'].apply(beregn_status)
-            
-            avg_dist = df_phys['distance'].mean()
-            avg_hsr = df_phys['hsr'].mean()
-            latest = df_phys.iloc[0]
+            # LØSNING PÅ DIN FEJL: Brug pd.Timestamp til filtrering i stedet for string
+            start_date = pd.Timestamp('2025-07-01')
+            df_chart = df_phys[df_phys['match_date'] >= start_date].copy().sort_values('match_date', ascending=True)
 
+            latest = df_phys.iloc[0]
             m1, m2, m3, m4 = st.columns(4)
             m1.metric("Seneste Distance", f"{round(latest['distance']/1000, 2)} km")
             m2.metric("HSR Meter", f"{int(latest['hsr'])} m")
@@ -547,7 +552,8 @@ def vis_side(dp=None):
 
             with t_sub_charts:
                 cat_choice = st.segmented_control("Vælg metrik", options=["HSR (m)", "Sprint (m)", "Distance (km)", "Topfart (km/t)"], default="HSR (m)", key="phys_graph_control")
-                # Tilføjet suffix i mapping
+                
+                # 1. Suffix defineret i mapping
                 mapping = {
                     "HSR (m)": ("hsr", 1, " m"), 
                     "Sprint (m)": ("sprinting", 1, " m"), 
@@ -555,28 +561,23 @@ def vis_side(dp=None):
                     "Topfart (km/t)": ("top_speed", 1, " km/t")
                 }
                 col, div, suffix = mapping[cat_choice]
-
-                df_chart = df_phys[df_phys['match_date'] >= '2025-07-01'].copy().sort_values('match_date', ascending=True)
-
+                
                 if not df_chart.empty:
-                    df_chart['y_vals'] = df_chart[col] / div
-                    y_vals = df_chart['y_vals']
-                    
+                    y_vals = df_chart[col] / div
                     fig = go.Figure()
                     fig.add_trace(go.Bar(
                         x=df_chart['match_date'].dt.strftime('%d/%m'), 
                         y=y_vals,
-                        # Tilføjer suffix til labels på grafen
+                        # 1. Suffix bruges her
                         text=y_vals.apply(lambda x: f"{x:.0f}{suffix}" if x > 100 else f"{x:.1f}{suffix}"),
                         textposition='outside', 
                         marker_color='#cc0000'
                     ))
-                    
                     fig.update_layout(height=400, margin=dict(t=30, b=50), yaxis=dict(showticklabels=False))
                     st.plotly_chart(fig, use_container_width=True)
 
             with t_sub_log:
-                # Omdøb kolonner til pæne overskrifter
+                # 2. Individuelle overskrifter via rename
                 df_vis = df_phys.rename(columns={
                     'match_date': 'Dato',
                     'match_teams': 'Modstander',
@@ -585,7 +586,8 @@ def vis_side(dp=None):
                     'hsr': 'HSR (m)',
                     'sprinting': 'Sprint (m)',
                     'top_speed': 'Topfart (km/t)',
-                    'hi_runs': 'Højintense løb'
+                    'hi_runs': 'Højintense Akt.',
+                    'Status': 'Kampstatus'
                 })
                 st.dataframe(df_vis, hide_index=True, use_container_width=True)
                 
