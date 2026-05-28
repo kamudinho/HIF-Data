@@ -169,8 +169,6 @@ def vis_side():
     .league-table th:nth-child(1), .league-table td:nth-child(1) { width: 20px; }  /* # kolonne */
     .league-table th:nth-child(2), .league-table td:nth-child(2) { width: 30px; }  /* Logo */
     .league-table th:nth-child(3), .league-table td:nth-child(3) { width: 150px; } /* HOLD kolonne */
-    .league-table th:nth-child(4), .league-table td:nth-child(4) { width: 20px; }  /* K */
-    .league-table th:nth-child(9), .league-table td:nth-child(9) { width: 20px; }  /* P */
 </style>
 """, unsafe_allow_html=True)
     
