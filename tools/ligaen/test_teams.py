@@ -156,7 +156,7 @@ def vis_side():
     st.markdown("""
 <style>
     .league-table { 
-        width: 100%; 
+        width: 80%; 
         border-collapse: collapse; 
         table-layout: fixed; /* Dette låser bredden! */
     }
@@ -166,11 +166,11 @@ def vis_side():
         white-space: nowrap;
     }
     /* Definer faste bredder for kolonnerne */
-    .league-table th:nth-child(1), .league-table td:nth-child(1) { width: 30px; }  /* # kolonne */
+    .league-table th:nth-child(1), .league-table td:nth-child(1) { width: 20px; }  /* # kolonne */
     .league-table th:nth-child(2), .league-table td:nth-child(2) { width: 30px; }  /* Logo */
     .league-table th:nth-child(3), .league-table td:nth-child(3) { width: 150px; } /* HOLD kolonne */
-    .league-table th:nth-child(4), .league-table td:nth-child(4) { width: 40px; }  /* K */
-    .league-table th:nth-child(9), .league-table td:nth-child(9) { width: 40px; }  /* P */
+    .league-table th:nth-child(4), .league-table td:nth-child(4) { width: 20px; }  /* K */
+    .league-table th:nth-child(9), .league-table td:nth-child(9) { width: 20px; }  /* P */
 </style>
 """, unsafe_allow_html=True)
     
