@@ -103,19 +103,49 @@ def vis_side(conn):
     tab_struktur, tab_stats, tab_kode = st.tabs(["📋 Tabelstruktur", "📊 Stat_Type Forklaringer", "💻 Kode-eksempel"])
 
     # --- FANE 1: TABELSTRUKTUR ---
+    # --- FANE 1: TABELSTRUKTUR (UDVIDET) ---
     with tab_struktur:
-        tabeller = ['OPTA_MATCHEXPECTEDGOALS', 'OPTA_MATCHSTATS', 'OPTA_PLAYERS']
-        valgt_tabel = st.selectbox("Vælg tabel for at se kolonner:", tabeller)
+        # Vi definerer hvilke skemaer vi vil lede i
+        schema_map = {
+            "Opta (AXIS)": "AXIS",
+            "SecondSpectrum (SECONDSPECTRUM)": "SECONDSPECTRUM"
+        }
+        
+        col1, col2 = st.columns(2)
+        valgt_skema_navn = col1.selectbox("Vælg skema:", list(schema_map.keys()))
+        schema_valg = schema_map[valgt_skema_navn]
+        
+        # Hent tabeller dynamisk baseret på skema
+        query_tabeller = f"""
+            SELECT TABLE_NAME 
+            FROM KLUB_HVIDOVREIF.INFORMATION_SCHEMA.TABLES 
+            WHERE TABLE_SCHEMA = '{schema_valg}'
+            ORDER BY TABLE_NAME
+        """
+        df_tabeller = conn.query(query_tabeller)
+        
+        valgt_tabel = col2.selectbox("Vælg tabel:", df_tabeller['TABLE_NAME'].tolist())
         
         if valgt_tabel:
             query_cols = f"""
                 SELECT COLUMN_NAME, DATA_TYPE, IS_NULLABLE
                 FROM KLUB_HVIDOVREIF.INFORMATION_SCHEMA.COLUMNS 
-                WHERE TABLE_NAME = '{valgt_tabel}' AND TABLE_SCHEMA = 'AXIS'
+                WHERE TABLE_NAME = '{valgt_tabel}' AND TABLE_SCHEMA = '{schema_valg}'
                 ORDER BY ORDINAL_POSITION
             """
             df_cols = conn.query(query_cols)
+            
+            # Vis tabel info
+            st.write(f"### Kolonner i {valgt_skema_navn}.{valgt_tabel}")
             st.dataframe(df_cols, use_container_width=True, hide_index=True)
+            
+            # Tilføjet: Mulighed for at se de første 5 rækker (meget nyttigt til debugging)
+            if st.checkbox("Vis preview af data (første 5 rækker)"):
+                try:
+                    df_preview = conn.query(f"SELECT * FROM KLUB_HVIDOVREIF.{schema_valg}.{valgt_tabel} LIMIT 5")
+                    st.dataframe(df_preview, use_container_width=True)
+                except Exception as e:
+                    st.error("Kunne ikke hente preview (tjek SQL-rettigheder): " + str(e))
 
     # --- FANE 2: STAT_TYPE FORKLARINGER ---
     with tab_stats:
