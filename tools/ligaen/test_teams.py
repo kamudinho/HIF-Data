@@ -91,8 +91,30 @@ def vis_side():
     played = load_data()
     df_wy = get_wyscout_stats()
     
-    gs_df = beregn_tabel(played.head(138))
+    # --- PRÆCIS 22 RUNDER LOGIK ---
+    # Vi finder de første 22 kampe for hvert hold
+    played = played.sort_values('MATCH_DATE_FULL')
+    
+    # Lav en liste over alle hold
+    alle_hold = pd.concat([played['CONTESTANTHOME_OPTAUUID'], played['CONTESTANTAWAY_OPTAUUID']]).unique()
+    
+    # Find index for den kamp hvor alle hold har spillet 22 kampe
+    # Vi tager den kamp, hvor det 22. hold har spillet sin 22. kamp
+    kamp_count = {}
+    cutoff_index = 0
+    for i, row in played.iterrows():
+        h, a = row['CONTESTANTHOME_OPTAUUID'], row['CONTESTANTAWAY_OPTAUUID']
+        kamp_count[h] = kamp_count.get(h, 0) + 1
+        kamp_count[a] = kamp_count.get(a, 0) + 1
+        
+        # Når alle hold har nået 22 kampe, er grundspillet slut
+        if all(val >= 22 for val in kamp_count.values()):
+            cutoff_index = played.index.get_loc(i)
+            break
+            
+    gs_df = beregn_tabel(played.iloc[:cutoff_index + 1])
     slut_df = beregn_tabel(played)
+    # -------------------------------
     
     top6_uuids = gs_df.head(6)['UUID'].tolist()
     bund6_uuids = gs_df.tail(6)['UUID'].tolist()
