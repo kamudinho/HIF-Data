@@ -257,28 +257,24 @@ def vis_side(dp=None):
                 cols = st.columns(3) # Næste række
         
     with tab4:        
-        # 1. Beregn liga-gennemsnit for alle stat_keys
+        # 1. Hent liga-gennemsnit (Globalt, så det er en fast reference)
         all_played = df_matches[df_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].copy()
         league_avgs = {}
         for k in stat_keys:
-            # Beregn gennemsnit for hvert hold først, derefter gennemsnit af alle hold
-            all_vals = []
-            for t_name, t_info in TEAMS.items():
-                t_uuid = str(t_info.get('opta_uuid', '')).strip().upper()
-                if not t_uuid: continue
-                t_m = all_played[(all_played['CONTESTANTHOME_OPTAUUID'] == t_uuid) | (all_played['CONTESTANTAWAY_OPTAUUID'] == t_uuid)]
-                if not t_m.empty:
-                    vals = pd.to_numeric(t_m[f"HOME_{k}"].where(t_m['CONTESTANTHOME_OPTAUUID'] == t_uuid, t_m[f"AWAY_{k}"]), errors='coerce')
-                    all_vals.append(vals.mean())
-            league_avgs[k] = np.mean(all_vals) if all_vals else 0
+            all_vals = pd.concat([pd.to_numeric(all_played[f"HOME_{k}"], errors='coerce'), 
+                                  pd.to_numeric(all_played[f"AWAY_{k}"], errors='coerce')])
+            league_avgs[k] = all_vals.mean()
 
-        # 2. Hent holdets stats (fra team_avgs beregnet i tab1)
-        hold_stats = team_avgs.get(valgt_uuid, {k: 0 for k in stat_keys})
+        # 2. BEREGN HOLDETS SNIT UD FRA DE FILTREREDE KAMPE (f_matches)
+        # Her opdateres det hver gang du skifter hold/periode/side!
+        hold_stats = {}
+        for k in stat_keys:
+            vals = pd.to_numeric(f_matches[f"HOME_{k}"].where(f_matches['CONTESTANTHOME_OPTAUUID'] == valgt_uuid, f_matches[f"AWAY_{k}"]), errors='coerce')
+            hold_stats[k] = vals.mean() if not vals.empty else 0
 
-        # 3. Visuelle container (samme stil som i tab1)
+        # 3. Visuelle container (samme stil som tab1)
         with st.container(border=True):
-            st.caption(f"**Gennemsnitlig præstation for {valgt_navn}**")
-            
+            st.caption(f"Sæsonoversigt: {valgt_navn}")
             stats_conf = [
                 ("POSS", "Boldbesiddelse", 1, "%"), ("PASSES", "Afleveringer: Samlet", 0, ""), 
                 ("FORWARD_PASSES", "Afleveringer: Fremadrettede", 0, ""), ("PASSES_FT", "Afleveringer: Sidste 1/3", 0, ""), 
@@ -291,11 +287,9 @@ def vis_side(dp=None):
                 hv = hold_stats.get(s_key, 0)
                 av = league_avgs.get(s_key, 0)
                 
-                # Beregn forskel og bar-procent (hvis holdet er > liga, skal baren fylde mere)
                 diff = hv - av
                 diff_str = f" <span style='color:{'green' if diff>=0 else 'red'}; font-size:10px;'>({'+' if diff>=0 else ''}{diff:.{dec}f}{suf})</span>"
                 
-                # Procentvis visualisering (max 2x liga-snit som reference)
                 max_scale = av * 2 if av > 0 else 10
                 h_pct = min((hv / max_scale) * 100, 100)
                 
