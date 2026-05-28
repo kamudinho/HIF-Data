@@ -59,8 +59,9 @@ def draw_h2h_chart(team1, team2, metrics, labels, df_wy, chart_key, df_liga):
     
     for i, m in enumerate(metrics):
         suffix = f"{i+1}" if i > 0 else ""
-        v1 = float(d1[m.upper()].iloc[0] if not d1.empty else 0)
-        v2 = float(d2[m.upper()].iloc[0] if not d2.empty else 0)
+        # Her tjekker vi om kolonnen eksisterer, ellers returneres 0
+        v1 = float(d1[m.upper()].iloc[0]) if not d1.empty and m.upper() in d1.columns else 0.0
+        v2 = float(d2[m.upper()].iloc[0]) if not d2.empty and m.upper() in d2.columns else 0.0
         
         fig.add_trace(go.Bar(x=[0, 1], y=[v1, v2], marker_color=[TEAM_COLORS.get(team1, {}).get("primary", "#df003b"), TEAM_COLORS.get(team2, {}).get("primary", "#0056a3")], width=0.7, xaxis=f"x{suffix}", yaxis=f"y{suffix}"))
         fig.add_annotation(dict(x=0.5, y=-0.2, xref=f"x{suffix} domain", yref=f"y{suffix} domain", text=f"<b>{labels[i]}</b>", showarrow=False))
