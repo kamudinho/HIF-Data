@@ -257,7 +257,7 @@ def vis_side(dp=None):
                 cols = st.columns(3) # Næste række
         
     with tab4:
-            st.caption(f"**Gennemsnitlig præstation for {valgt_navn}**")
+        st.caption(f"**Gennemsnitlig præstation for {valgt_navn}**")
         
         # 1. Beregn liga-gennemsnit for alle stat_keys
         all_played = df_matches[df_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].copy()
