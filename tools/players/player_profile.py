@@ -94,27 +94,26 @@ def draw_player_info_box(ax, team_logo, player_name, season_str, category_str):
             fontsize=8, color='#666666', va='center')
 
 def get_physical_data(player_name, player_opta_uuid, valgt_hold_navn, db_conn):
-    # Vi bruger en mere fleksibel søgning. 
-    # Hvis 'player_name' er "Matthew Hoppe", søger vi efter navne, 
-    # der indeholder både "Matthew" og "Hoppe" i samme felt.
-    
-    # Vi henter alt data for spilleren
-    sql = f"""
-        SELECT *
-        FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
-        WHERE UPPER(PLAYER_NAME) LIKE UPPER('%{player_name.split()[-1]}%')
-        ORDER BY MATCH_DATE DESC
-    """
-    
+    # 1. Hent data fra tabellen
+    sql = "SELECT * FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS"
     df = db_conn.query(sql)
     
-    if df is not None and not df.empty:
-        df.columns = df.columns.str.lower()
-        # Her logger vi lige hvilke navne vi rent faktisk ramte
-        # st.write(f"Søgning på {player_name} gav match: {df['player_name'].unique()}")
-    else:
-        st.warning(f"Ingen data fundet for spiller: {player_name} (Søgte på efternavn)")
-        
+    if df is None or df.empty:
+        return None
+
+    # 2. Hvis data er "grød" i én kolonne (eksempel på løsning):
+    # Vi antager her at navnet kommer efter det første 6-cifrede ID
+    # Vi skaber en ny kolonne 'player_name' ved at fjerne ID'et
+    def extract_name(row_val):
+        # Dette er et groft eksempel - du skal tilpasse det 
+        # alt efter hvordan din dataframe ser ud i 'df.columns'
+        import re
+        # Fjerner tal i starten af strengen
+        return re.sub(r'^\d+', '', str(row_val))
+
+    # Eksempel: Hvis din dataframe hedder 'data' og kolonnen er den første:
+    # df['player_name'] = df.iloc[:, 0].apply(extract_name)
+    
     return df
     
 def vis_side(dp=None):
