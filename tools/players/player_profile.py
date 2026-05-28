@@ -524,11 +524,24 @@ def vis_side(dp=None):
         df_phys = get_physical_data(valgt_spiller, valgt_player_uuid, valgt_hold, conn)
         
         if df_phys is not None and not df_phys.empty:
-            # Sørg for at dato er et rigtigt datetime objekt
             df_phys['match_date'] = pd.to_datetime(df_phys['match_date'])
             
+            # --- KONVERTERING AF 98:21 FORMAT ---
+            def parse_minutes(val):
+                try:
+                    # Hvis det er en streng med kolon, f.eks. "98:21"
+                    if isinstance(val, str) and ':' in val:
+                        parts = val.split(':')
+                        # Antager formatet er M:S eller T:M. 
+                        # Hvis det er "98:21", tolker vi det som 98 minutter + 21 sekunder (eller blot 98 min)
+                        return float(parts[0]) 
+                    return float(val)
+                except:
+                    return 0.0
+
+            df_phys['minutes'] = df_phys['minutes'].apply(parse_minutes)
+            
             # 3. Status: Fuld tid / Indskiftet / Udskiftet
-            # Vi antager at 90 min er fuld tid
             def get_status(min):
                 if min >= 90: return "Fuld tid"
                 elif min > 0: return "Ind/Udskiftet"
@@ -537,7 +550,7 @@ def vis_side(dp=None):
             
             df_phys = df_phys.sort_values('match_date', ascending=False)
             
-            # LØSNING PÅ DIN FEJL: Brug pd.Timestamp til filtrering i stedet for string
+            # Dato-filtrering
             start_date = pd.Timestamp('2025-07-01')
             df_chart = df_phys[df_phys['match_date'] >= start_date].copy().sort_values('match_date', ascending=True)
 
@@ -553,7 +566,6 @@ def vis_side(dp=None):
             with t_sub_charts:
                 cat_choice = st.segmented_control("Vælg metrik", options=["HSR (m)", "Sprint (m)", "Distance (km)", "Topfart (km/t)"], default="HSR (m)", key="phys_graph_control")
                 
-                # 1. Suffix defineret i mapping
                 mapping = {
                     "HSR (m)": ("hsr", 1, " m"), 
                     "Sprint (m)": ("sprinting", 1, " m"), 
@@ -568,7 +580,6 @@ def vis_side(dp=None):
                     fig.add_trace(go.Bar(
                         x=df_chart['match_date'].dt.strftime('%d/%m'), 
                         y=y_vals,
-                        # 1. Suffix bruges her
                         text=y_vals.apply(lambda x: f"{x:.0f}{suffix}" if x > 100 else f"{x:.1f}{suffix}"),
                         textposition='outside', 
                         marker_color='#cc0000'
@@ -577,7 +588,6 @@ def vis_side(dp=None):
                     st.plotly_chart(fig, use_container_width=True)
 
             with t_sub_log:
-                # 2. Individuelle overskrifter via rename
                 df_vis = df_phys.rename(columns={
                     'match_date': 'Dato',
                     'match_teams': 'Modstander',
