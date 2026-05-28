@@ -94,25 +94,34 @@ def draw_player_info_box(ax, team_logo, player_name, season_str, category_str):
             fontsize=8, color='#666666', va='center')
 
 def get_physical_data(player_name, player_opta_uuid, valgt_hold_navn, db_conn):
-    # 1. Hent data fra tabellen
+    # Vi henter rådata fra Snowflake
     sql = "SELECT * FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS"
-    df = db_conn.query(sql)
+    df_raw = db_conn.query(sql)
     
-    if df is None or df.empty:
+    if df_raw is None or df_raw.empty:
         return None
 
-    # 2. Hvis data er "grød" i én kolonne (eksempel på løsning):
-    # Vi antager her at navnet kommer efter det første 6-cifrede ID
-    # Vi skaber en ny kolonne 'player_name' ved at fjerne ID'et
-    def extract_name(row_val):
-        # Dette er et groft eksempel - du skal tilpasse det 
-        # alt efter hvordan din dataframe ser ud i 'df.columns'
-        import re
-        # Fjerner tal i starten af strengen
-        return re.sub(r'^\d+', '', str(row_val))
+    # Her er tricket: Vi antager at din første kolonne indeholder "grøden"
+    # Vi splitter ID og Navn ved at bruge regex
+    # Eksempel: '426384Matthew Hoppe' -> ID: 426384, Navn: Matthew Hoppe
+    import re
+    
+    def parse_row(row):
+        val = str(row.iloc[0]) # Den første kolonne med "grøden"
+        # Finder det første tal-stykke (ID) og resten (Navn)
+        match = re.match(r'^(\d+)(.*)', val)
+        if match:
+            return pd.Series([match.group(1), match.group(2)])
+        return pd.Series([None, val])
 
-    # Eksempel: Hvis din dataframe hedder 'data' og kolonnen er den første:
-    # df['player_name'] = df.iloc[:, 0].apply(extract_name)
+    df_parsed = df_raw.apply(parse_row, axis=1)
+    df_parsed.columns = ['ssid', 'player_name']
+    
+    # Nu kan vi filtrere på navnet
+    df_parsed['player_name'] = df_parsed['player_name'].str.strip()
+    df_final = df_parsed[df_parsed['player_name'].str.contains(player_name.split()[-1], case=False, na=False)]
+    
+    return df_final
     
     return df
     
