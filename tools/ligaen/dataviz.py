@@ -53,7 +53,7 @@ def load_data(periode, start, split, slut):
         LEFT JOIN {db}.WYSCOUT_MATCHADVANCEDSTATS_DEFENCE md ON tm.MATCH_WYID = md.MATCH_WYID AND tm.TEAM_WYID = md.TEAM_WYID 
         LEFT JOIN {db}.WYSCOUT_MATCHADVANCEDSTATS_PASSES mp ON tm.MATCH_WYID = mp.MATCH_WYID AND tm.TEAM_WYID = mp.TEAM_WYID
         WHERE tm.COMPETITION_WYID = 328 
-        AND tm.DATE_UTC {filter_sql} 
+        AND tm.DATE {filter_sql} 
         GROUP BY tm.TEAM_WYID
     """)
     
