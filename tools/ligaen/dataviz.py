@@ -140,7 +140,18 @@ def draw_position_performance_chart(df_merged, metric, label):
 # --- 3. HOVEDFUNKTION ---
 
 def vis_side():
-    df_opta, df_wy, df_ss = load_data()
+    # --- NYT FILTER ---
+    col_f1, col_f2 = st.columns([1, 2])
+    with col_f1:
+        periode = st.radio("Periode:", ["Hele Sæsonen", "1. Halvår", "2. Halvår"], horizontal=True)
+    
+    # Definer dato-grænser (Tilpas datoerne til den præcise sæsonstart/slut)
+    start_dato = "2025-07-01"
+    split_dato = "2025-12-31" # Skæringspunktet mellem efterår og forår
+    slut_dato = "2026-06-30"
+
+    # Hent data (vi sender nu perioden med ned)
+    df_opta, df_wy, df_ss = load_data(periode, start_dato, split_dato, slut_dato)
     if df_opta is None or df_opta.empty: return
 
     df_opta.columns = [c.upper() for c in df_opta.columns]
