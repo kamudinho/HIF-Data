@@ -20,14 +20,26 @@ def get_base64_image(url):
     return url
 
 @st.cache_data(ttl=3600)
-def load_data():
+def load_data(periode, start, split, slut):
     conn = _get_snowflake_conn()
     db = "KLUB_HVIDOVREIF.AXIS"
     
-    # A. Opta Matchinfo
-    df_opta = conn.query(f"SELECT * FROM {db}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = 'dyjr458hcmrcy87fsabfsy87o'")
+    # Opbyg dato-filter baseret på brugerens valg
+    if periode == "1. Halvår":
+        date_filter = f"BETWEEN '{start}' AND '{split}'"
+    elif periode == "2. Halvår":
+        date_filter = f"BETWEEN '{pd.to_datetime(split) + pd.Timedelta(days=1)}' AND '{slut}'"
+    else:
+        date_filter = f"BETWEEN '{start}' AND '{slut}'"
+
+    # A. Opta Matchinfo (Tilføj WHERE på MATCH_DATE_FULL)
+    df_opta = conn.query(f"""
+        SELECT * FROM {db}.OPTA_MATCHINFO 
+        WHERE TOURNAMENTCALENDAR_OPTAUUID = 'dyjr458hcmrcy87fsabfsy87o'
+        AND MATCH_DATE_FULL {date_filter}
+    """)
     
-    # B. Wyscout Performance (Med aliasser for at undgå ambiguous error)
+    # B. Wyscout Performance (Her skal vi filtrere inde i joinen eller før GROUP BY)
     df_wy = conn.query(f"""
         SELECT 
             tm.TEAM_WYID, 
@@ -38,21 +50,22 @@ def load_data():
         LEFT JOIN {db}.WYSCOUT_MATCHADVANCEDSTATS_DEFENCE md ON tm.MATCH_WYID = md.MATCH_WYID AND tm.TEAM_WYID = md.TEAM_WYID 
         LEFT JOIN {db}.WYSCOUT_MATCHADVANCEDSTATS_PASSES mp ON tm.MATCH_WYID = mp.MATCH_WYID AND tm.TEAM_WYID = mp.TEAM_WYID
         WHERE tm.COMPETITION_WYID = 328 
+        AND tm.MATCH_DATE {date_filter} -- FILTRERING HER
         GROUP BY tm.TEAM_WYID
     """)
     
-    # C. Second Spectrum (Fysisk - Koblet via Game Metadata)
+    # C. Second Spectrum (Allerede filtreret på ps.MATCH_DATE i din kode)
     df_ss = conn.query(f"""
         WITH BASE AS (
             SELECT m.HOME_OPTAID as TEAM_ID, ps.DISTANCE, ps."HIGH SPEED RUNNING" as HSR
             FROM {db}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS ps
             JOIN {db}.SECONDSPECTRUM_GAME_METADATA m ON ps.MATCH_SSIID = m.MATCH_SSIID
-            WHERE ps.MATCH_DATE >= '2025-07-01'
+            WHERE ps.MATCH_DATE {date_filter}
             UNION ALL
             SELECT m.AWAY_OPTAID as TEAM_ID, ps.DISTANCE, ps."HIGH SPEED RUNNING" as HSR
             FROM {db}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS ps
             JOIN {db}.SECONDSPECTRUM_GAME_METADATA m ON ps.MATCH_SSIID = m.MATCH_SSIID
-            WHERE ps.MATCH_DATE >= '2025-07-01'
+            WHERE ps.MATCH_DATE {date_filter}
         )
         SELECT TEAM_ID, AVG(DISTANCE) / 1000 as DIST_KM, AVG(HSR) as HSR
         FROM BASE GROUP BY TEAM_ID
