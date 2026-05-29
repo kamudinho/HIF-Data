@@ -24,15 +24,11 @@ def load_data(periode, start, split, slut):
     conn = _get_snowflake_conn()
     db = "KLUB_HVIDOVREIF.AXIS"
     
-    # Definition af dato-filtre baseret på dine kolonnenavne
     if periode == "1. Halvår":
-        # Fra sæsonstart til og med 31. dec
         filter_sql = f"BETWEEN '{start}' AND '{split}'"
     elif periode == "2. Halvår":
-        # Fra 1. jan til sæsonslut
         filter_sql = f"BETWEEN '{pd.to_datetime(split) + pd.Timedelta(days=1)}' AND '{slut}'"
     else:
-        # Hele intervallet
         filter_sql = f"BETWEEN '{start}' AND '{slut}'"
 
     # A. Opta Matchinfo
@@ -42,7 +38,7 @@ def load_data(periode, start, split, slut):
         AND MATCH_DATE_FULL {filter_sql}
     """)
     
-    # B. Wyscout Performance (Rettet til DATE_UTC)
+    # B. Wyscout Performance (Rettet til DATE_UTC baseret på dit skema)
     df_wy = conn.query(f"""
         SELECT 
             tm.TEAM_WYID, 
@@ -57,7 +53,7 @@ def load_data(periode, start, split, slut):
         GROUP BY tm.TEAM_WYID
     """)
     
-    # C. Second Spectrum (Bruger MATCH_DATE)
+    # C. Second Spectrum
     df_ss = conn.query(f"""
         WITH BASE AS (
             SELECT m.HOME_OPTAID as TEAM_ID, ps.DISTANCE, ps."HIGH SPEED RUNNING" as HSR
@@ -93,19 +89,15 @@ def calculate_split_table(df_opta):
 
     df_played = df_opta[df_opta['MATCH_STATUS'].str.contains('Played|Full|Finish', case=False, na=False)].sort_values('MATCH_DATE_FULL')
     
-    # 1. Definer Top 6 og Bund 6 efter 22 runder (132 kampe i en 12-holds liga)
     df_r22 = df_played.head(132) 
     tabel_r22 = get_points(df_r22).sort_values(['P', 'MD'], ascending=False)
     top_6_uuids = tabel_r22.head(6)['OPTA_UUID'].tolist()
     
-    # 2. Beregn point for alle spillede kampe
     tabel_nu = get_points(df_played)
     
-    # 3. Sorter grupperne hver for sig
     top_6_final = tabel_nu[tabel_nu['OPTA_UUID'].isin(top_6_uuids)].sort_values(['P', 'MD'], ascending=False)
     bund_6_final = tabel_nu[~tabel_nu['OPTA_UUID'].isin(top_6_uuids)].sort_values(['P', 'MD'], ascending=False)
     
-    # 4. Sæt dem sammen igen (Top 1-6 efterfulgt af Bund 7-12)
     final_table = pd.concat([top_6_final, bund_6_final]).reset_index(drop=True)
     final_table['#'] = final_table.index + 1
     return final_table
@@ -156,19 +148,44 @@ def draw_position_performance_chart(df_merged, metric, label):
 # --- 3. HOVEDFUNKTION ---
 
 def vis_side():
-    # --- NYT FILTER ---
-    col_f1, col_f2 = st.columns([1, 2])
-    with col_f1:
-        periode = st.radio("Periode:", ["Hele Sæsonen", "1. Halvår", "2. Halvår"], horizontal=True)
-    
-    # Definer dato-grænser (Tilpas datoerne til den præcise sæsonstart/slut)
+    # Definer dato-grænser for sæsonen 2025/2026
     start_dato = "2025-07-01"
-    split_dato = "2025-12-31" # Skæringspunktet mellem efterår og forår
+    split_dato = "2025-12-31" 
     slut_dato = "2026-06-30"
 
-    # Hent data (vi sender nu perioden med ned)
+    # --- TOP MENU / DROPDOWNS TIL HØJRE ---
+    col1, col2, col3 = st.columns([2.0, 1.0, 1.0])
+    
+    with col2:
+        # Gammelt holdvalg (Metrik) flyttet herhen
+        metric_map = {
+            "xG": "XG", "Mål": "GOALS", "Skud": "SHOTS", 
+            "Afleveringer": "PASSES", "PPDA": "PPDA", 
+            "Distance": "DIST", "High Speed Running": "HSR"
+        }
+        sel_metric = st.selectbox("Vælg parameter:", list(metric_map.keys()))
+
+    with col3:
+        # Nyt Periodevalg som dropdown ved siden af
+        periode = st.selectbox("Vælg periode:", ["Hele Sæsonen", "1. Halvår", "2. Halvår"])
+
+    # Generer beskrivende tekst baseret på periodevalg
+    if periode == "1. Halvår":
+        tekst_beskrivelse = "Efterår 2025"
+    elif periode == "2. Halvår":
+        tekst_beskrivelse = "Forår 2026"
+    else:
+        tekst_beskrivelse = "Samlet for sæson 2025/2026"
+
+    with col1:
+        st.markdown(f"### 📊 {tekst_beskrivelse}")
+        st.caption("Betinia Ligaen: Placering vs. Performance")
+
+    # Hent data med det valgte filter
     df_opta, df_wy, df_ss = load_data(periode, start_dato, split_dato, slut_dato)
-    if df_opta is None or df_opta.empty: return
+    if df_opta is None or df_opta.empty: 
+        st.warning("Ingen data fundet for den valgte periode.")
+        return
 
     df_opta.columns = [c.upper() for c in df_opta.columns]
     df_liga = calculate_split_table(df_opta)
@@ -182,7 +199,6 @@ def vis_side():
         if team_info:
             perf = df_wy[df_wy['TEAM_WYID'] == team_info.get('team_wyid')]
             
-            # Robust ID matching for fysisk data
             try:
                 m_id = str(team_info.get('opta_id'))
                 fysisk = df_ss[df_ss['TEAM_ID'].astype(str) == m_id]
@@ -203,19 +219,8 @@ def vis_side():
             })
 
     df_final = pd.DataFrame(final_data)
-
-    col1, col2 = st.columns([2.5, 1.5])
-    with col1:
-        st.markdown("<br>", unsafe_allow_html=True)
-        st.caption("Betinia Ligaen: Placering vs. Performance")
-    with col2:
-        metric_map = {
-            "xG": "XG", "Mål": "GOALS", "Skud": "SHOTS", 
-            "Afleveringer": "PASSES", "PPDA": "PPDA", 
-            "Distance": "DIST", "High Speed Running": "HSR"
-        }
-        sel_metric = st.selectbox("", list(metric_map.keys()), label_visibility="collapsed")
     
+    # Tegn grafen baseret på valgte indstillinger
     draw_position_performance_chart(df_final, metric_map[sel_metric], sel_metric)
 
 if __name__ == "__main__":
