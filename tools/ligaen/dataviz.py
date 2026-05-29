@@ -24,22 +24,25 @@ def load_data(periode, start, split, slut):
     conn = _get_snowflake_conn()
     db = "KLUB_HVIDOVREIF.AXIS"
     
-    # Opbyg dato-filter baseret på brugerens valg
+    # Definition af dato-filtre baseret på dine kolonnenavne
     if periode == "1. Halvår":
-        date_filter = f"BETWEEN '{start}' AND '{split}'"
+        # Fra sæsonstart til og med 31. dec
+        filter_sql = f"BETWEEN '{start}' AND '{split}'"
     elif periode == "2. Halvår":
-        date_filter = f"BETWEEN '{pd.to_datetime(split) + pd.Timedelta(days=1)}' AND '{slut}'"
+        # Fra 1. jan til sæsonslut
+        filter_sql = f"BETWEEN '{pd.to_datetime(split) + pd.Timedelta(days=1)}' AND '{slut}'"
     else:
-        date_filter = f"BETWEEN '{start}' AND '{slut}'"
+        # Hele intervallet
+        filter_sql = f"BETWEEN '{start}' AND '{slut}'"
 
-    # A. Opta Matchinfo (Tilføj WHERE på MATCH_DATE_FULL)
+    # A. Opta Matchinfo
     df_opta = conn.query(f"""
         SELECT * FROM {db}.OPTA_MATCHINFO 
         WHERE TOURNAMENTCALENDAR_OPTAUUID = 'dyjr458hcmrcy87fsabfsy87o'
-        AND MATCH_DATE_FULL {date_filter}
+        AND MATCH_DATE_FULL {filter_sql}
     """)
     
-    # B. Wyscout Performance (Her skal vi filtrere inde i joinen eller før GROUP BY)
+    # B. Wyscout Performance (Rettet til DATE_UTC)
     df_wy = conn.query(f"""
         SELECT 
             tm.TEAM_WYID, 
@@ -50,29 +53,29 @@ def load_data(periode, start, split, slut):
         LEFT JOIN {db}.WYSCOUT_MATCHADVANCEDSTATS_DEFENCE md ON tm.MATCH_WYID = md.MATCH_WYID AND tm.TEAM_WYID = md.TEAM_WYID 
         LEFT JOIN {db}.WYSCOUT_MATCHADVANCEDSTATS_PASSES mp ON tm.MATCH_WYID = mp.MATCH_WYID AND tm.TEAM_WYID = mp.TEAM_WYID
         WHERE tm.COMPETITION_WYID = 328 
-        AND tm.MATCH_DATE {date_filter} -- FILTRERING HER
+        AND tm.DATE_UTC {filter_sql} 
         GROUP BY tm.TEAM_WYID
     """)
     
-    # C. Second Spectrum (Allerede filtreret på ps.MATCH_DATE i din kode)
+    # C. Second Spectrum (Bruger MATCH_DATE)
     df_ss = conn.query(f"""
         WITH BASE AS (
             SELECT m.HOME_OPTAID as TEAM_ID, ps.DISTANCE, ps."HIGH SPEED RUNNING" as HSR
             FROM {db}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS ps
             JOIN {db}.SECONDSPECTRUM_GAME_METADATA m ON ps.MATCH_SSIID = m.MATCH_SSIID
-            WHERE ps.MATCH_DATE {date_filter}
+            WHERE ps.MATCH_DATE {filter_sql}
             UNION ALL
             SELECT m.AWAY_OPTAID as TEAM_ID, ps.DISTANCE, ps."HIGH SPEED RUNNING" as HSR
             FROM {db}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS ps
             JOIN {db}.SECONDSPECTRUM_GAME_METADATA m ON ps.MATCH_SSIID = m.MATCH_SSIID
-            WHERE ps.MATCH_DATE {date_filter}
+            WHERE ps.MATCH_DATE {filter_sql}
         )
         SELECT TEAM_ID, AVG(DISTANCE) / 1000 as DIST_KM, AVG(HSR) as HSR
         FROM BASE GROUP BY TEAM_ID
     """)
     
     return df_opta, df_wy, df_ss
-
+    
 def calculate_split_table(df_opta):
     """Beregner tabel med Top 6 / Bund 6 split baseret på runde 22-reglen"""
     def get_points(df):
