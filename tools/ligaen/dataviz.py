@@ -104,7 +104,7 @@ def calculate_split_table(df_opta):
 
 # --- 2. CHART FUNKTION ---
 
-def draw_position_performance_chart(df_merged, metric, label):
+def draw_position_performance_chart(df_merged, metric, label, periode_tekst):
     if df_merged is None or df_merged.empty:
         st.warning("Ingen data tilgængelig.")
         return
@@ -138,59 +138,64 @@ def draw_position_performance_chart(df_merged, metric, label):
     ))
 
     fig.update_layout(
-        height=600, margin=dict(t=30, b=60, l=60, r=40),
+        height=600, margin=dict(t=50, b=60, l=60, r=40),
         xaxis=dict(title="<b>Placering</b>", tickmode='linear', range=[0.4, 12.6], gridcolor="#f0f0f0", linecolor='black'),
         yaxis=dict(title=f"<b>{label}</b>", gridcolor="#f0f0f0", autorange="reversed" if is_ppda else True, linecolor='black'),
-        plot_bgcolor='white'
+        plot_bgcolor='white',
+        # Her tilføjes din tekst øverst til højre i selve grafen
+        annotations=[dict(
+            x=1, y=1.05, xref='paper', yref='paper',
+            text=f"<b>{periode_tekst}</b>",
+            showarrow=False, font=dict(size=14, color="gray"),
+            xanchor='right'
+        )]
     )
     st.plotly_chart(fig, use_container_width=True)
 
-# --- 3. HOVEDFUNKTION ---
+# --- OPPDATERET HOVEDFUNKTION ---
 
 def vis_side():
-    # Definer dato-grænser for sæsonen 2025/2026
     start_dato = "2025-07-01"
     split_dato = "2025-12-31" 
     slut_dato = "2026-06-30"
 
-    # --- TOP MENU / DROPDOWNS TIL HØJRE ---
-    col1, col2, col3 = st.columns([2.0, 1.0, 1.0])
+    # --- TOP MENU ---
+    col_title, col_m, col_p = st.columns([2.0, 1.0, 1.0])
     
-    with col2:
-        # Gammelt holdvalg (Metrik) flyttet herhen
+    with col_m:
         metric_map = {
             "xG": "XG", "Mål": "GOALS", "Skud": "SHOTS", 
             "Afleveringer": "PASSES", "PPDA": "PPDA", 
             "Distance": "DIST", "High Speed Running": "HSR"
         }
-        sel_metric = st.selectbox("Vælg parameter:", list(metric_map.keys()))
+        sel_metric = st.selectbox("Parameter:", list(metric_map.keys()))
 
-    with col3:
-        # Nyt Periodevalg som dropdown ved siden af
-        periode = st.selectbox("Vælg periode:", ["Hele Sæsonen", "1. Halvår", "2. Halvår"])
+    with col_p:
+        periode = st.selectbox("Periode:", ["Hele Sæsonen", "1. Halvår", "2. Halvår"])
 
-    # Generer beskrivende tekst baseret på periodevalg
+    # Tekstlogik
     if periode == "1. Halvår":
         tekst_beskrivelse = "Efterår 2025"
     elif periode == "2. Halvår":
         tekst_beskrivelse = "Forår 2026"
     else:
-        tekst_beskrivelse = "Samlet for sæson 2025/2026"
+        tekst_beskrivelse = "Sæson 2025/2026"
 
-    with col1:
-        st.markdown(f"### 📊 {tekst_beskrivelse}")
-        st.caption("Betinia Ligaen: Placering vs. Performance")
+    with col_title:
+        st.subheader("Betinia Ligaen")
+        st.caption("Placering vs. Performance")
 
-    # Hent data med det valgte filter
+    # Data load
     df_opta, df_wy, df_ss = load_data(periode, start_dato, split_dato, slut_dato)
     if df_opta is None or df_opta.empty: 
-        st.warning("Ingen data fundet for den valgte periode.")
+        st.info("Ingen data fundet for den valgte periode.")
         return
 
     df_opta.columns = [c.upper() for c in df_opta.columns]
     df_liga = calculate_split_table(df_opta)
-
-    final_data = []
+    
+    # Tegn grafen med den nye tekst-parameter
+    draw_position_performance_chart(df_final, metric_map[sel_metric], sel_metric, tekst_beskrivelse)    final_data = []
     for _, row in df_liga.iterrows():
         opt_uuid = row['OPTA_UUID']
         team_info = next((info for name, info in TEAMS.items() if info.get('opta_uuid') == opt_uuid), None)
