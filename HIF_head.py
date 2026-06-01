@@ -188,35 +188,32 @@ def vis_side():
     col1, col2, col3 = st.columns([1, 1, 1])
 
     with col1:
-        with col1:
         with st.container(border=True):
             # Hent alle kampe for Hvidovre
             hif_m = df_matches[(df_matches['CONTESTANTHOME_OPTAUUID'].str.upper() == HIF_UUID.strip().upper()) | 
                                (df_matches['CONTESTANTAWAY_OPTAUUID'].str.upper() == HIF_UUID.strip().upper())]
             
-            # Find kampe fra i dag og frem
             today = pd.Timestamp.today().normalize()
             future = hif_m[hif_m['MATCH_DATE_FULL'] >= today].sort_values('MATCH_DATE_FULL')
             
             # 1. Fast overskrift der altid vises
             st.markdown("<div class='card-title'><span>NÆSTE MODSTANDER</span></div>", unsafe_allow_html=True)
 
-            # 2. Logik for indhold baseret på om der er kampe
+            # --- LØSNING: Vi definerer opp_id her, så den altid eksisterer ---
+            opp_id = None 
+
             if not future.empty:
                 nk = future.iloc[0]
                 opp_id = nk['CONTESTANTAWAY_OPTAUUID'] if str(nk['CONTESTANTHOME_OPTAUUID']).upper() == HIF_UUID.strip().upper() else nk['CONTESTANTHOME_OPTAUUID']
                 opp_name = opta_to_name.get(str(opp_id).upper(), "Ukendt")
                 
-                # Underoverskrift med modstander og dato
                 st.markdown(f"<div class='card-title' style='border:none; margin-top:-10px; padding-bottom:0; font-size: 13px;'><span>vs. {opp_name.upper()}</span><span>{nk['MATCH_DATE_FULL'].strftime('%d/%m')}</span></div>", unsafe_allow_html=True)
                 
-                # Beregn stats
                 hif_stats = beregn_hold_stats(df_stats, HIF_UUID)
                 opp_stats = beregn_hold_stats(df_stats, opp_id)
                 hif_logo = TEAMS.get("Hvidovre", {}).get("logo", "")
                 opp_logo = TEAMS.get(opp_name, {}).get("logo", "")
                 
-                # Vis tabel
                 stats_html = f"""
                 <table class='stats-table' style='width: 100%; margin-top: 10px;'>
                     <tr><td style='width: 34%;'></td>
@@ -228,9 +225,7 @@ def vis_side():
                     <tr><td class='stats-label'>xG for/imod</td><td class='stats-value'>{hif_stats['xgf']}/{hif_stats['xga']}</td><td class='stats-value'>{opp_stats['xgf']}/{opp_stats['xga']}</td></tr>
                 </table>"""
                 st.markdown(stats_html, unsafe_allow_html=True)
-            
             else:
-                # Besked når der ikke er planlagte kampe
                 st.caption("Afventer kampprogram for sæson 2026/2027")
                 
     with col2:
