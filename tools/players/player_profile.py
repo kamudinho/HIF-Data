@@ -310,7 +310,7 @@ def vis_side(dp=None):
 
     df_spiller = df_all[df_all['player_optauuid'] == valgt_player_uuid].copy()
 
-    t_profile, t_pitch, t_phys, t_stats, t_compare = st.tabs(["Spillerprofil", "Spilleraktioner", "Fysisk data", "Statistik", "Sammenligning"])
+    t_profile, t_pitch, t_phys = st.tabs(["Spillerprofil", "Spilleraktioner", "Fysisk data"])
 
     with t_profile:
         def count_event_with_qual(df_group, eid, qids):
@@ -557,8 +557,6 @@ def vis_side(dp=None):
             m2.metric("HSR", f"{int(latest.get('hsr_total', 0))} m")
             m3.metric("Topfart", f"{round(float(latest.get('top_speed', 0)), 1)} km/t")
             m4.metric("Højintense", int(latest.get('hi_runs', 0)))
-
-            # ... resten af din fane-logik ...
 
             t_sub_log, t_sub_charts = st.tabs(["Kampoversigt", "Grafer"])
 
