@@ -20,12 +20,6 @@ def get_users():
             "role": "coach",
             "restricted": ["TESTSIDE", "TILPASNING", "ADMIN", "Opret emne", "Emnedatabase"] # Ingen adgang til emner
         },
-        "cg": {
-            "pass": "Gron1234", 
-            "role": "scout",
-            "restricted": ["TESTSIDE", "TILPASNING", "ADMIN", "TRUPPEN", "HIF ANALYSE", "BETINIA LIGAEN"] 
-            # CG kan se Scouting-menuen (Rapport, Database, Emnedatabase)
-        },
         "jeppe": {
             "pass": "Scout1234", 
             "role": "scout",
