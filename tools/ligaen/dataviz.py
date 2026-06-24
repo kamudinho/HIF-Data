@@ -24,9 +24,9 @@ def load_data(periode, start, split, slut):
     conn = _get_snowflake_conn()
     db = "KLUB_HVIDOVREIF.AXIS"
     
-    if periode == "1. Halvår":
+    if periode == "Efterår 2025":
         filter_sql = f"BETWEEN '{start}' AND '{split}'"
-    elif periode == "2. Halvår":
+    elif periode == "Forår 2026":
         filter_sql = f"BETWEEN '{pd.to_datetime(split) + pd.Timedelta(days=1)}' AND '{slut}'"
     else:
         filter_sql = f"BETWEEN '{start}' AND '{slut}'"
@@ -171,12 +171,12 @@ def vis_side():
         sel_metric = st.selectbox("Parameter:", list(metric_map.keys()))
 
     with col_p:
-        periode = st.selectbox("Periode:", ["Hele Sæsonen", "1. Halvår", "2. Halvår"])
+        periode = st.selectbox("Periode:", ["2025/2026", "EFterår 2025", "Forår 2026"])
 
     # Generer den tekst-streng der skal indlejres i grafen
-    if periode == "1. Halvår":
+    if periode == "Efterår 2025":
         tekst_beskrivelse = "Efterår 2025"
-    elif periode == "2. Halvår":
+    elif periode == "Forår 2026":
         tekst_beskrivelse = "Forår 2026"
     else:
         tekst_beskrivelse = "Samlet for sæson 2025/2026"
