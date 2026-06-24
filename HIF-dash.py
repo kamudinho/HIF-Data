@@ -143,11 +143,11 @@ with st.sidebar:
     # UNDERMENU LOGIK
     menu_map = {
         "HVIDOVRE IF": ["Forside"],
-        "HOLDANALYSE": ["Modstanderanalyse", "Ligaoversigt", "Kampoversigt", "Afslutninger", "Fysisk data"],
+        "HOLDANALYSE": ["Modstanderanalyse", "Ligaoversigt", "Kampoversigt", "Afslutninger", "Fysisk data", "Grafer"],
         "SPILLERANALYSE": ["Spillerprofil"],
         "SCOUTING": ["Scoutrapport", "Database", "Emnedatabase", "Transfers"],
         "TILPASNING": ["Spillerdata", "Spiller-score", "Standardsituationer"],
-        "TESTSIDE": ["1. Div-tilpasning", "Grafer", "Sammenligning", "Charts", "Oversigt", "Forecast"],
+        "TESTSIDE": ["1. Div-tilpasning", "Sammenligning", "Charts", "Oversigt", "Forecast"],
         "ADMIN": ["System Log", "Profil", "Datakatalog", "Konklusion", "Fysisk profil", "Hold: Fysisk profil", "Intern analyse", "Top 5: Spillere", "Ordbog"]
     }
     
