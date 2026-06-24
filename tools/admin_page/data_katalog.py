@@ -132,7 +132,7 @@ def vis_side(conn):
             # Preview funktion til hurtig verifikation
             if st.checkbox(f"Vis preview af data fra {valgt_tabel} (første 5 rækker)"):
                 try:
-                    df_preview = conn.query(f"SELECT * FROM KLUB_HVIDOVREIF.AXIS.{valgt_tabel} LIMIT 5")
+                    df_preview = conn.query(f"SELECT * FROM KLUB_HVIDOVREIF.AXIS.{valgt_tabel} LIMIT 25")
                     st.dataframe(df_preview, use_container_width=True)
                 except Exception as e:
                     st.error("Kunne ikke hente preview: " + str(e))
