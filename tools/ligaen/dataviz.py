@@ -42,7 +42,7 @@ def load_data(periode, start, split, slut):
     df_wy = conn.query(f"""
         SELECT 
             tm.TEAM_WYID, 
-            AVG(adv.XG) as XG, AVG(adv.SHOTS) as SHOTS, AVG(adv.GOALS) as GOALS,
+            AVG(adv.XG) as XG, AVG(adv.GOALSCONCEDED) as GOALS_AGAINST, AVG(adv.SHOTS) as SHOTS, AVG(adv.GOALS) as GOALS,
             AVG(md.PPDA) as PPDA, AVG(mp.PASSES) as PASSES
         FROM {db}.WYSCOUT_TEAMMATCHES tm 
         LEFT JOIN {db}.WYSCOUT_MATCHADVANCEDSTATS_GENERAL adv ON tm.MATCH_WYID = adv.MATCH_WYID AND tm.TEAM_WYID = adv.TEAM_WYID 
@@ -164,7 +164,7 @@ def vis_side():
     
     with col_m:
         metric_map = {
-            "xG": "XG", "Mål": "GOALS", "Skud": "SHOTS", 
+            "xG": "XG", "Mål": "GOALS", "Mål imod": "GOALS_AGAINST", "Skud": "SHOTS", 
             "Afleveringer": "PASSES", "PPDA": "PPDA", 
             "Distance": "DIST", "High Speed Running": "HSR"
         }
@@ -217,6 +217,7 @@ def vis_side():
                 'XG': perf['XG'].iloc[0] if not perf.empty else np.nan,
                 'SHOTS': perf['SHOTS'].iloc[0] if not perf.empty else np.nan,
                 'GOALS': perf['GOALS'].iloc[0] if not perf.empty else np.nan,
+                'GOALS AGAINST': perf['GOALS_AGAINST'].iloc[0] if not perf.empty else np.nan,
                 'PASSES': perf['PASSES'].iloc[0] if not perf.empty else np.nan,
                 'PPDA': perf['PPDA'].iloc[0] if not perf.empty else np.nan,
                 'DIST': fysisk['DIST_KM'].iloc[0] if not fysisk.empty else np.nan,
