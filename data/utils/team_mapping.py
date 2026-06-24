@@ -1,5 +1,17 @@
 # data/utils/team_mapping.py
 
+# --- Sæsoner og Turneringer ---
+SEASONS = {
+    "2026/2027": {
+        "1. Division": "2mb332vncy4450vu14paj8844",  # Den nye du lige har sat ind
+        "3F Superliga": "29actv1ohj8r10kd9hu0jnb0n",
+    },
+    "2025/2026": {
+        "1. Division": "dyjr458hcmrcy87fsabfsy87o",  # UUID fra din forrige side-kode
+        "3F Superliga": "dummy_old_superliga_uuid",
+    }
+}
+
 # --- GLOBAL KONTROL ---
 COMPETITION_NAME = "1. Division"
 TOURNAMENTCALENDAR_NAME = "2026/2027"
