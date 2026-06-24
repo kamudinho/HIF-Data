@@ -6,7 +6,7 @@ TOURNAMENTCALENDAR_NAME = "2026/2027"
 
 # --- Turneringer ---
 COMPETITIONS = {
-    "1. Division": {"wyid": 328, "COMPETITION_OPTAUUID": "dyjr458hcmrcy87fsabfsy87o", "COMPETITION_NAME": "1. Division"},
+    "1. Division": {"wyid": 328, "COMPETITION_OPTAUUID": "2mb332vncy4450vu14paj8844", "COMPETITION_NAME": "1. Division"},
     "3F Superliga": {"wyid": 335, "COMPETITION_OPTAUUID": "29actv1ohj8r10kd9hu0jnb0n", "COMPETITION_NAME": "Superliga"},
     "2. division": {"wyid": 329, "opta_uuid": None},
     "3. division": {"wyid": 43319, "opta_uuid": None},
