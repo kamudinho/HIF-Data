@@ -24,6 +24,7 @@ def load_data(periode, start, split, slut):
     conn = _get_snowflake_conn()
     db = "KLUB_HVIDOVREIF.AXIS"
     
+    # Rettet stavefejl til præcis match ("Efterår 2025")
     if periode == "Efterår 2025":
         filter_sql = f"BETWEEN '{start}' AND '{split}'"
     elif periode == "Forår 2026":
@@ -38,7 +39,7 @@ def load_data(periode, start, split, slut):
         AND MATCH_DATE_FULL {filter_sql}
     """)
     
-    # B. Wyscout Performance (Sikret mod DATE_UTC / DATE efter behov)
+    # B. Wyscout Performance
     df_wy = conn.query(f"""
         SELECT 
             tm.TEAM_WYID, 
@@ -116,7 +117,9 @@ def draw_position_performance_chart(df_merged, metric, label, periode_tekst):
     
     y_min, y_max = y_vals.min(), y_vals.max()
     y_span = y_max - y_min if y_max != y_min else 1
-    is_ppda = "PPDA" in label.upper()
+    
+    # Vend aksen om, hvis det er defensive parametre hvor LAVE tal er bedst (PPDA og Mål imod)
+    is_reversed = "PPDA" in label.upper() or "IMOD" in label.upper()
 
     for _, row in df_merged.iterrows():
         if pd.notnull(row[metric]) and row.get('LOGO_URL'):
@@ -127,7 +130,7 @@ def draw_position_performance_chart(df_merged, metric, label, periode_tekst):
                 sizex=0.5, 
                 sizey=y_span * 0.35,
                 xanchor="center", 
-                yanchor="bottom" if not is_ppda else "top"
+                yanchor="top" if is_reversed else "bottom"
             ))
 
     fig.add_trace(go.Scatter(
@@ -140,9 +143,8 @@ def draw_position_performance_chart(df_merged, metric, label, periode_tekst):
     fig.update_layout(
         height=600, margin=dict(t=50, b=60, l=60, r=40),
         xaxis=dict(title="<b>Placering</b>", tickmode='linear', range=[0.4, 12.6], gridcolor="#f0f0f0", linecolor='black'),
-        yaxis=dict(title=f"<b>{label}</b>", gridcolor="#f0f0f0", autorange="reversed" if is_ppda else True, linecolor='black'),
+        yaxis=dict(title=f"<b>{label}</b>", gridcolor="#f0f0f0", autorange="reversed" if is_reversed else True, linecolor='black'),
         plot_bgcolor='white',
-        # Tekst i øverste højre hjørne af selve grafområdet
         annotations=[dict(
             x=1, y=1.04, xref='paper', yref='paper',
             text=f"<b>{periode_tekst}</b>",
@@ -171,7 +173,8 @@ def vis_side():
         sel_metric = st.selectbox("Parameter:", list(metric_map.keys()))
 
     with col_p:
-        periode = st.selectbox("Periode:", ["2025/2026", "EFterår 2025", "Forår 2026"])
+        # Rettet stavefejl i dropdown ("Efterår 2025")
+        periode = st.selectbox("Periode:", ["2025/2026", "Efterår 2025", "Forår 2026"])
 
     # Generer den tekst-streng der skal indlejres i grafen
     if periode == "Efterår 2025":
@@ -217,7 +220,8 @@ def vis_side():
                 'XG': perf['XG'].iloc[0] if not perf.empty else np.nan,
                 'SHOTS': perf['SHOTS'].iloc[0] if not perf.empty else np.nan,
                 'GOALS': perf['GOALS'].iloc[0] if not perf.empty else np.nan,
-                'GOALS AGAINST': perf['GOALS_AGAINST'].iloc[0] if not perf.empty else np.nan,
+                # RETTET HER: Ændret fra 'GOALS AGAINST' til 'GOALS_AGAINST' så det matcher metric_map
+                'GOALS_AGAINST': perf['GOALS_AGAINST'].iloc[0] if not perf.empty else np.nan,
                 'PASSES': perf['PASSES'].iloc[0] if not perf.empty else np.nan,
                 'PPDA': perf['PPDA'].iloc[0] if not perf.empty else np.nan,
                 'DIST': fysisk['DIST_KM'].iloc[0] if not fysisk.empty else np.nan,
@@ -226,7 +230,7 @@ def vis_side():
 
     df_final = pd.DataFrame(final_data)
     
-    # Her kaldes grafen korrekt efter dataen er bygget færdig
+    # Kalder grafen med de korrekte værdier
     draw_position_performance_chart(df_final, metric_map[sel_metric], sel_metric, tekst_beskrivelse)
 
 if __name__ == "__main__":
