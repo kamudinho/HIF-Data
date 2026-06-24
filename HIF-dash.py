@@ -238,6 +238,9 @@ try:
         elif s == "Modstanderanalyse":
             import tools.ligaen.modstanderanalyse as ma
             ma.vis_side()
+        elif s == "Grafer":
+            import tools.ligaen.dataviz as dviz
+            dviz.vis_side()
 
     elif m == "TILPASNING":
         if s == "Spillerdata":
