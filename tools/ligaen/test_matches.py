@@ -11,7 +11,7 @@ def vis_side(dp=None):
         return
 
     DB = "KLUB_HVIDOVREIF.AXIS"
-    LIGA_UUID = "dyjr458hcmrcy87fsabfsy87o" 
+    LIGA_UUID = "2mb332vncy4450vu14paj8844" 
 
     sql = f"""
         WITH MatchBase AS (
