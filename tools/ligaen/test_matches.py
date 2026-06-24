@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-from data.utils.team_mapping import TEAMS, TEAM_COLORS, SEASONS
+from data.utils.team_mapping import TEAMS, TEAM_COLORS, SEASONS, SEASON_LEAGUE_MAPPER
 from data.data_load import _get_snowflake_conn
 
 def vis_side(dp=None):
@@ -11,6 +11,7 @@ def vis_side(dp=None):
         return
 
     DB = "KLUB_HVIDOVREIF.AXIS"
+    LIGA_NAVN = "1. Division"  # App-konstant for denne side
     
     # --- CSS-STYLING ---
     st.markdown("""
@@ -30,16 +31,29 @@ def vis_side(dp=None):
         </style>
     """, unsafe_allow_html=True)
 
-    # --- 1. HOLD VALG (RÆKKE 1) ---
+    # --- SÆSON FILTER (Præ-evaluering nødvendig for dynamisk hold-liste) ---
+    if "season_select_main" not in st.session_state:
+        st.session_state["season_select_main"] = list(SEASONS.keys())[0]
+
+    valgt_saeson = st.session_state["season_select_main"]
+
+    # Generer hold ud fra den valgte sæson og den faste liga (1. Division)
+    aktuelle_hold_navne = SEASON_LEAGUE_MAPPER.get(valgt_saeson, {}).get(LIGA_NAVN, [])
+    liga_hold_options = {n: TEAMS[n].get("opta_uuid") for n in aktuelle_hold_navne if n in TEAMS}
+    h_list = sorted(list(liga_hold_options.keys()))
+    
+    if not h_list:
+        st.warning(f"Ingen hold fundet for {LIGA_NAVN} i sæsonen {valgt_saeson}.")
+        return
+
+    # --- layout rækker ---
     col_layout = [2.5, 0.5, 0.5, 0.5, 0.5, 0.6, 0.6, 0.6]
     row1 = st.columns(col_layout)
     row2 = st.columns(col_layout)
     
+    # --- 1. HOLD VALG (RÆKKE 1) ---
     with row1[0]:
-        liga_hold_options = {n: i.get("opta_uuid") for n, i in TEAMS.items() if i.get("league") == "1. Division"}
-        h_list = sorted(liga_hold_options.keys())
         hif_idx = h_list.index("Hvidovre") if "Hvidovre" in h_list else 0
-        
         valgt_navn = st.selectbox("Hold", h_list, index=hif_idx, label_visibility="collapsed", key="team_select_main")
         valgt_uuid = str(liga_hold_options[valgt_navn]).strip().upper()
 
@@ -47,13 +61,14 @@ def vis_side(dp=None):
     with row2[0]:
         c_season, c_period, c_side = st.columns(3)
         with c_season:
-            valgt_saeson = st.selectbox("Sæson", list(SEASONS.keys()), index=0, key="season_select_main", label_visibility="collapsed")
+            # Opdaterer session state direkte ved ændring for at genindlæse holdlisten korrekt næste gang
+            st.selectbox("Sæson", list(SEASONS.keys()), key="season_select_main", label_visibility="collapsed")
         with c_period:
             valgt_periode = st.selectbox("Periode", ["Hele Sæsonen", "Efterår", "Forår"], label_visibility="collapsed", key="period_select_main")
         with c_side:
             valgt_side = st.selectbox("Side", ["Samlet", "Hjemme", "Ude"], label_visibility="collapsed", key="side_select_main")
 
-    LIGA_UUID = SEASONS[valgt_saeson]["1. Division"]
+    LIGA_UUID = SEASONS[valgt_saeson][LIGA_NAVN]
 
     # --- 3. SQL QUERY ---
     sql = f"""
@@ -135,16 +150,16 @@ def vis_side(dp=None):
     for col in ['CONTESTANTHOME_OPTAUUID', 'CONTESTANTAWAY_OPTAUUID']:
         df_matches[col] = df_matches[col].astype(str).str.strip().str.upper()
 
+    # Opret et globalt kort over Opta-UUID til Navn for alle hold i TEAMS
     opta_to_name = {str(v['opta_uuid']).strip().upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
 
-    # Filtrer grundlæggende alle kampe for det valgte hold
+    # Filtrer alle kampe for det valgte hold
     team_matches = df_matches[(df_matches['CONTESTANTHOME_OPTAUUID'] == valgt_uuid) | (df_matches['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid)].copy()
 
-    # Opdel i Spillede og Kommende med det samme, så Periode/Side-filtre KUN rammer statistikken og de afviklede resultater
     played_p = team_matches[team_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].copy()
     future_p = team_matches[~team_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].copy()
 
-    # --- APPLIKER FILTRE PÅ SPILLEDE KAMPE (Statistik & Resultat-fane) ---
+    # --- APPLIKER FILTRE PÅ SPILLEDE KAMPE ---
     aar_start = valgt_saeson.split("/")[0]
     aar_slut = valgt_saeson.split("/")[1]
 
@@ -194,8 +209,11 @@ def vis_side(dp=None):
             all_played = df_matches[df_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].copy()
             team_avgs = {}
             stat_keys = ["POSS", "PASSES", "FORWARD_PASSES", "SHOTS", "BIG_CHANCES", "XG", "XGNP", "TOUCHES_IN_BOX", "DZ_SHOTS", "PASSES_FT"]
-            for t_name, t_info in TEAMS.items():
-                t_uuid = str(t_info.get('opta_uuid', '')).strip().upper()
+            
+            # Find snit for alle hold der er tilgængelige i den nuværende sæsons liga-liste
+            for t_name in aktuelle_hold_navne:
+                if t_name not in TEAMS: continue
+                t_uuid = str(TEAMS[t_name].get('opta_uuid', '')).strip().upper()
                 if not t_uuid: continue
                 t_m = all_played[(all_played['CONTESTANTHOME_OPTAUUID'] == t_uuid) | (all_played['CONTESTANTAWAY_OPTAUUID'] == t_uuid)]
                 avgs = {}
@@ -213,13 +231,11 @@ def vis_side(dp=None):
                     
                     c1.markdown(f"<div style='text-align:right; font-weight:bold; padding-top:8px;'>{h_n}</div>", unsafe_allow_html=True)
                     
-                    # SIKKER LOGO-INDLÆSNING (Hjemme)
                     h_logo = TEAMS.get(h_n, {}).get('logo', '')
                     if h_logo: c2.image(h_logo, width=35)
                     
                     c3.markdown(f"<div style='text-align:center;'><span class='score-pill'>{int(row['TOTAL_HOME_SCORE'])} - {int(row['TOTAL_AWAY_SCORE'])}</span></div>", unsafe_allow_html=True)
                     
-                    # SIKKER LOGO-INDLÆSNING (Ude)
                     a_logo = TEAMS.get(a_n, {}).get('logo', '')
                     if a_logo: c4.image(a_logo, width=35)
                     
