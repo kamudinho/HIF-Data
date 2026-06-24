@@ -30,7 +30,7 @@ COMPETITIONS = {
 SEASON_LEAGUE_MAPPER = {
     "2026/2027": {
         "1. Division": [
-            "Hvidovre", "FC Fredericia", "Vejle" "Esbjerg", "Kolding", "Hobro", 
+            "Hvidovre", "Fredericia", "Vejle" "Esbjerg", "Kolding", "Hobro", 
             "HB Køge", "Hillerød", "Aarhus Fremad", "AB", "AaB", "Vendsyssel"
         ],
         "3F Superliga": [
@@ -81,7 +81,7 @@ TEAMS = {
     "Silkeborg IF": {"abbr": "SIF", "team_wyid": 7461, "opta_uuid": "418_uuid_dummy", "opta_id": 418, "logo": "https://cdn5.wyscout.com/photos/team/public/1948_120x120.png"},
     "Vejle": {"abbr": "VB", "team_wyid": 7473, "opta_uuid": "2450_uuid_dummy", "opta_id": 2450, "logo": "https://cdn5.wyscout.com/photos/team/public/g623_120x120.png"},
     "OB": {"abbr": "OB", "team_wyid": 7460, "opta_uuid": "5rz9enoyknpg8ji78za5b82p8", "opta_id": 545, "logo": "https://cdn5.wyscout.com/photos/team/public/287_120x120.png"},
-    "FC Fredericia": {"abbr": "FCF", "team_wyid": 7469, "opta_uuid": "3051_uuid_dummy", "opta_id": 3051, "logo": "https://cdn5.wyscout.com/photos/team/public/2469_120x120.png"},
+    "Fredericia": {"abbr": "FCF", "team_wyid": 7469, "opta_uuid": "3051_uuid_dummy", "opta_id": 3051, "logo": "https://cdn5.wyscout.com/photos/team/public/2469_120x120.png"},
 }
 
 # --- Klubfarver ---
