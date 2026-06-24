@@ -7,7 +7,7 @@ from data.data_load import _get_snowflake_conn
 def vis_side(dp=None):
     conn = _get_snowflake_conn()
     if not conn:
-        st.error("Kunne ikke forbinde til Snowflake.")
+        st.error("Kunne ikke forbinder til Snowflake.")
         return
 
     DB = "KLUB_HVIDOVREIF.AXIS"
@@ -30,15 +30,12 @@ def vis_side(dp=None):
         </style>
     """, unsafe_allow_html=True)
 
-    # --- 1. SÆSON OG HOLD VALG (KONTROL PANEL) ---
-    col_layout = [2.2, 0.5, 0.5, 0.5, 0.5, 0.6, 0.6, 0.6]
+    # --- 1. HOLD VALG (RÆKKE 1) ---
+    col_layout = [2.5, 0.5, 0.5, 0.5, 0.5, 0.6, 0.6, 0.6]
     row1 = st.columns(col_layout)
     row2 = st.columns(col_layout)
     
     with row1[0]:
-        # Sæson-vælger øverst (bruger SEASONS fra din team_mapping.py)
-        valgt_saeson = st.selectbox("Sæson", list(SEASONS.keys()), index=0, key="season_select_main", label_visibility="collapsed")
-        
         liga_hold_options = {n: i.get("opta_uuid") for n, i in TEAMS.items() if i.get("league") == "1. Division"}
         h_list = sorted(liga_hold_options.keys())
         hif_idx = h_list.index("Hvidovre") if "Hvidovre" in h_list else 0
@@ -46,10 +43,20 @@ def vis_side(dp=None):
         valgt_navn = st.selectbox("Hold", h_list, index=hif_idx, label_visibility="collapsed", key="team_select_main")
         valgt_uuid = str(liga_hold_options[valgt_navn]).strip().upper()
 
-    # Dynamisk opslag af LIGA_UUID fra din team_mapping konfiguration baseret på den valgte sæson
+    # --- 2. FILTRERINGSMENU (RÆKKE 2 - SÆSON, PERIODE, SIDE PÅ SAMME LINJE) ---
+    with row2[0]:
+        c_season, c_period, c_side = st.columns(3)
+        with c_season:
+            valgt_saeson = st.selectbox("Sæson", list(SEASONS.keys()), index=0, key="season_select_main", label_visibility="collapsed")
+        with c_period:
+            valgt_periode = st.selectbox("Periode", ["Hele Sæsonen", "Efterår", "Forår"], label_visibility="collapsed", key="period_select_main")
+        with c_side:
+            valgt_side = st.selectbox("Side", ["Samlet", "Hjemme", "Ude"], label_visibility="collapsed", key="side_select_main")
+
+    # Dynamisk opslag af LIGA_UUID ud fra valgt sæson
     LIGA_UUID = SEASONS[valgt_saeson]["1. Division"]
 
-    # --- 2. SQL QUERY ---
+    # --- 3. SQL QUERY ---
     sql = f"""
         WITH MatchBase AS (
             SELECT 
@@ -134,17 +141,10 @@ def vis_side(dp=None):
     # Filtrer kampe for det valgte hold
     team_matches = df_matches[(df_matches['CONTESTANTHOME_OPTAUUID'] == valgt_uuid) | (df_matches['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid)].copy()
 
-    # --- 3. DYNAMISK PERIODE-FILTRERING BASERET PÅ SÆSON ---
-    aar_start = valgt_saeson.split("/")[0]  # f.eks. "2025" eller "2026"
-    aar_slut = valgt_saeson.split("/")[1]   # f.eks. "2026" eller "2027"
+    # Tidsfiltrering baseret på det valgte sæsonnavn
+    aar_start = valgt_saeson.split("/")[0]
+    aar_slut = valgt_saeson.split("/")[1]
 
-    with row2[0]:
-        c_period, c_side = st.columns(2)
-        with c_period:
-            valgt_periode = st.selectbox("Periode", ["Hele Sæsonen", "Efterår", "Forår"], label_visibility="collapsed", key="period_select_main")
-        with c_side:
-            valgt_side = st.selectbox("Side", ["Samlet", "Hjemme", "Ude"], label_visibility="collapsed", key="side_select_main")
-            
     if valgt_periode == "Efterår": 
         f_matches = team_matches[(team_matches['MATCH_DATE_FULL'] >= f'{aar_start}-07-01') & (team_matches['MATCH_DATE_FULL'] <= f'{aar_start}-12-31')]
     elif valgt_periode == "Forår": 
@@ -156,11 +156,6 @@ def vis_side(dp=None):
     elif valgt_side == "Ude": f_matches = f_matches[f_matches['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid]
 
     played_p = f_matches[f_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].copy()
-    
-    # Sikring mod tomme datasæt for nyvalgt sæson
-    if played_p.empty:
-        st.info(f"Der er endnu ikke spillet nogen færdige kampe for {valgt_navn} i den valgte periode ({valgt_saeson} - {valgt_periode} / {valgt_side}).")
-        return
 
     # --- 4. BEREGNING AF STATS-BAR OVERBLIK ---
     summary = {"K": len(played_p), "S": 0, "U": 0, "N": 0, "M+": 0, "M-": 0}
@@ -194,47 +189,48 @@ def vis_side(dp=None):
     tab1, tab2, tab3, tab4 = st.tabs(["RESULTATER", "KOMMENDE", "SÆSONOVERBLIK", "KAMPOVERBLIK"])
 
     with tab1:
-        all_played = df_matches[df_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].copy()
-        team_avgs = {}
-        stat_keys = ["POSS", "PASSES", "FORWARD_PASSES", "SHOTS", "BIG_CHANCES", "XG", "XGNP", "TOUCHES_IN_BOX", "DZ_SHOTS", "PASSES_FT"]
-        for t_name, t_info in TEAMS.items():
-            t_uuid = str(t_info.get('opta_uuid', '')).strip().upper()
-            if not t_uuid: continue
-            t_m = all_played[(all_played['CONTESTANTHOME_OPTAUUID'] == t_uuid) | (all_played['CONTESTANTAWAY_OPTAUUID'] == t_uuid)]
-            avgs = {}
-            for k in stat_keys:
-                vals = pd.to_numeric(t_m[f"HOME_{k}"].where(t_m['CONTESTANTHOME_OPTAUUID'] == t_uuid, t_m[f"AWAY_{k}"]), errors='coerce')
-                avgs[k] = vals.mean() if not vals.empty else 0
-            team_avgs[t_uuid] = avgs
+        if not played_p.empty:
+            all_played = df_matches[df_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].copy()
+            team_avgs = {}
+            stat_keys = ["POSS", "PASSES", "FORWARD_PASSES", "SHOTS", "BIG_CHANCES", "XG", "XGNP", "TOUCHES_IN_BOX", "DZ_SHOTS", "PASSES_FT"]
+            for t_name, t_info in TEAMS.items():
+                t_uuid = str(t_info.get('opta_uuid', '')).strip().upper()
+                if not t_uuid: continue
+                t_m = all_played[(all_played['CONTESTANTHOME_OPTAUUID'] == t_uuid) | (all_played['CONTESTANTAWAY_OPTAUUID'] == t_uuid)]
+                avgs = {}
+                for k in stat_keys:
+                    vals = pd.to_numeric(t_m[f"HOME_{k}"].where(t_m['CONTESTANTHOME_OPTAUUID'] == t_uuid, t_m[f"AWAY_{k}"]), errors='coerce')
+                    avgs[k] = vals.mean() if not vals.empty else 0
+                team_avgs[t_uuid] = avgs
 
-        for _, row in played_p.sort_values('MATCH_DATE_FULL', ascending=False).iterrows():
-            st.markdown(f"<div class='date-header'>RUNDE {int(row['WEEK']) if pd.notnull(row['WEEK']) else 0} — {row['MATCH_DATE_FULL'].strftime('%d. %b %Y').upper()}</div>", unsafe_allow_html=True)
-            with st.container(border=True):
-                h_uuid, a_uuid = row['CONTESTANTHOME_OPTAUUID'], row['CONTESTANTAWAY_OPTAUUID']
-                h_n, a_n = opta_to_name.get(h_uuid, "Hjemme"), opta_to_name.get(a_uuid, "Ude")
-                c1, c2, c3, c4, c5 = st.columns([2, 0.4, 1.2, 0.4, 2])
-                c1.markdown(f"<div style='text-align:right; font-weight:bold; padding-top:8px;'>{h_n}</div>", unsafe_allow_html=True)
-                c2.image(TEAMS.get(h_n, {}).get('logo', ''), width=35)
-                c3.markdown(f"<div style='text-align:center;'><span class='score-pill'>{int(row['TOTAL_HOME_SCORE'])} - {int(row['TOTAL_AWAY_SCORE'])}</span></div>", unsafe_allow_html=True)
-                c4.image(TEAMS.get(a_n, {}).get('logo', ''), width=35)
-                c5.markdown(f"<div style='font-weight:bold; padding-top:8px;'>{a_n}</div>", unsafe_allow_html=True)
-                
-                stats_conf = [("HOME_POSS", "AWAY_POSS", "POSS", "Boldbesiddelse", 1, "%"), ("HOME_PASSES", "AWAY_PASSES", "PASSES", "Afleveringer: Samlet", 0, ""), ("HOME_FORWARD_PASSES", "AWAY_FORWARD_PASSES", "FORWARD_PASSES", "Afleveringer: Fremadrettede", 0, ""), ("HOME_PASSES_FT", "AWAY_PASSES_FT", "PASSES_FT", "Afleveringer: Sidste 1/3", 0, ""), ("HOME_TOUCHES_IN_BOX", "AWAY_TOUCHES_IN_BOX", "TOUCHES_IN_BOX", "Touches in box", 0, ""), ("HOME_SHOTS", "AWAY_SHOTS", "SHOTS", "Afslutninger", 0, ""), ("HOME_DZ_SHOTS", "AWAY_DZ_SHOTS", "DZ_SHOTS", "Skud fra DZ", 0, ""), ("HOME_XG", "AWAY_XG", "XG", "xG", 2, ""), ("HOME_XGNP", "AWAY_XGNP", "XGNP", "xGnp", 2, ""), ("HOME_BIG_CHANCES", "AWAY_BIG_CHANCES", "BIG_CHANCES", "Store chancer", 0, "")]
-                for hc, ac, s_key, lbl, dec, suf in stats_conf:
-                    hv_raw, av_raw = pd.to_numeric(row.get(hc), errors='coerce'), pd.to_numeric(row.get(ac), errors='coerce')
-                    if pd.isna(hv_raw) and pd.isna(av_raw): continue
-                    hv, av = float(hv_raw or 0), float(av_raw or 0)
-                    h_avg, a_avg = team_avgs.get(h_uuid, {}).get(s_key, 0), team_avgs.get(a_uuid, {}).get(s_key, 0)
-                    hd, ad = hv - h_avg, av - a_avg
-                    h_diff_str = f" <span style='color:{'green' if hd>=0 else 'red'}; font-size:10px;'>({'+' if hd>=0 else ''}{hd:.{dec}f}{suf})</span>"
-                    a_diff_str = f"<span style='color:{'green' if ad>=0 else 'red'}; font-size:10px;'>({'+' if ad>=0 else ''}{ad:.{dec}f}{suf})</span> "
-                    h_pct = (hv / (hv + av) * 100) if (hv + av) > 0 else 50
-                    st.markdown(f"<div style='display:flex; justify-content:space-between; font-size:11px; margin-top:8px;'><div style='text-align:left;'><b>{hv:.{dec}f}{suf}</b>{h_diff_str}</div><div style='color:#888;'>{lbl.upper()}</div><div style='text-align:right;'>{a_diff_str}<b>{av:.{dec}f}{suf}</b></div></div><div style='display:flex; height:7px; background:#eee; border-radius:3px; overflow:hidden; margin-bottom:10px;'><div style='width:{h_pct}%; background:{TEAM_COLORS.get(h_n, {}).get('primary', '#ccc') if h_uuid==valgt_uuid else '#ddd'};'></div><div style='width:{100-h_pct}%; background:{TEAM_COLORS.get(a_n, {}).get('primary', '#ccc') if a_uuid==valgt_uuid else '#ddd'};'></div></div>", unsafe_allow_html=True)
+            for _, row in played_p.sort_values('MATCH_DATE_FULL', ascending=False).iterrows():
+                st.markdown(f"<div class='date-header'>RUNDE {int(row['WEEK']) if pd.notnull(row['WEEK']) else 0} — {row['MATCH_DATE_FULL'].strftime('%d. %b %Y').upper()}</div>", unsafe_allow_html=True)
+                with st.container(border=True):
+                    h_uuid, a_uuid = row['CONTESTANTHOME_OPTAUUID'], row['CONTESTANTAWAY_OPTAUUID']
+                    h_n, a_n = opta_to_name.get(h_uuid, "Hjemme"), opta_to_name.get(a_uuid, "Ude")
+                    c1, c2, c3, c4, c5 = st.columns([2, 0.4, 1.2, 0.4, 2])
+                    c1.markdown(f"<div style='text-align:right; font-weight:bold; padding-top:8px;'>{h_n}</div>", unsafe_allow_html=True)
+                    c2.image(TEAMS.get(h_n, {}).get('logo', ''), width=35)
+                    c3.markdown(f"<div style='text-align:center;'><span class='score-pill'>{int(row['TOTAL_HOME_SCORE'])} - {int(row['TOTAL_AWAY_SCORE'])}</span></div>", unsafe_allow_html=True)
+                    c4.image(TEAMS.get(a_n, {}).get('logo', ''), width=35)
+                    c5.markdown(f"<div style='font-weight:bold; padding-top:8px;'>{a_n}</div>", unsafe_allow_html=True)
+                    
+                    stats_conf = [("HOME_POSS", "AWAY_POSS", "POSS", "Boldbesiddelse", 1, "%"), ("HOME_PASSES", "AWAY_PASSES", "PASSES", "Afleveringer: Samlet", 0, ""), ("HOME_FORWARD_PASSES", "AWAY_FORWARD_PASSES", "FORWARD_PASSES", "Afleveringer: Fremadrettede", 0, ""), ("HOME_PASSES_FT", "AWAY_PASSES_FT", "PASSES_FT", "Afleveringer: Sidste 1/3", 0, ""), ("HOME_TOUCHES_IN_BOX", "AWAY_TOUCHES_IN_BOX", "TOUCHES_IN_BOX", "Touches in box", 0, ""), ("HOME_SHOTS", "AWAY_SHOTS", "SHOTS", "Afslutninger", 0, ""), ("HOME_DZ_SHOTS", "AWAY_DZ_SHOTS", "DZ_SHOTS", "Skud fra DZ", 0, ""), ("HOME_XG", "AWAY_XG", "XG", "xG", 2, ""), ("HOME_XGNP", "AWAY_XGNP", "XGNP", "xGnp", 2, ""), ("HOME_BIG_CHANCES", "AWAY_BIG_CHANCES", "BIG_CHANCES", "Store chancer", 0, "")]
+                    for hc, ac, s_key, lbl, dec, suf in stats_conf:
+                        hv_raw, av_raw = pd.to_numeric(row.get(hc), errors='coerce'), pd.to_numeric(row.get(ac), errors='coerce')
+                        if pd.isna(hv_raw) and pd.isna(av_raw): continue
+                        hv, av = float(hv_raw or 0), float(av_raw or 0)
+                        h_avg, a_avg = team_avgs.get(h_uuid, {}).get(s_key, 0), team_avgs.get(a_uuid, {}).get(s_key, 0)
+                        hd, ad = hv - h_avg, av - a_avg
+                        h_diff_str = f" <span style='color:{'green' if hd>=0 else 'red'}; font-size:10px;'>({'+' if hd>=0 else ''}{hd:.{dec}f}{suf})</span>"
+                        a_diff_str = f"<span style='color:{'green' if ad>=0 else 'red'}; font-size:10px;'>({'+' if ad>=0 else ''}{ad:.{dec}f}{suf})</span> "
+                        h_pct = (hv / (hv + av) * 100) if (hv + av) > 0 else 50
+                        st.markdown(f"<div style='display:flex; justify-content:space-between; font-size:11px; margin-top:8px;'><div style='text-align:left;'><b>{hv:.{dec}f}{suf}</b>{h_diff_str}</div><div style='color:#888;'>{lbl.upper()}</div><div style='text-align:right;'>{a_diff_str}<b>{av:.{dec}f}{suf}</b></div></div><div style='display:flex; height:7px; background:#eee; border-radius:3px; overflow:hidden; margin-bottom:10px;'><div style='width:{h_pct}%; background:{TEAM_COLORS.get(h_n, {}).get('primary', '#ccc') if h_uuid==valgt_uuid else '#ddd'};'></div><div style='width:{100-h_pct}%; background:{TEAM_COLORS.get(a_n, {}).get('primary', '#ccc') if a_uuid==valgt_uuid else '#ddd'};'></div></div>", unsafe_allow_html=True)
 
     with tab2:
         future = team_matches[~team_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)]
         if future.empty:
-            st.info("Ingen kommende kampe fundet i denne periode.")
+            st.caption("Ingen kommende kampe fundet.")
         else:
             for _, row in future.sort_values('MATCH_DATE_FULL').iterrows():
                 st.markdown(f"<div class='date-header'>RUNDE {int(row['WEEK']) if pd.notnull(row['WEEK']) else 0} — {row['MATCH_DATE_FULL'].strftime('%d. %b %Y').upper()}</div>", unsafe_allow_html=True)
@@ -248,106 +244,107 @@ def vis_side(dp=None):
                     c5.markdown(f"<div style='font-weight:bold; padding-top:8px;'>{a_n}</div>", unsafe_allow_html=True)
 
     with tab3:
-        st.caption(f"Sæsonoverblik: {valgt_navn}")
-        c_off, c_def = st.columns(2)
-        stat_keys_90 = ["POSS", "XG", "SHOTS", "PASSES", "BIG_CHANCES", "XGNP", "PASSES_FT", "TOUCHES_IN_BOX", "FORWARD_PASSES", "DZ_SHOTS"]
-        
-        def get_stats_90(is_us):
-            stats = {}
-            for k in stat_keys_90:
-                vals = []
-                for _, m in played_p.iterrows():
-                    is_h = m['CONTESTANTHOME_OPTAUUID'] == valgt_uuid
-                    col = f"{'HOME_' if (is_h if is_us else not is_h) else 'AWAY_'}{k}"
-                    vals.append(pd.to_numeric(m.get(col), errors='coerce'))
-                stats[k] = np.nanmean(vals) if vals else 0
-            return stats
+        if not played_p.empty:
+            st.caption(f"Sæsonoverblik: {valgt_navn}")
+            c_off, c_def = st.columns(2)
+            stat_keys_90 = ["POSS", "XG", "SHOTS", "PASSES", "BIG_CHANCES", "XGNP", "PASSES_FT", "TOUCHES_IN_BOX", "FORWARD_PASSES", "DZ_SHOTS"]
+            
+            def get_stats_90(is_us):
+                stats = {}
+                for k in stat_keys_90:
+                    vals = []
+                    for _, m in played_p.iterrows():
+                        is_h = m['CONTESTANTHOME_OPTAUUID'] == valgt_uuid
+                        col = f"{'HOME_' if (is_h if is_us else not is_h) else 'AWAY_'}{k}"
+                        vals.append(pd.to_numeric(m.get(col), errors='coerce'))
+                    stats[k] = np.nanmean(vals) if vals else 0
+                return stats
 
-        off_stats = get_stats_90(True)
-        def_stats = get_stats_90(False)
+            off_stats = get_stats_90(True)
+            def_stats = get_stats_90(False)
 
-        for col_name, data, target in [("OFFENSIVT", off_stats, c_off), ("MODSTANDER", def_stats, c_def)]:
-            with target:
-                st.markdown(f"**{col_name}**")
-                cols = st.columns(4)
-                for i, k in enumerate(stat_keys_90):
-                    val = data.get(k, 0)
-                    with cols[i % 4]:
-                        st.markdown(f"""
-                            <div class='stat-box2'>
-                                <div class='stat-label'>{k.replace('_', ' ')}</div>
-                                <div class='stat-val'>{val:.1f}</div>
-                            </div>
-                        """, unsafe_allow_html=True)
-                    if (i + 1) % 4 == 0 and i < len(stat_keys_90) - 1:
-                        cols = st.columns(4)        
+            for col_name, data, target in [("OFFENSIVT", off_stats, c_off), ("MODSTANDER", def_stats, c_def)]:
+                with target:
+                    st.markdown(f"**{col_name}**")
+                    cols = st.columns(4)
+                    for i, k in enumerate(stat_keys_90):
+                        val = data.get(k, 0)
+                        with cols[i % 4]:
+                            st.markdown(f"""
+                                <div class='stat-box2'>
+                                    <div class='stat-label'>{k.replace('_', ' ')}</div>
+                                    <div class='stat-val'>{val:.1f}</div>
+                                </div>
+                            """, unsafe_allow_html=True)
+                        if (i + 1) % 4 == 0 and i < len(stat_keys_90) - 1:
+                            cols = st.columns(4)        
 
     with tab4:
-        # 1. Beregn LIGA-snit (FAST reference til liga-bar til højre)
-        all_played_m = df_matches[df_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)]
-        league_avgs = {}
-        for k in stat_keys:
-            all_vals = pd.concat([pd.to_numeric(all_played_m[f"HOME_{k}"], errors='coerce'), 
-                                  pd.to_numeric(all_played_m[f"AWAY_{k}"], errors='coerce')])
-            league_avgs[k] = all_vals.mean()
-
-        # 2. Beregn HOLDETS SAMLEDE SNIT OVER HELE SÆSONEN (Til reference-diff i parentesen)
-        team_all_season = df_matches[(df_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)) & 
-                                     ((df_matches['CONTESTANTHOME_OPTAUUID'] == valgt_uuid) | (df_matches['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid))]
-        team_total_snit = {}
-        for k in stat_keys:
-            vals = pd.to_numeric(team_all_season[f"HOME_{k}"].where(team_all_season['CONTESTANTHOME_OPTAUUID'] == valgt_uuid, team_all_season[f"AWAY_{k}"]), errors='coerce')
-            team_total_snit[k] = vals.mean() if not vals.empty else 0
-
-        # 3. Beregn det AKTUELLE (filtrerede/valgte) snit ud fra side/periode-valg
-        hold_stats = {}
-        for k in stat_keys:
-            vals = pd.to_numeric(f_matches[f"HOME_{k}"].where(f_matches['CONTESTANTHOME_OPTAUUID'] == valgt_uuid, f_matches[f"AWAY_{k}"]), errors='coerce')
-            hold_stats[k] = vals.mean() if not vals.empty else 0
-
-        with st.container(border=True):
-            c_left, c_right = st.columns([1, 1])
-            with c_left:
-                st.markdown(f"""
-                    <div style='display:flex; align-items:center; gap:10px;'>
-                        <img src='{TEAMS.get(valgt_navn, {}).get('logo', '')}' width='30'>
-                        <div style='font-size:16px; font-weight:bold;'>{valgt_navn}</div>
-                    </div>
-                """, unsafe_allow_html=True)
-            with c_right:
-                st.markdown(f"<div style='text-align:right; font-size:11px; color:#666; padding-top:5px;'>Visning: <b>{valgt_side}</b> | Periode: <b>{valgt_periode}</b></div>", unsafe_allow_html=True)
+        if not played_p.empty:
+            all_played_m = df_matches[df_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)]
+            stat_keys = ["POSS", "PASSES", "FORWARD_PASSES", "SHOTS", "BIG_CHANCES", "XG", "XGNP", "TOUCHES_IN_BOX", "DZ_SHOTS", "PASSES_FT"]
             
-            st.markdown("<hr style='margin-top:5px; margin-bottom:10px;'>", unsafe_allow_html=True)
-            
-            stats_conf = [
-                ("POSS", "Boldbesiddelse", 1, "%"), ("PASSES", "Afleveringer: Samlet", 0, ""), 
-                ("FORWARD_PASSES", "Afleveringer: Fremadrettede", 0, ""), ("PASSES_FT", "Afleveringer: Sidste 1/3", 0, ""), 
-                ("TOUCHES_IN_BOX", "Touches in box", 0, ""), ("SHOTS", "Afslutninger", 0, ""), 
-                ("DZ_SHOTS", "Skud fra DZ", 0, ""), ("XG", "xG", 2, ""), 
-                ("XGNP", "xGnp", 2, ""), ("BIG_CHANCES", "Store chancer", 0, "")
-            ]
-            
-            for s_key, lbl, dec, suf in stats_conf:
-                hv = hold_stats.get(s_key, 0)
-                av_liga = league_avgs.get(s_key, 0)
-                av_total = team_total_snit.get(s_key, 0)
+            league_avgs = {}
+            for k in stat_keys:
+                all_vals = pd.concat([pd.to_numeric(all_played_m[f"HOME_{k}"], errors='coerce'), 
+                                      pd.to_numeric(all_played_m[f"AWAY_{k}"], errors='coerce')])
+                league_avgs[k] = all_vals.mean()
+
+            team_all_season = df_matches[(df_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)) & 
+                                         ((df_matches['CONTESTANTHOME_OPTAUUID'] == valgt_uuid) | (df_matches['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid))]
+            team_total_snit = {}
+            for k in stat_keys:
+                vals = pd.to_numeric(team_all_season[f"HOME_{k}"].where(team_all_season['CONTESTANTHOME_OPTAUUID'] == valgt_uuid, team_all_season[f"AWAY_{k}"]), errors='coerce')
+                team_total_snit[k] = vals.mean() if not vals.empty else 0
+
+            hold_stats = {}
+            for k in stat_keys:
+                vals = pd.to_numeric(f_matches[f"HOME_{k}"].where(f_matches['CONTESTANTHOME_OPTAUUID'] == valgt_uuid, f_matches[f"AWAY_{k}"]), errors='coerce')
+                hold_stats[k] = vals.mean() if not vals.empty else 0
+
+            with st.container(border=True):
+                c_left, c_right = st.columns([1, 1])
+                with c_left:
+                    st.markdown(f"""
+                        <div style='display:flex; align-items:center; gap:10px;'>
+                            <img src='{TEAMS.get(valgt_navn, {}).get('logo', '')}' width='30'>
+                            <div style='font-size:16px; font-weight:bold;'>{valgt_navn}</div>
+                        </div>
+                    """, unsafe_allow_html=True)
+                with c_right:
+                    st.markdown(f"<div style='text-align:right; font-size:11px; color:#666; padding-top:5px;'>Visning: <b>{valgt_side}</b> | Periode: <b>{valgt_periode}</b></div>", unsafe_allow_html=True)
                 
-                diff = hv - av_total
-                if valgt_side == "Samlet" and valgt_periode == "Hele Sæsonen":
-                    diff_str = f" <span style='color:gray; font-size:10px;'>(0.0{suf})</span>"
-                else:
-                    diff_str = f" <span style='color:{'green' if diff>=0 else 'red'}; font-size:10px;'>({diff:+.{dec}f}{suf})</span>"
+                st.markdown("<hr style='margin-top:5px; margin-bottom:10px;'>", unsafe_allow_html=True)
                 
-                max_scale = av_liga * 2 if av_liga > 0 else 10
-                h_pct = min((hv / max_scale) * 100, 100)
+                stats_conf = [
+                    ("POSS", "Boldbesiddelse", 1, "%"), ("PASSES", "Afleveringer: Samlet", 0, ""), 
+                    ("FORWARD_PASSES", "Afleveringer: Fremadrettede", 0, ""), ("PASSES_FT", "Afleveringer: Sidste 1/3", 0, ""), 
+                    ("TOUCHES_IN_BOX", "Touches in box", 0, ""), ("SHOTS", "Afslutninger", 0, ""), 
+                    ("DZ_SHOTS", "Skud fra DZ", 0, ""), ("XG", "xG", 2, ""), 
+                    ("XGNP", "xGnp", 2, ""), ("BIG_CHANCES", "Store chancer", 0, "")
+                ]
                 
-                st.markdown(f"""
-                    <div style='display:flex; justify-content:space-between; font-size:11px; margin-top:8px;'>
-                        <div style='text-align:left;'><b>{hv:.{dec}f}{suf}</b>{diff_str}</div>
-                        <div style='color:#888;'>{lbl.upper()}</div>
-                        <div style='text-align:right;'><b>{av_liga:.{dec}f}{suf}</b> <span style='color:#888; font-size:10px;'>(LIGA)</span></div>
-                    </div>
-                    <div style='display:flex; height:7px; background:#eee; border-radius:3px; overflow:hidden; margin-bottom:10px;'>
-                        <div style='width:{h_pct}%; background:{TEAM_COLORS.get(valgt_navn, {}).get("primary", "#cc0000")};'></div>
-                    </div>
-                """, unsafe_allow_html=True)
+                for s_key, lbl, dec, suf in stats_conf:
+                    hv = hold_stats.get(s_key, 0)
+                    av_liga = league_avgs.get(s_key, 0)
+                    av_total = team_total_snit.get(s_key, 0)
+                    
+                    diff = hv - av_total
+                    if valgt_side == "Samlet" and valgt_periode == "Hele Sæsonen":
+                        diff_str = f" <span style='color:gray; font-size:10px;'>(0.0{suf})</span>"
+                    else:
+                        diff_str = f" <span style='color:{'green' if diff>=0 else 'red'}; font-size:10px;'>({diff:+.{dec}f}{suf})</span>"
+                    
+                    max_scale = av_liga * 2 if av_liga > 0 else 10
+                    h_pct = min((hv / max_scale) * 100, 100)
+                    
+                    st.markdown(f"""
+                        <div style='display:flex; justify-content:space-between; font-size:11px; margin-top:8px;'>
+                            <div style='text-align:left;'><b>{hv:.{dec}f}{suf}</b>{diff_str}</div>
+                            <div style='color:#888;'>{lbl.upper()}</div>
+                            <div style='text-align:right;'><b>{av_liga:.{dec}f}{suf}</b> <span style='color:#888; font-size:10px;'>(LIGA)</span></div>
+                        </div>
+                        <div style='display:flex; height:7px; background:#eee; border-radius:3px; overflow:hidden; margin-bottom:10px;'>
+                            <div style='width:{h_pct}%; background:{TEAM_COLORS.get(valgt_navn, {}).get("primary", "#cc0000")};'></div>
+                        </div>
+                    """, unsafe_allow_html=True)
