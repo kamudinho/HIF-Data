@@ -20,7 +20,7 @@ def get_users():
             "role": "coach",
             "restricted": ["TESTSIDE", "TILPASNING", "ADMIN", "Opret emne", "Emnedatabase"] # Ingen adgang til emner
         },
-        "jeppe": {
+        "kasper-scout": {
             "pass": "Scout1234", 
             "role": "scout",
             "restricted": [
