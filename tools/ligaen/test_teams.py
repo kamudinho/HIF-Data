@@ -6,6 +6,7 @@ import plotly.graph_objects as go
 from data.utils.team_mapping import (
     SEASONS,
     COMPETITIONS,
+    SEASON_LEAGUE_MAPPER,
     TEAMS,
     TEAM_COLORS,
     COMPETITION_NAME as DEFAULT_COMP,
@@ -38,27 +39,63 @@ def style_form(f):
         res += f'<span style="color:{color}; font-weight:bold; margin-right:3px;">{char}</span>'
     return res
 
-def beregn_tabel(df_matches):
+def beregn_tabel(df_matches, valgt_saeson, valgt_turnering):
+    """
+    Beregner ligatabellen. Initialiserer altid samtlige hold fra team_mapping 
+    for den valgte sæson og turnering, så holdene fremgår med 0 kampe/point 
+    hvis der ikke er spilledata endnu.
+    """
     stats = {}
-    for _, row in df_matches.iterrows():
-        h_uuid, a_uuid = row['CONTESTANTHOME_OPTAUUID'], row['CONTESTANTAWAY_OPTAUUID']
-        for uuid, name in [(h_uuid, row['CONTESTANTHOME_NAME']), (a_uuid, row['CONTESTANTAWAY_NAME'])]:
-            if uuid not in stats: 
-                stats[uuid] = {'HOLD': name, 'UUID': uuid, 'K': 0, 'V': 0, 'U': 0, 'T': 0, 'M+': 0, 'M-': 0, 'P': 0, 'FORM': ""}
+
+    # 1. Hent alle forventede hold fra team_mapping
+    forventede_hold_navne = SEASON_LEAGUE_MAPPER.get(valgt_saeson, {}).get(valgt_turnering, [])
+    
+    for hold_navn in forventede_hold_navne:
+        team_info = TEAMS.get(hold_navn, {})
+        opta_uuid = team_info.get('opta_uuid', hold_navn)
         
-        if str(row['MATCH_STATUS']).lower() in ['played', 'full-time', 'finished']:
-            h_g, a_g = int(row['TOTAL_HOME_SCORE'] or 0), int(row['TOTAL_AWAY_SCORE'] or 0)
-            for u, gf, ga in [(h_uuid, h_g, a_g), (a_uuid, a_g, h_g)]:
-                stats[u]['K'] += 1; stats[u]['M+'] += gf; stats[u]['M-'] += ga
-                if gf > ga: stats[u]['P'] += 3; stats[u]['V'] += 1; stats[u]['FORM'] += 'V'
-                elif gf == ga: stats[u]['P'] += 1; stats[u]['U'] += 1; stats[u]['FORM'] += 'U'
-                else: stats[u]['T'] += 1; stats[u]['FORM'] += 'T'
+        stats[opta_uuid] = {
+            'HOLD': hold_navn, 
+            'UUID': opta_uuid, 
+            'K': 0, 'V': 0, 'U': 0, 'T': 0, 
+            'M+': 0, 'M-': 0, 'P': 0, 'FORM': ""
+        }
+
+    # 2. Opdater med data fra spillede kampe, hvis der er nogen
+    if df_matches is not None and not df_matches.empty:
+        for _, row in df_matches.iterrows():
+            h_uuid, a_uuid = row['CONTESTANTHOME_OPTAUUID'], row['CONTESTANTAWAY_OPTAUUID']
+            
+            # Sikr at hold oprettes, hvis et hold i Opta-data ikke var i mapper
+            for uuid, name in [(h_uuid, row['CONTESTANTHOME_NAME']), (a_uuid, row['CONTESTANTAWAY_NAME'])]:
+                if uuid not in stats: 
+                    stats[uuid] = {
+                        'HOLD': name, 'UUID': uuid, 
+                        'K': 0, 'V': 0, 'U': 0, 'T': 0, 
+                        'M+': 0, 'M-': 0, 'P': 0, 'FORM': ""
+                    }
+            
+            if str(row['MATCH_STATUS']).lower() in ['played', 'full-time', 'finished']:
+                h_g = int(row['TOTAL_HOME_SCORE']) if pd.notnull(row['TOTAL_HOME_SCORE']) else 0
+                a_g = int(row['TOTAL_AWAY_SCORE']) if pd.notnull(row['TOTAL_AWAY_SCORE']) else 0
+                
+                for u, gf, ga in [(h_uuid, h_g, a_g), (a_uuid, a_g, h_g)]:
+                    stats[u]['K'] += 1
+                    stats[u]['M+'] += gf
+                    stats[u]['M-'] += ga
+                    if gf > ga: 
+                        stats[u]['P'] += 3; stats[u]['V'] += 1; stats[u]['FORM'] += 'V'
+                    elif gf == ga: 
+                        stats[u]['P'] += 1; stats[u]['U'] += 1; stats[u]['FORM'] += 'U'
+                    else: 
+                        stats[u]['T'] += 1; stats[u]['FORM'] += 'T'
                 
     df = pd.DataFrame(stats.values())
     if df.empty:
         return pd.DataFrame(columns=['HOLD', 'UUID', 'K', 'V', 'U', 'T', 'M+', 'M-', 'P', 'FORM', 'MD'])
+    
     df['MD'] = df['M+'] - df['M-']
-    return df.sort_values(['P', 'MD', 'M+'], ascending=False).reset_index(drop=True)
+    return df.sort_values(['P', 'MD', 'M+', 'HOLD'], ascending=[False, False, False, True]).reset_index(drop=True)
 
 # --- 2. GRAFER OG H2H ---
 
@@ -72,8 +109,8 @@ def draw_h2h_chart(team1_name, team2_name, metrics, labels, df_wy, chart_key):
     fig = go.Figure()
     col_width, gap = 0.18, 0.05
     
-    d1 = df_wy[df_wy['TEAMNAME'].str.contains(team1_name, case=False, na=False)]
-    d2 = df_wy[df_wy['TEAMNAME'].str.contains(team2_name, case=False, na=False)]
+    d1 = df_wy[df_wy['TEAMNAME'].str.contains(team1_name, case=False, na=False)] if not df_wy.empty else pd.DataFrame()
+    d2 = df_wy[df_wy['TEAMNAME'].str.contains(team2_name, case=False, na=False)] if not df_wy.empty else pd.DataFrame()
     
     color1 = get_team_color(team1_name, "primary", "#cc0000")
     color2 = get_team_color(team2_name, "primary", "#0056a3")
@@ -143,11 +180,10 @@ def render_kamp_boks(kamp):
     </div>
     """, unsafe_allow_html=True)
 
-# --- 4. DATA LOADING (MED DYNAMISK OPSLAG FRA TEAM_MAPPING) ---
+# --- 4. DATA LOADING ---
 
 @st.cache_data(ttl=3600)
 def load_liga_data(opta_calendar_uuid):
-    """Henter Opta-kampe dynamisk baseret på Opta Calendar UUID."""
     if not opta_calendar_uuid:
         return pd.DataFrame()
         
@@ -161,7 +197,6 @@ def load_liga_data(opta_calendar_uuid):
 
 @st.cache_data(ttl=3600)
 def get_wyscout_stats(competition_wyid):
-    """Henter Wyscout-statistikker dynamisk baseret på Wyscout Competition ID."""
     conn = _get_snowflake_conn()
     db = "KLUB_HVIDOVREIF.AXIS"
     query = f"""
@@ -202,8 +237,9 @@ def render_kampe_dynamisk(df_opta, filter_uuids):
             (df_opta['CONTESTANTAWAY_OPTAUUID'].isin(filter_uuids))
     
     relevante_kampe = df_opta[maske]
+    if relevante_kampe.empty: return
+
     unikke_datoer = sorted(relevante_kampe['MATCH_DATE_FULL'].dt.date.unique(), reverse=True)
-    
     if unikke_datoer:
         seneste_dato = unikke_datoer[0]
         st.markdown(f"##### Seneste spillerunde: {seneste_dato}")
@@ -214,32 +250,32 @@ def render_kampe_dynamisk(df_opta, filter_uuids):
 # --- 5. HOVEDSIDE ---
 
 def vis_side():
-    # Henter ID'erne dynamisk ud fra den aktive sæson og turnering i team_mapping.py
     calendar_uuid = SEASONS.get(DEFAULT_SEASON, {}).get(DEFAULT_COMP)
     wyid = COMPETITIONS.get(DEFAULT_COMP, {}).get("wyid", 328)
 
-    # Hent data med de dynamiske ID'er
     df_opta = load_liga_data(calendar_uuid)
     df_wy = get_wyscout_stats(wyid)
 
     st.title(DEFAULT_COMP)
 
-    if df_opta.empty:
-        st.warning("Der blev ikke fundet nogen kampe.")
-        return
-
-    played = df_opta[df_opta['MATCH_STATUS'].str.lower().isin(['played', 'full-time', 'finished'])].sort_values('MATCH_DATE_FULL')
+    # Filtrer spillede kampe hvis der er data
+    played = pd.DataFrame()
+    if not df_opta.empty and 'MATCH_STATUS' in df_opta.columns:
+        played = df_opta[df_opta['MATCH_STATUS'].str.lower().isin(['played', 'full-time', 'finished'])].sort_values('MATCH_DATE_FULL')
     
-    kamp_count = {}; cutoff_index = 0
-    for i, row in played.iterrows():
-        h, a = row['CONTESTANTHOME_OPTAUUID'], row['CONTESTANTAWAY_OPTAUUID']
-        kamp_count[h] = kamp_count.get(h, 0) + 1; kamp_count[a] = kamp_count.get(a, 0) + 1
-        if all(val >= 22 for val in kamp_count.values()): 
-            cutoff_index = played.index.get_loc(i)
-            break
+    cutoff_index = 0
+    if not played.empty:
+        kamp_count = {}
+        for i, row in played.iterrows():
+            h, a = row['CONTESTANTHOME_OPTAUUID'], row['CONTESTANTAWAY_OPTAUUID']
+            kamp_count[h] = kamp_count.get(h, 0) + 1; kamp_count[a] = kamp_count.get(a, 0) + 1
+            if all(val >= 22 for val in kamp_count.values()): 
+                cutoff_index = played.index.get_loc(i)
+                break
             
-    gs_df = beregn_tabel(played.iloc[:cutoff_index + 1]) if cutoff_index > 0 else beregn_tabel(played)
-    slut_df = beregn_tabel(played)
+    # Tabellen beregnes nu ALTID med alle 12 hold fra DEFAULT_SEASON og DEFAULT_COMP
+    gs_df = beregn_tabel(played.iloc[:cutoff_index + 1], DEFAULT_SEASON, DEFAULT_COMP) if cutoff_index > 0 else beregn_tabel(played, DEFAULT_SEASON, DEFAULT_COMP)
+    slut_df = beregn_tabel(played, DEFAULT_SEASON, DEFAULT_COMP)
     
     top6 = gs_df.head(6)['UUID'].tolist() if not gs_df.empty else []
     bund6 = gs_df.tail(6)['UUID'].tolist() if not gs_df.empty else []
