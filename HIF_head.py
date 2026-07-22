@@ -278,9 +278,6 @@ def vis_side():
                 venue = nk.get('VENUE_LONGNAME', 'Ukendt stadion')
                 round_week = nk.get('WEEK', '')
                 
-                # Dommer-eksempel (tjekker OFFICIAL1)
-                ref_name = f"{nk.get('OFFICIAL1_FIRSTNAME', '')} {nk.get('OFFICIAL1_LASTNAME', '')}".strip()
-                
                 st.markdown(f"<div class='card-title' style='border:none; margin-top:0px; padding-bottom:0; font-size: 13px;'><span>vs. {opp_name.upper()}</span><span>{match_date} kl. {match_time}</span></div>", unsafe_allow_html=True)
                 
                 # Vis ekstra metadata (Stadion, Dommer, Runde)
