@@ -19,7 +19,7 @@ def apply_custom_style():
             [data-testid="stHeaderBlockContainer"] h1 { display: none; }
             .stApp { background-color: #FFFFFF; }
             
-            /* Tving alle kolonner og deres container-bokse til at fylde 100% i højden */
+            /* Tving kolonner til at strække sig og bokse (border wrappers) til at fylde 100% i højden */
             [data-testid="stHorizontalBlock"] {
                 display: flex;
                 align-items: stretch;
