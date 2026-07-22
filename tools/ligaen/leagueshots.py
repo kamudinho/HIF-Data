@@ -121,7 +121,9 @@ def vis_side(dp=None):
         st.markdown("### **Liga & Holdanalyse**")
         st.markdown("<p style='color: #666; font-size: 0.9rem;'>Analyser skudmønstre og konvertering fordelt på zoner.</p>", unsafe_allow_html=True)
 
-    # Hent data tidligt, så hold-listen kan genereres uanset hvad
+    # Hent alle hold fra TEAMS mappingen uanset sæson
+    all_teams = sorted(list(TEAMS.keys()))
+
     f_col1, f_col2, f_col3 = top_col2.columns(3)
     with f_col1:
         sæson_sel = st.selectbox("Sæson", list(SEASONS.keys()), index=0)
@@ -129,33 +131,29 @@ def vis_side(dp=None):
         tilgængelige_turneringer = list(SEASONS[sæson_sel].keys())
         turnering_sel = st.selectbox("Turnering", tilgængelige_turneringer, index=0)
 
+    with f_col3:
+        default_idx = all_teams.index("Hvidovre") if "Hvidovre" in all_teams else 0
+        t_sel = st.selectbox("Hold", all_teams, index=default_idx)
+
     aktuel_liga_uuid = SEASONS[sæson_sel][turnering_sel]
     df_all = load_league_data(aktuel_liga_uuid)
     
     if not df_all.empty and 'EVENT_CONTESTANT_OPTAUUID' in df_all.columns:
         uuid_to_name = {v['opta_uuid'].upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
         df_all['KLUB_NAVN'] = df_all['EVENT_CONTESTANT_OPTAUUID'].str.upper().map(uuid_to_name)
-        teams = sorted([n for n in df_all['KLUB_NAVN'].unique() if pd.notna(n)])
     else:
-        teams = []
-
-    with f_col3:
-        if teams:
-            default_idx = teams.index("Hvidovre") if "Hvidovre" in teams else 0
-            t_sel = st.selectbox("Hold", teams, index=default_idx)
-        else:
-            t_sel = st.selectbox("Hold", ["Der er ingen data at vise"], index=0)
+        if not df_all.empty:
+            df_all['KLUB_NAVN'] = None
 
     st.markdown("---")
 
-    if df_all.empty or not teams or t_sel == "Der er ingen data at vise":
-        st.warning("Ingen data at vise for den valgte sæson/turnering.")
+    # Filtrer data for det valgte hold
+    df_team = df_all[df_all['KLUB_NAVN'] == t_sel].copy() if not df_all.empty and 'KLUB_NAVN' in df_all.columns else pd.DataFrame()
+
+    if df_team.empty:
+        st.warning(f"Der er ingen data at vise for {t_sel} i den valgte sæson/turnering.")
         return
 
-    t_color = TEAM_COLORS.get(t_sel, {}).get('primary', HIF_RED)
-    t_logo = get_logo_img(TEAMS.get(t_sel, {}).get('logo'))
-    
-    df_team = df_all[df_all['KLUB_NAVN'] == t_sel].copy()
     df_team['X_M'] = df_team['EVENT_X'].apply(lambda x: to_metric(x, 105))
     df_team['Y_M'] = df_team['EVENT_Y'].apply(lambda y: to_metric(y, 68))
     df_team['Zone'] = df_team.apply(map_to_zone, axis=1)
@@ -212,6 +210,8 @@ def vis_side(dp=None):
     with tabs[1]:
         st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
         c1, c2 = st.columns([2, 1])
+        t_color = TEAM_COLORS.get(t_sel, {}).get('primary', HIF_RED)
+        t_logo = get_logo_img(TEAMS.get(t_sel, {}).get('logo'))
         with c2:
             p_sel = st.selectbox("Filtrer spiller", ["Alle spillere"] + sorted(df_team['PLAYER_NAME'].unique()))
             d_v = df_team if p_sel == "Alle spillere" else df_team[df_team['PLAYER_NAME'] == p_sel]
@@ -232,6 +232,8 @@ def vis_side(dp=None):
         st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
         c1, c2 = st.columns([2, 1])
         dz_d = df_team[df_team['IS_DZ']]
+        t_color = TEAM_COLORS.get(t_sel, {}).get('primary', HIF_RED)
+        t_logo = get_logo_img(TEAMS.get(t_sel, {}).get('logo'))
         with c2:
             s_dz, m_dz = len(dz_d), len(dz_d[dz_d["EVENT_TYPEID"]==16])
             st.markdown(f'<div class="stat-box"><div class="stat-label">DZ Skud</div><div class="stat-value">{s_dz}</div></div>', unsafe_allow_html=True)
@@ -251,6 +253,8 @@ def vis_side(dp=None):
             c1, c2 = st.columns([1.6, 1])
             plot_df = df_team[df_team['EVENT_TYPEID'] == 16] if is_goal else df_team
             total_count = len(plot_df)
+            t_color = TEAM_COLORS.get(t_sel, {}).get('primary', HIF_RED)
+            t_logo = get_logo_img(TEAMS.get(t_sel, {}).get('logo'))
             with c2:
                 st.write(f"**Zone-stats ({'Mål' if is_goal else 'Skud'})**")
                 z_summary = []
