@@ -19,7 +19,7 @@ def apply_custom_style():
             [data-testid="stHeaderBlockContainer"] h1 { display: none; }
             .stApp { background-color: #FFFFFF; }
             
-            /* Tving alle kolonner og deres container-bokse til at have samme fulde højde */
+            /* Tving alle kolonner og deres container-bokse til at fylde 100% i højden */
             [data-testid="stHorizontalBlock"] {
                 display: flex;
                 align-items: stretch;
@@ -29,12 +29,19 @@ def apply_custom_style():
                 flex-direction: column;
             }
             [data-testid="stHorizontalBlock"] [data-testid="stVerticalBlockBorderWrapper"] {
-                height: 100%;
+                height: 100% !important;
                 display: flex;
                 flex-direction: column;
             }
             [data-testid="stHorizontalBlock"] [data-testid="stVerticalBlockBorderWrapper"] > div {
                 flex: 1;
+                display: flex;
+                flex-direction: column;
+            }
+            [data-testid="stHorizontalBlock"] [data-testid="stVerticalBlockBorderWrapper"] > div > div {
+                flex: 1;
+                display: flex;
+                flex-direction: column;
             }
 
             .stats-table { width: 100%; font-size: 11px; border-collapse: collapse; table-layout: auto; }
@@ -175,7 +182,7 @@ def beregn_hold_stats(df_stats, team_uuid):
     total_matches = len(home) + len(away)
     if total_matches == 0: return {"gf": "0.0", "ga": "0.0", "xgf": "0.0", "xga": "0.0", "poss": "0%"}
     gf = home['TOTAL_HOME_SCORE'].sum() + away['TOTAL_AWAY_SCORE'].sum()
-    ga = home['TOTAL_AWAY_SCORE'].sum() + away['HOME_XG'].sum()
+    ga = home['TOTAL_AWAY_SCORE'].sum() + away['TOTAL_HOME_SCORE'].sum()
     xgf = home['HOME_XG'].fillna(0).sum() + away['AWAY_XG'].fillna(0).sum()
     xga = home['AWAY_XG'].fillna(0).sum() + away['HOME_XG'].fillna(0).sum()
     poss_all = pd.concat([home['HOME_POSSESSION'], away['AWAY_POSSESSION']]).dropna().mean()
@@ -257,7 +264,7 @@ def vis_side():
         df_stats = conn.query(fallback_queries["opta_team_stats"])
         df_stats.columns = [str(c).upper() for c in df_stats.columns]
 
-    # --- TOPSEKTION: 3 KOLONNER (ENSTENS HØJDE) ---
+    # --- TOPSEKTION: 3 KOLONNER (ENSTENS HØJDE FOR BOKSE) ---
     col1, col2, col3 = st.columns([1, 1, 1])
 
     # KOLONNE 1: NÆSTE MODSTANDER
