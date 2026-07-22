@@ -5,34 +5,63 @@ import matplotlib.pyplot as plt
 import plotly.express as px
 from mplsoccer import Pitch, VerticalPitch
 from data.data_load import _get_snowflake_conn
-from data.utils.team_mapping import TEAMS
 import requests
 from PIL import Image
 from io import BytesIO
 
-# --- IMPORT FRA DIN MAPPING.PY ---
+# --- 1. DYNAMISK IMPORT OG KONFIGURATION FRA DIN TEAM_MAPPING.PY ---
+from data.utils.team_mapping import (
+    TEAMS,
+    SEASONS,
+    COMPETITIONS,
+    SEASON_LEAGUE_MAPPER,
+    TOURNAMENTCALENDAR_NAME,  # Eksempelvis "2026/2027" eller "2025/2026"
+    COMPETITION_NAME         # Eksempelvis "1. Division"
+)
+
 from data.utils.mapping import (
     OPTA_EVENT_TYPES, 
     OPTA_QUALIFIERS,
     get_action_label
 )
 
-# --- 1. KONFIGURATION (OPDATERET 2026) ---
+# Snowflake database sti
 DB = "KLUB_HVIDOVREIF.AXIS"
-# Liga-ID'er for Superliga, NordicBet, 2. div, 3. div og Pokalen
-LIGA_IDS = "('dyjr458hcmrcy87fsabfsy87o', 'e5p78j2r7v8h3u9s5k0l2m4n6', 'f6q89k3s8w9i4v0t6l1m3n5o7', '335', '328', '329', '43319', '331')"
+
+# Hent automatisk den aktive sæson og turnering ud fra global kontrol i team_mapping.py
+SEASONNAME = TOURNAMENTCALENDAR_NAME
+COMP_INFO = COMPETITIONS.get(COMPETITION_NAME, {})
+TEAM_WYID = TEAMS.get("Hvidovre", {}).get("team_wyid", 7490)
+
+# Opbyg dynamisk tuple af relevante turneringer / sæsoner (Wyscout WYIDs + Opta UUIDs)
+LIGA_IDS_LIST = []
+# Tilføj numeriske Wyscout IDs fra din COMPETITIONS dict
+for comp_data in COMPETITIONS.values():
+    if "wyid" in comp_data and comp_data["wyid"]:
+        LIGA_IDS_LIST.append(str(comp_data["wyid"]))
+
+# Tilføj relevante Opta UUIDs for den valgte sæson
+if SEASONNAME in SEASONS:
+    for comp_key, uuid_val in SEASONS[SEASONNAME].items():
+        if uuid_val and "dummy" not in uuid_val:
+            LIGA_IDS_LIST.append(str(uuid_val))
+
+LIGA_IDS = tuple(LIGA_IDS_LIST)
 
 # --- 2. HJÆLPEFUNKTIONER ---
 @st.cache_data(ttl=3600)
 def get_logo_img(opta_uuid):
-    """Henter klublogo fra din TEAMS mapping eller via URL"""
-    if not opta_uuid: return None
+    """Henter klublogo ud fra TEAMS dict via Opta UUID"""
+    if not opta_uuid: 
+        return None
     url = next((info['logo'] for name, info in TEAMS.items() if info.get('opta_uuid') == opta_uuid), None)
-    if not url: return None
+    if not url: 
+        return None
     try:
         response = requests.get(url, timeout=5)
         return Image.open(BytesIO(response.content))
-    except: return None
+    except: 
+        return None
 
 def draw_match_row(date, h_name, h_uuid, score, a_name, a_uuid, res_char):
     """Tegner en række i kampoversigten med logoer og farvet resultat-badge"""
@@ -68,18 +97,6 @@ def draw_match_info_box(ax, scoring_team_logo, opp_team_logo, date_str, score_st
         ax_l2.imshow(opp_team_logo); ax_l2.axis('off')
     ax.text(0.03, 0.07, f"{date_str} | Stilling: {score_str} ({min_str}. min)", transform=ax.transAxes, fontsize=8, color='#444444', va='top')
 
-def draw_player_info_box(ax, team_logo, player_name, season_str, category_str):
-    """Tegner spiller-info overlay på banen for spillerprofilen"""
-    if team_logo:
-        ax_l = ax.inset_axes([0.02, 0.88, 0.07, 0.07], transform=ax.transAxes)
-        ax_l.imshow(team_logo)
-        ax_l.axis('off')
-    ax.text(0.10, 0.92, player_name.upper(), transform=ax.transAxes, 
-            fontsize=10, fontweight='bold', color='black', va='center')
-    info_text = f"{season_str} | {category_str}"
-    ax.text(0.10, 0.89, info_text, transform=ax.transAxes, 
-            fontsize=8, color='#666666', va='center')
-
 def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None):
     """Genererer banerplot (KDE/Heatmap)"""
     plot_data = df[df['EVENT_TYPEID'].astype(str).isin([str(i) for i in event_ids])].copy()
@@ -109,31 +126,41 @@ def vis_side(dp=None):
     conn = _get_snowflake_conn()
     if not conn: return
 
-    # --- 1. HENT HOLD MAPPING ---
-    df_teams_raw = conn.query(f"SELECT DISTINCT CONTESTANTHOME_NAME, CONTESTANTHOME_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS}")
-    ids = df_teams_raw['CONTESTANTHOME_OPTAUUID'].unique()
-    mapping_lookup = {str(info.get('opta_uuid', '')).lower().replace('t', ''): name for name, info in TEAMS.items()}
+    liga_ids_sql = str(LIGA_IDS)
+
+    # --- HENT OG FILTRÉR HOLD UD FRA SEASON_LEAGUE_MAPPER ---
+    allowed_team_names = SEASON_LEAGUE_MAPPER.get(SEASONNAME, {}).get(COMPETITION_NAME, [])
     
-    team_map = {
-        mapping_lookup.get(str(u).lower().replace('t','')): u 
-        for u in ids 
-        if mapping_lookup.get(str(u).lower().replace('t','')) is not None
-    }
+    # Byg hold-mapping baseret på tilladte hold i den valgte sæson/liga
+    team_map = {}
+    for team_name, info in TEAMS.items():
+        if not allowed_team_names or team_name in allowed_team_names:
+            if "opta_uuid" in info and info["opta_uuid"]:
+                team_map[team_name] = info["opta_uuid"]
+
+    # Hvis intet match i SEASON_LEAGUE_MAPPER, fald tilbage til alle TEAMS
+    if not team_map:
+        team_map = {name: info["opta_uuid"] for name, info in TEAMS.items() if info.get("opta_uuid")}
 
     col_spacer_top, col_hold = st.columns([3.5, 1])
-    valgt_hold = col_hold.selectbox("Vælg hold", sorted(list(team_map.keys())), label_visibility="collapsed")
-    valgt_uuid = team_map[valgt_hold]
+    
+    # Sætter Hvidovre som standard (eller første tilgængelige hold)
+    sorted_teams = sorted(list(team_map.keys()))
+    default_index = sorted_teams.index("Hvidovre") if "Hvidovre" in sorted_teams else 0
+    
+    valgt_hold_navn = col_hold.selectbox("Vælg hold", sorted_teams, index=default_index, label_visibility="collapsed")
+    valgt_uuid = team_map[valgt_hold_navn]
     hold_logo = get_logo_img(valgt_uuid)
 
     with st.spinner("Henter data..."):
         # SQL for seneste 10 kampe (Metadata)
         sql_res = f"""
             SELECT MATCH_LOCALDATE, CONTESTANTHOME_NAME, CONTESTANTAWAY_NAME, 
-                    TOTAL_HOME_SCORE, TOTAL_AWAY_SCORE, CONTESTANTHOME_OPTAUUID, 
-                    CONTESTANTAWAY_OPTAUUID, MATCH_OPTAUUID 
+                   TOTAL_HOME_SCORE, TOTAL_AWAY_SCORE, CONTESTANTHOME_OPTAUUID, 
+                   CONTESTANTAWAY_OPTAUUID, MATCH_OPTAUUID 
             FROM {DB}.OPTA_MATCHINFO 
             WHERE (CONTESTANTHOME_OPTAUUID = '{valgt_uuid}' OR CONTESTANTAWAY_OPTAUUID = '{valgt_uuid}') 
-            AND TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS} 
+            AND TOURNAMENTCALENDAR_OPTAUUID IN {liga_ids_sql} 
             AND (MATCH_STATUS ILIKE '%Played%' OR MATCH_STATUS ILIKE '%Full%' OR MATCH_STATUS ILIKE '%Finish%') 
             ORDER BY MATCH_LOCALDATE DESC LIMIT 10
         """
@@ -172,7 +199,7 @@ def vis_side(dp=None):
                        MATCH_LOCALDATE, CONTESTANTHOME_OPTAUUID, CONTESTANTAWAY_OPTAUUID,
                        TOTAL_HOME_SCORE, TOTAL_AWAY_SCORE
                 FROM {DB}.OPTA_MATCHINFO 
-                WHERE TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS}
+                WHERE TOURNAMENTCALENDAR_OPTAUUID IN {liga_ids_sql}
             ),
             TargetGoals AS (
                 SELECT MATCH_OPTAUUID, EVENT_TIMESTAMP as G_TIME, EVENT_TIMEMIN as G_MIN 
@@ -211,17 +238,17 @@ def vis_side(dp=None):
             st.error("Ingen data fundet for det valgte hold.")
             return
             
-    n_matches = df_all_h['MATCH_OPTAUUID'].nunique()
+    n_matches = df_all_h['MATCH_OPTAUUID'].nunique() if 'df_all_h' in locals() and df_all_h is not None else 0
     total_minutes = n_matches * 90
     
-    # Herefter kommer dine tabs
+    # --- TABS VISNING ---
     t1, t2, t3, t4, t5 = st.tabs(["OVERSIGT", "MED BOLDEN", "UDEN BOLDEN", "MÅL-SEKVENSER", "SPILLEROVERSIGT"])
     
     with t1:
-        # 1. Resultat logik
+        # Resultat logik
         df_res['RES'] = df_res.apply(lambda r: "D" if r['TOTAL_HOME_SCORE'] == r['TOTAL_AWAY_SCORE'] else ("W" if ((r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid and r['TOTAL_HOME_SCORE'] > r['TOTAL_AWAY_SCORE']) or (r['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid and r['TOTAL_AWAY_SCORE'] > r['TOTAL_HOME_SCORE'])) else "L"), axis=1)
         
-        # 2. Volumen beregninger baseret på din mapping
+        # Volumen beregninger
         df_vol = df_all_h.groupby('MATCH_OPTAUUID').agg(
             P_tot=('EVENT_TYPEID', lambda x: (x == 1).sum()),
             P_suc=('EVENT_TYPEID', lambda x: ((df_all_h.loc[x.index, 'EVENT_TYPEID'] == 1) & (df_all_h.loc[x.index, 'OUTCOME'] == 1)).sum()),
@@ -254,7 +281,7 @@ def vis_side(dp=None):
         m_col1, m_spacer, m_col2 = st.columns([1.3, 0.1, 2.0])
         
         with m_col1:
-            st.write("**Seneste 10 kampe**")
+            st.write(f"**Seneste 10 kampe ({SEASONNAME} - {COMPETITION_NAME})**")
             with st.container(border=True):
                 st.markdown('<div class="metric-row-wrapper">', unsafe_allow_html=True)
                 wins, draws, losses = (df_res['RES'] == "W").sum(), (df_res['RES'] == "D").sum(), (df_res['RES'] == "L").sum()
@@ -276,12 +303,9 @@ def vis_side(dp=None):
             kat_map = {"Pasninger": 'P', "Afslutninger": 'A', "Erobringer": 'E', "Dueller": 'D', "Frispark": 'F'}
             col_map = {'P': '#084594', 'A': '#cb181d', 'E': '#238b45', 'D': '#ec7014', 'F': '#6a51a3'}
             
-            # --- 1. Navne-mapping til forkortelser ---
-            # Vi opdaterer OPP_NAME så B 9 bliver B93 og HB bliver HBK
+            # Rengøring af holdnavne til aksevisning
             name_fix = {"B 9": "B93", "HB": "HBK"}
             df_plot['OPP_NAME_CLEAN'] = df_plot['OPP_NAME'].replace(name_fix)
-            
-            # Opdater X-aksen så den bruger de nye navne
             df_plot['X_AXIS_LABEL'] = df_plot['LABEL'] + "<br>" + df_plot['OPP_NAME_CLEAN'].str.upper()
 
             # --- Graf 1 ---
@@ -297,7 +321,6 @@ def vis_side(dp=None):
             fig1.update_traces(
                 marker_color=col_map[c_key1], 
                 textposition='outside',
-                # Vi bruger OPP_NAME_CLEAN her for at få de rigtige navne i hover
                 customdata=np.stack((df_plot['OPP_NAME_CLEAN'], df_plot['LABEL'], [val1.lower()] * len(df_plot)), axis=-1),
                 hovertemplate="vs. %{customdata[0]}<br>%{customdata[1]}<br><br><b>%{y} %{customdata[2]}</b><extra></extra>"
             )
@@ -340,9 +363,6 @@ def vis_side(dp=None):
         kat_options = ["Opbygning", "Gennembrud", "Touches in Box", "Afslutninger"]
         c_left, c_right = st.columns([2, 1])
         v_med = c_right.selectbox("Vælg Fokusområde", kat_options, key="ms_t2", label_visibility="collapsed")
-        
-        n_matches = df_all_h['MATCH_OPTAUUID'].nunique()
-        total_minutes = n_matches * 90
 
         if v_med == "Opbygning":
             ids, tit, cm, zn = [1], "OPBYGNING", "Blues", "up"
@@ -424,7 +444,6 @@ def vis_side(dp=None):
         erobring_ids = [7, 8, 12, 127] 
         duel_ids = [7, 44] 
 
-        # Filtrering af data baseret på valg
         if "Erobringer" in v_uden:
             ids, tit, cm, zn = erobring_ids, "Egen halvdel: EROBRINGER", "Oranges", "up"
             df_f = df_all_h[(df_all_h['EVENT_X'] <= 50) & (df_all_h['EVENT_TYPEID'].isin(ids))].copy()
@@ -441,12 +460,10 @@ def vis_side(dp=None):
         total_act = len(df_f)
 
         with c_left:
-            # Tegn banen
             fig = plot_custom_pitch(df_f, ids, tit, zone=zn, cmap=cm, logo=hold_logo)
             st.pyplot(fig)
 
         with c_right:
-            # Beregn metrics
             acc_pct = (df_f['OUTCOME'].sum() / total_act * 100) if total_act > 0 else 0
             avg_p90 = (total_act / total_minutes * 90) if total_minutes > 0 else 0
             
@@ -465,7 +482,6 @@ def vis_side(dp=None):
                 ).reset_index()
                 df_top['RATE'] = (df_top['SUCCESS'] / df_top['TOTAL'] * 100).fillna(0)
                 
-                # Sortering: Succesrate først, derefter volumen
                 df_top = df_top[df_top['TOTAL'] >= 1]
                 df_top = df_top.sort_values(['RATE', 'TOTAL'], ascending=[False, False]).head(8)
     
@@ -504,18 +520,17 @@ def vis_side(dp=None):
             sk = st.selectbox("Vælg mål", list(opts.keys()), format_func=lambda x: opts[x]['label'])
             sd = opts[sk]
     
-            # 2. Filtrér sekvensen
+            # Filtrér sekvensen
             tge = df_all_events[(df_all_events['MATCH_OPTAUUID'] == sd['match_id']) & 
                                 (df_all_events['GOAL_TIME'] == sd['goal_ts'])].sort_values('EVENT_TIMESTAMP').copy()
     
-            # 3. Tegn Pitch
+            # Tegn Pitch
             p_c, l_c = st.columns([2.5, 1])
             p = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='grey')
             f, ax = p.draw(figsize=(10, 7))
             
             draw_match_info_box(ax, hold_logo, get_logo_img(sd['opp_uuid']), sd['date'], sd['score_str'], sd['min'])
     
-            # Pile og spillernavne
             for i in range(len(tge)-1):
                 p.arrows(tge.iloc[i]['EVENT_X'], tge.iloc[i]['EVENT_Y'], 
                          tge.iloc[i+1]['EVENT_X'], tge.iloc[i+1]['EVENT_Y'], 
@@ -528,7 +543,6 @@ def vis_side(dp=None):
             
             p_c.pyplot(f)
     
-            # 4. Tabel med omdøbning og Penalty-tjek
             def get_final_label_t4(row):
                 if str(row['EVENT_TYPEID']) == "16" and "9" in row['qual_list']:
                     return "STRAFFESPARK"
@@ -544,7 +558,11 @@ def vis_side(dp=None):
                 use_container_width=True
             )
         else:
-            st.info("Ingen mål fundet for denne sæson.")
+            st.info(f"Ingen mål fundet for denne sæson ({SEASONNAME}).")
+
+    with t5:
+        st.write("**Spilleroversigt**")
+        st.info("Visning af spillerdata og profiler.")
             
     with t5:
         if not df_all_events.empty:
