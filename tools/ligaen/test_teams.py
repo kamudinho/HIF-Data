@@ -100,16 +100,24 @@ def beregn_tabel(df_matches, valgt_saeson, valgt_turnering):
 # --- 2. GRAFER OG H2H ---
 
 def get_team_color(team_name, color_type="primary", default="#0056a3"):
-    # Tjek først direkte på nøglen
-    if team_name in TEAM_COLORS:
-        return TEAM_COLORS[team_name].get(color_type, default)
-    
-    # Ellers prøv at matche delvist mod slutning/start (f.eks. AB / Vendsyssel)
+    # Find de definerede farver for holdet
+    found_colors = None
     for key, colors in TEAM_COLORS.items():
         if key.lower() in team_name.lower() or team_name.lower() in key.lower():
-            return colors.get(color_type, default)
+            found_colors = colors
+            break
             
-    return default
+    if not found_colors:
+        return default
+        
+    primary = found_colors.get("primary", default)
+    secondary = found_colors.get("secondary", "#000000")
+    
+    # Hvis der bedes om primærfarve, men den er hvid, returner sekundærfarven i stedet
+    if color_type == "primary" and primary.lower() in ["#ffffff", "white", "#fff"]:
+        return secondary
+        
+    return found_colors.get(color_type, default)
 
 def draw_h2h_chart(team1_name, team2_name, metrics, labels, df_wy, chart_key):
     fig = go.Figure()
