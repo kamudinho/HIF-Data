@@ -9,14 +9,13 @@ import requests
 from PIL import Image
 from io import BytesIO
 
-# --- 1. DYNAMISK IMPORT OG KONFIGURATION FRA DIN TEAM_MAPPING.PY ---
+# --- 1. DYNAMISK IMPORT OG KONFIGURATION FRA TEAM_MAPPING.PY ---
 from data.utils.team_mapping import (
     TEAMS,
     SEASONS,
     COMPETITIONS,
     SEASON_LEAGUE_MAPPER,
-    TOURNAMENTCALENDAR_NAME,  # Eksempelvis "2026/2027" eller "2025/2026"
-    COMPETITION_NAME         # Eksempelvis "1. Division"
+    COMPETITION_NAME
 )
 
 from data.utils.mapping import (
@@ -27,26 +26,6 @@ from data.utils.mapping import (
 
 # Snowflake database sti
 DB = "KLUB_HVIDOVREIF.AXIS"
-
-# Hent automatisk den aktive sæson og turnering ud fra global kontrol i team_mapping.py
-SEASONNAME = TOURNAMENTCALENDAR_NAME
-COMP_INFO = COMPETITIONS.get(COMPETITION_NAME, {})
-TEAM_WYID = TEAMS.get("Hvidovre", {}).get("team_wyid", 7490)
-
-# Opbyg dynamisk tuple af relevante turneringer / sæsoner (Wyscout WYIDs + Opta UUIDs)
-LIGA_IDS_LIST = []
-# Tilføj numeriske Wyscout IDs fra din COMPETITIONS dict
-for comp_data in COMPETITIONS.values():
-    if "wyid" in comp_data and comp_data["wyid"]:
-        LIGA_IDS_LIST.append(str(comp_data["wyid"]))
-
-# Tilføj relevante Opta UUIDs for den valgte sæson
-if SEASONNAME in SEASONS:
-    for comp_key, uuid_val in SEASONS[SEASONNAME].items():
-        if uuid_val and "dummy" not in uuid_val:
-            LIGA_IDS_LIST.append(str(uuid_val))
-
-LIGA_IDS = tuple(LIGA_IDS_LIST)
 
 # --- 2. HJÆLPEFUNKTIONER ---
 @st.cache_data(ttl=3600)
@@ -126,34 +105,65 @@ def vis_side(dp=None):
     conn = _get_snowflake_conn()
     if not conn: return
 
+    # --- SÆSON- OG HOLDVÆLGER I TOPPEN ---
+    available_seasons = sorted(list(SEASONS.keys()), reverse=True)
+    
+    col_spacer_top, col_saeson, col_hold = st.columns([2.5, 1, 1])
+    
+    # 1. Vælg Sæson
+    valgt_saeson = col_saeson.selectbox(
+        "Vælg sæson", 
+        available_seasons, 
+        index=0, 
+        label_visibility="collapsed",
+        key="saeson_select"
+    )
+
+    # Dynamisk opbygning af LIGA_IDS for den VALGTE sæson
+    LIGA_IDS_LIST = []
+    
+    for comp_data in COMPETITIONS.values():
+        if "wyid" in comp_data and comp_data["wyid"]:
+            LIGA_IDS_LIST.append(str(comp_data["wyid"]))
+
+    if valgt_saeson in SEASONS:
+        for comp_key, uuid_val in SEASONS[valgt_saeson].items():
+            if uuid_val and "dummy" not in str(uuid_val).lower():
+                LIGA_IDS_LIST.append(str(uuid_val))
+
+    LIGA_IDS = tuple(LIGA_IDS_LIST)
     liga_ids_sql = str(LIGA_IDS)
 
-    # --- HENT OG FILTRÉR HOLD UD FRA SEASON_LEAGUE_MAPPER ---
-    allowed_team_names = SEASON_LEAGUE_MAPPER.get(SEASONNAME, {}).get(COMPETITION_NAME, [])
+    # --- FILTRÉR HOLD UD FRA VALGTE SÆSON ---
+    allowed_team_names = SEASON_LEAGUE_MAPPER.get(valgt_saeson, {}).get(COMPETITION_NAME, [])
     
-    # Byg hold-mapping baseret på tilladte hold i den valgte sæson/liga
     team_map = {}
     for team_name, info in TEAMS.items():
         if not allowed_team_names or team_name in allowed_team_names:
             if "opta_uuid" in info and info["opta_uuid"]:
                 team_map[team_name] = info["opta_uuid"]
 
-    # Hvis intet match i SEASON_LEAGUE_MAPPER, fald tilbage til alle TEAMS
     if not team_map:
         team_map = {name: info["opta_uuid"] for name, info in TEAMS.items() if info.get("opta_uuid")}
 
-    col_spacer_top, col_hold = st.columns([3.5, 1])
-    
-    # Sætter Hvidovre som standard (eller første tilgængelige hold)
+    # 2. Vælg Hold
     sorted_teams = sorted(list(team_map.keys()))
     default_index = sorted_teams.index("Hvidovre") if "Hvidovre" in sorted_teams else 0
     
-    valgt_hold_navn = col_hold.selectbox("Vælg hold", sorted_teams, index=default_index, label_visibility="collapsed")
+    valgt_hold_navn = col_hold.selectbox(
+        "Vælg hold", 
+        sorted_teams, 
+        index=default_index, 
+        label_visibility="collapsed",
+        key="hold_select"
+    )
     valgt_uuid = team_map[valgt_hold_navn]
     hold_logo = get_logo_img(valgt_uuid)
 
-    with st.spinner("Henter data..."):
-        # SQL for seneste 10 kampe (Metadata)
+    df_all_events = pd.DataFrame()
+
+    with st.spinner(f"Henter data for {valgt_hold_navn} ({valgt_saeson})..."):
+        # SQL for seneste 10 kampe
         sql_res = f"""
             SELECT MATCH_LOCALDATE, CONTESTANTHOME_NAME, CONTESTANTAWAY_NAME, 
                    TOTAL_HOME_SCORE, TOTAL_AWAY_SCORE, CONTESTANTHOME_OPTAUUID, 
@@ -170,7 +180,7 @@ def vis_side(dp=None):
             match_ids = tuple(df_res['MATCH_OPTAUUID'].tolist())
             m_ids_str = f"('{match_ids[0]}')" if len(match_ids) == 1 else str(match_ids)
             
-            # --- SQL: HENTER EVENTS MED JOIN PÅ PLAYERS FOR FULDE NAVNE ---
+            # SQL: EVENTS WITH PLAYER JOIN
             sql_all_h = f"""
                 SELECT 
                     e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, 
@@ -192,7 +202,7 @@ def vis_side(dp=None):
                 df_all_h['Action_Label'] = df_all_h.apply(get_action_label, axis=1)
                 df_all_h = df_all_h.dropna(subset=['Action_Label'])
 
-            # --- SQL: MÅL-SEKVENSER MED JOIN PÅ PLAYERS FOR FULDE NAVNE ---
+            # SQL: MÅL-SEKVENSER
             sql_seq = f"""
             WITH SeasonMatches AS (
                 SELECT MATCH_OPTAUUID, CONTESTANTHOME_NAME, CONTESTANTAWAY_NAME, 
@@ -232,12 +242,11 @@ def vis_side(dp=None):
                 if df_all_events is not None and not df_all_events.empty:
                     df_all_events['qual_list'] = df_all_events['QUALIFIERS'].fillna('').str.split(',')
             except Exception as e:
-                st.error(f"Fejl i SQL: {e}")
                 df_all_events = pd.DataFrame()
         else:
-            st.error("Ingen data fundet for det valgte hold.")
+            st.warning(f"Der er endnu ikke spillet/registreret nogen færdigspillede kampe for {valgt_hold_navn} i sæsonen {valgt_saeson}.")
             return
-            
+
     n_matches = df_all_h['MATCH_OPTAUUID'].nunique() if 'df_all_h' in locals() and df_all_h is not None else 0
     total_minutes = n_matches * 90
     
@@ -245,10 +254,8 @@ def vis_side(dp=None):
     t1, t2, t3, t4, t5 = st.tabs(["OVERSIGT", "MED BOLDEN", "UDEN BOLDEN", "MÅL-SEKVENSER", "SPILLEROVERSIGT"])
     
     with t1:
-        # Resultat logik
         df_res['RES'] = df_res.apply(lambda r: "D" if r['TOTAL_HOME_SCORE'] == r['TOTAL_AWAY_SCORE'] else ("W" if ((r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid and r['TOTAL_HOME_SCORE'] > r['TOTAL_AWAY_SCORE']) or (r['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid and r['TOTAL_AWAY_SCORE'] > r['TOTAL_HOME_SCORE'])) else "L"), axis=1)
         
-        # Volumen beregninger
         df_vol = df_all_h.groupby('MATCH_OPTAUUID').agg(
             P_tot=('EVENT_TYPEID', lambda x: (x == 1).sum()),
             P_suc=('EVENT_TYPEID', lambda x: ((df_all_h.loc[x.index, 'EVENT_TYPEID'] == 1) & (df_all_h.loc[x.index, 'OUTCOME'] == 1)).sum()),
@@ -281,7 +288,7 @@ def vis_side(dp=None):
         m_col1, m_spacer, m_col2 = st.columns([1.3, 0.1, 2.0])
         
         with m_col1:
-            st.write(f"**Seneste 10 kampe ({SEASONNAME} - {COMPETITION_NAME})**")
+            st.write(f"**Seneste 10 kampe ({valgt_saeson} - {COMPETITION_NAME})**")
             with st.container(border=True):
                 st.markdown('<div class="metric-row-wrapper">', unsafe_allow_html=True)
                 wins, draws, losses = (df_res['RES'] == "W").sum(), (df_res['RES'] == "D").sum(), (df_res['RES'] == "L").sum()
@@ -303,12 +310,11 @@ def vis_side(dp=None):
             kat_map = {"Pasninger": 'P', "Afslutninger": 'A', "Erobringer": 'E', "Dueller": 'D', "Frispark": 'F'}
             col_map = {'P': '#084594', 'A': '#cb181d', 'E': '#238b45', 'D': '#ec7014', 'F': '#6a51a3'}
             
-            # Rengøring af holdnavne til aksevisning
             name_fix = {"B 9": "B93", "HB": "HBK"}
             df_plot['OPP_NAME_CLEAN'] = df_plot['OPP_NAME'].replace(name_fix)
             df_plot['X_AXIS_LABEL'] = df_plot['LABEL'] + "<br>" + df_plot['OPP_NAME_CLEAN'].str.upper()
 
-            # --- Graf 1 ---
+            # Graf 1
             h_c1, d_c1 = st.columns([2, 1])
             val1 = d_c1.selectbox("Vælg", list(kat_map.keys()), index=0, key="val_top", label_visibility="collapsed")
             c_key1 = kat_map[val1]
@@ -329,7 +335,7 @@ def vis_side(dp=None):
                               xaxis_title=None, yaxis_title=None, hoverlabel=dict(bgcolor="white", font_size=12))
             st.plotly_chart(fig1, use_container_width=True, config={'displayModeBar': False})
 
-            # --- Graf 2 ---
+            # Graf 2
             options_2 = [k for k in kat_map.keys() if k != val1]
             h_c2, d_c2 = st.columns([2, 1])
             val2 = d_c2.selectbox("Vælg", options_2, index=0, key="val_bot", label_visibility="collapsed")
@@ -374,7 +380,7 @@ def vis_side(dp=None):
             ids, tit, cm, zn = [0], "TOUCHES IN BOX", "Blues", "down"
             df_f = df_all_h[(df_all_h['EVENT_X'] > 83) & (df_all_h['EVENT_Y'] > 21.1) & (df_all_h['EVENT_Y'] < 78.9)].copy()
             df_shots = df_all_h[df_all_h['EVENT_TYPEID'].isin([13, 14, 15, 16])].copy()
-        else: # Afslutninger
+        else:
             ids, tit, cm, zn = [13, 14, 15, 16], "AFSLUTNINGER", "YlOrRd", "down"
             df_f = df_all_h[df_all_h['EVENT_TYPEID'].isin(ids)].copy()
 
@@ -453,7 +459,7 @@ def vis_side(dp=None):
         elif "Egen halvdel: Dueller" in v_uden:
             ids, tit, cm, zn = duel_ids, "Egen halvdel: DUELLER", "Oranges", "up"
             df_f = df_all_h[(df_all_h['EVENT_X'] <= 50) & (df_all_h['EVENT_TYPEID'].isin(ids))].copy()
-        else: # Off. halvdel: Dueller
+        else:
             ids, tit, cm, zn = duel_ids, "Off. halvdel: DUELLER", "Oranges", "down"
             df_f = df_all_h[(df_all_h['EVENT_X'] > 50) & (df_all_h['EVENT_TYPEID'].isin(ids))].copy()
 
@@ -520,11 +526,9 @@ def vis_side(dp=None):
             sk = st.selectbox("Vælg mål", list(opts.keys()), format_func=lambda x: opts[x]['label'])
             sd = opts[sk]
     
-            # Filtrér sekvensen
             tge = df_all_events[(df_all_events['MATCH_OPTAUUID'] == sd['match_id']) & 
                                 (df_all_events['GOAL_TIME'] == sd['goal_ts'])].sort_values('EVENT_TIMESTAMP').copy()
     
-            # Tegn Pitch
             p_c, l_c = st.columns([2.5, 1])
             p = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='grey')
             f, ax = p.draw(figsize=(10, 7))
@@ -558,12 +562,8 @@ def vis_side(dp=None):
                 use_container_width=True
             )
         else:
-            st.info(f"Ingen mål fundet for denne sæson ({SEASONNAME}).")
+            st.info(f"Ingen mål fundet for {valgt_hold_navn} i sæsonen {valgt_saeson}.")
 
-    with t5:
-        st.write("**Spilleroversigt**")
-        st.info("Visning af spillerdata og profiler.")
-            
     with t5:
         if not df_all_events.empty:
             # 1. Databehandling
@@ -641,6 +641,8 @@ def vis_side(dp=None):
                             </div>
                         </div>
                     """, unsafe_allow_html=True)
-            
+        else:
+            st.info(f"Ingen målsekvenser tilgængelige for {valgt_hold_navn} i sæsonen {valgt_saeson}.")
+
 if __name__ == "__main__":
     vis_side()
