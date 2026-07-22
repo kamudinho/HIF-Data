@@ -100,46 +100,61 @@ def vis_side(dp=None):
     st.markdown("""
     <style>
         header {visibility: hidden;}
-        .main .block-container { padding-top: 0.5rem !important; padding-bottom: 3rem !important; }
-        [data-testid="stVerticalBlock"] { gap: 0rem !important; }
-        .stTabs { margin-top: 10px !important; }
+        .main .block-container { 
+            padding-top: 1rem !important; 
+            padding-bottom: 3rem !important; 
+            max-width: 1400px !important; 
+        }
         .stat-box { 
             background-color: #f8f9fa; 
-            padding: 5px !important; 
+            padding: 10px !important; 
             border-radius: 5px; 
             border-left: 5px solid #cc0000; 
-            margin-bottom: 20px !important; 
+            margin-bottom: 15px !important; 
             display: block; 
         }
-        .stat-label { font-size: 0.7rem; text-transform: uppercase; color: #666; font-weight: bold; }
-        .stat-value { font-size: 1.2rem; font-weight: 800; color: #1a1a1a; margin-top: 3px; }
+        .stat-label { font-size: 0.75rem; text-transform: uppercase; color: #666; font-weight: bold; }
+        .stat-value { font-size: 1.3rem; font-weight: 800; color: #1a1a1a; margin-top: 3px; }
     </style>
     """, unsafe_allow_html=True)
 
-    # Dynamisk valg af sæson og turnering
-    col_s1, col_s2 = st.columns(2)
-    with col_s1:
-        sæson_sel = st.selectbox("Sæson", list(SEASONS.keys()), index=0)
-    with col_s2:
-        tilgængelige_turneringer = list(SEASONS[sæson_sel].keys())
-        turnering_sel = st.selectbox("Turnering", tilgængelige_turneringer, index=0)
+    # Toppen: Brug venstre side til evt. overskrift/info og højre side til filtre (Sæson, Turnering, Hold)
+    top_col1, top_col2 = st.columns([1.5, 2.5])
+    
+    with top_col1:
+        st.markdown("### **Liga & Holdanalyse**")
+        st.markdown("<p style='color: #666; font-size: 0.9rem;'>Analyser skudmønstre og konvertering fordelt på zoner.</p>", unsafe_allow_html=True)
 
-    # Hent dynamisk UUID baseret på valg
-    aktuel_liga_uuid = SEASONS[sæson_sel][turnering_sel]
+    with top_col2:
+        # Samlet boks / kolonner til højre for sæson, turnering og hold
+        f_col1, f_col2, f_col3 = st.columns(3)
+        with f_col1:
+            sæson_sel = st.selectbox("Sæson", list(SEASONS.keys()), index=0)
+        with f_col2:
+            tilgængelige_turneringer = list(SEASONS[sæson_sel].keys())
+            turnering_sel = st.selectbox("Turnering", tilgængelige_turneringer, index=0)
+        
+        # Hent dynamisk UUID baseret på valg for at kunne finde holdene
+        aktuel_liga_uuid = SEASONS[sæson_sel][turnering_sel]
+        df_all = load_league_data(aktuel_liga_uuid)
+        
+        if not df_all.empty:
+            uuid_to_name = {v['opta_uuid'].upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
+            df_all['KLUB_NAVN'] = df_all['EVENT_CONTESTANT_OPTAUUID'].str.upper().map(uuid_to_name)
+            teams = sorted([n for n in df_all['KLUB_NAVN'].unique() if pd.notna(n)])
+        else:
+            teams = []
 
-    df_all = load_league_data(aktuel_liga_uuid)
-    if df_all.empty:
+        with f_col3:
+            default_idx = teams.index("Hvidovre") if "Hvidovre" in teams else 0
+            t_sel = st.selectbox("Hold", teams if teams else ["Ingen hold"], index=default_idx)
+
+    st.markdown("---")
+
+    if df_all.empty or not teams:
         st.warning("Ingen data fundet for den valgte sæson/turnering.")
         return
 
-    uuid_to_name = {v['opta_uuid'].upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
-    df_all['KLUB_NAVN'] = df_all['EVENT_CONTESTANT_OPTAUUID'].str.upper().map(uuid_to_name)
-    teams = sorted([n for n in df_all['KLUB_NAVN'].unique() if pd.notna(n)])
-
-    c_h1, c_h2 = st.columns([2, 1])
-    with c_h2:
-        t_sel = st.selectbox("Hold", teams, index=teams.index("Hvidovre") if "Hvidovre" in teams else 0, label_visibility="collapsed")
-    
     t_color = TEAM_COLORS.get(t_sel, {}).get('primary', HIF_RED)
     t_logo = get_logo_img(TEAMS.get(t_sel, {}).get('logo'))
     
@@ -155,6 +170,7 @@ def vis_side(dp=None):
 
     # TAB 0: SPILLEROVERSIGT
     with tabs[0]:
+        st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
         p_stats = []
         for p, d in df_team.groupby('PLAYER_NAME'):
             s, m = len(d), len(d[d['EVENT_TYPEID']==16])
@@ -173,7 +189,7 @@ def vis_side(dp=None):
             })
 
         df_display = pd.DataFrame(p_stats).sort_values("Konv.%", ascending=False)
-        dynamic_height = (len(df_display) + 1) * 35 + 40
+        dynamic_height = (len(df_display) + 1) * 38 + 50
 
         st.dataframe(
             df_display,
@@ -181,10 +197,7 @@ def vis_side(dp=None):
             hide_index=True,
             height=dynamic_height,
             column_config={
-                "Spiller": st.column_config.TextColumn(
-                    "Spiller",
-                    width="medium",
-                ),
+                "Spiller": st.column_config.TextColumn("Spiller", width="medium"),
                 "DZ-Andel": st.column_config.ProgressColumn(
                     "DZ-Andel", 
                     help="Andel af skud foretaget i Danger Zone",
@@ -200,11 +213,14 @@ def vis_side(dp=None):
         
     # TAB 1: AFSLUTNINGER
     with tabs[1]:
+        st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
         c1, c2 = st.columns([2, 1])
         with c2:
-            p_sel = st.selectbox("Spiller", ["Alle spillere"] + sorted(df_team['PLAYER_NAME'].unique()))
+            p_sel = st.selectbox("Filtrer spiller", ["Alle spillere"] + sorted(df_team['PLAYER_NAME'].unique()))
             d_v = df_team if p_sel == "Alle spillere" else df_team[df_team['PLAYER_NAME'] == p_sel]
             s, m = len(d_v), len(d_v[d_v["EVENT_TYPEID"]==16])
+            
+            st.markdown("<div style='margin-top: 20px;'></div>", unsafe_allow_html=True)
             st.markdown(f'<div class="stat-box"><div class="stat-label">Skud</div><div class="stat-value">{s}</div></div>', unsafe_allow_html=True)
             st.markdown(f'<div class="stat-box"><div class="stat-label">Mål</div><div class="stat-value">{m}</div></div>', unsafe_allow_html=True)
             st.markdown(f'<div class="stat-box"><div class="stat-label">Konvertering</div><div class="stat-value">{(m/s*100 if s>0 else 0):.1f}%</div></div>', unsafe_allow_html=True)
@@ -216,6 +232,7 @@ def vis_side(dp=None):
 
     # TAB 2: DZ-ANALYSE
     with tabs[2]:
+        st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
         c1, c2 = st.columns([2, 1])
         dz_d = df_team[df_team['IS_DZ']]
         with c2:
@@ -233,6 +250,7 @@ def vis_side(dp=None):
     # TAB 3 & 4: ZONER
     for i, is_goal in enumerate([False, True]):
         with tabs[i+3]:
+            st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
             c1, c2 = st.columns([1.6, 1])
             plot_df = df_team[df_team['EVENT_TYPEID'] == 16] if is_goal else df_team
             total_count = len(plot_df)
