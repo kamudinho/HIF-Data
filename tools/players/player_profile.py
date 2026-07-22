@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import plotly.graph_objects as go
 from mplsoccer import Pitch
 from data.data_load import _get_snowflake_conn
-from data.utils.team_mapping import TEAMS
+from data.utils.team_mapping import TEAMS, TEAM_COLORS
 import requests
 from PIL import Image
 import io
@@ -20,10 +20,20 @@ from data.utils.mapping import (
     get_action_label
 )
 
-# --- KONFIGURATION ---
+# --- KONFIGURATION (HVIDOVRE-APP / 2025/2026) ---
 DB = "KLUB_HVIDOVREIF.AXIS"
+SEASONNAME = "2025/2026"
+TEAM_WYID = 7490
+COMPETITION_WYID = (328,)
+COMP_MAP = { 
+    335: "Superliga", 
+    328: "NordicBet Liga", 
+    329: "2. division", 
+    43319: "3. division", 
+    331: "Oddset Pokalen", 
+    1305: "U19 Ligaen" 
+}
 LIGA_IDS = "('dyjr458hcmrcy87fsabfsy87o', 'e5p78j2r7v8h3u9s5k0l2m4n6', 'f6q89k3s8w9i4v0t6l1m3n5o7', '335', '328', '329', '43319', '331')"
-CURRENT_SEASON = "2025/2026"
 
 # --- HJÆLPEFUNKTIONER ---
 @st.cache_data(ttl=3600)
@@ -39,6 +49,25 @@ def get_logo_img(opta_uuid):
         return Image.open(BytesIO(response.content))
     except: 
         return None
+
+def get_team_color(team_name, color_type="primary", default="#df003b"):
+    found_colors = None
+    for key, colors in TEAM_COLORS.items():
+        if key.lower() in team_name.lower() or team_name.lower() in key.lower():
+            found_colors = colors
+            break
+            
+    if not found_colors:
+        return default
+        
+    primary = found_colors.get("primary", default)
+    secondary = found_colors.get("secondary", "#000000")
+    
+    # Hvid farve-håndtering: Brug sekundærfarve hvis primær er hvid
+    if color_type == "primary" and primary.lower() in ["#ffffff", "white", "#fff"]:
+        return secondary
+        
+    return found_colors.get(color_type, default)
 
 def har_qualifier(row_events, row_quals, event_id, qual_ids):
     try:
@@ -77,7 +106,7 @@ def create_relative_donut(player_val, max_val, label, rank_text, color="#df003b"
     fig.update_layout(
         showlegend=False, margin=dict(t=0, b=0, l=0, r=0), height=110, width=130,
         annotations=[dict(
-            text=f"<b>{player_val}</b><br><span style='font-size:12px; color:#df003b; font-weight:bold;'>{rank_text}</span>", 
+            text=f"<b>{player_val}</b><br><span style='font-size:12px; color:{color}; font-weight:bold;'>{rank_text}</span>", 
             x=0.5, y=0.5, font_size=16, showarrow=False, font_family="Arial"
         )]
     )
@@ -94,25 +123,15 @@ def draw_player_info_box(ax, team_logo, player_name, season_str, category_str):
             fontsize=8, color='#666666', va='center')
 
 def get_physical_data(player_name, player_opta_uuid, valgt_hold_navn, db_conn):
-    # Vi bruger opta_uuid som primært filter, da det er unikt.
-    # Da vi ikke ved om opta_uuid findes i den fysiske tabel, 
-    # bruger vi en kombination af navn og UUID hvis muligt.
-    
     efternavn = player_name.split()[-1]
-    
-    # Prøv at matche på UUID først, hvis det fejler, fald tilbage på navn
     sql = f"""
         SELECT * FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
         WHERE UPPER(PLAYER_NAME) LIKE UPPER('%{efternavn}%')
         AND MATCH_DATE >= '2025-07-01'
     """
-    
     df = db_conn.query(sql)
-    
     if df is not None and not df.empty:
         df.columns = df.columns.str.lower()
-        
-        # Omdøb kolonner
         rename_map = {
             'high speed running': 'hsr',
             'sprinting': 'sprinting',
@@ -121,16 +140,10 @@ def get_physical_data(player_name, player_opta_uuid, valgt_hold_navn, db_conn):
             'distance': 'distance'
         }
         df = df.rename(columns=rename_map, errors='ignore')
-        
-        # DEBUG: Se hvad vi har fundet
-        # st.write(f"Fandt {len(df)} rækker for {player_name}")
-        
         return df
-    
     return None
     
 def vis_side(dp=None):
-    # --- NYT: INDLÆS OVERSKRIVNINGSFIL ---
     try:
         csv_path = os.path.join(os.getcwd(), 'data', 'players', '1div_overskrivning.csv')
         df_csv = pd.read_csv(csv_path)
@@ -166,9 +179,21 @@ def vis_side(dp=None):
                 team_map[mapping_lookup[uuid_clean]] = r['contestanthome_optauuid']
 
     col_spacer_top, col_h_hold, col_h_spiller = st.columns([2, 1.2, 1.2])
-    valgt_hold = col_h_hold.selectbox("Hold", sorted(list(team_map.keys())), label_visibility="collapsed")
+    
+    # Sørg for at Hvidovre som standard er valgt eller øverst hvis muligt
+    default_team_idx = 0
+    team_names = sorted(list(team_map.keys()))
+    for idx, name in enumerate(team_names):
+        if "hvidovre" in name.lower():
+            default_team_idx = idx
+            break
+
+    valgt_hold = col_h_hold.selectbox("Hold", team_names, index=default_team_idx, label_visibility="collapsed")
     valgt_uuid_hold = team_map[valgt_hold]
     hold_logo = get_logo_img(valgt_uuid_hold)
+    
+    # Hent holdfarver (dynamisk med hvidovre-fallback)
+    primær_farve = get_team_color(valgt_hold, "primary", "#df003b")
 
     # 2. HENT DATA
     with st.spinner("Henter spillerdata..."):
@@ -190,7 +215,6 @@ def vis_side(dp=None):
         df_all = conn.query(sql_events)
         if df_all is not None:
             df_all.columns = df_all.columns.str.lower()
-            # OVERSKRIV NAVNE FRA CSV
             df_all['visningsnavn'] = df_all.apply(lambda r: navne_map.get(str(r['player_optauuid']), r['visningsnavn']), axis=1)
 
         sql_expected = f"""
@@ -272,7 +296,6 @@ def vis_side(dp=None):
         df_db_stats = conn.query(sql_db_stats)
         if df_db_stats is not None:
             df_db_stats.columns = df_db_stats.columns.str.lower()
-            # OVERSKRIV NAVNE FRA CSV HER OGSÅ
             df_db_stats['visningsnavn'] = df_db_stats.apply(lambda r: navne_map.get(str(r['player_optauuid']), r['visningsnavn']), axis=1)
         
     if df_all is None or df_all.empty:
@@ -421,10 +444,9 @@ def vis_side(dp=None):
                         player_val = truppen_stats.loc[valgt_player_uuid, k_id]
                         if isinstance(player_val, pd.Series):
                             player_val = player_val.iloc[0]
-                        fig = create_relative_donut(player_val, truppen_stats[k_id].max(), label, get_ordinal(spiller_ranks[k_id]))
+                        fig = create_relative_donut(player_val, truppen_stats[k_id].max(), label, get_ordinal(spiller_ranks[k_id]), color=primær_farve)
                         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False}, key=f"p_{k_id}_{i}_{j}")
                         
-    # --- RESTEN AF DIN KODE (t_pitch, t_phys osv.) FORTSÆTTER HERFRA UÆNDRET ---
     with t_pitch:
         descriptions = {
             "Heatmap": "Viser spillerens generelle bevægelsesmønster og intensitet på banen.",
@@ -499,7 +521,7 @@ def vis_side(dp=None):
 
             pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
             fig, ax = pitch.draw(figsize=(10, 7))
-            draw_player_info_box(ax, hold_logo, valgt_spiller, CURRENT_SEASON, visning)
+            draw_player_info_box(ax, hold_logo, valgt_spiller, SEASONNAME, visning)
 
             df_plot = df_spiller.dropna(subset=['event_x', 'event_y'])
             if not df_plot.empty:
@@ -507,13 +529,13 @@ def vis_side(dp=None):
                     pitch.kdeplot(df_plot.event_x, df_plot.event_y, ax=ax, cmap='Blues', fill=True, alpha=0.6, levels=50)
                 elif visning == "Berøringer":
                     d = df_plot[df_plot['event_typeid'].isin(touch_ids)]
-                    ax.scatter(d.event_x, d.event_y, color='#084594', s=40, edgecolors='white', alpha=0.5)
+                    ax.scatter(d.event_x, d.event_y, color=primær_farve, s=40, edgecolors='white', alpha=0.5)
                 elif visning == "Afslutninger":
                     d = df_plot[df_plot['event_typeid'].isin([13, 14, 15, 16])]
                     goals = d[d['event_typeid'] == 16]
                     misses = d[d['event_typeid'].isin([13, 14, 15])]
                     ax.scatter(misses.event_x, misses.event_y, color='grey', s=60, edgecolors='black', alpha=0.6)
-                    ax.scatter(goals.event_x, goals.event_y, color='red', s=120, marker='s', edgecolors='black', zorder=5)
+                    ax.scatter(goals.event_x, goals.event_y, color=primær_farve, s=120, marker='s', edgecolors='black', zorder=5)
                 elif visning == "Erobringer":
                     d = df_plot[df_plot['event_typeid'].isin([7, 8, 12, 49])]
                     ax.scatter(d.event_x, d.event_y, color='orange', s=100, edgecolors='white')
@@ -523,22 +545,13 @@ def vis_side(dp=None):
     with t_phys:
         df_phys = get_physical_data(valgt_spiller, valgt_player_uuid, valgt_hold, conn)
 
-        if st.button("Vis rå data fra fysisk tabel (første 10 rækker)"):
-            # Vi henter alt, så vi kan se kolonne-strukturen og indholdet
-            df_debug = conn.query("SELECT * FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS LIMIT 10")
-            st.write(df_debug)
         if df_phys is None or df_phys.empty:
             st.warning("Ingen fysiske data fundet for denne spiller.")
         else:
-            # 1. Konverter alle kolonnenavne til små bogstaver én gang for alle
             df_phys.columns = df_phys.columns.str.lower()
-            
-            # Sørg for at datoer er rigtige
             df_phys['match_date'] = pd.to_datetime(df_phys['match_date'])
             df_phys = df_phys.sort_values('match_date', ascending=False)
             
-            # 2. HSR beregning - Brug .get(kolonne, 0) for at undgå fejl
-            # Vi bruger de navne, som vi forventer (i små bogstaver)
             hsr_col = 'high speed running' if 'high speed running' in df_phys.columns else 'hsr'
             spr_col = 'sprinting' if 'sprinting' in df_phys.columns else 'sprint'
             
@@ -546,11 +559,7 @@ def vis_side(dp=None):
             spr_val = df_phys.get('sprinting', pd.Series(0, index=df_phys.index))
             
             df_phys['hsr_total'] = hsr_val + spr_val
-            
             latest = df_phys.iloc[0]
-            
-            # Debug: Hvis tallene stadig er 0, så udskriv kolonnerne
-            # st.write(f"Kolonner fundet: {df_phys.columns.tolist()}") 
 
             m1, m2, m3, m4 = st.columns(4)
             m1.metric("Distance", f"{round(latest.get('distance', 0)/1000, 2)} km")
@@ -587,7 +596,7 @@ def vis_side(dp=None):
                         y=y_vals,
                         text=y_vals.apply(lambda x: f"{x:.0f}" if x > 100 else f"{x:.1f}"),
                         textposition='outside', 
-                        marker_color='#cc0000', 
+                        marker_color=primær_farve, 
                         textfont=dict(size=9, color="black"),
                         cliponaxis=False
                     ))
