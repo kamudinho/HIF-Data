@@ -128,34 +128,30 @@ def vis_side(dp=None):
         tilgængelige_turneringer = list(SEASONS[sæson_sel].keys())
         turnering_sel = st.selectbox("Turnering", tilgængelige_turneringer, index=0)
 
-    # Hent data for den valgte turnering først, så vi ved hvilke hold der findes heri
+    # Hent alle hold fra TEAMS-konstanten, så listen er komplet og uafhængig af række-filterfejl
+    all_teams = sorted(list(TEAMS.keys()))
+    with f_col3:
+        default_idx = all_teams.index("Hvidovre") if "Hvidovre" in all_teams else 0
+        t_sel = st.selectbox("Hold", all_teams, index=default_idx)
+
+    # Hent data for den valgte liga/turnering
     aktuel_liga_uuid = SEASONS[sæson_sel][turnering_sel]
     df_all = load_league_data(aktuel_liga_uuid)
     
     if not df_all.empty and 'EVENT_CONTESTANT_OPTAUUID' in df_all.columns:
         uuid_to_name = {v['opta_uuid'].upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
         df_all['KLUB_NAVN'] = df_all['EVENT_CONTESTANT_OPTAUUID'].str.upper().map(uuid_to_name)
-        teams = sorted([n for n in df_all['KLUB_NAVN'].unique() if pd.notna(n)])
     else:
-        teams = []
-
-    with f_col3:
-        if teams:
-            default_idx = teams.index("Hvidovre") if "Hvidovre" in teams else 0
-            t_sel = st.selectbox("Hold", teams, index=default_idx)
-        else:
-            t_sel = st.selectbox("Hold", ["Der er ingen data at vise"], index=0)
+        if not df_all.empty:
+            df_all['KLUB_NAVN'] = None
 
     st.markdown("---")
 
-    if df_all.empty or not teams or t_sel == "Der er ingen data at vise":
-        st.warning("Ingen data at vise for den valgte sæson/turnering.")
-        return
-
-    df_team = df_all[df_all['KLUB_NAVN'] == t_sel].copy()
+    # Filtrer data for det valgte hold
+    df_team = df_all[df_all['KLUB_NAVN'] == t_sel].copy() if not df_all.empty and 'KLUB_NAVN' in df_all.columns else pd.DataFrame()
 
     if df_team.empty:
-        st.warning(f"Der er ingen data at vise for {t_sel} i den valgte turnering.")
+        st.warning(f"Der er ingen data at vise for {t_sel} i den valgte sæson/turnering.")
         return
 
     df_team['X_M'] = df_team['EVENT_X'].apply(lambda x: to_metric(x, 105))
