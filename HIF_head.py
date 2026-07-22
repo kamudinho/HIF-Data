@@ -34,17 +34,15 @@ def apply_custom_style():
     """, unsafe_allow_html=True)
 
 def resolve_team_name(uuid_str, raw_name=""):
-    """Sikker opslag af holdnavn uanset casing og sprogvariationer (f.eks. Vendsyssel FF)."""
+    """Sikker opslag af holdnavn uanset casing og sprogvariationer."""
     if not uuid_str:
         return raw_name
     uuid_clean = str(uuid_str).strip().upper()
     
-    # 1. Tjek i TEAMS mappen
     for t_name, t_info in TEAMS.items():
         if str(t_info.get('opta_uuid', '')).strip().upper() == uuid_clean:
             return t_name
             
-    # 2. Rengør Optas eget rå navn som fallback
     if raw_name:
         clean_raw = raw_name.replace("FF", "").replace("IF", "").strip()
         for t_name in TEAMS.keys():
@@ -56,8 +54,6 @@ def resolve_team_name(uuid_str, raw_name=""):
 
 def get_opta_queries(calendar_uuid, hif_uuid):
     DB = "KLUB_HVIDOVREIF.AXIS"
-    
-    # Hvis der ikke er en specifik calendar_uuid (f.eks. ved fallback til seneste kampe), henter vi fra hele tabellen
     calendar_filter = f"WHERE TOURNAMENTCALENDAR_OPTAUUID = '{calendar_uuid}'" if calendar_uuid else ""
 
     return {"opta_team_stats": f"""
@@ -232,7 +228,7 @@ def vis_side():
         if 'MATCH_DATE_FULL' in df_matches.columns:
             df_matches['MATCH_DATE_FULL'] = pd.to_datetime(df_matches['MATCH_DATE_FULL'], errors='coerce').dt.tz_localize(None)
 
-    # 2. Hent stats (Hvis 2026/2027 endnu ikke har stats, henter vi seneste tilgængelige kampe så graferne kan vises)
+    # 2. Hent stats (fallback til seneste spillet, hvis 2026/2027 endnu ikke har afviklede kampe)
     queries = get_opta_queries(calendar_uuid, HIF_UUID)
     df_stats = conn.query(queries["opta_team_stats"])
     df_stats.columns = [str(c).upper() for c in df_stats.columns]
@@ -242,9 +238,9 @@ def vis_side():
         df_stats = conn.query(fallback_queries["opta_team_stats"])
         df_stats.columns = [str(c).upper() for c in df_stats.columns]
 
-    col1, col2, col3 = st.columns([1, 1, 1])
+    # --- SEKTION 1: NÆSTE MODSTANDER OG STILLING ---
+    col1, col2 = st.columns([1, 2])
 
-    # --- COL 1: NÆSTE MODSTANDER ---
     with col1:
         with st.container(border=True):
             st.markdown("<div class='card-title'><span>NÆSTE MODSTANDER</span></div>", unsafe_allow_html=True)
@@ -282,7 +278,6 @@ def vis_side():
             else:
                 st.caption(f"Afventer næste kamp for sæson {active_season}")
 
-    # --- COL 2: STILLING ---
     with col2:
         with st.container(border=True):
             st.markdown(f'<div class="card-title"><span>STILLING ({active_comp.upper()})</span></div>', unsafe_allow_html=True)
@@ -300,14 +295,9 @@ def vis_side():
             else:
                 st.caption("Ingen stillingsdata fundet.")
 
-    # --- COL 3: SCOUTING ---
-    with col3:
-        with st.container(border=True):
-            st.markdown('<div class="card-title"><span>SCOUTING</span></div>', unsafe_allow_html=True)
-
+    # --- SEKTION 2: HVIDOVRE IF vs. LIGA (TABEL + TRENDGRAFER) ---
     main_col, trend_area = st.columns([1, 2])
 
-    # --- VS LIGA STATS ---
     with main_col:
         with st.container(border=True):
             st.markdown('<div class="card-title"><span>HVIDOVRE IF vs. LIGA</span></div>', unsafe_allow_html=True)
@@ -322,7 +312,6 @@ def vis_side():
                 html += "</tbody></table>"
                 st.markdown(html, unsafe_allow_html=True)
 
-    # --- GRAFER (TRENDS) ---
     with trend_area:
         hif_recent = df_stats[((df_stats['CONTESTANTHOME_OPTAUUID'].str.upper() == HIF_UUID) | (df_stats['CONTESTANTAWAY_OPTAUUID'].str.upper() == HIF_UUID)) & (df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False))].sort_values('MATCH_DATE_FULL', ascending=True).tail(10).copy()
         
