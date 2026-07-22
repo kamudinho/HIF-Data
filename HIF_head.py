@@ -286,9 +286,9 @@ def vis_side():
                 # Vis ekstra metadata (Stadion, Dommer, Runde)
                 meta_html = f"""
                 <div style='font-size: 11px; color: #555; margin-bottom: 8px; line-height: 1.4;'>
-                    📍 <b>Stadion:</b> {venue}<br>
-                    🛡️ <b>Runde:</b> Spillerunde {round_week}<br>
-                     whistles <b>Dommer:</b> {ref_name if ref_name else 'Ikke oplyst'}
+                    <b>Stadion:</b> {venue}<br>
+                    <b>Runde:</b> Spillerunde {round_week}<br>
+                    <b>Dommer:</b> {ref_name if ref_name else 'Ikke oplyst'}
                 </div>
                 """
                 st.markdown(meta_html, unsafe_allow_html=True)
