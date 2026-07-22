@@ -144,47 +144,47 @@ def draw_h2h_chart(team1_name, team2_name, metrics, labels, df_wy, chart_key):
             yaxis=f"y{suffix}"
         ))
         
-        # Kategori-label placeres under logoerne (y=-0.28)
+        # Kategori-teksten placeres nu i TOPPEN (y=1.18)
         fig.add_annotation(dict(
-            x=0.5, y=-0.28, 
+            x=0.5, y=1.18, 
             xref=f"x{suffix} domain", 
             yref=f"y{suffix} domain", 
             text=f"<b>{labels[i]}</b>", 
-            showarrow=False
+            showarrow=False,
+            font=dict(size=13)
         ))
         
-        # Tilføj logo for Hold 1 under venstre søjle
+        # Logoer placeres direkte under søjlerne (y=-0.15)
         if logo1_url:
             images.append(dict(
                 source=logo1_url,
                 xref=f"x{suffix}", yref=f"y{suffix} domain",
-                x=0, y=-0.12,
-                sizex=0.35, sizey=0.15,
+                x=0, y=-0.15,
+                sizex=0.35, sizey=0.20,
                 xanchor="center", yanchor="top"
             ))
             
-        # Tilføj logo for Hold 2 under højre søjle
         if logo2_url:
             images.append(dict(
                 source=logo2_url,
                 xref=f"x{suffix}", yref=f"y{suffix} domain",
-                x=1, y=-0.12,
-                sizex=0.35, sizey=0.15,
+                x=1, y=-0.15,
+                sizex=0.35, sizey=0.20,
                 xanchor="center", yanchor="top"
             ))
 
-        max_val = max(v1, v2, 1.0) * 1.25
+        max_val = max(v1, v2, 1.0) * 1.30
         
         fig.update_layout({
             f"xaxis{suffix}": dict(domain=[i*(col_width+gap), i*(col_width+gap)+col_width], showticklabels=False), 
             f"yaxis{suffix}": dict(visible=False, range=[0, max_val])
         })
     
-    # Tilføj logoerne til layoutet og skab lidt ekstra luft i bunden
+    # Justeret top- og bundmargin for at give plads til både overskrift og logoer
     fig.update_layout(
         images=images,
         height=420, 
-        margin=dict(t=40, b=80), 
+        margin=dict(t=60, b=60), 
         plot_bgcolor='rgba(0,0,0,0)', 
         showlegend=False
     )
