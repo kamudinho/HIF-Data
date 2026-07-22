@@ -180,16 +180,19 @@ def vis_side(dp=None):
             match_ids = tuple(df_res['MATCH_OPTAUUID'].tolist())
             m_ids_str = f"('{match_ids[0]}')" if len(match_ids) == 1 else str(match_ids)
             
-            # SQL: EVENTS WITH PLAYER JOIN
+            # SQL: EVENTS WITH PLAYER JOIN (BRUGER OPTA_MATCH_LINEUPS I STEDET FOR OPTA_PLAYERS)
             sql_all_h = f"""
                 SELECT 
                     e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, 
-                    TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME) as PLAYER_NAME, 
+                    TRIM(p.PLAYER_FIRSTNAME) || ' ' || TRIM(p.PLAYER_LASTNAME) as PLAYER_NAME, 
                     e.MATCH_OPTAUUID, e.EVENT_TIMESTAMP, e.EVENT_OUTCOME as OUTCOME,
                     LISTAGG(q.QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY q.QUALIFIER_QID) as QUALIFIERS
                 FROM {DB}.OPTA_EVENTS e
-                JOIN (SELECT DISTINCT PLAYER_OPTAUUID, FIRST_NAME, LAST_NAME FROM {DB}.OPTA_PLAYERS WHERE FIRST_NAME IS NOT NULL) p 
-                    ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
+                JOIN (
+                    SELECT DISTINCT PLAYER_OPTAUUID, PLAYER_FIRSTNAME, PLAYER_LASTNAME 
+                    FROM {DB}.OPTA_MATCH_LINEUPS 
+                    WHERE PLAYER_FIRSTNAME IS NOT NULL
+                ) p ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
                 LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
                 WHERE e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' 
                 AND e.MATCH_OPTAUUID IN {m_ids_str}
@@ -202,7 +205,7 @@ def vis_side(dp=None):
                 df_all_h['Action_Label'] = df_all_h.apply(get_action_label, axis=1)
                 df_all_h = df_all_h.dropna(subset=['Action_Label'])
 
-            # SQL: MÅL-SEKVENSER
+            # SQL: MÅL-SEKVENSER (BRUGER OPTA_MATCH_LINEUPS I STEDET FOR OPTA_PLAYERS)
             sql_seq = f"""
             WITH SeasonMatches AS (
                 SELECT MATCH_OPTAUUID, CONTESTANTHOME_NAME, CONTESTANTAWAY_NAME, 
@@ -218,7 +221,7 @@ def vis_side(dp=None):
                 AND MATCH_OPTAUUID IN (SELECT MATCH_OPTAUUID FROM SeasonMatches)
             )
             SELECT e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, 
-                   TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME) as PLAYER_NAME, 
+                   TRIM(p.PLAYER_FIRSTNAME) || ' ' || TRIM(p.PLAYER_LASTNAME) as PLAYER_NAME, 
                    e.EVENT_TIMESTAMP, e.MATCH_OPTAUUID,
                    m.MATCH_LOCALDATE, m.CONTESTANTHOME_NAME, m.CONTESTANTAWAY_NAME, 
                    m.CONTESTANTHOME_OPTAUUID, m.CONTESTANTAWAY_OPTAUUID,
@@ -226,8 +229,11 @@ def vis_side(dp=None):
                    tg.G_TIME as GOAL_TIME, tg.G_MIN as GOAL_MIN,
                    LISTAGG(q.QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY q.QUALIFIER_QID) as QUALIFIERS
             FROM {DB}.OPTA_EVENTS e
-            JOIN (SELECT DISTINCT PLAYER_OPTAUUID, FIRST_NAME, LAST_NAME FROM {DB}.OPTA_PLAYERS WHERE FIRST_NAME IS NOT NULL) p 
-                ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
+            JOIN (
+                SELECT DISTINCT PLAYER_OPTAUUID, PLAYER_FIRSTNAME, PLAYER_LASTNAME 
+                FROM {DB}.OPTA_MATCH_LINEUPS 
+                WHERE PLAYER_FIRSTNAME IS NOT NULL
+            ) p ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
             JOIN SeasonMatches m ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
             INNER JOIN TargetGoals tg ON e.MATCH_OPTAUUID = tg.MATCH_OPTAUUID
                 AND e.EVENT_TIMESTAMP >= DATEADD(second, -20, tg.G_TIME)
@@ -283,7 +289,7 @@ def vis_side(dp=None):
             .metric-row-wrapper { margin-top: -35px; margin-bottom: -25px; }
             .compact-divider { margin-top: -5px; margin-bottom: 5px; border-top: 1px solid #f0f2f6; }
             </style>
-            """, unsafe_allow_html=True)
+            """, unsafe_unsafe_html=True if 'unsafe_unsafe_html' in locals() else True)
 
         m_col1, m_spacer, m_col2 = st.columns([1.3, 0.1, 2.0])
         
