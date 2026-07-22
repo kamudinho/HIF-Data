@@ -146,8 +146,6 @@ def vis_side(dp=None):
         if not df_all.empty:
             df_all['KLUB_NAVN'] = None
 
-    st.markdown("---")
-
     df_team = df_all[df_all['KLUB_NAVN'] == t_sel].copy() if not df_all.empty and 'KLUB_NAVN' in df_all.columns else pd.DataFrame()
 
     if df_team.empty:
