@@ -125,16 +125,10 @@ def vis_side(dp=None):
         sæson_sel = st.selectbox("Sæson", list(SEASONS.keys()), index=0)
     
     with f_col2:
-        # Filtrer "Superliga" / "3F Superliga" fra de tilgængelige turneringer
         tilgængelige_turneringer = [t for t in SEASONS[sæson_sel].keys() if "superliga" not in t.lower()]
         if not tilgængelige_turneringer:
             tilgængelige_turneringer = list(SEASONS[sæson_sel].keys())
         turnering_sel = st.selectbox("Turnering", tilgængelige_turneringer, index=0)
-
-    all_teams = sorted(list(TEAMS.keys()))
-    with f_col3:
-        default_idx = all_teams.index("Hvidovre") if "Hvidovre" in all_teams else 0
-        t_sel = st.selectbox("Hold", all_teams, index=default_idx)
 
     aktuel_liga_uuid = SEASONS[sæson_sel][turnering_sel]
     df_all = load_league_data(aktuel_liga_uuid)
@@ -142,14 +136,30 @@ def vis_side(dp=None):
     if not df_all.empty and 'EVENT_CONTESTANT_OPTAUUID' in df_all.columns:
         uuid_to_name = {v['opta_uuid'].upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
         df_all['KLUB_NAVN'] = df_all['EVENT_CONTESTANT_OPTAUUID'].str.upper().map(uuid_to_name)
+        # Hent kun hold fra 1. division baseret på de hold der findes i det indlæste datasæt for rækken
+        teams = sorted([n for n in df_all['KLUB_NAVN'].unique() if pd.notna(n)])
     else:
         if not df_all.empty:
             df_all['KLUB_NAVN'] = None
+        teams = []
 
-    df_team = df_all[df_all['KLUB_NAVN'] == t_sel].copy() if not df_all.empty and 'KLUB_NAVN' in df_all.columns else pd.DataFrame()
+    with f_col3:
+        if teams:
+            default_idx = teams.index("Hvidovre") if "Hvidovre" in teams else 0
+            t_sel = st.selectbox("Hold", teams, index=default_idx)
+        else:
+            t_sel = st.selectbox("Hold", ["Der er ingen data at vise"], index=0)
+
+    st.markdown("---")
+
+    if df_all.empty or not teams or t_sel == "Der er ingen data at vise":
+        st.warning("Ingen data at vise for den valgte sæson/turnering.")
+        return
+
+    df_team = df_all[df_all['KLUB_NAVN'] == t_sel].copy()
 
     if df_team.empty:
-        st.warning(f"Der er ingen data at vise for {t_sel} i den valgte sæson/turnering.")
+        st.warning(f"Der er ingen data at vise for {t_sel} i den valgte turnering.")
         return
 
     df_team['X_M'] = df_team['EVENT_X'].apply(lambda x: to_metric(x, 105))
