@@ -19,7 +19,7 @@ def apply_custom_style():
             [data-testid="stHeaderBlockContainer"] h1 { display: none; }
             .stApp { background-color: #FFFFFF; }
             
-            /* Tving kolonner til at strække sig og bokse (border wrappers) til at fylde 100% i højden */
+            /* Tving kolonner og alle underliggende elementer til at strække sig 100% i højden */
             [data-testid="stHorizontalBlock"] {
                 display: flex;
                 align-items: stretch;
@@ -27,11 +27,13 @@ def apply_custom_style():
             [data-testid="stHorizontalBlock"] > div {
                 display: flex;
                 flex-direction: column;
+                flex: 1;
             }
             [data-testid="stHorizontalBlock"] [data-testid="stVerticalBlockBorderWrapper"] {
                 height: 100% !important;
                 display: flex;
                 flex-direction: column;
+                flex: 1;
             }
             [data-testid="stHorizontalBlock"] [data-testid="stVerticalBlockBorderWrapper"] > div {
                 flex: 1;
