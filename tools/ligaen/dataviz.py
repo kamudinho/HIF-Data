@@ -34,7 +34,6 @@ def load_data(periode, start, split, slut, calendar_uuid, wyid):
     conn = _get_snowflake_conn()
     db = "KLUB_HVIDOVREIF.AXIS"
     
-    # Dynamisk periode-filtrering
     if "Efterår" in periode:
         filter_sql = f"BETWEEN '{start}' AND '{split}'"
     elif "Forår" in periode:
@@ -42,7 +41,6 @@ def load_data(periode, start, split, slut, calendar_uuid, wyid):
     else:
         filter_sql = f"BETWEEN '{start}' AND '{slut}'"
 
-    # A. Opta Matchinfo (Dynamisk calendar_uuid)
     df_opta = pd.DataFrame()
     if calendar_uuid:
         df_opta = conn.query(f"""
@@ -51,7 +49,6 @@ def load_data(periode, start, split, slut, calendar_uuid, wyid):
             AND MATCH_DATE_FULL {filter_sql}
         """)
     
-    # B. Wyscout Performance (Dynamisk wyid)
     df_wy = pd.DataFrame()
     if wyid:
         df_wy = conn.query(f"""
@@ -68,7 +65,6 @@ def load_data(periode, start, split, slut, calendar_uuid, wyid):
             GROUP BY tm.TEAM_WYID
         """)
     
-    # C. Second Spectrum
     df_ss = conn.query(f"""
         WITH BASE AS (
             SELECT m.HOME_OPTAID as TEAM_ID, ps.DISTANCE, ps."HIGH SPEED RUNNING" as HSR
@@ -88,11 +84,8 @@ def load_data(periode, start, split, slut, calendar_uuid, wyid):
     return df_opta, df_wy, df_ss
 
 def calculate_split_table(df_opta, valgt_saeson, valgt_turnering):
-    """Beregner tabel. Initialiserer med alle hold fra team_mapping hvis få/ingen kampe er spillet."""
     def get_points(df):
         stats = {}
-        
-        # Opret alle forventede hold fra team_mapping først
         forventede_hold = SEASON_LEAGUE_MAPPER.get(valgt_saeson, {}).get(valgt_turnering, [])
         for h_navn in forventede_hold:
             info = TEAMS.get(h_navn, {})
@@ -139,11 +132,21 @@ def draw_position_performance_chart(df_merged, metric, label, periode_tekst):
     fig = go.Figure()
     df_merged[metric] = pd.to_numeric(df_merged[metric], errors='coerce')
     
+    # Tjek om vi har rigtige data, eller om der slet ingen data er endnu
     y_vals = df_merged[metric].dropna()
-    y_min = y_vals.min() if not y_vals.empty else 0
-    y_max = y_vals.max() if not y_vals.empty else 1
-    y_span = y_max - y_min if y_max != y_min else 1
-    
+    has_data = not y_vals.empty
+
+    if has_data:
+        y_min = y_vals.min()
+        y_max = y_vals.max()
+        y_span = y_max - y_min if y_max != y_min else 1.0
+        y_range = None
+    else:
+        # Ingen data endnu: sæt alle y-værdier til 0.0 så de står på en lige linje
+        df_merged[metric] = 0.0
+        y_span = 1.0
+        y_range = [-0.5, 0.5]  # Fast låst akse så linjen placerer sig pænt i midten
+
     is_reversed = "PPDA" in label.upper() or "IMOD" in label.upper()
 
     for _, row in df_merged.iterrows():
@@ -153,22 +156,36 @@ def draw_position_performance_chart(df_merged, metric, label, periode_tekst):
                 source=b64_logo, xref="x", yref="y",
                 x=row['#'], y=row[metric],
                 sizex=0.5, 
-                sizey=y_span * 0.35,
+                sizey=y_span * 0.35 if has_data else 0.3,
                 xanchor="center", 
-                yanchor="top" if is_reversed else "bottom"
+                yanchor="middle" if not has_data else ("top" if is_reversed else "bottom")
             ))
 
+    # Scatter trace til hover-effekt og positionering
     fig.add_trace(go.Scatter(
         x=df_merged['#'], y=df_merged[metric], mode='markers',
         marker=dict(size=45, opacity=0), 
         hovertext=df_merged['HOLD_NAVN'],
-        hovertemplate="<b>%{hovertext}</b><br>Placering: %{x}<br>"+label+": %{y:.2f}<extra></extra>"
+        hovertemplate="<b>%{hovertext}</b><br>Placering: %{x}<br>" + 
+                      (f"{label}: %{{y:.2f}}" if has_data else "Ingen data endnu") + "<extra></extra>"
     ))
+
+    # Konfigurer Y-akse med hensyntagen til om der er data eller ej
+    yaxis_config = dict(
+        title=f"<b>{label}</b>", 
+        gridcolor="#f0f0f0", 
+        linecolor='black'
+    )
+    if has_data:
+        yaxis_config['autorange'] = "reversed" if is_reversed else True
+    else:
+        yaxis_config['range'] = y_range
+        yaxis_config['showticklabels'] = False  # Skjul y-værdierne (f.eks. 0.0) når der ikke er data
 
     fig.update_layout(
         height=600, margin=dict(t=50, b=60, l=60, r=40),
         xaxis=dict(title="<b>Placering</b>", tickmode='linear', range=[0.4, 12.6], gridcolor="#f0f0f0", linecolor='black'),
-        yaxis=dict(title=f"<b>{label}</b>", gridcolor="#f0f0f0", autorange="reversed" if is_reversed else True, linecolor='black'),
+        yaxis=yaxis_config,
         plot_bgcolor='white',
         annotations=[dict(
             x=1, y=1.04, xref='paper', yref='paper',
@@ -182,19 +199,16 @@ def draw_position_performance_chart(df_merged, metric, label, periode_tekst):
 # --- 3. HOVEDFUNKTION ---
 
 def vis_side():
-    # Dynamiske start- og slutår ud fra DEFAULT_SEASON (f.eks. "2025/2026")
     y_start = DEFAULT_SEASON.split('/')[0] if '/' in DEFAULT_SEASON else "2025"
-    y_end = f"{DEFAULT_SEASON.split('/')[1]}" if '/' in DEFAULT_SEASON else "2026"
+    y_end = f"20{DEFAULT_SEASON.split('/')[1]}" if '/' in DEFAULT_SEASON else "2026"
 
     start_dato = f"{y_start}-07-01"
     split_dato = f"{y_start}-12-31" 
     slut_dato = f"{y_end}-06-30"
 
-    # Opta Calendar UUID og Wyscout ID slås dynamisk op
     calendar_uuid = SEASONS.get(DEFAULT_SEASON, {}).get(DEFAULT_COMP)
     wyid = COMPETITIONS.get(DEFAULT_COMP, {}).get("wyid", 328)
 
-    # --- TOP MENU MED DROPDOWNS TIL HØJRE ---
     col_title, col_m, col_p = st.columns([2.0, 1.0, 1.0])
     
     with col_m:
@@ -223,7 +237,6 @@ def vis_side():
         st.subheader(DEFAULT_COMP)
         st.caption("Placering vs. Performance")
 
-    # Data load og filtrering med dynamiske IDs
     df_opta, df_wy, df_ss = load_data(periode, start_dato, split_dato, slut_dato, calendar_uuid, wyid)
     
     if df_opta is not None and not df_opta.empty:
@@ -231,7 +244,6 @@ def vis_side():
 
     df_liga = calculate_split_table(df_opta, DEFAULT_SEASON, DEFAULT_COMP)
     
-    # Opbygning af det endelige performance data-grundlag
     final_data = []
     for _, row in df_liga.iterrows():
         opt_uuid = row['OPTA_UUID']
@@ -263,7 +275,6 @@ def vis_side():
 
     df_final = pd.DataFrame(final_data)
     
-    # Kalder grafen med de korrekte værdier
     draw_position_performance_chart(df_final, metric_map[sel_metric], sel_metric, tekst_beskrivelse)
 
 if __name__ == "__main__":
