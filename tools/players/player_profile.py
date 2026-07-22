@@ -63,7 +63,6 @@ def get_team_color(team_name, color_type="primary", default="#df003b"):
     primary = found_colors.get("primary", default)
     secondary = found_colors.get("secondary", "#000000")
     
-    # Hvid farve-håndtering: Brug sekundærfarve hvis primær er hvid
     if color_type == "primary" and primary.lower() in ["#ffffff", "white", "#fff"]:
         return secondary
         
@@ -180,7 +179,6 @@ def vis_side(dp=None):
 
     col_spacer_top, col_h_hold, col_h_spiller = st.columns([2, 1.2, 1.2])
     
-    # Sørg for at Hvidovre som standard er valgt eller øverst hvis muligt
     default_team_idx = 0
     team_names = sorted(list(team_map.keys()))
     for idx, name in enumerate(team_names):
@@ -192,10 +190,9 @@ def vis_side(dp=None):
     valgt_uuid_hold = team_map[valgt_hold]
     hold_logo = get_logo_img(valgt_uuid_hold)
     
-    # Hent holdfarver (dynamisk med hvidovre-fallback)
     primær_farve = get_team_color(valgt_hold, "primary", "#df003b")
 
-    # 2. HENT DATA
+    # 2. HENT DATA (Med OPTA_MATCH_LINEUPS i stedet for OPTA_PLAYERS)
     with st.spinner("Henter spillerdata..."):
         sql_events = f"""
             SELECT 
@@ -205,7 +202,7 @@ def vis_side(dp=None):
                 TO_CHAR(e.EVENT_TIMESTAMP, 'YYYY-MM-DD HH24:MI:SS') as EVENT_TIMESTAMP_STR,
                 LISTAGG(q.QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY q.QUALIFIER_QID) as QUALIFIERS
             FROM {DB}.OPTA_EVENTS e
-            JOIN (SELECT DISTINCT PLAYER_OPTAUUID, FIRST_NAME, LAST_NAME FROM {DB}.OPTA_PLAYERS WHERE FIRST_NAME IS NOT NULL) p 
+            JOIN (SELECT DISTINCT PLAYER_OPTAUUID, FIRST_NAME, LAST_NAME FROM {DB}.OPTA_MATCH_LINEUPS WHERE FIRST_NAME IS NOT NULL) p 
                 ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
             LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
             WHERE e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid_hold}' 
@@ -245,7 +242,7 @@ def vis_side(dp=None):
                     TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME) as VISNINGSNAVN,
                     LISTAGG(q.QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY q.QUALIFIER_QID) as QUALIFIERS
                 FROM {DB}.OPTA_EVENTS e
-                JOIN {DB}.OPTA_PLAYERS p ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
+                JOIN {DB}.OPTA_MATCH_LINEUPS p ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
                 LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
                 WHERE e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid_hold}'
                   AND e.EVENT_TIMESTAMP >= '2025-07-01'
