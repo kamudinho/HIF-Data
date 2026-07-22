@@ -220,7 +220,7 @@ def vis_side():
     active_comp = DEFAULT_COMP
     calendar_uuid = SEASONS.get(active_season, {}).get(active_comp)
 
-    # 1. Hent kampprogram for 2026/2027
+    # 1. Hent kampprogram for den valgte sæson
     df_matches = pd.DataFrame()
     if calendar_uuid:
         df_matches = conn.query(f"SELECT * FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = '{calendar_uuid}'")
@@ -228,7 +228,7 @@ def vis_side():
         if 'MATCH_DATE_FULL' in df_matches.columns:
             df_matches['MATCH_DATE_FULL'] = pd.to_datetime(df_matches['MATCH_DATE_FULL'], errors='coerce').dt.tz_localize(None)
 
-    # 2. Hent stats (fallback til seneste spillet, hvis 2026/2027 endnu ikke har afviklede kampe)
+    # 2. Hent stats (fallback til seneste spillet, hvis sæsonen ikke har afviklede kampe endnu)
     queries = get_opta_queries(calendar_uuid, HIF_UUID)
     df_stats = conn.query(queries["opta_team_stats"])
     df_stats.columns = [str(c).upper() for c in df_stats.columns]
@@ -238,9 +238,10 @@ def vis_side():
         df_stats = conn.query(fallback_queries["opta_team_stats"])
         df_stats.columns = [str(c).upper() for c in df_stats.columns]
 
-    # --- SEKTION 1: NÆSTE MODSTANDER OG STILLING ---
-    col1, col2 = st.columns([1, 2])
+    # --- TOPSEKTION: 3 KOLONNER ---
+    col1, col2, col3 = st.columns([1, 1, 1])
 
+    # KOLONNE 1: NÆSTE MODSTANDER
     with col1:
         with st.container(border=True):
             st.markdown("<div class='card-title'><span>NÆSTE MODSTANDER</span></div>", unsafe_allow_html=True)
@@ -278,7 +279,23 @@ def vis_side():
             else:
                 st.caption(f"Afventer næste kamp for sæson {active_season}")
 
+    # KOLONNE 2: HVIDOVRE IF vs. LIGA (TABEL)
     with col2:
+        with st.container(border=True):
+            st.markdown('<div class="card-title"><span>HVIDOVRE IF vs. LIGA</span></div>', unsafe_allow_html=True)
+            df_stats_comp = beregn_per_90(df_stats, HIF_UUID)
+            if df_stats_comp is not None:
+                opp_navn = df_stats_comp.iloc[0]['Opponent']
+                opp_header = f"vs. {opp_navn}"
+                html = f"<table class='stats-table'><thead><tr><th></th><th>{opp_header}</th><th>HIF</th><th>Liga</th><th>Diff</th></tr></thead><tbody>"
+                for _, r in df_stats_comp.iterrows():
+                    diff_color = "#28a745" if r['Diff'] > 0 else "#dc3545"
+                    html += f"<tr><td class='stats-label'>{r['Stat']}</td><td class='stats-value'>{r['Seneste']:.0f}</td><td class='stats-value'>{r['HIF']:.2f}</td><td class='stats-value'>{r['Liga']:.2f}</td><td class='stats-value' style='color:{diff_color}; font-weight:800;'>{r['Diff']:+.2f}</td></tr>"
+                html += "</tbody></table>"
+                st.markdown(html, unsafe_allow_html=True)
+
+    # KOLONNE 3: STILLING
+    with col3:
         with st.container(border=True):
             st.markdown(f'<div class="card-title"><span>STILLING ({active_comp.upper()})</span></div>', unsafe_allow_html=True)
             
@@ -295,24 +312,9 @@ def vis_side():
             else:
                 st.caption("Ingen stillingsdata fundet.")
 
-    # --- SEKTION 2: HVIDOVRE IF vs. LIGA (TABEL + TRENDGRAFER) ---
-    main_col, trend_area = st.columns([1, 2])
-
-    with main_col:
-        with st.container(border=True):
-            st.markdown('<div class="card-title"><span>HVIDOVRE IF vs. LIGA</span></div>', unsafe_allow_html=True)
-            df_stats_comp = beregn_per_90(df_stats, HIF_UUID)
-            if df_stats_comp is not None:
-                opp_navn = df_stats_comp.iloc[0]['Opponent']
-                opp_header = f"vs. {opp_navn}"
-                html = f"<table class='stats-table'><thead><tr><th></th><th>{opp_header}</th><th>HIF</th><th>Liga</th><th>Diff</th></tr></thead><tbody>"
-                for _, r in df_stats_comp.iterrows():
-                    diff_color = "#28a745" if r['Diff'] > 0 else "#dc3545"
-                    html += f"<tr><td class='stats-label'>{r['Stat']}</td><td class='stats-value'>{r['Seneste']:.0f}</td><td class='stats-value'>{r['HIF']:.2f}</td><td class='stats-value'>{r['Liga']:.2f}</td><td class='stats-value' style='color:{diff_color}; font-weight:800;'>{r['Diff']:+.2f}</td></tr>"
-                html += "</tbody></table>"
-                st.markdown(html, unsafe_allow_html=True)
-
-    with trend_area:
+    # --- BUNDSEKTION: TRENDGRAFER (UNDER DE 3 KOLONNER) ---
+    with st.container(border=True):
+        st.markdown('<div class="card-title"><span>PRESTATIONS-TRENDS</span></div>', unsafe_allow_html=True)
         hif_recent = df_stats[((df_stats['CONTESTANTHOME_OPTAUUID'].str.upper() == HIF_UUID) | (df_stats['CONTESTANTAWAY_OPTAUUID'].str.upper() == HIF_UUID)) & (df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False))].sort_values('MATCH_DATE_FULL', ascending=True).tail(10).copy()
         
         if not hif_recent.empty:
@@ -334,14 +336,18 @@ def vis_side():
             liga_indices = played.apply(lambda row: beregn_kategori_indices(row, "DUMMY_UUID"), axis=1)
             liga_means = liga_indices.mean()
             
-            r1_c1, r1_c2 = st.columns(2)
-            r2_c1, r2_c2 = st.columns(2)
-            categories = [("OFFENSIV", "Offensiv", "xG, Skud, Touches", r1_c1), ("DEFENSIV", "Defensiv", "Mål imod, tacklinger", r2_c1), ("OFF. STD", "Off_Std", "Hjørnespark", r1_c2), ("DEF. STD", "Def_Std", "Hjørnespark", r2_c2)]
+            r1_c1, r1_c2, r2_c1, r2_c2 = st.columns(4)
+            categories = [
+                ("OFFENSIV", "Offensiv", "xG, Skud, Touches", r1_c1), 
+                ("DEFENSIV", "Defensiv", "Mål imod, tacklinger", r1_c2), 
+                ("OFF. STD", "Off_Std", "Hjørnespark", r2_c1), 
+                ("DEF. STD", "Def_Std", "Hjørnespark", r2_c2)
+            ]
             
             for title, col, desc, target in categories:
                 with target:
-                    st.markdown(f"<div style='font-weight:700; font-size:14px; margin-bottom:0px;'>{title}</div>", unsafe_allow_html=True)
-                    st.caption(f"<div style='margin-top:-5px;'>{desc}</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div style='font-weight:700; font-size:12px; margin-bottom:0px;'>{title}</div>", unsafe_allow_html=True)
+                    st.caption(f"<div style='margin-top:-5px; font-size:10px;'>{desc}</div>", unsafe_allow_html=True)
                     hif_avg = hif_recent[col].mean()
                     hif_recent['tooltip_header'] = hif_recent.apply(lambda r: f"vs. {r['OPPONENT_NAME']} {int(r['TOTAL_HOME_SCORE'])}-{int(r['TOTAL_AWAY_SCORE'])} ({r['HOME_OR_AWAY']})", axis=1)
                     hif_recent['diff_label'] = hif_recent[col].apply(lambda x: f"{x - hif_avg:+.1f}")
