@@ -6,7 +6,6 @@ import plotly.graph_objects as go
 from data.utils.team_mapping import (
     SEASONS,
     COMPETITIONS,
-    SEASON_LEAGUE_MAPPER,
     TEAMS,
     TEAM_COLORS,
     COMPETITION_NAME as DEFAULT_COMP,
@@ -64,7 +63,6 @@ def beregn_tabel(df_matches):
 # --- 2. GRAFER OG H2H ---
 
 def get_team_color(team_name, color_type="primary", default="#0056a3"):
-    """Henter klubfarver dynamisk fra TEAM_COLORS."""
     for key, colors in TEAM_COLORS.items():
         if key.lower() in team_name.lower() or team_name.lower() in key.lower():
             return colors.get(color_type, default)
@@ -145,12 +143,12 @@ def render_kamp_boks(kamp):
     </div>
     """, unsafe_allow_html=True)
 
-# --- 4. DYNAMISK DATA LOADING ---
+# --- 4. DATA LOADING (MED DYNAMISK OPSLAG FRA TEAM_MAPPING) ---
 
 @st.cache_data(ttl=3600)
 def load_liga_data(opta_calendar_uuid):
-    """Henter Opta-kampe dynamisk baseret på den valgte sæsons Opta Calendar UUID."""
-    if not opta_calendar_uuid or "dummy" in opta_calendar_uuid:
+    """Henter Opta-kampe dynamisk baseret på Opta Calendar UUID."""
+    if not opta_calendar_uuid:
         return pd.DataFrame()
         
     conn = _get_snowflake_conn()
@@ -163,7 +161,7 @@ def load_liga_data(opta_calendar_uuid):
 
 @st.cache_data(ttl=3600)
 def get_wyscout_stats(competition_wyid):
-    """Henter Wyscout-statistikker baseret på turneringens Wyscout ID."""
+    """Henter Wyscout-statistikker dynamisk baseret på Wyscout Competition ID."""
     conn = _get_snowflake_conn()
     db = "KLUB_HVIDOVREIF.AXIS"
     query = f"""
@@ -216,39 +214,22 @@ def render_kampe_dynamisk(df_opta, filter_uuids):
 # --- 5. HOVEDSIDE ---
 
 def vis_side():
-    # --- DYNAMIK FRA TEAM_MAPPING ---
-    st.sidebar.header("Turnering & Sæson")
-    
-    valgt_saeson = st.sidebar.selectbox(
-        "Vælg Sæson", 
-        options=list(SEASONS.keys()), 
-        index=list(SEASONS.keys()).index(DEFAULT_SEASON) if DEFAULT_SEASON in SEASONS else 0
-    )
-    
-    tilgaengelige_turneringer = list(SEASONS[valgt_saeson].keys())
-    valgt_turnering = st.sidebar.selectbox(
-        "Vælg Turnering", 
-        options=tilgaengelige_turneringer, 
-        index=tilgaengelige_turneringer.index(DEFAULT_COMP) if DEFAULT_COMP in tilgaengelige_turneringer else 0
-    )
+    # Henter ID'erne dynamisk ud fra den aktive sæson og turnering i team_mapping.py
+    calendar_uuid = SEASONS.get(DEFAULT_SEASON, {}).get(DEFAULT_COMP)
+    wyid = COMPETITIONS.get(DEFAULT_COMP, {}).get("wyid", 328)
 
-    # Slå UUID og WyId op direkte fra konfigurationen
-    calendar_uuid = SEASONS[valgt_saeson].get(valgt_turnering)
-    wyid = COMPETITIONS.get(valgt_turnering, {}).get("wyid", 328)
-
-    # Hent data
+    # Hent data med de dynamiske ID'er
     df_opta = load_liga_data(calendar_uuid)
     df_wy = get_wyscout_stats(wyid)
 
-    st.title(f"{valgt_turnering} ({valgt_saeson})")
+    st.title(DEFAULT_COMP)
 
     if df_opta.empty:
-        st.warning(f"Der blev ikke fundet kampe for {valgt_turnering} i sæsonen {valgt_saeson}.")
+        st.warning("Der blev ikke fundet nogen kampe.")
         return
 
     played = df_opta[df_opta['MATCH_STATUS'].str.lower().isin(['played', 'full-time', 'finished'])].sort_values('MATCH_DATE_FULL')
     
-    # Beregn grundspil / slutspil cutoff
     kamp_count = {}; cutoff_index = 0
     for i, row in played.iterrows():
         h, a = row['CONTESTANTHOME_OPTAUUID'], row['CONTESTANTAWAY_OPTAUUID']
@@ -280,17 +261,13 @@ def vis_side():
             render_kampe_dynamisk(played, bund6)
             
     with t_h2h:
-        # Hent hold dynamisk fra den valgte sæson/turnering eller tabellen
-        saesons_hold = SEASON_LEAGUE_MAPPER.get(valgt_saeson, {}).get(valgt_turnering, [])
-        if not saesons_hold:
-            saesons_hold = sorted(gs_df['HOLD'].tolist()) if not gs_df.empty else []
-
-        if len(saesons_hold) >= 2:
+        alle_hold = sorted(gs_df['HOLD'].tolist()) if not gs_df.empty else []
+        if len(alle_hold) >= 2:
             c1, c2 = st.columns(2)
-            default_hvidovre_idx = next((i for i, h in enumerate(saesons_hold) if "hvidovre" in h.lower()), 0)
+            default_hvidovre_idx = next((i for i, h in enumerate(alle_hold) if "hvidovre" in h.lower()), 0)
             
-            t1 = c1.selectbox("Hold 1", saesons_hold, index=default_hvidovre_idx)
-            t2_options = [h for h in saesons_hold if h != t1]
+            t1 = c1.selectbox("Hold 1", alle_hold, index=default_hvidovre_idx)
+            t2_options = [h for h in alle_hold if h != t1]
             t2 = c2.selectbox("Hold 2", t2_options, index=0)
             
             tabs = st.tabs(["Generelt", "xG Stats", "Afslutninger", "Defensivt", "Spilopbygning"])
@@ -299,8 +276,6 @@ def vis_side():
             with tabs[2]: draw_h2h_chart(t1, t2, ['SHOTSONTARGET', 'SHOTSBLOCKED', 'SHOTSFROMBOX', 'SHOTSFROMDANGERZONE'], ['På mål', 'Blokeret', 'I feltet', 'Danger Zone'], df_wy, "shot")
             with tabs[3]: draw_h2h_chart(t1, t2, ['INTERCEPTIONS', 'TACKLES', 'CLEARANCES'], ['Interc.', 'Tackler', 'Clearing'], df_wy, "def")
             with tabs[4]: draw_h2h_chart(t1, t2, ['PASSES', 'CROSSESTOTAL', 'PROGRESSIVEPASSES', 'PASSTOFINALTHIRDS'], ['Aflev.', 'Indlæg', 'Progr.', 'Sidste 1/3'], df_wy, "pass")
-        else:
-            st.info("Der er ikke tilstrækkeligt med hold til at lave en H2H sammenligning.")
 
 if __name__ == "__main__":
     st.markdown("<style>.league-table { width: 100%; border-collapse: collapse; }</style>", unsafe_allow_html=True)
