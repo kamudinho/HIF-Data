@@ -87,16 +87,20 @@ def calculate_split_table(df_opta, valgt_saeson, valgt_turnering):
     def get_points(df):
         stats = {}
         forventede_hold = SEASON_LEAGUE_MAPPER.get(valgt_saeson, {}).get(valgt_turnering, [])
+        
+        # Hent forventede hold og sorter dem alfabetisk som udgangspunkt
+        forventede_hold = sorted(forventede_hold)
+        
         for h_navn in forventede_hold:
             info = TEAMS.get(h_navn, {})
             u_id = info.get('opta_uuid', h_navn)
-            stats[u_id] = {'P': 0, 'MD': 0}
+            stats[u_id] = {'P': 0, 'MD': 0, 'NAME': h_navn}
 
         if df is not None and not df.empty:
             for _, row in df.iterrows():
                 h_uuid, a_uuid = row['CONTESTANTHOME_OPTAUUID'], row['CONTESTANTAWAY_OPTAUUID']
                 for uuid in [h_uuid, a_uuid]:
-                    if uuid not in stats: stats[uuid] = {'P': 0, 'MD': 0}
+                    if uuid not in stats: stats[uuid] = {'P': 0, 'MD': 0, 'NAME': 'Ukendt'}
                 h_g, a_g = int(row.get('TOTAL_HOME_SCORE', 0) or 0), int(row.get('TOTAL_AWAY_SCORE', 0) or 0)
                 stats[h_uuid]['MD'] += (h_g - a_g); stats[a_uuid]['MD'] += (a_g - h_g)
                 if h_g > a_g: stats[h_uuid]['P'] += 3
@@ -109,14 +113,15 @@ def calculate_split_table(df_opta, valgt_saeson, valgt_turnering):
     if df_opta is not None and not df_opta.empty and 'MATCH_STATUS' in df_opta.columns:
         df_played = df_opta[df_opta['MATCH_STATUS'].str.contains('Played|Full|Finish', case=False, na=False)].sort_values('MATCH_DATE_FULL')
     
+    # Sorter efter Point, Måldifference og til slut alfabetisk
     df_r22 = df_played.head(132) if not df_played.empty else df_played
-    tabel_r22 = get_points(df_r22).sort_values(['P', 'MD'], ascending=False)
+    tabel_r22 = get_points(df_r22).sort_values(['P', 'MD', 'NAME'], ascending=[False, False, True])
     top_6_uuids = tabel_r22.head(6)['OPTA_UUID'].tolist()
     
     tabel_nu = get_points(df_played)
     
-    top_6_final = tabel_nu[tabel_nu['OPTA_UUID'].isin(top_6_uuids)].sort_values(['P', 'MD'], ascending=False)
-    bund_6_final = tabel_nu[~tabel_nu['OPTA_UUID'].isin(top_6_uuids)].sort_values(['P', 'MD'], ascending=False)
+    top_6_final = tabel_nu[tabel_nu['OPTA_UUID'].isin(top_6_uuids)].sort_values(['P', 'MD', 'NAME'], ascending=[False, False, True])
+    bund_6_final = tabel_nu[~tabel_nu['OPTA_UUID'].isin(top_6_uuids)].sort_values(['P', 'MD', 'NAME'], ascending=[False, False, True])
     
     final_table = pd.concat([top_6_final, bund_6_final]).reset_index(drop=True)
     final_table['#'] = final_table.index + 1
@@ -132,7 +137,6 @@ def draw_position_performance_chart(df_merged, metric, label, periode_tekst):
     fig = go.Figure()
     df_merged[metric] = pd.to_numeric(df_merged[metric], errors='coerce')
     
-    # Tjek om vi har rigtige data, eller om der slet ingen data er endnu
     y_vals = df_merged[metric].dropna()
     has_data = not y_vals.empty
 
@@ -142,10 +146,10 @@ def draw_position_performance_chart(df_merged, metric, label, periode_tekst):
         y_span = y_max - y_min if y_max != y_min else 1.0
         y_range = None
     else:
-        # Ingen data endnu: sæt alle y-værdier til 0.0 så de står på en lige linje
+        # Ingen data endnu: placeres på flad linje i midten
         df_merged[metric] = 0.0
         y_span = 1.0
-        y_range = [-0.5, 0.5]  # Fast låst akse så linjen placerer sig pænt i midten
+        y_range = [-0.5, 0.5]
 
     is_reversed = "PPDA" in label.upper() or "IMOD" in label.upper()
 
@@ -161,7 +165,6 @@ def draw_position_performance_chart(df_merged, metric, label, periode_tekst):
                 yanchor="middle" if not has_data else ("top" if is_reversed else "bottom")
             ))
 
-    # Scatter trace til hover-effekt og positionering
     fig.add_trace(go.Scatter(
         x=df_merged['#'], y=df_merged[metric], mode='markers',
         marker=dict(size=45, opacity=0), 
@@ -170,7 +173,6 @@ def draw_position_performance_chart(df_merged, metric, label, periode_tekst):
                       (f"{label}: %{{y:.2f}}" if has_data else "Ingen data endnu") + "<extra></extra>"
     ))
 
-    # Konfigurer Y-akse med hensyntagen til om der er data eller ej
     yaxis_config = dict(
         title=f"<b>{label}</b>", 
         gridcolor="#f0f0f0", 
@@ -180,7 +182,7 @@ def draw_position_performance_chart(df_merged, metric, label, periode_tekst):
         yaxis_config['autorange'] = "reversed" if is_reversed else True
     else:
         yaxis_config['range'] = y_range
-        yaxis_config['showticklabels'] = False  # Skjul y-værdierne (f.eks. 0.0) når der ikke er data
+        yaxis_config['showticklabels'] = False
 
     fig.update_layout(
         height=600, margin=dict(t=50, b=60, l=60, r=40),
@@ -200,7 +202,7 @@ def draw_position_performance_chart(df_merged, metric, label, periode_tekst):
 
 def vis_side():
     y_start = DEFAULT_SEASON.split('/')[0] if '/' in DEFAULT_SEASON else "2025"
-    y_end = f"20{DEFAULT_SEASON.split('/')[1]}" if '/' in DEFAULT_SEASON else "2026"
+    y_end = f"{DEFAULT_SEASON.split('/')[1]}" if '/' in DEFAULT_SEASON else "2026"
 
     start_dato = f"{y_start}-07-01"
     split_dato = f"{y_start}-12-31" 
@@ -249,7 +251,7 @@ def vis_side():
         opt_uuid = row['OPTA_UUID']
         
         team_info = next((info for name, info in TEAMS.items() if info.get('opta_uuid') == opt_uuid), None)
-        team_name = next((name for name, info in TEAMS.items() if info.get('opta_uuid') == opt_uuid), "Ukendt")
+        team_name = next((name for name, info in TEAMS.items() if info.get('opta_uuid') == opt_uuid), row.get('NAME', "Ukendt"))
         
         if team_info:
             perf = df_wy[df_wy['TEAM_WYID'] == team_info.get('team_wyid')] if df_wy is not None and not df_wy.empty else pd.DataFrame()
