@@ -4,7 +4,7 @@ import numpy as np
 from mplsoccer import VerticalPitch
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
-from data.utils.team_mapping import TEAMS, TEAM_COLORS
+from data.utils.team_mapping import TEAMS, TEAM_COLORS, SEASONS, COMPETITIONS
 from data.data_load import _get_snowflake_conn
 from PIL import Image
 import requests
@@ -13,7 +13,6 @@ from io import BytesIO
 # --- KONFIGURATION (Hvidovre-app værdier) ---
 HIF_RED = '#cc0000'
 DB = "KLUB_HVIDOVREIF.AXIS"
-LIGA_UUID = "dyjr458hcmrcy87fsabfsy87o"
 
 # --- ZONE DEFINITIONER (105x68 m) ---
 P_L, P_W = 105.0, 68.0
@@ -38,12 +37,12 @@ ZONE_BOUNDARIES = {
 }
 
 @st.cache_data(ttl=3600)
-def load_league_data():
+def load_league_data(liga_uuid):
     conn = _get_snowflake_conn()
-    if not conn: return pd.DataFrame()
+    if not conn or not liga_uuid: return pd.DataFrame()
     
-    # Subquery til at finde de rigtige kampe
-    match_sql = f"SELECT DISTINCT MATCH_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'"
+    # Subquery til at finde de rigtige kampe baseret på dynamisk UUID
+    match_sql = f"SELECT DISTINCT MATCH_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = '{liga_uuid}'"
     
     # SQL med JOIN på OPTA_PLAYERS for at sammensætte fulde navne
     sql = f"""
@@ -109,8 +108,21 @@ def vis_side(dp=None):
     </style>
     """, unsafe_allow_html=True)
 
-    df_all = load_league_data()
-    if df_all.empty: return
+    # Dynamisk valg af sæson og turnering (hvis ikke sendes med via dp/session_state)
+    col_s1, col_s2 = st.columns(2)
+    with col_s1:
+        sæson_sel = st.selectbox("Sæson", list(SEASONS.keys()), index=0)
+    with col_s2:
+        tilgængelige_turneringer = list(SEASONS[sæson_sel].keys())
+        turnering_sel = st.selectbox("Turnering", tilgængelige_turneringer, index=0)
+
+    # Hent dynamisk UUID baseret på valg
+    aktuel_liga_uuid = SEASONS[sæson_sel][turnering_sel]
+
+    df_all = load_league_data(aktuel_liga_uuid)
+    if df_all.empty:
+        st.warning("Ingen data fundet for den valgte sæson/turnering.")
+        return
 
     uuid_to_name = {v['opta_uuid'].upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
     df_all['KLUB_NAVN'] = df_all['EVENT_CONTESTANT_OPTAUUID'].str.upper().map(uuid_to_name)
@@ -155,31 +167,28 @@ def vis_side(dp=None):
         df_display = pd.DataFrame(p_stats).sort_values("Konv.%", ascending=False)
         dynamic_height = (len(df_display) + 1) * 35 + 40
 
-        df_display = pd.DataFrame(p_stats).sort_values("Konv.%", ascending=False)
-    dynamic_height = (len(df_display) + 1) * 35 + 40
-
-    st.dataframe(
-        df_display,
-        use_container_width=True, 
-        hide_index=True,
-        height=dynamic_height,
-        column_config={
-            "Spiller": st.column_config.TextColumn(
-                "Spiller",
-                width="medium",  # Gør kolonnen markant bredere
-            ),
-            "DZ-Andel": st.column_config.ProgressColumn(
-                "DZ-Andel", 
-                help="Andel af skud foretaget i Danger Zone",
-                format="%d%%", 
-                min_value=0, 
-                max_value=100,
-                width="medium"
-            ),
-            "Konv.%": st.column_config.NumberColumn("Konv.%", format="%.1f%%", width="small"),
-            "DZ-Konv.%": st.column_config.NumberColumn("DZ-Konv.%", format="%.1f%%", width="small")
-        }
-    )
+        st.dataframe(
+            df_display,
+            use_container_width=True, 
+            hide_index=True,
+            height=dynamic_height,
+            column_config={
+                "Spiller": st.column_config.TextColumn(
+                    "Spiller",
+                    width="medium",
+                ),
+                "DZ-Andel": st.column_config.ProgressColumn(
+                    "DZ-Andel", 
+                    help="Andel af skud foretaget i Danger Zone",
+                    format="%d%%", 
+                    min_value=0, 
+                    max_value=100,
+                    width="medium"
+                ),
+                "Konv.%": st.column_config.NumberColumn("Konv.%", format="%.1f%%", width="small"),
+                "DZ-Konv.%": st.column_config.NumberColumn("DZ-Konv.%", format="%.1f%%", width="small")
+            }
+        )
         
     # TAB 1: AFSLUTNINGER
     with tabs[1]:
