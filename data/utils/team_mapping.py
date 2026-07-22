@@ -68,7 +68,9 @@ TEAMS = {
     "Aarhus Fremad": {"abbr": "AAF", "team_wyid": 7502, "opta_uuid": "bfwi3pjyg3whbn0tpsz19e8hq", "opta_id": 2290, "ssid": "cd08baf0-84c3-490a-9879-da4a55b8e645", "logo": "https://cdn5.wyscout.com/photos/team/public/g3686_120x120.png"},
     "B 93": {"abbr": "B93", "team_wyid": 7470, "opta_uuid": "ajtb177oqwawkdwbqhldmq6mx", "opta_id": 2935, "ssid": "e0bb5b5f-2df2-4fc4-854a-e537bd65a280", "logo": "https://cdn5.wyscout.com/photos/team/public/g620_120x120.png"},
     "Middelfart": {"abbr": "MIF", "team_wyid": 7578, "opta_uuid": "eq2jaitwsokibzx3wy7kb5gqp", "opta_id": 3050, "ssid": "c90bbc9d-d21c-4be0-a045-d41a633c6005", "logo": "https://cdn5.wyscout.com/photos/team/public/g11034_120x120.png"},
-    
+    "AB": {"abbr": "AB", "team_wyid": 7464, "opta_uuid": "1uovb0izovmuzdhoq7eyk3ou3", "opta_id": 2397, "ssid": "56fa29c7-3a48-4186-9d14-dbf45fbc78d9", "logo": "https://cdn5.wyscout.com/photos/team/public/2470_120x120.png"},
+    "Vendsyssel": {"abbr": "VEN", "team_wyid": 7488, "opta_uuid": "7gkglopz9cjsysn2u6sbhuvc5", "opta_id": 401, "ssid": "40d5387b-ac2f-4e9b-bb97-34456aeb69c4", "logo": "https://cdn5.wyscout.com/photos/team/public/2661_120x120.png"},
+
     # Superliga stamdata
     "FC København": {"abbr": "FCK", "team_wyid": 7452, "opta_uuid": "569_uuid_dummy", "opta_id": 569, "logo": "https://cdn5.wyscout.com/photos/team/public/284_120x120.png"},
     "FC Midtjylland": {"abbr": "FCM", "team_wyid": 7455, "opta_uuid": "1000_uuid_dummy", "opta_id": 1000, "logo": "https://cdn5.wyscout.com/photos/team/public/286_120x120.png"},
