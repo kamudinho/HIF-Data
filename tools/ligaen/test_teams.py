@@ -117,12 +117,21 @@ def draw_h2h_chart(team1_name, team2_name, metrics, labels, df_wy, chart_key):
 
     for i, m in enumerate(metrics):
         suffix = f"{i+1}" if i > 0 else ""
+        
+        # Hent værdier (afrundet til 2 decimaler hvis flydetal, ellers pænt formateret)
         v1 = float(d1[m.upper()].iloc[0]) if not d1.empty and m.upper() in d1.columns else 0.0
         v2 = float(d2[m.upper()].iloc[0]) if not d2.empty and m.upper() in d2.columns else 0.0
         
+        # Tekstformatering over søjlerne (undgår .0 hvis det er heltal)
+        txt1 = f"{v1:.2f}".rstrip('0').rstrip('.') if v1 % 1 != 0 else f"{int(v1)}"
+        txt2 = f"{v2:.2f}".rstrip('0').rstrip('.') if v2 % 1 != 0 else f"{int(v2)}"
+
         fig.add_trace(go.Bar(
             x=[0, 1], 
             y=[v1, v2], 
+            text=[txt1, txt2],                  # <-- Værdierne der skal vises
+            textposition='outside',             # <-- Placeres oven over søjlen
+            textfont=dict(size=12, color='black'),
             marker_color=[color1, color2], 
             width=0.7, 
             xaxis=f"x{suffix}", 
@@ -136,9 +145,13 @@ def draw_h2h_chart(team1_name, team2_name, metrics, labels, df_wy, chart_key):
             text=f"<b>{labels[i]}</b>", 
             showarrow=False
         ))
+        
+        # Y-aksens max justeres let op så teksten over søjlen ikke bliver skåret af
+        max_val = max(v1, v2, 1.0) * 1.25
+        
         fig.update_layout({
             f"xaxis{suffix}": dict(domain=[i*(col_width+gap), i*(col_width+gap)+col_width], showticklabels=False), 
-            f"yaxis{suffix}": dict(visible=False)
+            f"yaxis{suffix}": dict(visible=False, range=[0, max_val])
         })
     
     fig.update_layout(height=380, margin=dict(t=50, b=50), plot_bgcolor='rgba(0,0,0,0)', showlegend=False)
