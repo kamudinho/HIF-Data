@@ -255,6 +255,7 @@ def vis_side():
         col1, col2, col3 = st.columns([1, 1, 1])
 
         # KOLONNE 1: NÆSTE MODSTANDER
+        # KOLONNE 1: NÆSTE MODSTANDER
         with col1:
             st.markdown("<div class='card-title'><span>NÆSTE MODSTANDER</span></div>", unsafe_allow_html=True)
             
@@ -271,7 +272,26 @@ def vis_side():
                 opp_raw = nk['CONTESTANTAWAY_NAME'] if str(nk['CONTESTANTHOME_OPTAUUID']).upper() == HIF_UUID else nk['CONTESTANTHOME_NAME']
                 opp_name = resolve_team_name(opp_id, opp_raw)
                 
-                st.markdown(f"<div class='card-title' style='border:none; margin-top:0px; padding-bottom:0; font-size: 13px;'><span>vs. {opp_name.upper()}</span><span>{nk['MATCH_DATE_FULL'].strftime('%d/%m')}</span></div>", unsafe_allow_html=True)
+                # Udtræk ekstra detaljer fra rækken (nk)
+                match_date = nk['MATCH_DATE_FULL'].strftime('%d/%m/%Y') if pd.notnull(nk['MATCH_DATE_FULL']) else ""
+                match_time = nk.get('MATCH_LOCALTIME', '') or nk.get('MATCH_TIME', '')
+                venue = nk.get('VENUE_LONGNAME', 'Ukendt stadion')
+                round_week = nk.get('WEEK', '')
+                
+                # Dommer-eksempel (tjekker OFFICIAL1)
+                ref_name = f"{nk.get('OFFICIAL1_FIRSTNAME', '')} {nk.get('OFFICIAL1_LASTNAME', '')}".strip()
+                
+                st.markdown(f"<div class='card-title' style='border:none; margin-top:0px; padding-bottom:0; font-size: 13px;'><span>vs. {opp_name.upper()}</span><span>{match_date} kl. {match_time}</span></div>", unsafe_allow_html=True)
+                
+                # Vis ekstra metadata (Stadion, Dommer, Runde)
+                meta_html = f"""
+                <div style='font-size: 11px; color: #555; margin-bottom: 8px; line-height: 1.4;'>
+                    📍 <b>Stadion:</b> {venue}<br>
+                    🛡️ <b>Runde:</b> Spillerunde {round_week}<br>
+                     whistles <b>Dommer:</b> {ref_name if ref_name else 'Ikke oplyst'}
+                </div>
+                """
+                st.markdown(meta_html, unsafe_allow_html=True)
                 
                 hif_stats = beregn_hold_stats(df_stats, HIF_UUID)
                 opp_stats = beregn_hold_stats(df_stats, opp_id)
@@ -291,7 +311,7 @@ def vis_side():
                 st.markdown(stats_html, unsafe_allow_html=True)
             else:
                 st.caption(f"Afventer næste kamp for sæson {active_season}")
-
+                
         # KOLONNE 2: HVIDOVRE IF vs. LIGA
         with col2:
             st.markdown("<div class='card-title'><span>HVIDOVRE IF vs. LIGA</span></div>", unsafe_allow_html=True)
