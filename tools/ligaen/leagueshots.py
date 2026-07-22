@@ -130,25 +130,23 @@ def vis_side(dp=None):
             tilgængelige_turneringer = list(SEASONS[sæson_sel].keys())
         turnering_sel = st.selectbox("Turnering", tilgængelige_turneringer, index=0)
 
+    # Hent holdene dynamisk ud fra den valgte sæson og turnering via SEASON_LEAGUE_MAPPER
+    from data.utils.team_mapping import SEASON_LEAGUE_MAPPER
+    teams = SEASON_LEAGUE_MAPPER.get(sæson_sel, {}).get(turnering_sel, sorted(list(TEAMS.keys())))
+
+    with f_col3:
+        default_idx = teams.index("Hvidovre") if "Hvidovre" in teams else 0
+        t_sel = st.selectbox("Hold", teams, index=default_idx)
+
     aktuel_liga_uuid = SEASONS[sæson_sel][turnering_sel]
     df_all = load_league_data(aktuel_liga_uuid)
     
     if not df_all.empty and 'EVENT_CONTESTANT_OPTAUUID' in df_all.columns:
         uuid_to_name = {v['opta_uuid'].upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
         df_all['KLUB_NAVN'] = df_all['EVENT_CONTESTANT_OPTAUUID'].str.upper().map(uuid_to_name)
-        # Hent kun hold fra 1. division baseret på de hold der findes i det indlæste datasæt for rækken
-        teams = sorted([n for n in df_all['KLUB_NAVN'].unique() if pd.notna(n)])
     else:
         if not df_all.empty:
             df_all['KLUB_NAVN'] = None
-        teams = []
-
-    with f_col3:
-        if teams:
-            default_idx = teams.index("Hvidovre") if "Hvidovre" in teams else 0
-            t_sel = st.selectbox("Hold", teams, index=default_idx)
-        else:
-            t_sel = st.selectbox("Hold", ["Der er ingen data at vise"], index=0)
 
     st.markdown("---")
 
