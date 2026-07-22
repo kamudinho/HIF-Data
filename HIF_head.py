@@ -345,7 +345,7 @@ def vis_side():
 
     # --- BUNDSEKTION: TRENDGRAFER ---
     with st.container(border=True):
-        st.markdown('<div class="card-title"><span>PRESTATIONS-TRENDS</span></div>', unsafe_allow_html=True)
+        st.markdown('<div class="card-title"><span>PRÆSTATIONS-TRENDS (Seneste 10 kampe)</span></div>', unsafe_allow_html=True)
         hif_recent = df_stats[((df_stats['CONTESTANTHOME_OPTAUUID'].str.upper() == HIF_UUID) | (df_stats['CONTESTANTAWAY_OPTAUUID'].str.upper() == HIF_UUID)) & (df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False))].sort_values('MATCH_DATE_FULL', ascending=True).tail(10).copy()
         
         if not hif_recent.empty:
