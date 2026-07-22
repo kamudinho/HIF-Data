@@ -144,9 +144,9 @@ def draw_h2h_chart(team1_name, team2_name, metrics, labels, df_wy, chart_key):
             yaxis=f"y{suffix}"
         ))
         
-        # Kategori-teksten placeres nu i TOPPEN (y=1.18)
+        # Kategori-teksten placeres i TOPPEN
         fig.add_annotation(dict(
-            x=0.5, y=1.18, 
+            x=0.5, y=1.20, 
             xref=f"x{suffix} domain", 
             yref=f"y{suffix} domain", 
             text=f"<b>{labels[i]}</b>", 
@@ -154,23 +154,27 @@ def draw_h2h_chart(team1_name, team2_name, metrics, labels, df_wy, chart_key):
             font=dict(size=13)
         ))
         
-        # Logoer placeres direkte under søjlerne (y=-0.15)
+        # Logoer placeres under søjlerne - cliponaxis=False forhindrer at de bliver beskåret
         if logo1_url:
             images.append(dict(
                 source=logo1_url,
                 xref=f"x{suffix}", yref=f"y{suffix} domain",
-                x=0, y=-0.15,
-                sizex=0.35, sizey=0.20,
-                xanchor="center", yanchor="top"
+                x=0, y=-0.08,
+                sizex=0.40, sizey=0.22,
+                xanchor="center", yanchor="top",
+                sizexmode="scaled", sizeymode="scaled",
+                layer="above"
             ))
             
         if logo2_url:
             images.append(dict(
                 source=logo2_url,
                 xref=f"x{suffix}", yref=f"y{suffix} domain",
-                x=1, y=-0.15,
-                sizex=0.35, sizey=0.20,
-                xanchor="center", yanchor="top"
+                x=1, y=-0.08,
+                sizex=0.40, sizey=0.22,
+                xanchor="center", yanchor="top",
+                sizexmode="scaled", sizeymode="scaled",
+                layer="above"
             ))
 
         max_val = max(v1, v2, 1.0) * 1.30
@@ -180,11 +184,11 @@ def draw_h2h_chart(team1_name, team2_name, metrics, labels, df_wy, chart_key):
             f"yaxis{suffix}": dict(visible=False, range=[0, max_val])
         })
     
-    # Justeret top- og bundmargin for at give plads til både overskrift og logoer
+    # Øget height og margin i bunden giver fuld plads til logoerne
     fig.update_layout(
         images=images,
-        height=420, 
-        margin=dict(t=60, b=60), 
+        height=450, 
+        margin=dict(t=70, b=90, l=10, r=10), 
         plot_bgcolor='rgba(0,0,0,0)', 
         showlegend=False
     )
