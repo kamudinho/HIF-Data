@@ -304,8 +304,6 @@ def vis_side():
     df_opta = load_liga_data(calendar_uuid)
     df_wy = get_wyscout_stats(wyid)
 
-    st.title(DEFAULT_COMP)
-
     # Filtrer spillede kampe hvis der er data
     played = pd.DataFrame()
     if not df_opta.empty and 'MATCH_STATUS' in df_opta.columns:
