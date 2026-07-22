@@ -19,7 +19,7 @@ def apply_custom_style():
             [data-testid="stHeaderBlockContainer"] h1 { display: none; }
             .stApp { background-color: #FFFFFF; }
             
-            /* Tving kolonner og alle underliggende elementer til at strække sig 100% i højden */
+            /* Sørg for at kolonnerne strækker sig, så boksene deler samme højde */
             [data-testid="stHorizontalBlock"] {
                 display: flex;
                 align-items: stretch;
@@ -44,6 +44,19 @@ def apply_custom_style():
                 flex: 1;
                 display: flex;
                 flex-direction: column;
+            }
+
+            /* Fast højde og fast layout på selve boks-indholdet, så de tre bokse er fuldstændig identiske i størrelse */
+            .fixed-card-content {
+                height: 380px !important;
+                max-height: 380px !important;
+                display: flex;
+                flex-direction: column;
+                overflow: hidden;
+            }
+            .fixed-card-body {
+                flex: 1;
+                overflow-y: auto;
             }
 
             .stats-table { width: 100%; font-size: 11px; border-collapse: collapse; table-layout: auto; }
@@ -266,13 +279,18 @@ def vis_side():
         df_stats = conn.query(fallback_queries["opta_team_stats"])
         df_stats.columns = [str(c).upper() for c in df_stats.columns]
 
-    # --- TOPSEKTION: 3 KOLONNER (ENSTENS HØJDE FOR BOKSE) ---
+    # --- TOPSEKTION: 3 KOLONNER (FAST BOKS-HØJDE) ---
     col1, col2, col3 = st.columns([1, 1, 1])
 
     # KOLONNE 1: NÆSTE MODSTANDER
     with col1:
         with st.container(border=True):
-            st.markdown("<div class='card-title'><span>NÆSTE MODSTANDER</span></div>", unsafe_allow_html=True)
+            st.markdown("""
+                <div class='fixed-card-content'>
+                    <div class='card-title'><span>NÆSTE MODSTANDER</span></div>
+                    <div class='fixed-card-body' id='card-1-body'>
+            """, unsafe_allow_html=True)
+            
             future = pd.DataFrame()
             if not df_matches.empty:
                 hif_m = df_matches[(df_matches['CONTESTANTHOME_OPTAUUID'].str.upper() == HIF_UUID) | 
@@ -306,11 +324,18 @@ def vis_side():
                 st.markdown(stats_html, unsafe_allow_html=True)
             else:
                 st.caption(f"Afventer næste kamp for sæson {active_season}")
+                
+            st.markdown("</div></div>", unsafe_allow_html=True)
 
-    # KOLONNE 2: HVIDOVRE IF vs. LIGA (STYRENDE HØJDE)
+    # KOLONNE 2: HVIDOVRE IF vs. LIGA
     with col2:
         with st.container(border=True):
-            st.markdown('<div class="card-title"><span>HVIDOVRE IF vs. LIGA</span></div>', unsafe_allow_html=True)
+            st.markdown("""
+                <div class='fixed-card-content'>
+                    <div class='card-title'><span>HVIDOVRE IF vs. LIGA</span></div>
+                    <div class='fixed-card-body'>
+            """, unsafe_allow_html=True)
+            
             df_stats_comp = beregn_per_90(df_stats, HIF_UUID)
             if df_stats_comp is not None:
                 opp_navn = df_stats_comp.iloc[0]['Opponent']
@@ -321,13 +346,19 @@ def vis_side():
                     html += f"<tr><td class='stats-label'>{r['Stat']}</td><td class='stats-value'>{r['Seneste']:.0f}</td><td class='stats-value'>{r['HIF']:.2f}</td><td class='stats-value'>{r['Liga']:.2f}</td><td class='stats-value' style='color:{diff_color}; font-weight:800;'>{r['Diff']:+.2f}</td></tr>"
                 html += "</tbody></table>"
                 st.markdown(html, unsafe_allow_html=True)
+                
+            st.markdown("</div></div>", unsafe_allow_html=True)
 
     # KOLONNE 3: STILLING
     with col3:
         with st.container(border=True):
-            st.markdown(f'<div class="card-title"><span>STILLING ({active_comp.upper()})</span></div>', unsafe_allow_html=True)
-            df_stilling = beregn_stilling(df_matches, active_season, active_comp)
+            st.markdown(f"""
+                <div class='fixed-card-content'>
+                    <div class='card-title'><span>STILLING ({active_comp.upper()})</span></div>
+                    <div class='fixed-card-body'>
+            """, unsafe_allow_html=True)
             
+            df_stilling = beregn_stilling(df_matches, active_season, active_comp)
             if not df_stilling.empty:
                 table_html = "<table class='table-standings'><thead><tr><th>#</th><th style='text-align:left;'>Hold</th><th>K</th><th>MF</th><th>P</th></tr></thead><tbody>"
                 for idx, row in df_stilling.head(12).iterrows():
@@ -338,6 +369,8 @@ def vis_side():
                 st.markdown(table_html, unsafe_allow_html=True)
             else:
                 st.caption("Ingen stillingsdata fundet.")
+                
+            st.markdown("</div></div>", unsafe_allow_html=True)
 
     # --- BUNDSEKTION: TRENDGRAFER ---
     with st.container(border=True):
