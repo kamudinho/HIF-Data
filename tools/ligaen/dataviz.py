@@ -184,7 +184,7 @@ def draw_position_performance_chart(df_merged, metric, label, periode_tekst):
 def vis_side():
     # Dynamiske start- og slutår ud fra DEFAULT_SEASON (f.eks. "2025/2026")
     y_start = DEFAULT_SEASON.split('/')[0] if '/' in DEFAULT_SEASON else "2025"
-    y_end = f"20{DEFAULT_SEASON.split('/')[1]}" if '/' in DEFAULT_SEASON else "2026"
+    y_end = f"{DEFAULT_SEASON.split('/')[1]}" if '/' in DEFAULT_SEASON else "2026"
 
     start_dato = f"{y_start}-07-01"
     split_dato = f"{y_start}-12-31" 
