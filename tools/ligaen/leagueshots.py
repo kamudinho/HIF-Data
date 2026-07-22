@@ -124,17 +124,19 @@ def vis_side(dp=None):
     f_col1, f_col2, f_col3 = top_col2.columns(3)
     with f_col1:
         sæson_sel = st.selectbox("Sæson", list(SEASONS.keys()), index=0)
+    
     with f_col2:
-        tilgængelige_turneringer = list(SEASONS[sæson_sel].keys())
+        # Filtrer "Superliga" / "3F Superliga" fra de tilgængelige turneringer
+        tilgængelige_turneringer = [t for t in SEASONS[sæson_sel].keys() if "superliga" not in t.lower()]
+        if not tilgængelige_turneringer:
+            tilgængelige_turneringer = list(SEASONS[sæson_sel].keys())
         turnering_sel = st.selectbox("Turnering", tilgængelige_turneringer, index=0)
 
-    # Hent alle hold fra TEAMS-konstanten, så listen er komplet og uafhængig af række-filterfejl
     all_teams = sorted(list(TEAMS.keys()))
     with f_col3:
         default_idx = all_teams.index("Hvidovre") if "Hvidovre" in all_teams else 0
         t_sel = st.selectbox("Hold", all_teams, index=default_idx)
 
-    # Hent data for den valgte liga/turnering
     aktuel_liga_uuid = SEASONS[sæson_sel][turnering_sel]
     df_all = load_league_data(aktuel_liga_uuid)
     
@@ -147,7 +149,6 @@ def vis_side(dp=None):
 
     st.markdown("---")
 
-    # Filtrer data for det valgte hold
     df_team = df_all[df_all['KLUB_NAVN'] == t_sel].copy() if not df_all.empty and 'KLUB_NAVN' in df_all.columns else pd.DataFrame()
 
     if df_team.empty:
