@@ -144,7 +144,7 @@ def draw_h2h_chart(team1_name, team2_name, metrics, labels, df_wy, chart_key):
             yaxis=f"y{suffix}"
         ))
         
-        # Kategori-teksten placeres i TOPPEN
+        # Kategori-teksten placeres i TOPPEN (y=1.20)
         fig.add_annotation(dict(
             x=0.5, y=1.20, 
             xref=f"x{suffix} domain", 
@@ -154,7 +154,7 @@ def draw_h2h_chart(team1_name, team2_name, metrics, labels, df_wy, chart_key):
             font=dict(size=13)
         ))
         
-        # Logoer placeres under søjlerne - cliponaxis=False forhindrer at de bliver beskåret
+        # Logoer placeres under søjlerne
         if logo1_url:
             images.append(dict(
                 source=logo1_url,
@@ -162,7 +162,7 @@ def draw_h2h_chart(team1_name, team2_name, metrics, labels, df_wy, chart_key):
                 x=0, y=-0.08,
                 sizex=0.40, sizey=0.22,
                 xanchor="center", yanchor="top",
-                sizexmode="scaled", sizeymode="scaled",
+                sizing="contain",
                 layer="above"
             ))
             
@@ -173,7 +173,7 @@ def draw_h2h_chart(team1_name, team2_name, metrics, labels, df_wy, chart_key):
                 x=1, y=-0.08,
                 sizex=0.40, sizey=0.22,
                 xanchor="center", yanchor="top",
-                sizexmode="scaled", sizeymode="scaled",
+                sizing="contain",
                 layer="above"
             ))
 
@@ -184,7 +184,6 @@ def draw_h2h_chart(team1_name, team2_name, metrics, labels, df_wy, chart_key):
             f"yaxis{suffix}": dict(visible=False, range=[0, max_val])
         })
     
-    # Øget height og margin i bunden giver fuld plads til logoerne
     fig.update_layout(
         images=images,
         height=450, 
@@ -193,7 +192,6 @@ def draw_h2h_chart(team1_name, team2_name, metrics, labels, df_wy, chart_key):
         showlegend=False
     )
     st.plotly_chart(fig, use_container_width=True, key=chart_key)
-
 # --- 3. UI KOMPONENTER ---
 
 def render_kamp_boks(kamp):
