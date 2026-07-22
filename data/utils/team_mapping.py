@@ -101,7 +101,7 @@ TEAM_COLORS = {
     "HB Køge": {"primary": "#000000", "secondary": "#0000ff"},
     "Aarhus Fremad": {"primary": "#000000", "secondary": "#ffff00"},
     "Vejle": {"primary": "#003399", "secondary": "#ffffff"},
-    "Fredericia": {"primary": "#FFFFFF", "secondary": "#000000"},
+    "Fredericia": {"primary": "#E2000F", "secondary": "#000000"},
     "Vendsyssel": {"primary": "#003399", "secondary": "#ffffff"},
     "AB": {"primary": "#000000", "secondary": "#ffffff"},
 
