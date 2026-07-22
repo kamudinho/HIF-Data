@@ -8,7 +8,7 @@ SEASONS = {
     },
     "2025/2026": {
         "1. Division": "dyjr458hcmrcy87fsabfsy87o",  # UUID fra din forrige side-kode
-        "3F Superliga": "dummy_old_superliga_uuid",
+        "3F Superliga": "29actv1ohj8r10kd9hu0jnb0n",
     }
 }
 
