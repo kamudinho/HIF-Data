@@ -19,7 +19,7 @@ def apply_custom_style():
             [data-testid="stHeaderBlockContainer"] h1 { display: none; }
             .stApp { background-color: #FFFFFF; }
             
-            /* Tving kolonner og Streamlits indbyggede boks-wrapper til at strække sig ens */
+            /* Sørg for at kolonnerne strækker sig ens */
             [data-testid="stHorizontalBlock"] {
                 display: flex;
                 align-items: stretch;
@@ -46,16 +46,17 @@ def apply_custom_style():
                 flex-direction: column;
             }
 
-            /* Fast højde på indholdet, fjern unødvendig intern padding i Streamlit bokse */
+            /* Fast højde på boksen, men start indholdet fra toppen (flex-start) */
             .fixed-card-content {
                 height: 380px !important;
                 max-height: 380px !important;
                 display: flex;
                 flex-direction: column;
+                justify-content: flex-start !important;
                 overflow: hidden;
             }
             
-            /* Fjern standard toppmargen/padding som Streamlit tilføjer inde i elementerne */
+            /* Fjern unødvendig afstand i Streamlit's interne elementer */
             [data-testid="stVerticalBlockBorderWrapper"] [data-testid="stVerticalBlock"] {
                 gap: 0rem !important;
             }
@@ -280,7 +281,7 @@ def vis_side():
         df_stats = conn.query(fallback_queries["opta_team_stats"])
         df_stats.columns = [str(c).upper() for c in df_stats.columns]
 
-    # --- TOPSEKTION: 3 KOLONNER (FAST BOKS-HØJDE MED KORREKT TOPPLACERING) ---
+    # --- TOPSEKTION: 3 KOLONNER (FAST BOKS-HØJDE MED INDHOLD STARTENDE ØVERST) ---
     col1, col2, col3 = st.columns([1, 1, 1])
 
     # KOLONNE 1: NÆSTE MODSTANDER
