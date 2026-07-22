@@ -1,7 +1,16 @@
 import streamlit as st
 import pandas as pd
 import altair as alt
-from data.utils.team_mapping import TEAMS
+
+# --- IMPORT DYNAMISKE KONSTANTER FRA TEAM_MAPPING ---
+from data.utils.team_mapping import (
+    SEASONS,
+    COMPETITIONS,
+    SEASON_LEAGUE_MAPPER,
+    TEAMS,
+    COMPETITION_NAME as DEFAULT_COMP,
+    TOURNAMENTCALENDAR_NAME as DEFAULT_SEASON
+)
 from data.data_load import _get_snowflake_conn
 from data.utils.stattype_map import STAT_TYPE_MAP
 
@@ -30,12 +39,9 @@ def apply_custom_style():
         </style>
     """, unsafe_allow_html=True)
 
-def get_opta_queries(liga_f, saeson_f, hif_only=False):
+def get_opta_queries(calendar_uuid, hif_uuid, hif_only=False):
     DB = "KLUB_HVIDOVREIF.AXIS"
-    HIF_UUID = '8gxd9ry2580pu1b1dd5ny9ymy'
-    tournament_map = {"NordicBet Liga": "dyjr458hcmrcy87fsabfsy87o", "Superliga": "29actv1ohj8r10kd9hu0jnb0n"}
-    current_tournament_uuid = tournament_map.get(liga_f, "dyjr458hcmrcy87fsabfsy87o")
-    hif_filter_matchinfo = f"AND (CONTESTANTHOME_OPTAUUID = '{HIF_UUID}' OR CONTESTANTAWAY_OPTAUUID = '{HIF_UUID}')" if hif_only else ""
+    hif_filter_matchinfo = f"AND (CONTESTANTHOME_OPTAUUID = '{hif_uuid}' OR CONTESTANTAWAY_OPTAUUID = '{hif_uuid}')" if hif_only else ""
 
     return {"opta_team_stats": f"""
         WITH CombinedStats AS (
@@ -47,7 +53,7 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
         ),
         MatchBase AS (
             SELECT MATCH_OPTAUUID, MATCH_DATE_FULL, WEEK, MATCH_STATUS, CONTESTANTHOME_OPTAUUID, CONTESTANTHOME_NAME, CONTESTANTAWAY_OPTAUUID, CONTESTANTAWAY_NAME, TOTAL_HOME_SCORE, TOTAL_AWAY_SCORE 
-            FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = '{current_tournament_uuid}' {hif_filter_matchinfo}
+            FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = '{calendar_uuid}' {hif_filter_matchinfo}
         ),
         PivotStats AS (
             SELECT MATCH_OPTAUUID, CONTESTANT_OPTAUUID,
@@ -136,50 +142,50 @@ def beregn_hold_stats(df_stats, team_uuid):
     poss_all = pd.concat([home['HOME_POSSESSION'], away['AWAY_POSSESSION']]).dropna().mean()
     return {"gf": f"{gf / total_matches:.1f}", "ga": f"{ga / total_matches:.1f}", "xgf": f"{xgf / total_matches:.2f}", "xga": f"{xga / total_matches:.2f}", "poss": f"{int(round(poss_all))}%" if pd.notnull(poss_all) else "0%"}
 
-def beregn_stilling(df_matches, opta_to_name):
-    """Beregner den aktuelle ligastilling ud fra spillede kampe."""
+def beregn_stilling(df_matches, opta_to_name, valgt_saeson, valgt_turnering):
+    """Beregner den aktuelle ligastilling for den aktive sæson og turnering."""
     stats = {}
     
-    # Registrer alle hold fra TEAMS mapping som udgangspunkt (alfabetisk)
-    for name in sorted(TEAMS.keys()):
+    # 1. Hent alle 12 hold for sæsonen fra team_mapping så tabellen altid indeholder alle hold (0 point fra start)
+    saesons_hold = SEASON_LEAGUE_MAPPER.get(valgt_saeson, {}).get(valgt_turnering, [])
+    if not saesons_hold:
+        saesons_hold = sorted(TEAMS.keys())
+
+    for name in saesons_hold:
         stats[name] = {'K': 0, 'V': 0, 'U': 0, 'T': 0, 'MF': 0, 'P': 0}
 
-    played = df_matches[df_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].copy()
-    
-    for _, row in played.iterrows():
-        h_uuid = str(row['CONTESTANTHOME_OPTAUUID']).upper()
-        a_uuid = str(row['CONTESTANTAWAY_OPTAUUID']).upper()
+    # 2. Læg spilledata ovenpå hvis der findes afviklede kampe
+    if df_matches is not None and not df_matches.empty and 'MATCH_STATUS' in df_matches.columns:
+        played = df_matches[df_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].copy()
         
-        h_name = opta_to_name.get(h_uuid, row.get('CONTESTANTHOME_NAME', 'Ukendt'))
-        a_name = opta_to_name.get(a_uuid, row.get('CONTESTANTAWAY_NAME', 'Ukendt'))
-        
-        if h_name not in stats: stats[h_name] = {'K': 0, 'V': 0, 'U': 0, 'T': 0, 'MF': 0, 'P': 0}
-        if a_name not in stats: stats[a_name] = {'K': 0, 'V': 0, 'U': 0, 'T': 0, 'MF': 0, 'P': 0}
+        for _, row in played.iterrows():
+            h_uuid = str(row['CONTESTANTHOME_OPTAUUID']).upper()
+            a_uuid = str(row['CONTESTANTAWAY_OPTAUUID']).upper()
+            
+            h_name = opta_to_name.get(h_uuid, row.get('CONTESTANTHOME_NAME', 'Ukendt'))
+            a_name = opta_to_name.get(a_uuid, row.get('CONTESTANTAWAY_NAME', 'Ukendt'))
+            
+            if h_name not in stats: stats[h_name] = {'K': 0, 'V': 0, 'U': 0, 'T': 0, 'MF': 0, 'P': 0}
+            if a_name not in stats: stats[a_name] = {'K': 0, 'V': 0, 'U': 0, 'T': 0, 'MF': 0, 'P': 0}
 
-        try:
-            h_g = int(row['TOTAL_HOME_SCORE'])
-            a_g = int(row['TOTAL_AWAY_SCORE'])
-        except:
-            continue
+            try:
+                h_g = int(row['TOTAL_HOME_SCORE'])
+                a_g = int(row['TOTAL_AWAY_SCORE'])
+            except:
+                continue
 
-        stats[h_name]['K'] += 1
-        stats[a_name]['K'] += 1
-        stats[h_name]['MF'] += (h_g - a_g)
-        stats[a_name]['MF'] += (a_g - h_g)
+            stats[h_name]['K'] += 1
+            stats[a_name]['K'] += 1
+            stats[h_name]['MF'] += (h_g - a_g)
+            stats[a_name]['MF'] += (a_g - h_g)
 
-        if h_g > a_g:
-            stats[h_name]['V'] += 1
-            stats[h_name]['P'] += 3
-            stats[a_name]['T'] += 1
-        elif a_g > h_g:
-            stats[a_name]['V'] += 1
-            stats[a_name]['P'] += 3
-            stats[h_name]['T'] += 1
-        else:
-            stats[h_name]['U'] += 1
-            stats[a_name]['U'] += 1
-            stats[h_name]['P'] += 1
-            stats[a_name]['P'] += 1
+            if h_g > a_g:
+                stats[h_name]['V'] += 1; stats[h_name]['P'] += 3; stats[a_name]['T'] += 1
+            elif a_g > h_g:
+                stats[a_name]['V'] += 1; stats[a_name]['P'] += 3; stats[h_name]['T'] += 1
+            else:
+                stats[h_name]['U'] += 1; stats[a_name]['U'] += 1
+                stats[h_name]['P'] += 1; stats[a_name]['P'] += 1
 
     df_standings = pd.DataFrame.from_dict(stats, orient='index').reset_index()
     df_standings.columns = ['Hold', 'K', 'V', 'U', 'T', 'MF', 'P']
@@ -197,37 +203,45 @@ def vis_side():
     conn = _get_snowflake_conn()
     if not conn: return
     
-    DB, LIGA_UUID, HIF_UUID = "KLUB_HVIDOVREIF.AXIS", "dyjr458hcmrcy87fsabfsy87o", "8GXD9RY2580PU1B1DD5NY9YMY"
+    DB = "KLUB_HVIDOVREIF.AXIS"
+    HIF_UUID = TEAMS.get("Hvidovre", {}).get("opta_uuid", "8gxd9ry2580pu1b1dd5ny9ymy").upper()
     
-    # Opdateret sæsonsøgning til 2026/2027
-    SAESON = "2026/2027"
-    queries = get_opta_queries("NordicBet Liga", SAESON, hif_only=False)
+    # Dynamiske sæsonsopslag for den nye sæson 2026/2027
+    active_season = DEFAULT_SEASON
+    active_comp = DEFAULT_COMP
+    calendar_uuid = SEASONS.get(active_season, {}).get(active_comp)
+
+    queries = get_opta_queries(calendar_uuid, HIF_UUID, hif_only=False)
     
-    df_matches = conn.query(f"SELECT * FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'")
-    df_matches.columns = [str(c).upper() for c in df_matches.columns]
-    
+    df_matches = pd.DataFrame()
+    if calendar_uuid:
+        df_matches = conn.query(f"SELECT * FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = '{calendar_uuid}'")
+        df_matches.columns = [str(c).upper() for c in df_matches.columns]
+        if 'MATCH_DATE_FULL' in df_matches.columns:
+            df_matches['MATCH_DATE_FULL'] = pd.to_datetime(df_matches['MATCH_DATE_FULL'], errors='coerce').dt.tz_localize(None)
+
     df_stats = conn.query(queries["opta_team_stats"])
     df_stats.columns = [str(c).upper() for c in df_stats.columns]
     
     opta_to_name = {str(v['opta_uuid']).strip().upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
-    df_matches['MATCH_DATE_FULL'] = pd.to_datetime(df_matches['MATCH_DATE_FULL'], errors='coerce').dt.tz_localize(None)
 
     col1, col2, col3 = st.columns([1, 1, 1])
 
-    # --- COL 1: NÆSTE MODSTANDER (2026/2027) ---
+    # --- COL 1: NÆSTE MODSTANDER (Nye Sæson 2026/2027) ---
     with col1:
         with st.container(border=True):
-            hif_m = df_matches[(df_matches['CONTESTANTHOME_OPTAUUID'].str.upper() == HIF_UUID.strip().upper()) | 
-                               (df_matches['CONTESTANTAWAY_OPTAUUID'].str.upper() == HIF_UUID.strip().upper())]
-            
-            today = pd.Timestamp.today().normalize()
-            future = hif_m[hif_m['MATCH_DATE_FULL'] >= today].sort_values('MATCH_DATE_FULL')
-            
             st.markdown("<div class='card-title'><span>NÆSTE MODSTANDER</span></div>", unsafe_allow_html=True)
+            
+            future = pd.DataFrame()
+            if not df_matches.empty:
+                hif_m = df_matches[(df_matches['CONTESTANTHOME_OPTAUUID'].str.upper() == HIF_UUID) | 
+                                   (df_matches['CONTESTANTAWAY_OPTAUUID'].str.upper() == HIF_UUID)]
+                today = pd.Timestamp.today().normalize()
+                future = hif_m[hif_m['MATCH_DATE_FULL'] >= today].sort_values('MATCH_DATE_FULL')
 
             if not future.empty:
                 nk = future.iloc[0]
-                opp_id = nk['CONTESTANTAWAY_OPTAUUID'] if str(nk['CONTESTANTHOME_OPTAUUID']).upper() == HIF_UUID.strip().upper() else nk['CONTESTANTHOME_OPTAUUID']
+                opp_id = nk['CONTESTANTAWAY_OPTAUUID'] if str(nk['CONTESTANTHOME_OPTAUUID']).upper() == HIF_UUID else nk['CONTESTANTHOME_OPTAUUID']
                 opp_name = opta_to_name.get(str(opp_id).upper(), "Ukendt")
                 
                 st.markdown(f"<div class='card-title' style='border:none; margin-top:-10px; padding-bottom:0; font-size: 13px;'><span>vs. {opp_name.upper()}</span><span>{nk['MATCH_DATE_FULL'].strftime('%d/%m')}</span></div>", unsafe_allow_html=True)
@@ -249,29 +263,25 @@ def vis_side():
                 </table>"""
                 st.markdown(stats_html, unsafe_allow_html=True)
             else:
-                st.caption(f"Afventer næste kamp for sæson {SAESON}")
+                st.caption(f"Afventer næste kamp for sæson {active_season}")
 
-    # --- COL 2: STILLING (Erstatning for Transfers) ---
+    # --- COL 2: STILLING (Nye Sæson 2026/2027) ---
     with col2:
         with st.container(border=True):
-            st.markdown('<div class="card-title"><span>STILLING (NORDICBET LIGA)</span></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="card-title"><span>STILLING ({active_comp.upper()})</span></div>', unsafe_allow_html=True)
             
-            df_stilling = beregn_stilling(df_matches, opta_to_name)
+            df_stilling = beregn_stilling(df_matches, opta_to_name, active_season, active_comp)
             
             if not df_stilling.empty:
-                # Byg HTML tabel for kompakt visning
                 table_html = "<table class='table-standings'><thead><tr><th>#</th><th style='text-align:left;'>Hold</th><th>K</th><th>MF</th><th>P</th></tr></thead><tbody>"
-                
-                # Vis top hold (begræns evt. til de første 12 hold i ligaen)
                 for idx, row in df_stilling.head(12).iterrows():
                     row_class = "hif-row" if "Hvidovre" in row['Hold'] else ""
                     mf_sign = f"+{row['MF']}" if row['MF'] > 0 else str(row['MF'])
                     table_html += f"<tr class='{row_class}'><td>{idx}</td><td class='team-cell'>{row['Hold']}</td><td>{row['K']}</td><td>{mf_sign}</td><td><b>{row['P']}</b></td></tr>"
-                
                 table_html += "</tbody></table>"
                 st.markdown(table_html, unsafe_allow_html=True)
             else:
-                st.caption("Ingen stillingsdata fundet for sæsonen.")
+                st.caption("Ingen stillingsdata fundet.")
 
     # --- COL 3: SCOUTING ---
     with col3:
@@ -295,12 +305,12 @@ def vis_side():
                 st.markdown(html, unsafe_allow_html=True)
 
     with trend_area:
-        hif_recent = df_stats[((df_stats['CONTESTANTHOME_OPTAUUID'].str.upper() == HIF_UUID.strip().upper()) | (df_stats['CONTESTANTAWAY_OPTAUUID'].str.upper() == HIF_UUID.strip().upper())) & (df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False))].sort_values('MATCH_DATE_FULL', ascending=True).copy()
+        hif_recent = df_stats[((df_stats['CONTESTANTHOME_OPTAUUID'].str.upper() == HIF_UUID) | (df_stats['CONTESTANTAWAY_OPTAUUID'].str.upper() == HIF_UUID)) & (df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False))].sort_values('MATCH_DATE_FULL', ascending=True).copy()
         if not hif_recent.empty:
             num_cols = ['HOME_XG', 'AWAY_XG', 'HOME_SHOTS', 'AWAY_SHOTS', 'HOME_TOUCHES', 'AWAY_TOUCHES', 'TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE', 'HOME_CORNERS', 'AWAY_CORNERS', 'HOME_TACKLES', 'AWAY_TACKLES']
             for col in num_cols: hif_recent[col] = pd.to_numeric(hif_recent[col], errors='coerce').fillna(0)
-            hif_recent['OPPONENT_NAME'] = hif_recent.apply(lambda r: get_team_name(r['CONTESTANTAWAY_OPTAUUID'] if str(r['CONTESTANTHOME_OPTAUUID']).strip().upper() == HIF_UUID.strip().upper() else r['CONTESTANTHOME_OPTAUUID'], r['CONTESTANTHOME_NAME'], r['CONTESTANTAWAY_NAME'], str(r['CONTESTANTHOME_OPTAUUID']).strip().upper() == HIF_UUID.strip().upper()), axis=1)
-            hif_recent['HOME_OR_AWAY'] = hif_recent.apply(lambda r: "H" if str(r['CONTESTANTHOME_OPTAUUID']).strip().upper() == HIF_UUID.strip().upper() else "U", axis=1)
+            hif_recent['OPPONENT_NAME'] = hif_recent.apply(lambda r: get_team_name(r['CONTESTANTAWAY_OPTAUUID'] if str(r['CONTESTANTHOME_OPTAUUID']).strip().upper() == HIF_UUID else r['CONTESTANTHOME_OPTAUUID'], r['CONTESTANTHOME_NAME'], r['CONTESTANTAWAY_NAME'], str(r['CONTESTANTHOME_OPTAUUID']).strip().upper() == HIF_UUID), axis=1)
+            hif_recent['HOME_OR_AWAY'] = hif_recent.apply(lambda r: "H" if str(r['CONTESTANTHOME_OPTAUUID']).strip().upper() == HIF_UUID else "U", axis=1)
             indices = hif_recent.apply(lambda row: beregn_kategori_indices(row, HIF_UUID), axis=1)
             hif_recent = pd.concat([hif_recent, indices], axis=1)
             hif_recent['index'] = range(1, len(hif_recent) + 1)
