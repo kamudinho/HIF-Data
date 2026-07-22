@@ -18,6 +18,25 @@ def apply_custom_style():
         <style>
             [data-testid="stHeaderBlockContainer"] h1 { display: none; }
             .stApp { background-color: #FFFFFF; }
+            
+            /* Tving alle kolonner og deres container-bokse til at have samme fulde højde */
+            [data-testid="stHorizontalBlock"] {
+                display: flex;
+                align-items: stretch;
+            }
+            [data-testid="stHorizontalBlock"] > div {
+                display: flex;
+                flex-direction: column;
+            }
+            [data-testid="stHorizontalBlock"] [data-testid="stVerticalBlockBorderWrapper"] {
+                height: 100%;
+                display: flex;
+                flex-direction: column;
+            }
+            [data-testid="stHorizontalBlock"] [data-testid="stVerticalBlockBorderWrapper"] > div {
+                flex: 1;
+            }
+
             .stats-table { width: 100%; font-size: 11px; border-collapse: collapse; table-layout: auto; }
             .stats-table th { text-align: center; padding: 4px; color: #888; font-weight: 600; white-space: nowrap; }
             .stats-label { text-align: left !important; color: #666; font-weight: 700; width: 40%; padding: 4px 8px 4px 0; }
@@ -156,7 +175,7 @@ def beregn_hold_stats(df_stats, team_uuid):
     total_matches = len(home) + len(away)
     if total_matches == 0: return {"gf": "0.0", "ga": "0.0", "xgf": "0.0", "xga": "0.0", "poss": "0%"}
     gf = home['TOTAL_HOME_SCORE'].sum() + away['TOTAL_AWAY_SCORE'].sum()
-    ga = home['TOTAL_AWAY_SCORE'].sum() + away['TOTAL_HOME_SCORE'].sum()
+    ga = home['TOTAL_AWAY_SCORE'].sum() + away['HOME_XG'].sum()
     xgf = home['HOME_XG'].fillna(0).sum() + away['AWAY_XG'].fillna(0).sum()
     xga = home['AWAY_XG'].fillna(0).sum() + away['HOME_XG'].fillna(0).sum()
     poss_all = pd.concat([home['HOME_POSSESSION'], away['AWAY_POSSESSION']]).dropna().mean()
@@ -220,7 +239,7 @@ def vis_side():
     active_comp = DEFAULT_COMP
     calendar_uuid = SEASONS.get(active_season, {}).get(active_comp)
 
-    # 1. Hent kampprogram for den valgte sæson
+    # 1. Hent kampprogram
     df_matches = pd.DataFrame()
     if calendar_uuid:
         df_matches = conn.query(f"SELECT * FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = '{calendar_uuid}'")
@@ -228,7 +247,7 @@ def vis_side():
         if 'MATCH_DATE_FULL' in df_matches.columns:
             df_matches['MATCH_DATE_FULL'] = pd.to_datetime(df_matches['MATCH_DATE_FULL'], errors='coerce').dt.tz_localize(None)
 
-    # 2. Hent stats (fallback til seneste spillet, hvis sæsonen ikke har afviklede kampe endnu)
+    # 2. Hent stats
     queries = get_opta_queries(calendar_uuid, HIF_UUID)
     df_stats = conn.query(queries["opta_team_stats"])
     df_stats.columns = [str(c).upper() for c in df_stats.columns]
@@ -238,7 +257,7 @@ def vis_side():
         df_stats = conn.query(fallback_queries["opta_team_stats"])
         df_stats.columns = [str(c).upper() for c in df_stats.columns]
 
-    # --- TOPSEKTION: 3 KOLONNER ---
+    # --- TOPSEKTION: 3 KOLONNER (ENSTENS HØJDE) ---
     col1, col2, col3 = st.columns([1, 1, 1])
 
     # KOLONNE 1: NÆSTE MODSTANDER
@@ -279,7 +298,7 @@ def vis_side():
             else:
                 st.caption(f"Afventer næste kamp for sæson {active_season}")
 
-    # KOLONNE 2: HVIDOVRE IF vs. LIGA (TABEL)
+    # KOLONNE 2: HVIDOVRE IF vs. LIGA (STYRENDE HØJDE)
     with col2:
         with st.container(border=True):
             st.markdown('<div class="card-title"><span>HVIDOVRE IF vs. LIGA</span></div>', unsafe_allow_html=True)
@@ -298,7 +317,6 @@ def vis_side():
     with col3:
         with st.container(border=True):
             st.markdown(f'<div class="card-title"><span>STILLING ({active_comp.upper()})</span></div>', unsafe_allow_html=True)
-            
             df_stilling = beregn_stilling(df_matches, active_season, active_comp)
             
             if not df_stilling.empty:
@@ -312,7 +330,7 @@ def vis_side():
             else:
                 st.caption("Ingen stillingsdata fundet.")
 
-    # --- BUNDSEKTION: TRENDGRAFER (UNDER DE 3 KOLONNER) ---
+    # --- BUNDSEKTION: TRENDGRAFER ---
     with st.container(border=True):
         st.markdown('<div class="card-title"><span>PRESTATIONS-TRENDS</span></div>', unsafe_allow_html=True)
         hif_recent = df_stats[((df_stats['CONTESTANTHOME_OPTAUUID'].str.upper() == HIF_UUID) | (df_stats['CONTESTANTAWAY_OPTAUUID'].str.upper() == HIF_UUID)) & (df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False))].sort_values('MATCH_DATE_FULL', ascending=True).tail(10).copy()
