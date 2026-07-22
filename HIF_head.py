@@ -19,7 +19,7 @@ def apply_custom_style():
             [data-testid="stHeaderBlockContainer"] h1 { display: none; }
             .stApp { background-color: #FFFFFF; }
             
-            /* Tving kolonner og Streamlits wrappers til at strække sig ens */
+            /* Sørg for at kolonnerne strækker sig ens */
             [data-testid="stHorizontalBlock"] {
                 display: flex;
                 align-items: stretch;
@@ -28,36 +28,6 @@ def apply_custom_style():
                 display: flex;
                 flex-direction: column;
                 flex: 1;
-            }
-            [data-testid="stHorizontalBlock"] [data-testid="stVerticalBlockBorderWrapper"] {
-                height: 100% !important;
-                display: flex;
-                flex-direction: column;
-                flex: 1;
-            }
-            [data-testid="stHorizontalBlock"] [data-testid="stVerticalBlockBorderWrapper"] > div {
-                flex: 1;
-                display: flex;
-                flex-direction: column;
-            }
-            [data-testid="stHorizontalBlock"] [data-testid="stVerticalBlockBorderWrapper"] > div > div {
-                flex: 1;
-                display: flex;
-                flex-direction: column;
-            }
-
-            /* Fjern absolut højde-lås og lad indholdet styre højden naturligt med flex */
-            .fixed-card-content {
-                display: flex;
-                flex-direction: column;
-                flex: 1;
-                justify-content: flex-start;
-            }
-            
-            /* Fjern unødvendig intern afstand i Streamlits beholdere */
-            [data-testid="stVerticalBlockBorderWrapper"] [data-testid="stVerticalBlock"] {
-                gap: 0rem !important;
-                height: 100%;
             }
 
             .stats-table { width: 100%; font-size: 11px; border-collapse: collapse; table-layout: auto; }
@@ -280,16 +250,13 @@ def vis_side():
         df_stats = conn.query(fallback_queries["opta_team_stats"])
         df_stats.columns = [str(c).upper() for c in df_stats.columns]
 
-    # --- TOPSEKTION: 3 KOLONNER (FLEKSIBEL HØJDE MED INDHOLD ØVERST) ---
-    col1, col2, col3 = st.columns([1, 1, 1])
+    # --- TOPSEKTION: ÉN STOR BOKS OMKRING ALLE 3 KOLONNER ---
+    with st.container(border=True):
+        col1, col2, col3 = st.columns([1, 1, 1])
 
-    # KOLONNE 1: NÆSTE MODSTANDER
-    with col1:
-        with st.container(border=True):
-            st.markdown("""
-                <div class='fixed-card-content'>
-                    <div class='card-title'><span>NÆSTE MODSTANDER</span></div>
-            """, unsafe_allow_html=True)
+        # KOLONNE 1: NÆSTE MODSTANDER
+        with col1:
+            st.markdown("<div class='card-title'><span>NÆSTE MODSTANDER</span></div>", unsafe_allow_html=True)
             
             future = pd.DataFrame()
             if not df_matches.empty:
@@ -324,16 +291,10 @@ def vis_side():
                 st.markdown(stats_html, unsafe_allow_html=True)
             else:
                 st.caption(f"Afventer næste kamp for sæson {active_season}")
-                
-            st.markdown("</div>", unsafe_allow_html=True)
 
-    # KOLONNE 2: HVIDOVRE IF vs. LIGA
-    with col2:
-        with st.container(border=True):
-            st.markdown("""
-                <div class='fixed-card-content'>
-                    <div class='card-title'><span>HVIDOVRE IF vs. LIGA</span></div>
-            """, unsafe_allow_html=True)
+        # KOLONNE 2: HVIDOVRE IF vs. LIGA
+        with col2:
+            st.markdown("<div class='card-title'><span>HVIDOVRE IF vs. LIGA</span></div>", unsafe_allow_html=True)
             
             df_stats_comp = beregn_per_90(df_stats, HIF_UUID)
             if df_stats_comp is not None:
@@ -345,16 +306,10 @@ def vis_side():
                     html += f"<tr><td class='stats-label'>{r['Stat']}</td><td class='stats-value'>{r['Seneste']:.0f}</td><td class='stats-value'>{r['HIF']:.2f}</td><td class='stats-value'>{r['Liga']:.2f}</td><td class='stats-value' style='color:{diff_color}; font-weight:800;'>{r['Diff']:+.2f}</td></tr>"
                 html += "</tbody></table>"
                 st.markdown(html, unsafe_allow_html=True)
-                
-            st.markdown("</div>", unsafe_allow_html=True)
 
-    # KOLONNE 3: STILLING
-    with col3:
-        with st.container(border=True):
-            st.markdown(f"""
-                <div class='fixed-card-content'>
-                    <div class='card-title'><span>STILLING ({active_comp.upper()})</span></div>
-            """, unsafe_allow_html=True)
+        # KOLONNE 3: STILLING
+        with col3:
+            st.markdown(f"<div class='card-title'><span>STILLING ({active_comp.upper()})</span></div>", unsafe_allow_html=True)
             
             df_stilling = beregn_stilling(df_matches, active_season, active_comp)
             if not df_stilling.empty:
@@ -367,8 +322,6 @@ def vis_side():
                 st.markdown(table_html, unsafe_allow_html=True)
             else:
                 st.caption("Ingen stillingsdata fundet.")
-                
-            st.markdown("</div>", unsafe_allow_html=True)
 
     # --- BUNDSEKTION: TRENDGRAFER ---
     with st.container(border=True):
