@@ -41,10 +41,8 @@ def load_league_data(liga_uuid):
     conn = _get_snowflake_conn()
     if not conn or not liga_uuid: return pd.DataFrame()
     
-    # Subquery til at finde de rigtige kampe baseret på dynamisk UUID
     match_sql = f"SELECT DISTINCT MATCH_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = '{liga_uuid}'"
     
-    # SQL med robust LEFT JOIN på OPTA_MATCH_LINEUPS
     sql = f"""
         SELECT 
             e.*, 
@@ -66,7 +64,6 @@ def load_league_data(liga_uuid):
         df = conn.query(sql) if hasattr(conn, 'query') else pd.read_sql(sql, conn)
         df.columns = [c.upper() for c in df.columns]
         
-        # Overskriv PLAYER_NAME med det fulde navn hvis det findes
         if 'FULL_PLAYER_NAME' in df.columns:
             df['PLAYER_NAME'] = df['FULL_PLAYER_NAME'].fillna(df.get('PLAYER_NAME', 'Ukendt'))
             
@@ -118,41 +115,41 @@ def vis_side(dp=None):
     </style>
     """, unsafe_allow_html=True)
 
-    # Toppen: Brug venstre side til evt. overskrift/info og højre side til filtre (Sæson, Turnering, Hold)
     top_col1, top_col2 = st.columns([1.5, 2.5])
     
     with top_col1:
         st.markdown("### **Liga & Holdanalyse**")
         st.markdown("<p style='color: #666; font-size: 0.9rem;'>Analyser skudmønstre og konvertering fordelt på zoner.</p>", unsafe_allow_html=True)
 
-    with top_col2:
-        # Samlet boks / kolonner til højre for sæson, turnering og hold
-        f_col1, f_col2, f_col3 = st.columns(3)
-        with f_col1:
-            sæson_sel = st.selectbox("Sæson", list(SEASONS.keys()), index=0)
-        with f_col2:
-            tilgængelige_turneringer = list(SEASONS[sæson_sel].keys())
-            turnering_sel = st.selectbox("Turnering", tilgængelige_turneringer, index=0)
-        
-        # Hent dynamisk UUID baseret på valg for at kunne finde holdene
-        aktuel_liga_uuid = SEASONS[sæson_sel][turnering_sel]
-        df_all = load_league_data(aktuel_liga_uuid)
-        
-        if not df_all.empty:
-            uuid_to_name = {v['opta_uuid'].upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
-            df_all['KLUB_NAVN'] = df_all['EVENT_CONTESTANT_OPTAUUID'].str.upper().map(uuid_to_name)
-            teams = sorted([n for n in df_all['KLUB_NAVN'].unique() if pd.notna(n)])
-        else:
-            teams = []
+    # Hent data tidligt, så hold-listen kan genereres uanset hvad
+    f_col1, f_col2, f_col3 = top_col2.columns(3)
+    with f_col1:
+        sæson_sel = st.selectbox("Sæson", list(SEASONS.keys()), index=0)
+    with f_col2:
+        tilgængelige_turneringer = list(SEASONS[sæson_sel].keys())
+        turnering_sel = st.selectbox("Turnering", tilgængelige_turneringer, index=0)
 
-        with f_col3:
+    aktuel_liga_uuid = SEASONS[sæson_sel][turnering_sel]
+    df_all = load_league_data(aktuel_liga_uuid)
+    
+    if not df_all.empty and 'EVENT_CONTESTANT_OPTAUUID' in df_all.columns:
+        uuid_to_name = {v['opta_uuid'].upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
+        df_all['KLUB_NAVN'] = df_all['EVENT_CONTESTANT_OPTAUUID'].str.upper().map(uuid_to_name)
+        teams = sorted([n for n in df_all['KLUB_NAVN'].unique() if pd.notna(n)])
+    else:
+        teams = []
+
+    with f_col3:
+        if teams:
             default_idx = teams.index("Hvidovre") if "Hvidovre" in teams else 0
-            t_sel = st.selectbox("Hold", teams if teams else ["Ingen hold"], index=default_idx)
+            t_sel = st.selectbox("Hold", teams, index=default_idx)
+        else:
+            t_sel = st.selectbox("Hold", ["Der er ingen data at vise"], index=0)
 
     st.markdown("---")
 
-    if df_all.empty or not teams:
-        st.warning("Ingen data fundet for den valgte sæson/turnering.")
+    if df_all.empty or not teams or t_sel == "Der er ingen data at vise":
+        st.warning("Ingen data at vise for den valgte sæson/turnering.")
         return
 
     t_color = TEAM_COLORS.get(t_sel, {}).get('primary', HIF_RED)
