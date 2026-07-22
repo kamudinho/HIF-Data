@@ -110,11 +110,12 @@ def vis_side(dp=None):
     
     col_spacer_top, col_saeson, col_hold = st.columns([2.5, 1, 1])
     
-    # 1. Vælg Sæson
+    # 1. Vælg Sæson (Standarder til 2025/2026 hvis tilgængelig)
+    default_season_idx = available_seasons.index("2025/2026") if "2025/2026" in available_seasons else 0
     valgt_saeson = col_saeson.selectbox(
         "Vælg sæson", 
         available_seasons, 
-        index=0, 
+        index=default_season_idx, 
         label_visibility="collapsed",
         key="saeson_select"
     )
@@ -146,7 +147,7 @@ def vis_side(dp=None):
     if not team_map:
         team_map = {name: info["opta_uuid"] for name, info in TEAMS.items() if info.get("opta_uuid")}
 
-    # 2. Vælg Hold
+    # 2. Vælg Hold (Standarder til Hvidovre)
     sorted_teams = sorted(list(team_map.keys()))
     default_index = sorted_teams.index("Hvidovre") if "Hvidovre" in sorted_teams else 0
     
@@ -180,7 +181,7 @@ def vis_side(dp=None):
             match_ids = tuple(df_res['MATCH_OPTAUUID'].tolist())
             m_ids_str = f"('{match_ids[0]}')" if len(match_ids) == 1 else str(match_ids)
             
-            # SQL: EVENTS WITH PLAYER JOIN (BRUGER OPTA_MATCH_LINEUPS I STEDET FOR OPTA_PLAYERS)
+            # SQL: EVENTS WITH PLAYER JOIN
             sql_all_h = f"""
                 SELECT 
                     e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, 
@@ -205,7 +206,7 @@ def vis_side(dp=None):
                 df_all_h['Action_Label'] = df_all_h.apply(get_action_label, axis=1)
                 df_all_h = df_all_h.dropna(subset=['Action_Label'])
 
-            # SQL: MÅL-SEKVENSER (BRUGER OPTA_MATCH_LINEUPS I STEDET FOR OPTA_PLAYERS)
+            # SQL: MÅL-SEKVENSER
             sql_seq = f"""
             WITH SeasonMatches AS (
                 SELECT MATCH_OPTAUUID, CONTESTANTHOME_NAME, CONTESTANTAWAY_NAME, 
@@ -289,7 +290,7 @@ def vis_side(dp=None):
             .metric-row-wrapper { margin-top: -35px; margin-bottom: -25px; }
             .compact-divider { margin-top: -5px; margin-bottom: 5px; border-top: 1px solid #f0f2f6; }
             </style>
-            """, unsafe_unsafe_html=True if 'unsafe_unsafe_html' in locals() else True)
+            """, unsafe_allow_html=True)
 
         m_col1, m_spacer, m_col2 = st.columns([1.3, 0.1, 2.0])
         
@@ -338,7 +339,7 @@ def vis_side(dp=None):
             )
             
             fig1.update_layout(height=300, margin=dict(t=25, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', 
-                              xaxis_title=None, yaxis_title=None, hoverlabel=dict(bgcolor="white", font_size=12))
+                               xaxis_title=None, yaxis_title=None, hoverlabel=dict(bgcolor="white", font_size=12))
             st.plotly_chart(fig1, use_container_width=True, config={'displayModeBar': False})
 
             # Graf 2
@@ -360,7 +361,7 @@ def vis_side(dp=None):
             )
             
             fig2.update_layout(height=300, margin=dict(t=25, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', 
-                              xaxis_title=None, yaxis_title=None, hoverlabel=dict(bgcolor="white", font_size=12))
+                               xaxis_title=None, yaxis_title=None, hoverlabel=dict(bgcolor="white", font_size=12))
             st.plotly_chart(fig2, use_container_width=True, config={'displayModeBar': False})
             
     with t2:
@@ -531,16 +532,16 @@ def vis_side(dp=None):
             
             sk = st.selectbox("Vælg mål", list(opts.keys()), format_func=lambda x: opts[x]['label'])
             sd = opts[sk]
-    
+
             tge = df_all_events[(df_all_events['MATCH_OPTAUUID'] == sd['match_id']) & 
                                 (df_all_events['GOAL_TIME'] == sd['goal_ts'])].sort_values('EVENT_TIMESTAMP').copy()
-    
+
             p_c, l_c = st.columns([2.5, 1])
             p = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='grey')
             f, ax = p.draw(figsize=(10, 7))
             
             draw_match_info_box(ax, hold_logo, get_logo_img(sd['opp_uuid']), sd['date'], sd['score_str'], sd['min'])
-    
+
             for i in range(len(tge)-1):
                 p.arrows(tge.iloc[i]['EVENT_X'], tge.iloc[i]['EVENT_Y'], 
                          tge.iloc[i+1]['EVENT_X'], tge.iloc[i+1]['EVENT_Y'], 
@@ -552,13 +553,13 @@ def vis_side(dp=None):
                 ax.text(r['EVENT_X'], r['EVENT_Y']+2.5, r['PLAYER_NAME'], fontsize=7, ha='center', fontweight='bold', bbox=dict(facecolor='white', alpha=0.6, edgecolor='none', pad=1), zorder=11)
             
             p_c.pyplot(f)
-    
+
             def get_final_label_t4(row):
                 if str(row['EVENT_TYPEID']) == "16" and "9" in row['qual_list']:
                     return "STRAFFESPARK"
                 label = get_action_label(row)
                 return label if label else "Opbygning"
-    
+
             tge['Aktion'] = tge.apply(get_final_label_t4, axis=1)
             
             l_c.write("**Målsekvens:**")
@@ -569,7 +570,7 @@ def vis_side(dp=None):
             )
         else:
             st.info(f"Ingen mål fundet for {valgt_hold_navn} i sæsonen {valgt_saeson}.")
-
+            
     with t5:
         if not df_all_events.empty:
             # 1. Databehandling
