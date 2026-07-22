@@ -118,8 +118,7 @@ def vis_side(dp=None):
     top_col1, top_col2 = st.columns([1.5, 2.5])
     
     with top_col1:
-        st.caption("**Liga & Holdanalyse**")
-        st.markdown("<p style='color: #666; font-size: 0.9rem;'>Analyser skudmønstre og konvertering fordelt på zoner.</p>", unsafe_allow_html=True)
+        st.caption("**Afslutningsanalyse**")
 
     f_col1, f_col2, f_col3 = top_col2.columns(3)
     with f_col1:
