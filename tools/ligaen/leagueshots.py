@@ -44,15 +44,19 @@ def load_league_data(liga_uuid):
     # Subquery til at finde de rigtige kampe baseret på dynamisk UUID
     match_sql = f"SELECT DISTINCT MATCH_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = '{liga_uuid}'"
     
-    # SQL med JOIN på OPTA_PLAYERS for at sammensætte fulde navne
+    # SQL med JOIN på OPTA_MATCH_LINEUPS i stedet for OPTA_PLAYERS
     sql = f"""
         SELECT 
             e.*, 
-            TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME) as FULL_PLAYER_NAME,
+            TRIM(l.FIRST_NAME) || ' ' || TRIM(l.LAST_NAME) as FULL_PLAYER_NAME,
             q.QUALIFIER_VALUE as XG_RAW 
         FROM {DB}.OPTA_EVENTS e 
-        JOIN (SELECT DISTINCT PLAYER_OPTAUUID, FIRST_NAME, LAST_NAME FROM {DB}.OPTA_PLAYERS WHERE FIRST_NAME IS NOT NULL) p 
-            ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
+        JOIN (
+            SELECT DISTINCT MATCH_OPTAUUID, PLAYER_OPTAUUID, FIRST_NAME, LAST_NAME 
+            FROM {DB}.OPTA_MATCH_LINEUPS 
+            WHERE FIRST_NAME IS NOT NULL
+        ) l 
+            ON e.MATCH_OPTAUUID = l.MATCH_OPTAUUID AND e.PLAYER_OPTAUUID = l.PLAYER_OPTAUUID
         LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID AND q.QUALIFIER_QID = 321
         WHERE e.EVENT_TYPEID IN (13,14,15,16) 
         AND e.MATCH_OPTAUUID IN ({match_sql})
@@ -108,7 +112,7 @@ def vis_side(dp=None):
     </style>
     """, unsafe_allow_html=True)
 
-    # Dynamisk valg af sæson og turnering (hvis ikke sendes med via dp/session_state)
+    # Dynamisk valg af sæson og turnering
     col_s1, col_s2 = st.columns(2)
     with col_s1:
         sæson_sel = st.selectbox("Sæson", list(SEASONS.keys()), index=0)
