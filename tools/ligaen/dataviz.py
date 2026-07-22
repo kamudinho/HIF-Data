@@ -4,7 +4,16 @@ import numpy as np
 import plotly.graph_objects as go
 import requests
 import base64
-from data.utils.team_mapping import TEAMS
+
+# --- IMPORT DYNAMISKE KONSTANTER OG MAPPINGS ---
+from data.utils.team_mapping import (
+    SEASONS,
+    COMPETITIONS,
+    SEASON_LEAGUE_MAPPER,
+    TEAMS,
+    COMPETITION_NAME as DEFAULT_COMP,
+    TOURNAMENTCALENDAR_NAME as DEFAULT_SEASON
+)
 from data.data_load import _get_snowflake_conn
 
 # --- 1. HJÆLPEFUNKTIONER ---
@@ -16,43 +25,48 @@ def get_base64_image(url):
         if response.status_code == 200:
             encoded_str = base64.b64encode(response.content).decode("utf-8")
             return f"data:image/png;base64,{encoded_str}"
-    except: return url
+    except: 
+        return url
     return url
 
 @st.cache_data(ttl=3600)
-def load_data(periode, start, split, slut):
+def load_data(periode, start, split, slut, calendar_uuid, wyid):
     conn = _get_snowflake_conn()
     db = "KLUB_HVIDOVREIF.AXIS"
     
-    # Rettet stavefejl til præcis match ("Efterår 2025")
-    if periode == "Efterår 2025":
+    # Dynamisk periode-filtrering
+    if "Efterår" in periode:
         filter_sql = f"BETWEEN '{start}' AND '{split}'"
-    elif periode == "Forår 2026":
+    elif "Forår" in periode:
         filter_sql = f"BETWEEN '{pd.to_datetime(split) + pd.Timedelta(days=1)}' AND '{slut}'"
     else:
         filter_sql = f"BETWEEN '{start}' AND '{slut}'"
 
-    # A. Opta Matchinfo
-    df_opta = conn.query(f"""
-        SELECT * FROM {db}.OPTA_MATCHINFO 
-        WHERE TOURNAMENTCALENDAR_OPTAUUID = 'dyjr458hcmrcy87fsabfsy87o'
-        AND MATCH_DATE_FULL {filter_sql}
-    """)
+    # A. Opta Matchinfo (Dynamisk calendar_uuid)
+    df_opta = pd.DataFrame()
+    if calendar_uuid:
+        df_opta = conn.query(f"""
+            SELECT * FROM {db}.OPTA_MATCHINFO 
+            WHERE TOURNAMENTCALENDAR_OPTAUUID = '{calendar_uuid}'
+            AND MATCH_DATE_FULL {filter_sql}
+        """)
     
-    # B. Wyscout Performance
-    df_wy = conn.query(f"""
-        SELECT 
-            tm.TEAM_WYID, 
-            AVG(adv.XG) as XG, AVG(adv.SHOTS) as SHOTS, AVG(adv.GOALS) as GOALS,
-            AVG(md.PPDA) as PPDA, AVG(mp.PASSES) as PASSES
-        FROM {db}.WYSCOUT_TEAMMATCHES tm 
-        LEFT JOIN {db}.WYSCOUT_MATCHADVANCEDSTATS_GENERAL adv ON tm.MATCH_WYID = adv.MATCH_WYID AND tm.TEAM_WYID = adv.TEAM_WYID 
-        LEFT JOIN {db}.WYSCOUT_MATCHADVANCEDSTATS_DEFENCE md ON tm.MATCH_WYID = md.MATCH_WYID AND tm.TEAM_WYID = md.TEAM_WYID 
-        LEFT JOIN {db}.WYSCOUT_MATCHADVANCEDSTATS_PASSES mp ON tm.MATCH_WYID = mp.MATCH_WYID AND tm.TEAM_WYID = mp.TEAM_WYID
-        WHERE tm.COMPETITION_WYID = 328 
-        AND tm.DATE {filter_sql} 
-        GROUP BY tm.TEAM_WYID
-    """)
+    # B. Wyscout Performance (Dynamisk wyid)
+    df_wy = pd.DataFrame()
+    if wyid:
+        df_wy = conn.query(f"""
+            SELECT 
+                tm.TEAM_WYID, 
+                AVG(adv.XG) as XG, AVG(adv.SHOTS) as SHOTS, AVG(adv.GOALS) as GOALS,
+                AVG(md.PPDA) as PPDA, AVG(mp.PASSES) as PASSES
+            FROM {db}.WYSCOUT_TEAMMATCHES tm 
+            LEFT JOIN {db}.WYSCOUT_MATCHADVANCEDSTATS_GENERAL adv ON tm.MATCH_WYID = adv.MATCH_WYID AND tm.TEAM_WYID = adv.TEAM_WYID 
+            LEFT JOIN {db}.WYSCOUT_MATCHADVANCEDSTATS_DEFENCE md ON tm.MATCH_WYID = md.MATCH_WYID AND tm.TEAM_WYID = md.TEAM_WYID 
+            LEFT JOIN {db}.WYSCOUT_MATCHADVANCEDSTATS_PASSES mp ON tm.MATCH_WYID = mp.MATCH_WYID AND tm.TEAM_WYID = mp.TEAM_WYID
+            WHERE tm.COMPETITION_WYID = {wyid} 
+            AND tm.DATE {filter_sql} 
+            GROUP BY tm.TEAM_WYID
+        """)
     
     # C. Second Spectrum
     df_ss = conn.query(f"""
@@ -72,25 +86,37 @@ def load_data(periode, start, split, slut):
     """)
     
     return df_opta, df_wy, df_ss
-    
-def calculate_split_table(df_opta):
-    """Beregner tabel med Top 6 / Bund 6 split baseret på runde 22-reglen"""
+
+def calculate_split_table(df_opta, valgt_saeson, valgt_turnering):
+    """Beregner tabel. Initialiserer med alle hold fra team_mapping hvis få/ingen kampe er spillet."""
     def get_points(df):
         stats = {}
-        for _, row in df.iterrows():
-            h_uuid, a_uuid = row['CONTESTANTHOME_OPTAUUID'], row['CONTESTANTAWAY_OPTAUUID']
-            for uuid in [h_uuid, a_uuid]:
-                if uuid not in stats: stats[uuid] = {'P': 0, 'MD': 0}
-            h_g, a_g = int(row.get('TOTAL_HOME_SCORE', 0)), int(row.get('TOTAL_AWAY_SCORE', 0))
-            stats[h_uuid]['MD'] += (h_g - a_g); stats[a_uuid]['MD'] += (a_g - h_g)
-            if h_g > a_g: stats[h_uuid]['P'] += 3
-            elif a_g > h_g: stats[a_uuid]['P'] += 3
-            else: stats[h_uuid]['P'] += 1; stats[a_uuid]['P'] += 1
+        
+        # Opret alle forventede hold fra team_mapping først
+        forventede_hold = SEASON_LEAGUE_MAPPER.get(valgt_saeson, {}).get(valgt_turnering, [])
+        for h_navn in forventede_hold:
+            info = TEAMS.get(h_navn, {})
+            u_id = info.get('opta_uuid', h_navn)
+            stats[u_id] = {'P': 0, 'MD': 0}
+
+        if df is not None and not df.empty:
+            for _, row in df.iterrows():
+                h_uuid, a_uuid = row['CONTESTANTHOME_OPTAUUID'], row['CONTESTANTAWAY_OPTAUUID']
+                for uuid in [h_uuid, a_uuid]:
+                    if uuid not in stats: stats[uuid] = {'P': 0, 'MD': 0}
+                h_g, a_g = int(row.get('TOTAL_HOME_SCORE', 0) or 0), int(row.get('TOTAL_AWAY_SCORE', 0) or 0)
+                stats[h_uuid]['MD'] += (h_g - a_g); stats[a_uuid]['MD'] += (a_g - h_g)
+                if h_g > a_g: stats[h_uuid]['P'] += 3
+                elif a_g > h_g: stats[a_uuid]['P'] += 3
+                else: stats[h_uuid]['P'] += 1; stats[a_uuid]['P'] += 1
+                
         return pd.DataFrame.from_dict(stats, orient='index').reset_index().rename(columns={'index': 'OPTA_UUID'})
 
-    df_played = df_opta[df_opta['MATCH_STATUS'].str.contains('Played|Full|Finish', case=False, na=False)].sort_values('MATCH_DATE_FULL')
+    df_played = pd.DataFrame()
+    if df_opta is not None and not df_opta.empty and 'MATCH_STATUS' in df_opta.columns:
+        df_played = df_opta[df_opta['MATCH_STATUS'].str.contains('Played|Full|Finish', case=False, na=False)].sort_values('MATCH_DATE_FULL')
     
-    df_r22 = df_played.head(132) 
+    df_r22 = df_played.head(132) if not df_played.empty else df_played
     tabel_r22 = get_points(df_r22).sort_values(['P', 'MD'], ascending=False)
     top_6_uuids = tabel_r22.head(6)['OPTA_UUID'].tolist()
     
@@ -112,13 +138,12 @@ def draw_position_performance_chart(df_merged, metric, label, periode_tekst):
 
     fig = go.Figure()
     df_merged[metric] = pd.to_numeric(df_merged[metric], errors='coerce')
-    y_vals = df_merged[metric].dropna()
-    if y_vals.empty: return
     
-    y_min, y_max = y_vals.min(), y_vals.max()
+    y_vals = df_merged[metric].dropna()
+    y_min = y_vals.min() if not y_vals.empty else 0
+    y_max = y_vals.max() if not y_vals.empty else 1
     y_span = y_max - y_min if y_max != y_min else 1
     
-    # Vend aksen om, hvis det er defensive parametre hvor LAVE tal er bedst (PPDA og Mål imod)
     is_reversed = "PPDA" in label.upper() or "IMOD" in label.upper()
 
     for _, row in df_merged.iterrows():
@@ -157,9 +182,17 @@ def draw_position_performance_chart(df_merged, metric, label, periode_tekst):
 # --- 3. HOVEDFUNKTION ---
 
 def vis_side():
-    start_dato = "2025-07-01"
-    split_dato = "2025-12-31" 
-    slut_dato = "2026-06-30"
+    # Dynamiske start- og slutår ud fra DEFAULT_SEASON (f.eks. "2025/2026")
+    y_start = DEFAULT_SEASON.split('/')[0] if '/' in DEFAULT_SEASON else "2025"
+    y_end = f"20{DEFAULT_SEASON.split('/')[1]}" if '/' in DEFAULT_SEASON else "2026"
+
+    start_dato = f"{y_start}-07-01"
+    split_dato = f"{y_start}-12-31" 
+    slut_dato = f"{y_end}-06-30"
+
+    # Opta Calendar UUID og Wyscout ID slås dynamisk op
+    calendar_uuid = SEASONS.get(DEFAULT_SEASON, {}).get(DEFAULT_COMP)
+    wyid = COMPETITIONS.get(DEFAULT_COMP, {}).get("wyid", 328)
 
     # --- TOP MENU MED DROPDOWNS TIL HØJRE ---
     col_title, col_m, col_p = st.columns([2.0, 1.0, 1.0])
@@ -173,43 +206,45 @@ def vis_side():
         sel_metric = st.selectbox("Parameter:", list(metric_map.keys()))
 
     with col_p:
-        # Rettet stavefejl i dropdown ("Efterår 2025")
-        periode = st.selectbox("Periode:", ["2025/2026", "Efterår 2025", "Forår 2026"])
+        opt_efteraar = f"Efterår {y_start}"
+        opt_foraar = f"Forår {y_end}"
+        opt_hele = f"{DEFAULT_SEASON}"
+        
+        periode = st.selectbox("Periode:", [opt_hele, opt_efteraar, opt_foraar])
 
-    # Generer den tekst-streng der skal indlejres i grafen
-    if periode == "Efterår 2025":
-        tekst_beskrivelse = "Efterår 2025"
-    elif periode == "Forår 2026":
-        tekst_beskrivelse = "Forår 2026"
+    if periode == opt_efteraar:
+        tekst_beskrivelse = opt_efteraar
+    elif periode == opt_foraar:
+        tekst_beskrivelse = opt_foraar
     else:
-        tekst_beskrivelse = "Samlet for sæson 2025/2026"
+        tekst_beskrivelse = f"Samlet for sæson {DEFAULT_SEASON}"
 
     with col_title:
-        st.subheader("Betinia Ligaen")
+        st.subheader(DEFAULT_COMP)
         st.caption("Placering vs. Performance")
 
-    # Data load og filtrering
-    df_opta, df_wy, df_ss = load_data(periode, start_dato, split_dato, slut_dato)
-    if df_opta is None or df_opta.empty: 
-        st.info("Ingen data fundet for den valgte periode.")
-        return
+    # Data load og filtrering med dynamiske IDs
+    df_opta, df_wy, df_ss = load_data(periode, start_dato, split_dato, slut_dato, calendar_uuid, wyid)
+    
+    if df_opta is not None and not df_opta.empty:
+        df_opta.columns = [c.upper() for c in df_opta.columns]
 
-    df_opta.columns = [c.upper() for c in df_opta.columns]
-    df_liga = calculate_split_table(df_opta)
+    df_liga = calculate_split_table(df_opta, DEFAULT_SEASON, DEFAULT_COMP)
     
     # Opbygning af det endelige performance data-grundlag
     final_data = []
     for _, row in df_liga.iterrows():
         opt_uuid = row['OPTA_UUID']
+        
         team_info = next((info for name, info in TEAMS.items() if info.get('opta_uuid') == opt_uuid), None)
         team_name = next((name for name, info in TEAMS.items() if info.get('opta_uuid') == opt_uuid), "Ukendt")
         
         if team_info:
-            perf = df_wy[df_wy['TEAM_WYID'] == team_info.get('team_wyid')]
+            perf = df_wy[df_wy['TEAM_WYID'] == team_info.get('team_wyid')] if df_wy is not None and not df_wy.empty else pd.DataFrame()
             
             try:
                 m_id = str(team_info.get('opta_id'))
-                fysisk = df_ss[df_ss['TEAM_ID'].astype(str) == m_id]
+                fysisk = df_ss[df_ss['TEAM_ID'].astype(str) == m_id] if df_ss is not None and not df_ss.empty else pd.DataFrame()
             except:
                 fysisk = pd.DataFrame()
             
@@ -217,13 +252,13 @@ def vis_side():
                 '#': row['#'],
                 'HOLD_NAVN': team_name,
                 'LOGO_URL': team_info.get('logo'),
-                'XG': perf['XG'].iloc[0] if not perf.empty else np.nan,
-                'SHOTS': perf['SHOTS'].iloc[0] if not perf.empty else np.nan,
-                'GOALS': perf['GOALS'].iloc[0] if not perf.empty else np.nan,
-                'PASSES': perf['PASSES'].iloc[0] if not perf.empty else np.nan,
-                'PPDA': perf['PPDA'].iloc[0] if not perf.empty else np.nan,
-                'DIST': fysisk['DIST_KM'].iloc[0] if not fysisk.empty else np.nan,
-                'HSR': fysisk['HSR'].iloc[0] if not fysisk.empty else np.nan
+                'XG': perf['XG'].iloc[0] if not perf.empty and 'XG' in perf.columns else np.nan,
+                'SHOTS': perf['SHOTS'].iloc[0] if not perf.empty and 'SHOTS' in perf.columns else np.nan,
+                'GOALS': perf['GOALS'].iloc[0] if not perf.empty and 'GOALS' in perf.columns else np.nan,
+                'PASSES': perf['PASSES'].iloc[0] if not perf.empty and 'PASSES' in perf.columns else np.nan,
+                'PPDA': perf['PPDA'].iloc[0] if not perf.empty and 'PPDA' in perf.columns else np.nan,
+                'DIST': fysisk['DIST_KM'].iloc[0] if not fysisk.empty and 'DIST_KM' in fysisk.columns else np.nan,
+                'HSR': fysisk['HSR'].iloc[0] if not fysisk.empty and 'HSR' in fysisk.columns else np.nan
             })
 
     df_final = pd.DataFrame(final_data)
