@@ -30,7 +30,7 @@ COMPETITIONS = {
 SEASON_LEAGUE_MAPPER = {
     "2026/2027": {
         "1. Division": [
-            "Hvidovre", "Fredericia", "Vejle" "Esbjerg", "Kolding", "Hobro", 
+            "Hvidovre", "Fredericia", "Vejle", "Esbjerg", "Kolding", "Hobro", 
             "HB Køge", "Hillerød", "Aarhus Fremad", "AB", "AaB", "Vendsyssel"
         ],
         "3F Superliga": [
