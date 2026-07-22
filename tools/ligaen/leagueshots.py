@@ -44,17 +44,17 @@ def load_league_data(liga_uuid):
     # Subquery til at finde de rigtige kampe baseret på dynamisk UUID
     match_sql = f"SELECT DISTINCT MATCH_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = '{liga_uuid}'"
     
-    # SQL med JOIN på OPTA_MATCH_LINEUPS i stedet for OPTA_PLAYERS
+    # SQL med robust LEFT JOIN på OPTA_MATCH_LINEUPS
     sql = f"""
         SELECT 
             e.*, 
             TRIM(l.FIRST_NAME) || ' ' || TRIM(l.LAST_NAME) as FULL_PLAYER_NAME,
             q.QUALIFIER_VALUE as XG_RAW 
         FROM {DB}.OPTA_EVENTS e 
-        JOIN (
+        LEFT JOIN (
             SELECT DISTINCT MATCH_OPTAUUID, PLAYER_OPTAUUID, FIRST_NAME, LAST_NAME 
             FROM {DB}.OPTA_MATCH_LINEUPS 
-            WHERE FIRST_NAME IS NOT NULL
+            WHERE FIRST_NAME IS NOT NULL AND LAST_NAME IS NOT NULL
         ) l 
             ON e.MATCH_OPTAUUID = l.MATCH_OPTAUUID AND e.PLAYER_OPTAUUID = l.PLAYER_OPTAUUID
         LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID AND q.QUALIFIER_QID = 321
@@ -62,14 +62,18 @@ def load_league_data(liga_uuid):
         AND e.MATCH_OPTAUUID IN ({match_sql})
     """
     
-    df = conn.query(sql) if hasattr(conn, 'query') else pd.read_sql(sql, conn)
-    df.columns = [c.upper() for c in df.columns]
-    
-    # Overskriv PLAYER_NAME med det fulde navn fra vores JOIN
-    if 'FULL_PLAYER_NAME' in df.columns:
-        df['PLAYER_NAME'] = df['FULL_PLAYER_NAME']
+    try:
+        df = conn.query(sql) if hasattr(conn, 'query') else pd.read_sql(sql, conn)
+        df.columns = [c.upper() for c in df.columns]
         
-    return df
+        # Overskriv PLAYER_NAME med det fulde navn hvis det findes
+        if 'FULL_PLAYER_NAME' in df.columns:
+            df['PLAYER_NAME'] = df['FULL_PLAYER_NAME'].fillna(df.get('PLAYER_NAME', 'Ukendt'))
+            
+        return df
+    except Exception as e:
+        st.error(f"Fejl ved indlæsning af data fra Snowflake: {e}")
+        return pd.DataFrame()
 
 @st.cache_data(ttl=3600)
 def get_logo_img(url):
