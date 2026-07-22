@@ -115,22 +115,28 @@ def draw_h2h_chart(team1_name, team2_name, metrics, labels, df_wy, chart_key):
     color1 = get_team_color(team1_name, "primary", "#cc0000")
     color2 = get_team_color(team2_name, "primary", "#0056a3")
 
+    # Hent logo-URL'er for begge hold
+    _, info1 = get_team_info_by_opta_uuid(TEAMS.get(team1_name, {}).get('opta_uuid'))
+    _, info2 = get_team_info_by_opta_uuid(TEAMS.get(team2_name, {}).get('opta_uuid'))
+    logo1_url = info1.get('logo', '')
+    logo2_url = info2.get('logo', '')
+
+    images = []
+
     for i, m in enumerate(metrics):
         suffix = f"{i+1}" if i > 0 else ""
         
-        # Hent værdier (afrundet til 2 decimaler hvis flydetal, ellers pænt formateret)
         v1 = float(d1[m.upper()].iloc[0]) if not d1.empty and m.upper() in d1.columns else 0.0
         v2 = float(d2[m.upper()].iloc[0]) if not d2.empty and m.upper() in d2.columns else 0.0
         
-        # Tekstformatering over søjlerne (undgår .0 hvis det er heltal)
         txt1 = f"{v1:.2f}".rstrip('0').rstrip('.') if v1 % 1 != 0 else f"{int(v1)}"
         txt2 = f"{v2:.2f}".rstrip('0').rstrip('.') if v2 % 1 != 0 else f"{int(v2)}"
 
         fig.add_trace(go.Bar(
             x=[0, 1], 
             y=[v1, v2], 
-            text=[txt1, txt2],                  # <-- Værdierne der skal vises
-            textposition='outside',             # <-- Placeres oven over søjlen
+            text=[txt1, txt2],
+            textposition='outside',
             textfont=dict(size=12, color='black'),
             marker_color=[color1, color2], 
             width=0.7, 
@@ -138,15 +144,35 @@ def draw_h2h_chart(team1_name, team2_name, metrics, labels, df_wy, chart_key):
             yaxis=f"y{suffix}"
         ))
         
+        # Kategori-label placeres under logoerne (y=-0.28)
         fig.add_annotation(dict(
-            x=0.5, y=-0.2, 
+            x=0.5, y=-0.28, 
             xref=f"x{suffix} domain", 
             yref=f"y{suffix} domain", 
             text=f"<b>{labels[i]}</b>", 
             showarrow=False
         ))
         
-        # Y-aksens max justeres let op så teksten over søjlen ikke bliver skåret af
+        # Tilføj logo for Hold 1 under venstre søjle
+        if logo1_url:
+            images.append(dict(
+                source=logo1_url,
+                xref=f"x{suffix}", yref=f"y{suffix} domain",
+                x=0, y=-0.12,
+                sizex=0.35, sizey=0.15,
+                xanchor="center", yanchor="top"
+            ))
+            
+        # Tilføj logo for Hold 2 under højre søjle
+        if logo2_url:
+            images.append(dict(
+                source=logo2_url,
+                xref=f"x{suffix}", yref=f"y{suffix} domain",
+                x=1, y=-0.12,
+                sizex=0.35, sizey=0.15,
+                xanchor="center", yanchor="top"
+            ))
+
         max_val = max(v1, v2, 1.0) * 1.25
         
         fig.update_layout({
@@ -154,7 +180,14 @@ def draw_h2h_chart(team1_name, team2_name, metrics, labels, df_wy, chart_key):
             f"yaxis{suffix}": dict(visible=False, range=[0, max_val])
         })
     
-    fig.update_layout(height=380, margin=dict(t=50, b=50), plot_bgcolor='rgba(0,0,0,0)', showlegend=False)
+    # Tilføj logoerne til layoutet og skab lidt ekstra luft i bunden
+    fig.update_layout(
+        images=images,
+        height=420, 
+        margin=dict(t=40, b=80), 
+        plot_bgcolor='rgba(0,0,0,0)', 
+        showlegend=False
+    )
     st.plotly_chart(fig, use_container_width=True, key=chart_key)
 
 # --- 3. UI KOMPONENTER ---
