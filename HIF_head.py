@@ -19,7 +19,7 @@ def apply_custom_style():
             [data-testid="stHeaderBlockContainer"] h1 { display: none; }
             .stApp { background-color: #FFFFFF; }
             
-            /* Sørg for at kolonnerne strækker sig ens */
+            /* Tving kolonner og Streamlits wrappers til at strække sig ens */
             [data-testid="stHorizontalBlock"] {
                 display: flex;
                 align-items: stretch;
@@ -46,19 +46,18 @@ def apply_custom_style():
                 flex-direction: column;
             }
 
-            /* Fast højde på boksen, men start indholdet fra toppen (flex-start) */
+            /* Fjern absolut højde-lås og lad indholdet styre højden naturligt med flex */
             .fixed-card-content {
-                height: 380px !important;
-                max-height: 380px !important;
                 display: flex;
                 flex-direction: column;
-                justify-content: flex-start !important;
-                overflow: hidden;
+                flex: 1;
+                justify-content: flex-start;
             }
             
-            /* Fjern unødvendig afstand i Streamlit's interne elementer */
+            /* Fjern unødvendig intern afstand i Streamlits beholdere */
             [data-testid="stVerticalBlockBorderWrapper"] [data-testid="stVerticalBlock"] {
                 gap: 0rem !important;
+                height: 100%;
             }
 
             .stats-table { width: 100%; font-size: 11px; border-collapse: collapse; table-layout: auto; }
@@ -281,7 +280,7 @@ def vis_side():
         df_stats = conn.query(fallback_queries["opta_team_stats"])
         df_stats.columns = [str(c).upper() for c in df_stats.columns]
 
-    # --- TOPSEKTION: 3 KOLONNER (FAST BOKS-HØJDE MED INDHOLD STARTENDE ØVERST) ---
+    # --- TOPSEKTION: 3 KOLONNER (FLEKSIBEL HØJDE MED INDHOLD ØVERST) ---
     col1, col2, col3 = st.columns([1, 1, 1])
 
     # KOLONNE 1: NÆSTE MODSTANDER
