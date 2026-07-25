@@ -370,8 +370,8 @@ def vis_side():
             with tabs[0]: draw_h2h_chart(t1, t2, ['SHOTS', 'GOALS', 'MATCHTEMPO'], ['Skud', 'Mål', 'Tempo'], df_wy, "gen")
             with tabs[1]: draw_h2h_chart(t1, t2, ['XG', 'XGPERSHOT'], ['Total xG', 'xG pr. skud'], df_wy, "xg")
             with tabs[2]: draw_h2h_chart(t1, t2, ['SHOTSONTARGET', 'SHOTSBLOCKED', 'SHOTSFROMBOX', 'SHOTSFROMDANGERZONE'], ['På mål', 'Blokeret', 'I feltet', 'Danger Zone'], df_wy, "shot")
-            with tabs[3]: draw_h2h_chart(t1, t2, ['INTERCEPTIONS', 'TACKLES', 'CLEARANCES'], ['Interc.', 'Tackler', 'Clearing'], df_wy, "def")
-            with tabs[4]: draw_h2h_chart(t1, t2, ['PASSES', 'CROSSESTOTAL', 'PROGRESSIVEPASSES', 'PASSTOFINALTHIRDS'], ['Aflev.', 'Indlæg', 'Progr.', 'Sidste 1/3'], df_wy, "pass")
+            with tabs[3]: draw_h2h_chart(t1, t2, ['INTERCEPTIONS', 'TACKLES', 'CLEARANCES'], ['Interceptions', 'Tacklinger', 'Clearinger'], df_wy, "def")
+            with tabs[4]: draw_h2h_chart(t1, t2, ['PASSES', 'CROSSESTOTAL', 'PROGRESSIVEPASSES', 'PASSTOFINALTHIRDS'], ['Afleveringer', 'Indlæg', 'Progressive afl.', 'Sidste 1/3'], df_wy, "pass")
 
 if __name__ == "__main__":
     st.markdown("<style>.league-table { width: 100%; border-collapse: collapse; }</style>", unsafe_allow_html=True)
