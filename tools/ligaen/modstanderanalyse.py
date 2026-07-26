@@ -268,14 +268,12 @@ def vis_side(dp=None):
             FROM {DB}.OPTA_MATCHINFO 
             WHERE (CONTESTANTHOME_OPTAUUID = '{valgt_uuid}' OR CONTESTANTAWAY_OPTAUUID = '{valgt_uuid}') 
             AND TOURNAMENTCALENDAR_OPTAUUID IN {liga_ids_sql} 
-            ORDER BY ABS(DATEDIFF(day, MATCH_LOCALDATE, CURRENT_DATE())) ASC LIMIT 10
+            ORDER BY MATCH_LOCALDATE ASC LIMIT 10
         """
         df_res = conn.query(sql_res)
 
         if df_res is not None and not df_res.empty:
-            # Sikr at datoer konverteres korrekt og undgå NoneType fejl
             df_res['MATCH_LOCALDATE_DT'] = pd.to_datetime(df_res['MATCH_LOCALDATE'], errors='coerce')
-            df_res = df_res.sort_values('MATCH_LOCALDATE_DT', ascending=False)
 
             df_res['IS_PLAYED'] = df_res['MATCH_STATUS'].astype(str).str.contains("Played|Full|Finish|Post|Award", case=False, na=False) | \
                                   (df_res['TOTAL_HOME_SCORE'].notnull() & df_res['TOTAL_AWAY_SCORE'].notnull())
@@ -292,6 +290,12 @@ def vis_side(dp=None):
 
             df_res['RES'] = df_res.apply(calc_res, axis=1)
 
+            # Sortering: Spillede kampe sorteres faldende (seneste øverst), kommende kampe sorteres stigende
+            # Vi opdeler i spillede og ikke-spillede for at ramme det præcise ønskede flow
+            df_played = df_res[df_res['IS_PLAYED']].sort_values('MATCH_LOCALDATE_DT', ascending=False)
+            df_upcoming = df_res[~df_res['IS_PLAYED']].sort_values('MATCH_LOCALDATE_DT', ascending=True)
+            df_res = pd.concat([df_played, df_upcoming]).head(10)
+
             df_vol = df_all_h.groupby('MATCH_OPTAUUID').agg(
                 P_tot=('EVENT_TYPEID', lambda x: (x == 1).sum()),
                 P_suc=('EVENT_TYPEID', lambda x: ((df_all_h.loc[x.index, 'EVENT_TYPEID'] == 1) & (df_all_h.loc[x.index, 'OUTCOME'] == 1)).sum()),
@@ -305,9 +309,7 @@ def vis_side(dp=None):
                 F_suc=('EVENT_TYPEID', lambda x: (x == 4).sum())
             ).reset_index()
 
-            # Kun spillede kampe med i graferne
-            df_played_res = df_res[df_res['IS_PLAYED']].copy()
-            df_plot = df_played_res.merge(df_vol, on='MATCH_OPTAUUID', how='left').fillna(0)
+            df_plot = df_played.merge(df_vol, on='MATCH_OPTAUUID', how='left').fillna(0)
             
             if not df_plot.empty:
                 df_plot['LABEL'] = df_plot['MATCH_LOCALDATE_DT'].dt.strftime('%d/%m')
@@ -333,9 +335,9 @@ def vis_side(dp=None):
                 st.write(f"**Kampe ({valgt_saeson} - {COMPETITION_NAME})**")
                 with st.container(border=True):
                     st.markdown('<div class="metric-row-wrapper">', unsafe_allow_html=True)
-                    wins, draws, losses = (df_played_res['RES'] == "W").sum(), (df_played_res['RES'] == "D").sum(), (df_played_res['RES'] == "L").sum()
-                    mål_s = sum([row['TOTAL_HOME_SCORE'] if row['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else row['TOTAL_AWAY_SCORE'] for _, row in df_played_res.iterrows() if pd.notnull(row['TOTAL_HOME_SCORE'])])
-                    mål_i = sum([row['TOTAL_AWAY_SCORE'] if row['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else row['TOTAL_HOME_SCORE'] for _, row in df_played_res.iterrows() if pd.notnull(row['TOTAL_HOME_SCORE'])])
+                    wins, draws, losses = (df_played['RES'] == "W").sum(), (df_played['RES'] == "D").sum(), (df_played['RES'] == "L").sum()
+                    mål_s = sum([row['TOTAL_HOME_SCORE'] if row['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else row['TOTAL_AWAY_SCORE'] for _, row in df_played.iterrows() if pd.notnull(row['TOTAL_HOME_SCORE'])])
+                    mål_i = sum([row['TOTAL_AWAY_SCORE'] if row['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else row['TOTAL_HOME_SCORE'] for _, row in df_played.iterrows() if pd.notnull(row['TOTAL_HOME_SCORE'])])
                     met_cols = st.columns(5)
                     met_cols[0].metric("Pts", (wins*3)+draws)
                     met_cols[1].metric("V", wins)
@@ -347,13 +349,15 @@ def vis_side(dp=None):
                     
                     for _, row in df_res.iterrows():
                         match_dt = row['MATCH_LOCALDATE_DT']
-                        date_str = match_dt.strftime('%d/%m') if pd.notnull(match_dt) else "Ugyldig dato"
+                        date_str = match_dt.strftime('%d/%m') if pd.notnull(match_dt) else "-"
                         
                         if row['IS_PLAYED'] and pd.notnull(row['TOTAL_HOME_SCORE']) and pd.notnull(row['TOTAL_AWAY_SCORE']):
                             score_display = f"{int(row['TOTAL_HOME_SCORE'])}-{int(row['TOTAL_AWAY_SCORE'])}"
                             res_val = row['RES']
                         else:
-                            score_display = match_dt.strftime('%H:%M') if pd.notnull(match_dt) and match_dt.strftime('%H:%M') != '00:00' else "TBD"
+                            # Viser tidspunkt, hvis det er satt (og ikke 00:00), ellers "TBD" så datoen stadig bærer i midten
+                            time_str = match_dt.strftime('%H:%M') if pd.notnull(match_dt) else ""
+                            score_display = time_str if time_str and time_str != '00:00' else "TBD"
                             res_val = "-"
 
                         draw_match_row(date_str, row['CONTESTANTHOME_NAME'], row['CONTESTANTHOME_OPTAUUID'], score_display, row['CONTESTANTAWAY_NAME'], row['CONTESTANTAWAY_OPTAUUID'], res_val)
