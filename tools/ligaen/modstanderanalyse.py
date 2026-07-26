@@ -288,6 +288,7 @@ def vis_side(dp=None):
 
             df_res['RES'] = df_res.apply(calc_res, axis=1)
 
+            # Udled volumendata for alle hentede kampe, men vi filtrerer til grafen
             df_vol = pd.DataFrame()
             if 'df_all_h' in locals() and df_all_h is not None and not df_all_h.empty:
                 df_vol = df_all_h.groupby('MATCH_OPTAUUID').agg(
@@ -303,12 +304,13 @@ def vis_side(dp=None):
                     F_suc=('EVENT_TYPEID', lambda x: (x == 4).sum())
                 ).reset_index()
 
-            df_plot = df_res.merge(df_vol, on='MATCH_OPTAUUID', how='left').fillna(0)
-            df_plot['MATCH_DT'] = pd.to_datetime(df_plot['MATCH_LOCALDATE'], errors='coerce')
-            df_plot['LABEL'] = df_plot['MATCH_DT'].dt.strftime('%d/%m').fillna('')
-            df_plot = df_plot.sort_values('MATCH_LOCALDATE')
-            df_plot['OPP_NAME'] = df_plot.apply(lambda r: r['CONTESTANTAWAY_NAME'] if r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else r['CONTESTANTHOME_NAME'], axis=1)
-            df_plot['X_AXIS_LABEL'] = df_plot['LABEL'] + "<br>" + df_plot['OPP_NAME'].str[:3].str.upper()
+            df_plot_all = df_res.merge(df_vol, on='MATCH_OPTAUUID', how='left').fillna(0)
+            df_plot_all['MATCH_DT'] = pd.to_datetime(df_plot_all['MATCH_LOCALDATE'], errors='coerce')
+            df_plot_all = df_plot_all.sort_values('MATCH_LOCALDATE', ascending=False)
+            
+            # Find KUN den seneste spillede kamp til graferne
+            played_matches = df_plot_all[df_plot_all['IS_PLAYED']]
+            df_latest = played_matches.head(1) if not played_matches.empty else df_plot_all.head(1)
 
             st.markdown("""
                 <style>
@@ -368,25 +370,25 @@ def vis_side(dp=None):
                 col_map = {'P': '#084594', 'A': '#cb181d', 'E': '#238b45', 'D': '#ec7014', 'F': '#6a51a3'}
                 
                 name_fix = {"B 9": "B93", "HB": "HBK"}
-                df_plot['OPP_NAME_CLEAN'] = df_plot['OPP_NAME'].replace(name_fix)
-                df_plot['X_AXIS_LABEL'] = df_plot['LABEL'] + "<br>" + df_plot['OPP_NAME_CLEAN'].str.upper()
+                
+                if not df_latest.empty:
+                    latest_row = df_latest.iloc[0]
+                    opp_name = latest_row['CONTESTANTAWAY_NAME'] if latest_row['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else latest_row['CONTESTANTHOME_NAME']
+                    opp_clean = name_fix.get(opp_name[:4].strip(), opp_name[:12])
+                    match_label = pd.to_datetime(latest_row['MATCH_LOCALDATE']).strftime('%d/%m') + " vs. " + opp_clean
+                else:
+                    match_label = "Seneste kamp"
 
                 # Graf 1
                 h_c1, d_c1 = st.columns([2, 1])
                 val1 = d_c1.selectbox("Vælg", list(kat_map.keys()), index=0, key="val_top", label_visibility="collapsed")
                 c_key1 = kat_map[val1]
-                avg1 = df_plot[f'{c_key1}_tot'].mean()
-                h_c1.markdown(f"**{val1} (Gns: {round(avg1, 1)})**")
+                val_1_num = df_latest[f'{c_key1}_tot'].values[0] if not df_latest.empty else 0
+                h_c1.markdown(f"**{val1} ({match_label}: {int(val_1_num)})**")
                 
-                fig1 = px.bar(df_plot, x='X_AXIS_LABEL', y=f"{c_key1}_tot", text=f"{c_key1}_tot")
-                fig1.add_hline(y=avg1, line_dash="dot", line_color="rgba(0,0,0,0.2)", line_width=1)
-                fig1.update_traces(
-                    marker_color=col_map[c_key1], 
-                    textposition='outside',
-                    customdata=np.stack((df_plot['OPP_NAME_CLEAN'], df_plot['LABEL'], [val1.lower()] * len(df_plot)), axis=-1),
-                    hovertemplate="vs. %{customdata[0]}<br>%{customdata[1]}<br><br><b>%{y} %{customdata[2]}</b><extra></extra>"
-                )
-                fig1.update_layout(height=300, margin=dict(t=25, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None, hoverlabel=dict(bgcolor="white", font_size=12))
+                fig1 = px.bar(df_latest, x=[match_label], y=f"{c_key1}_tot", text=f"{c_key1}_tot")
+                fig1.update_traces(marker_color=col_map[c_key1], textposition='outside')
+                fig1.update_layout(height=300, margin=dict(t=25, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None)
                 st.plotly_chart(fig1, use_container_width=True, config={'displayModeBar': False})
 
                 # Graf 2
@@ -394,18 +396,12 @@ def vis_side(dp=None):
                 h_c2, d_c2 = st.columns([2, 1])
                 val2 = d_c2.selectbox("Vælg", options_2, index=0, key="val_bot", label_visibility="collapsed")
                 c_key2 = kat_map[val2]
-                avg2 = df_plot[f'{c_key2}_tot'].mean()
-                h_c2.markdown(f"**{val2} (Gns: {round(avg2, 1)})**")
+                val_2_num = df_latest[f'{c_key2}_tot'].values[0] if not df_latest.empty else 0
+                h_c2.markdown(f"**{val2} ({match_label}: {int(val_2_num)})**")
                 
-                fig2 = px.bar(df_plot, x='X_AXIS_LABEL', y=f"{c_key2}_tot", text=f"{c_key2}_tot")
-                fig2.add_hline(y=avg2, line_dash="dot", line_color="rgba(0,0,0,0.2)", line_width=1)
-                fig2.update_traces(
-                    marker_color=col_map[c_key2], 
-                    textposition='outside',
-                    customdata=np.stack((df_plot['OPP_NAME_CLEAN'], df_plot['LABEL'], [val2.lower()] * len(df_plot)), axis=-1),
-                    hovertemplate="vs. %{customdata[0]}<br>%{customdata[1]}<br><br><b>%{y} %{customdata[2]}</b><extra></extra>"
-                )
-                fig2.update_layout(height=300, margin=dict(t=25, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None, hoverlabel=dict(bgcolor="white", font_size=12))
+                fig2 = px.bar(df_latest, x=[match_label], y=f"{c_key2}_tot", text=f"{c_key2}_tot")
+                fig2.update_traces(marker_color=col_map[c_key2], textposition='outside')
+                fig2.update_layout(height=300, margin=dict(t=25, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', xaxis_title=None, yaxis_title=None)
                 st.plotly_chart(fig2, use_container_width=True, config={'displayModeBar': False})
             
     with t2:
