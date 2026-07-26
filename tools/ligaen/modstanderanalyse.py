@@ -296,18 +296,24 @@ def vis_side(dp=None):
             df_played = df_res[df_res['IS_PLAYED']].sort_values('MATCH_LOCALDATE_DT', ascending=False)
             df_upcoming = df_res[~df_res['IS_PLAYED']].sort_values('MATCH_LOCALDATE_DT', ascending=True)
             
-            # Dynamisk sammensætning af op til 10 kampe totalt:
-            # - Så mange spillede som muligt (nyeste øverst)
-            # - Fyld resten op med kommende kampe (kronologisk fremad)
             target_total = 10
-            n_played_to_take = min(len(df_played), target_total)
-            df_played_sel = df_played.head(n_played_to_take)
+            n_played_to_terminate = min(len(df_played), target_total)
+            df_played_sel = df_played.head(n_played_to_terminate)
             
             remaining_slots = target_total - len(df_played_sel)
             df_upcoming_sel = df_upcoming.head(remaining_slots) if remaining_slots > 0 else pd.DataFrame(columns=df_res.columns)
             
-            # Sorter de endelige 10 kampe kronologisk, så de vises korrekt efter dato i tabellen
-            df_res = pd.concat([df_played_sel, df_upcoming_sel]).sort_values('MATCH_LOCALDATE_DT', ascending=True)
+            # SÆT SAMMEN: 
+            # Hvis vi har kommende kampe (fx ny sæson), vil vi gerne have nærmeste fremtidige kamp øverst, 
+            # og de spillede lige under (nyeste spillet først). 
+            # Hvis der ikke er nogen kommende kampe (fx gammel afsluttet sæson), tager vi bare de spillede (nyeste øverst).
+            if not df_upcoming_sel.empty:
+                # Kommende kampe først (nærmeste dato øverst), derefter spillede kampe (nyeste spillet først)
+                df_res = pd.concat([df_upcoming_sel.sort_values('MATCH_LOCALDATE_DT', ascending=True), 
+                                    df_played_sel.sort_values('MATCH_LOCALDATE_DT', ascending=False)])
+            else:
+                # Kun spillede kampe: Nyeste øverst
+                df_res = df_played_sel.sort_values('MATCH_LOCALDATE_DT', ascending=False)
 
             df_vol = df_all_h.groupby('MATCH_OPTAUUID').agg(
                 P_tot=('EVENT_TYPEID', lambda x: (x == 1).sum()),
