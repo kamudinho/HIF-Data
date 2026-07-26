@@ -588,8 +588,9 @@ def vis_side(dp=None):
                 
     with t4:
         if not df_all_events.empty:
+            # Sorterer så seneste kamp/mål kommer først (hvis der er flere mål på samme tidspunkt, sorteres efter tidspunkt faldende)
             gl = df_all_events.drop_duplicates(['MATCH_OPTAUUID', 'GOAL_TIME']).sort_values(
-                ['MATCH_LOCALDATE', 'GOAL_MIN'], ascending=[False, False]
+                ['MATCH_LOCALDATE', 'EVENT_TIMESTAMP'], ascending=[False, False]
             )
             
             opts = {}
@@ -598,17 +599,24 @@ def vis_side(dp=None):
                 
                 dato_str = pd.to_datetime(r['MATCH_LOCALDATE']).strftime('%d/%m')
                 opp_navn = r['CONTESTANTAWAY_NAME'] if r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else r['CONTESTANTHOME_NAME']
+                
+                # Kampens endelige resultat
                 kamp_res = f"{int(r['TOTAL_HOME_SCORE'])}-{int(r['TOTAL_AWAY_SCORE'])}"
                 
+                # Hent målets specifikke stilling i det øjeblik det blev scoret (hvis feltene findes, ellers fallback til samlet resultat)
+                mål_hjemme = int(r['HOME_SCORE']) if 'HOME_SCORE' in r and pd.notna(r['HOME_SCORE']) else int(r['TOTAL_HOME_SCORE'])
+                mål_ude = int(r['AWAY_SCORE']) if 'AWAY_SCORE' in r and pd.notna(r['AWAY_SCORE']) else int(r['TOTAL_AWAY_SCORE'])
+                mål_stilling = f"{mål_hjemme}-{mål_ude}"
+
+                # Lægger 1 minut til (f.eks. 0 -> 1, 14 -> 15 osv.)
                 raw_min = r['GOAL_MIN']
                 if pd.isna(raw_min):
                     minuttal = 1
                 else:
                     minuttal = int(raw_min) + 1
                 
-                # F.eks. "25/07: 1-0 (1. min) vs. Vendsyssel (2-2)"
-                # Her tages udgangspunkt i målets aktuelle stilling eller kampens resultat, eller score-format som ønsket
-                label_tekst = f"{dato_str}: {kamp_res} ({minuttal}. min) vs. {opp_navn} ({kamp_res})"
+                # Ønsket format: "25/7: 1-0 (1. min) vs. Vendssyssel (2-2)"
+                label_tekst = f"{dato_str}: {mål_stilling} ({minuttal}. min) vs. {opp_navn} ({kamp_res})"
 
                 opts[key] = {
                     'label': label_tekst, 
