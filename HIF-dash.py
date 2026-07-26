@@ -73,13 +73,13 @@ if not st.session_state["logged_in"]:
         </style>
     """, unsafe_allow_html=True)
     
-    # 35% til venstre (login) og 65% til højre (tom kolonne der matcher billedet)
-    col_left, col_right = st.name = st.columns([35, 65]) if hasattr(st, 'columns') else st.columns([1, 2])
+    col_left, col_right = st.columns([35, 65])
     
     with col_left:
         st.markdown("<br><br><br><br><br>", unsafe_allow_html=True)
         
-        _, center, _ = st.columns([1, 2, 1])
+        # Ændret fra [1, 2, 1] til [0.8, 2.4, 0.8] for at give lidt mere bredde til login-boksen i midten
+        _, center, _ = st.columns([0.8, 2.4, 0.8])
         with center:
             st.markdown(f'<div style="display: flex; justify-content: center;"><img src="{HIF_LOGO_URL}" style="width: 70px;"></div>', unsafe_allow_html=True)
             st.markdown("<h2 style='text-align: center;'>HIF Data HUB</h2>", unsafe_allow_html=True)
