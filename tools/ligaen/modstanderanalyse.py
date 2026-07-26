@@ -641,6 +641,11 @@ def vis_side(dp=None):
             def get_final_label_t4(row):
                 if str(row['EVENT_TYPEID']) == "16" and "9" in row['qual_list']:
                     return "STRAFFESPARK"
+                
+                # Bruger Action_Label kolonnen som allerede er beregnet i SQL/data-load, hvis den findes
+                if 'Action_Label' in row and pd.notna(row['Action_Label']) and row['Action_Label'] != "":
+                    return row['Action_Label']
+                
                 label = get_action_label(row)
                 return label if label else "Opbygning"
 
