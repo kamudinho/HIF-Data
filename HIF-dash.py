@@ -67,7 +67,7 @@ if not st.session_state["logged_in"]:
             .stApp {{ background: linear-gradient(to right, white 50%, transparent 50%); }}
             [data-testid="stAppViewContainer"]::before {{
                 content: ""; position: fixed; right: 0; top: 0; width: 50%; height: 100vh;
-                background-image: url('https://www.tv2kosmopol.dk/img/asset/aW1hZ2VzLzIwMjMvMDUvMjgvMjAyMzA1MjctMTUxMTM3LWwtMTkyMHgxNDg1d2UuanBn/20230527-151137-l-1920x1485we.jpg?fm=jpg&w=1920&h=862.92134831461&s=69869f3269bf8ebfa06b2b56bcf20a2e');
+                background-image: url('https://hvidovrefodbold-dk.b-cdn.net/media/aamleu11/8d6a2343.jpg?cc=0,0.18620699949167102,0,0.1881673748827034&width=1920&height=800&rnd=134071899231000000');
                 background-size: cover; background-position: center; opacity: 0.7; 
             }}
         </style>
