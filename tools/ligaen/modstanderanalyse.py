@@ -97,7 +97,7 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None)
     ax.text(0.94, text_y, title, transform=ax.transAxes, fontsize=6, fontweight='bold', ha='right', va='top')
     
     if not plot_data.empty: 
-        pitch.kdeplot(plot_data.EVENT_X, plot_data.EVENT_Y, ax=ax, cmap=cmap, fill=True, alpha=0.5, levels=100, linewidths=1.5)
+        pitch.kdeplot(plot_data.EVENT_X, plot_data.EVENT_Y, ax=ax, cmap=cmap, fill=True, alpha=0.5, levels=100, linewidths=1.2)
     return fig
 
 # --- 3. HOVEDFUNKTION ---
