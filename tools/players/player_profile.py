@@ -126,7 +126,7 @@ def get_physical_data(player_name, player_opta_uuid, valgt_hold_navn, db_conn):
     sql = f"""
         SELECT * FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
         WHERE UPPER(PLAYER_NAME) LIKE UPPER('%{efternavn}%')
-        AND MATCH_DATE >= '2025-07-01'
+        AND MATCH_DATE >= '2026-07-01'
     """
     df = db_conn.query(sql)
     if df is not None and not df.empty:
@@ -206,7 +206,7 @@ def vis_side(dp=None):
                 ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
             LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
             WHERE e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid_hold}' 
-            AND e.EVENT_TIMESTAMP >= '2025-07-01'
+            AND e.EVENT_TIMESTAMP >= '2026-07-01'
             GROUP BY 1, 2, 3, 4, 5, 6, 7
         """
         df_all = conn.query(sql_events)
@@ -245,7 +245,7 @@ def vis_side(dp=None):
                 JOIN {DB}.OPTA_MATCH_LINEUPS p ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
                 LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
                 WHERE e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid_hold}'
-                  AND e.EVENT_TIMESTAMP >= '2025-07-01'
+                  AND e.EVENT_TIMESTAMP >= '2026-07-01'
                 GROUP BY e.EVENT_OPTAUUID, e.PLAYER_OPTAUUID, e.EVENT_TYPEID, e.EVENT_TIMESTAMP, e.MATCH_OPTAUUID, p.FIRST_NAME, p.LAST_NAME
             ),
             SortedEvents AS (
