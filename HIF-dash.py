@@ -68,7 +68,7 @@ if not st.session_state["logged_in"]:
             [data-testid="stAppViewContainer"]::before {{
                 content: ""; position: fixed; right: 0; top: 0; width: 60%; height: 100vh;
                 background-image: url('https://static1.squarespace.com/static/573c1b7d01dbae9b52cd0936/573d6bdc37013bcc611eefd5/6477a814a3929d7ab0fa3006/1685610754298/GettyImages-1252722215.jpg?format=1500w');
-                background-size: cover; background-position: center; opacity: 0.7; 
+                background-size: cover; background-position: right; opacity: 0.7; 
             }}
         </style>
     """, unsafe_allow_html=True)
