@@ -190,9 +190,9 @@ def vis_side(dp=None):
                     LISTAGG(q.QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY q.QUALIFIER_QID) as QUALIFIERS
                 FROM {DB}.OPTA_EVENTS e
                 JOIN (
-                    SELECT DISTINCT PLAYER_OPTAUUID, PLAYER_FIRSTNAME, PLAYER_LASTNAME 
+                    SELECT DISTINCT PLAYER_OPTAUUID, FIRST_NAME, LAST_NAME 
                     FROM {DB}.OPTA_MATCH_LINEUPS 
-                    WHERE PLAYER_FIRSTNAME IS NOT NULL
+                    WHERE FIRST_NAME IS NOT NULL
                 ) p ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
                 LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
                 WHERE e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' 
@@ -222,7 +222,7 @@ def vis_side(dp=None):
                 AND MATCH_OPTAUUID IN (SELECT MATCH_OPTAUUID FROM SeasonMatches)
             )
             SELECT e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, 
-                   TRIM(p.PLAYER_FIRSTNAME) || ' ' || TRIM(p.PLAYER_LASTNAME) as PLAYER_NAME, 
+                   TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME) as PLAYER_NAME, 
                    e.EVENT_TIMESTAMP, e.MATCH_OPTAUUID,
                    m.MATCH_LOCALDATE, m.CONTESTANTHOME_NAME, m.CONTESTANTAWAY_NAME, 
                    m.CONTESTANTHOME_OPTAUUID, m.CONTESTANTAWAY_OPTAUUID,
