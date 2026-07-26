@@ -64,10 +64,10 @@ if not st.session_state["logged_in"]:
         <style>
             [data-testid="stAppViewContainer"] {{ padding: 0 !important; }}
             [data-testid="stHeader"] {{ display: none; }}
-            .stApp {{ background: linear-gradient(to right, white 80%, transparent 50%); }}
+            .stApp {{ background: linear-gradient(to right, white 60%, transparent 50%); }}
             [data-testid="stAppViewContainer"]::before {{
-                content: ""; position: fixed; right: 0; top: 0; width: 80%; height: 100vh;
-                background-image: url('https://hvidovrefodbold-dk.b-cdn.net/media/aamleu11/8d6a2343.jpg?cc=0,0.18620699949167102,0,0.1881673748827034&width=1920&height=800&rnd=134071899231000000');
+                content: ""; position: fixed; right: 0; top: 0; width: 60%; height: 100vh;
+                background-image: url('https://static1.squarespace.com/static/573c1b7d01dbae9b52cd0936/573d6bdc37013bcc611eefd5/6477a814a3929d7ab0fa3006/1685610754298/GettyImages-1252722215.jpg?format=1500w');
                 background-size: cover; background-position: center; opacity: 0.7; 
             }}
         </style>
