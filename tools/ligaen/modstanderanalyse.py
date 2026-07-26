@@ -262,18 +262,21 @@ def vis_side(dp=None):
     
     with t1:
         sql_res = f"""
-            SELECT MATCH_LOCALDATE, CONTESTANTHOME_NAME, CONTESTANTAWAY_NAME, 
+            SELECT MATCH_LOCALDATE, MATCH_DATE_FULL, CONTESTANTHOME_NAME, CONTESTANTAWAY_NAME, 
                    TOTAL_HOME_SCORE, TOTAL_AWAY_SCORE, CONTESTANTHOME_OPTAUUID, 
                    CONTESTANTAWAY_OPTAUUID, MATCH_OPTAUUID, MATCH_STATUS 
             FROM {DB}.OPTA_MATCHINFO 
             WHERE (CONTESTANTHOME_OPTAUUID = '{valgt_uuid}' OR CONTESTANTAWAY_OPTAUUID = '{valgt_uuid}') 
             AND TOURNAMENTCALENDAR_OPTAUUID IN {liga_ids_sql} 
-            ORDER BY MATCH_LOCALDATE ASC LIMIT 10
+            ORDER BY COALESCE(MATCH_DATE_FULL, MATCH_LOCALDATE) ASC LIMIT 10
         """
         df_res = conn.query(sql_res)
 
         if df_res is not None and not df_res.empty:
-            df_res['MATCH_LOCALDATE_DT'] = pd.to_datetime(df_res['MATCH_LOCALDATE'], errors='coerce')
+            # Prioriter MATCH_DATE_FULL, ellers brug MATCH_LOCALDATE som fallback
+            df_res['USE_DATE'] = df_res['MATCH_DATE_FULL'].fillna(df_res['MATCH_LOCALDATE'])
+            df_res['MATCH_LOCALDATE_DT'] = pd.to_datetime(df_res['USE_DATE'], errors='coerce')
+            df_res['MATCH_DATE_ONLY'] = df_res['MATCH_LOCALDATE_DT'].dt.date
 
             df_res['IS_PLAYED'] = df_res['MATCH_STATUS'].astype(str).str.contains("Played|Full|Finish|Post|Award", case=False, na=False) | \
                                   (df_res['TOTAL_HOME_SCORE'].notnull() & df_res['TOTAL_AWAY_SCORE'].notnull())
@@ -290,8 +293,7 @@ def vis_side(dp=None):
 
             df_res['RES'] = df_res.apply(calc_res, axis=1)
 
-            # Sortering: Spillede kampe sorteres faldende (seneste øverst), kommende kampe sorteres stigende
-            # Vi opdeler i spillede og ikke-spillede for at ramme det præcise ønskede flow
+            # Opdel i spillede (seneste øverst) og kommende (stigende nedad)
             df_played = df_res[df_res['IS_PLAYED']].sort_values('MATCH_LOCALDATE_DT', ascending=False)
             df_upcoming = df_res[~df_res['IS_PLAYED']].sort_values('MATCH_LOCALDATE_DT', ascending=True)
             df_res = pd.concat([df_played, df_upcoming]).head(10)
@@ -312,7 +314,7 @@ def vis_side(dp=None):
             df_plot = df_played.merge(df_vol, on='MATCH_OPTAUUID', how='left').fillna(0)
             
             if not df_plot.empty:
-                df_plot['LABEL'] = df_plot['MATCH_LOCALDATE_DT'].dt.strftime('%d/%m')
+                df_plot['LABEL'] = pd.to_datetime(df_plot['MATCH_DATE_ONLY']).dt.strftime('%d/%m')
                 df_plot = df_plot.sort_values('MATCH_LOCALDATE_DT')
                 df_plot['OPP_NAME'] = df_plot.apply(lambda r: r['CONTESTANTAWAY_NAME'] if r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else r['CONTESTANTHOME_NAME'], axis=1)
                 name_fix = {"B 9": "B93", "HB": "HBK"}
@@ -348,14 +350,14 @@ def vis_side(dp=None):
                     st.markdown('<div class="compact-divider"></div>', unsafe_allow_html=True)
                     
                     for _, row in df_res.iterrows():
-                        match_dt = row['MATCH_LOCALDATE_DT']
-                        date_str = match_dt.strftime('%d/%m') if pd.notnull(match_dt) else "-"
+                        d_val = row['MATCH_DATE_ONLY']
+                        date_str = d_val.strftime('%d/%m') if pd.notnull(d_val) else "-"
                         
                         if row['IS_PLAYED'] and pd.notnull(row['TOTAL_HOME_SCORE']) and pd.notnull(row['TOTAL_AWAY_SCORE']):
                             score_display = f"{int(row['TOTAL_HOME_SCORE'])}-{int(row['TOTAL_AWAY_SCORE'])}"
                             res_val = row['RES']
                         else:
-                            # Viser tidspunkt, hvis det er satt (og ikke 00:00), ellers "TBD" så datoen stadig bærer i midten
+                            match_dt = row['MATCH_LOCALDATE_DT']
                             time_str = match_dt.strftime('%H:%M') if pd.notnull(match_dt) else ""
                             score_display = time_str if time_str and time_str != '00:00' else "TBD"
                             res_val = "-"
