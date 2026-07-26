@@ -268,7 +268,8 @@ def vis_side(dp=None):
             FROM {DB}.OPTA_MATCHINFO 
             WHERE (CONTESTANTHOME_OPTAUUID = '{valgt_uuid}' OR CONTESTANTAWAY_OPTAUUID = '{valgt_uuid}') 
             AND TOURNAMENTCALENDAR_OPTAUUID IN {liga_ids_sql} 
-            ORDER BY COALESCE(MATCH_DATE_FULL, MATCH_LOCALDATE) DESC LIMIT 10
+            AND SEASONNAME = '{valgt_saeson}'
+            ORDER BY COALESCE(MATCH_DATE_FULL, MATCH_LOCALDATE) ASC
         """
         df_res = conn.query(sql_res)
 
