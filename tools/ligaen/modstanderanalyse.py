@@ -600,8 +600,12 @@ def vis_side(dp=None):
                 opp_navn = r['CONTESTANTAWAY_NAME'] if r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else r['CONTESTANTHOME_NAME']
                 kamp_res = f"{int(r['TOTAL_HOME_SCORE'])}-{int(r['TOTAL_AWAY_SCORE'])}"
                 
-                # Runder op til nærmeste hele minut (fx 0.59 -> 1, 14.34 -> 15)
-                minuttal = int(np.ceil(r['GOAL_MIN']))
+                # Lægger 1 minut til (f.eks. 0 -> 1, 14 -> 15 osv.)
+                raw_min = r['GOAL_MIN']
+                if pd.isna(raw_min):
+                    minuttal = 1
+                else:
+                    minuttal = int(raw_min) + 1
                 
                 label_tekst = f"({minuttal}. min) - {dato_str} vs {opp_navn} ({kamp_res})"
 
