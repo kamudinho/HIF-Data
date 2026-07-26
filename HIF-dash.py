@@ -73,9 +73,13 @@ if not st.session_state["logged_in"]:
         </style>
     """, unsafe_allow_html=True)
     
-    col1, _ = st.columns([1, 1])
-    with col1:
-        st.markdown("<br><br><br><br><br><br>", unsafe_allow_html=True)
+    # Del skærmen op i venstre (hvor login skal være) og højre (hvor billedet er)
+    col_left, col_right = st.columns([1, 1])
+    
+    with col_left:
+        st.markdown("<br><br><br><br><br>", unsafe_allow_html=True)
+        
+        # Centrer login-boksen vandret i venstre kolonne ved at bruge indlejrede kolonner
         _, center, _ = st.columns([1, 2, 1])
         with center:
             st.markdown(f'<div style="display: flex; justify-content: center;"><img src="{HIF_LOGO_URL}" style="width: 70px;"></div>', unsafe_allow_html=True)
