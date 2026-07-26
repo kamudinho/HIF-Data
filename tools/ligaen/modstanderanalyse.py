@@ -111,7 +111,7 @@ def vis_side(dp=None):
     col_spacer_top, col_saeson, col_hold = st.columns([2.5, 1, 1])
     
     # 1. Vælg Sæson
-    default_season_idx = available_seasons.index("2025/2026") if "2025/2026" in available_seasons else 0
+    default_season_idx = available_seasons.index("2026/2027") if "2026/2027" in available_seasons else 0
     valgt_saeson = col_saeson.selectbox(
         "Vælg sæson", 
         available_seasons, 
