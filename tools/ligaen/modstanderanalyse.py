@@ -303,7 +303,8 @@ def vis_side(dp=None):
                 ).reset_index()
 
             df_plot = df_res.merge(df_vol, on='MATCH_OPTAUUID', how='left').fillna(0)
-            df_plot['LABEL'] = pd.to_datetime(df_plot['MATCH_LOCALDATE']).dt.strftime('%d/%m')
+            df_plot['MATCH_DT'] = pd.to_datetime(df_plot['MATCH_LOCALDATE'], errors='coerce')
+            df_plot['LABEL'] = df_plot['MATCH_DT'].dt.strftime('%d/%m').fillna('')
             df_plot = df_plot.sort_values('MATCH_LOCALDATE')
             df_plot['OPP_NAME'] = df_plot.apply(lambda r: r['CONTESTANTAWAY_NAME'] if r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else r['CONTESTANTHOME_NAME'], axis=1)
             df_plot['X_AXIS_LABEL'] = df_plot['LABEL'] + "<br>" + df_plot['OPP_NAME'].str[:3].str.upper()
@@ -339,15 +340,15 @@ def vis_side(dp=None):
                     st.markdown('<div class="compact-divider"></div>', unsafe_allow_html=True)
                     
                     for _, row in df_res.iterrows():
-                        match_date_obj = pd.to_datetime(row['MATCH_LOCALDATE'])
-                        date_str = match_date_obj.strftime('%d/%m')
-                        time_str = match_date_obj.strftime('%H:%M')
+                        match_date_obj = pd.to_datetime(row['MATCH_LOCALDATE'], errors='coerce')
+                        date_str = match_date_obj.strftime('%d/%m') if pd.notnull(match_date_obj) else "-"
+                        time_str = match_date_obj.strftime('%H:%M') if pd.notnull(match_date_obj) else ""
                         
                         if row['IS_PLAYED']:
                             score_or_time = f"{int(row['TOTAL_HOME_SCORE'])}-{int(row['TOTAL_AWAY_SCORE'])}"
                             res_char = row['RES']
                         else:
-                            score_or_time = time_str if time_str != "00:00" else "TBD"
+                            score_or_time = time_str if time_str and time_str != "00:00" else "TBD"
                             res_char = "-"
 
                         bg_color = "#2e7d32" if res_char == "W" else ("#757575" if res_char == "D" else ("#c62828" if res_char == "L" else "#bdbdbd"))
