@@ -33,7 +33,7 @@ COMP_MAP = {
     331: "Oddset Pokalen", 
     1305: "U19 Ligaen" 
 }
-LIGA_IDS = "('dyjr458hcmrcy87fsabfsy87o', '8gxd9ry2580pu1b1dd5ny9ymy', 'e5p78j2r7v8h3u9s5k0l2m4n6', 'f6q89k3s8w9i4v0t6l1m3n5o7', '335', '328', '329', '43319', '331')"
+LIGA_IDS = "('8gxd9ry2580pu1b1dd5ny9ymy', 'e5p78j2r7v8h3u9s5k0l2m4n6', 'f6q89k3s8w9i4v0t6l1m3n5o7', '335', '328', '329', '43319', '331')"
 
 # --- HJÆLPEFUNKTIONER ---
 @st.cache_data(ttl=3600)
