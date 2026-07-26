@@ -273,15 +273,18 @@ def vis_side(dp=None):
         df_res = conn.query(sql_res)
 
         if df_res is not None and not df_res.empty:
-            # Sæt datoer og IS_PLAYED op med det samme, så de er til rådighed
             df_res['USE_DATE'] = df_res['MATCH_DATE_FULL'].fillna(df_res['MATCH_LOCALDATE'])
             df_res['MATCH_LOCALDATE_DT'] = pd.to_datetime(df_res['USE_DATE'], errors='coerce')
             df_res = df_res.sort_values('MATCH_LOCALDATE_DT', ascending=True).reset_index(drop=True)
             
             df_res['MATCH_DATE_ONLY'] = df_res['MATCH_LOCALDATE_DT'].dt.date
             
-            df_res['IS_PLAYED'] = df_res['MATCH_STATUS'].astype(str).str.contains("Played|Full|Finish|Post|Award", case=False, na=False) | \
-                                  (df_res['TOTAL_HOME_SCORE'].notnull() & df_res['TOTAL_AWAY_SCORE'].notnull())
+            # Opdel i spillede og kommende KUN for denne sæson
+            df_played = df_res[df_res['IS_PLAYED']].sort_values('MATCH_LOCALDATE_DT', ascending=False)
+            df_upcoming = df_res[~df_res['IS_PLAYED']].sort_values('MATCH_LOCALDATE_DT', ascending=True)
+
+            # Vælg f.eks. de seneste spillede og de næste kommende, så det tilsammen giver et godt overblik uden blanding
+            df_res = pd.concat([df_played.head(5), df_upcoming.head(5)]).sort_values('MATCH_LOCALDATE_DT', ascending=True)
             
             def calc_res(r):
                 if not r['IS_PLAYED'] or pd.isna(r['TOTAL_HOME_SCORE']) or pd.isna(r['TOTAL_AWAY_SCORE']): 
