@@ -110,8 +110,8 @@ def vis_side(dp=None):
     
     col_spacer_top, col_saeson, col_hold = st.columns([2.5, 1, 1])
     
-    # 1. Vælg Sæson (Standarder til 2025/2026 hvis tilgængelig)
-    default_season_idx = available_seasons.index("2026/2027") if "2026/2027" in available_seasons else 0
+    # 1. Vælg Sæson
+    default_season_idx = available_seasons.index("2025/2026") if "2025/2026" in available_seasons else 0
     valgt_saeson = col_saeson.selectbox(
         "Vælg sæson", 
         available_seasons, 
@@ -147,7 +147,7 @@ def vis_side(dp=None):
     if not team_map:
         team_map = {name: info["opta_uuid"] for name, info in TEAMS.items() if info.get("opta_uuid")}
 
-    # 2. Vælg Hold (Standarder til Hvidovre)
+    # 2. Vælg Hold
     sorted_teams = sorted(list(team_map.keys()))
     default_index = sorted_teams.index("Hvidovre") if "Hvidovre" in sorted_teams else 0
     
@@ -164,7 +164,6 @@ def vis_side(dp=None):
     df_all_events = pd.DataFrame()
 
     with st.spinner(f"Henter data for {valgt_hold_navn} ({valgt_saeson})..."):
-        # SQL for seneste 10 kampe
         sql_res = f"""
             SELECT MATCH_LOCALDATE, CONTESTANTHOME_NAME, CONTESTANTAWAY_NAME, 
                    TOTAL_HOME_SCORE, TOTAL_AWAY_SCORE, CONTESTANTHOME_OPTAUUID, 
@@ -181,7 +180,6 @@ def vis_side(dp=None):
             match_ids = tuple(df_res['MATCH_OPTAUUID'].tolist())
             m_ids_str = f"('{match_ids[0]}')" if len(match_ids) == 1 else str(match_ids)
             
-            # SQL: EVENTS WITH PLAYER JOIN
             sql_all_h = f"""
                 SELECT 
                     e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, 
@@ -206,7 +204,6 @@ def vis_side(dp=None):
                 df_all_h['Action_Label'] = df_all_h.apply(get_action_label, axis=1)
                 df_all_h = df_all_h.dropna(subset=['Action_Label'])
 
-            # SQL: MÅL-SEKVENSER
             sql_seq = f"""
             WITH SeasonMatches AS (
                 SELECT MATCH_OPTAUUID, CONTESTANTHOME_NAME, CONTESTANTAWAY_NAME, 
@@ -280,12 +277,10 @@ def vis_side(dp=None):
             
             df_res['MATCH_DATE_ONLY'] = df_res['MATCH_LOCALDATE_DT'].dt.date
             
-            # 1. DEFINÉR IS_PLAYED FØRST (Brug score-tjek og status)
             df_res['IS_PLAYED'] = (
                 df_res['TOTAL_HOME_SCORE'].notnull() & df_res['TOTAL_AWAY_SCORE'].notnull()
             ) | df_res['MATCH_STATUS'].astype(str).str.contains("Played|Full|Finish", case=False, na=False)
             
-            # 2. DEFINÉR calc_res FUNKTIONEN
             def calc_res(r):
                 if not r['IS_PLAYED'] or pd.isna(r['TOTAL_HOME_SCORE']) or pd.isna(r['TOTAL_AWAY_SCORE']): 
                     return "-"
@@ -298,11 +293,9 @@ def vis_side(dp=None):
 
             df_res['RES'] = df_res.apply(calc_res, axis=1)
 
-            # 3. OPDEL KAMPENE KORREKT TIL OVERSIGTEN (Seneste spillede + næste kommende)
             df_played = df_res[df_res['IS_PLAYED']].sort_values('MATCH_LOCALDATE_DT', ascending=False)
             df_upcoming = df_res[~df_res['IS_PLAYED']].sort_values('MATCH_LOCALDATE_DT', ascending=True)
             
-            # Vælg f.eks. op til 5 spillede og 5 kommende, så det altid dækker nutiden
             df_res = pd.concat([df_played.head(5), df_upcoming.head(5)]).sort_values('MATCH_LOCALDATE_DT', ascending=True)
 
             df_vol = df_all_h.groupby('MATCH_OPTAUUID').agg(
@@ -377,7 +370,6 @@ def vis_side(dp=None):
                 col_map = {'P': '#084594', 'A': '#cb181d', 'E': '#238b45', 'D': '#ec7014', 'F': '#6a51a3'}
 
                 if not df_plot.empty:
-                    # Graf 1
                     h_c1, d_c1 = st.columns([2, 1])
                     val1 = d_c1.selectbox("Vælg", list(kat_map.keys()), index=0, key="val_top", label_visibility="collapsed")
                     c_key1 = kat_map[val1]
@@ -398,7 +390,6 @@ def vis_side(dp=None):
                                        xaxis_title=None, yaxis_title=None, hoverlabel=dict(bgcolor="white", font_size=12))
                     st.plotly_chart(fig1, use_container_width=True, config={'displayModeBar': False})
 
-                    # Graf 2
                     options_2 = [k for k in kat_map.keys() if k != val1]
                     h_c2, d_c2 = st.columns([2, 1])
                     val2 = d_c2.selectbox("Vælg", options_2, index=0, key="val_bot", label_visibility="collapsed")
