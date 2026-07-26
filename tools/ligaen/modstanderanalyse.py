@@ -261,7 +261,6 @@ def vis_side(dp=None):
     t1, t2, t3, t4, t5 = st.tabs(["OVERSIGT", "MED BOLDEN", "UDEN BOLDEN", "MÅL-SEKVENSER", "SPILLEROVERSIGT"])
     
     with t1:
-        # Hent både spillede og kommende kampe (fjernet det stive status-filter fra SQL'en)
         sql_res = f"""
             SELECT MATCH_LOCALDATE, CONTESTANTHOME_NAME, CONTESTANTAWAY_NAME, 
                    TOTAL_HOME_SCORE, TOTAL_AWAY_SCORE, CONTESTANTHOME_OPTAUUID, 
@@ -274,8 +273,9 @@ def vis_side(dp=None):
         df_res = conn.query(sql_res)
 
         if df_res is not None and not df_res.empty:
-            # Sorter kronologisk, så de kommer i rigtig rækkefølge i oversigten
-            df_res = df_res.sort_values('MATCH_LOCALDATE', ascending=False)
+            # Sikr at datoer konverteres korrekt og undgå NoneType fejl
+            df_res['MATCH_LOCALDATE_DT'] = pd.to_datetime(df_res['MATCH_LOCALDATE'], errors='coerce')
+            df_res = df_res.sort_values('MATCH_LOCALDATE_DT', ascending=False)
 
             df_res['IS_PLAYED'] = df_res['MATCH_STATUS'].astype(str).str.contains("Played|Full|Finish|Post|Award", case=False, na=False) | \
                                   (df_res['TOTAL_HOME_SCORE'].notnull() & df_res['TOTAL_AWAY_SCORE'].notnull())
@@ -306,12 +306,16 @@ def vis_side(dp=None):
             ).reset_index()
 
             # Kun spillede kampe med i graferne
-            df_played_res = df_res[df_res['IS_PLAYED']]
+            df_played_res = df_res[df_res['IS_PLAYED']].copy()
             df_plot = df_played_res.merge(df_vol, on='MATCH_OPTAUUID', how='left').fillna(0)
-            df_plot['LABEL'] = pd.to_datetime(df_plot['MATCH_LOCALDATE']).dt.strftime('%d/%m')
-            df_plot = df_plot.sort_values('MATCH_LOCALDATE')
-            df_plot['OPP_NAME'] = df_plot.apply(lambda r: r['CONTESTANTAWAY_NAME'] if r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else r['CONTESTANTHOME_NAME'], axis=1)
-            df_plot['X_AXIS_LABEL'] = df_plot['LABEL'] + "<br>" + df_plot['OPP_NAME'].str[:3].str.upper()
+            
+            if not df_plot.empty:
+                df_plot['LABEL'] = df_plot['MATCH_LOCALDATE_DT'].dt.strftime('%d/%m')
+                df_plot = df_plot.sort_values('MATCH_LOCALDATE_DT')
+                df_plot['OPP_NAME'] = df_plot.apply(lambda r: r['CONTESTANTAWAY_NAME'] if r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else r['CONTESTANTHOME_NAME'], axis=1)
+                name_fix = {"B 9": "B93", "HB": "HBK"}
+                df_plot['OPP_NAME_CLEAN'] = df_plot['OPP_NAME'].replace(name_fix)
+                df_plot['X_AXIS_LABEL'] = df_plot['LABEL'] + "<br>" + df_plot['OPP_NAME_CLEAN'].str.upper()
 
             st.markdown("""
                 <style>
@@ -342,14 +346,14 @@ def vis_side(dp=None):
                     st.markdown('<div class="compact-divider"></div>', unsafe_allow_html=True)
                     
                     for _, row in df_res.iterrows():
-                        match_dt = pd.to_datetime(row['MATCH_LOCALDATE'])
-                        date_str = match_dt.strftime('%d/%m')
+                        match_dt = row['MATCH_LOCALDATE_DT']
+                        date_str = match_dt.strftime('%d/%m') if pd.notnull(match_dt) else "Ugyldig dato"
                         
                         if row['IS_PLAYED'] and pd.notnull(row['TOTAL_HOME_SCORE']) and pd.notnull(row['TOTAL_AWAY_SCORE']):
                             score_display = f"{int(row['TOTAL_HOME_SCORE'])}-{int(row['TOTAL_AWAY_SCORE'])}"
                             res_val = row['RES']
                         else:
-                            score_display = match_dt.strftime('%H:%M') if match_dt.strftime('%H:%M') != '00:00' else "TBD"
+                            score_display = match_dt.strftime('%H:%M') if pd.notnull(match_dt) and match_dt.strftime('%H:%M') != '00:00' else "TBD"
                             res_val = "-"
 
                         draw_match_row(date_str, row['CONTESTANTHOME_NAME'], row['CONTESTANTHOME_OPTAUUID'], score_display, row['CONTESTANTAWAY_NAME'], row['CONTESTANTAWAY_OPTAUUID'], res_val)
@@ -359,52 +363,51 @@ def vis_side(dp=None):
                 kat_map = {"Pasninger": 'P', "Afslutninger": 'A', "Erobringer": 'E', "Dueller": 'D', "Frispark": 'F'}
                 col_map = {'P': '#084594', 'A': '#cb181d', 'E': '#238b45', 'D': '#ec7014', 'F': '#6a51a3'}
 
-                name_fix = {"B 9": "B93", "HB": "HBK"}
-                df_plot['OPP_NAME_CLEAN'] = df_plot['OPP_NAME'].replace(name_fix)
-                df_plot['X_AXIS_LABEL'] = df_plot['LABEL'] + "<br>" + df_plot['OPP_NAME_CLEAN'].str.upper()
+                if not df_plot.empty:
+                    # Graf 1
+                    h_c1, d_c1 = st.columns([2, 1])
+                    val1 = d_c1.selectbox("Vælg", list(kat_map.keys()), index=0, key="val_top", label_visibility="collapsed")
+                    c_key1 = kat_map[val1]
+                    avg1 = df_plot[f'{c_key1}_tot'].mean()
+                    h_c1.markdown(f"**{val1} (Gns: {round(avg1, 1)})**")
 
-                # Graf 1
-                h_c1, d_c1 = st.columns([2, 1])
-                val1 = d_c1.selectbox("Vælg", list(kat_map.keys()), index=0, key="val_top", label_visibility="collapsed")
-                c_key1 = kat_map[val1]
-                avg1 = df_plot[f'{c_key1}_tot'].mean() if not df_plot.empty else 0
-                h_c1.markdown(f"**{val1} (Gns: {round(avg1, 1)})**")
+                    fig1 = px.bar(df_plot, x='X_AXIS_LABEL', y=f"{c_key1}_tot", text=f"{c_key1}_tot")
+                    fig1.add_hline(y=avg1, line_dash="dot", line_color="rgba(0,0,0,0.2)", line_width=1)
 
-                fig1 = px.bar(df_plot, x='X_AXIS_LABEL', y=f"{c_key1}_tot", text=f"{c_key1}_tot")
-                fig1.add_hline(y=avg1, line_dash="dot", line_color="rgba(0,0,0,0.2)", line_width=1)
+                    fig1.update_traces(
+                        marker_color=col_map[c_key1], 
+                        textposition='outside',
+                        customdata=np.stack((df_plot['OPP_NAME_CLEAN'], df_plot['LABEL'], [val1.lower()] * len(df_plot)), axis=-1),
+                        hovertemplate="vs. %{customdata[0]}<br>%{customdata[1]}<br><br><b>%{y} %{customdata[2]}</b><extra></extra>"
+                    )
 
-                fig1.update_traces(
-                    marker_color=col_map[c_key1], 
-                    textposition='outside',
-                    customdata=np.stack((df_plot['OPP_NAME_CLEAN'], df_plot['LABEL'], [val1.lower()] * len(df_plot)), axis=-1) if not df_plot.empty else None,
-                    hovertemplate="vs. %{customdata[0]}<br>%{customdata[1]}<br><br><b>%{y} %{customdata[2]}</b><extra></extra>"
-                )
+                    fig1.update_layout(height=300, margin=dict(t=25, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', 
+                                       xaxis_title=None, yaxis_title=None, hoverlabel=dict(bgcolor="white", font_size=12))
+                    st.plotly_chart(fig1, use_container_width=True, config={'displayModeBar': False})
 
-                fig1.update_layout(height=300, margin=dict(t=25, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', 
-                                   xaxis_title=None, yaxis_title=None, hoverlabel=dict(bgcolor="white", font_size=12))
-                st.plotly_chart(fig1, use_container_width=True, config={'displayModeBar': False})
+                    # Graf 2
+                    options_2 = [k for k in kat_map.keys() if k != val1]
+                    h_c2, d_c2 = st.columns([2, 1])
+                    val2 = d_c2.selectbox("Vælg", options_2, index=0, key="val_bot", label_visibility="collapsed")
+                    c_key2 = kat_map[val2]
+                    avg2 = df_plot[f'{c_key2}_tot'].mean()
+                    h_c2.markdown(f"**{val2} (Gns: {round(avg2, 1)})**")
 
-                # Graf 2
-                options_2 = [k for k in kat_map.keys() if k != val1]
-                h_c2, d_c2 = st.columns([2, 1])
-                val2 = d_c2.selectbox("Vælg", options_2, index=0, key="val_bot", label_visibility="collapsed")
-                c_key2 = kat_map[val2]
-                avg2 = df_plot[f'{c_key2}_tot'].mean() if not df_plot.empty else 0
-                h_c2.markdown(f"**{val2} (Gns: {round(avg2, 1)})**")
+                    fig2 = px.bar(df_plot, x='X_AXIS_LABEL', y=f"{c_key2}_tot", text=f"{c_key2}_tot")
+                    fig2.add_hline(y=avg2, line_dash="dot", line_color="rgba(0,0,0,0.2)", line_width=1)
 
-                fig2 = px.bar(df_plot, x='X_AXIS_LABEL', y=f"{c_key2}_tot", text=f"{c_key2}_tot")
-                fig2.add_hline(y=avg2, line_dash="dot", line_color="rgba(0,0,0,0.2)", line_width=1)
+                    fig2.update_traces(
+                        marker_color=col_map[c_key2], 
+                        textposition='outside',
+                        customdata=np.stack((df_plot['OPP_NAME_CLEAN'], df_plot['LABEL'], [val2.lower()] * len(df_plot)), axis=-1),
+                        hovertemplate="vs. %{customdata[0]}<br>%{customdata[1]}<br><br><b>%{y} %{customdata[2]}</b><extra></extra>"
+                    )
 
-                fig2.update_traces(
-                    marker_color=col_map[c_key2], 
-                    textposition='outside',
-                    customdata=np.stack((df_plot['OPP_NAME_CLEAN'], df_plot['LABEL'], [val2.lower()] * len(df_plot)), axis=-1) if not df_plot.empty else None,
-                    hovertemplate="vs. %{customdata[0]}<br>%{customdata[1]}<br><br><b>%{y} %{customdata[2]}</b><extra></extra>"
-                )
-
-                fig2.update_layout(height=300, margin=dict(t=25, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', 
-                                   xaxis_title=None, yaxis_title=None, hoverlabel=dict(bgcolor="white", font_size=12))
-                st.plotly_chart(fig2, use_container_width=True, config={'displayModeBar': False})
+                    fig2.update_layout(height=300, margin=dict(t=25, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', 
+                                       xaxis_title=None, yaxis_title=None, hoverlabel=dict(bgcolor="white", font_size=12))
+                    st.plotly_chart(fig2, use_container_width=True, config={'displayModeBar': False})
+                else:
+                    st.info("Ingen spillede kampe fundet til at generere grafer endnu.")
             
     with t2:
         st.markdown("""
