@@ -261,7 +261,7 @@ def vis_side(dp=None):
     t1, t2, t3, t4, t5 = st.tabs(["OVERSIGT", "MED BOLDEN", "UDEN BOLDEN", "MÅL-SEKVENSER", "SPILLEROVERSIGT"])
     
     with t1:
-        # Hent de seneste/kommende 10 kampe for holdet
+        # Hent de seneste kampe, hvor vi tjekker om der er registreret mål (hvilket betyder den er spillet)
         sql_res = f"""
             SELECT MATCH_LOCALDATE, CONTESTANTHOME_NAME, CONTESTANTAWAY_NAME, 
                    TOTAL_HOME_SCORE, TOTAL_AWAY_SCORE, CONTESTANTHOME_OPTAUUID, 
@@ -274,11 +274,15 @@ def vis_side(dp=None):
         df_res = conn.query(sql_res)
 
         if df_res is not None and not df_res.empty:
-            df_res['IS_PLAYED'] = df_res['MATCH_STATUS'].astype(str).str.contains("Played|Full|Finish", case=False, na=False)
+            # En kamp betragtes som spillet, hvis den har en status der indikerer det ELLER hvis der er sat scores
+            df_res['IS_PLAYED'] = df_res['MATCH_STATUS'].astype(str).str.contains("Played|Full|Finish|Post|Award", case=False, na=False) | \
+                                  (df_res['TOTAL_HOME_SCORE'].notnull() & df_res['TOTAL_AWAY_SCORE'].notnull())
             
             def calc_res(r):
-                if not r['IS_PLAYED']: return "-"
-                if r['TOTAL_HOME_SCORE'] == r['TOTAL_AWAY_SCORE']: return "D"
+                if not r['IS_PLAYED'] or pd.isna(r['TOTAL_HOME_SCORE']) or pd.isna(r['TOTAL_AWAY_SCORE']): 
+                    return "-"
+                if r['TOTAL_HOME_SCORE'] == r['TOTAL_AWAY_SCORE']: 
+                    return "D"
                 if (r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid and r['TOTAL_HOME_SCORE'] > r['TOTAL_AWAY_SCORE']) or \
                    (r['CONTESTANTAWAY_OPTAUUID'] == valgt_uuid and r['TOTAL_AWAY_SCORE'] > r['TOTAL_HOME_SCORE']):
                     return "W"
@@ -327,8 +331,8 @@ def vis_side(dp=None):
                     st.markdown('<div class="metric-row-wrapper">', unsafe_allow_html=True)
                     played_df = df_res[df_res['IS_PLAYED']]
                     wins, draws, losses = (played_df['RES'] == "W").sum(), (played_df['RES'] == "D").sum(), (played_df['RES'] == "L").sum()
-                    mål_s = sum([row['TOTAL_HOME_SCORE'] if row['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else row['TOTAL_AWAY_SCORE'] for _, row in played_df.iterrows()]) if not played_df.empty else 0
-                    mål_i = sum([row['TOTAL_AWAY_SCORE'] if row['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else row['TOTAL_HOME_SCORE'] for _, row in played_df.iterrows()]) if not played_df.empty else 0
+                    mål_s = sum([row['TOTAL_HOME_SCORE'] if row['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else row['TOTAL_AWAY_SCORE'] for _, row in played_df.iterrows() if pd.notnull(row['TOTAL_HOME_SCORE'])]) if not played_df.empty else 0
+                    mål_i = sum([row['TOTAL_AWAY_SCORE'] if row['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else row['TOTAL_HOME_SCORE'] for _, row in played_df.iterrows() if pd.notnull(row['TOTAL_HOME_SCORE'])]) if not played_df.empty else 0
                     
                     met_cols = st.columns(5)
                     met_cols[0].metric("Pts", (wins*3)+draws)
@@ -344,7 +348,7 @@ def vis_side(dp=None):
                         date_str = match_date_obj.strftime('%d/%m') if pd.notnull(match_date_obj) else "-"
                         time_str = match_date_obj.strftime('%H:%M') if pd.notnull(match_date_obj) else ""
                         
-                        if row['IS_PLAYED']:
+                        if row['IS_PLAYED'] and pd.notnull(row['TOTAL_HOME_SCORE']) and pd.notnull(row['TOTAL_AWAY_SCORE']):
                             score_or_time = f"{int(row['TOTAL_HOME_SCORE'])}-{int(row['TOTAL_AWAY_SCORE'])}"
                             res_char = row['RES']
                         else:
@@ -360,13 +364,13 @@ def vis_side(dp=None):
                         with cols[1]: 
                             st.markdown(f"<div style='{flex_style} justify-content: flex-end; font-size:13px; font-weight:600; text-align:right;'>{row['CONTESTANTHOME_NAME'][:12]}</div>", unsafe_allow_html=True)
                         with cols[2]:
-                            logo_h = next((info['logo'] for name, info in TEAMS.items() if info.get('opta_uuid') == row['CONTESTANTHOME_OPTAUUID']), "")
+                            logo_h = next((info['logo'] for name, info in TEAMS.items() if info.get('opta_uuid'] == row['CONTESTANTHOME_OPTAUUID']), "")
                             if logo_h: st.image(logo_h, width=18)
                         with cols[3]: 
                             font_size = "11px" if not row['IS_PLAYED'] else "12px"
                             st.markdown(f"<div style='{flex_style} justify-content: center;'><div style='background:#f0f2f6; border-radius:3px; width: 100%; text-align:center; font-size:{font_size}; font-weight:800; padding:2px 0;'>{score_or_time}</div></div>", unsafe_allow_html=True)
                         with cols[4]:
-                            logo_a = next((info['logo'] for name, info in TEAMS.items() if info.get('opta_uuid') == row['CONTESTANTAWAY_OPTAUUID']), "")
+                            logo_a = next((info['logo'] for name, info in TEAMS.items() if info.get('opta_uuid'] == row['CONTESTANTAWAY_OPTAUUID']), "")
                             if logo_a: st.image(logo_a, width=18)
                         with cols[5]: 
                             st.markdown(f"<div style='{flex_style} justify-content: flex-start; font-size:13px; font-weight:600; text-align:left;'>{row['CONTESTANTAWAY_NAME'][:12]}</div>", unsafe_allow_html=True)
