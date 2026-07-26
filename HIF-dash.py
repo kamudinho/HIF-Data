@@ -64,22 +64,21 @@ if not st.session_state["logged_in"]:
         <style>
             [data-testid="stAppViewContainer"] {{ padding: 0 !important; }}
             [data-testid="stHeader"] {{ display: none; }}
-            .stApp {{ background: linear-gradient(to right, white 60%, transparent 50%); }}
+            .stApp {{ background: linear-gradient(to right, white 35%, transparent 35%); }}
             [data-testid="stAppViewContainer"]::before {{
-                content: ""; position: fixed; right: 0; top: 0; width: 60%; height: 100vh;
+                content: ""; position: fixed; right: 0; top: 0; width: 65%; height: 100vh;
                 background-image: url('https://static1.squarespace.com/static/573c1b7d01dbae9b52cd0936/573d6bdc37013bcc611eefd5/6477a814a3929d7ab0fa3006/1685610754298/GettyImages-1252722215.jpg?format=1500w');
                 background-size: cover; background-position: left; opacity: 0.7; 
             }}
         </style>
     """, unsafe_allow_html=True)
     
-    # Del skærmen op i venstre (hvor login skal være) og højre (hvor billedet er)
-    col_left, col_right = st.columns([1, 1])
+    # 35% til venstre (login) og 65% til højre (tom kolonne der matcher billedet)
+    col_left, col_right = st.name = st.columns([35, 65]) if hasattr(st, 'columns') else st.columns([1, 2])
     
     with col_left:
         st.markdown("<br><br><br><br><br>", unsafe_allow_html=True)
         
-        # Centrer login-boksen vandret i venstre kolonne ved at bruge indlejrede kolonner
         _, center, _ = st.columns([1, 2, 1])
         with center:
             st.markdown(f'<div style="display: flex; justify-content: center;"><img src="{HIF_LOGO_URL}" style="width: 70px;"></div>', unsafe_allow_html=True)
