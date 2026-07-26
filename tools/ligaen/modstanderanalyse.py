@@ -273,12 +273,15 @@ def vis_side(dp=None):
         df_res = conn.query(sql_res)
 
         if df_res is not None and not df_res.empty:
-            # Sorter dem kronologisk opad igen, så de vises korrekt (ældste først af de 10)
+            # Sæt datoer og IS_PLAYED op med det samme, så de er til rådighed
             df_res['USE_DATE'] = df_res['MATCH_DATE_FULL'].fillna(df_res['MATCH_LOCALDATE'])
             df_res['MATCH_LOCALDATE_DT'] = pd.to_datetime(df_res['USE_DATE'], errors='coerce')
             df_res = df_res.sort_values('MATCH_LOCALDATE_DT', ascending=True).reset_index(drop=True)
             
             df_res['MATCH_DATE_ONLY'] = df_res['MATCH_LOCALDATE_DT'].dt.date
+            
+            df_res['IS_PLAYED'] = df_res['MATCH_STATUS'].astype(str).str.contains("Played|Full|Finish|Post|Award", case=False, na=False) | \
+                                  (df_res['TOTAL_HOME_SCORE'].notnull() & df_res['TOTAL_AWAY_SCORE'].notnull())
             
             def calc_res(r):
                 if not r['IS_PLAYED'] or pd.isna(r['TOTAL_HOME_SCORE']) or pd.isna(r['TOTAL_AWAY_SCORE']): 
@@ -292,7 +295,7 @@ def vis_side(dp=None):
 
             df_res['RES'] = df_res.apply(calc_res, axis=1)
 
-            # Opdel i spillede (seneste øverst) og kommende (stigende nedad)
+            # Opdel i spillede og kommende
             df_played = df_res[df_res['IS_PLAYED']].sort_values('MATCH_LOCALDATE_DT', ascending=False)
             df_upcoming = df_res[~df_res['IS_PLAYED']].sort_values('MATCH_LOCALDATE_DT', ascending=True)
             df_res = pd.concat([df_played, df_upcoming]).head(10)
