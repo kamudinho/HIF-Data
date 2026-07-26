@@ -261,7 +261,6 @@ def vis_side(dp=None):
     t1, t2, t3, t4, t5 = st.tabs(["OVERSIGT", "MED BOLDEN", "UDEN BOLDEN", "MÅL-SEKVENSER", "SPILLEROVERSIGT"])
     
     with t1:
-        # Hent de seneste kampe, hvor vi tjekker om der er registreret mål (hvilket betyder den er spillet)
         sql_res = f"""
             SELECT MATCH_LOCALDATE, CONTESTANTHOME_NAME, CONTESTANTAWAY_NAME, 
                    TOTAL_HOME_SCORE, TOTAL_AWAY_SCORE, CONTESTANTHOME_OPTAUUID, 
@@ -274,7 +273,6 @@ def vis_side(dp=None):
         df_res = conn.query(sql_res)
 
         if df_res is not None and not df_res.empty:
-            # En kamp betragtes som spillet, hvis den har en status der indikerer det ELLER hvis der er sat scores
             df_res['IS_PLAYED'] = df_res['MATCH_STATUS'].astype(str).str.contains("Played|Full|Finish|Post|Award", case=False, na=False) | \
                                   (df_res['TOTAL_HOME_SCORE'].notnull() & df_res['TOTAL_AWAY_SCORE'].notnull())
             
@@ -290,7 +288,6 @@ def vis_side(dp=None):
 
             df_res['RES'] = df_res.apply(calc_res, axis=1)
 
-            # Brug den allerede hentede 'df_all_h' til volumengraferne uden at overskrive den
             df_vol = pd.DataFrame()
             if 'df_all_h' in locals() and df_all_h is not None and not df_all_h.empty:
                 df_vol = df_all_h.groupby('MATCH_OPTAUUID').agg(
@@ -326,7 +323,7 @@ def vis_side(dp=None):
             m_col1, m_spacer, m_col2 = st.columns([1.3, 0.1, 2.0])
             
             with m_col1:
-                st.write(f"**Kampe ({valgt_saeson} - {COMPETITION_NAME})**")
+                st.write(f"**Fixture ({valgt_saeson} - {COMPETITION_NAME})**")
                 with st.container(border=True):
                     st.markdown('<div class="metric-row-wrapper">', unsafe_allow_html=True)
                     played_df = df_res[df_res['IS_PLAYED']]
@@ -355,28 +352,15 @@ def vis_side(dp=None):
                             score_or_time = time_str if time_str and time_str != "00:00" else "TBD"
                             res_char = "-"
 
-                        bg_color = "#2e7d32" if res_char == "W" else ("#757575" if res_char == "D" else ("#c62828" if res_char == "L" else "#bdbdbd"))
-                        cols = st.columns([0.5, 1.2, 0.25, 0.7, 0.25, 1.2, 0.3], vertical_alignment="center")
-                        flex_style = "display: flex; align-items: center; height: 30px; margin: 0;"
-
-                        with cols[0]: 
-                            st.markdown(f"<div style='{flex_style} font-size:11px; color:#666;'>{date_str}</div>", unsafe_allow_html=True)
-                        with cols[1]: 
-                            st.markdown(f"<div style='{flex_style} justify-content: flex-end; font-size:13px; font-weight:600; text-align:right;'>{row['CONTESTANTHOME_NAME'][:12]}</div>", unsafe_allow_html=True)
-                        with cols[2]:
-                            logo_h = next((info['logo'] for name, info in TEAMS.items() if info.get('opta_uuid') == row['CONTESTANTHOME_OPTAUUID']), "")
-                            if logo_h: st.image(logo_h, width=18)
-                        with cols[3]: 
-                            font_size = "11px" if not row['IS_PLAYED'] else "12px"
-                            st.markdown(f"<div style='{flex_style} justify-content: center;'><div style='background:#f0f2f6; border-radius:3px; width: 100%; text-align:center; font-size:{font_size}; font-weight:800; padding:2px 0;'>{score_or_time}</div></div>", unsafe_allow_html=True)
-                        with cols[4]:
-                            logo_a = next((info['logo'] for name, info in TEAMS.items() if info.get('opta_uuid') == row['CONTESTANTAWAY_OPTAUUID']), "")
-                            if logo_a: st.image(logo_a, width=18)
-                        with cols[5]: 
-                            st.markdown(f"<div style='{flex_style} justify-content: flex-start; font-size:13px; font-weight:600; text-align:left;'>{row['CONTESTANTAWAY_NAME'][:12]}</div>", unsafe_allow_html=True)
-                        with cols[6]: 
-                            st.markdown(f"<div style='{flex_style} justify-content: center;'><div style='background-color:{bg_color}; color:white; border-radius:3px; text-align:center; font-weight:bold; font-size:11px; padding:2px 0; width:22px;'>{res_char}</div></div>", unsafe_allow_html=True)
-
+                        draw_match_row(
+                            date_str, 
+                            row['CONTESTANTHOME_NAME'], 
+                            row['CONTESTANTHOME_OPTAUUID'], 
+                            score_or_time, 
+                            row['CONTESTANTAWAY_NAME'], 
+                            row['CONTESTANTAWAY_OPTAUUID'], 
+                            res_char
+                        )
                         st.markdown("<hr style='margin:2px 0; opacity:0.05'>", unsafe_allow_html=True)
 
             with m_col2:
