@@ -592,18 +592,26 @@ def vis_side(dp=None):
                 ['MATCH_LOCALDATE', 'GOAL_MIN'], ascending=[False, True]
             )
             
-            # Gør nøglerne 100% unikke ved at tilføje et indeks i loopen, så st.selectbox ikke crasher
             opts = {}
             for i, (_, r) in enumerate(gl.iterrows()):
                 key = f"{r['MATCH_OPTAUUID']}_{r['GOAL_TIME']}_{i}"
+                
+                dato_str = pd.to_datetime(r['MATCH_LOCALDATE']).strftime('%d/%m')
+                opp_navn = r['CONTESTANTAWAY_NAME'] if r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else r['CONTESTANTHOME_NAME']
+                kamp_res = f"{int(r['TOTAL_HOME_SCORE'])}-{int(r['TOTAL_AWAY_SCORE'])}"
+                
+                minuttal = int(r['GOAL_MIN'])
+                
+                label_tekst = f"({minuttal}. min) - {dato_str} vs {opp_navn} ({kamp_res})"
+
                 opts[key] = {
-                    'label': f"{pd.to_datetime(r['MATCH_LOCALDATE']).strftime('%d/%m')} vs {r['CONTESTANTAWAY_NAME'] if r['CONTESTANTHOME_OPTAUUID']==valgt_uuid else r['CONTESTANTHOME_NAME']} ({int(r['TOTAL_HOME_SCORE'])}-{int(r['TOTAL_AWAY_SCORE'])})", 
+                    'label': label_tekst, 
                     'match_id': r['MATCH_OPTAUUID'], 
                     'goal_ts': r['GOAL_TIME'], 
-                    'opp_uuid': r['CONTESTANTAWAY_OPTAUUID'] if r['CONTESTANTHOME_OPTAUUID']==valgt_uuid else r['CONTESTANTHOME_OPTAUUID'], 
-                    'min': int(r['GOAL_MIN']), 
+                    'opp_uuid': r['CONTESTANTAWAY_OPTAUUID'] if r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else r['CONTESTANTHOME_OPTAUUID'], 
+                    'min': minuttal, 
                     'date': pd.to_datetime(r['MATCH_LOCALDATE']).strftime('%d/%m/%Y'),
-                    'score_str': f"{int(r['TOTAL_HOME_SCORE'])}-{int(r['TOTAL_AWAY_SCORE'])}"
+                    'score_str': kamp_res
                 }
             
             sk = st.selectbox("Vælg mål", list(opts.keys()), format_func=lambda x: opts[x]['label'])
@@ -645,7 +653,8 @@ def vis_side(dp=None):
                 use_container_width=True
             )
         else:
-            st.info(f"Ingen mål fundet for {valgt_hold_navn} i sæsonen {valgt_saeson}.")            
+            st.info(f"Ingen mål fundet for {valgt_hold_navn} i sæsonen {valgt_saeson}.")
+            
     with t5:
         if not df_all_events.empty:
             # 1. Databehandling
