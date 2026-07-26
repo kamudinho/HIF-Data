@@ -293,9 +293,9 @@ def vis_side(dp=None):
             df_res['RES'] = df_res.apply(calc_res, axis=1)
 
             # Opdel i spillede og kommende
-            # df_played: Nyeste spillet først
+            # df_played: Sorteret med senest spillede øverst
             df_played = df_res[df_res['IS_PLAYED']].sort_values('MATCH_LOCALDATE_DT', ascending=False)
-            # df_upcoming: Nærmeste fremtidige først
+            # df_upcoming: Sorteret kronologisk fremad i tid
             df_upcoming = df_res[~df_res['IS_PLAYED']].sort_values('MATCH_LOCALDATE_DT', ascending=True)
             
             target_total = 10
@@ -305,17 +305,20 @@ def vis_side(dp=None):
             remaining_slots = target_total - len(df_played_sel)
             df_upcoming_sel = df_upcoming.head(remaining_slots) if remaining_slots > 0 else pd.DataFrame(columns=df_res.columns)
             
-            # TABELLEN: 
-            # Hvis vi har kommende kampe, skal den *nærmeste* kommende kamp ligge ØVERST, 
-            # efterfulgt af de spillede kampe (med den senest spillede lige under den kommende).
-            # Hvis der ingen kommende kampe er (gammel sæson), ligger den nyest spillede øverst og går bagud.
-            if not df_upcoming_sel.empty:
+            # TABELLEN:
+            # 1. Spillede kampe først (med den seneste øverst, og ældre nedefter)
+            # 2. Derefter kommende kampe (kronologisk fremad i tid)
+            if not df_upcoming_sel.empty and not df_played_sel.empty:
                 df_res = pd.concat([
-                    df_upcoming_sel.sort_values('MATCH_LOCALDATE_DT', ascending=True), 
-                    df_played_sel.sort_values('MATCH_LOCALDATE_DT', ascending=False)
+                    df_played_sel.sort_values('MATCH_LOCALDATE_DT', ascending=False),
+                    df_upcoming_sel.sort_values('MATCH_LOCALDATE_DT', ascending=True)
                 ])
+            elif not df_upcoming_sel.empty:
+                # Kun kommende kampe (sæsonstart)
+                df_res = df_upcoming_sel.sort_values('MATCH_LOCALDATE_DT', ascending=True).head(10)
             else:
-                df_res = df_played_sel.sort_values('MATCH_LOCALDATE_DT', ascending=False)
+                # Kun spillede kampe (afsluttet sæson)
+                df_res = df_played_sel.sort_values('MATCH_LOCALDATE_DT', ascending=False).head(10)
 
             df_vol = df_all_h.groupby('MATCH_OPTAUUID').agg(
                 P_tot=('EVENT_TYPEID', lambda x: (x == 1).sum()),
@@ -330,7 +333,7 @@ def vis_side(dp=None):
                 F_suc=('EVENT_TYPEID', lambda x: (x == 4).sum())
             ).reset_index()
 
-            # GRAFEN: Vi bruger kun de faktiske spillede kampe (og som maksimalt matcher de seneste 10 spillede, sorteret kronologisk til grafen)
+            # GRAFEN: Bruger udelukkende de spillede kampe sorteret kronologisk til graferne
             df_plot_source = df_played_sel.sort_values('MATCH_LOCALDATE_DT', ascending=True)
             df_plot = df_plot_source.merge(df_vol, on='MATCH_OPTAUUID', how='left').fillna(0)
             
@@ -353,7 +356,6 @@ def vis_side(dp=None):
                 """, unsafe_allow_html=True)
 
             m_col1, m_spacer, m_col2 = st.columns([1.3, 0.1, 2.0])
-
             with m_col1:
                 st.write(f"**Kampe ({valgt_saeson} - {COMPETITION_NAME})**")
                 with st.container(border=True):
