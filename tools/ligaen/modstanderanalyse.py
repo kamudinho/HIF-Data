@@ -273,13 +273,12 @@ def vis_side(dp=None):
         df_res = conn.query(sql_res)
 
         if df_res is not None and not df_res.empty:
-            # Prioriter MATCH_DATE_FULL, ellers brug MATCH_LOCALDATE som fallback
+            # Sorter dem kronologisk opad igen, så de vises korrekt (ældste først af de 10)
             df_res['USE_DATE'] = df_res['MATCH_DATE_FULL'].fillna(df_res['MATCH_LOCALDATE'])
             df_res['MATCH_LOCALDATE_DT'] = pd.to_datetime(df_res['USE_DATE'], errors='coerce')
+            df_res = df_res.sort_values('MATCH_LOCALDATE_DT', ascending=True).reset_index(drop=True)
+            
             df_res['MATCH_DATE_ONLY'] = df_res['MATCH_LOCALDATE_DT'].dt.date
-
-            df_res['IS_PLAYED'] = df_res['MATCH_STATUS'].astype(str).str.contains("Played|Full|Finish|Post|Award", case=False, na=False) | \
-                                  (df_res['TOTAL_HOME_SCORE'].notnull() & df_res['TOTAL_AWAY_SCORE'].notnull())
             
             def calc_res(r):
                 if not r['IS_PLAYED'] or pd.isna(r['TOTAL_HOME_SCORE']) or pd.isna(r['TOTAL_AWAY_SCORE']): 
