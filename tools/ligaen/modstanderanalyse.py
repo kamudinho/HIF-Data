@@ -266,14 +266,13 @@ def vis_side(dp=None):
             WHERE (CONTESTANTHOME_OPTAUUID = '{valgt_uuid}' OR CONTESTANTAWAY_OPTAUUID = '{valgt_uuid}') 
             AND TOURNAMENTCALENDAR_OPTAUUID IN {liga_ids_sql} 
             AND TOURNAMENTCALENDAR_NAME = '{valgt_saeson}'
-            ORDER BY COALESCE(MATCH_DATE_FULL, MATCH_LOCALDATE) DESC LIMIT 10
+            ORDER BY COALESCE(MATCH_DATE_FULL, MATCH_LOCALDATE) ASC
         """
         df_res = conn.query(sql_res)
 
         if df_res is not None and not df_res.empty:
             df_res['USE_DATE'] = df_res['MATCH_DATE_FULL'].fillna(df_res['MATCH_LOCALDATE'])
             df_res['MATCH_LOCALDATE_DT'] = pd.to_datetime(df_res['USE_DATE'], errors='coerce')
-            df_res = df_res.sort_values('MATCH_LOCALDATE_DT', ascending=True).reset_index(drop=True)
             
             df_res['MATCH_DATE_ONLY'] = df_res['MATCH_LOCALDATE_DT'].dt.date
             
@@ -293,10 +292,22 @@ def vis_side(dp=None):
 
             df_res['RES'] = df_res.apply(calc_res, axis=1)
 
+            # Opdel i spillede og kommende
             df_played = df_res[df_res['IS_PLAYED']].sort_values('MATCH_LOCALDATE_DT', ascending=False)
             df_upcoming = df_res[~df_res['IS_PLAYED']].sort_values('MATCH_LOCALDATE_DT', ascending=True)
             
-            df_res = pd.concat([df_played.head(5), df_upcoming.head(5)]).sort_values('MATCH_LOCALDATE_DT', ascending=True)
+            # Dynamisk sammensætning af op til 10 kampe totalt:
+            # - Så mange spillede som muligt (nyeste øverst)
+            # - Fyld resten op med kommende kampe (kronologisk fremad)
+            target_total = 10
+            n_played_to_take = min(len(df_played), target_total)
+            df_played_sel = df_played.head(n_played_to_take)
+            
+            remaining_slots = target_total - len(df_played_sel)
+            df_upcoming_sel = df_upcoming.head(remaining_slots) if remaining_slots > 0 else pd.DataFrame(columns=df_res.columns)
+            
+            # Sorter de endelige 10 kampe kronologisk, så de vises korrekt efter dato i tabellen
+            df_res = pd.concat([df_played_sel, df_upcoming_sel]).sort_values('MATCH_LOCALDATE_DT', ascending=True)
 
             df_vol = df_all_h.groupby('MATCH_OPTAUUID').agg(
                 P_tot=('EVENT_TYPEID', lambda x: (x == 1).sum()),
