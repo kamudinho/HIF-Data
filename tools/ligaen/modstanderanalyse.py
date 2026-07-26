@@ -589,7 +589,7 @@ def vis_side(dp=None):
     with t4:
         if not df_all_events.empty:
             gl = df_all_events.drop_duplicates(['MATCH_OPTAUUID', 'GOAL_TIME']).sort_values(
-                ['MATCH_LOCALDATE', 'GOAL_MIN'], ascending=[False, True]
+                ['MATCH_LOCALDATE', 'GOAL_MIN'], ascending=[False, False]
             )
             
             opts = {}
@@ -600,14 +600,15 @@ def vis_side(dp=None):
                 opp_navn = r['CONTESTANTAWAY_NAME'] if r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else r['CONTESTANTHOME_NAME']
                 kamp_res = f"{int(r['TOTAL_HOME_SCORE'])}-{int(r['TOTAL_AWAY_SCORE'])}"
                 
-                # Lægger 1 minut til (f.eks. 0 -> 1, 14 -> 15 osv.)
                 raw_min = r['GOAL_MIN']
                 if pd.isna(raw_min):
                     minuttal = 1
                 else:
                     minuttal = int(raw_min) + 1
                 
-                label_tekst = f"({minuttal}. min) - {dato_str} vs {opp_navn} ({kamp_res})"
+                # F.eks. "25/07: 1-0 (1. min) vs. Vendsyssel (2-2)"
+                # Her tages udgangspunkt i målets aktuelle stilling eller kampens resultat, eller score-format som ønsket
+                label_tekst = f"{dato_str}: {kamp_res} ({minuttal}. min) vs. {opp_navn} ({kamp_res})"
 
                 opts[key] = {
                     'label': label_tekst, 
