@@ -364,13 +364,13 @@ def vis_side(dp=None):
                         with cols[1]: 
                             st.markdown(f"<div style='{flex_style} justify-content: flex-end; font-size:13px; font-weight:600; text-align:right;'>{row['CONTESTANTHOME_NAME'][:12]}</div>", unsafe_allow_html=True)
                         with cols[2]:
-                            logo_h = next((info['logo'] for name, info in TEAMS.items() if info.get('opta_uuid'] == row['CONTESTANTHOME_OPTAUUID']), "")
+                            logo_h = next((info['logo'] for name, info in TEAMS.items() if info.get('opta_uuid') == row['CONTESTANTHOME_OPTAUUID']), "")
                             if logo_h: st.image(logo_h, width=18)
                         with cols[3]: 
                             font_size = "11px" if not row['IS_PLAYED'] else "12px"
                             st.markdown(f"<div style='{flex_style} justify-content: center;'><div style='background:#f0f2f6; border-radius:3px; width: 100%; text-align:center; font-size:{font_size}; font-weight:800; padding:2px 0;'>{score_or_time}</div></div>", unsafe_allow_html=True)
                         with cols[4]:
-                            logo_a = next((info['logo'] for name, info in TEAMS.items() if info.get('opta_uuid'] == row['CONTESTANTAWAY_OPTAUUID']), "")
+                            logo_a = next((info['logo'] for name, info in TEAMS.items() if info.get('opta_uuid') == row['CONTESTANTAWAY_OPTAUUID']), "")
                             if logo_a: st.image(logo_a, width=18)
                         with cols[5]: 
                             st.markdown(f"<div style='{flex_style} justify-content: flex-start; font-size:13px; font-weight:600; text-align:left;'>{row['CONTESTANTAWAY_NAME'][:12]}</div>", unsafe_allow_html=True)
