@@ -600,7 +600,8 @@ def vis_side(dp=None):
                 opp_navn = r['CONTESTANTAWAY_NAME'] if r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else r['CONTESTANTHOME_NAME']
                 kamp_res = f"{int(r['TOTAL_HOME_SCORE'])}-{int(r['TOTAL_AWAY_SCORE'])}"
                 
-                minuttal = int(r['GOAL_MIN'])
+                # Runder op til nærmeste hele minut (fx 0.59 -> 1, 14.34 -> 15)
+                minuttal = int(np.ceil(r['GOAL_MIN']))
                 
                 label_tekst = f"({minuttal}. min) - {dato_str} vs {opp_navn} ({kamp_res})"
 
@@ -642,7 +643,6 @@ def vis_side(dp=None):
                 if str(row['EVENT_TYPEID']) == "16" and "9" in row['qual_list']:
                     return "STRAFFESPARK"
                 
-                # Bruger Action_Label kolonnen som allerede er beregnet i SQL/data-load, hvis den findes
                 if 'Action_Label' in row and pd.notna(row['Action_Label']) and row['Action_Label'] != "":
                     return row['Action_Label']
                 
