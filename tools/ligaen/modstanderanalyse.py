@@ -185,7 +185,7 @@ def vis_side(dp=None):
             sql_all_h = f"""
                 SELECT 
                     e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, 
-                    TRIM(p.PLAYER_FIRSTNAME) || ' ' || TRIM(p.PLAYER_LASTNAME) as PLAYER_NAME, 
+                    TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME) as PLAYER_NAME, 
                     e.MATCH_OPTAUUID, e.EVENT_TIMESTAMP, e.EVENT_OUTCOME as OUTCOME,
                     LISTAGG(q.QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY q.QUALIFIER_QID) as QUALIFIERS
                 FROM {DB}.OPTA_EVENTS e
@@ -231,9 +231,9 @@ def vis_side(dp=None):
                    LISTAGG(q.QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY q.QUALIFIER_QID) as QUALIFIERS
             FROM {DB}.OPTA_EVENTS e
             JOIN (
-                SELECT DISTINCT PLAYER_OPTAUUID, PLAYER_FIRSTNAME, PLAYER_LASTNAME 
+                SELECT DISTINCT PLAYER_OPTAUUID, FIRST_NAME, LAST_NAME 
                 FROM {DB}.OPTA_MATCH_LINEUPS 
-                WHERE PLAYER_FIRSTNAME IS NOT NULL
+                WHERE FIRST_NAME IS NOT NULL
             ) p ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
             JOIN SeasonMatches m ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
             INNER JOIN TargetGoals tg ON e.MATCH_OPTAUUID = tg.MATCH_OPTAUUID
