@@ -266,7 +266,7 @@ def vis_side(dp=None):
             WHERE (CONTESTANTHOME_OPTAUUID = '{valgt_uuid}' OR CONTESTANTAWAY_OPTAUUID = '{valgt_uuid}') 
             AND TOURNAMENTCALENDAR_OPTAUUID IN {liga_ids_sql} 
             AND TOURNAMENTCALENDAR_NAME = '{valgt_saeson}'
-            ORDER BY COALESCE(MATCH_DATE_FULL, MATCH_LOCALDATE) ASC
+            ORDER BY COALESCE(MATCH_DATE_FULL, MATCH_LOCALDATE) DESC 10
         """
         df_res = conn.query(sql_res)
 
