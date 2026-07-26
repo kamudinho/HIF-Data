@@ -64,9 +64,9 @@ if not st.session_state["logged_in"]:
         <style>
             [data-testid="stAppViewContainer"] {{ padding: 0 !important; }}
             [data-testid="stHeader"] {{ display: none; }}
-            .stApp {{ background: linear-gradient(to right, white 30%, transparent 50%); }}
+            .stApp {{ background: linear-gradient(to right, white 80%, transparent 50%); }}
             [data-testid="stAppViewContainer"]::before {{
-                content: ""; position: fixed; right: 0; top: 0; width: 30%; height: 100vh;
+                content: ""; position: fixed; right: 0; top: 0; width: 80%; height: 100vh;
                 background-image: url('https://hvidovrefodbold-dk.b-cdn.net/media/aamleu11/8d6a2343.jpg?cc=0,0.18620699949167102,0,0.1881673748827034&width=1920&height=800&rnd=134071899231000000');
                 background-size: cover; background-position: center; opacity: 0.7; 
             }}
