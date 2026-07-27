@@ -174,9 +174,10 @@ def vis_side():
             a_seq_count = max(1.0, a_passes * 0.4)
             a_sec_per_seq = a_total_sec / a_seq_count
 
-            match_rows.append({
+            h_res = 'Sejr' if h_score > a_score else ('Uafgjort' if h_score == a_score else 'Nederlag')
+            h_dict = {
                 'TEAM_UUID': h_uuid,
-                'RESULTAT': 'Sejr' if h_score > a_score else ('Uafgjort' if h_score == a_score else 'Nederlag'),
+                'RESULTAT': h_res,
                 'POSS': h_poss_pct,
                 'PASSES': h_passes,
                 'PASS_PCT': h_pass_pct,
@@ -196,10 +197,13 @@ def vis_side():
                 'FT_GOALS': pd.to_numeric(row.get('HOME_FT_GOALS'), errors='coerce'),
                 'PPDA': h_ppda,
                 'BALL_TIME_SEQ': h_sec_per_seq
-            })
-            match_rows.append({
+            }
+            match_rows.append(h_dict)
+
+            a_res = 'Sejr' if a_score > h_score else ('Uafgjort' if a_score == h_score else 'Nederlag')
+            a_dict = {
                 'TEAM_UUID': a_uuid,
-                'RESULTAT': 'Sejr' if a_score > h_score else ('Uafgjort' if a_score == h_score else 'Nederlag'),
+                'RESULTAT': a_res,
                 'POSS': a_poss_pct,
                 'PASSES': a_passes,
                 'PASS_PCT': a_pass_pct,
@@ -219,7 +223,8 @@ def vis_side():
                 'FT_GOALS': pd.to_numeric(row.get('AWAY_FT_GOALS'), errors='coerce'),
                 'PPDA': a_ppda,
                 'BALL_TIME_SEQ': a_sec_per_seq
-            })
+            }
+            match_rows.append(a_dict)
 
         df_perf = pd.DataFrame(match_rows)
         team_perf = df_perf.dropna(subset=['TEAM_UUID'])
