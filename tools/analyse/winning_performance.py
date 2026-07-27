@@ -35,7 +35,7 @@ def vis_side():
                     SUM(CASE WHEN STAT_TYPE = 'ontargetScoringAtt' THEN STAT_TOTAL ELSE 0 END) AS SHOTS_ON_TARGET,
                     SUM(CASE WHEN STAT_TYPE = 'wonTackle' THEN STAT_TOTAL ELSE 0 END) AS TACKLES_WON,
                     SUM(CASE WHEN STAT_TYPE = 'totalFoul' THEN STAT_TOTAL ELSE 0 END) AS FOULS,
-                    SUM(CASE WHEN STAT_TYPE = 'yellowCard' THEN STAT_TOTAL ELSE 0 END) AS YELLOW_CARDS,
+                    SUM(CASE WHEN STAT_TYPE = 'goalsconceced' THEN STAT_TOTAL ELSE 0 END) AS GOALS_CONCEDED,
                     SUM(CASE WHEN STAT_TYPE = 'corner' THEN STAT_TOTAL ELSE 0 END) AS CORNERS
                 FROM {DB}.OPTA_MATCHSTATS
                 GROUP BY 1, 2
@@ -185,7 +185,7 @@ def vis_side():
                 'SHOTS_ON_TARGET': pd.to_numeric(row.get('HOME_SHOTS_ON_TARGET'), errors='coerce'),
                 'TACKLES': pd.to_numeric(row.get('HOME_TACKLES'), errors='coerce'),
                 'FOULS': pd.to_numeric(row.get('HOME_FOULS'), errors='coerce'),
-                'YELLOW': pd.to_numeric(row.get('HOME_YELLOW'), errors='coerce'),
+                'MÅL IMOD': pd.to_numeric(row.get('HOME_GOALS_CONCEDED'), errors='coerce'),
                 'CORNERS': pd.to_numeric(row.get('HOME_CORNERS'), errors='coerce'),
                 'XG': pd.to_numeric(row.get('HOME_XG'), errors='coerce'),
                 'BIG_CHANCES': pd.to_numeric(row.get('HOME_BIG_CHANCES'), errors='coerce'),
@@ -211,7 +211,7 @@ def vis_side():
                 'SHOTS_ON_TARGET': pd.to_numeric(row.get('AWAY_SHOTS_ON_TARGET'), errors='coerce'),
                 'TACKLES': pd.to_numeric(row.get('AWAY_TACKLES'), errors='coerce'),
                 'FOULS': pd.to_numeric(row.get('AWAY_FOULS'), errors='coerce'),
-                'YELLOW': pd.to_numeric(row.get('AWAY_YELLOW'), errors='coerce'),
+                'MÅL IMOD': pd.to_numeric(row.get('AWAY_GOALS_CONCEDED'), errors='coerce'),
                 'CORNERS': pd.to_numeric(row.get('AWAY_CORNERS'), errors='coerce'),
                 'XG': pd.to_numeric(row.get('AWAY_XG'), errors='coerce'),
                 'BIG_CHANCES': pd.to_numeric(row.get('AWAY_BIG_CHANCES'), errors='coerce'),
@@ -232,7 +232,7 @@ def vis_side():
         if not team_perf.empty:
             cols_to_mean = [
                 'POSS', 'PASSES', 'PASS_PCT', 'SHOTS', 'SHOTS_ON_TARGET', 'TACKLES', 
-                'FOULS', 'YELLOW', 'CORNERS', 'XG', 'BIG_CHANCES', 'PREv_GOALS', 
+                'FOULS', 'MÅL IMOD', 'CORNERS', 'XG', 'BIG_CHANCES', 'PREv_GOALS', 
                 'BOX_ENTRIES', 'FT_SUCCESS', 'FT_UNSUCCESS', 'FT_SHOTS', 'FT_GOALS',
                 'PPDA', 'BALL_TIME_SEQ'
             ]
@@ -246,7 +246,7 @@ def vis_side():
                 'Afslutninger (Inden for ramme)', 
                 'Vundne Tacklinger', 
                 'Frispark begået', 
-                'Gule kort', 
+                'Mål imod', 
                 'Hjørnespark', 
                 'xG (Forventede Mål)', 
                 'Store Chancer', 
@@ -323,10 +323,9 @@ def vis_side():
 
                 with col3:
                     st.markdown("##### 🔴 FORSVARSSPIL")
-                    st.markdown(f"- **Mål indkasseret:** {get_val('Mål indkasseret')}")
+                    st.markdown(f"- **Mål imod:** {get_val('Mål imod')}")
                     st.markdown(f"- **Vundne Tacklinger:** {get_val('Vundne Tacklinger')}")
                     st.markdown(f"- **Frispark begået:** {get_val('Frispark begået')}")
-                    st.markdown(f"- **Gule kort:** {get_val('Gule kort')}")
 
                 with col4:
                     st.markdown("##### 🔴 EROBRINGSSPIL")
