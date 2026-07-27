@@ -150,28 +150,43 @@ def vis_side():
                 'Box Entries (Feltindsættelser)'
             ]
 
-            # Farvekodningsfunktion til at fremhæve målsætninger i Sejr-kolonnen
-            def color_cells(val, row_name):
-                try:
-                    v = float(val)
-                except:
-                    return ''
+            # Farvekodningsfunktion der tjekker om målene er opfyldt for 'Sejr'
+            def color_goals(row):
+                styles = [''] * len(row)
+                row_name = str(row.name)
                 
-                if "Pasningsprocent" in row_name and v >= 78:
-                    return 'background-color: #d4edda;'
-                elif "Succesfulde pasninger" in row_name and v >= 445:
-                    return 'background-color: #d4edda;'
-                return ''
+                for i, col_name in enumerate(row.index):
+                    if col_name == 'Sejr':
+                        val = row[col_name]
+                        try:
+                            v = float(val)
+                        except:
+                            continue
+                            
+                        # Eksempler på tjek mod dine mål (f.eks. Pasningsprocent > 78, xG > 1.2, Box Entries > 10)
+                        if "Pasningsprocent" in row_name and v >= 78:
+                            styles[i] = 'background-color: #d4edda; color: #155724; font-weight: bold;'
+                        elif "Box Entries" in row_name and v >= 10:
+                            styles[i] = 'background-color: #d4edda; color: #155724; font-weight: bold;'
+                        elif "xG" in row_name and v >= 1.2:
+                            styles[i] = 'background-color: #d4edda; color: #155724; font-weight: bold;'
+                        elif "Store Chancer" in row_name and v >= 2.0:
+                            styles[i] = 'background-color: #d4edda; color: #155724; font-weight: bold;'
+                return styles
 
             tab1, tab2 = st.tabs(["Datagrundlag", "Winning Performance Model"])
 
             with tab1:
                 st.markdown("Alle gennemsnitlige præstationsmål fordelt på kampens udfald")
+                
+                # Anvend den specifikke farvekodning på tabellen
+                styled_summary = summary_table.style.format("{:.2f}").apply(color_goals, axis=1)
+                
                 st.dataframe(
-                    summary_table.style.format("{:.2f}").background_gradient(cmap="Greens", axis=1),
+                    styled_summary,
                     use_container_width=True
                 )
-                st.info(f"Tabellen viser alle metrikker (inkl. Box Entries) opdelt efter Sejr, Uafgjort og Nederlag for sæson {SEASONNAME}.")
+                st.info(f"Tabellen viser alle metrikker (inkl. Box Entries) opdelt efter Sejr, Uafgjort og Nederlag for sæson {SEASONNAME}. Celler i Sejr-kolonnen farves grønne, hvis målsætningen er nået.")
 
             with tab2:
                 st.markdown("Winning Performance Model (Fase-opdelt målstruktur)")
