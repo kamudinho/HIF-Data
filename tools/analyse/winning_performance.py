@@ -16,7 +16,7 @@ def vis_side():
         SEASONNAME = "2025/2026"
         
         sql = f"""
-            WITH MatchBase AS (
+            With MatchBase AS (
                 SELECT 
                     MATCH_OPTAUUID, MATCH_DATE_FULL, MATCH_STATUS,
                     CONTESTANTHOME_OPTAUUID, CONTESTANTAWAY_OPTAUUID,
@@ -69,7 +69,7 @@ def vis_side():
             df_matches = conn.query(sql) if hasattr(conn, 'query') else pd.read_sql(sql, conn)
 
         if df_matches is None or df_matches.empty:
-            st.warning("SQL-forespørgslen returnerede ingen rækker. Tjek om tabellernavnene i databasen er korrekte.")
+            st.warning("SQL-forespørgslen returnerede ingen rækker.")
             return
 
         df_matches.columns = [str(c).upper() for c in df_matches.columns]
@@ -83,12 +83,21 @@ def vis_side():
             h_score = int(row['TOTAL_HOME_SCORE']) if pd.notnull(row['TOTAL_HOME_SCORE']) else 0
             a_score = int(row['TOTAL_AWAY_SCORE']) if pd.notnull(row['TOTAL_AWAY_SCORE']) else 0
             
+            # Beregn pasningsprocent
+            h_passes = row.get('HOME_PASSES', 0) or 0
+            h_acc = row.get('HOME_ACC_PASSES', 0) or 0
+            h_pass_pct = (h_acc / h_passes * 100) if h_passes > 0 else 0
+
+            a_passes = row.get('AWAY_PASSES', 0) or 0
+            a_acc = row.get('AWAY_ACC_PASSES', 0) or 0
+            a_pass_pct = (a_acc / a_passes * 100) if a_passes > 0 else 0
+
             match_rows.append({
                 'TEAM_UUID': h_uuid,
                 'RESULTAT': 'Sejr' if h_score > a_score else ('Uafgjort' if h_score == a_score else 'Nederlag'),
                 'POSS': pd.to_numeric(row.get('HOME_POSS'), errors='coerce'),
-                'PASSES': pd.to_numeric(row.get('HOME_PASSES'), errors='coerce'),
-                'ACC_PASSES': pd.to_numeric(row.get('HOME_ACC_PASSES'), errors='coerce'),
+                'PASSES': pd.to_numeric(h_passes, errors='coerce'),
+                'PASS_PCT': h_pass_pct,
                 'SHOTS': pd.to_numeric(row.get('HOME_SHOTS'), errors='coerce'),
                 'SHOTS_ON_TARGET': pd.to_numeric(row.get('HOME_SHOTS_ON_TARGET'), errors='coerce'),
                 'TACKLES': pd.to_numeric(row.get('HOME_TACKLES'), errors='coerce'),
@@ -103,8 +112,8 @@ def vis_side():
                 'TEAM_UUID': a_uuid,
                 'RESULTAT': 'Sejr' if a_score > h_score else ('Uafgjort' if a_score == h_score else 'Nederlag'),
                 'POSS': pd.to_numeric(row.get('AWAY_POSS'), errors='coerce'),
-                'PASSES': pd.to_numeric(row.get('AWAY_PASSES'), errors='coerce'),
-                'ACC_PASSES': pd.to_numeric(row.get('AWAY_ACC_PASSES'), errors='coerce'),
+                'PASSES': pd.to_numeric(a_passes, errors='coerce'),
+                'PASS_PCT': a_pass_pct,
                 'SHOTS': pd.to_numeric(row.get('AWAY_SHOTS'), errors='coerce'),
                 'SHOTS_ON_TARGET': pd.to_numeric(row.get('AWAY_SHOTS_ON_TARGET'), errors='coerce'),
                 'TACKLES': pd.to_numeric(row.get('AWAY_TACKLES'), errors='coerce'),
@@ -120,13 +129,13 @@ def vis_side():
         team_perf = df_perf.dropna(subset=['TEAM_UUID'])
 
         if not team_perf.empty:
-            cols_to_mean = ['POSS', 'PASSES', 'ACC_PASSES', 'SHOTS', 'SHOTS_ON_TARGET', 'TACKLES', 'FOULS', 'YELLOW', 'CORNERS', 'XG', 'BIG_CHANCES', 'PREv_GOALS']
+            cols_to_mean = ['POSS', 'PASSES', 'PASS_PCT', 'SHOTS', 'SHOTS_ON_TARGET', 'TACKLES', 'FOULS', 'YELLOW', 'CORNERS', 'XG', 'BIG_CHANCES', 'PREv_GOALS']
             summary_table = team_perf.groupby('RESULTAT')[cols_to_mean].mean().reindex(['Sejr', 'Uafgjort', 'Nederlag']).T
             
             summary_table.index = [
                 'Boldbesiddelse (%)', 
                 'Afleveringer (Total)', 
-                'Afleveringer (Præcise)', 
+                'Pasningsprocent (%)', 
                 'Afslutninger (Total)', 
                 'Afslutninger (Inden for ramme)', 
                 'Vundne Tacklinger', 
@@ -138,11 +147,51 @@ def vis_side():
                 'Forhindrede Mål (Prevented Goals)'
             ]
             
+            st.markdown("### 📊 Statistisk Oversigt (Sejr vs. Uafgjort vs. Nederlag)")
             st.dataframe(
                 summary_table.style.format("{:.2f}").background_gradient(cmap="Greens", axis=1),
                 use_container_width=True
             )
-            st.info(f"💡 Tabellen viser udvidede gennemsnitlige præstationsmål fordelt på kampens udfald for sæson {SEASONNAME}.")
+            
+            st.markdown("---")
+            st.markdown("### 📋 Winning Performance Model (Fase-opdelt målstruktur)")
+            
+            # Opsætning af visuelle kolonner svarende til din skabelon
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                st.markdown("#### 🔴 OPBYGNINGSSPIL")
+                st.markdown("- **Pasningsprocent:** >78%")
+                st.markdown("- **Progression from 1/3:** >75%")
+                st.markdown("- **XT (Threat):** >1,4")
+                st.markdown("- **Succesfulde pasninger:** >445")
+                st.markdown("- **<6 aktioner** på modstanders halvdel når midterlinje passeres")
+
+            with col2:
+                st.markdown("#### 🔴 AVSLUTNINGSSPIL")
+                st.markdown("- **Avg xG pr. afslutning:** >0,11")
+                st.markdown("- **xG / Box Entry:** >0,15")
+                st.markdown("- **Pasninger til 10ere på off. tredjedel:** >12")
+                st.markdown("- **Box entries efter retvendt 10er:** >4")
+                st.markdown("- **Berøringer i feltet:** >10")
+                st.markdown("- **Succesfulde box entries (indlæg + pasning):** >12")
+
+            with col3:
+                st.markdown("#### 🔴 FORSVARSSPIL")
+                st.markdown("- **Avg xG imod:** <1,0")
+                st.markdown("- **xG / Box entries imod:** <0,09")
+                st.markdown("- **Unsuccesful box entries fra central korridor:** <60%")
+                st.markdown("- **Berøringer i feltet imod:** <9")
+                st.markdown("- **Succesfulde pasninger imod:** <74%")
+                st.markdown("- **Box entries imod:** <8")
+
+            with col4:
+                st.markdown("#### 🔴 EROBRINGSSPIL")
+                st.markdown("- **PPDA:** <13")
+                st.markdown("- **Fasthold erobring 2/3:** [Målsætning]")
+                st.markdown("- **Tid modstanderen har bolden:** <11 sek")
+
+            st.info(f"💡 Modellen ovenfor afspejler de opstillede KPI-målhold for sæson {SEASONNAME} holdt op imod de faktiske træk fra databasen.")
         else:
             st.warning("Ikke nok data tilgængelig.")
 
