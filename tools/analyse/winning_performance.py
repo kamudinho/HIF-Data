@@ -93,7 +93,7 @@ def vis_side():
                     SUM(CASE WHEN EVENT_TYPEID = 7 THEN 1 ELSE 0 END) AS TACKLES_DEF,     -- 7 = Tackle
                     SUM(CASE WHEN EVENT_TYPEID = 8 THEN 1 ELSE 0 END) AS INTERCEPTIONS,   -- 8 = Interception
                     -- Tidsbaseret / Sekvens proxy (hvis tidsstempler er tilgængelige, ellers standardiseret)
-                    AVG(EVENT_MINUTE) AS AVG_EVENT_MINUTE
+                    AVG(EVENT_TIMEMIN) AS AVG_EVENT_MINUTE
                 FROM {DB}.OPTA_EVENTS
                 GROUP BY 1, 2
             )
