@@ -38,9 +38,6 @@ def vis_side():
                     SUM(CASE WHEN STAT_TYPE = 'wonTackle' THEN STAT_TOTAL ELSE 0 END) AS TACKLES_WON,
                     SUM(CASE WHEN STAT_TYPE = 'totalTackle' THEN STAT_TOTAL ELSE 0 END) AS TOTAL_TACKLES,
                     SUM(CASE WHEN STAT_TYPE = 'totalFoul' THEN STAT_TOTAL ELSE 0 END) AS FOULS,
-                    SUM(CASE WHEN STAT_TYPE = 'yellowCard' THEN STAT_TOTAL ELSE 0 END) AS YELLOW_CARDS,
-                    SUM(CASE WHEN STAT_TYPE = 'redCard' THEN STAT_TOTAL ELSE 0 END) AS RED_CARDS,
-                    SUM(CASE WHEN STAT_TYPE = 'corner' THEN STAT_TOTAL ELSE 0 END) AS CORNERS,
                     SUM(CASE WHEN STAT_TYPE = 'cornerTaken' THEN STAT_TOTAL ELSE 0 END) AS CORNER_TAKEN,
                     SUM(CASE WHEN STAT_TYPE = 'wonCorners' THEN STAT_TOTAL ELSE 0 END) AS WON_CORNERS,
                     SUM(CASE WHEN STAT_TYPE = 'lostCorners' THEN STAT_TOTAL ELSE 0 END) AS LOST_CORNERS,
@@ -120,7 +117,7 @@ def vis_side():
                 h.POSSESSION AS HOME_POSS, h.PASSES AS HOME_PASSES, h.ACCURATE_PASSES AS HOME_ACC_PASSES,
                 h.SHOTS AS HOME_SHOTS, h.SHOTS_ON_TARGET AS HOME_SHOTS_ON_TARGET, h.SHOT_OFF_TARGET AS HOME_SHOT_OFF_TARGET,
                 h.BLOCKED_SHOTS AS HOME_BLOCKED_SHOTS, h.TACKLES_WON AS HOME_TACKLES_WON, h.TOTAL_TACKLES AS HOME_TOTAL_TACKLES,
-                h.FOULS AS HOME_FOULS, h.YELLOW_CARDS AS HOME_YELLOW, h.RED_CARDS AS HOME_RED, h.CORNERS AS HOME_CORNERS,
+                h.FOULS AS HOME_FOULS,
                 h.CORNER_TAKEN AS HOME_CORNER_TAKEN, h.WON_CORNERS AS HOME_WON_CORNERS, h.LOST_CORNERS AS HOME_LOST_CORNERS,
                 h.TOTAL_THROWS AS HOME_TOTAL_THROWS, h.GOAL_KICKS AS HOME_GOAL_KICKS, h.TOTAL_CLEARANCE AS HOME_TOTAL_CLEARANCE,
                 h.TOTAL_OFFSIDE AS HOME_TOTAL_OFFSIDE, h.SAVES AS HOME_SAVES, h.SUBS_MADE AS HOME_SUBS_MADE,
@@ -135,7 +132,7 @@ def vis_side():
                 a.POSSESSION AS AWAY_POSS, a.PASSES AS AWAY_PASSES, a.ACCURATE_PASSES AS AWAY_ACC_PASSES,
                 a.SHOTS AS AWAY_SHOTS, a.SHOTS_ON_TARGET AS AWAY_SHOTS_ON_TARGET, a.SHOT_OFF_TARGET AS AWAY_SHOT_OFF_TARGET,
                 a.BLOCKED_SHOTS AS AWAY_BLOCKED_SHOTS, a.TACKLES_WON AS AWAY_TACKLES_WON, a.TOTAL_TACKLES AS AWAY_TOTAL_TACKLES,
-                a.FOULS AS AWAY_FOULS, a.YELLOW_CARDS AS AWAY_YELLOW, a.RED_CARDS AS AWAY_RED, a.CORNERS AS AWAY_CORNERS,
+                a.FOULS AS AWAY_FOULS,
                 a.CORNER_TAKEN AS AWAY_CORNER_TAKEN, a.WON_CORNERS AS AWAY_WON_CORNERS, a.LOST_CORNERS AS AWAY_LOST_CORNERS,
                 a.TOTAL_THROWS AS AWAY_TOTAL_THROWS, a.GOAL_KICKS AS AWAY_GOAL_KICKS, a.TOTAL_CLEARANCE AS AWAY_TOTAL_CLEARANCE,
                 a.TOTAL_OFFSIDE AS AWAY_TOTAL_OFFSIDE, a.SAVES AS AWAY_SAVES, a.SUBS_MADE AS AWAY_SUBS_MADE,
@@ -218,9 +215,6 @@ def vis_side():
                 'TACKLES': pd.to_numeric(row.get('HOME_TACKLES_WON'), errors='coerce'),
                 'TOTAL_TACKLES': pd.to_numeric(row.get('HOME_TOTAL_TACKLES'), errors='coerce'),
                 'FOULS': pd.to_numeric(row.get('HOME_FOULS'), errors='coerce'),
-                'YELLOW': pd.to_numeric(row.get('HOME_YELLOW'), errors='coerce'),
-                'RED': pd.to_numeric(row.get('HOME_RED'), errors='coerce'),
-                'CORNERS': pd.to_numeric(row.get('HOME_CORNERS'), errors='coerce'),
                 'CORNER_TAKEN': pd.to_numeric(row.get('HOME_CORNER_TAKEN'), errors='coerce'),
                 'WON_CORNERS': pd.to_numeric(row.get('HOME_WON_CORNERS'), errors='coerce'),
                 'LOST_CORNERS': pd.to_numeric(row.get('HOME_LOST_CORNERS'), errors='coerce'),
@@ -260,9 +254,6 @@ def vis_side():
                 'TACKLES': pd.to_numeric(row.get('AWAY_TACKLES_WON'), errors='coerce'),
                 'TOTAL_TACKLES': pd.to_numeric(row.get('AWAY_TOTAL_TACKLES'), errors='coerce'),
                 'FOULS': pd.to_numeric(row.get('AWAY_FOULS'), errors='coerce'),
-                'YELLOW': pd.to_numeric(row.get('AWAY_YELLOW'), errors='coerce'),
-                'RED': pd.to_numeric(row.get('AWAY_RED'), errors='coerce'),
-                'CORNERS': pd.to_numeric(row.get('AWAY_CORNERS'), errors='coerce'),
                 'CORNER_TAKEN': pd.to_numeric(row.get('AWAY_CORNER_TAKEN'), errors='coerce'),
                 'WON_CORNERS': pd.to_numeric(row.get('AWAY_WON_CORNERS'), errors='coerce'),
                 'LOST_CORNERS': pd.to_numeric(row.get('AWAY_LOST_CORNERS'), errors='coerce'),
@@ -401,8 +392,6 @@ def vis_side():
                     st.markdown("##### 🔴 FORSVARSSPIL")
                     st.markdown(f"- **Mål indkasseret:** {get_val('Mål indkasseret')}")
                     st.markdown(f"- **Vundne Tacklinger:** {get_val('Vundne Tacklinger')}")
-                    st.markdown(f"- **Frispark begået:** {get_val('Frispark begået')}")
-                    st.markdown(f"- **Gule kort:** {get_val('Gule kort')}")
 
                 with col4:
                     st.markdown("##### 🔴 EROBRINGSSPIL")
