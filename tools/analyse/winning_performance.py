@@ -241,9 +241,11 @@ def vis_side():
                 
                 styled_summary = summary_table.style.format("{:.2f}").apply(color_goals, axis=1)
                 
+                # Bruger height=None / fjerner begrænsning, så hele tabellen vises fuldt ud uden at afkorte
                 st.dataframe(
                     styled_summary,
-                    use_container_width=True
+                    use_container_width=True,
+                    height=700
                 )
                 st.info(f"Tabellen viser alle metrikker opdelt efter Sejr, Uafgjort og Nederlag for sæson {SEASONNAME}.")
 
