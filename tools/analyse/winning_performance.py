@@ -163,7 +163,7 @@ def vis_side():
             a_ppda = (h_passes_val / a_def_actions) if a_def_actions > 0 else 0.0
 
             h_poss_pct = float(pd.to_numeric(row.get('HOME_POSS'), errors='coerce') or 50.0)
-            a_poss_pct = float(pd.to_numeric(row.get('AWAY_POSS'), errors='coerce') or 50.0
+            a_poss_pct = float(pd.to_numeric(row.get('AWAY_POSS'), errors='coerce') or 50.0)
 
             match_rows.append({
                 'TEAM_UUID': h_uuid,
