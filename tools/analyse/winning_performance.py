@@ -3,7 +3,7 @@ import pandas as pd
 
 def vis_side():
     try:
-        st.markdown("### Winning Performance")
+        st.caption("Winning Performance")
         
         from data.data_load import _get_snowflake_conn
         conn = _get_snowflake_conn()
@@ -95,65 +95,83 @@ def vis_side():
             match_rows.append({
                 'TEAM_UUID': h_uuid,
                 'RESULTAT': 'Sejr' if h_score > a_score else ('Uafgjort' if h_score == a_score else 'Nederlag'),
-                'PASS_PCT': h_pass_pct,
+                'POSS': pd.to_numeric(row.get('HOME_POSS'), errors='coerce'),
                 'PASSES': pd.to_numeric(h_passes, errors='coerce'),
-                'XG': pd.to_numeric(row.get('HOME_XG'), errors='coerce'),
-                'BOX_ENTRIES': pd.to_numeric(row.get('HOME_BOX_ENTRIES'), errors='coerce'),
+                'PASS_PCT': h_pass_pct,
                 'SHOTS': pd.to_numeric(row.get('HOME_SHOTS'), errors='coerce'),
-                'BIG_CHANCES': pd.to_numeric(row.get('HOME_BIG_CHANCES'), errors='coerce')
+                'SHOTS_ON_TARGET': pd.to_numeric(row.get('HOME_SHOTS_ON_TARGET'), errors='coerce'),
+                'TACKLES': pd.to_numeric(row.get('HOME_TACKLES'), errors='coerce'),
+                'FOULS': pd.to_numeric(row.get('HOME_FOULS'), errors='coerce'),
+                'YELLOW': pd.to_numeric(row.get('HOME_YELLOW'), errors='coerce'),
+                'CORNERS': pd.to_numeric(row.get('HOME_CORNERS'), errors='coerce'),
+                'XG': pd.to_numeric(row.get('HOME_XG'), errors='coerce'),
+                'BIG_CHANCES': pd.to_numeric(row.get('HOME_BIG_CHANCES'), errors='coerce'),
+                'PREv_GOALS': pd.to_numeric(row.get('HOME_PREV_GOALS'), errors='coerce'),
+                'BOX_ENTRIES': pd.to_numeric(row.get('HOME_BOX_ENTRIES'), errors='coerce')
             })
             match_rows.append({
                 'TEAM_UUID': a_uuid,
                 'RESULTAT': 'Sejr' if a_score > h_score else ('Uafgjort' if a_score == h_score else 'Nederlag'),
-                'PASS_PCT': a_pass_pct,
+                'POSS': pd.to_numeric(row.get('AWAY_POSS'), errors='coerce'),
                 'PASSES': pd.to_numeric(a_passes, errors='coerce'),
-                'XG': pd.to_numeric(row.get('AWAY_XG'), errors='coerce'),
-                'BOX_ENTRIES': pd.to_numeric(row.get('AWAY_BOX_ENTRIES'), errors='coerce'),
+                'PASS_PCT': a_pass_pct,
                 'SHOTS': pd.to_numeric(row.get('AWAY_SHOTS'), errors='coerce'),
-                'BIG_CHANCES': pd.to_numeric(row.get('AWAY_BIG_CHANCES'), errors='coerce')
+                'SHOTS_ON_TARGET': pd.to_numeric(row.get('AWAY_SHOTS_ON_TARGET'), errors='coerce'),
+                'TACKLES': pd.to_numeric(row.get('AWAY_TACKLES'), errors='coerce'),
+                'FOULS': pd.to_numeric(row.get('AWAY_FOULS'), errors='coerce'),
+                'YELLOW': pd.to_numeric(row.get('AWAY_YELLOW'), errors='coerce'),
+                'CORNERS': pd.to_numeric(row.get('AWAY_CORNERS'), errors='coerce'),
+                'XG': pd.to_numeric(row.get('AWAY_XG'), errors='coerce'),
+                'BIG_CHANCES': pd.to_numeric(row.get('AWAY_BIG_CHANCES'), errors='coerce'),
+                'PREv_GOALS': pd.to_numeric(row.get('AWAY_PREV_GOALS'), errors='coerce'),
+                'BOX_ENTRIES': pd.to_numeric(row.get('AWAY_BOX_ENTRIES'), errors='coerce')
             })
 
         df_perf = pd.DataFrame(match_rows)
         team_perf = df_perf.dropna(subset=['TEAM_UUID'])
 
         if not team_perf.empty:
-            cols_to_mean = ['PASS_PCT', 'PASSES', 'XG', 'BOX_ENTRIES', 'SHOTS', 'BIG_CHANCES']
+            cols_to_mean = ['POSS', 'PASSES', 'PASS_PCT', 'SHOTS', 'SHOTS_ON_TARGET', 'TACKLES', 'FOULS', 'YELLOW', 'CORNERS', 'XG', 'BIG_CHANCES', 'PREv_GOALS', 'BOX_ENTRIES']
             summary_table = team_perf.groupby('RESULTAT')[cols_to_mean].mean().reindex(['Sejr', 'Uafgjort', 'Nederlag']).T
             
             summary_table.index = [
+                'Boldbesiddelse (%)', 
+                'Afleveringer (Total)', 
                 'Pasningsprocent (%) [Mål: >78%]', 
-                'Succesfulde pasninger [Mål: >445]', 
-                'xG (Forventede Mål)', 
-                'Box Entries (Feltindsættelser)', 
                 'Afslutninger (Total)', 
-                'Store Chancer'
+                'Afslutninger (Inden for ramme)', 
+                'Vundne Tacklinger', 
+                'Frispark begået', 
+                'Gule kort', 
+                'Hjørnespark', 
+                'xG (Forventede Mål)', 
+                'Store Chancer', 
+                'Forhindrede Mål (Prevented Goals)',
+                'Box Entries (Feltindsættelser)'
             ]
 
-            # Farvekodningsfunktion baseret på mål (f.eks. Pasningsprocent > 78)
-            def highlight_kpi(row):
-                styles = []
-                # Vi tjekker værdien for 'Sejr' kolonnen ift. målsætningerne
-                for idx in row.index:
-                    val = row[idx]
-                    if "Pasningsprocent" in str(row.name) and idx == 'Sejr':
-                        color = 'background-color: #d4edda;' if val >= 78 else 'background-color: #f8d7da;'
-                    elif "Succesfulde pasninger" in str(row.name) and idx == 'Sejr':
-                        color = 'background-color: #d4edda;' if val >= 445 else 'background-color: #f8d7da;'
-                    else:
-                        color = ''
-                    styles.append(color)
-                return styles
+            # Farvekodningsfunktion til at fremhæve målsætninger i Sejr-kolonnen
+            def color_cells(val, row_name):
+                try:
+                    v = float(val)
+                except:
+                    return ''
+                
+                if "Pasningsprocent" in row_name and v >= 78:
+                    return 'background-color: #d4edda;'
+                elif "Succesfulde pasninger" in row_name and v >= 445:
+                    return 'background-color: #d4edda;'
+                return ''
 
-            # Oprettelse af tabs
-            tab1, tab2 = st.tabs(["Datagrundlag", "Performance Model"])
+            tab1, tab2 = st.tabs(["Datagrundlag", "Winning Performance Model"])
 
             with tab1:
-                st.markdown("#### Gennemsnitlige præstationsmål holdt op mod skabelonens mål")
-                
-                styled_table = summary_table.style.format("{:.2f}")
-                st.dataframe(styled_table, use_container_width=True)
-                
-                st.info(f"💡 Tabellen viser gennemsnittet for Sejr, Uafgjort og Nederlag for sæson {SEASONNAME}. Felterne er afstemt efter de definerede tærskler.")
+                st.markdown("#### Alle gennemsnitlige præstationsmål fordelt på kampens udfald")
+                st.dataframe(
+                    summary_table.style.format("{:.2f}").background_gradient(cmap="Greens", axis=1),
+                    use_container_width=True
+                )
+                st.info(f"💡 Tabellen viser alle metrikker (inkl. Box Entries) opdelt efter Sejr, Uafgjort og Nederlag for sæson {SEASONNAME}.")
 
             with tab2:
                 st.markdown("#### Winning Performance Model (Fase-opdelt målstruktur)")
