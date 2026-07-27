@@ -35,7 +35,7 @@ def vis_side():
                     SUM(CASE WHEN STAT_TYPE = 'ontargetScoringAtt' THEN STAT_TOTAL ELSE 0 END) AS SHOTS_ON_TARGET,
                     SUM(CASE WHEN STAT_TYPE = 'wonTackle' THEN STAT_TOTAL ELSE 0 END) AS TACKLES_WON,
                     SUM(CASE WHEN STAT_TYPE = 'totalFoul' THEN STAT_TOTAL ELSE 0 END) AS FOULS,
-                    SUM(CASE WHEN STAT_TYPE = 'goalsconceced' THEN STAT_TOTAL ELSE 0 END) AS GOALS_CONCEDED,
+                    SUM(CASE WHEN STAT_TYPE = 'goalsConceeced' THEN STAT_TOTAL ELSE 0 END) AS GOALS_CONCEDED,
                     SUM(CASE WHEN STAT_TYPE = 'corner' THEN STAT_TOTAL ELSE 0 END) AS CORNERS
                 FROM {DB}.OPTA_MATCHSTATS
                 GROUP BY 1, 2
