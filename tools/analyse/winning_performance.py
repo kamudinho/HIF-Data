@@ -374,14 +374,14 @@ def vis_side():
                 col1, col2, col3, col4 = st.columns(4)
                 
                 with col1:
-                    st.markdown("##### 🔴 OPBYGNINGSSPIL")
+                    st.markdown('##### <img src="https://cdn5.wyscout.com/photos/team/public/2659_120x120.png" width="20" style="vertical-align: middle; margin-right: 8px;"> OPBYGNINGSSPIL', unsafe_allow_html=True)
                     st.markdown(f"- **Pasningsprocent:** {get_val('Pasningsprocent (%)')} (Mål: >78%)")
                     st.markdown(f"- **Afleveringer (Total):** {get_val('Afleveringer (Total)')}")
                     st.markdown(f"- **Boldbesiddelse:** {get_val('Boldbesiddelse (%)')}%")
                     st.markdown(f"- **Afslutninger (Total):** {get_val('Afslutninger (Total)')}")
 
                 with col2:
-                    st.markdown("##### 🔴 AVSLUTNINGSSPIL")
+                    st.markdown('##### <img src="https://cdn5.wyscout.com/photos/team/public/2659_120x120.png" width="20" style="vertical-align: middle; margin-right: 8px;"> AFSLUTNINGSSPIL', unsafe_allow_html=True)
                     st.markdown(f"- **xG (Forventede Mål):** {get_val('xG (Forventede Mål)')}")
                     st.markdown(f"- **Store Chancer:** {get_val('Store Chancer')}")
                     st.markdown(f"- **Box Entries:** {get_val('Box Entries')} (Mål: >10)")
@@ -389,12 +389,12 @@ def vis_side():
                     st.markdown(f"- **Afslutninger på mål:** {get_val('Afslutninger (Inden for ramme)')}")
 
                 with col3:
-                    st.markdown("##### 🔴 FORSVARSSPIL")
+                    st.markdown('##### <img src="https://cdn5.wyscout.com/photos/team/public/2659_120x120.png" width="20" style="vertical-align: middle; margin-right: 8px;"> FORSVARSSPIL', unsafe_allow_html=True)
                     st.markdown(f"- **Mål indkasseret:** {get_val('Mål indkasseret')}")
                     st.markdown(f"- **Vundne Tacklinger:** {get_val('Vundne Tacklinger')}")
 
                 with col4:
-                    st.markdown("##### 🔴 EROBRINGSSPIL")
+                    st.markdown('##### <img src="https://cdn5.wyscout.com/photos/team/public/2659_120x120.png" width="20" style="vertical-align: middle; margin-right: 8px;"> EROBRINGSSPIL', unsafe_allow_html=True)
                     st.markdown(f"- **PPDA:** {get_val('PPDA (Passes Per Defensive Action)')} (Mål: <13)")
                     st.markdown(f"- **Boldbesiddelsestid pr. sekvens:** {get_val('Boldbesiddelsestid pr. sekvens (sek)')} sek")
                     st.markdown(f"- **Hjørnespark:** {get_val('Hjørnespark')}")
