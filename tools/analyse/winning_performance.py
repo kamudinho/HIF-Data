@@ -27,6 +27,7 @@ def vis_side():
                 SELECT 
                     MATCH_OPTAUUID, CONTESTANT_OPTAUUID,
                     MAX(CASE WHEN STAT_TYPE = 'possessionPercentage' THEN STAT_TOTAL END) AS POSSESSION,
+                    SUM(CASE WHEN STAT_TYPE = 'totalPass' THEN STAT_TOTAL ELSE 0 END) AS PASSES,
                     SUM(CASE WHEN STAT_TYPE = 'totalScoringAtt' THEN STAT_TOTAL ELSE 0 END) AS SHOTS
                 FROM {DB}.OPTA_MATCHSTATS
                 GROUP BY 1, 2
@@ -41,8 +42,8 @@ def vis_side():
             )
             SELECT 
                 b.*,
-                h.POSSESSION AS HOME_POSS, hx.XG AS HOME_XG, hx.BIG_CHANCES AS HOME_BIG_CHANCES, h.SHOTS AS HOME_SHOTS,
-                a.POSSESSION AS AWAY_POSS, ax.XG AS AWAY_XG, ax.BIG_CHANCES AS AWAY_BIG_CHANCES, a.SHOTS AS AWAY_SHOTS
+                h.POSSESSION AS HOME_POSS, h.PASSES AS HOME_PASSES, hx.XG AS HOME_XG, hx.BIG_CHANCES AS HOME_BIG_CHANCES, h.SHOTS AS HOME_SHOTS,
+                a.POSSESSION AS AWAY_POSS, a.PASSES AS AWAY_PASSES, ax.XG AS AWAY_XG, ax.BIG_CHANCES AS AWAY_BIG_CHANCES, a.SHOTS AS AWAY_SHOTS
             FROM MatchBase b
             LEFT JOIN StatsPivot h ON b.MATCH_OPTAUUID = h.MATCH_OPTAUUID AND b.CONTESTANTHOME_OPTAUUID = h.CONTESTANT_OPTAUUID
             LEFT JOIN StatsPivot a ON b.MATCH_OPTAUUID = a.MATCH_OPTAUUID AND b.CONTESTANTAWAY_OPTAUUID = a.CONTESTANT_OPTAUUID
@@ -72,31 +73,36 @@ def vis_side():
                 'TEAM_UUID': h_uuid,
                 'RESULTAT': 'Sejr' if h_score > a_score else ('Uafgjort' if h_score == a_score else 'Nederlag'),
                 'POSS': pd.to_numeric(row.get('HOME_POSS'), errors='coerce'),
+                'PASSES': pd.to_numeric(row.get('HOME_PASSES'), errors='coerce'),
                 'XG': pd.to_numeric(row.get('HOME_XG'), errors='coerce'),
-                'SHOTS': pd.to_numeric(row.get('HOME_SHOTS'), errors='coerce'),
-                'BIG_CHANCES': pd.to_numeric(row.get('HOME_BIG_CHANCES'), errors='coerce')
+                'BIG_CHANCES': pd.to_numeric(row.get('HOME_BIG_CHANCES'), errors='coerce'),
+                'SHOTS': pd.to_numeric(row.get('HOME_SHOTS'), errors='coerce')
             })
             match_rows.append({
                 'TEAM_UUID': a_uuid,
                 'RESULTAT': 'Sejr' if a_score > h_score else ('Uafgjort' if a_score == h_score else 'Nederlag'),
                 'POSS': pd.to_numeric(row.get('AWAY_POSS'), errors='coerce'),
+                'PASSES': pd.to_numeric(row.get('AWAY_PASSES'), errors='coerce'),
                 'XG': pd.to_numeric(row.get('AWAY_XG'), errors='coerce'),
-                'SHOTS': pd.to_numeric(row.get('AWAY_SHOTS'), errors='coerce'),
-                'BIG_CHANCES': pd.to_numeric(row.get('AWAY_BIG_CHANCES'), errors='coerce')
+                'BIG_CHANCES': pd.to_numeric(row.get('AWAY_BIG_CHANCES'), errors='coerce'),
+                'SHOTS': pd.to_numeric(row.get('AWAY_SHOTS'), errors='coerce')
             })
 
         df_perf = pd.DataFrame(match_rows)
         team_perf = df_perf.dropna(subset=['TEAM_UUID'])
 
         if not team_perf.empty:
-            summary_table = team_perf.groupby('RESULTAT')[['POSS', 'XG', 'BIG_CHANCES', 'SHOTS']].mean().reindex(['Sejr', 'Uafgjort', 'Nederlag'])
-            summary_table.columns = ['Boldbesiddelse (%)', 'xG (Forventede Mål)', 'Store Chancer', 'Afslutninger']
+            # Beregn gennemsnit og transponer (vendes om med .T)
+            summary_table = team_perf.groupby('RESULTAT')[['POSS', 'PASSES', 'XG', 'BIG_CHANCES', 'SHOTS']].mean().reindex(['Sejr', 'Uafgjort', 'Nederlag']).T
+            
+            # Giv rækkerne (kategorierne) pæne navne
+            summary_table.index = ['Boldbesiddelse (%)', 'Afleveringer', 'xG (Forventede Mål)', 'Store Chancer', 'Afslutninger']
             
             st.dataframe(
-                summary_table.style.format("{:.2f}").background_gradient(cmap="Greens", subset=['xG (Forventede Mål)', 'Store Chancer']),
+                summary_table.style.format("{:.2f}").background_gradient(cmap="Greens", axis=1),
                 use_container_width=True
             )
-            st.info(f"💡 Tabellen viser gennemsnitlige præstationsmål opdelt efter kampens resultat for sæson {SEASONNAME}.")
+            st.info(f"💡 Tabellen viser gennemsnitlige præstationsmål fordelt på kampens udfald for sæson {SEASONNAME}.")
         else:
             st.warning("Ikke nok data tilgængelig.")
 
