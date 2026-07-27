@@ -146,7 +146,6 @@ def vis_side():
             h_score = int(row['TOTAL_HOME_SCORE']) if pd.notnull(row['TOTAL_HOME_SCORE']) else 0
             a_score = int(row['TOTAL_AWAY_SCORE']) if pd.notnull(row['TOTAL_AWAY_SCORE']) else 0
             
-            # Hjemmehold
             h_passes = float(row.get('HOME_PASSES', 0) or 0)
             h_acc = float(row.get('HOME_ACC_PASSES', 0) or 0)
             h_pass_pct = (h_acc / h_passes * 100.0) if h_passes > 0 else 0.0
@@ -155,7 +154,6 @@ def vis_side():
             h_def_actions = float(row.get('HOME_TACKLES_DEF', 0) or 0) + float(row.get('HOME_INTERCEPTIONS', 0) or 0) + float(row.get('HOME_FOULS_COMMITTED', 0) or 0)
             h_ppda = (a_passes_val / h_def_actions) if h_def_actions > 0 else 0.0
 
-            # Udehold
             a_passes = float(row.get('AWAY_PASSES', 0) or 0)
             a_acc = float(row.get('AWAY_ACC_PASSES', 0) or 0)
             a_pass_pct = (a_acc / a_passes * 100.0) if a_passes > 0 else 0.0
