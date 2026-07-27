@@ -369,7 +369,7 @@ def vis_side():
                 st.info(f"Tabellen viser alle metrikker opdelt efter Sejr, Uafgjort og Nederlag for sæson {SEASONNAME}.")
 
             with tab2:
-                st.markdown("Winning Performance Model (Fase-opdelt målstruktur med faktiske snit ved Sejre)")
+                st.markdown("Winning Performance Model")
                 
                 col1, col2, col3, col4 = st.columns(4)
                 
