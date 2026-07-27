@@ -43,9 +43,45 @@ def vis_side():
                     MATCH_ID, CONTESTANT_OPTAUUID,
                     SUM(CASE WHEN STAT_TYPE IN ('expectedGoals', 'expectedGoal') THEN STAT_VALUE ELSE 0 END) AS XG,
                     SUM(CASE WHEN STAT_TYPE = 'bigChanceCreated' THEN STAT_VALUE ELSE 0 END) AS BIG_CHANCES,
-                    SUM(CASE WHEN STAT_TYPE = 'preventedGoals' THEN STAT_VALUE ELSE 0 END) AS PREVENTED_GOALS,
-                    SUM(CASE WHEN STAT_TYPE IN ('entryBoxSuccess', 'boxEntrySuccess', 'successfulBoxEntry') THEN STAT_VALUE ELSE 0 END) AS BOX_ENTRIES
+                    SUM(CASE WHEN STAT_TYPE = 'preventedGoals' THEN STAT_VALUE ELSE 0 END) AS PREVENTED_GOALS
                 FROM {DB}.OPTA_MATCHEXPECTEDGOALS
+                GROUP BY 1, 2
+            ),
+            BoxEntriesPivot AS (
+                SELECT 
+                    MATCH_OPTAUUID, 
+                    EVENT_CONTESTANT_OPTAUUID AS CONTESTANT_OPTAUUID,
+                    SUM(CASE 
+                        WHEN EVENT_TYPEID IN (1, 13) 
+                             AND EVENT_OUTCOME = 1 
+                             AND EVENT_X >= 83 
+                             AND EVENT_Y BETWEEN 21 AND 79 
+                        THEN 1 ELSE 0 
+                    END) AS CALCULATED_BOX_ENTRIES
+                FROM {DB}.OPTA_EVENTS
+                GROUP BY 1, 2
+            ),
+            FinalThirdPassesPivot AS (
+                SELECT 
+                    MATCH_OPTAUUID, 
+                    EVENT_CONTESTANT_OPTAUUID AS CONTESTANT_OPTAUUID,
+                    SUM(CASE 
+                        WHEN EVENT_TYPEID = 1 AND EVENT_OUTCOME = 1 AND EVENT_X >= 66.6 
+                        THEN 1 ELSE 0 
+                    END) AS FT_PASSES_SUCCESSFUL,
+                    SUM(CASE 
+                        WHEN EVENT_TYPEID = 1 AND EVENT_OUTCOME = 0 AND EVENT_X >= 66.6 
+                        THEN 1 ELSE 0 
+                    END) AS FT_PASSES_UNSUCCESSFUL,
+                    SUM(CASE 
+                        WHEN EVENT_X >= 66.6 AND EVENT_TYPEID IN (13, 14, 15) 
+                        THEN 1 ELSE 0 
+                    END) AS FT_SHOTS_PRODUCED,
+                    SUM(CASE 
+                        WHEN EVENT_X >= 66.6 AND EVENT_TYPEID = 16 
+                        THEN 1 ELSE 0 
+                    END) AS FT_GOALS
+                FROM {DB}.OPTA_EVENTS
                 GROUP BY 1, 2
             )
             SELECT 
@@ -53,17 +89,27 @@ def vis_side():
                 h.POSSESSION AS HOME_POSS, h.PASSES AS HOME_PASSES, h.ACCURATE_PASSES AS HOME_ACC_PASSES,
                 h.SHOTS AS HOME_SHOTS, h.SHOTS_ON_TARGET AS HOME_SHOTS_ON_TARGET, h.TACKLES_WON AS HOME_TACKLES,
                 h.FOULS AS HOME_FOULS, h.YELLOW_CARDS AS HOME_YELLOW, h.CORNERS AS HOME_CORNERS,
-                hx.XG AS HOME_XG, hx.BIG_CHANCES AS HOME_BIG_CHANCES, hx.PREVENTED_GOALS AS HOME_PREV_GOALS, hx.BOX_ENTRIES AS HOME_BOX_ENTRIES,
+                hx.XG AS HOME_XG, hx.BIG_CHANCES AS HOME_BIG_CHANCES, hx.PREVENTED_GOALS AS HOME_PREV_GOALS, 
+                h_box.CALCULATED_BOX_ENTRIES AS HOME_BOX_ENTRIES,
+                h_ft.FT_PASSES_SUCCESSFUL AS HOME_FT_SUCCESS, h_ft.FT_PASSES_UNSUCCESSFUL AS HOME_FT_UNSUCCESS,
+                h_ft.FT_SHOTS_PRODUCED AS HOME_FT_SHOTS, h_ft.FT_GOALS AS HOME_FT_GOALS,
                 
                 a.POSSESSION AS AWAY_POSS, a.PASSES AS AWAY_PASSES, a.ACCURATE_PASSES AS AWAY_ACC_PASSES,
                 a.SHOTS AS AWAY_SHOTS, a.SHOTS_ON_TARGET AS AWAY_SHOTS_ON_TARGET, a.TACKLES_WON AS AWAY_TACKLES,
                 a.FOULS AS AWAY_FOULS, a.YELLOW_CARDS AS AWAY_YELLOW, a.CORNERS AS AWAY_CORNERS,
-                ax.XG AS AWAY_XG, ax.BIG_CHANCES AS AWAY_BIG_CHANCES, ax.PREVENTED_GOALS AS AWAY_PREV_GOALS, ax.BOX_ENTRIES AS AWAY_BOX_ENTRIES
+                ax.XG AS AWAY_XG, ax.BIG_CHANCES AS AWAY_BIG_CHANCES, ax.PREVENTED_GOALS AS AWAY_PREV_GOALS, 
+                a_box.CALCULATED_BOX_ENTRIES AS AWAY_BOX_ENTRIES,
+                a_ft.FT_PASSES_SUCCESSFUL AS AWAY_FT_SUCCESS, a_ft.FT_PASSES_UNSUCCESSFUL AS AWAY_FT_UNSUCCESS,
+                a_ft.FT_SHOTS_PRODUCED AS AWAY_FT_SHOTS, a_ft.FT_GOALS AS AWAY_FT_GOALS
             FROM MatchBase b
             LEFT JOIN StatsPivot h ON b.MATCH_OPTAUUID = h.MATCH_OPTAUUID AND b.CONTESTANTHOME_OPTAUUID = h.CONTESTANT_OPTAUUID
             LEFT JOIN StatsPivot a ON b.MATCH_OPTAUUID = a.MATCH_OPTAUUID AND b.CONTESTANTAWAY_OPTAUUID = a.CONTESTANT_OPTAUUID
             LEFT JOIN XGPivot hx ON b.MATCH_OPTAUUID = hx.MATCH_ID AND b.CONTESTANTHOME_OPTAUUID = hx.CONTESTANT_OPTAUUID
             LEFT JOIN XGPivot ax ON b.MATCH_OPTAUUID = ax.MATCH_ID AND b.CONTESTANTAWAY_OPTAUUID = ax.CONTESTANT_OPTAUUID
+            LEFT JOIN BoxEntriesPivot h_box ON b.MATCH_OPTAUUID = h_box.MATCH_OPTAUUID AND b.CONTESTANTHOME_OPTAUUID = h_box.CONTESTANT_OPTAUUID
+            LEFT JOIN BoxEntriesPivot a_box ON b.MATCH_OPTAUUID = a_box.MATCH_OPTAUUID AND b.CONTESTANTAWAY_OPTAUUID = a_box.CONTESTANT_OPTAUUID
+            LEFT JOIN FinalThirdPassesPivot h_ft ON b.MATCH_OPTAUUID = h_ft.MATCH_OPTAUUID AND b.CONTESTANTHOME_OPTAUUID = h_ft.CONTESTANT_OPTAUUID
+            LEFT JOIN FinalThirdPassesPivot a_ft ON b.MATCH_OPTAUUID = a_ft.MATCH_OPTAUUID AND b.CONTESTANTAWAY_OPTAUUID = a_ft.CONTESTANT_OPTAUUID
         """
 
         with st.spinner("Henter data..."):
@@ -107,7 +153,11 @@ def vis_side():
                 'XG': pd.to_numeric(row.get('HOME_XG'), errors='coerce'),
                 'BIG_CHANCES': pd.to_numeric(row.get('HOME_BIG_CHANCES'), errors='coerce'),
                 'PREv_GOALS': pd.to_numeric(row.get('HOME_PREV_GOALS'), errors='coerce'),
-                'BOX_ENTRIES': pd.to_numeric(row.get('HOME_BOX_ENTRIES'), errors='coerce')
+                'BOX_ENTRIES': pd.to_numeric(row.get('HOME_BOX_ENTRIES'), errors='coerce'),
+                'FT_SUCCESS': pd.to_numeric(row.get('HOME_FT_SUCCESS'), errors='coerce'),
+                'FT_UNSUCCESS': pd.to_numeric(row.get('HOME_FT_UNSUCCESS'), errors='coerce'),
+                'FT_SHOTS': pd.to_numeric(row.get('HOME_FT_SHOTS'), errors='coerce'),
+                'FT_GOALS': pd.to_numeric(row.get('HOME_FT_GOALS'), errors='coerce')
             })
             match_rows.append({
                 'TEAM_UUID': a_uuid,
@@ -124,14 +174,22 @@ def vis_side():
                 'XG': pd.to_numeric(row.get('AWAY_XG'), errors='coerce'),
                 'BIG_CHANCES': pd.to_numeric(row.get('AWAY_BIG_CHANCES'), errors='coerce'),
                 'PREv_GOALS': pd.to_numeric(row.get('AWAY_PREV_GOALS'), errors='coerce'),
-                'BOX_ENTRIES': pd.to_numeric(row.get('AWAY_BOX_ENTRIES'), errors='coerce')
+                'BOX_ENTRIES': pd.to_numeric(row.get('AWAY_BOX_ENTRIES'), errors='coerce'),
+                'FT_SUCCESS': pd.to_numeric(row.get('AWAY_FT_SUCCESS'), errors='coerce'),
+                'FT_UNSUCCESS': pd.to_numeric(row.get('AWAY_FT_UNSUCCESS'), errors='coerce'),
+                'FT_SHOTS': pd.to_numeric(row.get('AWAY_FT_SHOTS'), errors='coerce'),
+                'FT_GOALS': pd.to_numeric(row.get('AWAY_FT_GOALS'), errors='coerce')
             })
 
         df_perf = pd.DataFrame(match_rows)
         team_perf = df_perf.dropna(subset=['TEAM_UUID'])
 
         if not team_perf.empty:
-            cols_to_mean = ['POSS', 'PASSES', 'PASS_PCT', 'SHOTS', 'SHOTS_ON_TARGET', 'TACKLES', 'FOULS', 'YELLOW', 'CORNERS', 'XG', 'BIG_CHANCES', 'PREv_GOALS', 'BOX_ENTRIES']
+            cols_to_mean = [
+                'POSS', 'PASSES', 'PASS_PCT', 'SHOTS', 'SHOTS_ON_TARGET', 'TACKLES', 
+                'FOULS', 'YELLOW', 'CORNERS', 'XG', 'BIG_CHANCES', 'PREv_GOALS', 
+                'BOX_ENTRIES', 'FT_SUCCESS', 'FT_UNSUCCESS', 'FT_SHOTS', 'FT_GOALS'
+            ]
             summary_table = team_perf.groupby('RESULTAT')[cols_to_mean].mean().reindex(['Sejr', 'Uafgjort', 'Nederlag']).T
             
             summary_table.index = [
@@ -147,10 +205,13 @@ def vis_side():
                 'xG (Forventede Mål)', 
                 'Store Chancer', 
                 'Forhindrede Mål (Prevented Goals)',
-                'Box Entries (Feltindsættelser)'
+                'Box Entries (Feltindsættelser)',
+                'Final Third: Succesfulde Afleveringer',
+                'Final Third: Fejlede Afleveringer',
+                'Final Third: Afslutninger produceret',
+                'Final Third: Mål scoret'
             ]
 
-            # Farvekodningsfunktion der tjekker om målene er opfyldt for 'Sejr'
             def color_goals(row):
                 styles = [''] * len(row)
                 row_name = str(row.name)
@@ -163,7 +224,6 @@ def vis_side():
                         except:
                             continue
                             
-                        # Eksempler på tjek mod dine mål (f.eks. Pasningsprocent > 78, xG > 1.2, Box Entries > 10)
                         if "Pasningsprocent" in row_name and v >= 78:
                             styles[i] = 'background-color: #d4edda; color: #155724; font-weight: bold;'
                         elif "Box Entries" in row_name and v >= 10:
@@ -177,16 +237,15 @@ def vis_side():
             tab1, tab2 = st.tabs(["Datagrundlag", "Winning Performance Model"])
 
             with tab1:
-                st.markdown("Alle gennemsnitlige præstationsmål fordelt på kampens udfald")
+                st.markdown("Alle gennemsnitlige præstationsmål fordelt på kampens udfald (inkl. beregnede hændelser)")
                 
-                # Anvend den specifikke farvekodning på tabellen
                 styled_summary = summary_table.style.format("{:.2f}").apply(color_goals, axis=1)
                 
                 st.dataframe(
                     styled_summary,
                     use_container_width=True
                 )
-                st.info(f"Tabellen viser alle metrikker (inkl. Box Entries) opdelt efter Sejr, Uafgjort og Nederlag for sæson {SEASONNAME}. Celler i Sejr-kolonnen farves grønne, hvis målsætningen er nået.")
+                st.info(f"Tabellen viser alle metrikker opdelt efter Sejr, Uafgjort og Nederlag for sæson {SEASONNAME}.")
 
             with tab2:
                 st.markdown("Winning Performance Model (Fase-opdelt målstruktur)")
