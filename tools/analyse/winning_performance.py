@@ -294,7 +294,7 @@ def vis_side():
         if not team_perf.empty:
             cols_to_mean = [
                 'POSS', 'PASSES', 'PASS_PCT', 'SHOTS', 'SHOTS_ON_TARGET', 'SHOT_OFF_TARGET', 'BLOCKED_SHOTS',
-                'TACKLES', 'TOTAL_TACKLES', 'FOULS', 'YELLOW', 'RED', 'CORNERS', 'CORNER_TAKEN', 'WON_CORNERS',
+                'TACKLES', 'TOTAL_TACKLES', 'FOULS', 'CORNER_TAKEN', 'WON_CORNERS',
                 'LOST_CORNERS', 'TOTAL_THROWS', 'GOAL_KICKS', 'TOTAL_CLEARANCE', 'TOTAL_OFFSIDE', 'SAVES',
                 'SUBS_MADE', 'GOALS_CONCEDED', 'FK_FOUL_WON', 'FK_FOUL_LOST', 'XG', 'BIG_CHANCES', 'PREv_GOALS', 
                 'BOX_ENTRIES', 'FT_SUCCESS', 'FT_UNSUCCESS', 'FT_SHOTS', 'FT_GOALS', 'PPDA', 'BALL_TIME_SEQ'
@@ -312,10 +312,7 @@ def vis_side():
                 'Vundne Tacklinger', 
                 'Tacklinger (Total)',
                 'Frispark begået', 
-                'Gule kort', 
-                'Røde kort',
-                'Hjørnespark', 
-                'Hjørnespark taget',
+                'Hjørnespark',
                 'Vundne hjørnespark',
                 'Tabte hjørnespark',
                 'Indkast',
