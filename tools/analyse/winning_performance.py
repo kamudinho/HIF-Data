@@ -33,10 +33,28 @@ def vis_side():
                     SUM(CASE WHEN STAT_TYPE = 'accuratePass' THEN STAT_TOTAL ELSE 0 END) AS ACCURATE_PASSES,
                     SUM(CASE WHEN STAT_TYPE = 'totalScoringAtt' THEN STAT_TOTAL ELSE 0 END) AS SHOTS,
                     SUM(CASE WHEN STAT_TYPE = 'ontargetScoringAtt' THEN STAT_TOTAL ELSE 0 END) AS SHOTS_ON_TARGET,
+                    SUM(CASE WHEN STAT_TYPE = 'shotOffTarget' THEN STAT_TOTAL ELSE 0 END) AS SHOT_OFF_TARGET,
+                    SUM(CASE WHEN STAT_TYPE = 'blockedScoringAtt' THEN STAT_TOTAL ELSE 0 END) AS BLOCKED_SHOTS,
                     SUM(CASE WHEN STAT_TYPE = 'wonTackle' THEN STAT_TOTAL ELSE 0 END) AS TACKLES_WON,
+                    SUM(CASE WHEN STAT_TYPE = 'totalTackle' THEN STAT_TOTAL ELSE 0 END) AS TOTAL_TACKLES,
                     SUM(CASE WHEN STAT_TYPE = 'totalFoul' THEN STAT_TOTAL ELSE 0 END) AS FOULS,
-                    SUM(CASE WHEN STAT_TYPE = 'goalsConceced' THEN STAT_TOTAL ELSE 0 END) AS GOALS_CONCEDED,
-                    SUM(CASE WHEN STAT_TYPE = 'corner' THEN STAT_TOTAL ELSE 0 END) AS CORNERS
+                    SUM(CASE WHEN STAT_TYPE = 'yellowCard' THEN STAT_TOTAL ELSE 0 END) AS YELLOW_CARDS,
+                    SUM(CASE WHEN STAT_TYPE = 'redCard' THEN STAT_TOTAL ELSE 0 END) AS RED_CARDS,
+                    SUM(CASE WHEN STAT_TYPE = 'corner' THEN STAT_TOTAL ELSE 0 END) AS CORNERS,
+                    SUM(CASE WHEN STAT_TYPE = 'cornerTaken' THEN STAT_TOTAL ELSE 0 END) AS CORNER_TAKEN,
+                    SUM(CASE WHEN STAT_TYPE = 'wonCorners' THEN STAT_TOTAL ELSE 0 END) AS WON_CORNERS,
+                    SUM(CASE WHEN STAT_TYPE = 'lostCorners' THEN STAT_TOTAL ELSE 0 END) AS LOST_CORNERS,
+                    SUM(CASE WHEN STAT_TYPE = 'totalThrows' THEN STAT_TOTAL ELSE 0 END) AS TOTAL_THROWS,
+                    SUM(CASE WHEN STAT_TYPE = 'goalKicks' THEN STAT_TOTAL ELSE 0 END) AS GOAL_KICKS,
+                    SUM(CASE WHEN STAT_TYPE = 'totalClearance' THEN STAT_TOTAL ELSE 0 END) AS TOTAL_CLEARANCE,
+                    SUM(CASE WHEN STAT_TYPE = 'totalOffside' THEN STAT_TOTAL ELSE 0 END) AS TOTAL_OFFSIDE,
+                    SUM(CASE WHEN STAT_TYPE = 'saves' THEN STAT_TOTAL ELSE 0 END) AS SAVES,
+                    SUM(CASE WHEN STAT_TYPE = 'subsMade' THEN STAT_TOTAL ELSE 0 END) AS SUBS_MADE,
+                    SUM(CASE WHEN STAT_TYPE = 'goals' THEN STAT_TOTAL ELSE 0 END) AS GOALS,
+                    SUM(CASE WHEN STAT_TYPE = 'goalsConceded' THEN STAT_TOTAL ELSE 0 END) AS GOALS_CONCEDED,
+                    SUM(CASE WHEN STAT_TYPE = 'goalAssist' THEN STAT_TOTAL ELSE 0 END) AS GOAL_ASSIST,
+                    SUM(CASE WHEN STAT_TYPE = 'fkFoulWon' THEN STAT_TOTAL ELSE 0 END) AS FK_FOUL_WON,
+                    SUM(CASE WHEN STAT_TYPE = 'fkFoulLost' THEN STAT_TOTAL ELSE 0 END) AS FK_FOUL_LOST
                 FROM {DB}.OPTA_MATCHSTATS
                 GROUP BY 1, 2
             ),
@@ -100,8 +118,14 @@ def vis_side():
             SELECT 
                 b.*,
                 h.POSSESSION AS HOME_POSS, h.PASSES AS HOME_PASSES, h.ACCURATE_PASSES AS HOME_ACC_PASSES,
-                h.SHOTS AS HOME_SHOTS, h.SHOTS_ON_TARGET AS HOME_SHOTS_ON_TARGET, h.TACKLES_WON AS HOME_TACKLES,
-                h.FOULS AS HOME_FOULS, h.GOALS_CONCEDED AS HOME_GOALS_CONCEDED, h.CORNERS AS HOME_CORNERS,
+                h.SHOTS AS HOME_SHOTS, h.SHOTS_ON_TARGET AS HOME_SHOTS_ON_TARGET, h.SHOT_OFF_TARGET AS HOME_SHOT_OFF_TARGET,
+                h.BLOCKED_SHOTS AS HOME_BLOCKED_SHOTS, h.TACKLES_WON AS HOME_TACKLES_WON, h.TOTAL_TACKLES AS HOME_TOTAL_TACKLES,
+                h.FOULS AS HOME_FOULS, h.YELLOW_CARDS AS HOME_YELLOW, h.RED_CARDS AS HOME_RED, h.CORNERS AS HOME_CORNERS,
+                h.CORNER_TAKEN AS HOME_CORNER_TAKEN, h.WON_CORNERS AS HOME_WON_CORNERS, h.LOST_CORNERS AS HOME_LOST_CORNERS,
+                h.TOTAL_THROWS AS HOME_TOTAL_THROWS, h.GOAL_KICKS AS HOME_GOAL_KICKS, h.TOTAL_CLEARANCE AS HOME_TOTAL_CLEARANCE,
+                h.TOTAL_OFFSIDE AS HOME_TOTAL_OFFSIDE, h.SAVES AS HOME_SAVES, h.SUBS_MADE AS HOME_SUBS_MADE,
+                h.GOALS AS HOME_GOALS, h.GOALS_CONCEDED AS HOME_GOALS_CONCEDED, h.GOAL_ASSIST AS HOME_GOAL_ASSIST,
+                h.FK_FOUL_WON AS HOME_FK_FOUL_WON, h.FK_FOUL_LOST AS HOME_FK_FOUL_LOST,
                 hx.XG AS HOME_XG, hx.BIG_CHANCES AS HOME_BIG_CHANCES, hx.PREVENTED_GOALS AS HOME_PREV_GOALS, 
                 h_box.CALCULATED_BOX_ENTRIES AS HOME_BOX_ENTRIES,
                 h_ft.FT_PASSES_SUCCESSFUL AS HOME_FT_SUCCESS, h_ft.FT_PASSES_UNSUCCESSFUL AS HOME_FT_UNSUCCESS,
@@ -109,8 +133,14 @@ def vis_side():
                 h_adv.FOULS_COMMITTED AS HOME_FOULS_COMMITTED, h_adv.TACKLES_DEF AS HOME_TACKLES_DEF, h_adv.INTERCEPTIONS AS HOME_INTERCEPTIONS, h_adv.OPP_PASSES_ALLOWED AS HOME_OPP_PASSES_ALLOWED,
                 
                 a.POSSESSION AS AWAY_POSS, a.PASSES AS AWAY_PASSES, a.ACCURATE_PASSES AS AWAY_ACC_PASSES,
-                a.SHOTS AS AWAY_SHOTS, a.SHOTS_ON_TARGET AS AWAY_SHOTS_ON_TARGET, a.TACKLES_WON AS AWAY_TACKLES,
-                a.FOULS AS AWAY_FOULS, a.GOALS_CONCEDED AS AWAY_GOALS_CONCEDED, a.CORNERS AS AWAY_CORNERS,
+                a.SHOTS AS AWAY_SHOTS, a.SHOTS_ON_TARGET AS AWAY_SHOTS_ON_TARGET, a.SHOT_OFF_TARGET AS AWAY_SHOT_OFF_TARGET,
+                a.BLOCKED_SHOTS AS AWAY_BLOCKED_SHOTS, a.TACKLES_WON AS AWAY_TACKLES_WON, a.TOTAL_TACKLES AS AWAY_TOTAL_TACKLES,
+                a.FOULS AS AWAY_FOULS, a.YELLOW_CARDS AS AWAY_YELLOW, a.RED_CARDS AS AWAY_RED, a.CORNERS AS AWAY_CORNERS,
+                a.CORNER_TAKEN AS AWAY_CORNER_TAKEN, a.WON_CORNERS AS AWAY_WON_CORNERS, a.LOST_CORNERS AS AWAY_LOST_CORNERS,
+                a.TOTAL_THROWS AS AWAY_TOTAL_THROWS, a.GOAL_KICKS AS AWAY_GOAL_KICKS, a.TOTAL_CLEARANCE AS AWAY_TOTAL_CLEARANCE,
+                a.TOTAL_OFFSIDE AS AWAY_TOTAL_OFFSIDE, a.SAVES AS AWAY_SAVES, a.SUBS_MADE AS AWAY_SUBS_MADE,
+                a.GOALS AS AWAY_GOALS, a.GOALS_CONCEDED AS AWAY_GOALS_CONCEDED, a.GOAL_ASSIST AS AWAY_GOAL_ASSIST,
+                a.FK_FOUL_WON AS AWAY_FK_FOUL_WON, a.FK_FOUL_LOST AS AWAY_FK_FOUL_LOST,
                 ax.XG AS AWAY_XG, ax.BIG_CHANCES AS AWAY_BIG_CHANCES, ax.PREVENTED_GOALS AS AWAY_PREV_GOALS, 
                 a_box.CALCULATED_BOX_ENTRIES AS AWAY_BOX_ENTRIES,
                 a_ft.FT_PASSES_SUCCESSFUL AS AWAY_FT_SUCCESS, a_ft.FT_PASSES_UNSUCCESSFUL AS AWAY_FT_UNSUCCESS,
@@ -164,7 +194,7 @@ def vis_side():
             a_ppda = (h_opp_passes / a_def_actions) if a_def_actions > 0 else 0.0
 
             h_poss_pct = float(pd.to_numeric(row.get('HOME_POSS'), errors='coerce') or 50.0)
-            a_poss_pct = float(pd.to_numeric(row.get('AWAY_POSS'), errors='coerce') or 50.0)
+            a_poss_pct = float(pd.to_numeric(row.get('AWAY_POSS'), errors='coerce') or 50.0
 
             h_total_sec = (h_poss_pct / 100.0) * 5400.0
             h_seq_count = max(1.0, h_passes * 0.4)
@@ -183,10 +213,26 @@ def vis_side():
                 'PASS_PCT': h_pass_pct,
                 'SHOTS': pd.to_numeric(row.get('HOME_SHOTS'), errors='coerce'),
                 'SHOTS_ON_TARGET': pd.to_numeric(row.get('HOME_SHOTS_ON_TARGET'), errors='coerce'),
-                'TACKLES': pd.to_numeric(row.get('HOME_TACKLES'), errors='coerce'),
+                'SHOT_OFF_TARGET': pd.to_numeric(row.get('HOME_SHOT_OFF_TARGET'), errors='coerce'),
+                'BLOCKED_SHOTS': pd.to_numeric(row.get('HOME_BLOCKED_SHOTS'), errors='coerce'),
+                'TACKLES': pd.to_numeric(row.get('HOME_TACKLES_WON'), errors='coerce'),
+                'TOTAL_TACKLES': pd.to_numeric(row.get('HOME_TOTAL_TACKLES'), errors='coerce'),
                 'FOULS': pd.to_numeric(row.get('HOME_FOULS'), errors='coerce'),
-                'MÅL IMOD': pd.to_numeric(row.get('HOME_GOALS_CONCEDED'), errors='coerce'),
+                'YELLOW': pd.to_numeric(row.get('HOME_YELLOW'), errors='coerce'),
+                'RED': pd.to_numeric(row.get('HOME_RED'), errors='coerce'),
                 'CORNERS': pd.to_numeric(row.get('HOME_CORNERS'), errors='coerce'),
+                'CORNER_TAKEN': pd.to_numeric(row.get('HOME_CORNER_TAKEN'), errors='coerce'),
+                'WON_CORNERS': pd.to_numeric(row.get('HOME_WON_CORNERS'), errors='coerce'),
+                'LOST_CORNERS': pd.to_numeric(row.get('HOME_LOST_CORNERS'), errors='coerce'),
+                'TOTAL_THROWS': pd.to_numeric(row.get('HOME_TOTAL_THROWS'), errors='coerce'),
+                'GOAL_KICKS': pd.to_numeric(row.get('HOME_GOAL_KICKS'), errors='coerce'),
+                'TOTAL_CLEARANCE': pd.to_numeric(row.get('HOME_TOTAL_CLEARANCE'), errors='coerce'),
+                'TOTAL_OFFSIDE': pd.to_numeric(row.get('HOME_TOTAL_OFFSIDE'), errors='coerce'),
+                'SAVES': pd.to_numeric(row.get('HOME_SAVES'), errors='coerce'),
+                'SUBS_MADE': pd.to_numeric(row.get('HOME_SUBS_MADE'), errors='coerce'),
+                'GOALS_CONCEDED': pd.to_numeric(row.get('HOME_GOALS_CONCEDED'), errors='coerce'),
+                'FK_FOUL_WON': pd.to_numeric(row.get('HOME_FK_FOUL_WON'), errors='coerce'),
+                'FK_FOUL_LOST': pd.to_numeric(row.get('HOME_FK_FOUL_LOST'), errors='coerce'),
                 'XG': pd.to_numeric(row.get('HOME_XG'), errors='coerce'),
                 'BIG_CHANCES': pd.to_numeric(row.get('HOME_BIG_CHANCES'), errors='coerce'),
                 'PREv_GOALS': pd.to_numeric(row.get('HOME_PREV_GOALS'), errors='coerce'),
@@ -209,10 +255,26 @@ def vis_side():
                 'PASS_PCT': a_pass_pct,
                 'SHOTS': pd.to_numeric(row.get('AWAY_SHOTS'), errors='coerce'),
                 'SHOTS_ON_TARGET': pd.to_numeric(row.get('AWAY_SHOTS_ON_TARGET'), errors='coerce'),
-                'TACKLES': pd.to_numeric(row.get('AWAY_TACKLES'), errors='coerce'),
+                'SHOT_OFF_TARGET': pd.to_numeric(row.get('AWAY_SHOT_OFF_TARGET'), errors='coerce'),
+                'BLOCKED_SHOTS': pd.to_numeric(row.get('AWAY_BLOCKED_SHOTS'), errors='coerce'),
+                'TACKLES': pd.to_numeric(row.get('AWAY_TACKLES_WON'), errors='coerce'),
+                'TOTAL_TACKLES': pd.to_numeric(row.get('AWAY_TOTAL_TACKLES'), errors='coerce'),
                 'FOULS': pd.to_numeric(row.get('AWAY_FOULS'), errors='coerce'),
-                'MÅL IMOD': pd.to_numeric(row.get('AWAY_GOALS_CONCEDED'), errors='coerce'),
+                'YELLOW': pd.to_numeric(row.get('AWAY_YELLOW'), errors='coerce'),
+                'RED': pd.to_numeric(row.get('AWAY_RED'), errors='coerce'),
                 'CORNERS': pd.to_numeric(row.get('AWAY_CORNERS'), errors='coerce'),
+                'CORNER_TAKEN': pd.to_numeric(row.get('AWAY_CORNER_TAKEN'), errors='coerce'),
+                'WON_CORNERS': pd.to_numeric(row.get('AWAY_WON_CORNERS'), errors='coerce'),
+                'LOST_CORNERS': pd.to_numeric(row.get('AWAY_LOST_CORNERS'), errors='coerce'),
+                'TOTAL_THROWS': pd.to_numeric(row.get('AWAY_TOTAL_THROWS'), errors='coerce'),
+                'GOAL_KICKS': pd.to_numeric(row.get('AWAY_GOAL_KICKS'), errors='coerce'),
+                'TOTAL_CLEARANCE': pd.to_numeric(row.get('AWAY_TOTAL_CLEARANCE'), errors='coerce'),
+                'TOTAL_OFFSIDE': pd.to_numeric(row.get('AWAY_TOTAL_OFFSIDE'), errors='coerce'),
+                'SAVES': pd.to_numeric(row.get('AWAY_SAVES'), errors='coerce'),
+                'SUBS_MADE': pd.to_numeric(row.get('AWAY_SUBS_MADE'), errors='coerce'),
+                'GOALS_CONCEDED': pd.to_numeric(row.get('AWAY_GOALS_CONCEDED'), errors='coerce'),
+                'FK_FOUL_WON': pd.to_numeric(row.get('AWAY_FK_FOUL_WON'), errors='coerce'),
+                'FK_FOUL_LOST': pd.to_numeric(row.get('AWAY_FK_FOUL_LOST'), errors='coerce'),
                 'XG': pd.to_numeric(row.get('AWAY_XG'), errors='coerce'),
                 'BIG_CHANCES': pd.to_numeric(row.get('AWAY_BIG_CHANCES'), errors='coerce'),
                 'PREv_GOALS': pd.to_numeric(row.get('AWAY_PREV_GOALS'), errors='coerce'),
@@ -231,10 +293,11 @@ def vis_side():
 
         if not team_perf.empty:
             cols_to_mean = [
-                'POSS', 'PASSES', 'PASS_PCT', 'SHOTS', 'SHOTS_ON_TARGET', 'TACKLES', 
-                'FOULS', 'MÅL IMOD', 'CORNERS', 'XG', 'BIG_CHANCES', 'PREv_GOALS', 
-                'BOX_ENTRIES', 'FT_SUCCESS', 'FT_UNSUCCESS', 'FT_SHOTS', 'FT_GOALS',
-                'PPDA', 'BALL_TIME_SEQ'
+                'POSS', 'PASSES', 'PASS_PCT', 'SHOTS', 'SHOTS_ON_TARGET', 'SHOT_OFF_TARGET', 'BLOCKED_SHOTS',
+                'TACKLES', 'TOTAL_TACKLES', 'FOULS', 'YELLOW', 'RED', 'CORNERS', 'CORNER_TAKEN', 'WON_CORNERS',
+                'LOST_CORNERS', 'TOTAL_THROWS', 'GOAL_KICKS', 'TOTAL_CLEARANCE', 'TOTAL_OFFSIDE', 'SAVES',
+                'SUBS_MADE', 'GOALS_CONCEDED', 'FK_FOUL_WON', 'FK_FOUL_LOST', 'XG', 'BIG_CHANCES', 'PREv_GOALS', 
+                'BOX_ENTRIES', 'FT_SUCCESS', 'FT_UNSUCCESS', 'FT_SHOTS', 'FT_GOALS', 'PPDA', 'BALL_TIME_SEQ'
             ]
             summary_table = team_perf.groupby('RESULTAT')[cols_to_mean].mean().reindex(['Sejr', 'Uafgjort', 'Nederlag']).T
             
@@ -244,13 +307,29 @@ def vis_side():
                 'Pasningsprocent (%)', 
                 'Afslutninger (Total)', 
                 'Afslutninger (Inden for ramme)', 
+                'Afslutninger (Uden for ramme)',
+                'Blokerede afslutninger',
                 'Vundne Tacklinger', 
+                'Tacklinger (Total)',
                 'Frispark begået', 
-                'Mål imod', 
+                'Gule kort', 
+                'Røde kort',
                 'Hjørnespark', 
+                'Hjørnespark taget',
+                'Vundne hjørnespark',
+                'Tabte hjørnespark',
+                'Indkast',
+                'Målspark',
+                'Clearinger',
+                'Offsides',
+                'Redninger',
+                'Foretagne udskiftninger',
+                'Mål indkasseret',
+                'Frispark vundet',
+                'Frispark tabt',
                 'xG (Forventede Mål)', 
                 'Store Chancer', 
-                'Mål indkasseret',
+                'Prevented Goals',
                 'Box Entries',
                 'Final Third: Succesfulde Afleveringer',
                 'Final Third: Afleveringer',
@@ -323,9 +402,10 @@ def vis_side():
 
                 with col3:
                     st.markdown("##### 🔴 FORSVARSSPIL")
-                    st.markdown(f"- **Mål imod:** {get_val('Mål imod')}")
+                    st.markdown(f"- **Mål indkasseret:** {get_val('Mål indkasseret')}")
                     st.markdown(f"- **Vundne Tacklinger:** {get_val('Vundne Tacklinger')}")
                     st.markdown(f"- **Frispark begået:** {get_val('Frispark begået')}")
+                    st.markdown(f"- **Gule kort:** {get_val('Gule kort')}")
 
                 with col4:
                     st.markdown("##### 🔴 EROBRINGSSPIL")
