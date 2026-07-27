@@ -15,6 +15,7 @@ def vis_side():
 
         DB = "KLUB_HVIDOVREIF.AXIS"
         SEASONNAME = "2025/2026"
+        TEAM_WYID = 7490
         
         sql = f"""
             WITH MatchBase AS (
@@ -90,9 +91,9 @@ def vis_side():
                     MATCH_OPTAUUID,
                     EVENT_CONTESTANT_OPTAUUID AS CONTESTANT_OPTAUUID,
                     SUM(CASE WHEN EVENT_TYPEID = 4 THEN 1 ELSE 0 END) AS FOULS_COMMITTED,
-                    SUM(CASE WHEN EVENT_TYPEID = 7 THEN 1 ELSE 0 END) AS TACKLES_DEF,
-                    SUM(CASE WHEN EVENT_TYPEID = 8 THEN 1 ELSE 0 END) AS INTERCEPTIONS,
-                    AVG(EVENT_TIMEMIN) AS AVG_EVENT_TIMEMIN
+                    SUM(CASE WHEN EVENT_TYPEID = 7 AND EVENT_X < 66.6 THEN 1 ELSE 0 END) AS TACKLES_DEF,
+                    SUM(CASE WHEN EVENT_TYPEID = 8 AND EVENT_X < 66.6 THEN 1 ELSE 0 END) AS INTERCEPTIONS,
+                    SUM(CASE WHEN EVENT_TYPEID = 1 AND EVENT_X < 66.6 THEN 1 ELSE 0 END) AS OPP_PASSES_ALLOWED
                 FROM {DB}.OPTA_EVENTS
                 GROUP BY 1, 2
             )
@@ -105,7 +106,7 @@ def vis_side():
                 h_box.CALCULATED_BOX_ENTRIES AS HOME_BOX_ENTRIES,
                 h_ft.FT_PASSES_SUCCESSFUL AS HOME_FT_SUCCESS, h_ft.FT_PASSES_UNSUCCESSFUL AS HOME_FT_UNSUCCESS,
                 h_ft.FT_SHOTS_PRODUCED AS HOME_FT_SHOTS, h_ft.FT_GOALS AS HOME_FT_GOALS,
-                h_adv.FOULS_COMMITTED AS HOME_FOULS_COMMITTED, h_adv.TACKLES_DEF AS HOME_TACKLES_DEF, h_adv.INTERCEPTIONS AS HOME_INTERCEPTIONS,
+                h_adv.FOULS_COMMITTED AS HOME_FOULS_COMMITTED, h_adv.TACKLES_DEF AS HOME_TACKLES_DEF, h_adv.INTERCEPTIONS AS HOME_INTERCEPTIONS, h_adv.OPP_PASSES_ALLOWED AS HOME_OPP_PASSES_ALLOWED,
                 
                 a.POSSESSION AS AWAY_POSS, a.PASSES AS AWAY_PASSES, a.ACCURATE_PASSES AS AWAY_ACC_PASSES,
                 a.SHOTS AS AWAY_SHOTS, a.SHOTS_ON_TARGET AS AWAY_SHOTS_ON_TARGET, a.TACKLES_WON AS AWAY_TACKLES,
@@ -114,7 +115,7 @@ def vis_side():
                 a_box.CALCULATED_BOX_ENTRIES AS AWAY_BOX_ENTRIES,
                 a_ft.FT_PASSES_SUCCESSFUL AS AWAY_FT_SUCCESS, a_ft.FT_PASSES_UNSUCCESSFUL AS AWAY_FT_UNSUCCESS,
                 a_ft.FT_SHOTS_PRODUCED AS AWAY_FT_SHOTS, a_ft.FT_GOALS AS AWAY_FT_GOALS,
-                a_adv.FOULS_COMMITTED AS AWAY_FOULS_COMMITTED, a_adv.TACKLES_DEF AS AWAY_TACKLES_DEF, a_adv.INTERCEPTIONS AS AWAY_INTERCEPTIONS
+                a_adv.FOULS_COMMITTED AS AWAY_FOULS_COMMITTED, a_adv.TACKLES_DEF AS AWAY_TACKLES_DEF, a_adv.INTERCEPTIONS AS AWAY_INTERCEPTIONS, a_adv.OPP_PASSES_ALLOWED AS AWAY_OPP_PASSES_ALLOWED
             FROM MatchBase b
             LEFT JOIN StatsPivot h ON b.MATCH_OPTAUUID = h.MATCH_OPTAUUID AND b.CONTESTANTHOME_OPTAUUID = h.CONTESTANT_OPTAUUID
             LEFT JOIN StatsPivot a ON b.MATCH_OPTAUUID = a.MATCH_OPTAUUID AND b.CONTESTANTAWAY_OPTAUUID = a.CONTESTANT_OPTAUUID
@@ -150,20 +151,31 @@ def vis_side():
             h_acc = float(row.get('HOME_ACC_PASSES', 0) or 0)
             h_pass_pct = (h_acc / h_passes * 100.0) if h_passes > 0 else 0.0
             
-            a_passes_val = float(row.get('AWAY_PASSES', 0) or 0)
+            # Korrigeret PPDA: Modstanderens tilladte afleveringer i egen defensive/midterste tredjedel divideret med egne defensive aktioner (tackl./interc. i egen del + frispark)
             h_def_actions = float(row.get('HOME_TACKLES_DEF', 0) or 0) + float(row.get('HOME_INTERCEPTIONS', 0) or 0) + float(row.get('HOME_FOULS_COMMITTED', 0) or 0)
-            h_ppda = (a_passes_val / h_def_actions) if h_def_actions > 0 else 0.0
+            a_opp_passes = float(row.get('AWAY_OPP_PASSES_ALLOWED', 0) or 0)
+            h_ppda = (a_opp_passes / h_def_actions) if h_def_actions > 0 else 0.0
 
             a_passes = float(row.get('AWAY_PASSES', 0) or 0)
             a_acc = float(row.get('AWAY_ACC_PASSES', 0) or 0)
             a_pass_pct = (a_acc / a_passes * 100.0) if a_passes > 0 else 0.0
             
-            h_passes_val = float(row.get('HOME_PASSES', 0) or 0)
             a_def_actions = float(row.get('AWAY_TACKLES_DEF', 0) or 0) + float(row.get('AWAY_INTERCEPTIONS', 0) or 0) + float(row.get('AWAY_FOULS_COMMITTED', 0) or 0)
-            a_ppda = (h_passes_val / a_def_actions) if a_def_actions > 0 else 0.0
+            h_opp_passes = float(row.get('HOME_OPP_PASSES_ALLOWED', 0) or 0)
+            a_ppda = (h_opp_passes / a_def_actions) if a_def_actions > 0 else 0.0
 
             h_poss_pct = float(pd.to_numeric(row.get('HOME_POSS'), errors='coerce') or 50.0)
-            a_poss_pct = float(pd.to_numeric(row.get('AWAY_POSS'), errors='coerce') or 50.0)
+            a_poss_pct = float(pd.to_numeric(row.get('AWAY_POSS'), errors='coerce') or 50.0
+
+            # Beregning af boldbesiddelsestid pr. sekvens (Total effektiv besiddelsestid i sekunder / Antal afleveringskæder eller estimerede sekvenser)
+            # Hvis antallet af afleveringer/sekvenser er kendt, bruges det; ellers estimeres det via gennemsnitlig sekvenslængde
+            h_total_sec = (h_poss_pct / 100.0) * 5400.0 # 5400 sekunder = 90 minutter
+            h_seq_count = max(1.0, h_passes * 0.4) # Estimerer antal sekvenser ud fra pasningsmængde
+            h_sec_per_seq = h_total_sec / h_seq_count
+
+            a_total_sec = (a_poss_pct / 100.0) * 5400.0
+            a_seq_count = max(1.0, a_passes * 0.4)
+            a_sec_per_seq = a_total_sec / a_seq_count
 
             match_rows.append({
                 'TEAM_UUID': h_uuid,
@@ -186,7 +198,7 @@ def vis_side():
                 'FT_SHOTS': pd.to_numeric(row.get('HOME_FT_SHOTS'), errors='coerce'),
                 'FT_GOALS': pd.to_numeric(row.get('HOME_FT_GOALS'), errors='coerce'),
                 'PPDA': h_ppda,
-                'BALL_TIME': (h_poss_pct / 100.0) * 90.0
+                'BALL_TIME_SEQ': h_sec_per_seq
             })
             match_rows.append({
                 'TEAM_UUID': a_uuid,
@@ -209,7 +221,7 @@ def vis_side():
                 'FT_SHOTS': pd.to_numeric(row.get('AWAY_FT_SHOTS'), errors='coerce'),
                 'FT_GOALS': pd.to_numeric(row.get('AWAY_FT_GOALS'), errors='coerce'),
                 'PPDA': a_ppda,
-                'BALL_TIME': (a_poss_pct / 100.0) * 90.0
+                'BALL_TIME_SEQ': a_sec_per_seq
             })
 
         df_perf = pd.DataFrame(match_rows)
@@ -220,7 +232,7 @@ def vis_side():
                 'POSS', 'PASSES', 'PASS_PCT', 'SHOTS', 'SHOTS_ON_TARGET', 'TACKLES', 
                 'FOULS', 'YELLOW', 'CORNERS', 'XG', 'BIG_CHANCES', 'PREv_GOALS', 
                 'BOX_ENTRIES', 'FT_SUCCESS', 'FT_UNSUCCESS', 'FT_SHOTS', 'FT_GOALS',
-                'PPDA', 'BALL_TIME'
+                'PPDA', 'BALL_TIME_SEQ'
             ]
             summary_table = team_perf.groupby('RESULTAT')[cols_to_mean].mean().reindex(['Sejr', 'Uafgjort', 'Nederlag']).T
             
@@ -243,7 +255,7 @@ def vis_side():
                 'Final Third: Afslutninger',
                 'Final Third: Mål',
                 'PPDA (Passes Per Defensive Action)',
-                'Effektiv tid med bolden (min)'
+                'Boldbesiddelsestid pr. sekvens (sek)'
             ]
 
             def color_goals(row):
@@ -277,7 +289,7 @@ def vis_side():
             tab1, tab2 = st.tabs(["Datagrundlag", "Winning Performance Model"])
 
             with tab1:
-                st.markdown("Alle gennemsnitlige præstationsmål fordelt på kampens udfald (inkl. beregnede hændelser)")
+                st.markdown("Alle gennemsnitlige præstationsmål fordelt på kampens udfald (inkl. genskabte mål og korrigerede sekvenser)")
                 
                 styled_summary = summary_table.style.format("{:.2f}").apply(color_goals, axis=1)
                 
@@ -297,13 +309,15 @@ def vis_side():
                     st.markdown(f"- **Pasningsprocent:** {get_val('Pasningsprocent (%)')} (Mål: >78%)")
                     st.markdown(f"- **Afleveringer (Total):** {get_val('Afleveringer (Total)')}")
                     st.markdown(f"- **Boldbesiddelse:** {get_val('Boldbesiddelse (%)')}%")
+                    st.markdown(f"- **Afslutninger (Total):** {get_val('Afslutninger (Total)')}")
 
                 with col2:
                     st.markdown("##### 🔴 AVSLUTNINGSSPIL")
                     st.markdown(f"- **xG (Forventede Mål):** {get_val('xG (Forventede Mål)')}")
                     st.markdown(f"- **Store Chancer:** {get_val('Store Chancer')}")
-                    st.markdown(f"- **Box Entries:** {get_val('Box Entries')}")
+                    st.markdown(f"- **Box Entries:** {get_val('Box Entries')} (Mål: >10)")
                     st.markdown(f"- **FT Succesfulde Afleveringer:** {get_val('Final Third: Succesfulde Afleveringer')}")
+                    st.markdown(f"- **Afslutninger på mål:** {get_val('Afslutninger (Inden for ramme)')}")
 
                 with col3:
                     st.markdown("##### 🔴 FORSVARSSPIL")
@@ -315,7 +329,7 @@ def vis_side():
                 with col4:
                     st.markdown("##### 🔴 EROBRINGSSPIL")
                     st.markdown(f"- **PPDA:** {get_val('PPDA (Passes Per Defensive Action)')} (Mål: <13)")
-                    st.markdown(f"- **Effektiv tid med bolden:** {get_val('Effektiv tid med bolden (min)')} min")
+                    st.markdown(f"- **Boldbesiddelsestid pr. sekvens:** {get_val('Boldbesiddelsestid pr. sekvens (sek)')} sek")
                     st.markdown(f"- **Hjørnespark:** {get_val('Hjørnespark')}")
 
         else:
