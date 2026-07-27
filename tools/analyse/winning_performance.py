@@ -3,7 +3,7 @@ import pandas as pd
 
 def vis_side():
     try:
-        st.markdown("### 🎯 Winning Performance & Kamp-KPI'er")
+        st.markdown("### Winning Performance")
         
         from data.data_load import _get_snowflake_conn
         conn = _get_snowflake_conn()
@@ -145,7 +145,7 @@ def vis_side():
                 return styles
 
             # Oprettelse af tabs
-            tab1, tab2 = st.tabs(["📊 KPI Sammenligning & Mål", "📋 Winning Performance Model"])
+            tab1, tab2 = st.tabs(["Datagrundlag", "Performance Model"])
 
             with tab1:
                 st.markdown("#### Gennemsnitlige præstationsmål holdt op mod skabelonens mål")
