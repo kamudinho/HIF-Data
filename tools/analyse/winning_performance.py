@@ -234,6 +234,13 @@ def vis_side():
                             styles[i] = 'background-color: #d4edda; color: #155724; font-weight: bold;'
                 return styles
 
+            # Hjælpefunktion til at hente gennemsnittet for en given metrik ved Sejre
+            def get_val(metric_name):
+                try:
+                    return f"{summary_table.loc[metric_name, 'Sejr']:.1f}"
+                except:
+                    return "N/A"
+
             tab1, tab2 = st.tabs(["Datagrundlag", "Winning Performance Model"])
 
             with tab1:
@@ -241,49 +248,43 @@ def vis_side():
                 
                 styled_summary = summary_table.style.format("{:.2f}").apply(color_goals, axis=1)
                 
-                # Bruger height=None / fjerner begrænsning, så hele tabellen vises fuldt ud uden at afkorte
+                # Fjerner height for at undgå afkortning
                 st.dataframe(
                     styled_summary,
-                    use_container_width=True,
-                    height=700
+                    use_container_width=True
                 )
                 st.info(f"Tabellen viser alle metrikker opdelt efter Sejr, Uafgjort og Nederlag for sæson {SEASONNAME}.")
 
             with tab2:
-                st.markdown("Winning Performance Model (Fase-opdelt målstruktur)")
+                st.markdown("Winning Performance Model (Fase-opdelt målstruktur med faktiske snit ved Sejre)")
                 
                 col1, col2, col3, col4 = st.columns(4)
                 
                 with col1:
                     st.markdown("##### 🔴 OPBYGNINGSSPIL")
-                    st.markdown("- **Pasningsprocent:** >78%")
-                    st.markdown("- **Progression from 1/3:** >75%")
-                    st.markdown("- **XT (Threat):** >1,4")
-                    st.markdown("- **Succesfulde pasninger:** >445")
-                    st.markdown("- **<6 aktioner** på modstanders halvdel når midterlinje passeres")
+                    st.markdown(f"- **Pasningsprocent:** {get_val('Pasningsprocent (%)')} (Mål: >78%)")
+                    st.markdown(f"- **Afleveringer (Total):** {get_val('Afleveringer (Total)')}")
+                    st.markdown(f"- **Boldbesiddelse:** {get_val('Boldbesiddelse (%)')}%")
 
                 with col2:
                     st.markdown("##### 🔴 AVSLUTNINGSSPIL")
-                    st.markdown("- **Avg xG pr. afslutning:** >0,11")
-                    st.markdown("- **xG / Box Entry:** >0,15")
-                    st.markdown("- **Pasninger til 10ere på off. tredjedel:** >12")
-                    st.markdown("- **Box entries efter retvendt 10er:** >4")
-                    st.markdown("- **Berøringer i feltet:** >10")
-                    st.markdown("- **Succesfulde box entries (indlæg + pasning):** >12")
+                    st.markdown(f"- **xG (Forventede Mål):** {get_val('xG (Forventede Mål)')}")
+                    st.markdown(f"- **Store Chancer:** {get_val('Store Chancer')}")
+                    st.markdown(f"- **Box Entries:** {get_val('Box Entries')}")
+                    st.markdown(f"- **FT Succesfulde Afleveringer:** {get_val('Final Third: Succesfulde Afleveringer')}")
+                    st.markdown(f"- **Afslutninger (Total):** {get_val('Afslutninger (Total)')}")
 
                 with col3:
                     st.markdown("##### 🔴 FORSVARSSPIL")
-                    st.markdown("- **Avg xG imod:** <1,0")
-                    st.markdown("- **xG / Box entries imod:** <0,09")
-                    st.markdown("- **Unsuccesful box entries fra central korridor:** <60%")
-                    st.markdown("- **Berøringer i feltet imod:** <9")
-                    st.markdown("- **Succesfulde pasninger imod:** <74%")
-                    st.markdown("- **Box entries imod:** <8")
+                    st.markdown(f"- **Mål indkasseret:** {get_val('Mål indkasseret')}")
+                    st.markdown(f"- **Vundne Tacklinger:** {get_val('Vundne Tacklinger')}")
+                    st.markdown(f"- **Frispark begået:** {get_val('Frispark begået')}")
+                    st.markdown(f"- **Gule kort:** {get_val('Gule kort')}")
 
                 with col4:
                     st.markdown("##### 🔴 EROBRINGSSPIL")
-                    st.markdown("- **PPDA:** <13")
-                    st.markdown("- **Fasthold erobring 2/3:** [Målsætning]")
+                    st.markdown(f"- **Hjørnespark:** {get_val('Hjørnespark')}")
+                    st.markdown("- **PPDA:** [Målsætning]")
                     st.markdown("- **Tid modstanderen har bolden:** <11 sek")
 
         else:
