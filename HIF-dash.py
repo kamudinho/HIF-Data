@@ -263,7 +263,7 @@ try:
         elif s == "Grafer":
             import tools.ligaen.dataviz as dviz
             dviz.vis_side()
-        elif s == "Winning Perfomance":
+        elif s == "Winning Performance":
             import tools.analyse.winning_performance as wp
             wp.vis_side()
 
