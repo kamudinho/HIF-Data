@@ -151,7 +151,6 @@ def vis_side():
             h_acc = float(row.get('HOME_ACC_PASSES', 0) or 0)
             h_pass_pct = (h_acc / h_passes * 100.0) if h_passes > 0 else 0.0
             
-            # Korrigeret PPDA: Modstanderens tilladte afleveringer i egen defensive/midterste tredjedel divideret med egne defensive aktioner (tackl./interc. i egen del + frispark)
             h_def_actions = float(row.get('HOME_TACKLES_DEF', 0) or 0) + float(row.get('HOME_INTERCEPTIONS', 0) or 0) + float(row.get('HOME_FOULS_COMMITTED', 0) or 0)
             a_opp_passes = float(row.get('AWAY_OPP_PASSES_ALLOWED', 0) or 0)
             h_ppda = (a_opp_passes / h_def_actions) if h_def_actions > 0 else 0.0
@@ -167,10 +166,8 @@ def vis_side():
             h_poss_pct = float(pd.to_numeric(row.get('HOME_POSS'), errors='coerce') or 50.0)
             a_poss_pct = float(pd.to_numeric(row.get('AWAY_POSS'), errors='coerce') or 50.0
 
-            # Beregning af boldbesiddelsestid pr. sekvens (Total effektiv besiddelsestid i sekunder / Antal afleveringskæder eller estimerede sekvenser)
-            # Hvis antallet af afleveringer/sekvenser er kendt, bruges det; ellers estimeres det via gennemsnitlig sekvenslængde
-            h_total_sec = (h_poss_pct / 100.0) * 5400.0 # 5400 sekunder = 90 minutter
-            h_seq_count = max(1.0, h_passes * 0.4) # Estimerer antal sekvenser ud fra pasningsmængde
+            h_total_sec = (h_poss_pct / 100.0) * 5400.0
+            h_seq_count = max(1.0, h_passes * 0.4)
             h_sec_per_seq = h_total_sec / h_seq_count
 
             a_total_sec = (a_poss_pct / 100.0) * 5400.0
@@ -289,7 +286,7 @@ def vis_side():
             tab1, tab2 = st.tabs(["Datagrundlag", "Winning Performance Model"])
 
             with tab1:
-                st.markdown("Alle gennemsnitlige præstationsmål fordelt på kampens udfald (inkl. genskabte mål og korrigerede sekvenser)")
+                st.markdown("Alle gennemsnitlige præstationsmål fordelt på kampens udfald")
                 
                 styled_summary = summary_table.style.format("{:.2f}").apply(color_goals, axis=1)
                 
