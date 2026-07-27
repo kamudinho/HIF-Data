@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+from decimal import Decimal
 
 def vis_side():
     try:
@@ -88,12 +89,10 @@ def vis_side():
                 SELECT 
                     MATCH_OPTAUUID,
                     EVENT_CONTESTANT_OPTAUUID AS CONTESTANT_OPTAUUID,
-                    -- Eksempel på avancerede hændelsesmålinger
-                    SUM(CASE WHEN EVENT_TYPEID = 4 THEN 1 ELSE 0 END) AS FOULS_COMMITTED, -- 4 = Foul
-                    SUM(CASE WHEN EVENT_TYPEID = 7 THEN 1 ELSE 0 END) AS TACKLES_DEF,     -- 7 = Tackle
-                    SUM(CASE WHEN EVENT_TYPEID = 8 THEN 1 ELSE 0 END) AS INTERCEPTIONS,   -- 8 = Interception
-                    -- Tidsbaseret / Sekvens proxy (hvis tidsstempler er tilgængelige, ellers standardiseret)
-                    AVG(EVENT_TIMEMIN) AS AVG_EVENT_MINUTE
+                    SUM(CASE WHEN EVENT_TYPEID = 4 THEN 1 ELSE 0 END) AS FOULS_COMMITTED,
+                    SUM(CASE WHEN EVENT_TYPEID = 7 THEN 1 ELSE 0 END) AS TACKLES_DEF,
+                    SUM(CASE WHEN EVENT_TYPEID = 8 THEN 1 ELSE 0 END) AS INTERCEPTIONS,
+                    AVG(EVENT_TIMEMIN) AS AVG_EVENT_TIMEMIN
                 FROM {DB}.OPTA_EVENTS
                 GROUP BY 1, 2
             )
@@ -147,34 +146,32 @@ def vis_side():
             h_score = int(row['TOTAL_HOME_SCORE']) if pd.notnull(row['TOTAL_HOME_SCORE']) else 0
             a_score = int(row['TOTAL_AWAY_SCORE']) if pd.notnull(row['TOTAL_AWAY_SCORE']) else 0
             
-            # Hjemmehold beregninger
-            h_passes = row.get('HOME_PASSES', 0) or 0
-            h_acc = row.get('HOME_ACC_PASSES', 0) or 0
-            h_pass_pct = (h_acc / h_passes * 100) if h_passes > 0 else 0
+            # Hjemmehold
+            h_passes = float(row.get('HOME_PASSES', 0) or 0)
+            h_acc = float(row.get('HOME_ACC_PASSES', 0) or 0)
+            h_pass_pct = (h_acc / h_passes * 100.0) if h_passes > 0 else 0.0
             
-            # PPDA beregning: Modstanderens afleveringer divideret med holdets defensive aktioner (tacklinger + interceptions + frispark)
-            a_passes_val = row.get('AWAY_PASSES', 0) or 0
-            h_def_actions = (row.get('HOME_TACKLES_DEF', 0) or 0) + (row.get('HOME_INTERCEPTIONS', 0) or 0) + (row.get('HOME_FOULS_COMMITTED', 0) or 0)
-            h_ppda = (a_passes_val / h_def_actions) if h_def_actions > 0 else 0
+            a_passes_val = float(row.get('AWAY_PASSES', 0) or 0)
+            h_def_actions = float(row.get('HOME_TACKLES_DEF', 0) or 0) + float(row.get('HOME_INTERCEPTIONS', 0) or 0) + float(row.get('HOME_FOULS_COMMITTED', 0) or 0)
+            h_ppda = (a_passes_val / h_def_actions) if h_def_actions > 0 else 0.0
 
-            # Udehold beregninger
-            a_passes = row.get('AWAY_PASSES', 0) or 0
-            a_acc = row.get('AWAY_ACC_PASSES', 0) or 0
-            a_pass_pct = (a_acc / a_passes * 100) if a_passes > 0 else 0
+            # Udehold
+            a_passes = float(row.get('AWAY_PASSES', 0) or 0)
+            a_acc = float(row.get('AWAY_ACC_PASSES', 0) or 0)
+            a_pass_pct = (a_acc / a_passes * 100.0) if a_passes > 0 else 0.0
             
-            h_passes_val = row.get('HOME_PASSES', 0) or 0
-            a_def_actions = (row.get('AWAY_TACKLES_DEF', 0) or 0) + (row.get('AWAY_INTERCEPTIONS', 0) or 0) + (row.get('AWAY_FOULS_COMMITTED', 0) or 0)
-            a_ppda = (h_passes_val / a_def_actions) if a_def_actions > 0 else 0
+            h_passes_val = float(row.get('HOME_PASSES', 0) or 0)
+            a_def_actions = float(row.get('AWAY_TACKLES_DEF', 0) or 0) + float(row.get('AWAY_INTERCEPTIONS', 0) or 0) + float(row.get('AWAY_FOULS_COMMITTED', 0) or 0)
+            a_ppda = (h_passes_val / a_def_actions) if a_def_actions > 0 else 0.0
 
-            # Tid på bolden (estimeret ud fra afleveringsmængde og besiddelsesprocent)
-            h_poss_pct = pd.to_numeric(row.get('HOME_POSS'), errors='coerce') or 50.0
-            a_poss_pct = pd.to_numeric(row.get('AWAY_POSS'), errors='coerce') or 50.0
-            
+            h_poss_pct = float(pd.to_numeric(row.get('HOME_POSS'), errors='coerce') or 50.0)
+            a_poss_pct = float(pd.to_numeric(row.get('AWAY_POSS'), errors='coerce') or 50.0
+
             match_rows.append({
                 'TEAM_UUID': h_uuid,
                 'RESULTAT': 'Sejr' if h_score > a_score else ('Uafgjort' if h_score == a_score else 'Nederlag'),
                 'POSS': h_poss_pct,
-                'PASSES': pd.to_numeric(h_passes, errors='coerce'),
+                'PASSES': h_passes,
                 'PASS_PCT': h_pass_pct,
                 'SHOTS': pd.to_numeric(row.get('HOME_SHOTS'), errors='coerce'),
                 'SHOTS_ON_TARGET': pd.to_numeric(row.get('HOME_SHOTS_ON_TARGET'), errors='coerce'),
@@ -191,13 +188,13 @@ def vis_side():
                 'FT_SHOTS': pd.to_numeric(row.get('HOME_FT_SHOTS'), errors='coerce'),
                 'FT_GOALS': pd.to_numeric(row.get('HOME_FT_GOALS'), errors='coerce'),
                 'PPDA': h_ppda,
-                'BALL_TIME': (h_poss_pct / 100.0) * 90.0 # Estimeret effektiv tid i minutter pr kamp
+                'BALL_TIME': (h_poss_pct / 100.0) * 90.0
             })
             match_rows.append({
                 'TEAM_UUID': a_uuid,
                 'RESULTAT': 'Sejr' if a_score > h_score else ('Uafgjort' if a_score == h_score else 'Nederlag'),
                 'POSS': a_poss_pct,
-                'PASSES': pd.to_numeric(a_passes, errors='coerce'),
+                'PASSES': a_passes,
                 'PASS_PCT': a_pass_pct,
                 'SHOTS': pd.to_numeric(row.get('AWAY_SHOTS'), errors='coerce'),
                 'SHOTS_ON_TARGET': pd.to_numeric(row.get('AWAY_SHOTS_ON_TARGET'), errors='coerce'),
