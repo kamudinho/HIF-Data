@@ -150,7 +150,7 @@ with st.sidebar:
         "SPILLERANALYSE": ["Spillerprofil"],
         "SCOUTING": ["Scoutrapport", "Database", "Emnedatabase", "Transfers"],
         "TILPASNING": ["Spillerdata", "Spiller-score", "Standardsituationer"],
-        "TESTSIDE": ["1. Div-tilpasning", "Sammenligning", "Charts", "Oversigt", "Forecast"],
+        "TESTSIDE": ["Winning Performance", "1. Div-tilpasning", "Sammenligning", "Charts", "Oversigt", "Forecast"],
         "ADMIN": ["System Log", "Profil", "Datakatalog", "Konklusion", "Fysisk profil", "Hold: Fysisk profil", "Intern analyse", "Top 5: Spillere", "Ordbog"]
     }
     
@@ -263,6 +263,9 @@ try:
         elif s == "Grafer":
             import tools.ligaen.dataviz as dviz
             dviz.vis_side()
+        elif s == "Winning Perfomance":
+            import tools.analyse.winning_performance as wp
+            wp.vis_side()
 
     elif m == "ADMIN":
         if s == "System Log":
