@@ -195,7 +195,7 @@ def vis_side():
             summary_table.index = [
                 'Boldbesiddelse (%)', 
                 'Afleveringer (Total)', 
-                'Pasningsprocent (%) [Mål: >78%]', 
+                'Pasningsprocent (%)', 
                 'Afslutninger (Total)', 
                 'Afslutninger (Inden for ramme)', 
                 'Vundne Tacklinger', 
@@ -204,12 +204,12 @@ def vis_side():
                 'Hjørnespark', 
                 'xG (Forventede Mål)', 
                 'Store Chancer', 
-                'Forhindrede Mål (Prevented Goals)',
-                'Box Entries (Feltindsættelser)',
+                'Mål indkasseret',
+                'Box Entries',
                 'Final Third: Succesfulde Afleveringer',
-                'Final Third: Fejlede Afleveringer',
-                'Final Third: Afslutninger produceret',
-                'Final Third: Mål scoret'
+                'Final Third: Afleveringer',
+                'Final Third: Afslutninger',
+                'Final Third: Mål'
             ]
 
             def color_goals(row):
