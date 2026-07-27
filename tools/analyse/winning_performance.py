@@ -194,7 +194,7 @@ def vis_side():
             a_ppda = (h_opp_passes / a_def_actions) if a_def_actions > 0 else 0.0
 
             h_poss_pct = float(pd.to_numeric(row.get('HOME_POSS'), errors='coerce') or 50.0)
-            a_poss_pct = float(pd.to_numeric(row.get('AWAY_POSS'), errors='coerce') or 50.0
+            a_poss_pct = float(pd.to_numeric(row.get('AWAY_POSS'), errors='coerce') or 50.0)
 
             h_total_sec = (h_poss_pct / 100.0) * 5400.0
             h_seq_count = max(1.0, h_passes * 0.4)
