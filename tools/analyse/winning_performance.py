@@ -166,15 +166,15 @@ def vis_side():
             tab1, tab2 = st.tabs(["Datagrundlag", "Winning Performance Model"])
 
             with tab1:
-                st.markdown("#### Alle gennemsnitlige præstationsmål fordelt på kampens udfald")
+                st.markdown("Alle gennemsnitlige præstationsmål fordelt på kampens udfald")
                 st.dataframe(
                     summary_table.style.format("{:.2f}").background_gradient(cmap="Greens", axis=1),
                     use_container_width=True
                 )
-                st.info(f"💡 Tabellen viser alle metrikker (inkl. Box Entries) opdelt efter Sejr, Uafgjort og Nederlag for sæson {SEASONNAME}.")
+                st.info(f"Tabellen viser alle metrikker (inkl. Box Entries) opdelt efter Sejr, Uafgjort og Nederlag for sæson {SEASONNAME}.")
 
             with tab2:
-                st.markdown("#### Winning Performance Model (Fase-opdelt målstruktur)")
+                st.markdown("Winning Performance Model (Fase-opdelt målstruktur)")
                 
                 col1, col2, col3, col4 = st.columns(4)
                 
