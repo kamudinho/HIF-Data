@@ -199,8 +199,8 @@ def vis_side(dp=None):
         'Gennembrud_Overtake': x.apply(lambda r: 1 if str(r['event_typeid']) == "3" and "465" in [str(q).strip() for q in (r.get('qual_list', []) if isinstance(r.get('qual_list', []), list) else str(r.get('qual_list', '')).split(','))] else 0, axis=1).sum(),
         'Rum_Driblinger_Space': x.apply(lambda r: 1 if str(r['event_typeid']) == "3" and "464" in [str(q).strip() for q in (r.get('qual_list', []) if isinstance(r.get('qual_list', []), list) else str(r.get('qual_list', '')).split(','))] else 0, axis=1).sum(),
         'Offensive_Dueller': x.apply(lambda r: 1 if "286" in [str(q).strip() for q in (r.get('qual_list', []) if isinstance(r.get('qual_list', []), list) else str(r.get('qual_list', '')).split(','))] else 0, axis=1).sum(),
-        'Defensive_Dueller': x.apply(lambda r: 1 if "285" in [str(q).strip() for q in (r.get('qual_list', []) if isinstance(r.get('qual_list', []), list) else str(r.get('qual_list', '')).split(','))] else 0, axis=1).sum(),
-        'Defensive_1v1_Stoppet': x.apply(lambda r: 1 if "467" in [str(q).strip() for q in (r.get('qual_list', []) if isinstance(r.get('qual_list', []), list) else str(r.get('qual_list', '')).split(','))] else 0, axis=1).sum(),
+        'Defensive_Dueller': x.apply(lambda r: 1 if "285" in [str(q).strip() for q in (r.get('qual_list', []), list) else str(r.get('qual_list', '')).split(','))] else 0, axis=1).sum(),
+        'Defensive_1v1_Stoppet': x.apply(lambda r: 1 if "467" in [str(q).strip() for q in (r.get('qual_list', []), list) else str(r.get('qual_list', '')).split(','))] else 0, axis=1).sum(),
         
         'Chancer_skabt': x.apply(lambda r: '210' in r.get('qual_list', []), axis=1).sum(),
         'Key_Passes': x.apply(lambda r: '210' in r.get('qual_list', []), axis=1).sum(),
@@ -245,6 +245,9 @@ def vis_side(dp=None):
         (truppen_stats['Pasninger_Succes'] / truppen_stats['Pasninger']) * 100
     ).where(truppen_stats['Pasninger'] > 0, 0).round(1)
     
+    # Konverter til procent-streng med '%' efter, så det vises korrekt i tabellen
+    truppen_stats['Pasningsprocent_Str'] = truppen_stats['Pasningsprocent'].astype(str) + "%"
+    
     # --- OPSETNING AF FANER ---
     t_team, t_profile, t_pitch, t_phys = st.tabs(["Holdoversigt", "Spillerprofil", "Spilleraktioner", "Fysisk data"])
     
@@ -278,13 +281,13 @@ def vis_side(dp=None):
             
             # --- KOLONNE-OPSÆTNING ---
             gen_kolonner = [
-                'visningsnavn', 'Kampe', 'Minutter', 'Aktioner', 'Pasninger', 'Pasningsprocent', 
+                'visningsnavn', 'Kampe', 'Minutter', 'Aktioner', 'Pasninger', 'Pasningsprocent_Str', 
                 'Mål', 'Assists', 'Udskiftet', 'Indskiftet', 'Gule_kort', 'Roede_kort'
             ]
             
             # --- FOKUS PÅ OPBYGNING OG SPILFORDELING ---
             opb_kolonner = [
-                'visningsnavn', 'Aktioner', 'Pasninger', 'Pasningsprocent', 'Key_Passes', 'Stikninger', 
+                'visningsnavn', 'Aktioner', 'Pasninger', 'Pasningsprocent_Str', 'Key_Passes', 'Stikninger', 
                 'Driblinger', 'Driblinger_Succes', 'Rum_Driblinger_Space'
             ]
             
@@ -314,7 +317,7 @@ def vis_side(dp=None):
             
             df_visning = df_visning.rename(columns={
                 'visningsnavn': 'Spiller',
-                'Pasningsprocent': 'Pasningsprocent (%)',
+                'Pasningsprocent_Str': 'Pasning (%)',
                 'Gule_kort': 'Gule kort',
                 'Roede_kort': 'Røde kort',
                 'Chancer_skabt': 'Chancer skabt',
@@ -326,8 +329,7 @@ def vis_side(dp=None):
                 'Rum_Driblinger_Space': 'Driblinger, 1v1', 
                 'Offensive_Dueller': 'Off. dueller',
                 'Defensive_Dueller': 'Def. dueller', 
-                'Defensive_1v1_Stoppet': 'Def. 1v1',
-                'Pasninger_Succes': 'Pasnings%'
+                'Defensive_1v1_Stoppet': 'Def. 1v1'
             })
             
             beregnet_hoejde = int(len(df_visning) * 38 + 45)
@@ -341,7 +343,7 @@ def vis_side(dp=None):
         else:
             st.info("Ingen trup-data tilgængelig endnu.")    
     with t_profile:
-        numeric_cols = truppen_stats.drop(columns=['visningsnavn'], errors='ignore')
+        numeric_cols = truppen_stats.drop(columns=['visningsnavn', 'Pasningsprocent_Str'], errors='ignore')
         ranks = numeric_cols.rank(ascending=False, method='min').astype(int)
         
         try:
