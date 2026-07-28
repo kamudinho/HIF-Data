@@ -13,6 +13,7 @@ import base64
 from io import BytesIO
 import os
 import re
+from data.utils.match_data import classify_take_on
 
 # --- IMPORT FRA MAPPING ---
 from data.utils.mapping import (
