@@ -1,7 +1,6 @@
 # data/utils/mapping.py
 
 # --- 1. SPORTLIG OPTA EVENT TYPE MAPPING ---
-# Vi har fjernet alt administrativt støj og beholdt kun det, der sker på banen.
 OPTA_EVENT_TYPES = {
     "1": "Pasning",
     "2": "Offside Pass",
@@ -127,3 +126,22 @@ def get_action_label(row):
 def is_assist(qualifiers_list):
     """Hurtig tjek om en aktion er en assist (ID 210)."""
     return "210" in [str(q) for q in qualifiers_list]
+
+def har_qualifier(event_typeid, qualifiers_list, target_event_id, target_qual_ids):
+    """
+    Tjekker om en hændelse matcher en specifik event type samt indeholder én eller flere angivne qualifiers.
+    """
+    if str(event_typeid) != str(target_event_id):
+        return False
+        
+    if not qualifiers_list:
+        return False
+        
+    if isinstance(target_qual_ids, (int, str)):
+        target_list = [str(target_qual_ids)]
+    else:
+        target_list = [str(q) for q in target_qual_ids]
+        
+    ql_str = [str(q).strip() for q in qualifiers_list]
+    
+    return any(tq in ql_str for tq in target_list)
