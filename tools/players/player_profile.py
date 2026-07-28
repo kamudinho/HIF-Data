@@ -16,6 +16,9 @@ from data.utils.match_data import classify_take_on
 # --- GENERELLE UI-HJÆLPERE ---
 from utils.helpers import get_logo_img, get_team_color, get_ordinal, draw_player_info_box
 
+# --- IMPORT AF SPILLERE ---
+from data.sql.liga_spillere import hent_match_og_haendelsesdata
+
 # --- KONFIGURATION (HVIDOVRE-APP / 2026/2027) ---
 DB = "KLUB_HVIDOVREIF.AXIS"
 SEASONNAME = "2026/2027"
