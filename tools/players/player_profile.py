@@ -294,7 +294,7 @@ def vis_side(dp=None):
             # --- FOKUS PÅ OPBYGNING OG SPILFORDELING ---
             opb_kolonner = [
                 'visningsnavn', 'Aktioner', 'Pasninger', 'Pasningsprocent', 'Key_Passes', 'Stikninger', 
-                'Driblinger_Ialt', 'Driblinger_Succes', 'Rum_Driblinger_Space'
+                'Driblinger', 'Driblinger_Succes', 'Rum_Driblinger_Space'
             ]
             
             # --- FOKUS PÅ DEN SIDSTE TREDJEDEL & AFSLUTNINGER ---
