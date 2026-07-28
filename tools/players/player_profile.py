@@ -136,7 +136,6 @@ def get_physical_data(player_name, player_opta_uuid, valgt_hold_navn, db_conn):
 @st.cache_data(ttl=3600)
 def hent_ligasammenligning_data(_conn, db_name, navn_mapping):
     try:
-        # 1. Hent alle hændelser for hele ligaen
         sql_liga_events = f"""
             SELECT 
                 e.EVENT_OPTAUUID,
@@ -159,14 +158,18 @@ def hent_ligasammenligning_data(_conn, db_name, navn_mapping):
         """
         df_l_events = _conn.query(sql_liga_events)
         if df_l_events is None or df_l_events.empty:
-            return pd.DataFrame()
+            return pd.DataFrame(), pd.DataFrame()
         
         df_l_events.columns = df_l_events.columns.str.lower()
         df_l_events['visningsnavn'] = df_l_events.apply(lambda r: navn_mapping.get(str(r['player_optauuid']), r['visningsnavn']), axis=1)
         df_l_events['event_timestamp'] = pd.to_datetime(df_l_events['event_timestamp_str'])
         df_l_events['qual_list'] = df_l_events['qualifiers'].fillna('').str.split(',')
+        
+        # Tilføj Action_Label baseret på event_typeid og qualifiers
+        df_l_events['action_label'] = df_l_events.apply(
+            lambda r: get_action_label(r['event_typeid'], r.get('qual_list', [])), axis=1
+        )
 
-        # 2. Hent Expected Goals for hele ligaen
         sql_liga_expected = f"""
             SELECT 
                 MATCH_ID,
@@ -183,7 +186,6 @@ def hent_ligasammenligning_data(_conn, db_name, navn_mapping):
         if df_liga_expected is not None and not df_liga_expected.empty:
             df_liga_expected.columns = df_liga_expected.columns.str.lower()
 
-        # 3. Beregn Mål & Assists for hele ligaen
         df_sorted = df_l_events.sort_values(['match_optauuid', 'event_timestamp'])
         df_sorted['assist_player_uuid'] = df_sorted['player_optauuid'].shift(1)
         df_sorted['prev_match'] = df_sorted['match_optauuid'].shift(1)
@@ -202,7 +204,6 @@ def hent_ligasammenligning_data(_conn, db_name, navn_mapping):
         player_assists = df_sorted[assist_mask].groupby('assist_player_uuid').size().reset_index(name='assists')
         df_db_stats = pd.merge(player_goals, player_assists, left_on='player_optauuid', right_on='assist_player_uuid', how='left').fillna({'assists': 0})
 
-        # 4. Beregn generelle hændelsesstatistikker per spiller
         def count_event_with_qual_l(df_group, eid, qids):
             return df_group.apply(lambda r: har_qualifier(r['event_typeid'], r.get('qual_list', []), eid, qids), axis=1).sum()
 
@@ -263,7 +264,6 @@ def hent_ligasammenligning_data(_conn, db_name, navn_mapping):
 
         liga_stats_raw['hold'] = liga_stats_raw['team_uuid'].apply(get_team_name)
         
-        # Returner både det samlede ligadatasæt og hændelsesdata til enkeltspiller-visning
         return liga_stats_raw.reset_index(), df_l_events
 
     except Exception as e:
@@ -291,7 +291,6 @@ def vis_side(dp=None):
     if not conn: 
         return
 
-    # 1. HOLDVALG
     df_teams_raw = conn.query(f"SELECT DISTINCT CONTESTANTHOME_NAME, CONTESTANTHOME_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS}")
     if df_teams_raw is not None:
         df_teams_raw.columns = df_teams_raw.columns.str.lower()
@@ -320,7 +319,6 @@ def vis_side(dp=None):
     
     primær_farve = get_team_color(valgt_hold, "primary", "#df003b")
 
-    # 2. HENT LIGADATA ÉN GANG VIA CACHE-FUNKTIONEN
     with st.spinner("Henter spillerdata for ligaen..."):
         df_alle_spillere_liga, df_all_events = hent_ligasammenligning_data(conn, DB, navne_map)
 
@@ -328,7 +326,6 @@ def vis_side(dp=None):
         st.warning("Ingen hændelsesdata fundet.")
         return
 
-    # 3. FILTRER DATA TIL DET VALGTE HOLD
     valgt_uuid_clean = str(valgt_uuid_hold).lower().replace('t', '')
     truppen_stats = df_alle_spillere_liga[
         df_alle_spillere_liga['team_uuid'].astype(str).str.lower().str.replace('t', '') == valgt_uuid_clean
@@ -342,7 +339,6 @@ def vis_side(dp=None):
         st.warning("Ingen data fundet for det valgte hold.")
         return
 
-    # Vælg spiller i UI ud fra det filtrerede holds spillere
     spiller_options = dict(zip(truppen_stats['visningsnavn'], truppen_stats['player_optauuid']))
     spiller_liste = sorted(list(spiller_options.keys()))
     
@@ -495,11 +491,12 @@ def vis_side(dp=None):
             "Erobringer": "Tacklinger, bolderobringer og opsnappede afleveringer."
         }
         touch_ids = [1, 3, 7, 10, 11, 12, 13, 14, 15, 16, 42, 44, 49, 50, 51, 54, 61, 73]
-        df_filtreret = df_spiller[~df_spiller['Action_Label'].isin(['Pasning', 'Indkast'])]
+        
+        df_filtreret = df_spiller[~df_spiller['action_label'].isin(['Pasning', 'Indkast'])]
         
         akt_stats = pd.DataFrame()
         if not df_filtreret.empty:
-            akt_stats = df_filtreret.groupby('Action_Label').agg(Total=('outcome', 'count'), Succes=('outcome', 'sum')).sort_values('Total', ascending=False)
+            akt_stats = df_filtreret.groupby('action_label').agg(Total=('outcome', 'count'), Succes=('outcome', 'sum')).sort_values('Total', ascending=False)
     
         c_stats_side, c_buffer, c_pitch_side = st.columns([1, 0.05, 2.2])
     
