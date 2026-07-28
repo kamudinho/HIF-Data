@@ -306,7 +306,6 @@ def vis_side(dp=None):
     for _, r in df_spillere_unikke.iterrows():
         navn = r['visningsnavn']
         uuid = r['player_optauuid']
-        # Bruger kun navnet direkte i dropdown uden uuid i parentes
         spiller_options[navn] = uuid
 
     spiller_liste = sorted(list(spiller_options.keys()))
@@ -389,10 +388,14 @@ def vis_side(dp=None):
         if not truppen_stats.empty:
             df_vis_truppen = truppen_stats.reset_index()
             
-            off_kolonner = ['visningsnavn', 'Kampe', 'Minutter', 'Mål', 'xG', 'Assists', 'xA', 'Pasninger', 'Stikninger', 'Indlæg', 'Afslutninger', 'Driblinger', 'Chancer_skabt', 'Key_Passes']
-            def_kolonner = ['visningsnavn', 'Kampe', 'Minutter', 'Erobringer', 'Gule_kort', 'Roede_kort']
+            # Her defineres hvilke kolonner der skal vises for hver kategori. Ret frit efter behov!
+            gen_kolonner = ['visningsnavn', 'Kampe', 'Minutter', 'Aktioner', 'Pasninger', 'Mål', 'Assists', 'Gule_kort', 'Roede_kort']
+            off_kolonner = ['visningsnavn', 'Afslutninger', 'xG', 'Chancer_skabt', 'Key_Passes', 'Stikninger', 'Indlæg', 'xA', 'Driblinger']
+            def_kolonner = ['visningsnavn', 'Erobringer']
             
-            if kategori_valg == "Offensiv":
+            if kategori_valg == "Generelt":
+                eksisterende_kolonner = [k for k in gen_kolonner if k in df_vis_truppen.columns]
+            elif kategori_valg == "Offensiv":
                 eksisterende_kolonner = [k for k in off_kolonner if k in df_vis_truppen.columns]
             elif kategori_valg == "Defensiv":
                 eksisterende_kolonner = [k for k in def_kolonner if k in df_vis_truppen.columns]
@@ -589,9 +592,6 @@ def vis_side(dp=None):
             df_phys.columns = df_phys.columns.str.lower()
             df_phys['match_date'] = pd.to_datetime(df_phys['match_date'])
             df_phys = df_phys.sort_values('match_date', ascending=False)
-            
-            hsr_col = 'high speed running' if 'high speed running' in df_phys.columns else 'hsr'
-            spr_col = 'sprinting' if 'sprinting' in df_phys.columns else 'sprint'
             
             hsr_val = df_phys.get('hsr', pd.Series(0, index=df_phys.index))
             spr_val = df_phys.get('sprinting', pd.Series(0, index=df_phys.index))
