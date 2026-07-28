@@ -12,7 +12,7 @@ from data.data_load import _get_snowflake_conn
 # --- 1. KONFIGURATION ---
 HIF_RED = '#cc0000'
 DB = "KLUB_HVIDOVREIF.AXIS"
-LIGA_UUID = "dyjr458hcmrcy87fsabfsy87o" 
+LIGA_UUID = "2mb332vncy4450vu14paj8844" 
 PLAYER_FILE = 'data/players/1div_overskrivning.csv'
 
 # --- 2. HJÆLPEFUNKTIONER (LOGO & DECODE) ---
