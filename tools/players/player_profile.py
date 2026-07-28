@@ -376,7 +376,7 @@ def vis_side(dp=None):
         col_t_title, col_spacer, col_t_btn = st.columns([2, 0.5, 2])
         
         with col_t_title:
-            st.markdown(f'<p style="font-size: 10px; font-weight: bold; margin: 0; line-height: 2.5;">HOLDOVERSIGT: {valgt_hold.upper()}</p>', unsafe_allow_html=True)
+            st.markdown(f'<p style="font-size: 16px; font-weight: bold; margin: 0; line-height: 2.5;">HOLDOVERSIGT: {valgt_hold.upper()}</p>', unsafe_allow_html=True)
             
         with col_t_btn:
             st.markdown('<div style="display: flex; justify-content: flex-end;">', unsafe_allow_html=True)
@@ -406,7 +406,6 @@ def vis_side(dp=None):
             
             df_visning = df_visning.rename(columns={
                 'visningsnavn': 'Spiller',
-                'player_optauuid': 'UUID',
                 'Gule_kort': 'Gule kort',
                 'Roede_kort': 'Røde kort',
                 'Chancer_skabt': 'Chancer skabt',
