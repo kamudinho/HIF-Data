@@ -370,7 +370,7 @@ def vis_side(dp=None):
     truppen_stats_raw['Assists'] = truppen_stats_raw['Assists'].fillna(0).astype(int)
     truppen_stats = truppen_stats_raw.copy()
 
-    # --- HENT LIGA-DATA TIL SAMMENLIGNING MED ALLE STATISTIKKER ---
+# --- HENT LIGA-DATA TIL SAMMENLIGNING MED ALLE STATISTIKKER ---
     @st.cache_data(ttl=3600)
     def hent_ligasammenligning_data(_conn, db_name, navn_mapping):
         # 1. Hent alle hændelser for hele ligaen
