@@ -191,7 +191,7 @@ def hent_ligasammenligning_data(_conn, db_name, navn_mapping):
             SELECT 
                 g.PLAYER_OPTAUUID as player_optauuid,
                 g.VISNINGSNAVN as visningsnavn,
-                COALESCE(g.GOALS, 0) as mål,
+                COALESCE(g.GOALS, 0) as goals,
                 COALESCE(a.ASSISTS, 0) as assists,
                 e.TEAM_UUID as team_uuid,
                 e.Aktioner,
@@ -245,6 +245,10 @@ def hent_ligasammenligning_data(_conn, db_name, navn_mapping):
             return pd.DataFrame()
         
         df_l_events.columns = df_l_events.columns.str.lower()
+        
+        # Omdøb kolonnen 'goals' til 'mål', så den matcher resten af koden
+        if 'goals' in df_l_events.columns:
+            df_l_events = df_l_events.rename(columns={'goals': 'mål'})
 
         # 2. Hent Expected Goals / minutter for hele ligaen
         sql_liga_expected = f"""
