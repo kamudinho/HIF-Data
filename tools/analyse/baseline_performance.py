@@ -123,13 +123,10 @@ def vis_side():
             match_counts = df_teams.groupby('TEAM').size().reset_index(name='MATCHES')
             agg_df = pd.merge(agg_df, match_counts, on='TEAM')
 
-            # --- PLACERING AF CAPTION OG DROPDOWN PÅ SAMME LINJE ---
-            col1, col2 = st.columns([1.2, 1])
-            
-            with col1:
-                st.caption("1. Division — Over- og Underpræstation mod Baseline")
+            # --- OPELDRAGNING AF TABS ---
+            tab1, tab2 = st.tabs(["📊 Baseline Oversigt", "📈 Scatterplot"])
 
-            # --- DROPDOWN TIL KATEGORIER ---
+            # Fælles dropdown til kategorier (placeret øverst før fanebladene eller delt)
             metric_labels = {
                 "Mål vs. Skud-baseline (Faktiske mål minus forventede ud fra skudvolumen)": "GOALS_VS_BASELINE",
                 "xG vs. Faktiske Mål (Afslutningskvalitet)": "XG_VS_GOALS",
@@ -140,76 +137,138 @@ def vis_side():
                 "Redninger": "SAVES"
             }
 
+            # Lad os lægge parameter-vælgeren øverst, så den styrer begge visninger
+            col1, col2 = st.columns([1.2, 1])
+            with col1:
+                st.caption("1. Division — Over- og Underpræstation mod Baseline")
             with col2:
                 selected_label = st.selectbox("Vælg parameter:", list(metric_labels.keys()), label_visibility="collapsed")
             
             metric_key = metric_labels[selected_label]
 
-            # Udregning af baseline og forskel
-            if metric_key == "GOALS_VS_BASELINE":
-                total_league_goals = agg_df['GOALS'].sum()
-                total_league_shots = agg_df['SHOTS'].sum()
-                league_conversion = total_league_goals / total_league_shots if total_league_shots > 0 else 0.1
-                
-                agg_df['BASELINE_VAL'] = agg_df['SHOTS'] * league_conversion
-                agg_df['DIFF'] = agg_df['GOALS'] - agg_df['BASELINE_VAL']
-                chart_title = "Mål over eller under en skud-volumen baseline"
-                xaxis_title = "mål vs. skud-volumen baseline"
+            # --- TAB 1: BASELINE VISNING ---
+            with tab1:
+                # Kopiér dataframe for ikke at ødelægge data til tab 2
+                df_b = agg_df.copy()
 
-            elif metric_key == "XG_VS_GOALS":
-                agg_df['DIFF'] = agg_df['GOALS'] - agg_df['XG']
-                chart_title = "Faktiske mål minus xG (Over/underpræstation på afslutninger)"
-                xaxis_title = "mål minus xG"
+                if metric_key == "GOALS_VS_BASELINE":
+                    total_league_goals = df_b['GOALS'].sum()
+                    total_league_shots = df_b['SHOTS'].sum()
+                    league_conversion = total_league_goals / total_league_shots if total_league_shots > 0 else 0.1
+                    
+                    df_b['BASELINE_VAL'] = df_b['SHOTS'] * league_conversion
+                    df_b['DIFF'] = df_b['GOALS'] - df_b['BASELINE_VAL']
+                    chart_title = "Mål over eller under en skud-volumen baseline"
+                    xaxis_title = "mål vs. skud-volumen baseline"
 
-            else:
-                league_avg_per_match = agg_df[metric_key].sum() / agg_df['MATCHES'].sum()
-                agg_df['BASELINE_VAL'] = agg_df['MATCHES'] * league_avg_per_match
-                agg_df['DIFF'] = agg_df[metric_key] - agg_df['BASELINE_VAL']
-                chart_title = f"{selected_label} vs. Liga-gennemsnit"
-                xaxis_title = "forskel i forhold til gennemsnit"
+                elif metric_key == "XG_VS_GOALS":
+                    df_b['DIFF'] = df_b['GOALS'] - df_b['XG']
+                    chart_title = "Faktiske mål minus xG (Over/underpræstation på afslutninger)"
+                    xaxis_title = "mål minus xG"
 
-            agg_df = agg_df.sort_values(by='DIFF', ascending=True)
-            agg_df['COLOR_TYPE'] = agg_df['DIFF'].apply(lambda x: 'Overpræsterer' if x >= 0 else 'Underpræsterer')
+                else:
+                    league_avg_per_match = df_b[metric_key].sum() / df_b['MATCHES'].sum()
+                    df_b['BASELINE_VAL'] = df_b['MATCHES'] * league_avg_per_match
+                    df_b['DIFF'] = df_b[metric_key] - df_b['BASELINE_VAL']
+                    chart_title = f"{selected_label} vs. Liga-gennemsnit"
+                    xaxis_title = "forskel i forhold til gennemsnit"
 
-            fig = px.bar(
-                agg_df,
-                x='DIFF',
-                y='TEAM',
-                orientation='h',
-                title=chart_title,
-                color='COLOR_TYPE',
-                color_discrete_map={
-                    'Overpræsterer': '#f39c12',  # Orange
-                    'Underpræsterer': '#2980b9'   # Blå
-                },
-                text_auto='.2f',
-                custom_data=['TEAM', 'DIFF', 'MATCHES']
-            )
+                df_b = df_b.sort_values(by='DIFF', ascending=True)
+                df_b['COLOR_TYPE'] = df_b['DIFF'].apply(lambda x: 'Overpræsterer' if x >= 0 else 'Underpræsterer')
 
-            fig.update_traces(
-                hovertemplate=(
-                    "<b>%{customdata[0]}</b><br>"
-                    "Præstation: %{x:.2f}<br>"
-                    "Kampe spillet: %{customdata[2]}"
-                    "<extra></extra>"
+                fig1 = px.bar(
+                    df_b,
+                    x='DIFF',
+                    y='TEAM',
+                    orientation='h',
+                    title=chart_title,
+                    color='COLOR_TYPE',
+                    color_discrete_map={
+                        'Overpræsterer': '#f39c12',  # Orange
+                        'Underpræsterer': '#2980b9'   # Blå
+                    },
+                    text_auto='.2f',
+                    custom_data=['TEAM', 'DIFF', 'MATCHES']
                 )
-            )
 
-            fig.update_layout(
-                xaxis_title=xaxis_title,
-                yaxis_title="",
-                showlegend=False,
-                plot_bgcolor='rgba(0,0,0,0)',
-                paper_bgcolor='rgba(0,0,0,0)',
-                font=dict(color='gray'),
-                title_font=dict(size=18, color='black'),
-                height=650
-            )
-            
-            fig.update_xaxes(showgrid=True, gridwidth=1, gridcolor='#eaeaea')
-            fig.update_yaxes(showgrid=False)
+                fig1.update_traces(
+                    hovertemplate=(
+                        "<b>%{customdata[0]}</b><br>"
+                        "Præstation: %{x:.2f}<br>"
+                        "Kampe spillet: %{customdata[2]}"
+                        "<extra></extra>"
+                    )
+                )
 
-            st.plotly_chart(fig, use_container_width=True)
+                fig1.update_layout(
+                    xaxis_title=xaxis_title,
+                    yaxis_title="",
+                    showlegend=False,
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    font=dict(color='gray'),
+                    title_font=dict(size=18, color='black'),
+                    height=650
+                )
+                
+                fig1.update_xaxes(showgrid=True, gridwidth=1, gridcolor='#eaeaea')
+                fig1.update_yaxes(showgrid=False)
+
+                st.plotly_chart(fig1, use_container_width=True)
+
+            # --- TAB 2: SCATTERPLOT VISNING ---
+            with tab2:
+                df_s = agg_df.copy()
+                
+                # Opsætning af x- og y-akser baseret på den valgte parameter i dropdowns
+                if metric_key == "XG_VS_GOALS":
+                    x_col, y_col = 'XG', 'GOALS'
+                    sc_title = "Sammenhæng mellem xG (Forventede Mål) og Faktiske Mål"
+                    x_name, y_name = "Forventede Mål (xG)", "Faktiske Mål"
+                elif metric_key == "GOALS_VS_BASELINE":
+                    x_col, y_col = 'SHOTS', 'GOALS'
+                    sc_title = "Sammenhæng mellem Skudvolumen og Faktiske Mål"
+                    x_name, y_name = "Skud Total", "Faktiske Mål"
+                else:
+                    x_col, y_col = 'MATCHES', metric_key
+                    sc_title = f"Sammenhæng mellem Kampe og {selected_label}"
+                    x_name, y_name = "Kampe Spillet", selected_label
+
+                fig2 = px.scatter(
+                    df_s,
+                    x=x_col,
+                    y=y_col,
+                    text='TEAM',
+                    title=sc_title,
+                    custom_data=['TEAM', 'MATCHES']
+                )
+
+                fig2.update_traces(
+                    textposition='top center',
+                    marker=dict(size=10, color='#f39c12'),
+                    hovertemplate=(
+                        "<b>%{customdata[0]}</b><br>"
+                        f"{x_name}: " + "%{x:.1f}<br>"
+                        f"{y_name}: " + "%{y:.1f}<br>"
+                        "Kampe: %{customdata[1]}"
+                        "<extra></extra>"
+                    )
+                )
+
+                fig2.update_layout(
+                    xaxis_title=x_name,
+                    yaxis_title=y_name,
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    font=dict(color='gray'),
+                    title_font=dict(size=18, color='black'),
+                    height=650
+                )
+
+                fig2.update_xaxes(showgrid=True, gridwidth=1, gridcolor='#eaeaea')
+                fig2.update_yaxes(showgrid=True, gridwidth=1, gridcolor='#eaeaea')
+
+                st.plotly_chart(fig2, use_container_width=True)
 
     except Exception as e:
         st.error(f"Fejl ved indlæsning af siden: {e}")
