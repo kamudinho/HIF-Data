@@ -380,7 +380,7 @@ def vis_side(dp=None):
             kategori_valg = st.segmented_control(
                 "Visningskategori", 
                 options=["Generelt", "Offensiv", "Defensiv"], 
-                horizontal=True,
+                default="Generelt",
                 key="team_kategori_control",
                 label_visibility="collapsed"
             )
