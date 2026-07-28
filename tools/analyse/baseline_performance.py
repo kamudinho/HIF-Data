@@ -253,7 +253,7 @@ def vis_side(df_events=None, kamp=None, hold_map=None):
                     plot_bgcolor='rgba(0,0,0,0)',
                     paper_bgcolor='rgba(0,0,0,0)',
                     font=dict(color='gray'),
-                    title_font=dict(size=18, color='black'),
+                    title_font=dict(size=18, color='white'),
                     height=600,
                     margin=dict(t=60, b=40, l=40, r=40)
                 )
@@ -349,7 +349,7 @@ def vis_side(df_events=None, kamp=None, hold_map=None):
                             color=HIF_RED if is_hif else 'gray',
                             line=dict(width=2, color='white')
                         ),
-                        hovertemplate=f"<b>{team_name}</b><br>Total {x_col}: %{{x:.2f}}<br>Total {y_col}: %{{y:.2f}}<extra></extra>"
+                        hovertemplate=f"<b>{team_name}</b><br>Total {x_col}: %{{x:.0f}}<br>Total {y_col}: %{{y:.0f}}<extra></extra>"
                     ))
 
                 # Tilføj gennemsnitslinjer igen
