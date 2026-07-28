@@ -718,9 +718,7 @@ def vis_side(dp=None):
     with t_compare:
         st.markdown('<p style="font-size: 14px; font-weight: bold; margin-bottom: 10px;">SPILLERSAMMENLIGNING PÅ TVÆRS AF LIGAEN</p>', unsafe_allow_html=True)
         
-        # Ekstra tjek for at se, om der er data i dataframe'en
         if df_alle_spillere_liga is not None and not df_alle_spillere_liga.empty:
-            # Sørg for at kolonnenavne er små bogstaver for en sikkerheds skyld
             df_alle_spillere_liga.columns = df_alle_spillere_liga.columns.str.lower()
             
             if 'visningsnavn' in df_alle_spillere_liga.columns:
@@ -744,11 +742,9 @@ def vis_side(dp=None):
                         label_visibility="collapsed"
                     )
                     
-                    # Sæt visningsnavn som index så det ser pænt ud i tabellen
-                    if 'visningsnavn' in df_sammenligning.columns:
-                        df_vis_sammenligning = df_sammenligning.set_index('visningsnavn')
-                    else:
-                        df_vis_sammenligning = df_sammenligning
+                    # Fravælg kolonnen med player_optauuid (og evt. team_uuid hvis du kun vil have holdnavnet)
+                    kolonner_at_vise = [col for col in ['hold', 'aktioner'] if col in df_sammenligning.columns]
+                    df_vis_sammenligning = df_sammenligning.set_index('visningsnavn')[kolonner_at_vise]
                         
                     beregnet_hoejde_comp = int(len(df_vis_sammenligning) * 38 + 45)
                     
