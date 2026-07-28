@@ -172,7 +172,7 @@ def vis_side(dp=None):
     
     df_spiller = df_all[df_all['player_optauuid'] == valgt_player_uuid].copy()
     
-    # --- BEREGN TRUP-STATS FØR FANERNE ---
+    # --- BEREGN TRUP-STATS INKL. DRIBLINGER OG DUELLER ---
     def count_event_with_qual(df_group, eid, qids):
         return df_group.apply(lambda r: har_qualifier(r['event_typeid'], r.get('qual_list', []), eid, qids), axis=1).sum()
     
@@ -187,7 +187,16 @@ def vis_side(dp=None):
         'Indlæg': count_event_with_qual(x, 1, [2, 155]),
         'Afslutninger': x['event_typeid'].isin([13, 14, 15, 16]).sum(),
         'Erobringer': x['event_typeid'].isin([7, 8, 12, 49]).sum(),
-        'Driblinger': (x['event_typeid'] == 3).sum(),
+        
+        # --- NYE DRIBLING OG DUEL STATS ---
+        'Driblinger_Ialt': (x['event_typeid'] == 3).sum(),
+        'Driblinger_Succes': x.apply(lambda r: 1 if str(r['event_typeid']) == "3" and "211" not in [str(q).strip() for q in (r.get('qual_list', []) if isinstance(r.get('qual_list', []), list) else str(r.get('qual_list', '')).split(','))] else 0, axis=1).sum(),
+        'Gennembrud_Overtake': x.apply(lambda r: 1 if str(r['event_typeid']) == "3" and "465" in [str(q).strip() for q in (r.get('qual_list', []) if isinstance(r.get('qual_list', []), list) else str(r.get('qual_list', '')).split(','))] else 0, axis=1).sum(),
+        'Rum_Driblinger_Space': x.apply(lambda r: 1 if str(r['event_typeid']) == "3" and "464" in [str(q).strip() for q in (r.get('qual_list', []) if isinstance(r.get('qual_list', []), list) else str(r.get('qual_list', '')).split(','))] else 0, axis=1).sum(),
+        'Offensive_Dueller': x.apply(lambda r: 1 if "286" in [str(q).strip() for q in (r.get('qual_list', []) if isinstance(r.get('qual_list', []), list) else str(r.get('qual_list', '')).split(','))] else 0, axis=1).sum(),
+        'Defensive_Dueller': x.apply(lambda r: 1 if "285" in [str(q).strip() for q in (r.get('qual_list', []) if isinstance(r.get('qual_list', []), list) else str(r.get('qual_list', '')).split(','))] else 0, axis=1).sum(),
+        'Defensive_1v1_Stoppet': x.apply(lambda r: 1 if "467" in [str(q).strip() for q in (r.get('qual_list', []) if isinstance(r.get('qual_list', []), list) else str(r.get('qual_list', '')).split(','))] else 0, axis=1).sum(),
+        
         'Chancer_skabt': x.apply(lambda r: '210' in r.get('qual_list', []), axis=1).sum(),
         'Key_Passes': x.apply(lambda r: '210' in r.get('qual_list', []), axis=1).sum(),
         'Tacklinger': (x['event_typeid'] == 7).sum(),
@@ -258,8 +267,16 @@ def vis_side(dp=None):
             df_vis_truppen = truppen_stats.reset_index()
             
             gen_kolonner = ['visningsnavn', 'Kampe', 'Minutter', 'Aktioner', 'Pasninger', 'Mål', 'Assists', 'Udskiftet', 'Indskiftet', 'Gule_kort', 'Roede_kort']
-            off_kolonner = ['visningsnavn', 'Aktioner', 'Afslutninger', 'xG', 'Chancer_skabt', 'Key_Passes', 'Stikninger', 'Indlæg', 'xA', 'Driblinger']
-            def_kolonner = ['visningsnavn', 'Aktioner', 'Erobringer', 'Tacklinger', 'Clearinger', 'Blokeringer', 'Interceptioner', 'Frispark_imod']
+            off_kolonner = [
+                'visningsnavn', 'Aktioner', 'Afslutninger', 'xG', 'Chancer_skabt', 
+                'Key_Passes', 'Stikninger', 'Indlæg', 'xA', 'Driblinger_Ialt', 
+                'Driblinger_Succes', 'Gennembrud_Overtake', 'Rum_Driblinger_Space', 'Offensive_Dueller'
+            ]
+            
+            def_kolonner = [
+                'visningsnavn', 'Aktioner', 'Erobringer', 'Tacklinger', 'Clearinger', 
+                'Blokeringer', 'Interceptioner', 'Defensive_Dueller', 'Defensive_1v1_Stoppet', 'Frispark_imod'
+            ]
             
             if kategori_valg == "Generelt":
                 eksisterende_kolonner = [k for k in gen_kolonner if k in df_vis_truppen.columns]
