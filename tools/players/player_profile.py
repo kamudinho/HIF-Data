@@ -376,7 +376,7 @@ def vis_side(dp=None):
         col_t_title, col_spacer, col_t_btn = st.columns([2, 1, 1.5])
         with col_t_title:
             st.subheader(f"Holdoversigt: {valgt_hold}")
-        with col_t_radio:
+        with col_t_btn:
             kategori_valg = st.segmented_control(
                 "Visningskategori", 
                 options=["Generelt", "Offensiv", "Defensiv"], 
