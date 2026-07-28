@@ -333,7 +333,12 @@ def vis_side(dp=None):
         'Erobringer': x['event_typeid'].isin([7, 8, 12, 49]).sum(),
         'Driblinger': (x['event_typeid'] == 3).sum(),
         'Chancer_skabt': x.apply(lambda r: '210' in r.get('qual_list', []), axis=1).sum(),
-        'Key_Passes': x.apply(lambda r: '210' in r.get('qual_list', []), axis=1).sum()
+        'Key_Passes': x.apply(lambda r: '210' in r.get('qual_list', []), axis=1).sum(),
+        'Tacklinger': (x['event_typeid'] == 7).sum(),
+        'Clearinger': (x['event_typeid'] == 12).sum(),
+        'Blokeringer': (x['event_typeid'] == 55).sum(),
+        'Interceptioner': (x['event_typeid'] == 5).sum(),
+        'Frispark_imod': (x['event_typeid'] == 4).sum()
     })).reset_index()
     
     event_stats = event_stats.drop_duplicates(subset=['player_optauuid']).set_index('player_optauuid')
@@ -391,7 +396,7 @@ def vis_side(dp=None):
             # Her defineres hvilke kolonner der skal vises for hver kategori. Ret frit efter behov!
             gen_kolonner = ['visningsnavn', 'Kampe', 'Minutter', 'Aktioner', 'Pasninger', 'Mål', 'Assists', 'Udskiftet', 'Indskiftet', 'Gule_kort', 'Roede_kort']
             off_kolonner = ['visningsnavn', 'Afslutninger', 'xG', 'Chancer_skabt', 'Key_Passes', 'Stikninger', 'Indlæg', 'xA', 'Driblinger']
-            def_kolonner = ['visningsnavn', 'Erobringer']
+            def_kolonner = ['visningsnavn', 'Erobringer', 'Tacklinger', 'Clearinger', 'Blokeringer', 'Interceptioner', 'Frispark_imod']
             
             if kategori_valg == "Generelt":
                 eksisterende_kolonner = [k for k in gen_kolonner if k in df_vis_truppen.columns]
