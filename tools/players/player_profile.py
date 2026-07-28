@@ -6,6 +6,7 @@ import requests
 from PIL import Image
 import os
 from mplsoccer import Pitch
+import io
 
 # --- DATA OG MAPPING ---
 from data.data_load import _get_snowflake_conn
