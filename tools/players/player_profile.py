@@ -267,7 +267,7 @@ def vis_side(dp=None):
                   AND ASSIST_PLAYER_UUID IS NOT NULL
                   AND ASSIST_PLAYER_UUID != PLAYER_OPTAUUID
                   AND (
-                      QUALIFIERS LIKE '%29%'             
+                      QUALIFIERS LIKE '%29%'           
                       OR PREV_QUALIFIERS LIKE '%210%'    
                   )
                 GROUP BY ASSIST_PLAYER_UUID
@@ -306,17 +306,14 @@ def vis_side(dp=None):
     for _, r in df_spillere_unikke.iterrows():
         navn = r['visningsnavn']
         uuid = r['player_optauuid']
-        if list(spiller_options.keys()).count(navn) > 0:
-            visnings_label = f"{navn} ({uuid[-4:]})"
-        else:
-            visnings_label = navn
-        spiller_options[visnings_label] = uuid
+        # Bruger kun navnet direkte i dropdown uden uuid i parentes
+        spiller_options[navn] = uuid
 
     spiller_liste = sorted(list(spiller_options.keys()))
     valgt_label = col_h_spiller.selectbox("Spiller", spiller_liste, label_visibility="collapsed")
     
     valgt_player_uuid = spiller_options[valgt_label]
-    valgt_spiller = valgt_label.split(" (")[0]
+    valgt_spiller = valgt_label
 
     df_spiller = df_all[df_all['player_optauuid'] == valgt_player_uuid].copy()
 
@@ -376,7 +373,7 @@ def vis_side(dp=None):
         col_t_title, col_spacer, col_t_btn = st.columns([2, 0.5, 2])
         
         with col_t_title:
-            st.markdown(f'<p style="font-size: 16px; font-weight: bold; margin: 0; line-height: 2.5;">HOLDOVERSIGT: {valgt_hold.upper()}</p>', unsafe_allow_html=True)
+            st.markdown(f'<p style="font-size: 10px; font-weight: bold; margin: 0; line-height: 2.5;">HOLDOVERSIGT: {valgt_hold.upper()}</p>', unsafe_allow_html=True)
             
         with col_t_btn:
             st.markdown('<div style="display: flex; justify-content: flex-end;">', unsafe_allow_html=True)
@@ -400,7 +397,7 @@ def vis_side(dp=None):
             elif kategori_valg == "Defensiv":
                 eksisterende_kolonner = [k for k in def_kolonner if k in df_vis_truppen.columns]
             else:  
-                eksisterende_kolonner = list(df_vis_truppen.columns)
+                eksisterende_kolonner = [k for k in df_vis_truppen.columns if k != 'player_optauuid']
             
             df_visning = df_vis_truppen[eksisterende_kolonner].copy()
             
