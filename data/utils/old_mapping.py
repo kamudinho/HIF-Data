@@ -272,3 +272,52 @@ def har_qualifier(event_typeid, qualifiers_list, target_event_id, target_qual_id
     ql_str = [str(q).strip() for q in qualifiers_list]
     
     return any(tq in ql_str for tq in target_list)
+
+# --- AVANCERET DRIBLING OG DUEL LOGIK (Opta ID 464, 465, 467) ---
+
+def get_dribble_type(row):
+    """
+    Kategoriserer en dribling (Event ID 3) mere præcist baseret på Opta-qualifiers:
+    - 465: Take on overtake (fremadrettet 1v1 gennembrud mod målet)
+    - 464: Take on space (til siden eller bagud for at skabe plads)
+    - 211: Overrun (bolden løber fra spilleren / fejlet)
+    """
+    eid = str(row.get('EVENT_TYPEID', ''))
+    if eid != "3":
+        return None
+        
+    ql = row.get('qual_list', [])
+    if isinstance(ql, str):
+        ql = [q.strip() for q in ql.split(',')]
+    else:
+        ql = [str(q).strip() for q in ql]
+        
+    if "465" in ql:
+        return "Gennembrud (Overtake)"
+    elif "464" in ql:
+        return "Rum-dribling (Space)"
+    elif "211" in ql:
+        return "Fejlet (Overrun)"
+    
+    return "Standard Dribling"
+
+def is_take_on_overtake(qualifiers_list):
+    """Tjekker om det er en fremadrettet gennembrudsdribling (Qualifier 465)."""
+    if not qualifiers_list:
+        return False
+    ql = [str(q).strip() for q in (qualifiers_list.split(',') if isinstance(qualifiers_list, str) else qualifiers_list)]
+    return "465" in ql
+
+def is_take_on_space(qualifiers_list):
+    """Tjekker om det er en rum-dribling til siden/bagud (Qualifier 464)."""
+    if not qualifiers_list:
+        return False
+    ql = [str(q).strip() for q in (qualifiers_list.split(',') if isinstance(qualifiers_list, str) else qualifiers_list)]
+    return "464" in ql
+
+def is_defensive_one_v_one(qualifiers_list):
+    """Tjekker om det er en defensiv 1v1 situation, hvor driblingen blev stoppet (Qualifier 467)."""
+    if not qualifiers_list:
+        return False
+    ql = [str(q).strip() for q in (qualifiers_list.split(',') if isinstance(qualifiers_list, str) else qualifiers_list)]
+    return "467" in ql
