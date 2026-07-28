@@ -10,7 +10,7 @@ from mplsoccer import Pitch
 # --- DATA OG MAPPING ---
 from data.data_load import _get_snowflake_conn
 from data.utils.team_mapping import TEAMS, TEAM_COLORS
-from data.utils.mapping import OPTA_EVENT_TYPES, OPTA_QUALIFIERS, get_action_label, is_assist
+from data.utils.mapping import OPTA_EVENT_TYPES, OPTA_QUALIFIERS, get_action_label, is_assist, har_qualifier
 from data.utils.match_data import classify_take_on
 
 # --- GENERELLE UI-HJÆLPERE ---
