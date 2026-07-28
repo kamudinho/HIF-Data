@@ -13,7 +13,10 @@ import base64
 from io import BytesIO
 import os
 import re
+from utils.helpers import get_logo_img, get_team_color, get_ordinal, draw_player_info_box
 from data.utils.match_data import classify_take_on
+from data.data_load import _get_snowflake_conn
+from data.utils.mapping import OPTA_EVENT_TYPES, OPTA_QUALIFIERS, get_action_label
 
 # --- IMPORT FRA MAPPING ---
 from data.utils.mapping import (
