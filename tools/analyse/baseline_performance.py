@@ -201,7 +201,7 @@ def vis_side(df_events=None, kamp=None, hold_map=None):
                     paper_bgcolor='rgba(0,0,0,0)',
                     font=dict(color='gray'),
                     title_font=dict(size=18, color='black'),
-                    height=650
+                    height=600
                 )
                 
                 fig1.update_xaxes(showgrid=True, gridwidth=1, gridcolor='#eaeaea')
@@ -289,7 +289,7 @@ def vis_side(df_events=None, kamp=None, hold_map=None):
                     plot_bgcolor='white',
                     xaxis_title=f"Gns. {x_col}",
                     yaxis_title=f"Gns. {y_col}",
-                    height=680,
+                    height=600,
                     margin=dict(t=20, b=20, l=20, r=20),
                     showlegend=False
                 )
