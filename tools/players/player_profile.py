@@ -267,15 +267,17 @@ def vis_side(dp=None):
             df_vis_truppen = truppen_stats.reset_index()
             
             gen_kolonner = ['visningsnavn', 'Kampe', 'Minutter', 'Aktioner', 'Pasninger', 'Mål', 'Assists', 'Udskiftet', 'Indskiftet', 'Gule_kort', 'Roede_kort']
+            
+            # --- FOKUS PÅ OPBYGNING OG SPILFORDELING ---
             opb_kolonner = [
-                'visningsnavn', 'Aktioner', 'Pasninger',
-                'Key_Passes', 'Stikninger', 'Indlæg' 'Driblinger_Ialt', 
-                'Driblinger_Succes', 'Gennembrud_Overtake', 'Rum_Driblinger_Space', 'Offensive_Dueller'
+                'visningsnavn', 'Aktioner', 'Pasninger', 'Stikninger', 
+                'Rum_Driblinger_Space', 'Driblinger_Ialt', 'Driblinger_Succes'
             ]
+            
+            # --- FOKUS PÅ DEN SIDSTE TREDJEDEL & AFSLUTNINGER ---
             off_kolonner = [
                 'visningsnavn', 'Aktioner', 'Afslutninger', 'xG', 'Chancer_skabt', 
-                'Key_Passes', 'Stikninger', 'Indlæg', 'xA', 'Driblinger_Ialt', 
-                'Driblinger_Succes', 'Gennembrud_Overtake', 'Rum_Driblinger_Space', 'Offensive_Dueller'
+                'Key_Passes', 'Indlæg', 'xA', 'Gennembrud_Overtake', 'Offensive_Dueller'
             ]
             
             def_kolonner = [
@@ -286,7 +288,7 @@ def vis_side(dp=None):
             if kategori_valg == "Generelt":
                 eksisterende_kolonner = [k for k in gen_kolonner if k in df_vis_truppen.columns]
             elif kategori_valg == "Opbygning":
-                eksisterende_kolonner = [k for k in off_kolonner if k in df_vis_truppen.columns]
+                eksisterende_kolonner = [k for k in opb_kolonner if k in df_vis_truppen.columns]
             elif kategori_valg == "Offensiv":
                 eksisterende_kolonner = [k for k in off_kolonner if k in df_vis_truppen.columns]
             elif kategori_valg == "Defensiv":
