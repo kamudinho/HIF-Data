@@ -330,8 +330,24 @@ def vis_side(dp=None):
 
     df_spiller = df_all[df_all['player_optauuid'] == valgt_player_uuid].copy()
 
-    t_profile, t_pitch, t_phys = st.tabs(["Spillerprofil", "Spilleraktioner", "Fysisk data"])
+    t_team, t_profile, t_pitch, t_phys = st.tabs(["Holdoversigt", "Spillerprofil", "Spilleraktioner", "Fysisk data"])
 
+    with t_team:
+        st.subheader(f"Holdoversigt: {valgt_hold}")
+        st.write("Her kan du se det samlede overblik over holdets aktioner og statistik for sæsonen.")
+        
+        # Eksempel på hold-metrikker / tabel
+        col_m1, col_m2, col_m3 = st.columns(3)
+        col_m1.metric("Antal aktioner i alt", len(df_all))
+        col_m2.metric("Unikke spillere", df_all['visningsnavn'].nunique())
+        col_m3.metric("Kampe / Hændelser", df_all['event_timestamp'].dt.date.nunique())
+
+        st.markdown("### Top aktionstyper for holdet")
+        if 'action_label' in df_all.columns:
+            action_counts = df_all['action_label'].value_counts().reset_index()
+            action_counts.columns = ['Aktion', Antal] = ['Aktion', 'Antal']
+            st.dataframe(action_counts.head(10), use_container_width=True, hide_index=True)
+            
     with t_profile:
         def count_event_with_qual(df_group, eid, qids):
             return df_group.apply(lambda r: har_qualifier(r['event_typeid'], r.get('qual_list', []), eid, qids), axis=1).sum()
