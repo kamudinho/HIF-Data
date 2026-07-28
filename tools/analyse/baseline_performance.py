@@ -177,7 +177,7 @@ def vis_side():
                     'Overpræsterer': '#f39c12',  # Orange
                     'Underpræsterer': '#2980b9'   # Blå
                 },
-                text_auto='.1f',
+                text_auto='.2f',
                 custom_data=['TEAM', 'DIFF', 'MATCHES'] # <--- Vælg hvad der skal med i tooltip
             )
 
@@ -185,7 +185,7 @@ def vis_side():
             fig.update_traces(
                 hovertemplate=(
                     "<b>%{customdata[0]}</b><br>"
-                    "Præstation:" + "%{x:.2f}<br>"
+                    "Præstation: "%{x:.2f}"<br>"
                     "Kampe spillet: %{customdata[2]}"
                     "<extra></extra>" # Fjerner den ekstra boks med standard info
                 )
