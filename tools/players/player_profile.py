@@ -370,7 +370,7 @@ def vis_side(dp=None):
     truppen_stats_raw['Assists'] = truppen_stats_raw['Assists'].fillna(0).astype(int)
     truppen_stats = truppen_stats_raw.copy()
 
-    # --- HENT LIGA-DATA TIL SAMMENLIGNING (CACHELET) ---
+    # --- HENT LIGA-DATA TIL SAMMENLIGNING ---
     @st.cache_data(ttl=3600)
     def hent_ligasammenligning_data(_conn, db_name, navn_mapping):
         sql_liga = f"""
@@ -382,21 +382,35 @@ def vis_side(dp=None):
             FROM {db_name}.OPTA_EVENTS e
             JOIN (SELECT DISTINCT PLAYER_OPTAUUID, FIRST_NAME, LAST_NAME FROM {db_name}.OPTA_MATCH_LINEUPS WHERE FIRST_NAME IS NOT NULL) p 
                 ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
-            WHERE e.EVENT_TIMESTAMP >= '2026-07-01'
             GROUP BY 1, 2, 3
         """
         try:
             df_l = _conn.query(sql_liga)
             if df_l is not None and not df_l.empty:
                 df_l.columns = df_l.columns.str.lower()
+                
+                # 1. Oversæt spiller-UUID til rigtigt navn fra mapping
                 df_l['visningsnavn'] = df_l.apply(lambda r: navn_mapping.get(str(r['player_optauuid']), r['visningsnavn']), axis=1)
                 df_l = df_l.dropna(subset=['visningsnavn'])
+                
+                # 2. Oversæt hold-UUID til holdnavn ved hjælp af TEAMS-mapping
+                team_lookup = {str(info['opta_uuid']).lower().replace('t', ''): name for name, info in TEAMS.items() if 'opta_uuid' in info}
+                
+                def get_team_name(uuid_val):
+                    if not uuid_val:
+                        return "Ukendt hold"
+                    clean_u = str(uuid_val).lower().replace('t', '')
+                    return team_lookup.get(clean_u, str(uuid_val)) # Falder tilbage til UUID hvis navnet ikke findes
+                
+                if 'team_uuid' in df_l.columns:
+                    df_l['hold'] = df_l['team_uuid'].apply(get_team_name)
+                
                 return df_l
         except Exception as e:
             st.error(f"Fejl ved hentning af ligadata: {e}")
         return pd.DataFrame()
 
-    # Kald funktionen og send parametrene med
+    # Kald funktionen
     df_alle_spillere_liga = hent_ligasammenligning_data(conn, DB, navne_map)
     
     # --- OPSETNING AF FANER ---
