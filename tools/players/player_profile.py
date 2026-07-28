@@ -670,7 +670,7 @@ def vis_side(dp=None):
             with t_sub_log:
                 st.data_editor(df_phys, hide_index=True, use_container_width=True, disabled=True)
 
-    with t_compare:
+with t_compare:
     st.markdown('<p style="font-size: 14px; font-weight: bold; margin-bottom: 10px;">SPILLERSAMMENLIGNING PÅ TVÆRS AF LIGAEN</p>', unsafe_allow_html=True)
     
     # Antag at 'df_alle_spillere_liga' er en samlet dataframe med alle spillere, du har hentet fra databasen/Wyscout/Opta for hele ligaen.
@@ -726,6 +726,6 @@ def vis_side(dp=None):
             st.info("Vælg mindst én spiller ovenfor for at se sammenligningen.")
     else:
         st.warning("Det ser ikke ud til, at det samlede ligadatasæt (`df_alle_spillere_liga`) er indlæst endnu. Sørg for at hente data for alle hold i ligaen, før denne side bruges.")
-
+        
 if __name__ == "__main__":
     vis_side()
