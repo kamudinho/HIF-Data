@@ -201,7 +201,7 @@ def vis_side(df_events=None, kamp=None, hold_map=None):
                     paper_bgcolor='rgba(0,0,0,0)',
                     font=dict(color='gray'),
                     title_font=dict(size=18, color='black'),
-                    height=620
+                    height=650
                 )
                 
                 fig1.update_xaxes(showgrid=True, gridwidth=1, gridcolor='#eaeaea')
@@ -219,15 +219,9 @@ def vis_side(df_events=None, kamp=None, hold_map=None):
                     "Tacklinger vs. Mål": {"x": "TACKLES", "y": "GOALS"}
                 }
 
-                if 'show_data' not in st.session_state:
-                    st.session_state.show_data = False
-
-                col_dropdown2, col_btn2 = st.columns([1, 1])
+                col_dropdown2, _ = st.columns([1, 1])
                 with col_dropdown2:
                     selected_label2 = st.selectbox("Vælg analyse (scatter):", list(metric_labels_tab2.keys()), label_visibility="collapsed", key="scatter_dropdown")
-                with col_btn2:
-                    if st.button("Data", use_container_width=True, key="btn_scatter_data"):
-                        st.session_state.show_data = not st.session_state.show_data
 
                 mapping = metric_labels_tab2[selected_label2]
                 x_col, y_col = mapping["x"], mapping["y"]
@@ -236,77 +230,74 @@ def vis_side(df_events=None, kamp=None, hold_map=None):
                 df_s[x_col] = pd.to_numeric(df_s[x_col], errors='coerce').fillna(0)
                 df_s[y_col] = pd.to_numeric(df_s[y_col], errors='coerce').fillna(0)
 
-                if st.session_state.show_data:
-                    col_graf, col_data = st.columns([2.5, 1])
-                    with col_data:
-                        df_table = df_s[['TEAM', x_col, y_col]].copy()
-                        df_table.columns = ['Hold', x_col, y_col]
-                        df_table[x_col] = df_table[x_col].map('{:.1f}'.format)
-                        df_table[y_col] = df_table[y_col].map('{:.2f}'.format)
-                        
-                        st.markdown("""
-                            <style>
-                                thead tr th:first-child { display:none; }
-                                tbody tr th { display:none; }
-                                table tr td:nth-child(2) { text-align: left !important; }
-                                table tr td:nth-child(3), table tr td:nth-child(4) { text-align: center !important; }
-                                table tr th:nth-child(3), table tr th:nth-child(4) { text-align: center !important; }
-                                table { width: 100%; border-collapse: collapse; font-size: 12px; }
-                                table tr:has(td:contains("Hvidovre")) {
-                                    background-color: #df003b !important;
-                                    color: white !important;
-                                }
-                                table tr:has(td:contains("Hvidovre")) td {
-                                    color: white !important;
-                                    font-weight: bold;
-                                }
-                            </style>
-                        """, unsafe_allow_html=True)
-                        st.table(df_table)
-                else:
-                    col_graf = st.container()
-
-                with col_graf:
-                    fig2 = go.Figure()
-                    avg_x = df_s[x_col].mean()
-                    avg_y = df_s[y_col].mean()
-                    HIF_RED = '#df003b'
-
-                    for _, row in df_s.iterrows():
-                        team_name = row['TEAM']
-                        is_hif = ("hvidovre" in team_name.lower())
-                        
-                        fig2.add_trace(go.Scatter(
-                            x=[row[x_col]], y=[row[y_col]],
-                            mode='markers+text',
-                            text=[team_name], 
-                            textposition="top center",
-                            textfont=dict(size=10, color='black'),
-                            marker=dict(
-                                size=25 if is_hif else 18, 
-                                color=HIF_RED if is_hif else 'rgba(80, 80, 80, 0.7)',
-                                line=dict(width=2, color='white')
-                            ),
-                            hovertemplate=f"<b>{team_name}</b><br>Gns. {x_col}: %{{x:.2f}}<br>Gns. {y_col}: %{{y:.2f}}<extra></extra>"
-                        ))
-
-                    fig2.add_vline(x=avg_x, line_dash="dot", line_color="#999")
-                    fig2.add_hline(y=avg_y, line_dash="dot", line_color="#999")
-
-                    fig2.update_layout(
-                        title=f"Sammenhæng mellem {x_col} og {y_col}",
-                        plot_bgcolor='white',
-                        xaxis_title=f"Gns. {x_col}",
-                        yaxis_title=f"Gns. {y_col}",
-                        height=620,
-                        margin=dict(t=20, b=20, l=20, r=20),
-                        showlegend=False
-                    )
+                # Brug st.expander til at vise tabellen som en dropdown uden at ændre scatterplottets størrelse
+                with st.expander("📊 Vis/skjul datatabel"):
+                    df_table = df_s[['TEAM', x_col, y_col]].copy()
+                    df_table.columns = ['Hold', x_col, y_col]
+                    df_table[x_col] = df_table[x_col].map('{:.1f}'.format)
+                    df_table[y_col] = df_table[y_col].map('{:.2f}'.format)
                     
-                    fig2.update_xaxes(showgrid=True, gridwidth=1, gridcolor='#eaeaea')
-                    fig2.update_yaxes(showgrid=True, gridwidth=1, gridcolor='#eaeaea')
+                    st.markdown("""
+                        <style>
+                            thead tr th:first-child { display:none; }
+                            tbody tr th { display:none; }
+                            table tr td:nth-child(2) { text-align: left !important; }
+                            table tr td:nth-child(3), table tr td:nth-child(4) { text-align: center !important; }
+                            table tr th:nth-child(3), table tr th:nth-child(4) { text-align: center !important; }
+                            table { width: 100%; border-collapse: collapse; font-size: 12px; }
+                            table tr:has(td:contains("Hvidovre")) {
+                                background-color: #df003b !important;
+                                color: white !important;
+                            }
+                            table tr:has(td:contains("Hvidovre")) td {
+                                color: white !important;
+                                font-weight: bold;
+                            }
+                        </style>
+                    """, unsafe_allow_html=True)
+                    st.table(df_table)
 
-                    st.plotly_chart(fig2, use_container_width=True, config={'displayModeBar': False})
+                # Scatterplot i fuld bredde og fast størrelse
+                fig2 = go.Figure()
+                avg_x = df_s[x_col].mean()
+                avg_y = df_s[y_col].mean()
+                HIF_RED = '#df003b'
+
+                for _, row in df_s.iterrows():
+                    team_name = row['TEAM']
+                    is_hif = ("hvidovre" in team_name.lower())
+                    
+                    fig2.add_trace(go.Scatter(
+                        x=[row[x_col]], y=[row[y_col]],
+                        mode='markers+text',
+                        text=[team_name], 
+                        textposition="top center",
+                        textfont=dict(size=10, color='black'),
+                        marker=dict(
+                            size=25 if is_hif else 18, 
+                            color=HIF_RED if is_hif else 'rgba(80, 80, 80, 0.7)',
+                            line=dict(width=2, color='white')
+                        ),
+                        hovertemplate=f"<b>{team_name}</b><br>Gns. {x_col}: %{{x:.2f}}<br>Gns. {y_col}: %{{y:.2f}}<extra></extra>"
+                    ))
+
+                fig2.add_vline(x=avg_x, line_dash="dot", line_color="#999")
+                fig2.add_hline(y=avg_y, line_dash="dot", line_color="#999")
+
+                fig2.update_layout(
+                    title=f"Sammenhæng mellem {x_col} og {y_col}",
+                    plot_bgcolor='white',
+                    xaxis_title=f"Gns. {x_col}",
+                    yaxis_title=f"Gns. {y_col}",
+                    height=680,
+                    margin=dict(t=20, b=20, l=20, r=20),
+                    showlegend=False
+                )
+                
+                fig2.update_xaxes(showgrid=True, gridwidth=1, gridcolor='#eaeaea')
+                fig2.update_yaxes(showgrid=True, gridwidth=1, gridcolor='#eaeaea')
+
+                st.plotly_chart(fig2, use_container_width=True, config={'displayModeBar': False})
 
     except Exception as e:
         st.error(f"Fejl ved indlæsning af siden: {e}")
