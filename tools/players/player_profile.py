@@ -233,11 +233,6 @@ def hent_ligasammenligning_data(_conn, db_name, navn_mapping):
     except Exception as e:
         st.error(f"Fejl ved hentning af ligadata: {e}")
         return pd.DataFrame()
-
-
-# --- 2. KALD FUNKTIONEN HER (f.eks. i din hovedopsætning/load-fase) ---
-# Sørg for at 'db_navn' og 'navn_mapping' matcher dine eksisterende variabelnavne i scriptet
-df_alle_spillere_liga = hent_ligasammenligning_data(conn, db_navn, navn_mapping)
     
 def vis_side(dp=None):
     try:
@@ -289,22 +284,27 @@ def vis_side(dp=None):
     
     primær_farve = get_team_color(valgt_hold, "primary", "#df003b")
 
-    # 2. HENT DATA
+    # 2. HENT DATA (Kun én gang for events)
     with st.spinner("Henter spillerdata..."):
         sql_events = f"""
             SELECT 
-                e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, 
-                TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME) as VISNINGSNAVN, 
-                e.PLAYER_OPTAUUID, e.EVENT_OUTCOME as OUTCOME,
+                e.EVENT_OPTAUUID,
+                e.PLAYER_OPTAUUID,
+                e.EVENT_TYPEID,
+                e.EVENT_TIMESTAMP,
+                e.MATCH_OPTAUUID,
+                e.EVENT_X, e.EVENT_Y, 
+                e.EVENT_OUTCOME as OUTCOME,
                 TO_CHAR(e.EVENT_TIMESTAMP, 'YYYY-MM-DD HH24:MI:SS') as EVENT_TIMESTAMP_STR,
+                TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME) as VISNINGSNAVN, 
                 LISTAGG(q.QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY q.QUALIFIER_QID) as QUALIFIERS
             FROM {DB}.OPTA_EVENTS e
-            JOIN (SELECT DISTINCT PLAYER_OPTAUUID, FIRST_NAME, LAST_NAME FROM {DB}.OPTA_MATCH_LINEUPS WHERE FIRST_NAME IS NOT NULL) p 
-                ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
+            JOIN {DB}.OPTA_MATCH_LINEUPS p ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
             LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
             WHERE e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid_hold}' 
-            AND e.EVENT_TIMESTAMP >= '2026-07-01'
-            GROUP BY 1, 2, 3, 4, 5, 6, 7
+              AND e.EVENT_TIMESTAMP >= '2026-07-01'
+              AND p.FIRST_NAME IS NOT NULL
+            GROUP BY 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
         """
         df_all = conn.query(sql_events)
         if df_all is not None:
@@ -328,70 +328,6 @@ def vis_side(dp=None):
         if df_expected is not None:
             df_expected.columns = df_expected.columns.str.lower()
 
-        sql_db_stats = f"""
-            WITH EventQualifiers AS (
-                SELECT 
-                    e.EVENT_OPTAUUID,
-                    e.PLAYER_OPTAUUID,
-                    e.EVENT_TYPEID,
-                    e.EVENT_TIMESTAMP,
-                    e.MATCH_OPTAUUID,
-                    TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME) as VISNINGSNAVN,
-                    LISTAGG(q.QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY q.QUALIFIER_QID) as QUALIFIERS
-                FROM {DB}.OPTA_EVENTS e
-                JOIN {DB}.OPTA_MATCH_LINEUPS p ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
-                LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
-                WHERE e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid_hold}'
-                  AND e.EVENT_TIMESTAMP >= '2026-07-01'
-                GROUP BY e.EVENT_OPTAUUID, e.PLAYER_OPTAUUID, e.EVENT_TYPEID, e.EVENT_TIMESTAMP, e.MATCH_OPTAUUID, p.FIRST_NAME, p.LAST_NAME
-            ),
-            SortedEvents AS (
-                SELECT 
-                    PLAYER_OPTAUUID,
-                    VISNINGSNAVN,
-                    EVENT_TYPEID,
-                    MATCH_OPTAUUID,
-                    QUALIFIERS,
-                    LAG(PLAYER_OPTAUUID) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_TIMESTAMP) AS ASSIST_PLAYER_UUID,
-                    LAG(EVENT_TYPEID) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_TIMESTAMP) AS PREV_EVENT_TYPEID,
-                    LAG(QUALIFIERS) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_TIMESTAMP) AS PREV_QUALIFIERS
-                FROM EventQualifiers
-            ),
-            PlayerGoals AS (
-                SELECT 
-                    PLAYER_OPTAUUID,
-                    VISNINGSNAVN,
-                    SUM(CASE WHEN EVENT_TYPEID = 16 THEN 1 ELSE 0 END) AS GOALS
-                FROM SortedEvents
-                GROUP BY PLAYER_OPTAUUID, VISNINGSNAVN
-            ),
-            PlayerAssists AS (
-                SELECT 
-                    ASSIST_PLAYER_UUID AS PLAYER_OPTAUUID,
-                    COUNT(*) AS ASSISTS
-                FROM SortedEvents
-                WHERE EVENT_TYPEID = 16 
-                  AND ASSIST_PLAYER_UUID IS NOT NULL
-                  AND ASSIST_PLAYER_UUID != PLAYER_OPTAUUID
-                  AND (
-                      QUALIFIERS LIKE '%29%'            
-                      OR PREV_QUALIFIERS LIKE '%210%'    
-                  )
-                GROUP BY ASSIST_PLAYER_UUID
-            )
-            SELECT 
-                g.PLAYER_OPTAUUID as player_optauuid,
-                g.VISNINGSNAVN as visningsnavn,
-                g.GOALS as goals,
-                COALESCE(a.ASSISTS, 0) as assists
-            FROM PlayerGoals g
-            LEFT JOIN PlayerAssists a ON g.PLAYER_OPTAUUID = a.PLAYER_OPTAUUID
-        """
-        df_db_stats = conn.query(sql_db_stats)
-        if df_db_stats is not None:
-            df_db_stats.columns = df_db_stats.columns.str.lower()
-            df_db_stats['visningsnavn'] = df_db_stats.apply(lambda r: navne_map.get(str(r['player_optauuid']), r['visningsnavn']), axis=1)
-        
     if df_all is None or df_all.empty:
         st.warning("Ingen hændelsesdata fundet.")
         return
@@ -403,7 +339,7 @@ def vis_side(dp=None):
     df_all_temp = df_all.rename(columns={
         'event_x': 'EVENT_X', 'event_y': 'EVENT_Y', 'event_typeid': 'EVENT_TYPEID',
         'visningsnavn': 'VISNINGSNAVN', 'player_optauuid': 'PLAYER_OPTAUUID',
-        'outcome': 'OUTCOME', 'qualifiers': 'QUALIFIERS'
+        'outcome': 'OUTCOME', 'qualifiers': 'QUALIFIERS', 'match_optauuid': 'MATCH_OPTAUUID'
     })
     df_all['Action_Label'] = df_all_temp.apply(get_action_label, axis=1)
 
@@ -423,7 +359,29 @@ def vis_side(dp=None):
 
     df_spiller = df_all[df_all['player_optauuid'] == valgt_player_uuid].copy()
 
-    # --- BEREGN TRUP-STATS FØR FANERNE ---
+    # --- BEREGN MÅL & ASSISTS DIREKTE FRA `df_all` (Undgår ekstra databasekald) ---
+    df_sorted = df_all.sort_values(['match_optauuid', 'event_timestamp'])
+    df_sorted['assist_player_uuid'] = df_sorted['player_optauuid'].shift(1)
+    df_sorted['prev_match'] = df_sorted['match_optauuid'].shift(1)
+    df_sorted['prev_event_typeid'] = df_sorted['event_typeid'].shift(1)
+    df_sorted['prev_qualifiers'] = df_sorted['qualifiers'].shift(1)
+
+    # Mål: Hændelsestype 16
+    player_goals = df_sorted[df_sorted['event_typeid'] == 16].groupby(['player_optauuid', 'visningsnavn']).size().reset_index(name='goals')
+
+    # Assists: Aflevering før mål med rette qualifiers
+    assist_mask = (
+        (df_sorted['event_typeid'] == 16) &
+        (df_sorted['match_optauuid'] == df_sorted['prev_match']) &
+        (df_sorted['assist_player_uuid'].notnull()) &
+        (df_sorted['assist_player_uuid'] != df_sorted['player_optauuid']) &
+        (df_sorted['qualifiers'].fillna('').str.contains('29') | df_sorted['prev_qualifiers'].fillna('').str.contains('210'))
+    )
+    player_assists = df_sorted[assist_mask].groupby('assist_player_uuid').size().reset_index(name='assists')
+
+    df_db_stats = pd.merge(player_goals, player_assists, left_on='player_optauuid', right_on='assist_player_uuid', how='left').fillna({'assists': 0})
+
+    # --- BEREGN TRUP-STATS FRA `df_all` ---
     def count_event_with_qual(df_group, eid, qids):
         return df_group.apply(lambda r: har_qualifier(r['event_typeid'], r.get('qual_list', []), eid, qids), axis=1).sum()
 
@@ -481,7 +439,6 @@ def vis_side(dp=None):
     t_team, t_profile, t_pitch, t_phys, t_compare = st.tabs([
         "Holdoversigt", "Spillerprofil", "Spilleraktioner", "Fysisk data", "Sammenligning"
     ])
-
     with t_team:
         col_t_title, col_t_btn = st.columns([3, 1])
         
