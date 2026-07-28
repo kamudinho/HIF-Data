@@ -23,17 +23,7 @@ from data.utils.mapping import (
 # --- KONFIGURATION (HVIDOVRE-APP / 2025/2026) ---
 DB = "KLUB_HVIDOVREIF.AXIS"
 SEASONNAME = "2025/2026"
-TEAM_WYID = 7490
-COMPETITION_WYID = (328,)
-COMP_MAP = { 
-    335: "Superliga", 
-    328: "NordicBet Liga", 
-    329: "2. division", 
-    43319: "3. division", 
-    331: "Oddset Pokalen", 
-    1305: "U19 Ligaen" 
-}
-LIGA_IDS = "('2mb332vncy4450vu14paj8844', 'e5p78j2r7v8h3u9s5k0l2m4n6', 'f6q89k3s8w9i4v0t6l1m3n5o7', '335', '328', '329', '43319', '331')"
+LIGA_IDS = "('2mb332vncy4450vu14paj8844')"
 
 # --- HJÆLPEFUNKTIONER ---
 @st.cache_data(ttl=3600)
