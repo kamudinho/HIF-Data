@@ -120,23 +120,46 @@ def get_summary_stats(df, group_col):
     stats['Top Modtager'] = stats[group_col].map(mod_map)
     return stats[[group_col, 'Antal', 'Succes %', 'Top Modtager', 'Afslutning %']]
 
-# --- 5. VISUALISERING (OPDATERET TIL VENSTRE-ALIGNMENT) ---
+# --- 5. VISUALISERING (MED SIDE- OG AFSLUTNINGSFILTER) ---
 def render_setpiece_analysis(df_team, sp_type, t_sel):
     t_info = next((info for name, info in TEAMS.items() if name == t_sel), None)
     t_uuid = t_info.get('opta_uuid') if t_info else None
     hold_logo = get_logo_img(t_uuid)
 
-    f1, f2 = st.columns([1, 1])
+    f1, f2, f3, f4 = st.columns([1.2, 1.2, 1.2, 1])
     with f1:
         p_list = ["Alle spillere"] + sorted(df_team[df_team['TYPE_NAVN'] == sp_type]['TAGER_NAVN'].unique().tolist())
         p_sel = st.selectbox(f"Spiller ({sp_type})", p_list, key=f"sb_p_{sp_type}")
     with f2:
+        side_sel = st.selectbox(f"Side ({sp_type})", ["Begge sider", "Venstre side", "Højre side"], key=f"sb_side_{sp_type}")
+    with f3:
+        kun_afslutning = st.selectbox(f"Filter ({sp_type})", ["Alle", "Kun med afslutning"], key=f"sb_shot_{sp_type}")
+    with f4:
         vis_mode = st.selectbox(f"Visning ({sp_type})", ["Zoner + Pile", "Kun Zoner", "Kun Pile"], key=f"sb_m_{sp_type}")
 
     mask = (df_team['TYPE_NAVN'] == sp_type)
     if p_sel != "Alle spillere": mask &= (df_team['TAGER_NAVN'] == p_sel)
+    
     df_plot = df_team[mask].copy()
     df_plot = df_plot[~((df_plot['EVENT_X'] == 0) & (df_plot['EVENT_Y'] == 0))]
+
+    for c in ['EVENT_X', 'EVENT_Y', 'ENDX', 'ENDY']: 
+        df_plot[c] = pd.to_numeric(df_plot[c], errors='coerce')
+
+    # Standardiserer til venstre-angreb (EVENT_X < 50 spejlvendes, så alt ses fra venstre mod højre mod mål)
+    mask_left = df_plot['EVENT_X'] < 50
+    df_plot.loc[mask_left, ['EVENT_X', 'ENDX']] = 100 - df_plot.loc[mask_left, ['EVENT_X', 'ENDX']]
+    df_plot.loc[mask_left, ['EVENT_Y', 'ENDY']] = 100 - df_plot.loc[mask_left, ['EVENT_Y', 'ENDY']]
+
+    # Filtrering på om sparket er taget fra venstre eller højre side af banen (set mod målet, hvor y=34 er midten)
+    if side_sel == "Venstre side":
+        df_plot = df_plot[df_plot['EVENT_Y'] < 34]
+    elif side_sel == "Højre side":
+        df_plot = df_plot[df_plot['EVENT_Y'] > 34]
+
+    # Filtrering på afslutninger
+    if kun_afslutning == "Kun med afslutning":
+        df_plot = df_plot[df_plot['ER_AFSLUTNING'] == 1]
 
     total = len(df_plot)
     succes = int(df_plot['MODTAGER'].notna().sum())
@@ -145,13 +168,6 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
     col_p, col_s = st.columns([2.2, 0.8]) 
     
     with col_p:
-        for c in ['EVENT_X', 'EVENT_Y', 'ENDX', 'ENDY']: 
-            df_plot[c] = pd.to_numeric(df_plot[c], errors='coerce')
-
-        mask_left = df_plot['EVENT_X'] < 50
-        df_plot.loc[mask_left, ['EVENT_X', 'ENDX']] = 100 - df_plot.loc[mask_left, ['EVENT_X', 'ENDX']]
-        df_plot.loc[mask_left, ['EVENT_Y', 'ENDY']] = 100 - df_plot.loc[mask_left, ['EVENT_Y', 'ENDY']]
-
         df_plot['x'], df_plot['y'] = df_plot['EVENT_X'] * 1.05, df_plot['EVENT_Y'] * 0.68
         df_plot['end_x'], df_plot['end_y'] = df_plot['ENDX'] * 1.05, df_plot['ENDY'] * 0.68
 
@@ -160,8 +176,8 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
         
         fig, ax = pitch.draw(figsize=(8, 5), constrained_layout=True)
         
-        # --- TEKST I VENSTRE HJØRNE (X=1 for tæt alignment) ---
-        ax.text(1, 66, sp_type.upper(), fontsize=12, fontweight='bold', color='#333333', alpha=0.9)
+        # --- TEKST I VENSTRE HJØRNE ---
+        ax.text(1, 66, f"{sp_type.upper()} ({side_sel.upper()})", fontsize=12, fontweight='bold', color='#333333', alpha=0.9)
         
         stats_line = f"{p_sel}\n{total} aktioner ({int(pct)}% succes)"
         ax.text(1, 62, stats_line, fontsize=9.5, color='#444444', va='top', linespacing=1.6)
@@ -171,7 +187,6 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
             ax_logo = ax.inset_axes([0.012, 0.03, 0.08, 0.08], transform=ax.transAxes)
             ax_logo.imshow(hold_logo)
             ax_logo.axis('off')
-            # Navnet rykket en smule så det passer med logo-størrelsen
             ax.text(11, 3, t_sel.upper(), fontsize=10, fontweight='bold', color='#333333', alpha=0.6, va='center')
         else:
             ax.text(1, 3, t_sel.upper(), fontsize=10, fontweight='bold', color='#333333', alpha=0.6, va='center')
