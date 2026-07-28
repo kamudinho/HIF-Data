@@ -385,7 +385,7 @@ def vis_side(dp=None):
                 logo_html = f'<img src="data:image/png;base64,{img_str}" style="height: 26px; margin-right: 10px; object-fit: contain;">'
 
             # Tilføjet padding-top for at skubbe logo/tekst ned, så det matcher segmented_control's fulde højde
-            st.markdown(f'<div style="display: flex; align-items: center; padding-top: 10px;">{logo_html}<span style="font-size: 16px; font-weight: bold; line-height: 1;">{valgt_hold.upper()}</span></div>', unsafe_allow_html=True)
+            st.markdown(f'<div style="display: flex; align-items: center; padding-top: 20px;">{logo_html}<span style="font-size: 16px; font-weight: bold; line-height: 1;">{valgt_hold.upper()}</span></div>', unsafe_allow_html=True)
             
         with col_t_btn:
             st.markdown('<div style="display: flex; justify-content: flex-end;">', unsafe_allow_html=True)
