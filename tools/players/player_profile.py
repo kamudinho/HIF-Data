@@ -390,7 +390,7 @@ def vis_side(dp=None):
             kolonne_prioritet = [
                 'visningsnavn', 'Kampe', 'Minutter', 'Mål', 'xG', 'Assists', 'xA', 
                 'Pasninger', 'Stikninger', 'Indlæg', 'Afslutninger', 'Erobringer', 
-                'Driblinger', 'Chancer_skabt', 'Key_Passes', 'GK', 'RK'
+                'Driblinger', 'Chancer_skabt', 'Key_Passes', 'Gule_Kort', 'Rode_Kort'
             ]
             eksisterende_kolonner = [k for k in kolonne_prioritet if k in df_vis_truppen.columns]
             
