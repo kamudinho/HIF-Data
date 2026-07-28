@@ -120,7 +120,10 @@ def vis_side(df_events=None, kamp=None, hold_map=None):
             match_counts = df_teams.groupby('TEAM').size().reset_index(name='MATCHES')
             agg_df = pd.merge(agg_df, match_counts, on='TEAM')
 
-            # --- OPRETTELSE AF TABS FØST ---
+            # --- TOP SEKTION: CAPTION ØVERST ---
+            st.caption("1. Division — Over- og Underpræstation samt Sammenhænge")
+
+            # --- OPRETTELSE AF TABS ---
             tab1, tab2 = st.tabs(["📊 Baseline Oversigt", "📈 Scatterplot"])
 
             # --- TAB 1: BASELINE VISNING ---
@@ -135,9 +138,7 @@ def vis_side(df_events=None, kamp=None, hold_map=None):
                     "Redninger": "SAVES"
                 }
 
-                col_header1, col_dropdown1 = st.columns([1.2, 1])
-                with col_header1:
-                    st.caption("1. Division — Over- og Underpræstation mod Baseline")
+                _, col_dropdown1 = st.columns([1.5, 1])
                 with col_dropdown1:
                     selected_label1 = st.selectbox("Vælg parameter (baseline):", list(metric_labels_tab1.keys()), label_visibility="collapsed", key="baseline_dropdown")
                 
@@ -222,9 +223,7 @@ def vis_side(df_events=None, kamp=None, hold_map=None):
                 if 'show_data' not in st.session_state:
                     st.session_state.show_data = False
 
-                col_header2, col_dropdown2, col_btn2 = st.columns([1.2, 1, 0.5])
-                with col_header2:
-                    st.caption("1. Division — Sammenhæng mellem parametre")
+                _, col_dropdown2, col_btn2 = st.columns([1, 1, 0.4])
                 with col_dropdown2:
                     selected_label2 = st.selectbox("Vælg analyse (scatter):", list(metric_labels_tab2.keys()), label_visibility="collapsed", key="scatter_dropdown")
                 with col_btn2:
@@ -246,6 +245,7 @@ def vis_side(df_events=None, kamp=None, hold_map=None):
                         df_table[x_col] = df_table[x_col].map('{:.1f}'.format)
                         df_table[y_col] = df_table[y_col].map('{:.2f}'.format)
                         
+                        # CSS til at fremhæve Hvidovre med HIF-farve og hvid tekst i tabellen
                         st.markdown("""
                             <style>
                                 thead tr th:first-child { display:none; }
@@ -254,6 +254,15 @@ def vis_side(df_events=None, kamp=None, hold_map=None):
                                 table tr td:nth-child(3), table tr td:nth-child(4) { text-align: center !important; }
                                 table tr th:nth-child(3), table tr th:nth-child(4) { text-align: center !important; }
                                 table { width: 100%; border-collapse: collapse; font-size: 12px; }
+                                /* Fremhæv række hvor holdet indeholder Hvidovre */
+                                table tr:has(td:contains("Hvidovre")) {
+                                    background-color: #df003b !important;
+                                    color: white !important;
+                                }
+                                table tr:has(td:contains("Hvidovre")) td {
+                                    color: white !important;
+                                    font-weight: bold;
+                                }
                             </style>
                         """, unsafe_allow_html=True)
                         st.table(df_table)
