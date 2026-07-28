@@ -373,7 +373,7 @@ def vis_side(dp=None):
     t_team, t_profile, t_pitch, t_phys = st.tabs(["Holdoversigt", "Spillerprofil", "Spilleraktioner", "Fysisk data"])
 
     with t_team:
-        col_t_title, col_t_radio = st.columns([2, 2])
+        col_t_title, col_spacer, col_t_btn = st.columns([2, 1, 1.5])
         with col_t_title:
             st.subheader(f"Holdoversigt: {valgt_hold}")
         with col_t_radio:
