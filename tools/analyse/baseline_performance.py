@@ -123,7 +123,7 @@ def vis_side(df_events=None, kamp=None, hold_map=None):
             st.caption("1. Division — Over- og Underpræstation samt Sammenhænge")
 
             # --- OPRETTELSE AF TABS ---
-            tab1, tab2 = st.tabs(["📊 Baseline Oversigt", "📈 Scatterplot"])
+            tab1, tab2 = st.tabs(["Baseline Oversigt", "Scatterplot"])
 
             # --- TAB 1: BASELINE VISNING ---
             with tab1:
@@ -142,7 +142,7 @@ def vis_side(df_events=None, kamp=None, hold_map=None):
                     selected_label1 = st.selectbox("Vælg parameter (baseline):", list(metric_labels_tab1.keys()), label_visibility="collapsed", key="baseline_dropdown")
                 
                 with col_btn1:
-                    with st.popover("📊 Data", use_container_width=True, key="popover_baseline_data"):
+                    with st.popover("Data", use_container_width=True, key="popover_baseline_data"):
                         metric_key1_pop = metric_labels_tab1[selected_label1]
                         df_b_pop = agg_df.copy()
 
@@ -152,18 +152,18 @@ def vis_side(df_events=None, kamp=None, hold_map=None):
                             conv = tot_g / tot_s if tot_s > 0 else 0.1
                             df_b_pop['BASELINE_VAL'] = df_b_pop['SHOTS'] * conv
                             df_b_pop['VAL'] = df_b_pop['GOALS'] - df_b_pop['BASELINE_VAL']
-                            val_col_name = "Diff vs Baseline"
+                            val_col_name = "Diff"
                         elif metric_key1_pop == "XG_VS_GOALS":
                             df_b_pop['VAL'] = df_b_pop['GOALS'] - df_b_pop['XG']
-                            val_col_name = "Diff vs xG"
+                            val_col_name = "Diff"
                         else:
                             avg_val = df_b_pop[metric_key1_pop].sum() / df_b_pop['MATCHES'].sum()
                             df_b_pop['BASELINE_VAL'] = df_b_pop['MATCHES'] * avg_val
                             df_b_pop['VAL'] = df_b_pop[metric_key1_pop] - df_b_pop['BASELINE_VAL']
-                            val_col_name = "Diff vs Snit"
+                            val_col_name = "Diff"
 
-                        df_table1 = df_b_pop[['TEAM', 'VAL']].copy()
-                        df_table1.columns = ['Hold', val_col_name]
+                        df_table1 = df_b_pop[['TEAM', 'VAL', 'MATCHES']].copy()
+                        df_table1.columns = ['Hold', val_col_name, 'Kampe']
                         df_table1[val_col_name] = df_table1[val_col_name].map('{:.2f}'.format)
                         
                         st.markdown("""
@@ -171,8 +171,8 @@ def vis_side(df_events=None, kamp=None, hold_map=None):
                                 thead tr th:first-child { display:none; }
                                 tbody tr th { display:none; }
                                 table tr td:nth-child(2) { text-align: left !important; }
-                                table tr td:nth-child(3) { text-align: center !important; }
-                                table tr th:nth-child(3) { text-align: center !important; }
+                                table tr td:nth-child(3), table tr td:nth-child(4) { text-align: center !important; }
+                                table tr th:nth-child(3), table tr th:nth-child(4) { text-align: center !important; }
                                 table { width: 100%; border-collapse: collapse; font-size: 12px; }
                                 table tr:has(td:contains("Hvidovre")) {
                                     background-color: #df003b !important;
@@ -246,7 +246,7 @@ def vis_side(df_events=None, kamp=None, hold_map=None):
                     paper_bgcolor='rgba(0,0,0,0)',
                     font=dict(color='gray'),
                     title_font=dict(size=18, color='black'),
-                    height=650
+                    height=600
                 )
                 
                 fig1.update_xaxes(showgrid=True, gridwidth=1, gridcolor='#eaeaea')
@@ -269,7 +269,7 @@ def vis_side(df_events=None, kamp=None, hold_map=None):
                     selected_label2 = st.selectbox("Vælg analyse (scatter):", list(metric_labels_tab2.keys()), label_visibility="collapsed", key="scatter_dropdown")
                 
                 with col_btn2:
-                    with st.popover("📊 Data", use_container_width=True, key="popover_scatter_data"):
+                    with st.popover("Data", use_container_width=True, key="popover_scatter_data"):
                         mapping = metric_labels_tab2[selected_label2]
                         x_col, y_col = mapping["x"], mapping["y"]
                         df_s_pop = agg_df.copy()
@@ -340,7 +340,7 @@ def vis_side(df_events=None, kamp=None, hold_map=None):
                     plot_bgcolor='white',
                     xaxis_title=f"Gns. {x_col}",
                     yaxis_title=f"Gns. {y_col}",
-                    height=680,
+                    height=600,
                     margin=dict(t=20, b=20, l=20, r=20),
                     showlegend=False
                 )
