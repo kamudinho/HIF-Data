@@ -197,7 +197,7 @@ def vis_side(dp=None):
         sql_events = f"""
             SELECT 
                 e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, 
-                REGEXP_REPLACE(p.MATCH_NAME, '^[A-ZÆØÅ].*?\\.', TRIM(p.FIRST_NAME)) as VISNINGSNAVN, 
+                p.MATCH_NAME, p.FIRST_NAME,
                 e.PLAYER_OPTAUUID, e.EVENT_OUTCOME as OUTCOME,
                 TO_CHAR(e.EVENT_TIMESTAMP, 'YYYY-MM-DD HH24:MI:SS') as EVENT_TIMESTAMP_STR,
                 LISTAGG(q.QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY q.QUALIFIER_QID) as QUALIFIERS
@@ -207,11 +207,28 @@ def vis_side(dp=None):
             LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
             WHERE e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid_hold}' 
             AND e.EVENT_TIMESTAMP >= '2026-07-01'
-            GROUP BY 1, 2, 3, 4, 5, 6, 7
+            GROUP BY 1, 2, 3, 4, 5, 6, 7, 8
         """
         df_all = conn.query(sql_events)
         if df_all is not None:
             df_all.columns = df_all.columns.str.lower()
+            # PYTHON-LOGIK TIL AT RETTE NAVNE SIKKERT (Fjerner initial og sætter FIRST_NAME ind, beholder efternavn)
+            import re
+            def fix_name(row):
+                m_name = str(row.get('match_name', ''))
+                f_name = str(row.get('first_name', ''))
+                if not m_name or not f_name:
+                    return m_name
+                cleaned = re.sub(r'^[A-ZÆØÅa-zæøå\.\s]+(?=\s[A-ZÆØÅa-zæøå]+)', f_name, m_name)
+                if cleaned == m_name: # Fallback hvis mønsteret ikke matchede præcist
+                    parts = m_name.split(' ', 1)
+                    if len(parts) > 1:
+                        cleaned = f_name + " " + parts[1]
+                    else:
+                        cleaned = f_name
+                return cleaned
+
+            df_all['visningsnavn'] = df_all.apply(fix_name, axis=1)
             df_all['visningsnavn'] = df_all.apply(lambda r: navne_map.get(str(r['player_optauuid']), r['visningsnavn']), axis=1)
 
         sql_expected = f"""
@@ -239,7 +256,8 @@ def vis_side(dp=None):
                     e.EVENT_TYPEID,
                     e.EVENT_TIMESTAMP,
                     e.MATCH_OPTAUUID,
-                    REGEXP_REPLACE(p.MATCH_NAME, '^[A-ZÆØÅ].*?\\.', TRIM(p.FIRST_NAME)) as VISNINGSNAVN,
+                    p.MATCH_NAME,
+                    p.FIRST_NAME,
                     LISTAGG(q.QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY q.QUALIFIER_QID) as QUALIFIERS
                 FROM {DB}.OPTA_EVENTS e
                 JOIN {DB}.OPTA_MATCH_LINEUPS p ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
@@ -251,7 +269,8 @@ def vis_side(dp=None):
             SortedEvents AS (
                 SELECT 
                     PLAYER_OPTAUUID,
-                    VISNINGSNAVN,
+                    MATCH_NAME,
+                    FIRST_NAME,
                     EVENT_TYPEID,
                     MATCH_OPTAUUID,
                     QUALIFIERS,
@@ -263,10 +282,11 @@ def vis_side(dp=None):
             PlayerGoals AS (
                 SELECT 
                     PLAYER_OPTAUUID,
-                    VISNINGSNAVN,
+                    MATCH_NAME,
+                    FIRST_NAME,
                     SUM(CASE WHEN EVENT_TYPEID = 16 THEN 1 ELSE 0 END) AS GOALS
                 FROM SortedEvents
-                GROUP BY PLAYER_OPTAUUID, VISNINGSNAVN
+                GROUP BY PLAYER_OPTAUUID, MATCH_NAME, FIRST_NAME
             ),
             PlayerAssists AS (
                 SELECT 
@@ -284,7 +304,8 @@ def vis_side(dp=None):
             )
             SELECT 
                 g.PLAYER_OPTAUUID as player_optauuid,
-                g.VISNINGSNAVN as visningsnavn,
+                g.MATCH_NAME as match_name,
+                g.FIRST_NAME as first_name,
                 g.GOALS as goals,
                 COALESCE(a.ASSISTS, 0) as assists
             FROM PlayerGoals g
@@ -293,6 +314,7 @@ def vis_side(dp=None):
         df_db_stats = conn.query(sql_db_stats)
         if df_db_stats is not None:
             df_db_stats.columns = df_db_stats.columns.str.lower()
+            df_db_stats['visningsnavn'] = df_db_stats.apply(fix_name, axis=1)
             df_db_stats['visningsnavn'] = df_db_stats.apply(lambda r: navne_map.get(str(r['player_optauuid']), r['visningsnavn']), axis=1)
     
     if df_all is None or df_all.empty:
