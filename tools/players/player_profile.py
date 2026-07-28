@@ -456,7 +456,7 @@ def vis_side(dp=None):
         df_phys = get_physical_data(valgt_spiller, valgt_player_uuid, valgt_hold, conn)
     
         if df_phys is None or df_phys.empty:
-            st.warning("Ingen fysiske data fundet for denne spiller.")
+            st.warning("Data findes endnu ikke hos Second Spectrum")
         else:
             df_phys.columns = df_phys.columns.str.lower()
             df_phys['match_date'] = pd.to_datetime(df_phys['match_date'])
