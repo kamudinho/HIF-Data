@@ -185,7 +185,7 @@ def vis_side():
             fig.update_traces(
                 hovertemplate=(
                     "<b>%{customdata[0]}</b><br>"
-                    f"{xaxis_title}: " + "%{x:.2f}<br>"
+                    "Præstation:" + "%{x:.2f}<br>"
                     "Kampe spillet: %{customdata[2]}"
                     "<extra></extra>" # Fjerner den ekstra boks med standard info
                 )
