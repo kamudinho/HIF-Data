@@ -17,7 +17,6 @@ def vis_side(df_events=None, kamp=None, hold_map=None):
 
         DB = "KLUB_HVIDOVREIF.AXIS"
         
-        # Bruger standard sæsonen eller henter fra session_state hvis tilgængelig
         valgt_saeson = st.session_state.get("saeson_select", "2025/2026")
         competition_uuid = SEASONS.get(valgt_saeson, {}).get(COMPETITION_NAME, "dyjr458hcmrcy87fsabfsy87o")
         
@@ -223,7 +222,7 @@ def vis_side(df_events=None, kamp=None, hold_map=None):
                 if 'show_data' not in st.session_state:
                     st.session_state.show_data = False
 
-                _, col_dropdown2, col_btn2 = st.columns([1, 1, 0.4])
+                col_dropdown2, col_btn2 = st.columns([1, 1])
                 with col_dropdown2:
                     selected_label2 = st.selectbox("Vælg analyse (scatter):", list(metric_labels_tab2.keys()), label_visibility="collapsed", key="scatter_dropdown")
                 with col_btn2:
@@ -245,7 +244,6 @@ def vis_side(df_events=None, kamp=None, hold_map=None):
                         df_table[x_col] = df_table[x_col].map('{:.1f}'.format)
                         df_table[y_col] = df_table[y_col].map('{:.2f}'.format)
                         
-                        # CSS til at fremhæve Hvidovre med HIF-farve og hvid tekst i tabellen
                         st.markdown("""
                             <style>
                                 thead tr th:first-child { display:none; }
@@ -254,7 +252,6 @@ def vis_side(df_events=None, kamp=None, hold_map=None):
                                 table tr td:nth-child(3), table tr td:nth-child(4) { text-align: center !important; }
                                 table tr th:nth-child(3), table tr th:nth-child(4) { text-align: center !important; }
                                 table { width: 100%; border-collapse: collapse; font-size: 12px; }
-                                /* Fremhæv række hvor holdet indeholder Hvidovre */
                                 table tr:has(td:contains("Hvidovre")) {
                                     background-color: #df003b !important;
                                     color: white !important;
