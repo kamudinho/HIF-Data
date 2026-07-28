@@ -481,63 +481,63 @@ def vis_side(dp=None):
         "Holdoversigt", "Spillerprofil", "Spilleraktioner", "Fysisk data", "Sammenligning"
     ])
 
-with t_team:
-    col_t_title, col_t_btn = st.columns([3, 1])
+    with t_team:
+        col_t_title, col_t_btn = st.columns([3, 1])
+        
+        with col_t_title:
+            logo_html = ""
+            if hold_logo is not None:
+                buffered = io.BytesIO()
+                hold_logo.save(buffered, format="PNG")
+                img_str = base64.b64encode(buffered.getvalue()).decode()
+                logo_html = f'<img src="data:image/png;base64,{img_str}" style="height: 26px; margin-right: 10px; object-fit: contain;">'
     
-    with col_t_title:
-        logo_html = ""
-        if hold_logo is not None:
-            buffered = io.BytesIO()
-            hold_logo.save(buffered, format="PNG")
-            img_str = base64.b64encode(buffered.getvalue()).decode()
-            logo_html = f'<img src="data:image/png;base64,{img_str}" style="height: 26px; margin-right: 10px; object-fit: contain;">'
-
-        st.markdown(f'<div style="display: flex; align-items: center; padding-top: 20px;">{logo_html}<span style="font-size: 16px; font-weight: bold; line-height: 1;">{valgt_hold.upper()}</span></div>', unsafe_allow_html=True)
+            st.markdown(f'<div style="display: flex; align-items: center; padding-top: 20px;">{logo_html}<span style="font-size: 16px; font-weight: bold; line-height: 1;">{valgt_hold.upper()}</span></div>', unsafe_allow_html=True)
+            
+        with col_t_btn:
+            st.markdown('<div style="display: flex; justify-content: flex-end;">', unsafe_allow_html=True)
+            kategori_valg = st.segmented_control(
+                "Visningskategori", 
+                options=["Generelt", "Offensiv", "Defensiv"], 
+                default="Generelt",
+                key="team_kategori_control",
+                label_visibility="collapsed"
+            )
+            st.markdown('</div>', unsafe_allow_html=True)
         
-    with col_t_btn:
-        st.markdown('<div style="display: flex; justify-content: flex-end;">', unsafe_allow_html=True)
-        kategori_valg = st.segmented_control(
-            "Visningskategori", 
-            options=["Generelt", "Offensiv", "Defensiv"], 
-            default="Generelt",
-            key="team_kategori_control",
-            label_visibility="collapsed"
-        )
-        st.markdown('</div>', unsafe_allow_html=True)
-    
-    if not truppen_stats.empty:
-        df_vis_truppen = truppen_stats.reset_index()
-        
-        gen_kolonner = ['visningsnavn', 'Kampe', 'Minutter', 'Aktioner', 'Pasninger', 'Mål', 'Assists', 'Udskiftet', 'Indskiftet', 'Gule_kort', 'Roede_kort']
-        off_kolonner = ['visningsnavn', 'Aktioner', 'Afslutninger', 'xG', 'Chancer_skabt', 'Key_Passes', 'Stikninger', 'Indlæg', 'xA', 'Driblinger']
-        def_kolonner = ['visningsnavn', 'Aktioner', 'Erobringer', 'Tacklinger', 'Clearinger', 'Blokeringer', 'Interceptioner', 'Frispark_imod']
-        
-        if kategori_valg == "Generelt":
-            eksisterende_kolonner = [k for k in gen_kolonner if k in df_vis_truppen.columns]
-        elif kategori_valg == "Offensiv":
-            eksisterende_kolonner = [k for k in off_kolonner if k in df_vis_truppen.columns]
-        elif kategori_valg == "Defensiv":
-            eksisterende_kolonner = [k for k in def_kolonner if k in df_vis_truppen.columns]
-        else:  
-            eksisterende_kolonner = [k for k in df_vis_truppen.columns if k != 'player_optauuid']
-        
-        df_visning = df_vis_truppen[eksisterende_kolonner].copy()
-        
-        df_visning = df_visning.rename(columns={
-            'visningsnavn': 'Spiller',
-            'Gule_kort': 'Gule kort',
-            'Roede_kort': 'Røde kort',
-            'Chancer_skabt': 'Chancer skabt',
-            'Key_Passes': 'Key Passes'
-        })
-        
-        beregnet_hoejde = int(len(df_visning) * 38 + 45)
-        
-        st.dataframe(
-            df_visning, 
-            use_container_width=True, 
-            hide_index=True,
-            height=beregnet_hoejde
-        )
-    else:
-        st.info("Ingen trup-data tilgængelig endnu.")
+        if not truppen_stats.empty:
+            df_vis_truppen = truppen_stats.reset_index()
+            
+            gen_kolonner = ['visningsnavn', 'Kampe', 'Minutter', 'Aktioner', 'Pasninger', 'Mål', 'Assists', 'Udskiftet', 'Indskiftet', 'Gule_kort', 'Roede_kort']
+            off_kolonner = ['visningsnavn', 'Aktioner', 'Afslutninger', 'xG', 'Chancer_skabt', 'Key_Passes', 'Stikninger', 'Indlæg', 'xA', 'Driblinger']
+            def_kolonner = ['visningsnavn', 'Aktioner', 'Erobringer', 'Tacklinger', 'Clearinger', 'Blokeringer', 'Interceptioner', 'Frispark_imod']
+            
+            if kategori_valg == "Generelt":
+                eksisterende_kolonner = [k for k in gen_kolonner if k in df_vis_truppen.columns]
+            elif kategori_valg == "Offensiv":
+                eksisterende_kolonner = [k for k in off_kolonner if k in df_vis_truppen.columns]
+            elif kategori_valg == "Defensiv":
+                eksisterende_kolonner = [k for k in def_kolonner if k in df_vis_truppen.columns]
+            else:  
+                eksisterende_kolonner = [k for k in df_vis_truppen.columns if k != 'player_optauuid']
+            
+            df_visning = df_vis_truppen[eksisterende_kolonner].copy()
+            
+            df_visning = df_visning.rename(columns={
+                'visningsnavn': 'Spiller',
+                'Gule_kort': 'Gule kort',
+                'Roede_kort': 'Røde kort',
+                'Chancer_skabt': 'Chancer skabt',
+                'Key_Passes': 'Key Passes'
+            })
+            
+            beregnet_hoejde = int(len(df_visning) * 38 + 45)
+            
+            st.dataframe(
+                df_visning, 
+                use_container_width=True, 
+                hide_index=True,
+                height=beregnet_hoejde
+            )
+        else:
+            st.info("Ingen trup-data tilgængelig endnu.")
