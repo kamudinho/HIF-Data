@@ -344,7 +344,7 @@ def vis_side(dp=None):
             st.info("Ingen trup-data tilgængelig endnu.")    
     with t_profile:
         numeric_cols = truppen_stats.drop(columns=['visningsnavn', 'Pasningsprocent_Str'], errors='ignore')
-        ranks = numeric_cols.rank(ascending=False, method='min').astype(int)
+        ranks = (-numeric_cols).rank(ascending=True, method='min').astype(int)
         
         try:
             spiller_ranks = ranks.loc[valgt_player_uuid]
