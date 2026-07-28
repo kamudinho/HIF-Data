@@ -393,6 +393,8 @@ def vis_side(dp=None):
             return df_l
         return pd.DataFrame()
 
+    st.write("Debug - ligadata rækker:", len(df_alle_spillere_liga))
+
     df_alle_spillere_liga = hent_ligasammenligning_data(conn)
 
 # --- OPSETNING AF FANER ---
