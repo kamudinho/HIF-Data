@@ -373,11 +373,13 @@ def vis_side(dp=None):
     t_team, t_profile, t_pitch, t_phys = st.tabs(["Holdoversigt", "Spillerprofil", "Spilleraktioner", "Fysisk data"])
 
     with t_team:
-        col_t_title, col_spacer, col_t_btn = st.columns([2, 1, 1.5])
+        col_t_title, col_spacer, col_t_btn = st.columns([2, 0.5, 2])
+        
         with col_t_title:
             st.markdown(f'<p style="font-size: 10px; font-weight: bold; margin: 0; line-height: 2.5;">HOLDOVERSIGT: {valgt_hold.upper()}</p>', unsafe_allow_html=True)
             
-            with col_t_btn:
+        with col_t_btn:
+            st.markdown('<div style="display: flex; justify-content: flex-end;">', unsafe_allow_html=True)
             kategori_valg = st.segmented_control(
                 "Visningskategori", 
                 options=["Generelt", "Offensiv", "Defensiv"], 
@@ -385,6 +387,7 @@ def vis_side(dp=None):
                 key="team_kategori_control",
                 label_visibility="collapsed"
             )
+            st.markdown('</div>', unsafe_allow_html=True)
         
         if not truppen_stats.empty:
             df_vis_truppen = truppen_stats.reset_index()
