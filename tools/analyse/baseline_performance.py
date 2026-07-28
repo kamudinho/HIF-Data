@@ -329,6 +329,10 @@ def vis_side(df_events=None, kamp=None, hold_map=None):
                 df_s[y_col] = pd.to_numeric(df_s[y_col], errors='coerce').fillna(0)
 
                 fig2 = go.Figure()
+                
+                # Beregn gennemsnit af totalerne til linjerne
+                avg_x = df_s[x_col].mean()
+                avg_y = df_s[y_col].mean()
 
                 for _, row in df_s.iterrows():
                     team_name = row['TEAM']
@@ -347,6 +351,10 @@ def vis_side(df_events=None, kamp=None, hold_map=None):
                         ),
                         hovertemplate=f"<b>{team_name}</b><br>Total {x_col}: %{{x:.2f}}<br>Total {y_col}: %{{y:.2f}}<extra></extra>"
                     ))
+
+                # Tilføj gennemsnitslinjer igen
+                fig2.add_vline(x=avg_x, line_dash="dot", line_color="#999")
+                fig2.add_hline(y=avg_y, line_dash="dot", line_color="#999")
 
                 fig2.update_layout(
                     title=f"Sammenhæng mellem {x_col} og {y_col} (Totaler)",
