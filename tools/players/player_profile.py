@@ -382,6 +382,7 @@ def vis_side(dp=None):
             FROM {db_name}.OPTA_EVENTS e
             JOIN (SELECT DISTINCT PLAYER_OPTAUUID, FIRST_NAME, LAST_NAME FROM {db_name}.OPTA_MATCH_LINEUPS WHERE FIRST_NAME IS NOT NULL) p 
                 ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
+            WHERE e.EVENT_TIMESTAMP >= '2026-07-01'
             GROUP BY 1, 2, 3
         """
         try:
