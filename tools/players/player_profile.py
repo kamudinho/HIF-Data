@@ -197,12 +197,12 @@ def vis_side(dp=None):
         sql_events = f"""
             SELECT 
                 e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, 
-                TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME) as VISNINGSNAVN, 
+                REGEXP_REPLACE(p.MATCH_NAME, '^[A-ZÆØÅ].*?\\.', TRIM(p.FIRST_NAME)) as VISNINGSNAVN, 
                 e.PLAYER_OPTAUUID, e.EVENT_OUTCOME as OUTCOME,
                 TO_CHAR(e.EVENT_TIMESTAMP, 'YYYY-MM-DD HH24:MI:SS') as EVENT_TIMESTAMP_STR,
                 LISTAGG(q.QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY q.QUALIFIER_QID) as QUALIFIERS
             FROM {DB}.OPTA_EVENTS e
-            JOIN (SELECT DISTINCT PLAYER_OPTAUUID, FIRST_NAME, LAST_NAME FROM {DB}.OPTA_MATCH_LINEUPS WHERE FIRST_NAME IS NOT NULL) p 
+            JOIN (SELECT DISTINCT PLAYER_OPTAUUID, FIRST_NAME, LAST_NAME, MATCH_NAME FROM {DB}.OPTA_MATCH_LINEUPS WHERE FIRST_NAME IS NOT NULL) p 
                 ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
             LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
             WHERE e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid_hold}' 
@@ -239,14 +239,14 @@ def vis_side(dp=None):
                     e.EVENT_TYPEID,
                     e.EVENT_TIMESTAMP,
                     e.MATCH_OPTAUUID,
-                    TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME) as VISNINGSNAVN,
+                    REGEXP_REPLACE(p.MATCH_NAME, '^[A-ZÆØÅ].*?\\.', TRIM(p.FIRST_NAME)) as VISNINGSNAVN,
                     LISTAGG(q.QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY q.QUALIFIER_QID) as QUALIFIERS
                 FROM {DB}.OPTA_EVENTS e
                 JOIN {DB}.OPTA_MATCH_LINEUPS p ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
                 LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
                 WHERE e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid_hold}'
                   AND e.EVENT_TIMESTAMP >= '2026-07-01'
-                GROUP BY e.EVENT_OPTAUUID, e.PLAYER_OPTAUUID, e.EVENT_TYPEID, e.EVENT_TIMESTAMP, e.MATCH_OPTAUUID, p.FIRST_NAME, p.LAST_NAME
+                GROUP BY e.EVENT_OPTAUUID, e.PLAYER_OPTAUUID, e.EVENT_TYPEID, e.EVENT_TIMESTAMP, e.MATCH_OPTAUUID, p.FIRST_NAME, p.MATCH_NAME
             ),
             SortedEvents AS (
                 SELECT 
@@ -277,7 +277,7 @@ def vis_side(dp=None):
                   AND ASSIST_PLAYER_UUID IS NOT NULL
                   AND ASSIST_PLAYER_UUID != PLAYER_OPTAUUID
                   AND (
-                      QUALIFIERS LIKE '%29%'             
+                      QUALIFIERS LIKE '%29%'           
                       OR PREV_QUALIFIERS LIKE '%210%'    
                   )
                 GROUP BY ASSIST_PLAYER_UUID
@@ -294,7 +294,7 @@ def vis_side(dp=None):
         if df_db_stats is not None:
             df_db_stats.columns = df_db_stats.columns.str.lower()
             df_db_stats['visningsnavn'] = df_db_stats.apply(lambda r: navne_map.get(str(r['player_optauuid']), r['visningsnavn']), axis=1)
-        
+    
     if df_all is None or df_all.empty:
         st.warning("Ingen hændelsesdata fundet.")
         return
