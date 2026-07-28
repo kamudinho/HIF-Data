@@ -132,10 +132,11 @@ def get_physical_data(player_name, player_opta_uuid, valgt_hold_navn, db_conn):
         return df
     return None
 
-# --- CACHET LIGASAMMENLIGNING & STATISTIK FUNKTION ---
+# --- CACHET LIGASAMMENLIGNING & STATISTIK FUNKTION (OPTIMERET) ---
 @st.cache_data(ttl=3600)
 def hent_ligasammenligning_data(_conn, db_name, navn_mapping):
     try:
+        # Optimeret SQL: Henter rå hændelser uden tung LISTAGG på hele tabellen
         sql_liga_events = f"""
             SELECT 
                 e.EVENT_OPTAUUID,
@@ -147,14 +148,11 @@ def hent_ligasammenligning_data(_conn, db_name, navn_mapping):
                 e.EVENT_OUTCOME as OUTCOME,
                 TO_CHAR(e.EVENT_TIMESTAMP, 'YYYY-MM-DD HH24:MI:SS') as EVENT_TIMESTAMP_STR,
                 e.EVENT_CONTESTANT_OPTAUUID as TEAM_UUID,
-                TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME) as VISNINGSNAVN,
-                LISTAGG(q.QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY q.QUALIFIER_QID) as QUALIFIERS
+                TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME) as VISNINGSNAVN
             FROM {db_name}.OPTA_EVENTS e
             JOIN {db_name}.OPTA_MATCH_LINEUPS p ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
-            LEFT JOIN {db_name}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
             WHERE e.EVENT_TIMESTAMP >= '2026-07-01'
               AND p.FIRST_NAME IS NOT NULL
-            GROUP BY 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11
         """
         df_l_events = _conn.query(sql_liga_events)
         if df_l_events is None or df_l_events.empty:
@@ -163,12 +161,25 @@ def hent_ligasammenligning_data(_conn, db_name, navn_mapping):
         df_l_events.columns = df_l_events.columns.str.lower()
         df_l_events['visningsnavn'] = df_l_events.apply(lambda r: navn_mapping.get(str(r['player_optauuid']), r['visningsnavn']), axis=1)
         df_l_events['event_timestamp'] = pd.to_datetime(df_l_events['event_timestamp_str'])
-        df_l_events['qual_list'] = df_l_events['qualifiers'].fillna('').str.split(',')
         
-        # Tilføj Action_Label baseret på event_typeid og qualifiers
-        df_l_events['action_label'] = df_l_events.apply(
-            lambda r: get_action_label(r['event_typeid'], r.get('qual_list', [])), axis=1
-        )
+        # Tilføj Action_Label sikkert via event_typeid
+        df_l_events['action_label'] = df_l_events['event_typeid'].apply(get_action_label)
+
+        # Hent qualifiers separat eller undgå dem i det tuse-tunge træk, 
+        # men hvis du absolut skal bruge dem til kort/chancer, henter vi dem letvægt:
+        sql_quals = f"""
+            SELECT EVENT_OPTAUUID, LISTAGG(QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY QUALIFIER_QID) as QUALIFIERS
+            FROM {db_name}.OPTA_QUALIFIERS
+            GROUP BY EVENT_OPTAUUID
+        """
+        df_quals = _conn.query(sql_quals)
+        if df_quals is not None and not df_quals.empty:
+            df_quals.columns = df_quals.columns.str.lower()
+            df_l_events = pd.merge(df_l_events, df_quals, on='event_optauuid', how='left')
+        else:
+            df_l_events['qualifiers'] = ''
+
+        df_l_events['qual_list'] = df_l_events['qualifiers'].fillna('').str.split(',')
 
         sql_liga_expected = f"""
             SELECT 
@@ -189,7 +200,6 @@ def hent_ligasammenligning_data(_conn, db_name, navn_mapping):
         df_sorted = df_l_events.sort_values(['match_optauuid', 'event_timestamp'])
         df_sorted['assist_player_uuid'] = df_sorted['player_optauuid'].shift(1)
         df_sorted['prev_match'] = df_sorted['match_optauuid'].shift(1)
-        df_sorted['prev_event_typeid'] = df_sorted['event_typeid'].shift(1)
         df_sorted['prev_qualifiers'] = df_sorted['qualifiers'].shift(1)
 
         player_goals = df_sorted[df_sorted['event_typeid'] == 16].groupby(['player_optauuid', 'visningsnavn']).size().reset_index(name='goals')
@@ -269,7 +279,6 @@ def hent_ligasammenligning_data(_conn, db_name, navn_mapping):
     except Exception as e:
         st.error(f"Fejl ved hentning af ligadata: {e}")
         return pd.DataFrame(), pd.DataFrame()
-
 def vis_side(dp=None):
     try:
         csv_path = os.path.join(os.getcwd(), 'data', 'players', '1div_overskrivning.csv')
