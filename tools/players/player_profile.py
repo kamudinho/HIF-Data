@@ -165,8 +165,7 @@ def hent_ligasammenligning_data(_conn, db_name, navn_mapping):
         # Tilføj Action_Label sikkert via event_typeid
         df_l_events['action_label'] = df_l_events['event_typeid'].apply(get_action_label)
 
-        # Hent qualifiers separat eller undgå dem i det tuse-tunge træk, 
-        # men hvis du absolut skal bruge dem til kort/chancer, henter vi dem letvægt:
+        # Hent qualifiers separat
         sql_quals = f"""
             SELECT EVENT_OPTAUUID, LISTAGG(QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY QUALIFIER_QID) as QUALIFIERS
             FROM {db_name}.OPTA_QUALIFIERS
@@ -175,10 +174,15 @@ def hent_ligasammenligning_data(_conn, db_name, navn_mapping):
         df_quals = _conn.query(sql_quals)
         if df_quals is not None and not df_quals.empty:
             df_quals.columns = df_quals.columns.str.lower()
+            
+            # Sørg for at ID'et har samme datatype (streng) i begge tabeller før merge
+            df_l_events['event_optauuid'] = df_l_events['event_optauuid'].astype(str)
+            df_quals['event_optauuid'] = df_quals['event_optauuid'].astype(str)
+            
             df_l_events = pd.merge(df_l_events, df_quals, on='event_optauuid', how='left')
         else:
             df_l_events['qualifiers'] = ''
-
+            
         df_l_events['qual_list'] = df_l_events['qualifiers'].fillna('').str.split(',')
 
         sql_liga_expected = f"""
@@ -279,6 +283,7 @@ def hent_ligasammenligning_data(_conn, db_name, navn_mapping):
     except Exception as e:
         st.error(f"Fejl ved hentning af ligadata: {e}")
         return pd.DataFrame(), pd.DataFrame()
+        
 def vis_side(dp=None):
     try:
         csv_path = os.path.join(os.getcwd(), 'data', 'players', '1div_overskrivning.csv')
