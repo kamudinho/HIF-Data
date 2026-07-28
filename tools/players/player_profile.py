@@ -396,7 +396,8 @@ def vis_side(dp=None):
             st.dataframe(
                 df_vis_truppen[eksisterende_kolonner], 
                 use_container_width=True, 
-                hide_index=True
+                hide_index=True,
+                height=800
             )
         else:
             st.info("Ingen trup-data tilgængelig endnu.")
