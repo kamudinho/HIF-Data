@@ -279,14 +279,14 @@ def vis_side(dp=None):
         if not truppen_stats.empty:
             df_vis_truppen = truppen_stats.reset_index()
             
-            # --- KOLONNE-OPSÆTNING ---
+            # --- KOLONNE-OPSÆTNING (Vi beholder Pasningsprocent som tal) ---
             gen_kolonner = [
-                'visningsnavn', 'Kampe', 'Minutter', 'Aktioner', 'Pasninger', 'Pasningsprocent', 'Pasningsprocent_Str', 
+                'visningsnavn', 'Kampe', 'Minutter', 'Aktioner', 'Pasninger', 'Pasningsprocent', 
                 'Mål', 'Assists', 'Udskiftet', 'Indskiftet', 'Gule_kort', 'Roede_kort'
             ]
             
             opb_kolonner = [
-                'visningsnavn', 'Aktioner', 'Pasninger', 'Pasningsprocent', 'Pasningsprocent_Str', 'Key_Passes', 'Stikninger', 
+                'visningsnavn', 'Aktioner', 'Pasninger', 'Pasningsprocent', 'Key_Passes', 'Stikninger', 
                 'Driblinger', 'Driblinger_Succes', 'Rum_Driblinger_Space'
             ]
             
@@ -313,18 +313,13 @@ def vis_side(dp=None):
             
             df_visning = df_vis_truppen[eksisterende_kolonner].copy()
             
-            # Sørg for at sortere efter aktioner eller pasningsprocent faldende (højeste først), 
-            # så 100% / flest aktioner kommer øverst i stedet for nederst:
+            # Sørg for at sortere faldende, så de største tal (f.eks. flest aktioner) kommer øverst
             if 'Aktioner' in df_visning.columns:
                 df_visning = df_visning.sort_values(by='Aktioner', ascending=False)
             
-            # Fjern den rå 'Pasningsprocent' kolonne fra visningen, nu hvor vi har '_Str' med %-tegn
-            if 'Pasningsprocent' in df_visning.columns:
-                df_visning = df_visning.drop(columns=['Pasningsprocent'])
-
             df_visning = df_visning.rename(columns={
                 'visningsnavn': 'Spiller',
-                'Pasningsprocent_Str': 'Pasning (%)',
+                'Pasningsprocent': 'Pasning (%)',
                 'Gule_kort': 'Gule kort',
                 'Roede_kort': 'Røde kort',
                 'Chancer_skabt': 'Chancer skabt',
@@ -341,11 +336,19 @@ def vis_side(dp=None):
             
             beregnet_hoejde = int(len(df_visning) * 38 + 45)
             
+            # Brug column_config til at vise Pasning (%) pænt som decimaltal, 
+            # så Streamlit behandler det som et rigtigt tal og sorterer korrekt.
             st.dataframe(
                 df_visning, 
                 use_container_width=True, 
                 hide_index=True,
-                height=beregnet_hoejde
+                height=beregnet_hoejde,
+                column_config={
+                    "Pasning (%)": st.column_config.NumberColumn(
+                        "Pasning (%)",
+                        format="%.1f%%"
+                    )
+                }
             )
         else:
             st.info("Ingen trup-data tilgængelig endnu.")
