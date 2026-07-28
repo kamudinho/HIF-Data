@@ -214,33 +214,23 @@ def vis_side(dp=None):
         df_all = conn.query(sql_events)
         if df_all is not None:
             df_all.columns = df_all.columns.str.lower()
-        
-        # SIKKER NAVNE-GENERERING
-        def fix_name(row):
-            f_name = row.get('first_name')
-            m_name = row.get('match_name')
             
-            # Rens værdier for 'nan', 'None' eller blanke strenge
-            f_str = str(f_name).strip() if f_name is not None else ""
-            if f_str.lower() in ['nan', 'none', '']:
-                f_str = ""
+            # 1. Definer funktionen først
+            def fix_name(row):
+                f_name = row.get('first_name')
+                m_name = row.get('match_name')
                 
-            m_str = str(m_name).strip() if m_name is not None else ""
-            if m_str.lower() in ['nan', 'none', '']:
-                m_str = ""
-
-            # Hvis vi har et match_name (f.eks. "C. Grening" eller "A. Jungersen")
-            if m_str and '.' in m_str:
-                parts = m_str.split('.', 1)
-                if len(parts) > 1 and f_str:
-                    efternavn_del = parts[1].strip()
-                    return f"{f_str} {efternavn_del}"
+                f_str = str(f_name).strip() if f_name is not None and str(f_name).lower() not in ['nan', 'none'] else ""
+                m_str = str(m_name).strip() if m_name is not None and str(m_name).lower() not in ['nan', 'none'] else ""
+                
+                if m_str and '.' in m_str:
+                    parts = m_str.split('.', 1)
+                    if len(parts) > 1 and f_str:
+                        return f"{f_str} {parts[1].strip()}"
+                
+                return m_str if m_str else (f_str if f_str else "Ukendt spiller")
             
-            # Fallback til match_name hvis det findes, ellers fornavn
-            if m_str:
-                return m_str
-            return f_str if f_str else "Ukendt spiller"
-    
+            # 2. Anvend funktionen på datarammen bagefter
             df_all['visningsnavn'] = df_all.apply(fix_name, axis=1)
             df_all['visningsnavn'] = df_all.apply(lambda r: navne_map.get(str(r['player_optauuid']), r['visningsnavn']), axis=1)
     
