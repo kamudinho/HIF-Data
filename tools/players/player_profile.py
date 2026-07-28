@@ -22,7 +22,7 @@ from data.utils.mapping import (
 
 # --- KONFIGURATION (HVIDOVRE-APP / 2025/2026) ---
 DB = "KLUB_HVIDOVREIF.AXIS"
-SEASONNAME = "2026/2027"
+SEASONNAME = "2025/2026"
 TEAM_WYID = 7490
 COMPETITION_WYID = (328,)
 COMP_MAP = { 
@@ -126,7 +126,7 @@ def get_physical_data(player_name, player_opta_uuid, valgt_hold_navn, db_conn):
     sql = f"""
         SELECT * FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
         WHERE UPPER(PLAYER_NAME) LIKE UPPER('%{efternavn}%')
-        AND MATCH_DATE >= '2026-07-01'
+        AND MATCH_DATE >= '2025-07-01'
     """
     df = db_conn.query(sql)
     if df is not None and not df.empty:
@@ -192,7 +192,7 @@ def vis_side(dp=None):
     
     primær_farve = get_team_color(valgt_hold, "primary", "#df003b")
 
-    # 2. HENT DATA (Med OPTA_MATCH_LINEUPS i stedet for OPTA_PLAYERS)
+    # 2. HENT DATA
     with st.spinner("Henter spillerdata..."):
         sql_events = f"""
             SELECT 
@@ -206,7 +206,7 @@ def vis_side(dp=None):
                 ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
             LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
             WHERE e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid_hold}' 
-            AND e.EVENT_TIMESTAMP >= '2026-07-01'
+            AND e.EVENT_TIMESTAMP >= '2025-07-01'
             GROUP BY 1, 2, 3, 4, 5, 6, 7
         """
         df_all = conn.query(sql_events)
@@ -245,7 +245,7 @@ def vis_side(dp=None):
                 JOIN {DB}.OPTA_MATCH_LINEUPS p ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
                 LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
                 WHERE e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid_hold}'
-                  AND e.EVENT_TIMESTAMP >= '2026-07-01'
+                  AND e.EVENT_TIMESTAMP >= '2025-07-01'
                 GROUP BY e.EVENT_OPTAUUID, e.PLAYER_OPTAUUID, e.EVENT_TYPEID, e.EVENT_TIMESTAMP, e.MATCH_OPTAUUID, p.FIRST_NAME, p.LAST_NAME
             ),
             SortedEvents AS (
@@ -335,6 +335,7 @@ def vis_side(dp=None):
         return df_group.apply(lambda r: har_qualifier(r['event_typeid'], r.get('qual_list', []), eid, qids), axis=1).sum()
 
     event_stats = df_all.groupby(['player_optauuid', 'visningsnavn']).apply(lambda x: pd.Series({
+        'Aktioner': len(x),
         'Gule_kort': count_event_with_qual(x, 17, 31),
         'Roede_kort': count_event_with_qual(x, 17, 33),
         'Indskiftet': (x['event_typeid'] == 19).sum(),
@@ -404,8 +405,6 @@ def vis_side(dp=None):
             elif kategori_valg == "Defensiv":
                 eksisterende_kolonner = [k for k in def_kolonner if k in df_vis_truppen.columns]
             else:  
-                # Tilføj 'Aktioner' baseret på len(df_spiller) eller samlet antal aktioner pr. spiller
-                total_akt = len(df_spiller)
                 eksisterende_kolonner = list(df_vis_truppen.columns)
             
             df_visning = df_vis_truppen[eksisterende_kolonner].copy()
@@ -616,7 +615,7 @@ def vis_side(dp=None):
             m4.metric("Højintense", int(latest.get('hi_runs', 0)))
 
             t_sub_log, t_sub_charts = st.tabs(["Kampoversigt", "Grafer"])
-
+                    
             with t_sub_charts:
                 cat_choice = st.segmented_control("Vælg metrik", options=["HSR (m)", "Sprint (m)", "Distance (km)", "Topfart (km/t)"], default="HSR (m)", key="phys_graph_control")
                 mapping = {"HSR (m)": ("hsr", 1, "m"), "Sprint (m)": ("sprinting", 1, "m"), "Distance (km)": ("distance", 1000, "km"), "Topfart (km/t)": ("top_speed", 1, "km/t")}
