@@ -192,7 +192,7 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
         # 3. Antal og succes % (og evt. valgt spiller)
         spiller_tekst = f"Spiller: {p_sel}" if p_sel != "Alle spillere" else "Alle spillere"
         stats_line = f"{spiller_tekst}\n{total} aktioner ({int(pct)}% succes)"
-        ax.text(1, 55.5, stats_line, fontsize=9, color='#555555', va='top', linespacing=1.4)
+        ax.text(1, 55.5, stats_line, fontsize=5, color='#555555', va='top', linespacing=1.4)
 
         # --- DATA PLOTTING ---
         if not df_plot.dropna(subset=['end_x', 'end_y']).empty:
