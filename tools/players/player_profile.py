@@ -132,7 +132,7 @@ def get_physical_data(player_name, player_opta_uuid, valgt_hold_navn, db_conn):
         return df
     return None
 
-# --- HENT LIGA-DATA TIL SAMMENLIGNING MED ALLE STATISTIKKER (Flyttet til topniveau) ---
+# --- 1. SÆT SELVE FUNKTIONEN IND ØVERST (hvor du definerer dine funktioner) ---
 @st.cache_data(ttl=3600)
 def hent_ligasammenligning_data(_conn, db_name, navn_mapping):
     try:
@@ -160,11 +160,9 @@ def hent_ligasammenligning_data(_conn, db_name, navn_mapping):
         df_l_events.columns = df_l_events.columns.str.lower()
         df_l_events['qual_list'] = df_l_events['qualifiers'].fillna('').str.split(',')
 
-        # Hjælpefunktion til qualifiers
         def count_event_with_qual_l(df_group, eid, qids):
             return df_group.apply(lambda r: har_qualifier(r['event_typeid'], r.get('qual_list', []), eid, qids), axis=1).sum()
 
-        # Beregn hændelses-statistikker for alle spillere i ligaen
         event_stats_liga = df_l_events.groupby(['player_optauuid', 'visningsnavn', 'team_uuid']).apply(lambda x: pd.Series({
             'Aktioner': len(x),
             'Gule_kort': count_event_with_qual_l(x, 17, 31),
@@ -188,7 +186,6 @@ def hent_ligasammenligning_data(_conn, db_name, navn_mapping):
 
         event_stats_liga = event_stats_liga.drop_duplicates(subset=['player_optauuid']).set_index('player_optauuid')
 
-        # 2. Hent Expected Goals / minutter for hele ligaen
         sql_liga_expected = f"""
             SELECT 
                 MATCH_ID,
@@ -220,7 +217,6 @@ def hent_ligasammenligning_data(_conn, db_name, navn_mapping):
             liga_stats_raw['xG'] = 0.0
             liga_stats_raw['xA'] = 0.0
 
-        # 3. Mål & Assists samt navnemapping og holdnavne
         liga_stats_raw['visningsnavn'] = liga_stats_raw.reset_index().apply(
             lambda r: navn_mapping.get(str(r['player_optauuid']), r['visningsnavn']), axis=1
         ).values
@@ -237,6 +233,11 @@ def hent_ligasammenligning_data(_conn, db_name, navn_mapping):
     except Exception as e:
         st.error(f"Fejl ved hentning af ligadata: {e}")
         return pd.DataFrame()
+
+
+# --- 2. KALD FUNKTIONEN HER (f.eks. i din hovedopsætning/load-fase) ---
+# Sørg for at 'db_navn' og 'navn_mapping' matcher dine eksisterende variabelnavne i scriptet
+df_alle_spillere_liga = hent_ligasammenligning_data(conn, db_navn, navn_mapping)
     
 def vis_side(dp=None):
     try:
