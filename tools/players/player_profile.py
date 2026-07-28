@@ -382,12 +382,13 @@ def vis_side(dp=None):
                 buffered = io.BytesIO()
                 hold_logo.save(buffered, format="PNG")
                 img_str = base64.b64encode(buffered.getvalue()).decode()
-                logo_html = f'<img src="data:image/png;base64,{img_str}" style="height: 40px; margin-right: 10px; object-fit: contain; vertical-align: middle;">'
+                logo_html = f'<img src="data:image/png;base64,{img_str}" style="height: 26px; margin-right: 10px; object-fit: contain;">'
 
-            st.markdown(f'<div style="display: flex; align-items: center; height: 100%;">{logo_html}<span style="font-size: 16px; font-weight: bold; line-height: 1;">{valgt_hold.upper()}</span></div>', unsafe_allow_html=True)
+            # Tilføjet padding-top for at skubbe logo/tekst ned, så det matcher segmented_control's fulde højde
+            st.markdown(f'<div style="display: flex; align-items: center; padding-top: 4px;">{logo_html}<span style="font-size: 16px; font-weight: bold; line-height: 1;">{valgt_hold.upper()}</span></div>', unsafe_allow_html=True)
             
         with col_t_btn:
-            st.markdown('<div style="display: flex; justify-content: flex-end; align-items: center; height: 100%;">', unsafe_allow_html=True)
+            st.markdown('<div style="display: flex; justify-content: flex-end;">', unsafe_allow_html=True)
             kategori_valg = st.segmented_control(
                 "Visningskategori", 
                 options=["Generelt", "Offensiv", "Defensiv"], 
