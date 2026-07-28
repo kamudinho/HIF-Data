@@ -287,8 +287,8 @@ def vis_side(df_events=None, kamp=None, hold_map=None):
 
                         df_table = df_s_pop[['TEAM', x_col, y_col]].copy()
                         df_table.columns = ['Hold', x_col, y_col]
-                        df_table[x_col] = df_table[x_col].map('{:.1f}'.format)
-                        df_table[y_col] = df_table[y_col].map('{:.2f}'.format)
+                        df_table[x_col] = df_table[x_col].map('{:.0f}'.format)
+                        df_table[y_col] = df_table[y_col].map('{:.0f}'.format)
                         
                         st.markdown("""
                             <style>
