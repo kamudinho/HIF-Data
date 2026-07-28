@@ -16,18 +16,16 @@ def vis_side():
         DB = "KLUB_HVIDOVREIF.AXIS"
         SEASONNAME = "2025/2026"
         
-        # SQL der henter hold og deres statistikker for 1. Division (komp ID 328)
+        # SQL oprettet med navne direkte fra OPTA_MATCHINFO for at undgå manglende tabeller
         sql = f"""
             WITH MatchBase AS (
                 SELECT 
-                    m.MATCH_OPTAUUID, m.MATCH_STATUS,
-                    m.CONTESTANTHOME_OPTAUUID, m.CONTESTANTAWAY_OPTAUUID,
-                    h_team.NAME AS HOME_TEAM_NAME,
-                    a_team.NAME AS AWAY_TEAM_NAME
-                FROM {DB}.OPTA_MATCHINFO m
-                LEFT JOIN {DB}.OPTA_CONTESTANT h_team ON m.CONTESTANTHOME_OPTAUUID = h_team.CONTESTANT_OPTAUUID
-                LEFT JOIN {DB}.OPTA_CONTESTANT a_team ON m.CONTESTANTAWAY_OPTAUUID = a_team.CONTESTANT_OPTAUUID
-                WHERE m.COMPETITION_OPTAUUID IN (
+                    MATCH_OPTAUUID, MATCH_STATUS,
+                    CONTESTANTHOME_OPTAUUID, CONTESTANTAWAY_OPTAUUID,
+                    CONTESTANTHOME_NAME AS HOME_TEAM_NAME,
+                    CONTESTANTAWAY_NAME AS AWAY_TEAM_NAME
+                FROM {DB}.OPTA_MATCHINFO
+                WHERE COMPETITION_OPTAUUID IN (
                     SELECT COMPETITION_OPTAUUID FROM {DB}.OPTA_TOURNAMENTCALENDAR 
                     WHERE COMPETITION_WYID = 328 AND SEASONNAME = '{SEASONNAME}'
                 )
@@ -75,7 +73,7 @@ def vis_side():
             LEFT JOIN XGPivot ax ON b.MATCH_OPTAUUID = ax.MATCH_ID AND b.CONTESTANTAWAY_OPTAUUID = ax.CONTESTANT_OPTAUUID
         """
 
-        with st.spinner("Henter 1. divisionsdata..."):
+        with st.spinner("Henter 1. divisionsdata til analyse..."):
             df_matches = conn.query(sql) if hasattr(conn, 'query') else pd.read_sql(sql, conn)
 
             if df_matches is None or df_matches.empty:
@@ -87,50 +85,48 @@ def vis_side():
 
             team_rows = []
             for _, row in played.iterrows():
+                h_name = row.get('HOME_TEAM_NAME') or str(row['CONTESTANTHOME_OPTAUUID'])[:8]
+                a_name = row.get('AWAY_TEAM_NAME') or str(row['CONTESTANTAWAY_OPTAUUID'])[:8]
+
                 # Hjemmehold
-                if pd.notnull(row.get('HOME_TEAM_NAME')):
-                    team_rows.append({
-                        'TEAM': row['HOME_TEAM_NAME'],
-                        'GOALS': pd.to_numeric(row.get('HOME_GOALS'), errors='coerce') or 0,
-                        'SHOTS': pd.to_numeric(row.get('HOME_SHOTS'), errors='coerce') or 0,
-                        'SHOTS_ON_TARGET': pd.to_numeric(row.get('HOME_SHOTS_ON_TARGET'), errors='coerce') or 0,
-                        'XG': pd.to_numeric(row.get('HOME_XG'), errors='coerce') or 0.0,
-                        'CORNERS': pd.to_numeric(row.get('HOME_CORNERS'), errors='coerce') or 0,
-                        'FOULS': pd.to_numeric(row.get('HOME_FOULS'), errors='coerce') or 0,
-                        'YELLOW_CARDS': pd.to_numeric(row.get('HOME_YELLOW'), errors='coerce') or 0,
-                        'TACKLES': pd.to_numeric(row.get('HOME_TACKLES'), errors='coerce') or 0,
-                        'SAVES': pd.to_numeric(row.get('HOME_SAVES'), errors='coerce') or 0
-                    })
+                team_rows.append({
+                    'TEAM': h_name,
+                    'GOALS': pd.to_numeric(row.get('HOME_GOALS'), errors='coerce') or 0,
+                    'SHOTS': pd.to_numeric(row.get('HOME_SHOTS'), errors='coerce') or 0,
+                    'SHOTS_ON_TARGET': pd.to_numeric(row.get('HOME_SHOTS_ON_TARGET'), errors='coerce') or 0,
+                    'XG': pd.to_numeric(row.get('HOME_XG'), errors='coerce') or 0.0,
+                    'CORNERS': pd.to_numeric(row.get('HOME_CORNERS'), errors='coerce') or 0,
+                    'FOULS': pd.to_numeric(row.get('HOME_FOULS'), errors='coerce') or 0,
+                    'YELLOW_CARDS': pd.to_numeric(row.get('HOME_YELLOW'), errors='coerce') or 0,
+                    'TACKLES': pd.to_numeric(row.get('HOME_TACKLES'), errors='coerce') or 0,
+                    'SAVES': pd.to_numeric(row.get('HOME_SAVES'), errors='coerce') or 0
+                })
                 # Udehold
-                if pd.notnull(row.get('AWAY_TEAM_NAME')):
-                    team_rows.append({
-                        'TEAM': row['AWAY_TEAM_NAME'],
-                        'GOALS': pd.to_numeric(row.get('AWAY_GOALS'), errors='coerce') or 0,
-                        'SHOTS': pd.to_numeric(row.get('AWAY_SHOTS'), errors='coerce') or 0,
-                        'SHOTS_ON_TARGET': pd.to_numeric(row.get('AWAY_SHOTS_ON_TARGET'), errors='coerce') or 0,
-                        'XG': pd.to_numeric(row.get('AWAY_XG'), errors='coerce') or 0.0,
-                        'CORNERS': pd.to_numeric(row.get('AWAY_CORNERS'), errors='coerce') or 0,
-                        'FOULS': pd.to_numeric(row.get('AWAY_FOULS'), errors='coerce') or 0,
-                        'YELLOW_CARDS': pd.to_numeric(row.get('AWAY_YELLOW'), errors='coerce') or 0,
-                        'TACKLES': pd.to_numeric(row.get('AWAY_TACKLES'), errors='coerce') or 0,
-                        'SAVES': pd.to_numeric(row.get('AWAY_SAVES'), errors='coerce') or 0
-                    })
+                team_rows.append({
+                    'TEAM': a_name,
+                    'GOALS': pd.to_numeric(row.get('AWAY_GOALS'), errors='coerce') or 0,
+                    'SHOTS': pd.to_numeric(row.get('AWAY_SHOTS'), errors='coerce') or 0,
+                    'SHOTS_ON_TARGET': pd.to_numeric(row.get('AWAY_SHOTS_ON_TARGET'), errors='coerce') or 0,
+                    'XG': pd.to_numeric(row.get('AWAY_XG'), errors='coerce') or 0.0,
+                    'CORNERS': pd.to_numeric(row.get('AWAY_CORNERS'), errors='coerce') or 0,
+                    'FOULS': pd.to_numeric(row.get('AWAY_FOULS'), errors='coerce') or 0,
+                    'YELLOW_CARDS': pd.to_numeric(row.get('AWAY_YELLOW'), errors='coerce') or 0,
+                    'TACKLES': pd.to_numeric(row.get('AWAY_TACKLES'), errors='coerce') or 0,
+                    'SAVES': pd.to_numeric(row.get('AWAY_SAVES'), errors='coerce') or 0
+                })
 
             df_teams = pd.DataFrame(team_rows)
             if df_teams.empty:
                 st.warning("Ikke nok data til at generere tabellen.")
                 return
 
-            # Aggreger pr. hold
             agg_df = df_teams.groupby('TEAM').sum(numeric_only=True).reset_index()
-            
-            # Tilføj kampe spillet for at kunne lave gennemsnit pr kamp hvis ønsket, ellers totaler
             match_counts = df_teams.groupby('TEAM').size().reset_index(name='MATCHES')
             agg_df = pd.merge(agg_df, match_counts, on='TEAM')
 
-            # ----------------- DROPDOWN TIL VALG AF KATEGORI -----------------
+            # --- DROPDOWN TIL KATEGORIER ---
             metric_labels = {
-                "Mål vs. Skud-baseline (Faktiske mål minus forventede mål baseret på skudvolumen)": "GOALS_VS_BASELINE",
+                "Mål vs. Skud-baseline (Faktiske mål minus forventede ud fra skudvolumen)": "GOALS_VS_BASELINE",
                 "xG vs. Faktiske Mål (Afslutningskvalitet)": "XG_VS_GOALS",
                 "Skud på mål (Total)": "SHOTS_ON_TARGET",
                 "Hjørnespark": "CORNERS",
@@ -143,14 +139,12 @@ def vis_side():
             selected_label = st.selectbox("Vælg parameter:", list(metric_labels.keys()))
             metric_key = metric_labels[selected_label]
 
-            # Beregn baseline-forskelle baseret på valgt kategori
+            # Udregning af baseline og forskel
             if metric_key == "GOALS_VS_BASELINE":
-                # Ligaens samlede konverteringsrate (Mål / Skud)
                 total_league_goals = agg_df['GOALS'].sum()
                 total_league_shots = agg_df['SHOTS'].sum()
                 league_conversion = total_league_goals / total_league_shots if total_league_shots > 0 else 0.1
                 
-                # Forventede mål ud fra holdets egne skud * ligaens konverteringsrate
                 agg_df['BASELINE_VAL'] = agg_df['SHOTS'] * league_conversion
                 agg_df['DIFF'] = agg_df['GOALS'] - agg_df['BASELINE_VAL']
                 chart_title = "Mål over eller under en skud-volumen baseline"
@@ -162,20 +156,16 @@ def vis_side():
                 xaxis_title = "mål minus xG"
 
             else:
-                # Generel baseline: Holdets værdi minus ligaens gennemsnit pr. kamp * holdets kampe
                 league_avg_per_match = agg_df[metric_key].sum() / agg_df['MATCHES'].sum()
                 agg_df['BASELINE_VAL'] = agg_df['MATCHES'] * league_avg_per_match
                 agg_df['DIFF'] = agg_df[metric_key] - agg_df['BASELINE_VAL']
                 chart_title = f"{selected_label} vs. Liga-gennemsnit"
-                xaxis_title = f"forskel i forhold til gennemsnit"
+                xaxis_title = "forskel i forhold til gennemsnit"
 
-            # Sorter data (højest til lavest)
             agg_df = agg_df.sort_values(by='DIFF', ascending=True)
-            
-            # Tilføj farve-kolonne (positiv = orange/gul, negativ = blå ligesom i eksemplet)
             agg_df['COLOR_TYPE'] = agg_df['DIFF'].apply(lambda x: 'Overpræsterer' if x >= 0 else 'Underpræsterer')
 
-            # Opret Plotly horisontal søjlediagram
+            # Plot med Plotly (med de klassiske farvekoder fra eksemplet)
             fig = px.bar(
                 agg_df,
                 x='DIFF',
@@ -184,8 +174,8 @@ def vis_side():
                 title=chart_title,
                 color='COLOR_TYPE',
                 color_discrete_map={
-                    'Overpræsterer': '#f39c12', # Orange
-                    'Underpræsterer': '#2980b9'  # Blå
+                    'Overpræsterer': '#f39c12',  # Orange
+                    'Underpræsterer': '#2980b9'   # Blå
                 },
                 text_auto='.1f'
             )
@@ -204,9 +194,7 @@ def vis_side():
             fig.update_yaxes(showgrid=False)
 
             st.plotly_chart(fig, use_container_width=True)
-
-            # Ekstra info-tekst
-            st.info("Højre for nul = Flere mål/værdi end volumen alene tilsiger; venstre = Færre. Analysen er sat op specifikt til NordicBet Liga (1. division).")
+            st.info("Højre for nul = Flere mål/værdi end volumen alene tilsiger; venstre = Færre.")
 
     except Exception as e:
         st.error(f"Fejl ved indlæsning af siden: {e}")
