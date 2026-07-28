@@ -326,7 +326,8 @@ def vis_side(dp=None):
                 'Rum_Driblinger_Space': 'Driblinger, 1v1', 
                 'Offensive_Dueller': 'Off. dueller',
                 'Defensive_Dueller': 'Def. dueller', 
-                'Defensive_1v1_Stoppet': 'Def. 1v1'
+                'Defensive_1v1_Stoppet': 'Def. 1v1',
+                'Pasninger_Succes': 'Pasnings%'
             })
             
             beregnet_hoejde = int(len(df_visning) * 38 + 45)
