@@ -406,10 +406,14 @@ def vis_side(dp=None):
                 'Key_Passes': 'Key Passes'
             })
             
+            # Beregn dynamisk højde (f.eks. 38 pixels pr. række + 45 pixels til header)
+            beregnet_hoejde = int(len(df_visning) * 38 + 45)
+            
             st.dataframe(
                 df_visning, 
                 use_container_width=True, 
-                hide_index=True
+                hide_index=True,
+                height=beregnet_hoejde
             )
         else:
             st.info("Ingen trup-data tilgængelig endnu.")
