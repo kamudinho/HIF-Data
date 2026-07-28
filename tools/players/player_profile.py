@@ -136,7 +136,7 @@ def get_physical_data(player_name, player_opta_uuid, valgt_hold_navn, db_conn):
 @st.cache_data(ttl=3600)
 def hent_ligasammenligning_data(_conn, db_name, navn_mapping):
     try:
-        # 1. Hent rå hændelser for hele ligaen (uden komplekse og fejlramte aggregeringer i SQL)
+        # 1. Hent rå hændelser for hele ligaen
         sql_liga_events = f"""
             SELECT 
                 e.EVENT_OPTAUUID,
@@ -164,7 +164,7 @@ def hent_ligasammenligning_data(_conn, db_name, navn_mapping):
         def count_event_with_qual_l(df_group, eid, qids):
             return df_group.apply(lambda r: har_qualifier(r['event_typeid'], r.get('qual_list', []), eid, qids), axis=1).sum()
 
-        # 2. Sorter hændelser og beregn mål & assists via Pandas (præcis som i trup-oversigten)
+        # 2. Sorter hændelser og beregn mål & assists via Pandas
         df_sorted = df_l_events.sort_values(by=['match_optauuid', 'event_timestamp'])
         df_sorted['assist_player_uuid'] = df_sorted.groupby('match_optauuid')['player_optauuid'].shift(1)
         df_sorted['prev_event_typeid'] = df_sorted.groupby('match_optauuid')['event_typeid'].shift(1)
@@ -173,15 +173,19 @@ def hent_ligasammenligning_data(_conn, db_name, navn_mapping):
         # Beregn mål pr spiller
         goals_df = df_sorted[df_sorted['event_typeid'] == 16].groupby(['player_optauuid', 'visningsnavn']).size().reset_index(name='mål')
 
-        # Beregn assists pr spiller
+        # Sikker tjek-funktion til assists for at undgå float/iterable fejl
+        def check_assist_qualifiers(row):
+            q = row.get('qual_list', [])
+            pq = row.get('prev_qualifiers', [])
+            q_list = q if isinstance(q, list) else []
+            pq_list = pq if isinstance(pq, list) else []
+            return ('29' in q_list) or ('210' in pq_list)
+
         mask_assists = (
             (df_sorted['event_typeid'] == 16) & 
             (df_sorted['assist_player_uuid'].notnull()) & 
             (df_sorted['assist_player_uuid'] != df_sorted['player_optauuid']) & 
-            (
-                df_sorted['qual_list'].apply(lambda q: '29' in q) | 
-                df_sorted['prev_qualifiers'].apply(lambda q: q is not None and '210' in q)
-            )
+            df_sorted.apply(check_assist_qualifiers, axis=1)
         )
         assists_df = df_sorted[mask_assists].groupby('assist_player_uuid').size().reset_index(name='assists')
 
@@ -199,8 +203,8 @@ def hent_ligasammenligning_data(_conn, db_name, navn_mapping):
             'afslutninger': x['event_typeid'].isin([13, 14, 15, 16]).sum(),
             'erobringer': x['event_typeid'].isin([7, 8, 12, 49]).sum(),
             'driblinger': (x['event_typeid'] == 3).sum(),
-            'chancer_skabt': x.apply(lambda r: '210' in r.get('qual_list', []), axis=1).sum(),
-            'key_passes': x.apply(lambda r: '210' in r.get('qual_list', []), axis=1).sum(),
+            'chancer_skabt': x.apply(lambda r: '210' in (r.get('qual_list', []) if isinstance(r.get('qual_list'), list) else []), axis=1).sum(),
+            'key_passes': x.apply(lambda r: '210' in (r.get('qual_list', []) if isinstance(r.get('qual_list'), list) else []), axis=1).sum(),
             'tacklinger': (x['event_typeid'] == 7).sum(),
             'clearinger': (x['event_typeid'] == 12).sum(),
             'blokeringer': (x['event_typeid'] == 55).sum(),
