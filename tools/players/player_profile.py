@@ -256,7 +256,7 @@ def vis_side(dp=None):
             st.markdown('<div style="display: flex; justify-content: flex-end;">', unsafe_allow_html=True)
             kategori_valg = st.segmented_control(
                 "Visningskategori", 
-                options=["Generelt", "Offensiv", "Defensiv"], 
+                options=["Generelt", "Opbygning", "Offensiv", "Defensiv"], 
                 default="Generelt",
                 key="team_kategori_control",
                 label_visibility="collapsed"
@@ -267,6 +267,11 @@ def vis_side(dp=None):
             df_vis_truppen = truppen_stats.reset_index()
             
             gen_kolonner = ['visningsnavn', 'Kampe', 'Minutter', 'Aktioner', 'Pasninger', 'Mål', 'Assists', 'Udskiftet', 'Indskiftet', 'Gule_kort', 'Roede_kort']
+            opb_kolonner = [
+                'visningsnavn', 'Aktioner', 'Pasninger',
+                'Key_Passes', 'Stikninger', 'Indlæg' 'Driblinger_Ialt', 
+                'Driblinger_Succes', 'Gennembrud_Overtake', 'Rum_Driblinger_Space', 'Offensive_Dueller'
+            ]
             off_kolonner = [
                 'visningsnavn', 'Aktioner', 'Afslutninger', 'xG', 'Chancer_skabt', 
                 'Key_Passes', 'Stikninger', 'Indlæg', 'xA', 'Driblinger_Ialt', 
@@ -280,6 +285,8 @@ def vis_side(dp=None):
             
             if kategori_valg == "Generelt":
                 eksisterende_kolonner = [k for k in gen_kolonner if k in df_vis_truppen.columns]
+            elif kategori_valg == "Opbygning":
+                eksisterende_kolonner = [k for k in off_kolonner if k in df_vis_truppen.columns]
             elif kategori_valg == "Offensiv":
                 eksisterende_kolonner = [k for k in off_kolonner if k in df_vis_truppen.columns]
             elif kategori_valg == "Defensiv":
@@ -295,7 +302,10 @@ def vis_side(dp=None):
                 'Roede_kort': 'Røde kort',
                 'Chancer_skabt': 'Chancer skabt',
                 'Key_Passes': 'Key Passes',
-                'Frispark_imod': 'Frispark'
+                'Frispark_imod': 'Frispark',
+                'Driblinger_Ialt': 'Driblinger, ialt', 
+                'Driblinger_Succes': 'Driblinger (Succes)', 'Gennembrud_Overtake': 'Gennembrud, 1v1', 'Rum_Driblinger_Space': 'Driblinger, 1v1)', 'Offensive_Dueller': 'Off. dueller'
+                'Defensive_Dueller': 'Def. dueller', 'Defensive_1v1_Stoppet': 'Def. 1v1'
             })
             
             beregnet_hoejde = int(len(df_visning) * 38 + 45)
