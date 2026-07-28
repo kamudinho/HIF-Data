@@ -151,11 +151,11 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
     df_plot.loc[mask_left, ['EVENT_X', 'ENDX']] = 100 - df_plot.loc[mask_left, ['EVENT_X', 'ENDX']]
     df_plot.loc[mask_left, ['EVENT_Y', 'ENDY']] = 100 - df_plot.loc[mask_left, ['EVENT_Y', 'ENDY']]
 
-    # Filtrering på om sparket er taget fra venstre eller højre side af banen (set mod målet, hvor y=34 er midten)
+    # Filtrering på om sparket er taget fra venstre eller højre side af banen (omvendt ift. før, så højre side svarer til y > 34)
     if side_sel == "Venstre side":
-        df_plot = df_plot[df_plot['EVENT_Y'] < 34]
-    elif side_sel == "Højre side":
         df_plot = df_plot[df_plot['EVENT_Y'] > 34]
+    elif side_sel == "Højre side":
+        df_plot = df_plot[df_plot['EVENT_Y'] < 34]
 
     # Filtrering på afslutninger
     if kun_afslutning == "Kun med afslutning":
