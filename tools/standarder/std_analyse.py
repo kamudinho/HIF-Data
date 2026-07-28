@@ -222,7 +222,9 @@ def vis_side():
     teams = sorted([n for n in df_all['KLUB_NAVN'].unique() if pd.notna(n)])
 
     _, _, col_sel = st.columns([2, 1, 1])
-    with col_sel: t_sel = st.selectbox("h", teams, index=teams.index("Hvidovre") if "Hvidovre" in teams else 0, key="main_team_selectbox")
+    with col_sel: 
+        # Ændret fra "h" til et tomt mellemrum, så det ikke ses
+        t_sel = st.selectbox("Vælg hold", teams, index=teams.index("Hvidovre") if "Hvidovre" in teams else 0, key="main_team_selectbox", label_visibility="collapsed")
 
     df_team_selected = df_all[df_all['KLUB_NAVN'] == t_sel].copy()
     tabs = st.tabs(["Holdoversigt", "Spilleroversigt", "Hjørnespark", "Frispark", "Indkast", "Zoneoversigt"])
@@ -242,5 +244,5 @@ def vis_side():
 
 if __name__ == "__main__":
     st.set_page_config(layout="wide", page_title="Standardsituationer")
-    st.markdown("<style>header {visibility: hidden;} div[data-testid='stSelectbox'] label { display: none !important; }</style>", unsafe_allow_html=True)
+    st.markdown("<style>header {visibility: hidden;}</style>", unsafe_allow_html=True)
     vis_side()
