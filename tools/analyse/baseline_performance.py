@@ -6,8 +6,6 @@ from data.utils.team_mapping import SEASONS, COMPETITION_NAME
 
 def vis_side():
     try:
-        st.caption("1. Division — Over- og Underpræstation mod Baseline")
-        
         from data.data_load import _get_snowflake_conn
         conn = _get_snowflake_conn()
         
@@ -125,6 +123,12 @@ def vis_side():
             match_counts = df_teams.groupby('TEAM').size().reset_index(name='MATCHES')
             agg_df = pd.merge(agg_df, match_counts, on='TEAM')
 
+            # --- PLACERING AF CAPTION OG DROPDOWN PÅ SAMME LINJE ---
+            col1, col2 = st.columns([1.2, 1])
+            
+            with col1:
+                st.caption("1. Division — Over- og Underpræstation mod Baseline")
+
             # --- DROPDOWN TIL KATEGORIER ---
             metric_labels = {
                 "Mål vs. Skud-baseline (Faktiske mål minus forventede ud fra skudvolumen)": "GOALS_VS_BASELINE",
@@ -136,7 +140,9 @@ def vis_side():
                 "Redninger": "SAVES"
             }
 
-            selected_label = st.selectbox("Vælg parameter:", list(metric_labels.keys()))
+            with col2:
+                selected_label = st.selectbox("Vælg parameter:", list(metric_labels.keys()), label_visibility="collapsed")
+            
             metric_key = metric_labels[selected_label]
 
             # Udregning af baseline og forskel
@@ -165,7 +171,6 @@ def vis_side():
             agg_df = agg_df.sort_values(by='DIFF', ascending=True)
             agg_df['COLOR_TYPE'] = agg_df['DIFF'].apply(lambda x: 'Overpræsterer' if x >= 0 else 'Underpræsterer')
 
-            # 1. Tilføj ekstra kolonner til customdata, hvis du vil vise dem i hover (f.eks. MATCHES eller GOALS)
             fig = px.bar(
                 agg_df,
                 x='DIFF',
@@ -178,16 +183,15 @@ def vis_side():
                     'Underpræsterer': '#2980b9'   # Blå
                 },
                 text_auto='.2f',
-                custom_data=['TEAM', 'DIFF', 'MATCHES'] # <--- Vælg hvad der skal med i tooltip
+                custom_data=['TEAM', 'DIFF', 'MATCHES']
             )
 
-            # 2. Tilpas hover-teksten med hovertemplate
             fig.update_traces(
                 hovertemplate=(
                     "<b>%{customdata[0]}</b><br>"
                     "Præstation: %{x:.2f}<br>"
                     "Kampe spillet: %{customdata[2]}"
-                    "<extra></extra>" # Fjerner den ekstra boks med standard info
+                    "<extra></extra>"
                 )
             )
 
@@ -199,7 +203,7 @@ def vis_side():
                 paper_bgcolor='rgba(0,0,0,0)',
                 font=dict(color='gray'),
                 title_font=dict(size=18, color='black'),
-                height=650  # Gør figuren højere som aftalt
+                height=650
             )
             
             fig.update_xaxes(showgrid=True, gridwidth=1, gridcolor='#eaeaea')
