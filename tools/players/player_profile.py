@@ -145,6 +145,10 @@ def vis_side(dp=None):
     df_all['event_timestamp'] = pd.to_datetime(df_all['event_timestamp_str'])
     df_all['qual_list'] = df_all['qualifiers'].fillna('').str.split(',')
     
+    # Forbered pasningskolonner tidligt
+    df_all['Pasninger_Total'] = (df_all['event_typeid'] == 1).astype(int)
+    df_all['Pasninger_Succes'] = ((df_all['event_typeid'] == 1) & (df_all['outcome'] == 1)).astype(int)
+    
     df_all_temp = df_all.rename(columns={
         'event_x': 'EVENT_X', 'event_y': 'EVENT_Y', 'event_typeid': 'EVENT_TYPEID',
         'visningsnavn': 'VISNINGSNAVN', 'player_optauuid': 'PLAYER_OPTAUUID',
@@ -182,7 +186,8 @@ def vis_side(dp=None):
         'Roede_kort': count_event_with_qual(x, 17, 33),
         'Indskiftet': (x['event_typeid'] == 19).sum(),
         'Udskiftet': (x['event_typeid'] == 18).sum(),
-        'Pasninger': (x['event_typeid'] == 1).sum(),
+        'Pasninger': x['Pasninger_Total'].sum(),
+        'Pasninger_Succes': x['Pasninger_Succes'].sum(),
         'Stikninger': count_event_with_qual(x, 1, 4),
         'Indlæg': count_event_with_qual(x, 1, [2, 155]),
         'Afslutninger': x['event_typeid'].isin([13, 14, 15, 16]).sum(),
@@ -194,8 +199,8 @@ def vis_side(dp=None):
         'Gennembrud_Overtake': x.apply(lambda r: 1 if str(r['event_typeid']) == "3" and "465" in [str(q).strip() for q in (r.get('qual_list', []) if isinstance(r.get('qual_list', []), list) else str(r.get('qual_list', '')).split(','))] else 0, axis=1).sum(),
         'Rum_Driblinger_Space': x.apply(lambda r: 1 if str(r['event_typeid']) == "3" and "464" in [str(q).strip() for q in (r.get('qual_list', []) if isinstance(r.get('qual_list', []), list) else str(r.get('qual_list', '')).split(','))] else 0, axis=1).sum(),
         'Offensive_Dueller': x.apply(lambda r: 1 if "286" in [str(q).strip() for q in (r.get('qual_list', []) if isinstance(r.get('qual_list', []), list) else str(r.get('qual_list', '')).split(','))] else 0, axis=1).sum(),
-        'Defensive_Dueller': x.apply(lambda r: 1 if "285" in [str(q).strip() for q in (r.get('qual_list', []) if isinstance(r.get('qual_list', []), list) else str(r.get('qual_list', '')).split(','))] else 0, axis=1).sum(),
-        'Defensive_1v1_Stoppet': x.apply(lambda r: 1 if "467" in [str(q).strip() for q in (r.get('qual_list', []) if isinstance(r.get('qual_list', []), list) else str(r.get('qual_list', '')).split(','))] else 0, axis=1).sum(),
+        'Defensive_Dueller': x.apply(lambda r: 1 if "285" in [str(q).strip() for q in (r.get('qual_list', []), list) else str(r.get('qual_list', '')).split(','))] else 0, axis=1).sum(),
+        'Defensive_1v1_Stoppet': x.apply(lambda r: 1 if "467" in [str(q).strip() for q in (r.get('qual_list', []), list) else str(r.get('qual_list', '')).split(','))] else 0, axis=1).sum(),
         
         'Chancer_skabt': x.apply(lambda r: '210' in r.get('qual_list', []), axis=1).sum(),
         'Key_Passes': x.apply(lambda r: '210' in r.get('qual_list', []), axis=1).sum(),
@@ -235,6 +240,11 @@ def vis_side(dp=None):
     truppen_stats_raw['Assists'] = truppen_stats_raw['Assists'].fillna(0).astype(int)
     truppen_stats = truppen_stats_raw.copy()
     
+    # --- BEREGN PASNINGSPROCENT DIREKTE PÅ TRUPPEN_STATS ---
+    truppen_stats['Pasningsprocent'] = (
+        (truppen_stats['Pasninger_Succes'] / truppen_stats['Pasninger']) * 100
+    ).where(truppen_stats['Pasninger'] > 0, 0).round(1)
+    
     # --- OPSETNING AF FANER ---
     t_team, t_profile, t_pitch, t_phys = st.tabs(["Holdoversigt", "Spillerprofil", "Spilleraktioner", "Fysisk data"])
     
@@ -265,25 +275,6 @@ def vis_side(dp=None):
         
         if not truppen_stats.empty:
             df_vis_truppen = truppen_stats.reset_index()
-            
-            # --- BEREGN PASNINGSPROCENT ---
-            if 'Pasninger' in df_vis_truppen.columns:
-                if 'Pasninger_Succes' in df_vis_truppen.columns:
-                    succes_col = 'Pasninger_Succes'
-                elif 'Pasningsfejl' in df_vis_truppen.columns:
-                    df_vis_truppen['Pasninger_Succes'] = df_vis_truppen['Pasninger'] - df_vis_truppen['Pasningsfejl']
-                    succes_col = 'Pasninger_Succes'
-                else:
-                    succes_col = None
-
-                if succes_col:
-                    df_vis_truppen['Pasningsprocent'] = (
-                        df_vis_truppen[succes_col] / df_vis_truppen['Pasninger'] * 100
-                    ).where(df_vis_truppen['Pasninger'] > 0, 0).round(1)
-                else:
-                    df_vis_truppen['Pasningsprocent'] = 0.0
-            else:
-                df_vis_truppen['Pasningsprocent'] = 0.0
             
             # --- KOLONNE-OPSÆTNING ---
             gen_kolonner = [
