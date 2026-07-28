@@ -22,8 +22,8 @@ from data.utils.mapping import (
 
 # --- KONFIGURATION (HVIDOVRE-APP / 2025/2026) ---
 DB = "KLUB_HVIDOVREIF.AXIS"
-SEASONNAME = "2025/2026"
-LIGA_IDS = "('328')"
+SEASONNAME = "2026/2027"
+LIGA_IDS = "2mb332vncy4450vu14paj8844"
 
 # --- HJÆLPEFUNKTIONER ---
 @st.cache_data(ttl=3600)
