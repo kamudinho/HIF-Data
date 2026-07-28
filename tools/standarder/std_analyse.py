@@ -146,12 +146,12 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
     for c in ['EVENT_X', 'EVENT_Y', 'ENDX', 'ENDY']: 
         df_plot[c] = pd.to_numeric(df_plot[c], errors='coerce')
 
-    # Standardiserer til venstre-angreb (EVENT_X < 50 spejlvendes, så alt ses fra venstre mod højre mod mål)
+    # Standardiserer til venstre-angreb (EVENT_X < 50 spejlvendes)
     mask_left = df_plot['EVENT_X'] < 50
     df_plot.loc[mask_left, ['EVENT_X', 'ENDX']] = 100 - df_plot.loc[mask_left, ['EVENT_X', 'ENDX']]
     df_plot.loc[mask_left, ['EVENT_Y', 'ENDY']] = 100 - df_plot.loc[mask_left, ['EVENT_Y', 'ENDY']]
 
-    # Filtrering på om sparket er taget fra venstre eller højre side af banen
+    # Filtrering på side
     if side_sel == "Venstre side":
         df_plot = df_plot[df_plot['EVENT_Y'] > 34]
     elif side_sel == "Højre side":
@@ -176,20 +176,23 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
         
         fig, ax = pitch.draw(figsize=(8, 5), constrained_layout=True)
         
-        # --- TEKST I VENSTRE HJØRNE ---
-        ax.text(1, 66, f"{sp_type.upper()} ({side_sel.upper()})", fontsize=12, fontweight='bold', color='#333333', alpha=0.9)
-        
-        stats_line = f"{p_sel}\n{total} aktioner ({int(pct)}% succes)"
-        ax.text(1, 62, stats_line, fontsize=9.5, color='#444444', va='top', linespacing=1.6)
-
-        # Logo & Klubnavn (Nederst til venstre)
+        # --- NY TEKSTOPSÆTNING I VENSTRE HJØRNE ---
+        # 1. Logo & Holdnavn (øverst)
         if hold_logo:
-            ax_logo = ax.inset_axes([0.012, 0.03, 0.08, 0.08], transform=ax.transAxes)
+            ax_logo = ax.inset_axes([0.012, 0.82, 0.07, 0.07], transform=ax.transAxes)
             ax_logo.imshow(hold_logo)
             ax_logo.axis('off')
-            ax.text(11, 3, t_sel.upper(), fontsize=10, fontweight='bold', color='#333333', alpha=0.6, va='center')
+            ax.text(8.5, 63.5, t_sel.upper(), fontsize=10, fontweight='bold', color='#333333', alpha=0.9, va='center')
         else:
-            ax.text(1, 3, t_sel.upper(), fontsize=10, fontweight='bold', color='#333333', alpha=0.6, va='center')
+            ax.text(1, 64, t_sel.upper(), fontsize=10, fontweight='bold', color='#333333', alpha=0.9, va='center')
+
+        # 2. Kategori (fx HJØRNESPARK (BEGGE SIDER))
+        ax.text(1, 60, f"{sp_type.upper()} ({side_sel.upper()})", fontsize=11, fontweight='bold', color='#111111', alpha=0.85)
+        
+        # 3. Antal og succes % (og evt. valgt spiller)
+        spiller_tekst = f"Spiller: {p_sel}" if p_sel != "Alle spillere" else "Alle spillere"
+        stats_line = f"{spiller_tekst}\n{total} aktioner ({int(pct)}% succes)"
+        ax.text(1, 55.5, stats_line, fontsize=9, color='#555555', va='top', linespacing=1.4)
 
         # --- DATA PLOTTING ---
         if not df_plot.dropna(subset=['end_x', 'end_y']).empty:
@@ -202,7 +205,7 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
                              color=p_color, ax=ax, width=0.4, headwidth=2.5, headlength=2.5, alpha=0.4)
                 pitch.scatter(df_plot.x, df_plot.y, ax=ax, color=p_color, s=15, alpha=0.6)
 
-        st.pyplot(fig)
+        st.pyplot(fig, clear_figure=True)
         
     with col_s:
         st.write("**Top 5-modtagere**")
@@ -212,8 +215,6 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
 
 # --- 6. HOVEDSIDE ---
 def vis_side():
-    st.subheader("Standardsituationer")
-    
     df_all = load_setpiece_data()
     if df_all.empty: st.warning("Ingen data fundet."); return
 
@@ -221,10 +222,13 @@ def vis_side():
     df_all['KLUB_NAVN'] = df_all['TEAM_UUID'].str.upper().map(uuid_to_name)
     teams = sorted([n for n in df_all['KLUB_NAVN'].unique() if pd.notna(n)])
 
-    _, _, col_sel = st.columns([2, 1, 1])
-    with col_sel: 
-        # Ændret fra "h" til et tomt mellemrum, så det ikke ses
-        t_sel = st.selectbox("Vælg hold", teams, index=teams.index("Hvidovre") if "Hvidovre" in teams else 0, key="main_team_selectbox", label_visibility="collapsed")
+    # Sørg for at st.subheader og dropdown er på linje vha. st.columns
+    c_title, c_drop = st.columns([3, 1])
+    with c_title:
+        st.subheader("Standardsituationer")
+    with c_drop:
+        default_idx = teams.index("Hvidovre") if "Hvidovre" in teams else 0
+        t_sel = st.selectbox("Vælg hold", teams, index=default_idx, key="main_team_selectbox", label_visibility="collapsed")
 
     df_team_selected = df_all[df_all['KLUB_NAVN'] == t_sel].copy()
     tabs = st.tabs(["Holdoversigt", "Spilleroversigt", "Hjørnespark", "Frispark", "Indkast", "Zoneoversigt"])
