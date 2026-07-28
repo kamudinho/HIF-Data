@@ -266,11 +266,34 @@ def vis_side(dp=None):
         if not truppen_stats.empty:
             df_vis_truppen = truppen_stats.reset_index()
             
-            gen_kolonner = ['visningsnavn', 'Kampe', 'Minutter', 'Aktioner', 'Pasninger', 'Mål', 'Assists', 'Udskiftet', 'Indskiftet', 'Gule_kort', 'Roede_kort']
+            # --- BEREGN PASNINGSPROCENT ---
+            if 'Pasninger' in df_vis_truppen.columns:
+                if 'Pasninger_Succes' in df_vis_truppen.columns:
+                    succes_col = 'Pasninger_Succes'
+                elif 'Pasningsfejl' in df_vis_truppen.columns:
+                    df_vis_truppen['Pasninger_Succes'] = df_vis_truppen['Pasninger'] - df_vis_truppen['Pasningsfejl']
+                    succes_col = 'Pasninger_Succes'
+                else:
+                    succes_col = None
+
+                if succes_col:
+                    df_vis_truppen['Pasningsprocent'] = (
+                        df_vis_truppen[succes_col] / df_vis_truppen['Pasninger'] * 100
+                    ).where(df_vis_truppen['Pasninger'] > 0, 0).round(1)
+                else:
+                    df_vis_truppen['Pasningsprocent'] = 0.0
+            else:
+                df_vis_truppen['Pasningsprocent'] = 0.0
+            
+            # --- KOLONNE-OPSÆTNING ---
+            gen_kolonner = [
+                'visningsnavn', 'Kampe', 'Minutter', 'Aktioner', 'Pasninger', 'Pasningsprocent', 
+                'Mål', 'Assists', 'Udskiftet', 'Indskiftet', 'Gule_kort', 'Roede_kort'
+            ]
             
             # --- FOKUS PÅ OPBYGNING OG SPILFORDELING ---
             opb_kolonner = [
-                'visningsnavn', 'Aktioner', 'Pasninger', 'Key_Passes', 'Stikninger', 
+                'visningsnavn', 'Aktioner', 'Pasninger', 'Pasningsprocent', 'Key_Passes', 'Stikninger', 
                 'Driblinger_Ialt', 'Driblinger_Succes', 'Rum_Driblinger_Space'
             ]
             
@@ -300,14 +323,19 @@ def vis_side(dp=None):
             
             df_visning = df_visning.rename(columns={
                 'visningsnavn': 'Spiller',
+                'Pasningsprocent': 'Pasningsprocent (%)',
                 'Gule_kort': 'Gule kort',
                 'Roede_kort': 'Røde kort',
                 'Chancer_skabt': 'Chancer skabt',
                 'Key_Passes': 'Key Passes',
                 'Frispark_imod': 'Frispark',
                 'Driblinger_Ialt': 'Driblinger, ialt', 
-                'Driblinger_Succes': 'Driblinger (Succes)', 'Gennembrud_Overtake': 'Gennembrud, 1v1', 'Rum_Driblinger_Space': 'Driblinger, 1v1', 'Offensive_Dueller': 'Off. dueller',
-                'Defensive_Dueller': 'Def. dueller', 'Defensive_1v1_Stoppet': 'Def. 1v1'
+                'Driblinger_Succes': 'Driblinger (Succes)', 
+                'Gennembrud_Overtake': 'Gennembrud, 1v1', 
+                'Rum_Driblinger_Space': 'Driblinger, 1v1', 
+                'Offensive_Dueller': 'Off. dueller',
+                'Defensive_Dueller': 'Def. dueller', 
+                'Defensive_1v1_Stoppet': 'Def. 1v1'
             })
             
             beregnet_hoejde = int(len(df_visning) * 38 + 45)
@@ -319,8 +347,7 @@ def vis_side(dp=None):
                 height=beregnet_hoejde
             )
         else:
-            st.info("Ingen trup-data tilgængelig endnu.")
-    
+            st.info("Ingen trup-data tilgængelig endnu.")    
     with t_profile:
         numeric_cols = truppen_stats.drop(columns=['visningsnavn'], errors='ignore')
         ranks = numeric_cols.rank(ascending=False, method='min').astype(int)
