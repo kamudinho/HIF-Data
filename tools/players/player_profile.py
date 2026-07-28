@@ -370,7 +370,7 @@ def vis_side(dp=None):
     truppen_stats_raw['Assists'] = truppen_stats_raw['Assists'].fillna(0).astype(int)
     truppen_stats = truppen_stats_raw.copy()
 
-    # --- OPSETNING AF FANER ---
+# --- OPSETNING AF FANER ---
     t_team, t_profile, t_pitch, t_phys, t_compare = st.tabs([
         "Holdoversigt", "Spillerprofil", "Spilleraktioner", "Fysisk data", "Sammenligning"
     ])
