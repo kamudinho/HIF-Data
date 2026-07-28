@@ -136,121 +136,90 @@ def get_physical_data(player_name, player_opta_uuid, valgt_hold_navn, db_conn):
 @st.cache_data(ttl=3600)
 def hent_ligasammenligning_data(_conn, db_name, navn_mapping):
     try:
-        # 1. Hent alle hændelser og beregn mål/assists via CTEs for hele ligaen
+        # 1. Hent rå hændelser for hele ligaen (uden komplekse og fejlramte aggregeringer i SQL)
         sql_liga_events = f"""
-            WITH EventQualifiers AS (
-                SELECT 
-                    e.EVENT_OPTAUUID,
-                    e.PLAYER_OPTAUUID,
-                    e.EVENT_TYPEID,
-                    e.EVENT_TIMESTAMP,
-                    e.MATCH_OPTAUUID,
-                    e.EVENT_CONTESTANT_OPTAUUID as TEAM_UUID,
-                    TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME) as VISNINGSNAVN,
-                    LISTAGG(q.QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY q.QUALIFIER_QID) as QUALIFIERS
-                FROM {db_name}.OPTA_EVENTS e
-                JOIN {db_name}.OPTA_MATCH_LINEUPS p ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
-                LEFT JOIN {db_name}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
-                WHERE e.EVENT_TIMESTAMP >= '2026-07-01'
-                GROUP BY e.EVENT_OPTAUUID, e.PLAYER_OPTAUUID, e.EVENT_TYPEID, e.EVENT_TIMESTAMP, e.MATCH_OPTAUUID, e.EVENT_CONTESTANT_OPTAUUID, p.FIRST_NAME, p.LAST_NAME
-            ),
-            SortedEvents AS (
-                SELECT 
-                    PLAYER_OPTAUUID,
-                    VISNINGSNAVN,
-                    EVENT_TYPEID,
-                    MATCH_OPTAUUID,
-                    QUALIFIERS,
-                    LAG(PLAYER_OPTAUUID) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_TIMESTAMP) AS ASSIST_PLAYER_UUID,
-                    LAG(EVENT_TYPEID) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_TIMESTAMP) AS PREV_EVENT_TYPEID,
-                    LAG(QUALIFIERS) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_TIMESTAMP) AS PREV_QUALIFIERS
-                FROM EventQualifiers
-            ),
-            PlayerGoals AS (
-                SELECT 
-                    PLAYER_OPTAUUID,
-                    VISNINGSNAVN,
-                    SUM(CASE WHEN EVENT_TYPEID = 16 THEN 1 ELSE 0 END) AS GOALS
-                FROM SortedEvents
-                GROUP BY PLAYER_OPTAUUID, VISNINGSNAVN
-            ),
-            PlayerAssists AS (
-                SELECT 
-                    ASSIST_PLAYER_UUID AS PLAYER_OPTAUUID,
-                    COUNT(*) AS ASSISTS
-                FROM SortedEvents
-                WHERE EVENT_TYPEID = 16 
-                  AND ASSIST_PLAYER_UUID IS NOT NULL
-                  AND ASSIST_PLAYER_UUID != PLAYER_OPTAUUID
-                  AND (
-                      QUALIFIERS LIKE '%29%'            
-                      OR PREV_QUALIFIERS LIKE '%210%'    
-                  )
-                GROUP BY ASSIST_PLAYER_UUID
-            )
             SELECT 
-                g.PLAYER_OPTAUUID as player_optauuid,
-                g.VISNINGSNAVN as visningsnavn,
-                COALESCE(g.GOALS, 0) as goals,
-                COALESCE(a.ASSISTS, 0) as assists,
-                e.TEAM_UUID as team_uuid,
-                e.Aktioner,
-                e.Gule_kort,
-                e.Roede_kort,
-                e.Indskiftet,
-                e.Udskiftet,
-                e.Pasninger,
-                e.Stikninger,
-                e.Indlæg,
-                e.Afslutninger,
-                e.Erobringer,
-                e.Driblinger,
-                e.Chancer_skabt,
-                e.Key_Passes,
-                e.Tacklinger,
-                e.Clearinger,
-                e.Blokeringer,
-                e.Interceptioner,
-                e.Frispark_imod
-            FROM PlayerGoals g
-            LEFT JOIN PlayerAssists a ON g.PLAYER_OPTAUUID = a.PLAYER_OPTAUUID
-            LEFT JOIN (
-                SELECT 
-                    PLAYER_OPTAUUID,
-                    MAX(TEAM_UUID) as TEAM_UUID,
-                    COUNT(*) as Aktioner,
-                    SUM(CASE WHEN EVENT_TYPEID = 17 AND QUALIFIERS LIKE '%31%' THEN 1 ELSE 0 END) as Gule_kort,
-                    SUM(CASE WHEN EVENT_TYPEID = 17 AND QUALIFIERS LIKE '%33%' THEN 1 ELSE 0 END) as Roede_kort,
-                    SUM(CASE WHEN EVENT_TYPEID = 19 THEN 1 ELSE 0 END) as Indskiftet,
-                    SUM(CASE WHEN EVENT_TYPEID = 18 THEN 1 ELSE 0 END) as Udskiftet,
-                    SUM(CASE WHEN EVENT_TYPEID = 1 THEN 1 ELSE 0 END) as Pasninger,
-                    SUM(CASE WHEN EVENT_TYPEID = 1 AND QUALIFIERS LIKE '%4%' THEN 1 ELSE 0 END) as Stikninger,
-                    SUM(CASE WHEN EVENT_TYPEID = 1 AND (QUALIFIERS LIKE '%2%' OR QUALIFIERS LIKE '%155%') THEN 1 ELSE 0 END) as Indlæg,
-                    SUM(CASE WHEN EVENT_TYPEID IN (13, 14, 15, 16) THEN 1 ELSE 0 END) as Afslutninger,
-                    SUM(CASE WHEN EVENT_TYPEID IN (7, 8, 12, 49) THEN 1 ELSE 0 END) as Erobringer,
-                    SUM(CASE WHEN EVENT_TYPEID = 3 THEN 1 ELSE 0 END) as Driblinger,
-                    SUM(CASE WHEN QUALIFIERS LIKE '%210%' THEN 1 ELSE 0 END) as Chancer_skabt,
-                    SUM(CASE WHEN QUALIFIERS LIKE '%210%' THEN 1 ELSE 0 END) as Key_Passes,
-                    SUM(CASE WHEN EVENT_TYPEID = 7 THEN 1 ELSE 0 END) as Tacklinger,
-                    SUM(CASE WHEN EVENT_TYPEID = 12 THEN 1 ELSE 0 END) as Clearinger,
-                    SUM(CASE WHEN EVENT_TYPEID = 55 THEN 1 ELSE 0 END) as Blokeringer,
-                    SUM(CASE WHEN EVENT_TYPEID = 5 THEN 1 ELSE 0 END) as Interceptioner,
-                    SUM(CASE WHEN EVENT_TYPEID = 4 THEN 1 ELSE 0 END) as Frispark_imod
-                FROM EventQualifiers
-                GROUP BY PLAYER_OPTAUUID
-            ) e ON g.PLAYER_OPTAUUID = e.PLAYER_OPTAUUID
+                e.EVENT_OPTAUUID,
+                e.PLAYER_OPTAUUID,
+                e.EVENT_TYPEID,
+                e.EVENT_TIMESTAMP,
+                e.MATCH_OPTAUUID,
+                e.EVENT_CONTESTANT_OPTAUUID as TEAM_UUID,
+                TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME) as VISNINGSNAVN,
+                LISTAGG(q.QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY q.QUALIFIER_QID) as QUALIFIERS
+            FROM {db_name}.OPTA_EVENTS e
+            JOIN {db_name}.OPTA_MATCH_LINEUPS p ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
+            LEFT JOIN {db_name}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
+            WHERE e.EVENT_TIMESTAMP >= '2026-07-01'
+            GROUP BY e.EVENT_OPTAUUID, e.PLAYER_OPTAUUID, e.EVENT_TYPEID, e.EVENT_TIMESTAMP, e.MATCH_OPTAUUID, e.EVENT_CONTESTANT_OPTAUUID, p.FIRST_NAME, p.LAST_NAME
         """
         df_l_events = _conn.query(sql_liga_events)
         if df_l_events is None or df_l_events.empty:
             return pd.DataFrame()
         
         df_l_events.columns = df_l_events.columns.str.lower()
-        
-        # Omdøb kolonnen 'goals' til 'mål', så den matcher resten af koden
-        if 'goals' in df_l_events.columns:
-            df_l_events = df_l_events.rename(columns={'goals': 'mål'})
+        df_l_events['qual_list'] = df_l_events['qualifiers'].fillna('').str.split(',')
 
-        # 2. Hent Expected Goals / minutter for hele ligaen
+        # Hjælpefunktion til qualifiers
+        def count_event_with_qual_l(df_group, eid, qids):
+            return df_group.apply(lambda r: har_qualifier(r['event_typeid'], r.get('qual_list', []), eid, qids), axis=1).sum()
+
+        # 2. Sorter hændelser og beregn mål & assists via Pandas (præcis som i trup-oversigten)
+        df_sorted = df_l_events.sort_values(by=['match_optauuid', 'event_timestamp'])
+        df_sorted['assist_player_uuid'] = df_sorted.groupby('match_optauuid')['player_optauuid'].shift(1)
+        df_sorted['prev_event_typeid'] = df_sorted.groupby('match_optauuid')['event_typeid'].shift(1)
+        df_sorted['prev_qualifiers'] = df_sorted.groupby('match_optauuid')['qual_list'].shift(1)
+
+        # Beregn mål pr spiller
+        goals_df = df_sorted[df_sorted['event_typeid'] == 16].groupby(['player_optauuid', 'visningsnavn']).size().reset_index(name='mål')
+
+        # Beregn assists pr spiller
+        mask_assists = (
+            (df_sorted['event_typeid'] == 16) & 
+            (df_sorted['assist_player_uuid'].notnull()) & 
+            (df_sorted['assist_player_uuid'] != df_sorted['player_optauuid']) & 
+            (
+                df_sorted['qual_list'].apply(lambda q: '29' in q) | 
+                df_sorted['prev_qualifiers'].apply(lambda q: q is not None and '210' in q)
+            )
+        )
+        assists_df = df_sorted[mask_assists].groupby('assist_player_uuid').size().reset_index(name='assists')
+
+        # 3. Beregn alle øvrige hændelses-statistikker i Pandas
+        event_stats_liga = df_l_events.groupby(['player_optauuid', 'visningsnavn']).apply(lambda x: pd.Series({
+            'team_uuid': x['team_uuid'].iloc[0],
+            'aktioner': len(x),
+            'gule_kort': count_event_with_qual_l(x, 17, 31),
+            'roede_kort': count_event_with_qual_l(x, 17, 33),
+            'indskiftet': (x['event_typeid'] == 19).sum(),
+            'udskiftet': (x['event_typeid'] == 18).sum(),
+            'pasninger': (x['event_typeid'] == 1).sum(),
+            'stikninger': count_event_with_qual_l(x, 1, 4),
+            'indlæg': count_event_with_qual_l(x, 1, [2, 155]),
+            'afslutninger': x['event_typeid'].isin([13, 14, 15, 16]).sum(),
+            'erobringer': x['event_typeid'].isin([7, 8, 12, 49]).sum(),
+            'driblinger': (x['event_typeid'] == 3).sum(),
+            'chancer_skabt': x.apply(lambda r: '210' in r.get('qual_list', []), axis=1).sum(),
+            'key_passes': x.apply(lambda r: '210' in r.get('qual_list', []), axis=1).sum(),
+            'tacklinger': (x['event_typeid'] == 7).sum(),
+            'clearinger': (x['event_typeid'] == 12).sum(),
+            'blokeringer': (x['event_typeid'] == 55).sum(),
+            'interceptioner': (x['event_typeid'] == 5).sum(),
+            'frispark_imod': (x['event_typeid'] == 4).sum()
+        })).reset_index()
+
+        # Flet mål og assists på
+        event_stats_liga = event_stats_liga.merge(goals_df[['player_optauuid', 'mål']], on='player_optauuid', how='left')
+        event_stats_liga = event_stats_liga.merge(assists_df, left_on='player_optauuid', right_on='assist_player_uuid', how='left')
+        if 'assist_player_uuid' in event_stats_liga.columns:
+            event_stats_liga = event_stats_liga.drop(columns=['assist_player_uuid'])
+            
+        event_stats_liga['mål'] = event_stats_liga['mål'].fillna(0).astype(int)
+        event_stats_liga['assists'] = event_stats_liga['assists'].fillna(0).astype(int)
+        
+        event_stats_liga = event_stats_liga.drop_duplicates(subset=['player_optauuid']).set_index('player_optauuid')
+
+        # 4. Hent Expected Goals / minutter for hele ligaen
         sql_liga_expected = f"""
             SELECT 
                 MATCH_ID,
@@ -274,15 +243,15 @@ def hent_ligasammenligning_data(_conn, db_name, navn_mapping):
                 'xa': 'sum'
             }).rename(columns={'match_id': 'Kampe', 'minutes': 'Minutter', 'xg': 'xG', 'xa': 'xA'})
             
-            liga_stats_raw = df_l_events.drop_duplicates(subset=['player_optauuid']).set_index('player_optauuid').join(match_stats_liga, how='left').fillna(0)
+            liga_stats_raw = event_stats_liga.join(match_stats_liga, how='left').fillna(0)
         else:
-            liga_stats_raw = df_l_events.drop_duplicates(subset=['player_optauuid']).set_index('player_optauuid').copy()
+            liga_stats_raw = event_stats_liga.copy()
             liga_stats_raw['Kampe'] = 0
             liga_stats_raw['Minutter'] = 0
             liga_stats_raw['xG'] = 0.0
             liga_stats_raw['xA'] = 0.0
 
-        # 3. Mål & Assists samt navnemapping og holdnavne
+        # 5. Navnemapping og holdnavne
         liga_stats_raw['visningsnavn'] = liga_stats_raw.reset_index().apply(
             lambda r: navn_mapping.get(str(r['player_optauuid']), r['visningsnavn']), axis=1
         ).values
