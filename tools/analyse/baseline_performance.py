@@ -174,13 +174,24 @@ def vis_side(df_events=None, kamp=None, hold_map=None):
                                 table tr td:nth-child(3), table tr td:nth-child(4) { text-align: center !important; }
                                 table tr th:nth-child(3), table tr th:nth-child(4) { text-align: center !important; }
                                 table { width: 100%; border-collapse: collapse; font-size: 12px; }
+                                
+                                /* Robust Hvidovre highlighting på tværs af Streamlit celler */
+                                table tr:has(td div:contains("Hvidovre")),
+                                table tr:has(td span:contains("Hvidovre")),
                                 table tr:has(td:contains("Hvidovre")) {
                                     background-color: #df003b !important;
-                                    color: white !important;
                                 }
+                                table tr:has(td div:contains("Hvidovre")) td,
+                                table tr:has(td span:contains("Hvidovre")) td,
                                 table tr:has(td:contains("Hvidovre")) td {
+                                    background-color: #df003b !important;
                                     color: white !important;
                                     font-weight: bold;
+                                }
+                                table tr:has(td div:contains("Hvidovre")) td *,
+                                table tr:has(td span:contains("Hvidovre")) td *,
+                                table tr:has(td:contains("Hvidovre")) td * {
+                                    color: white !important;
                                 }
                             </style>
                         """, unsafe_allow_html=True)
@@ -289,13 +300,24 @@ def vis_side(df_events=None, kamp=None, hold_map=None):
                                 table tr td:nth-child(3), table tr td:nth-child(4) { text-align: center !important; }
                                 table tr th:nth-child(3), table tr th:nth-child(4) { text-align: center !important; }
                                 table { width: 100%; border-collapse: collapse; font-size: 12px; }
+                                
+                                /* Robust Hvidovre highlighting på tværs af Streamlit celler */
+                                table tr:has(td div:contains("Hvidovre")),
+                                table tr:has(td span:contains("Hvidovre")),
                                 table tr:has(td:contains("Hvidovre")) {
                                     background-color: #df003b !important;
-                                    color: white !important;
                                 }
+                                table tr:has(td div:contains("Hvidovre")) td,
+                                table tr:has(td span:contains("Hvidovre")) td,
                                 table tr:has(td:contains("Hvidovre")) td {
+                                    background-color: #df003b !important;
                                     color: white !important;
                                     font-weight: bold;
+                                }
+                                table tr:has(td div:contains("Hvidovre")) td *,
+                                table tr:has(td span:contains("Hvidovre")) td *,
+                                table tr:has(td:contains("Hvidovre")) td * {
+                                    color: white !important;
                                 }
                             </style>
                         """, unsafe_allow_html=True)
