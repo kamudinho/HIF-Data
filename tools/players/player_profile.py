@@ -375,7 +375,7 @@ def vis_side(dp=None):
     with t_team:
         col_t_title, col_spacer, col_t_btn = st.columns([2, 1, 1.5])
         with col_t_title:
-            st.caption(f"{valgt_hold}")
+            st.caption(f"##{valgt_hold}")
         with col_t_btn:
             kategori_valg = st.segmented_control(
                 "Visningskategori", 
