@@ -382,15 +382,14 @@ def vis_side(dp=None):
     t_team, t_profile, t_pitch, t_phys = st.tabs(["Holdoversigt", "Spillerprofil", "Spilleraktioner", "Fysisk data"])
 
     with t_team:
-        st.subheader(f"Holdoversigt: {valgt_hold}")
-        st.write("Her kan du se det samlede overblik over truppen og spillernes statistik for sæsonen.")
+        st.caption(f"{valgt_hold}")
         
         if not truppen_stats.empty:
             df_vis_truppen = truppen_stats.reset_index()
             kolonne_prioritet = [
                 'visningsnavn', 'Kampe', 'Minutter', 'Mål', 'xG', 'Assists', 'xA', 
                 'Pasninger', 'Stikninger', 'Indlæg', 'Afslutninger', 'Erobringer', 
-                'Driblinger', 'Chancer_skabt', 'Key_Passes', 'Gule_kort', 'Roede_kort'
+                'Driblinger', 'Chancer_skabt', 'Key_Passes', 'GK', 'RK'
             ]
             eksisterende_kolonner = [k for k in kolonne_prioritet if k in df_vis_truppen.columns]
             
