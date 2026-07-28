@@ -1,10 +1,12 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
+import numpy as np
 
 from data.utils.team_mapping import SEASONS, COMPETITION_NAME
 
-def vis_side():
+def vis_side(df_events=None, kamp=None, hold_map=None):
     try:
         from data.data_load import _get_snowflake_conn
         conn = _get_snowflake_conn()
@@ -17,11 +19,8 @@ def vis_side():
         
         # Bruger standard sæsonen eller henter fra session_state hvis tilgængelig
         valgt_saeson = st.session_state.get("saeson_select", "2025/2026")
-        
-        # Hent det korrekte Opta UUID til turneringen ud fra team_mapping.py
         competition_uuid = SEASONS.get(valgt_saeson, {}).get(COMPETITION_NAME, "dyjr458hcmrcy87fsabfsy87o")
         
-        # SQL oprettet med det dynamiske turnering-UUID
         sql = f"""
             WITH MatchBase AS (
                 SELECT 
@@ -89,7 +88,6 @@ def vis_side():
                 h_name = row.get('HOME_TEAM_NAME') or str(row['CONTESTANTHOME_OPTAUUID'])[:8]
                 a_name = row.get('AWAY_TEAM_NAME') or str(row['CONTESTANTAWAY_OPTAUUID'])[:8]
 
-                # Hjemmehold
                 team_rows.append({
                     'TEAM': h_name,
                     'GOALS': pd.to_numeric(row.get('HOME_GOALS'), errors='coerce') or 0,
@@ -101,7 +99,6 @@ def vis_side():
                     'TACKLES': pd.to_numeric(row.get('HOME_TACKLES'), errors='coerce') or 0,
                     'SAVES': pd.to_numeric(row.get('HOME_SAVES'), errors='coerce') or 0
                 })
-                # Udehold
                 team_rows.append({
                     'TEAM': a_name,
                     'GOALS': pd.to_numeric(row.get('AWAY_GOALS'), errors='coerce') or 0,
@@ -123,7 +120,7 @@ def vis_side():
             match_counts = df_teams.groupby('TEAM').size().reset_index(name='MATCHES')
             agg_df = pd.merge(agg_df, match_counts, on='TEAM')
 
-            # --- TOP SEKTION: CAPTION OG DROPDOWN PÅ SAMME LINJE ---
+            # --- TOP SEKTION: CAPTION OG DROPDOWN ØVERST ---
             metric_labels = {
                 "Mål vs. Skud-baseline (Faktiske mål minus forventede ud fra skudvolumen)": "GOALS_VS_BASELINE",
                 "xG vs. Faktiske Mål (Afslutningskvalitet)": "XG_VS_GOALS",
@@ -134,18 +131,18 @@ def vis_side():
                 "Redninger": "SAVES"
             }
 
-            col1, col2 = st.columns([1.2, 1])
-            with col1:
+            col_header, col_dropdown = st.columns([1.2, 1])
+            with col_header:
                 st.caption("1. Division — Over- og Underpræstation mod Baseline")
-            with col2:
+            with col_dropdown:
                 selected_label = st.selectbox("Vælg parameter:", list(metric_labels.keys()), label_visibility="collapsed")
             
             metric_key = metric_labels[selected_label]
 
-            # --- TABS PLACERET EFTER TOP-KONTROLERNE ---
+            # --- TABS ---
             tab1, tab2 = st.tabs(["📊 Baseline Oversigt", "📈 Scatterplot"])
 
-            # --- TAB 1: BASELINE VISNING ---
+            # --- TAB 1: BASELINE SØJLEDIAGRAM ---
             with tab1:
                 df_b = agg_df.copy()
 
@@ -182,8 +179,8 @@ def vis_side():
                     title=chart_title,
                     color='COLOR_TYPE',
                     color_discrete_map={
-                        'Overpræsterer': '#f39c12',  # Orange
-                        'Underpræsterer': '#2980b9'   # Blå
+                        'Overpræsterer': '#f39c12',
+                        'Underpræsterer': '#2980b9'
                     },
                     text_auto='.2f',
                     custom_data=['TEAM', 'DIFF', 'MATCHES']
@@ -214,58 +211,96 @@ def vis_side():
 
                 st.plotly_chart(fig1, use_container_width=True)
 
-            # --- TAB 2: SCATTERPLOT VISNING ---
+            # --- TAB 2: SCATTERPLOT MED DIN ØNSKEDE STRUKTUR ---
             with tab2:
+                HIF_ID = 38331
+                HIF_RED = '#df003b'
+
+                if 'show_data' not in st.session_state:
+                    st.session_state.show_data = False
+
+                # Knap til at vise/skjule tabel ved siden af scatterplottet
+                col_spacer, col_btn = st.columns([3, 1])
+                with col_btn:
+                    if st.button("Data", use_container_width=True):
+                        st.session_state.show_data = not st.session_state.show_data
+
                 df_s = agg_df.copy()
                 
+                # Definer x- og y-akser ud fra den valgte kategori i dropdownen
                 if metric_key == "XG_VS_GOALS":
                     x_col, y_col = 'XG', 'GOALS'
-                    sc_title = "Sammenhæng mellem xG (Forventede Mål) og Faktiske Mål"
-                    x_name, y_name = "Forventede Mål (xG)", "Faktiske Mål"
+                    sc_title = "Sammenhæng mellem xG og Faktiske Mål"
                 elif metric_key == "GOALS_VS_BASELINE":
                     x_col, y_col = 'SHOTS', 'GOALS'
                     sc_title = "Sammenhæng mellem Skudvolumen og Faktiske Mål"
-                    x_name, y_name = "Skud Total", "Faktiske Mål"
                 else:
                     x_col, y_col = 'MATCHES', metric_key
                     sc_title = f"Sammenhæng mellem Kampe og {selected_label}"
-                    x_name, y_name = "Kampe Spillet", selected_label
 
-                fig2 = px.scatter(
-                    df_s,
-                    x=x_col,
-                    y=y_col,
-                    text='TEAM',
-                    title=sc_title,
-                    custom_data=['TEAM', 'MATCHES']
-                )
+                if st.session_state.show_data:
+                    col_graf, col_data = st.columns([2.5, 1])
+                    with col_data:
+                        df_table = df_s[['TEAM', x_col, y_col]].copy()
+                        df_table.columns = ['Hold', x_col, y_col]
+                        df_table[x_col] = df_table[x_col].map('{:.1f}'.format)
+                        df_table[y_col] = df_table[y_col].map('{:.2f}'.format)
+                        
+                        st.markdown("""
+                            <style>
+                                thead tr th:first-child { display:none; }
+                                tbody tr th { display:none; }
+                                table tr td:nth-child(2) { text-align: left !important; }
+                                table tr td:nth-child(3), table tr td:nth-child(4) { text-align: center !important; }
+                                table tr th:nth-child(3), table tr th:nth-child(4) { text-align: center !important; }
+                                table { width: 100%; border-collapse: collapse; font-size: 12px; }
+                            </style>
+                        """, unsafe_allow_html=True)
+                        st.table(df_table)
+                else:
+                    col_graf = st.container()
 
-                fig2.update_traces(
-                    textposition='top center',
-                    marker=dict(size=10, color='#f39c12'),
-                    hovertemplate=(
-                        "<b>%{customdata[0]}</b><br>"
-                        f"{x_name}: " + "%{x:.1f}<br>"
-                        f"{y_name}: " + "%{y:.1f}<br>"
-                        "Kampe: %{customdata[1]}"
-                        "<extra></extra>"
+                with col_graf:
+                    fig2 = go.Figure()
+                    avg_x = df_s[x_col].mean()
+                    avg_y = df_s[y_col].mean()
+
+                    # Matcher eventuelt hold-id hvis det findes, ellers bruges navnet som ID-tjek
+                    for _, row in df_s.iterrows():
+                        team_name = row['TEAM']
+                        is_hif = ("hvidovre" in team_name.lower())
+                        
+                        fig2.add_trace(go.Scatter(
+                            x=[row[x_col]], y=[row[y_col]],
+                            mode='markers+text',
+                            text=[team_name], 
+                            textposition="top center",
+                            textfont=dict(size=10, color='black'),
+                            marker=dict(
+                                size=25 if is_hif else 18, 
+                                color=HIF_RED if is_hif else 'rgba(80, 80, 80, 0.7)',
+                                line=dict(width=2, color='white')
+                            ),
+                            hovertemplate=f"<b>{team_name}</b><br>{x_col}: %{{x:.2f}}<br>{y_col}: %{{y:.2f}}<extra></extra>"
+                        ))
+
+                    fig2.add_vline(x=avg_x, line_dash="dot", line_color="#999")
+                    fig2.add_hline(y=avg_y, line_dash="dot", line_color="#999")
+
+                    fig2.update_layout(
+                        title=sc_title,
+                        plot_bgcolor='white',
+                        xaxis_title=f"Gns. {x_col}",
+                        yaxis_title=f"Gns. {y_col}",
+                        height=680,
+                        margin=dict(t=20, b=20, l=20, r=20),
+                        showlegend=False
                     )
-                )
+                    
+                    fig2.update_xaxes(showgrid=True, gridwidth=1, gridcolor='#eaeaea')
+                    fig2.update_yaxes(showgrid=True, gridwidth=1, gridcolor='#eaeaea')
 
-                fig2.update_layout(
-                    xaxis_title=x_name,
-                    yaxis_title=y_name,
-                    plot_bgcolor='rgba(0,0,0,0)',
-                    paper_bgcolor='rgba(0,0,0,0)',
-                    font=dict(color='gray'),
-                    title_font=dict(size=18, color='black'),
-                    height=650
-                )
-
-                fig2.update_xaxes(showgrid=True, gridwidth=1, gridcolor='#eaeaea')
-                fig2.update_yaxes(showgrid=True, gridwidth=1, gridcolor='#eaeaea')
-
-                st.plotly_chart(fig2, use_container_width=True)
+                    st.plotly_chart(fig2, use_container_width=True, config={'displayModeBar': False})
 
     except Exception as e:
         st.error(f"Fejl ved indlæsning af siden: {e}")
