@@ -672,62 +672,62 @@ def vis_side(dp=None):
             with t_sub_log:
                 st.data_editor(df_phys, hide_index=True, use_container_width=True, disabled=True)
 
-with t_compare:
-    st.markdown('<p style="font-size: 14px; font-weight: bold; margin-bottom: 10px;">SPILLERSAMMENLIGNING PÅ TVÆRS AF LIGAEN</p>', unsafe_allow_html=True)
-    
-    # Antag at 'df_alle_spillere_liga' er en samlet dataframe med alle spillere, du har hentet fra databasen/Wyscout/Opta for hele ligaen.
-    # Hvis du allerede har en samlet tabel, bruges den her. Ellers skal vi sikre, at datasættet dækker alle hold.
-    if 'df_alle_spillere_liga' in locals() and not df_alle_spillere_liga.empty:
+    with t_compare:
+        st.markdown('<p style="font-size: 14px; font-weight: bold; margin-bottom: 10px;">SPILLERSAMMENLIGNING PÅ TVÆRS AF LIGAEN</p>', unsafe_allow_html=True)
         
-        # Mulighed for at vælge flere spillere på tværs af hold
-        alle_tilgaengelige_spillere = sorted(df_alle_spillere_liga['visningsnavn'].unique())
-        
-        valgte_sammenligning_spillere = st.multiselect(
-            "Vælg spillere til sammenligning",
-            options=alle_tilgaengelige_spillere,
-            default=alle_tilgaengelige_spillere[:3] if len(alle_tilgaengelige_spillere) >= 3 else alle_tilgaengelige_spillere,
-            key="ligasammenligning_multiselect"
-        )
-        
-        if valgte_sammenligning_spillere:
-            # Filtrer dataen til kun at vise de valgte spillere
-            df_sammenligning = df_alle_spillere_liga[df_alle_spillere_liga['visningsnavn'].isin(valgte_sammenligning_spillere)].copy()
+        # Antag at 'df_alle_spillere_liga' er en samlet dataframe med alle spillere, du har hentet fra databasen/Wyscout/Opta for hele ligaen.
+        # Hvis du allerede har en samlet tabel, bruges den her. Ellers skal vi sikre, at datasættet dækker alle hold.
+        if 'df_alle_spillere_liga' in locals() and not df_alle_spillere_liga.empty:
             
-            # Vælg kategori på samme måde som på holdoversigten, hvis det ønskes
-            kat_sammenligning = st.segmented_control(
-                "Visningskategori_sammenligning",
-                options=["Generelt", "Offensiv", "Defensiv"],
-                default="Generelt",
-                key="sammenligning_kategori_control",
-                label_visibility="collapsed"
+            # Mulighed for at vælge flere spillere på tværs af hold
+            alle_tilgaengelige_spillere = sorted(df_alle_spillere_liga['visningsnavn'].unique())
+            
+            valgte_sammenligning_spillere = st.multiselect(
+                "Vælg spillere til sammenligning",
+                options=alle_tilgaengelige_spillere,
+                default=alle_tilgaengelige_spillere[:3] if len(alle_tilgaengelige_spillere) >= 3 else alle_tilgaengelige_spillere,
+                key="ligasammenligning_multiselect"
             )
             
-            gen_kol = ['visningsnavn', 'Hold', 'Kampe', 'Minutter', 'Aktioner', 'Pasninger', 'Mål', 'Assists', 'Gule_kort']
-            off_kol = ['visningsnavn', 'Hold', 'Afslutninger', 'xG', 'Chancer_skabt', 'Key_Passes', 'Stikninger', 'xA']
-            def_kol = ['visningsnavn', 'Hold', 'Erobringer', 'Tacklinger', 'Clearinger', 'Blokeringer', 'Interceptioner']
-            
-            if kat_sammenligning == "Generelt":
-                aktive_kol = [k for k in gen_kol if k in df_sammenligning.columns]
-            elif kat_sammenligning == "Offensiv":
-                aktive_kol = [k for k in off_kol if k in df_sammenligning.columns]
-            elif kat_sammenligning == "Defensiv":
-                aktive_kol = [k for k in def_kol if k in df_sammenligning.columns]
-            else:
-                aktive_kol = [k for k in df_sammenligning.columns]
+            if valgte_sammenligning_spillere:
+                # Filtrer dataen til kun at vise de valgte spillere
+                df_sammenligning = df_alle_spillere_liga[df_alle_spillere_liga['visningsnavn'].isin(valgte_sammenligning_spillere)].copy()
                 
-            df_vis_sammenligning = df_sammenligning[aktive_kol].set_index('visningsnavn')
-            
-            beregnet_hoejde_comp = int(len(df_vis_sammenligning) * 38 + 45)
-            
-            st.dataframe(
-                df_vis_sammenligning,
-                use_container_width=True,
-                height=beregnet_hoejde_comp
-            )
+                # Vælg kategori på samme måde som på holdoversigten, hvis det ønskes
+                kat_sammenligning = st.segmented_control(
+                    "Visningskategori_sammenligning",
+                    options=["Generelt", "Offensiv", "Defensiv"],
+                    default="Generelt",
+                    key="sammenligning_kategori_control",
+                    label_visibility="collapsed"
+                )
+                
+                gen_kol = ['visningsnavn', 'Hold', 'Kampe', 'Minutter', 'Aktioner', 'Pasninger', 'Mål', 'Assists', 'Gule_kort']
+                off_kol = ['visningsnavn', 'Hold', 'Afslutninger', 'xG', 'Chancer_skabt', 'Key_Passes', 'Stikninger', 'xA']
+                def_kol = ['visningsnavn', 'Hold', 'Erobringer', 'Tacklinger', 'Clearinger', 'Blokeringer', 'Interceptioner']
+                
+                if kat_sammenligning == "Generelt":
+                    aktive_kol = [k for k in gen_kol if k in df_sammenligning.columns]
+                elif kat_sammenligning == "Offensiv":
+                    aktive_kol = [k for k in off_kol if k in df_sammenligning.columns]
+                elif kat_sammenligning == "Defensiv":
+                    aktive_kol = [k for k in def_kol if k in df_sammenligning.columns]
+                else:
+                    aktive_kol = [k for k in df_sammenligning.columns]
+                    
+                df_vis_sammenligning = df_sammenligning[aktive_kol].set_index('visningsnavn')
+                
+                beregnet_hoejde_comp = int(len(df_vis_sammenligning) * 38 + 45)
+                
+                st.dataframe(
+                    df_vis_sammenligning,
+                    use_container_width=True,
+                    height=beregnet_hoejde_comp
+                )
+            else:
+                st.info("Vælg mindst én spiller ovenfor for at se sammenligningen.")
         else:
-            st.info("Vælg mindst én spiller ovenfor for at se sammenligningen.")
-    else:
-        st.warning("Det ser ikke ud til, at det samlede ligadatasæt (`df_alle_spillere_liga`) er indlæst endnu. Sørg for at hente data for alle hold i ligaen, før denne side bruges.")
+            st.warning("Det ser ikke ud til, at det samlede ligadatasæt (`df_alle_spillere_liga`) er indlæst endnu. Sørg for at hente data for alle hold i ligaen, før denne side bruges.")
         
 if __name__ == "__main__":
     vis_side()
