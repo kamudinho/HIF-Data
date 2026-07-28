@@ -258,7 +258,10 @@ def vis_side(dp=None):
     conn = _get_snowflake_conn()
     if not conn: 
         return
-
+        
+    # Hent ligadata til sammenligning på tværs af hold
+    df_alle_spillere_liga = hent_ligasammenligning_data(conn, DB, navne_map)
+    
     # 1. HOLDVALG
     df_teams_raw = conn.query(f"SELECT DISTINCT CONTESTANTHOME_NAME, CONTESTANTHOME_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS}")
     if df_teams_raw is not None:
