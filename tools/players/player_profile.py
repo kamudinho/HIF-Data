@@ -13,10 +13,13 @@ import base64
 from io import BytesIO
 import os
 import re
+# --- GENERELLE UI-HJÆLPERE ---
 from utils.helpers import get_logo_img, get_team_color, get_ordinal, draw_player_info_box
+
+# --- DATA OG MAPPING ---
+from data.utils.mapping import OPTA_EVENT_TYPES, OPTA_QUALIFIERS, get_action_label, is_assist
 from data.utils.match_data import classify_take_on
 from data.data_load import _get_snowflake_conn
-from data.utils.mapping import OPTA_EVENT_TYPES, OPTA_QUALIFIERS, get_action_label
 
 # --- KONFIGURATION (HVIDOVRE-APP / 2026/2027) ---
 DB = "KLUB_HVIDOVREIF.AXIS"
