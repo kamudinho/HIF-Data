@@ -1,25 +1,20 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
 import plotly.graph_objects as go
-from mplsoccer import Pitch
-from data.data_load import _get_snowflake_conn
-from data.utils.team_mapping import TEAMS, TEAM_COLORS
+from io import BytesIO
 import requests
 from PIL import Image
-import io
-import base64
-from io import BytesIO
 import os
-import re
-# --- GENERELLE UI-HJÆLPERE ---
-from utils.helpers import get_logo_img, get_team_color, get_ordinal, draw_player_info_box
+from mplsoccer import Pitch
 
 # --- DATA OG MAPPING ---
+from data.data_load import _get_snowflake_conn
+from data.utils.team_mapping import TEAMS, TEAM_COLORS
 from data.utils.mapping import OPTA_EVENT_TYPES, OPTA_QUALIFIERS, get_action_label, is_assist
 from data.utils.match_data import classify_take_on
-from data.data_load import _get_snowflake_conn
+
+# --- GENERELLE UI-HJÆLPERE ---
+from utils.helpers import get_logo_img, get_team_color, get_ordinal, draw_player_info_box
 
 # --- KONFIGURATION (HVIDOVRE-APP / 2026/2027) ---
 DB = "KLUB_HVIDOVREIF.AXIS"
@@ -36,60 +31,7 @@ COMP_MAP = {
 }
 LIGA_IDS = "('2mb332vncy4450vu14paj8844', 'e5p78j2r7v8h3u9s5k0l2m4n6', 'f6q89k3s8w9i4v0t6l1m3n5o7', '335', '328', '329', '43319', '331')"
 
-# --- HJÆLPEFUNKTIONER ---
-@st.cache_data(ttl=3600)
-def get_logo_img(opta_uuid):
-    if not opta_uuid: 
-        return None
-    uuid_clean = str(opta_uuid).lower().replace('t', '')
-    url = next((info['logo'] for name, info in TEAMS.items() if str(info.get('opta_uuid', '')).lower().replace('t','') == uuid_clean), None)
-    if not url: 
-        return None
-    try:
-        response = requests.get(url, timeout=5)
-        return Image.open(BytesIO(response.content))
-    except: 
-        return None
-
-def get_team_color(team_name, color_type="primary", default="#df003b"):
-    found_colors = None
-    for key, colors in TEAM_COLORS.items():
-        if key.lower() in team_name.lower() or team_name.lower() in key.lower():
-            found_colors = colors
-            break
-            
-    if not found_colors:
-        return default
-        
-    primary = found_colors.get("primary", default)
-    secondary = found_colors.get("secondary", "#000000")
-    
-    if color_type == "primary" and primary.lower() in ["#ffffff", "white", "#fff"]:
-        return secondary
-        
-    return found_colors.get(color_type, default)
-
-def har_qualifier(row_events, row_quals, event_id, qual_ids):
-    try:
-        if str(row_events) != str(event_id):
-            return False
-        ql = row_quals if isinstance(row_quals, list) else str(row_quals).split(',')
-        row_quals_set = {str(q).strip() for q in ql}
-        if isinstance(qual_ids, list):
-            target_quals = {str(q).strip() for q in qual_ids}
-            return len(row_quals_set.intersection(target_quals)) > 0
-        else:
-            return str(qual_ids).strip() in row_quals_set
-    except:
-        return False
-
-def get_ordinal(n):
-    if 11 <= (n % 100) <= 13:
-        suffix = 'th'
-    else:
-        suffix = {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')
-    return f"{n}{suffix}"
-
+# --- GRAFISKE HJÆLPEFUNKTIONER ---
 def create_relative_donut(player_val, max_val, label, rank_text, color="#df003b"):
     base_max = max(max_val, player_val, 1)
     reminder = base_max - player_val
@@ -111,17 +53,8 @@ def create_relative_donut(player_val, max_val, label, rank_text, color="#df003b"
         )]
     )
     return fig
-    
-def draw_player_info_box(ax, team_logo, player_name, season_str, category_str):
-    if team_logo:
-        ax_l = ax.inset_axes([0.02, 0.88, 0.07, 0.07], transform=ax.transAxes)
-        ax_l.imshow(team_logo)
-        ax_l.axis('off')
-    ax.text(0.10, 0.92, str(player_name).upper(), transform=ax.transAxes, 
-            fontsize=10, fontweight='bold', color='black', va='center')
-    ax.text(0.10, 0.89, f"{season_str} | {category_str}", transform=ax.transAxes, 
-            fontsize=8, color='#666666', va='center')
 
+# --- DATAFUNKTIONER ---
 def get_physical_data(player_name, player_opta_uuid, valgt_hold_navn, db_conn):
     efternavn = player_name.split()[-1]
     sql = f"""
