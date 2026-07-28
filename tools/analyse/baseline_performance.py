@@ -165,7 +165,7 @@ def vis_side():
             agg_df = agg_df.sort_values(by='DIFF', ascending=True)
             agg_df['COLOR_TYPE'] = agg_df['DIFF'].apply(lambda x: 'Overpræsterer' if x >= 0 else 'Underpræsterer')
 
-            # Plot med Plotly (med de klassiske farvekoder)
+            # 1. Tilføj ekstra kolonner til customdata, hvis du vil vise dem i hover (f.eks. MATCHES eller GOALS)
             fig = px.bar(
                 agg_df,
                 x='DIFF',
@@ -177,7 +177,18 @@ def vis_side():
                     'Overpræsterer': '#f39c12',  # Orange
                     'Underpræsterer': '#2980b9'   # Blå
                 },
-                text_auto='.1f'
+                text_auto='.1f',
+                custom_data=['TEAM', 'DIFF', 'MATCHES'] # <--- Vælg hvad der skal med i tooltip
+            )
+
+            # 2. Tilpas hover-teksten med hovertemplate
+            fig.update_traces(
+                hovertemplate=(
+                    "<b>%{customdata[0]}</b><br>"
+                    f"{xaxis_title}: " + "%{x:.2f}<br>"
+                    "Kampe spillet: %{customdata[2]}"
+                    "<extra></extra>" # Fjerner den ekstra boks med standard info
+                )
             )
 
             fig.update_layout(
@@ -188,7 +199,7 @@ def vis_side():
                 paper_bgcolor='rgba(0,0,0,0)',
                 font=dict(color='gray'),
                 title_font=dict(size=18, color='black'),
-                height=620
+                height=650  # Gør figuren højere som aftalt
             )
             
             fig.update_xaxes(showgrid=True, gridwidth=1, gridcolor='#eaeaea')
