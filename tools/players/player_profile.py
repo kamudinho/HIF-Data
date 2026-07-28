@@ -370,33 +370,35 @@ def vis_side(dp=None):
     truppen_stats_raw['Assists'] = truppen_stats_raw['Assists'].fillna(0).astype(int)
     truppen_stats = truppen_stats_raw.copy()
 
-    # --- HENT LIGA-DATA TIL SAMMENLIGNING (CACHELET) ---
+# --- HENT LIGA-DATA TIL SAMMENLIGNING (CACHELET) ---
     @st.cache_data(ttl=3600)
-    def hent_ligasammenligning_data(_conn):
+    def hent_ligasammenligning_data(_conn, db_name, navn_mapping):
         sql_liga = f"""
             SELECT 
                 TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME) as VISNINGSNAVN, 
                 e.PLAYER_OPTAUUID,
                 e.EVENT_CONTESTANT_OPTAUUID as TEAM_UUID,
-                COUNT(e.EVENT_OPTAUUID) as Aktioner
-            FROM {DB}.OPTA_EVENTS e
-            JOIN (SELECT DISTINCT PLAYER_OPTAUUID, FIRST_NAME, LAST_NAME FROM {DB}.OPTA_MATCH_LINEUPS WHERE FIRST_NAME IS NOT NULL) p 
+                COUNT(e.EVENT_OPTAUUID) as AKTIONER
+            FROM {db_name}.OPTA_EVENTS e
+            JOIN (SELECT DISTINCT PLAYER_OPTAUUID, FIRST_NAME, LAST_NAME FROM {db_name}.OPTA_MATCH_LINEUPS WHERE FIRST_NAME IS NOT NULL) p 
                 ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
             WHERE e.EVENT_TIMESTAMP >= '2026-07-01'
             GROUP BY 1, 2, 3
         """
-        df_l = _conn.query(sql_liga)
-        if df_l is not None:
-            df_l.columns = df_l.columns.str.lower()
-            df_l['visningsnavn'] = df_l.apply(lambda r: navne_map.get(str(r['player_optauuid']), r['visningsnavn']), axis=1)
-            df_l['hold'] = df_l['team_uuid']
-            return df_l
+        try:
+            df_l = _conn.query(sql_liga)
+            if df_l is not None and not df_l.empty:
+                df_l.columns = df_l.columns.str.lower()
+                df_l['visningsnavn'] = df_l.apply(lambda r: navn_mapping.get(str(r['player_optauuid']), r['visningsnavn']), axis=1)
+                df_l = df_l.dropna(subset=['visningsnavn'])
+                return df_l
+        except Exception as e:
+            st.error(f"Fejl ved hentning af ligadata: {e}")
         return pd.DataFrame()
 
-    st.write("Debug - ligadata rækker:", len(df_alle_spillere_liga))
-
-    df_alle_spillere_liga = hent_ligasammenligning_data(conn)
-
+    # Kald funktionen og send parametrene med
+    df_alle_spillere_liga = hent_ligasammenligning_data(conn, DB, navne_map)
+    
 # --- OPSETNING AF FANER ---
     t_team, t_profile, t_pitch, t_phys, t_compare = st.tabs([
         "Holdoversigt", "Spillerprofil", "Spilleraktioner", "Fysisk data", "Sammenligning"
