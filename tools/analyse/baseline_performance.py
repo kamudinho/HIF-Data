@@ -238,7 +238,6 @@ def vis_side(df_events=None, kamp=None, hold_map=None):
 
                 fig1.update_traces(
                     marker_color=df_b['COLOR_TEAM'],
-                    textfont=dict(size=12, color='white'),
                     hovertemplate=(
                         "<b>%{customdata[0]}</b><br>"
                         "Præstation: %{x:.2f}<br>"
@@ -253,13 +252,13 @@ def vis_side(df_events=None, kamp=None, hold_map=None):
                     showlegend=False,
                     plot_bgcolor='rgba(0,0,0,0)',
                     paper_bgcolor='rgba(0,0,0,0)',
-                    font=dict(color='white'),
-                    title_font=dict(size=18, color='white'),
+                    font=dict(color='gray'),
+                    title_font=dict(size=18, color='black'),
                     height=600,
                     margin=dict(t=60, b=40, l=40, r=40)
                 )
                 
-                fig1.update_xaxes(showgrid=True, gridwidth=1, gridcolor='#333333', zerolinecolor='#555555')
+                fig1.update_xaxes(showgrid=True, gridwidth=1, gridcolor='#eaeaea')
                 fig1.update_yaxes(showgrid=False)
 
                 st.plotly_chart(fig1, use_container_width=True)
@@ -331,6 +330,7 @@ def vis_side(df_events=None, kamp=None, hold_map=None):
 
                 fig2 = go.Figure()
                 
+                # Beregn gennemsnit af totalerne til linjerne
                 avg_x = df_s[x_col].mean()
                 avg_y = df_s[y_col].mean()
 
@@ -343,7 +343,7 @@ def vis_side(df_events=None, kamp=None, hold_map=None):
                         mode='markers+text',
                         text=[team_name], 
                         textposition="top center",
-                        textfont=dict(size=13, color='white', weight='bold' if is_hif else 'normal'),
+                        textfont=dict(size=10, color='black'),
                         marker=dict(
                             size=25 if is_hif else 18, 
                             color=HIF_RED if is_hif else 'gray',
@@ -352,15 +352,13 @@ def vis_side(df_events=None, kamp=None, hold_map=None):
                         hovertemplate=f"<b>{team_name}</b><br>Total {x_col}: %{{x:.2f}}<br>Total {y_col}: %{{y:.2f}}<extra></extra>"
                     ))
 
-                fig2.add_vline(x=avg_x, line_dash="dot", line_color="#777777")
-                fig2.add_hline(y=avg_y, line_dash="dot", line_color="#777777")
+                # Tilføj gennemsnitslinjer igen
+                fig2.add_vline(x=avg_x, line_dash="dot", line_color="#999")
+                fig2.add_hline(y=avg_y, line_dash="dot", line_color="#999")
 
                 fig2.update_layout(
                     title=f"Sammenhæng mellem {x_col} og {y_col} (Totaler)",
-                    plot_bgcolor='rgba(0,0,0,0)',
-                    paper_bgcolor='rgba(0,0,0,0)',
-                    font=dict(color='white'),
-                    title_font=dict(size=18, color='white'),
+                    plot_bgcolor='white',
                     xaxis_title=f"Total {x_col}",
                     yaxis_title=f"Total {y_col}",
                     height=600,
@@ -368,8 +366,8 @@ def vis_side(df_events=None, kamp=None, hold_map=None):
                     showlegend=False
                 )
                 
-                fig2.update_xaxes(showgrid=True, gridwidth=1, gridcolor='#333333')
-                fig2.update_yaxes(showgrid=True, gridwidth=1, gridcolor='#333333')
+                fig2.update_xaxes(showgrid=True, gridwidth=1, gridcolor='#eaeaea')
+                fig2.update_yaxes(showgrid=True, gridwidth=1, gridcolor='#eaeaea')
 
                 st.plotly_chart(fig2, use_container_width=True, config={'displayModeBar': False})
 
