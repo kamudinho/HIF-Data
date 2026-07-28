@@ -22,8 +22,8 @@ from data.utils.mapping import (
 
 # --- KONFIGURATION (HVIDOVRE-APP / 2025/2026) ---
 DB = "KLUB_HVIDOVREIF.AXIS"
-SEASONNAME = "2026/2027"
-LIGA_IDS = "('2mb332vncy4450vu14paj8844')"
+SEASONNAME = "2025/2026"
+LIGA_IDS = "('328')"
 
 # --- HJÆLPEFUNKTIONER ---
 @st.cache_data(ttl=3600)
@@ -116,7 +116,6 @@ def get_physical_data(player_name, player_opta_uuid, valgt_hold_navn, db_conn):
     sql = f"""
         SELECT * FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
         WHERE UPPER(PLAYER_NAME) LIKE UPPER('%{efternavn}%')
-        AND MATCH_DATE >= '2026-07-01'
     """
     df = db_conn.query(sql)
     if df is not None and not df.empty:
@@ -132,7 +131,7 @@ def get_physical_data(player_name, player_opta_uuid, valgt_hold_navn, db_conn):
         return df
     return None
 
-# --- HENT LIGA-DATA TIL SAMMENLIGNING MED ALLE STATISTIKKER (Flyttet til topniveau) ---
+# --- HENT LIGA-DATA TIL SAMMENLIGNING MED ALLE STATISTIKKER ---
 @st.cache_data(ttl=3600)
 def hent_ligasammenligning_data(_conn, db_name, navn_mapping):
     try:
@@ -150,7 +149,6 @@ def hent_ligasammenligning_data(_conn, db_name, navn_mapping):
             FROM {db_name}.OPTA_EVENTS e
             JOIN {db_name}.OPTA_MATCH_LINEUPS p ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
             LEFT JOIN {db_name}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
-            WHERE e.EVENT_TIMESTAMP >= '2026-07-01'
             GROUP BY e.EVENT_OPTAUUID, e.PLAYER_OPTAUUID, e.EVENT_TYPEID, e.EVENT_TIMESTAMP, e.MATCH_OPTAUUID, e.EVENT_CONTESTANT_OPTAUUID, p.FIRST_NAME, p.LAST_NAME
         """
         df_l_events = _conn.query(sql_liga_events)
@@ -160,7 +158,6 @@ def hent_ligasammenligning_data(_conn, db_name, navn_mapping):
         df_l_events.columns = df_l_events.columns.str.lower()
         df_l_events['qual_list'] = df_l_events['qualifiers'].fillna('').str.split(',')
 
-        # Hjælpefunktion til qualifiers
         def count_event_with_qual_l(df_group, eid, qids):
             return df_group.apply(lambda r: har_qualifier(r['event_typeid'], r.get('qual_list', []), eid, qids), axis=1).sum()
 
@@ -170,10 +167,8 @@ def hent_ligasammenligning_data(_conn, db_name, navn_mapping):
         df_sorted['prev_event_typeid'] = df_sorted.groupby('match_optauuid')['event_typeid'].shift(1)
         df_sorted['prev_qualifiers'] = df_sorted.groupby('match_optauuid')['qual_list'].shift(1)
 
-        # Beregn mål pr spiller
         goals_df = df_sorted[df_sorted['event_typeid'] == 16].groupby(['player_optauuid', 'visningsnavn']).size().reset_index(name='mål')
 
-        # Sikker tjek-funktion til assists for at undgå float/iterable fejl
         def check_assist_qualifiers(row):
             q = row.get('qual_list', [])
             pq = row.get('prev_qualifiers', [])
@@ -212,7 +207,6 @@ def hent_ligasammenligning_data(_conn, db_name, navn_mapping):
             'frispark_imod': (x['event_typeid'] == 4).sum()
         })).reset_index()
 
-        # Flet mål og assists på
         event_stats_liga = event_stats_liga.merge(goals_df[['player_optauuid', 'mål']], on='player_optauuid', how='left')
         event_stats_liga = event_stats_liga.merge(assists_df, left_on='player_optauuid', right_on='assist_player_uuid', how='left')
         if 'assist_player_uuid' in event_stats_liga.columns:
@@ -255,7 +249,6 @@ def hent_ligasammenligning_data(_conn, db_name, navn_mapping):
             liga_stats_raw['xG'] = 0.0
             liga_stats_raw['xA'] = 0.0
 
-        # 5. Navnemapping og holdnavne
         liga_stats_raw['visningsnavn'] = liga_stats_raw.reset_index().apply(
             lambda r: navn_mapping.get(str(r['player_optauuid']), r['visningsnavn']), axis=1
         ).values
@@ -294,7 +287,6 @@ def vis_side(dp=None):
     if not conn: 
         return
         
-    # Hent ligadata til sammenligning på tværs af hold
     df_alle_spillere_liga = hent_ligasammenligning_data(conn, DB, navne_map)
     
     # 1. HOLDVALG
@@ -340,7 +332,6 @@ def vis_side(dp=None):
                 ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
             LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
             WHERE e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid_hold}' 
-            AND e.EVENT_TIMESTAMP >= '2026-07-01'
             GROUP BY 1, 2, 3, 4, 5, 6, 7
         """
         df_all = conn.query(sql_events)
@@ -379,7 +370,6 @@ def vis_side(dp=None):
                 JOIN {DB}.OPTA_MATCH_LINEUPS p ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
                 LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
                 WHERE e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid_hold}'
-                  AND e.EVENT_TIMESTAMP >= '2026-07-01'
                 GROUP BY e.EVENT_OPTAUUID, e.PLAYER_OPTAUUID, e.EVENT_TYPEID, e.EVENT_TIMESTAMP, e.MATCH_OPTAUUID, p.FIRST_NAME, p.LAST_NAME
             ),
             SortedEvents AS (
