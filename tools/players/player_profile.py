@@ -194,22 +194,22 @@ def vis_side(dp=None):
     primær_farve = get_team_color(valgt_hold, "primary", "#df003b")
 
     # 2. HENT DATA
-    with st.spinner("Henter spillerdata..."):
-    sql_events = f"""
-        SELECT 
-            e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, 
-            p.MATCH_NAME, p.FIRST_NAME, p.SHORT_LAST_NAME,
-            e.PLAYER_OPTAUUID, e.EVENT_OUTCOME as OUTCOME,
-            TO_CHAR(e.EVENT_TIMESTAMP, 'YYYY-MM-DD HH24:MI:SS') as EVENT_TIMESTAMP_STR,
-            LISTAGG(q.QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY q.QUALIFIER_QID) as QUALIFIERS
-        FROM {DB}.OPTA_EVENTS e
-        JOIN (SELECT DISTINCT PLAYER_OPTAUUID, FIRST_NAME, LAST_NAME, SHORT_LAST_NAME, MATCH_NAME FROM {DB}.OPTA_MATCH_LINEUPS WHERE FIRST_NAME IS NOT NULL) p 
-            ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
-        LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
-        WHERE e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid_hold}' 
-        AND e.EVENT_TIMESTAMP >= '2026-07-01'
-        GROUP BY 1, 2, 3, 4, 5, 6, 7, 8, 9
-    """
+    with st.spinner("Henter spillere"):
+        sql_events = f"""
+            SELECT 
+                e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, 
+                p.MATCH_NAME, p.FIRST_NAME, p.SHORT_LAST_NAME,
+                e.PLAYER_OPTAUUID, e.EVENT_OUTCOME as OUTCOME,
+                TO_CHAR(e.EVENT_TIMESTAMP, 'YYYY-MM-DD HH24:MI:SS') as EVENT_TIMESTAMP_STR,
+                LISTAGG(q.QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY q.QUALIFIER_QID) as QUALIFIERS
+            FROM {DB}.OPTA_EVENTS e
+            JOIN (SELECT DISTINCT PLAYER_OPTAUUID, FIRST_NAME, LAST_NAME, SHORT_LAST_NAME, MATCH_NAME FROM {DB}.OPTA_MATCH_LINEUPS WHERE FIRST_NAME IS NOT NULL) p 
+                ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
+            LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
+            WHERE e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid_hold}' 
+            AND e.EVENT_TIMESTAMP >= '2026-07-01'
+            GROUP BY 1, 2, 3, 4, 5, 6, 7, 8, 9
+        """
         df_all = conn.query(sql_events)
         if df_all is not None:
             df_all.columns = df_all.columns.str.lower()
