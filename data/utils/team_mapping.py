@@ -72,7 +72,7 @@ TEAMS = {
     "Vendsyssel": {"abbr": "VEN", "team_wyid": 7488, "opta_uuid": "7gkglopz9cjsysn2u6sbhuvc5", "opta_id": 401, "ssid": "40d5387b-ac2f-4e9b-bb97-34456aeb69c4", "logo": "https://cdn5.wyscout.com/photos/team/public/2661_120x120.png"},
 
     # Superliga stamdata
-    "FC København": {"abbr": "FCK", "team_wyid": 7452, "opta_uuid": "569_uuid_dummy", "opta_id": 569, "logo": "https://cdn5.wyscout.com/photos/team/public/284_120x120.png"},
+    "FC København": {"abbr": "FCK", "team_wyid": 7452, "opta_uuid": "b3r6d8ydtmtjckam6pku9y400", "opta_id": 569, "logo": "https://cdn5.wyscout.com/photos/team/public/284_120x120.png"},
     "FC Midtjylland": {"abbr": "FCM", "team_wyid": 7455, "opta_uuid": "1000_uuid_dummy", "opta_id": 1000, "logo": "https://cdn5.wyscout.com/photos/team/public/286_120x120.png"},
     "Brøndby IF": {"abbr": "BIF", "team_wyid": 7453, "opta_uuid": "239_uuid_dummy", "opta_id": 239, "logo": "https://cdn5.wyscout.com/photos/team/public/291_120x120.png"},
     "AGF": {"abbr": "AGF", "team_wyid": 7457, "opta_uuid": "420_uuid_dummy", "opta_id": 420, "logo": "https://cdn5.wyscout.com/photos/team/public/292_120x120.png"},
