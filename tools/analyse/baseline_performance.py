@@ -17,8 +17,8 @@ def vis_side(df_events=None, kamp=None, hold_map=None):
 
         DB = "KLUB_HVIDOVREIF.AXIS"
         
-        valgt_saeson = st.session_state.get("saeson_select", "2026/2027")
-        competition_uuid = SEASONS.get(valgt_saeson, {}).get(COMPETITION_NAME, "2mb332vncy4450vu14paj8844")
+        valgt_saeson = st.session_state.get("saeson_select", "2025/2026")
+        competition_uuid = SEASONS.get(valgt_saeson, {}).get(COMPETITION_NAME, "dyjr458hcmrcy87fsabfsy87o")
         
         sql = f"""
             WITH MatchBase AS (
@@ -130,9 +130,9 @@ def vis_side(df_events=None, kamp=None, hold_map=None):
             # --- TAB 1: BASELINE VISNING ---
             with tab1:
                 metric_labels_tab1 = {
-                    "Mål vs. Skud": "GOALS_VS_BASELINE",
-                    "Mål vs. xG": "XG_VS_GOALS",
-                    "Skud på mål": "SHOTS_ON_TARGET",
+                    "Mål vs. Skud-baseline (Faktiske mål minus forventede ud fra skudvolumen)": "GOALS_VS_BASELINE",
+                    "xG vs. Faktiske Mål (Afslutningskvalitet)": "XG_VS_GOALS",
+                    "Skud på mål (Total)": "SHOTS_ON_TARGET",
                     "Hjørnespark": "CORNERS",
                     "Tacklinger": "TACKLES",
                     "Frispark": "FOULS",
@@ -208,20 +208,20 @@ def vis_side(df_events=None, kamp=None, hold_map=None):
                     
                     df_b['BASELINE_VAL'] = df_b['SHOTS'] * league_conversion
                     df_b['DIFF'] = df_b['GOALS'] - df_b['BASELINE_VAL']
-                    chart_title = "Mål vs. skud"
-                    xaxis_title = "mål vs. skud"
+                    chart_title = "Mål over eller under en skud-volumen baseline"
+                    xaxis_title = "mål vs. skud-volumen baseline"
 
                 elif metric_key1 == "XG_VS_GOALS":
                     df_b['DIFF'] = df_b['GOALS'] - df_b['XG']
-                    chart_title = "Mål vs. xG"
-                    xaxis_title = "Mål vs. xG"
+                    chart_title = "Faktiske mål minus xG (Over/underpræstation på afslutninger)"
+                    xaxis_title = "mål minus xG"
 
                 else:
                     league_avg_per_match = df_b[metric_key1].sum() / df_b['MATCHES'].sum()
                     df_b['BASELINE_VAL'] = df_b['MATCHES'] * league_avg_per_match
                     df_b['DIFF'] = df_b[metric_key1] - df_b['BASELINE_VAL']
-                    chart_title = f"{selected_label1} vs. Liga"
-                    xaxis_title = "Forskel vs. gennemsnit"
+                    chart_title = f"{selected_label1} vs. Liga-gennemsnit"
+                    xaxis_title = "forskel i forhold til gennemsnit"
 
                 df_b = df_b.sort_values(by='DIFF', ascending=True)
                 df_b['COLOR_TEAM'] = df_b['TEAM'].apply(lambda x: HIF_RED if str(x).strip().lower() == 'hvidovre' else 'gray')
@@ -238,6 +238,7 @@ def vis_side(df_events=None, kamp=None, hold_map=None):
 
                 fig1.update_traces(
                     marker_color=df_b['COLOR_TEAM'],
+                    textfont=dict(size=12, color='white'),
                     hovertemplate=(
                         "<b>%{customdata[0]}</b><br>"
                         "Præstation: %{x:.2f}<br>"
@@ -252,13 +253,13 @@ def vis_side(df_events=None, kamp=None, hold_map=None):
                     showlegend=False,
                     plot_bgcolor='rgba(0,0,0,0)',
                     paper_bgcolor='rgba(0,0,0,0)',
-                    font=dict(color='gray'),
+                    font=dict(color='white'),
                     title_font=dict(size=18, color='white'),
                     height=600,
                     margin=dict(t=60, b=40, l=40, r=40)
                 )
                 
-                fig1.update_xaxes(showgrid=True, gridwidth=1, gridcolor='#eaeaea')
+                fig1.update_xaxes(showgrid=True, gridwidth=1, gridcolor='#333333', zerolinecolor='#555555')
                 fig1.update_yaxes(showgrid=False)
 
                 st.plotly_chart(fig1, use_container_width=True)
@@ -287,8 +288,8 @@ def vis_side(df_events=None, kamp=None, hold_map=None):
 
                         df_table = df_s_pop[['TEAM', x_col, y_col]].copy()
                         df_table.columns = ['Hold', x_col, y_col]
-                        df_table[x_col] = df_table[x_col].map('{:.0f}'.format)
-                        df_table[y_col] = df_table[y_col].map('{:.0f}'.format)
+                        df_table[x_col] = df_table[x_col].map('{:.1f}'.format)
+                        df_table[y_col] = df_table[y_col].map('{:.2f}'.format)
                         
                         st.markdown("""
                             <style>
@@ -330,7 +331,6 @@ def vis_side(df_events=None, kamp=None, hold_map=None):
 
                 fig2 = go.Figure()
                 
-                # Beregn gennemsnit af totalerne til linjerne
                 avg_x = df_s[x_col].mean()
                 avg_y = df_s[y_col].mean()
 
@@ -343,22 +343,24 @@ def vis_side(df_events=None, kamp=None, hold_map=None):
                         mode='markers+text',
                         text=[team_name], 
                         textposition="top center",
-                        textfont=dict(size=10, color='black'),
+                        textfont=dict(size=13, color='white', weight='bold' if is_hif else 'normal'),
                         marker=dict(
                             size=25 if is_hif else 18, 
                             color=HIF_RED if is_hif else 'gray',
                             line=dict(width=2, color='white')
                         ),
-                        hovertemplate=f"<b>{team_name}</b><br>Total {x_col}: %{{x:.0f}}<br>Total {y_col}: %{{y:.0f}}<extra></extra>"
+                        hovertemplate=f"<b>{team_name}</b><br>Total {x_col}: %{{x:.2f}}<br>Total {y_col}: %{{y:.2f}}<extra></extra>"
                     ))
 
-                # Tilføj gennemsnitslinjer igen
-                fig2.add_vline(x=avg_x, line_dash="dot", line_color="#999")
-                fig2.add_hline(y=avg_y, line_dash="dot", line_color="#999")
+                fig2.add_vline(x=avg_x, line_dash="dot", line_color="#777777")
+                fig2.add_hline(y=avg_y, line_dash="dot", line_color="#777777")
 
                 fig2.update_layout(
                     title=f"Sammenhæng mellem {x_col} og {y_col} (Totaler)",
-                    plot_bgcolor='white',
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    font=dict(color='white'),
+                    title_font=dict(size=18, color='white'),
                     xaxis_title=f"Total {x_col}",
                     yaxis_title=f"Total {y_col}",
                     height=600,
@@ -366,8 +368,8 @@ def vis_side(df_events=None, kamp=None, hold_map=None):
                     showlegend=False
                 )
                 
-                fig2.update_xaxes(showgrid=True, gridwidth=1, gridcolor='#eaeaea')
-                fig2.update_yaxes(showgrid=True, gridwidth=1, gridcolor='#eaeaea')
+                fig2.update_xaxes(showgrid=True, gridwidth=1, gridcolor='#333333')
+                fig2.update_yaxes(showgrid=True, gridwidth=1, gridcolor='#333333')
 
                 st.plotly_chart(fig2, use_container_width=True, config={'displayModeBar': False})
 
