@@ -382,7 +382,7 @@ def vis_side(dp=None):
                 buffered = io.BytesIO()
                 hold_logo.save(buffered, format="PNG")
                 img_str = base64.b64encode(buffered.getvalue()).decode()
-                logo_html = f'<img src="data:image/png;base64,{img_str}" style="height: 50px; margin-right: 8px; object-fit: contain; vertical-align: middle;">'
+                logo_html = f'<img src="data:image/png;base64,{img_str}" style="height: 40px; margin-right: 8px; object-fit: contain; vertical-align: middle;">'
 
             st.markdown(f'<div style="display: flex; align-items: center;"><div style="display: flex; align-items: center;">{logo_html}<span style="font-size: 20px; font-weight: bold; line-height: 1;">{valgt_hold.upper()}</span></div></div>', unsafe_allow_html=True)
             
