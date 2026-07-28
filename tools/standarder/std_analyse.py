@@ -179,7 +179,7 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
         # --- NY TEKSTOPSÆTNING I VENSTRE HJØRNE ---
         # 1. Logo & Holdnavn (øverst)
         if hold_logo:
-            ax_logo = ax.inset_axes([0.12, 0.90, 0.07, 0.07], transform=ax.transAxes)
+            ax_logo = ax.inset_axes([0.062, 0.90, 0.07, 0.07], transform=ax.transAxes)
             ax_logo.imshow(hold_logo)
             ax_logo.axis('off')
             ax.text(8.5, 63.5, t_sel.upper(), fontsize=8, fontweight='bold', color='#333333', alpha=0.9, va='center')
