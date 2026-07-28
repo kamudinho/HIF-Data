@@ -373,19 +373,20 @@ def vis_side(dp=None):
     t_team, t_profile, t_pitch, t_phys = st.tabs(["Holdoversigt", "Spillerprofil", "Spilleraktioner", "Fysisk data"])
 
     with t_team:
-        st.subheader(f"Holdoversigt: {valgt_hold}")
-        st.write("Her kan du se det samlede overblik over truppen og spillernes statistik for sæsonen.")
-        
-        if not truppen_stats.empty:
-            df_vis_truppen = truppen_stats.reset_index()
-            
-            kategori_valg = st.segmented_control(
+        col_t_title, col_t_radio = st.columns([2, 2])
+        with col_t_title:
+            st.subheader(f"Holdoversigt: {valgt_hold}")
+        with col_t_radio:
+            kategori_valg = st.radio(
                 "Visningskategori", 
                 options=["Generelt", "Offensiv", "Defensiv"], 
-                default="Generelt",
+                horizontal=True,
                 key="team_kategori_control",
                 label_visibility="collapsed"
             )
+        
+        if not truppen_stats.empty:
+            df_vis_truppen = truppen_stats.reset_index()
             
             off_kolonner = ['visningsnavn', 'Kampe', 'Minutter', 'Mål', 'xG', 'Assists', 'xA', 'Pasninger', 'Stikninger', 'Indlæg', 'Afslutninger', 'Driblinger', 'Chancer_skabt', 'Key_Passes']
             def_kolonner = ['visningsnavn', 'Kampe', 'Minutter', 'Erobringer', 'Gule_kort', 'Roede_kort']
