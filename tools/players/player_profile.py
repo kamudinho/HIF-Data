@@ -815,71 +815,92 @@ def vis_side(dp=None):
                 st.data_editor(df_phys, hide_index=True, use_container_width=True, disabled=True)
 
     with t_compare:
-        st.markdown('<p style="font-size: 14px; font-weight: bold; margin-bottom: 10px;">SPILLERSAMMENLIGNING PÅ TVÆRS AF LIGAEN</p>', unsafe_allow_html=True)
+    st.markdown('<p style="font-size: 14px; font-weight: bold; margin-bottom: 10px;">SPILLERSAMMENLIGNING PÅ TVÆRS AF LIGAEN</p>', unsafe_allow_html=True)
+    
+    if df_alle_spillere_liga is not None and not df_alle_spillere_liga.empty:
+        # Sørg for at kolonnenavne er små bogstaver konsekvent
+        df_alle_spillere_liga.columns = [str(c).lower() for c in df_alle_spillere_liga.columns]
         
-        if df_alle_spillere_liga is not None and not df_alle_spillere_liga.empty:
-            df_alle_spillere_liga.columns = df_alle_spillere_liga.columns.str.lower()
+        if 'visningsnavn' in df_alle_spillere_liga.columns:
+            alle_tilgaengelige_spillere = sorted(df_alle_spillere_liga['visningsnavn'].dropna().unique())
             
-            if 'visningsnavn' in df_alle_spillere_liga.columns:
-                alle_tilgaengelige_spillere = sorted(df_alle_spillere_liga['visningsnavn'].dropna().unique())
+            valgte_sammenligning_spillere = st.multiselect(
+                "Vælg spillere til sammenligning",
+                options=alle_tilgaengelige_spillere,
+                default=alle_tilgaengelige_spillere[:3] if len(alle_tilgaengelige_spillere) >= 3 else alle_tilgaengelige_spillere,
+                key="ligasammenligning_multiselect"
+            )
+            
+            if valgte_sammenligning_spillere:
+                df_sammenligning = df_alle_spillere_liga[df_alle_spillere_liga['visningsnavn'].isin(valgte_sammenligning_spillere)].copy()
                 
-                valgte_sammenligning_spillere = st.multiselect(
-                    "Vælg spillere til sammenligning",
-                    options=alle_tilgaengelige_spillere,
-                    default=alle_tilgaengelige_spillere[:3] if len(alle_tilgaengelige_spillere) >= 3 else alle_tilgaengelige_spillere,
-                    key="ligasammenligning_multiselect"
+                kat_sammenligning = st.segmented_control(
+                    "Visningskategori_sammenligning",
+                    options=["Generelt", "Offensiv", "Defensiv"],
+                    default="Generelt",
+                    key="sammenligning_kategori_control",
+                    label_visibility="collapsed"
                 )
                 
-                if valgte_sammenligning_spillere:
-                    df_sammenligning = df_alle_spillere_liga[df_alle_spillere_liga['visningsnavn'].isin(valgte_sammenligning_spillere)].copy()
-                    
-                    kat_sammenligning = st.segmented_control(
-                        "Visningskategori_sammenligning",
-                        options=["Generelt", "Offensiv", "Defensiv"],
-                        default="Generelt",
-                        key="sammenligning_kategori_control",
-                        label_visibility="collapsed"
-                    )
-                    
-                    gen_kolonner_comp = ['visningsnavn', 'hold', 'Kampe', 'Minutter', 'Aktioner', 'Pasninger', 'Mål', 'Assists', 'Gule_kort', 'Roede_kort']
-                    off_kolonner_comp = ['visningsnavn', 'hold', 'Aktioner', 'Afslutninger', 'xG', 'Chancer_skabt', 'Key_Passes', 'Stikninger', 'Indlæg', 'xA', 'Driblinger']
-                    def_kolonner_comp = ['visningsnavn', 'hold', 'Aktioner', 'Erobringer', 'Tacklinger', 'Clearinger', 'Blokeringer', 'Interceptioner', 'Frispark_imod']
-                    
-                    if kat_sammenligning == "Generelt":
-                        valgte_komp_kolonner = [k for k in gen_kolonner_comp if k in df_sammenligning.columns]
-                    elif kat_sammenligning == "Offensiv":
-                        valgte_komp_kolonner = [k for k in off_kolonner_comp if k in df_sammenligning.columns]
-                    elif kat_sammenligning == "Defensiv":
-                        valgte_komp_kolonner = [k for k in def_kolonner_comp if k in df_sammenligning.columns]
-                    else:
-                        valgte_komp_kolonner = [k for k in df_sammenligning.columns if k != 'player_optauuid']
-                    
-                    df_vis_sammenligning = df_sammenligning[valgte_komp_kolonner].copy()
-                    
-                    if 'visningsnavn' in df_vis_sammenligning.columns:
-                        df_vis_sammenligning = df_vis_sammenligning.set_index('visningsnavn')
-                    
-                    df_vis_sammenligning = df_vis_sammenligning.rename(columns={
-                        'hold': 'Hold',
-                        'Gule_kort': 'Gule kort',
-                        'Roede_kort': 'Røde kort',
-                        'Chancer_skabt': 'Chancer skabt',
-                        'Key_Passes': 'Key Passes'
-                    })
-                        
-                    beregnet_hoejde_comp = int(len(df_vis_sammenligning) * 38 + 45)
-                    
-                    st.dataframe(
-                        df_vis_sammenligning,
-                        use_container_width=True,
-                        height=beregnet_hoejde_comp
-                    )
+                # RETTELSE: Alle kolonnenavne her er ændret til små bogstaver, så de matcher DataFrame'en
+                gen_kolonner_comp = ['visningsnavn', 'hold', 'kampe', 'minutter', 'aktioner', 'pasninger', 'mål', 'assists', 'gule_kort', 'roede_kort']
+                off_kolonner_comp = ['visningsnavn', 'hold', 'aktioner', 'afslutninger', 'xg', 'chancer_skabt', 'key_passes', 'stikninger', 'indlæg', 'xa', 'driblinger']
+                def_kolonner_comp = ['visningsnavn', 'hold', 'aktioner', 'erobringer', 'tacklinger', 'clearinger', 'blokeringer', 'interceptioner', 'frispark_imod']
+                
+                if kat_sammenligning == "Generelt":
+                    valgte_komp_kolonner = [k for k in gen_kolonner_comp if k in df_sammenligning.columns]
+                elif kat_sammenligning == "Offensiv":
+                    valgte_komp_kolonner = [k for k in off_kolonner_comp if k in df_sammenligning.columns]
+                elif kat_sammenligning == "Defensiv":
+                    valgte_komp_kolonner = [k for k in def_kolonner_comp if k in df_sammenligning.columns]
                 else:
-                    st.info("Vælg mindst én spiller ovenfor for at se sammenligningen.")
+                    valgte_komp_kolonner = [k for k in df_sammenligning.columns if k != 'player_optauuid']
+                
+                df_vis_sammenligning = df_sammenligning[valgte_komp_kolonner].copy()
+                
+                if 'visningsnavn' in df_vis_sammenligning.columns:
+                    df_vis_sammenligning = df_vis_sammenligning.set_index('visningsnavn')
+                
+                # Pæn omdøbning til visning i tabellen (med store bogstaver/pæne navne)
+                df_vis_sammenligning = df_vis_sammenligning.rename(columns={
+                    'hold': 'Hold',
+                    'kampe': 'Kampe',
+                    'minutter': 'Minutter',
+                    'aktioner': 'Aktioner',
+                    'pasninger': 'Pasninger',
+                    'mål': 'Mål',
+                    'assists': 'Assists',
+                    'gule_kort': 'Gule kort',
+                    'roede_kort': 'Røde kort',
+                    'afslutninger': 'Afslutninger',
+                    'xg': 'xG',
+                    'chancer_skabt': 'Chancer skabt',
+                    'key_passes': 'Key Passes',
+                    'stikninger': 'Stikninger',
+                    'indlæg': 'Indlæg',
+                    'xa': 'xA',
+                    'driblinger': 'Driblinger',
+                    'erobringer': 'Erobringer',
+                    'tacklinger': 'Tacklinger',
+                    'clearinger': 'Clearinger',
+                    'blokeringer': 'Blokeringer',
+                    'interceptioner': 'Interceptioner',
+                    'frispark_imod': 'Frispark imod'
+                })
+                    
+                beregnet_hoejde_comp = int(len(df_vis_sammenligning) * 38 + 45)
+                
+                st.dataframe(
+                    df_vis_sammenligning,
+                    use_container_width=True,
+                    height=beregnet_hoejde_comp
+                )
             else:
-                st.error("Kolonnen 'visningsnavn' blev ikke fundet i ligadata.")
+                st.info("Vælg mindst én spiller ovenfor for at se sammenligningen.")
         else:
-            st.warning("Ingen ligadata tilgængelig at vise.")
+            st.error("Kolonnen 'visningsnavn' blev ikke fundet i ligadata.")
+    else:
+        st.warning("Ingen ligadata tilgængelig at vise.")
 
 if __name__ == "__main__":
     vis_side()
