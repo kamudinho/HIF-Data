@@ -123,7 +123,7 @@ def vis_side(df_events=None, kamp=None, hold_map=None):
             st.caption("1. Division — Over- og Underpræstation samt Sammenhænge")
 
             # --- OPRETTELSE AF TABS ---
-            tab1, tab2 = st.tabs(["Baseline Oversigt", "Scatterplot"])
+            tab1, tab2 = st.tabs(["Baseline", "Scatterplot"])
 
             # --- TAB 1: BASELINE VISNING ---
             with tab1:
@@ -219,10 +219,45 @@ def vis_side(df_events=None, kamp=None, hold_map=None):
                     "Tacklinger vs. Mål": {"x": "TACKLES", "y": "GOALS"}
                 }
 
-                col_dropdown2, _ = st.columns([1, 1])
+                col_dropdown2, col_btn2 = st.columns([1.5, 0.5])
                 with col_dropdown2:
                     selected_label2 = st.selectbox("Vælg analyse (scatter):", list(metric_labels_tab2.keys()), label_visibility="collapsed", key="scatter_dropdown")
+                
+                with col_btn2:
+                    # Bruges popover, så tabellen åbner som en lille flydende boks ovenpå og intet forstyrrer plottets størrelse
+                    with st.popover("📊 Data", use_container_width=True):
+                        mapping = metric_labels_tab2[selected_label2]
+                        x_col, y_col = mapping["x"], mapping["y"]
+                        df_s_pop = agg_df.copy()
+                        df_s_pop[x_col] = pd.to_numeric(df_s_pop[x_col], errors='coerce').fillna(0)
+                        df_s_pop[y_col] = pd.to_numeric(df_s_pop[y_col], errors='coerce').fillna(0)
 
+                        df_table = df_s_pop[['TEAM', x_col, y_col]].copy()
+                        df_table.columns = ['Hold', x_col, y_col]
+                        df_table[x_col] = df_table[x_col].map('{:.1f}'.format)
+                        df_table[y_col] = df_table[y_col].map('{:.2f}'.format)
+                        
+                        st.markdown("""
+                            <style>
+                                thead tr th:first-child { display:none; }
+                                tbody tr th { display:none; }
+                                table tr td:nth-child(2) { text-align: left !important; }
+                                table tr td:nth-child(3), table tr td:nth-child(4) { text-align: center !important; }
+                                table tr th:nth-child(3), table tr th:nth-child(4) { text-align: center !important; }
+                                table { width: 100%; border-collapse: collapse; font-size: 12px; }
+                                table tr:has(td:contains("Hvidovre")) {
+                                    background-color: #df003b !important;
+                                    color: white !important;
+                                }
+                                table tr:has(td:contains("Hvidovre")) td {
+                                    color: white !important;
+                                    font-weight: bold;
+                                }
+                            </style>
+                        """, unsafe_allow_html=True)
+                        st.table(df_table)
+
+                # Generer selve scatterplottet i fuld størrelse
                 mapping = metric_labels_tab2[selected_label2]
                 x_col, y_col = mapping["x"], mapping["y"]
 
@@ -230,34 +265,6 @@ def vis_side(df_events=None, kamp=None, hold_map=None):
                 df_s[x_col] = pd.to_numeric(df_s[x_col], errors='coerce').fillna(0)
                 df_s[y_col] = pd.to_numeric(df_s[y_col], errors='coerce').fillna(0)
 
-                # Brug st.expander til at vise tabellen som en dropdown uden at ændre scatterplottets størrelse
-                with st.expander("📊 Vis/skjul datatabel"):
-                    df_table = df_s[['TEAM', x_col, y_col]].copy()
-                    df_table.columns = ['Hold', x_col, y_col]
-                    df_table[x_col] = df_table[x_col].map('{:.1f}'.format)
-                    df_table[y_col] = df_table[y_col].map('{:.2f}'.format)
-                    
-                    st.markdown("""
-                        <style>
-                            thead tr th:first-child { display:none; }
-                            tbody tr th { display:none; }
-                            table tr td:nth-child(2) { text-align: left !important; }
-                            table tr td:nth-child(3), table tr td:nth-child(4) { text-align: center !important; }
-                            table tr th:nth-child(3), table tr th:nth-child(4) { text-align: center !important; }
-                            table { width: 100%; border-collapse: collapse; font-size: 12px; }
-                            table tr:has(td:contains("Hvidovre")) {
-                                background-color: #df003b !important;
-                                color: white !important;
-                            }
-                            table tr:has(td:contains("Hvidovre")) td {
-                                color: white !important;
-                                font-weight: bold;
-                            }
-                        </style>
-                    """, unsafe_allow_html=True)
-                    st.table(df_table)
-
-                # Scatterplot i fuld bredde og fast størrelse
                 fig2 = go.Figure()
                 avg_x = df_s[x_col].mean()
                 avg_y = df_s[y_col].mean()
