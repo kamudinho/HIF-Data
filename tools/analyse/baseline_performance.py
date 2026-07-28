@@ -123,7 +123,7 @@ def vis_side(df_events=None, kamp=None, hold_map=None):
             st.caption("1. Division — Over- og Underpræstation samt Sammenhænge")
 
             # --- OPRETTELSE AF TABS ---
-            tab1, tab2 = st.tabs(["📊 Baseline Oversigt", "📈 Scatterplot"])
+            tab1, tab2 = st.tabs(["Baseline Oversigt", "Scatterplot"])
 
             # --- TAB 1: BASELINE VISNING ---
             with tab1:
