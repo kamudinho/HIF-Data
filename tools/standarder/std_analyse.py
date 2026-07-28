@@ -151,7 +151,7 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
     df_plot.loc[mask_left, ['EVENT_X', 'ENDX']] = 100 - df_plot.loc[mask_left, ['EVENT_X', 'ENDX']]
     df_plot.loc[mask_left, ['EVENT_Y', 'ENDY']] = 100 - df_plot.loc[mask_left, ['EVENT_Y', 'ENDY']]
 
-    # Filtrering på om sparket er taget fra venstre eller højre side af banen (omvendt ift. før, så højre side svarer til y > 34)
+    # Filtrering på om sparket er taget fra venstre eller højre side af banen
     if side_sel == "Venstre side":
         df_plot = df_plot[df_plot['EVENT_Y'] > 34]
     elif side_sel == "Højre side":
@@ -212,8 +212,7 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
 
 # --- 6. HOVEDSIDE ---
 def vis_side():
-    st.set_page_config(layout="wide", page_title="Standardsituationer")
-    st.markdown("<style>header {visibility: hidden;} div[data-testid='stSelectbox'] label { display: none !important; }</style>", unsafe_allow_html=True)
+    st.subheader("Standardsituationer")
     
     df_all = load_setpiece_data()
     if df_all.empty: st.warning("Ingen data fundet."); return
@@ -222,9 +221,8 @@ def vis_side():
     df_all['KLUB_NAVN'] = df_all['TEAM_UUID'].str.upper().map(uuid_to_name)
     teams = sorted([n for n in df_all['KLUB_NAVN'].unique() if pd.notna(n)])
 
-    col_t, _, col_sel = st.columns([2, 1, 1])
-    with col_t: st.subheader("Standardsituationer")
-    with col_sel: t_sel = st.selectbox("h", teams, index=teams.index("Hvidovre") if "Hvidovre" in teams else 0)
+    _, _, col_sel = st.columns([2, 1, 1])
+    with col_sel: t_sel = st.selectbox("h", teams, index=teams.index("Hvidovre") if "Hvidovre" in teams else 0, key="main_team_selectbox")
 
     df_team_selected = df_all[df_all['KLUB_NAVN'] == t_sel].copy()
     tabs = st.tabs(["Holdoversigt", "Spilleroversigt", "Hjørnespark", "Frispark", "Indkast", "Zoneoversigt"])
@@ -243,4 +241,6 @@ def vis_side():
         st.dataframe(df_team_selected.groupby(['ZONE', 'TYPE_NAVN']).size().unstack(fill_value=0), use_container_width=True)
 
 if __name__ == "__main__":
+    st.set_page_config(layout="wide", page_title="Standardsituationer")
+    st.markdown("<style>header {visibility: hidden;} div[data-testid='stSelectbox'] label { display: none !important; }</style>", unsafe_allow_html=True)
     vis_side()
