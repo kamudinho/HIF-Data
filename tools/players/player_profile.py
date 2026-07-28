@@ -434,7 +434,8 @@ def vis_side(dp=None):
                 'Gule_kort': 'Gule kort',
                 'Roede_kort': 'Røde kort',
                 'Chancer_skabt': 'Chancer skabt',
-                'Key_Passes': 'Key Passes'
+                'Key_Passes': 'Key Passes',
+                'Frispark_imod': 'Frispark'
             })
             
             beregnet_hoejde = int(len(df_visning) * 38 + 45)
