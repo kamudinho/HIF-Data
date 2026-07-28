@@ -396,6 +396,8 @@ def vis_side(dp=None):
             st.error(f"Fejl ved hentning af ligadata: {e}")
         return pd.DataFrame()
 
+        st.write("Debug - ligadata rækker:", len(df_alle_spillere_liga))
+
     # Kald funktionen og send parametrene med
     df_alle_spillere_liga = hent_ligasammenligning_data(conn, DB, navne_map)
     
