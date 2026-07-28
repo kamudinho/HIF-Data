@@ -166,9 +166,7 @@ def hent_ligasammenligning_data(_conn, db_name, navn_mapping):
         df_l_events['qual_list'] = df_l_events['qualifiers'].fillna('').str.split(',')
         
         # Tilføj Action_Label baseret på event_typeid og qualifiers
-        df_l_events['action_label'] = df_l_events.apply(
-            lambda r: get_action_label(r['event_typeid'], r.get('qual_list', [])), axis=1
-        )
+        df_l_events['action_label'] = df_l_events['event_typeid'].apply(get_action_label)
 
         sql_liga_expected = f"""
             SELECT 
