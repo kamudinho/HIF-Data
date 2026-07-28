@@ -214,24 +214,32 @@ def vis_side(dp=None):
         df_all = conn.query(sql_events)
         if df_all is not None:
             df_all.columns = df_all.columns.str.lower()
-            
-            # SIKKER NAVNE-GENERERING (Erstatter initialet i MATCH_NAME med FIRST_NAME)
+        
+        # SIKKER NAVNE-GENERERING
         def fix_name(row):
-            f_name = str(row.get('first_name', '')).strip()
-            m_name = str(row.get('match_name', '')).strip()
+            f_name = row.get('first_name')
+            m_name = row.get('match_name')
             
-            # Hvis vi har både fornavn og match_name, og match_name indeholder et punktum (f.eks. "C. Grening")
-            if f_name and f_name.lower() != 'nan' and m_name and '.' in m_name:
-                # Split ved punktum og mellemrum, og tag alt efter efternavnets initial
-                parts = m_name.split('.', 1)
-                if len(parts) > 1:
+            # Rens værdier for 'nan', 'None' eller blanke strenge
+            f_str = str(f_name).strip() if f_name is not None else ""
+            if f_str.lower() in ['nan', 'none', '']:
+                f_str = ""
+                
+            m_str = str(m_name).strip() if m_name is not None else ""
+            if m_str.lower() in ['nan', 'none', '']:
+                m_str = ""
+
+            # Hvis vi har et match_name (f.eks. "C. Grening" eller "A. Jungersen")
+            if m_str and '.' in m_str:
+                parts = m_str.split('.', 1)
+                if len(parts) > 1 and f_str:
                     efternavn_del = parts[1].strip()
-                    return f"{f_name} {efternavn_del}"
+                    return f"{f_str} {efternavn_del}"
             
-            # Fallback hvis noget mangler
-            if m_name:
-                return m_name
-            return f_name if f_name else "Ukendt spiller"
+            # Fallback til match_name hvis det findes, ellers fornavn
+            if m_str:
+                return m_str
+            return f_str if f_str else "Ukendt spiller"
     
             df_all['visningsnavn'] = df_all.apply(fix_name, axis=1)
             df_all['visningsnavn'] = df_all.apply(lambda r: navne_map.get(str(r['player_optauuid']), r['visningsnavn']), axis=1)
