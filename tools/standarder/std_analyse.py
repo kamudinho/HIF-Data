@@ -182,12 +182,12 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
             ax_logo = ax.inset_axes([0.012, 0.82, 0.07, 0.07], transform=ax.transAxes)
             ax_logo.imshow(hold_logo)
             ax_logo.axis('off')
-            ax.text(8.5, 63.5, t_sel.upper(), fontsize=10, fontweight='bold', color='#333333', alpha=0.9, va='center')
+            ax.text(8.5, 63.5, t_sel.upper(), fontsize=8, fontweight='bold', color='#333333', alpha=0.9, va='center')
         else:
-            ax.text(1, 64, t_sel.upper(), fontsize=10, fontweight='bold', color='#333333', alpha=0.9, va='center')
+            ax.text(1, 64, t_sel.upper(), fontsize=8, fontweight='bold', color='#333333', alpha=0.9, va='center')
 
         # 2. Kategori (fx HJØRNESPARK (BEGGE SIDER))
-        ax.text(1, 60, f"{sp_type.upper()} ({side_sel.upper()})", fontsize=11, fontweight='bold', color='#111111', alpha=0.85)
+        ax.text(1, 60, f"{sp_type.upper()} ({side_sel.upper()})", fontsize=6, fontweight='bold', color='#111111', alpha=0.85)
         
         # 3. Antal og succes % (og evt. valgt spiller)
         spiller_tekst = f"Spiller: {p_sel}" if p_sel != "Alle spillere" else "Alle spillere"
