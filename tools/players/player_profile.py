@@ -215,22 +215,23 @@ def vis_side(dp=None):
         if df_all is not None:
             df_all.columns = df_all.columns.str.lower()
             
-            # SIKKER NAVNE-GENERERING (Bruger FIRST_NAME + SHORT_LAST_NAME)
-            def fix_name(row):
-                f_name = str(row.get('first_name', '')).strip()
-                s_last_name = str(row.get('short_last_name', '')).strip()
-                
-                if f_name and s_last_name and s_last_name.lower() != 'nan':
-                    return f"{f_name} {s_last_name}"
-                
-                m_name = str(row.get('match_name', ''))
-                if not m_name or not f_name:
-                    return m_name
-                
-                parts = re.split(r'\.\s*', m_name, maxsplit=1)
-                if len(parts) > 1 and parts[1]:
-                    return f"{f_name} {parts[1]}"
-                return f_name
+            # SIKKER NAVNE-GENERERING (Erstatter initialet i MATCH_NAME med FIRST_NAME)
+        def fix_name(row):
+            f_name = str(row.get('first_name', '')).strip()
+            m_name = str(row.get('match_name', '')).strip()
+            
+            # Hvis vi har både fornavn og match_name, og match_name indeholder et punktum (f.eks. "C. Grening")
+            if f_name and f_name.lower() != 'nan' and m_name and '.' in m_name:
+                # Split ved punktum og mellemrum, og tag alt efter efternavnets initial
+                parts = m_name.split('.', 1)
+                if len(parts) > 1:
+                    efternavn_del = parts[1].strip()
+                    return f"{f_name} {efternavn_del}"
+            
+            # Fallback hvis noget mangler
+            if m_name:
+                return m_name
+            return f_name if f_name else "Ukendt spiller"
     
             df_all['visningsnavn'] = df_all.apply(fix_name, axis=1)
             df_all['visningsnavn'] = df_all.apply(lambda r: navne_map.get(str(r['player_optauuid']), r['visningsnavn']), axis=1)
