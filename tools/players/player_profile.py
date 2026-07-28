@@ -370,49 +370,112 @@ def vis_side(dp=None):
     truppen_stats_raw['Assists'] = truppen_stats_raw['Assists'].fillna(0).astype(int)
     truppen_stats = truppen_stats_raw.copy()
 
-    # --- HENT LIGA-DATA TIL SAMMENLIGNING ---
+    # --- HENT LIGA-DATA TIL SAMMENLIGNING MED ALLE STATISTIKKER ---
     @st.cache_data(ttl=3600)
     def hent_ligasammenligning_data(_conn, db_name, navn_mapping):
-        sql_liga = f"""
+        # 1. Hent alle hændelser for hele ligaen
+        sql_liga_events = f"""
             SELECT 
-                TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME) as VISNINGSNAVN, 
+                e.EVENT_OPTAUUID,
                 e.PLAYER_OPTAUUID,
+                e.EVENT_TYPEID,
+                e.EVENT_TIMESTAMP,
+                e.MATCH_OPTAUUID,
                 e.EVENT_CONTESTANT_OPTAUUID as TEAM_UUID,
-                COUNT(e.EVENT_OPTAUUID) as AKTIONER
+                TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME) as VISNINGSNAVN,
+                LISTAGG(q.QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY q.QUALIFIER_QID) as QUALIFIERS
             FROM {db_name}.OPTA_EVENTS e
-            JOIN (SELECT DISTINCT PLAYER_OPTAUUID, FIRST_NAME, LAST_NAME FROM {db_name}.OPTA_MATCH_LINEUPS WHERE FIRST_NAME IS NOT NULL) p 
-                ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
+            JOIN {db_name}.OPTA_MATCH_LINEUPS p ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
+            LEFT JOIN {db_name}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
             WHERE e.EVENT_TIMESTAMP >= '2026-07-01'
-            GROUP BY 1, 2, 3
+            GROUP BY e.EVENT_OPTAUUID, e.PLAYER_OPTAUUID, e.EVENT_TYPEID, e.EVENT_TIMESTAMP, e.MATCH_OPTAUUID, e.EVENT_CONTESTANT_OPTAUUID, p.FIRST_NAME, p.LAST_NAME
         """
         try:
-            df_l = _conn.query(sql_liga)
-            if df_l is not None and not df_l.empty:
-                df_l.columns = df_l.columns.str.lower()
-                
-                # 1. Oversæt spiller-UUID til rigtigt navn fra mapping
-                df_l['visningsnavn'] = df_l.apply(lambda r: navn_mapping.get(str(r['player_optauuid']), r['visningsnavn']), axis=1)
-                df_l = df_l.dropna(subset=['visningsnavn'])
-                
-                # 2. Oversæt hold-UUID til holdnavn ved hjælp af TEAMS-mapping
-                team_lookup = {str(info['opta_uuid']).lower().replace('t', ''): name for name, info in TEAMS.items() if 'opta_uuid' in info}
-                
-                def get_team_name(uuid_val):
-                    if not uuid_val:
-                        return "Ukendt hold"
-                    clean_u = str(uuid_val).lower().replace('t', '')
-                    return team_lookup.get(clean_u, str(uuid_val)) # Falder tilbage til UUID hvis navnet ikke findes
-                
-                if 'team_uuid' in df_l.columns:
-                    df_l['hold'] = df_l['team_uuid'].apply(get_team_name)
-                
-                return df_l
-        except Exception as e:
-            st.error(f"Fejl ved hentning af ligadata: {e}")
-        return pd.DataFrame()
+            df_l_events = _conn.query(sql_liga_events)
+            if df_l_events is None or df_l_events.empty:
+                return pd.DataFrame()
+            
+            df_l_events.columns = df_l_events.columns.str.lower()
+            df_l_events['qual_list'] = df_l_events['qualifiers'].fillna('').str.split(',')
 
-    # Kald funktionen
-    df_alle_spillere_liga = hent_ligasammenligning_data(conn, DB, navne_map)
+            # Hjælpefunktion til qualifiers
+            def count_event_with_qual_l(df_group, eid, qids):
+                return df_group.apply(lambda r: har_qualifier(r['event_typeid'], r.get('qual_list', []), eid, qids), axis=1).sum()
+
+            # Beregn hændelses-statistikker for alle spillere i ligaen
+          event_stats_liga = df_l_events.groupby(['player_optauuid', 'visningsnavn', 'team_uuid']).apply(lambda x: pd.Series({
+                'Aktioner': len(x),
+                'Gule_kort': count_event_with_qual_l(x, 17, 31),
+                'Roede_kort': count_event_with_qual_l(x, 17, 33),
+                'Indskiftet': (x['event_typeid'] == 19).sum(),
+                'Udskiftet': (x['event_typeid'] == 18).sum(),
+                'Pasninger': (x['event_typeid'] == 1).sum(),
+                'Stikninger': count_event_with_qual_l(x, 1, 4),
+                'Indlæg': count_event_with_qual_l(x, 1, [2, 155]),
+                'Afslutninger': x['event_typeid'].isin([13, 14, 15, 16]).sum(),
+                'Erobringer': x['event_typeid'].isin([7, 8, 12, 49]).sum(),
+                'Driblinger': (x['event_typeid'] == 3).sum(),
+                'Chancer_skabt': x.apply(lambda r: '210' in r.get('qual_list', []), axis=1).sum(),
+                'Key_Passes': x.apply(lambda r: '210' in r.get('qual_list', []), axis=1).sum(),
+                'Tacklinger': (x['event_typeid'] == 7).sum(),
+                'Clearinger': (x['event_typeid'] == 12).sum(),
+                'Blokeringer': (x['event_typeid'] == 55).sum(),
+                'Interceptioner': (x['event_typeid'] == 5).sum(),
+                'Frispark_imod': (x['event_typeid'] == 4).sum()
+          })).reset_index()
+
+          event_stats_liga = event_stats_liga.drop_duplicates(subset=['player_optauuid']).set_index('player_optauuid')
+
+          # 2. Hent Expected Goals / minutter for hele ligaen
+        sql_liga_expected = f"""
+            SELECT 
+                MATCH_ID,
+                PLAYER_OPTAUUID,
+                MAX(CASE WHEN STAT_TYPE = 'expectedGoals' THEN STAT_VALUE ELSE 0 END) AS xg,
+                MAX(CASE WHEN STAT_TYPE = 'expectedAssists' THEN STAT_VALUE ELSE 0 END) AS xa,
+                MAX(CASE WHEN STAT_TYPE = 'minsPlayed' THEN STAT_VALUE ELSE 0 END) AS minutes
+            FROM {db_name}.OPTA_MATCHEXPECTEDGOALS
+            WHERE TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS}
+              AND MATCH_STATUS = 'Played'
+            GROUP BY MATCH_ID, PLAYER_OPTAUUID
+        """
+        df_liga_expected = _conn.query(sql_liga_expected)
+        
+        if df_liga_expected is not None and not df_liga_expected.empty:
+            df_liga_expected.columns = df_liga_expected.columns.str.lower()
+            match_stats_liga = df_liga_expected.groupby('player_optauuid').agg({
+                'match_id': 'nunique',
+                'minutes': 'sum',
+                'xg': 'sum',
+                'xa': 'sum'
+          }).rename(columns={'match_id': 'Kampe', 'minutes': 'Minutter', 'xg': 'xG', 'xa': 'xA'})
+          
+          liga_stats_raw = event_stats_liga.join(match_stats_liga, how='left').fillna(0)
+        else:
+            liga_stats_raw = event_stats_liga.copy()
+            liga_stats_raw['Kampe'] = 0
+            liga_stats_raw['Minutter'] = 0
+            liga_stats_raw['xG'] = 0.0
+            liga_stats_raw['xA'] = 0.0
+
+        # 3. Hent Mål & Assists via logikken (eller forenklet for hele ligaen hvis ønsket)
+        # Her tilføjes navnemapping og holdnavne
+        liga_stats_raw['visningsnavn'] = liga_stats_raw.reset_index().apply(
+            lambda r: navn_mapping.get(str(r['player_optauuid']), r['visningsnavn']), axis=1
+        ).values
+
+        team_lookup = {str(info['opta_uuid']).lower().replace('t', ''): name for name, info in TEAMS.items() if 'opta_uuid' in info}
+        def get_team_name(uuid_val):
+            if not uuid_val:
+                return "Ukendt hold"
+            return team_lookup.get(str(uuid_val).lower().replace('t', ''), str(uuid_val))
+
+        liga_stats_raw['hold'] = liga_stats_raw['team_uuid'].apply(get_team_name)
+        return liga_stats_raw.reset_index()
+
+    except Exception as e:
+        st.error(f"Fejl ved hentning af ligadata: {e}")
+        return pd.DataFrame()
     
     # --- OPSETNING AF FANER ---
     t_team, t_profile, t_pitch, t_phys, t_compare = st.tabs([
