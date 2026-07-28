@@ -176,23 +176,23 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
         
         fig, ax = pitch.draw(figsize=(8, 5), constrained_layout=True)
         
-        # --- KORREGERET PLACERING AF LOGO OG TEKST ---
-        # 1. Logo (placeret til venstre for holdnavnet)
+        # --- KORREGERET OG NEDSKALERET TEKST & LOGO ---
+        # 1. Logo og Holdnavn (Pæn lille størrelse)
         if hold_logo:
-            ax_logo = ax.inset_axes([0.025, 0.83, 0.05, 0.09], transform=ax.transAxes)
+            ax_logo = ax.inset_axes([2.0, 61.5, 3.5, 3.5], transform=ax.transData)
             ax_logo.imshow(hold_logo)
             ax_logo.axis('off')
-            ax.text(8.0, 63.5, t_sel.upper(), fontsize=12, fontweight='bold', color='#222222', alpha=0.9, va='center')
+            ax.text(6.2, 63.2, t_sel.upper(), fontsize=9, fontweight='bold', color='#222222', alpha=0.9, va='center')
         else:
-            ax.text(4.0, 63.5, t_sel.upper(), fontsize=12, fontweight='bold', color='#222222', alpha=0.9, va='center')
+            ax.text(2.0, 63.2, t_sel.upper(), fontsize=9, fontweight='bold', color='#222222', alpha=0.9, va='center')
 
         # 2. Kategori (fx HJØRNESPARK (BEGGE SIDER))
-        ax.text(4.0, 59.5, f"{sp_type.upper()} ({side_sel.upper()})", fontsize=10, fontweight='bold', color='#444444', alpha=0.85)
+        ax.text(2.0, 59.5, f"{sp_type.upper()} ({side_sel.upper()})", fontsize=7.5, fontweight='bold', color='#555555', alpha=0.85)
         
         # 3. Antal og succes % (og evt. valgt spiller)
         spiller_tekst = f"Spiller: {p_sel}" if p_sel != "Alle spillere" else "Alle spillere"
-        stats_line = f"{spiller_tekst}\n{total} aktioner ({int(pct)}% succes)"
-        ax.text(4.0, 54.5, stats_line, fontsize=9, color='#666666', va='top', linespacing=1.3)
+        stats_line = f"{spiller_tekst} — {total} aktioner ({int(pct)}% succes)"
+        ax.text(2.0, 56.5, stats_line, fontsize=7, color='#666666', va='center')
 
         # --- DATA PLOTTING ---
         if not df_plot.dropna(subset=['end_x', 'end_y']).empty:
