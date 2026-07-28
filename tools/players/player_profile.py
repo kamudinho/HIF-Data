@@ -389,7 +389,7 @@ def vis_side(dp=None):
             df_vis_truppen = truppen_stats.reset_index()
             
             # Her defineres hvilke kolonner der skal vises for hver kategori. Ret frit efter behov!
-            gen_kolonner = ['visningsnavn', 'Kampe', 'Minutter', 'Aktioner', 'Pasninger', 'Mål', 'Assists', 'Gule_kort', 'Roede_kort']
+            gen_kolonner = ['visningsnavn', 'Kampe', 'Minutter', 'Aktioner', 'Pasninger', 'Mål', 'Assists', 'Udskiftet', 'Indskiftet', 'Gule_kort', 'Roede_kort']
             off_kolonner = ['visningsnavn', 'Afslutninger', 'xG', 'Chancer_skabt', 'Key_Passes', 'Stikninger', 'Indlæg', 'xA', 'Driblinger']
             def_kolonner = ['visningsnavn', 'Erobringer']
             
