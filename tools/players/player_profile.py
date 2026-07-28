@@ -395,8 +395,8 @@ def vis_side(dp=None):
             
             # Her defineres hvilke kolonner der skal vises for hver kategori. Ret frit efter behov!
             gen_kolonner = ['visningsnavn', 'Kampe', 'Minutter', 'Aktioner', 'Pasninger', 'Mål', 'Assists', 'Udskiftet', 'Indskiftet', 'Gule_kort', 'Roede_kort']
-            off_kolonner = ['visningsnavn', 'Afslutninger', 'xG', 'Chancer_skabt', 'Key_Passes', 'Stikninger', 'Indlæg', 'xA', 'Driblinger']
-            def_kolonner = ['visningsnavn', 'Erobringer', 'Tacklinger', 'Clearinger', 'Blokeringer', 'Interceptioner', 'Frispark_imod']
+            off_kolonner = ['visningsnavn', 'Aktioner', 'Afslutninger', 'xG', 'Chancer_skabt', 'Key_Passes', 'Stikninger', 'Indlæg', 'xA', 'Driblinger']
+            def_kolonner = ['visningsnavn', 'Aktioner', 'Erobringer', 'Tacklinger', 'Clearinger', 'Blokeringer', 'Interceptioner', 'Frispark_imod']
             
             if kategori_valg == "Generelt":
                 eksisterende_kolonner = [k for k in gen_kolonner if k in df_vis_truppen.columns]
