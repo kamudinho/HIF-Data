@@ -743,9 +743,32 @@ def vis_side(dp=None):
                         label_visibility="collapsed"
                     )
                     
-                    # Fravælg kolonnen med player_optauuid (og evt. team_uuid hvis du kun vil have holdnavnet)
-                    kolonner_at_vise = [col for col in ['hold', 'aktioner'] if col in df_sammenligning.columns]
-                    df_vis_sammenligning = df_sammenligning.set_index('visningsnavn')[kolonner_at_vise]
+                    # Brug de samme kategorier som i holdoversigten, så det matcher centralt
+                    gen_kolonner_comp = ['visningsnavn', 'hold', 'Kampe', 'Minutter', 'Aktioner', 'Pasninger', 'Mål', 'Assists', 'Gule_kort', 'Roede_kort']
+                    off_kolonner_comp = ['visningsnavn', 'hold', 'Aktioner', 'Afslutninger', 'xG', 'Chancer_skabt', 'Key_Passes', 'Stikninger', 'Indlæg', 'xA', 'Driblinger']
+                    def_kolonner_comp = ['visningsnavn', 'hold', 'Aktioner', 'Erobringer', 'Tacklinger', 'Clearinger', 'Blokeringer', 'Interceptioner', 'Frispark_imod']
+                    
+                    if kat_sammenligning == "Generelt":
+                        valgte_komp_kolonner = [k for k in gen_kolonner_comp if k in df_sammenligning.columns]
+                    elif kat_sammenligning == "Offensiv":
+                        valgte_komp_kolonner = [k for k in off_kolonner_comp if k in df_sammenligning.columns]
+                    elif kat_sammenligning == "Defensiv":
+                        valgte_komp_kolonner = [k for k in def_kolonner_comp if k in df_sammenligning.columns]
+                    else:
+                        valgte_komp_kolonner = [k for k in df_sammenligning.columns if k != 'player_optauuid']
+                    
+                    df_vis_sammenligning = df_sammenligning[valgte_komp_kolonner].copy()
+                    
+                    if 'visningsnavn' in df_vis_sammenligning.columns:
+                        df_vis_sammenligning = df_vis_sammenligning.set_index('visningsnavn')
+                    
+                    df_vis_sammenligning = df_vis_sammenligning.rename(columns={
+                        'hold': 'Hold',
+                        'Gule_kort': 'Gule kort',
+                        'Roede_kort': 'Røde kort',
+                        'Chancer_skabt': 'Chancer skabt',
+                        'Key_Passes': 'Key Passes'
+                    })
                         
                     beregnet_hoejde_comp = int(len(df_vis_sammenligning) * 38 + 45)
                     
