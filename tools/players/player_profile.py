@@ -132,11 +132,10 @@ def get_physical_data(player_name, player_opta_uuid, valgt_hold_navn, db_conn):
         return df
     return None
 
-# --- CACHET LIGASAMMENLIGNING & STATISTIK FUNKTION (OPTIMERET) ---
+# --- CACHET LIGASAMMENLIGNING & STATISTIK FUNKTION ---
 @st.cache_data(ttl=3600)
 def hent_ligasammenligning_data(_conn, db_name, navn_mapping):
     try:
-        # Optimeret SQL: Henter rå hændelser uden tung LISTAGG på hele tabellen
         sql_liga_events = f"""
             SELECT 
                 e.EVENT_OPTAUUID,
@@ -148,11 +147,14 @@ def hent_ligasammenligning_data(_conn, db_name, navn_mapping):
                 e.EVENT_OUTCOME as OUTCOME,
                 TO_CHAR(e.EVENT_TIMESTAMP, 'YYYY-MM-DD HH24:MI:SS') as EVENT_TIMESTAMP_STR,
                 e.EVENT_CONTESTANT_OPTAUUID as TEAM_UUID,
-                TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME) as VISNINGSNAVN
+                TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME) as VISNINGSNAVN,
+                LISTAGG(q.QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY q.QUALIFIER_QID) as QUALIFIERS
             FROM {db_name}.OPTA_EVENTS e
             JOIN {db_name}.OPTA_MATCH_LINEUPS p ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
+            LEFT JOIN {db_name}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
             WHERE e.EVENT_TIMESTAMP >= '2026-07-01'
               AND p.FIRST_NAME IS NOT NULL
+            GROUP BY 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11
         """
         df_l_events = _conn.query(sql_liga_events)
         if df_l_events is None or df_l_events.empty:
@@ -161,25 +163,12 @@ def hent_ligasammenligning_data(_conn, db_name, navn_mapping):
         df_l_events.columns = df_l_events.columns.str.lower()
         df_l_events['visningsnavn'] = df_l_events.apply(lambda r: navn_mapping.get(str(r['player_optauuid']), r['visningsnavn']), axis=1)
         df_l_events['event_timestamp'] = pd.to_datetime(df_l_events['event_timestamp_str'])
-        
-        # Tilføj Action_Label sikkert via event_typeid
-        df_l_events['action_label'] = df_l_events['event_typeid'].apply(get_action_label)
-
-        # Hent qualifiers separat eller undgå dem i det tuse-tunge træk, 
-        # men hvis du absolut skal bruge dem til kort/chancer, henter vi dem letvægt:
-        sql_quals = f"""
-            SELECT EVENT_OPTAUUID, LISTAGG(QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY QUALIFIER_QID) as QUALIFIERS
-            FROM {db_name}.OPTA_QUALIFIERS
-            GROUP BY EVENT_OPTAUUID
-        """
-        df_quals = _conn.query(sql_quals)
-        if df_quals is not None and not df_quals.empty:
-            df_quals.columns = df_quals.columns.str.lower()
-            df_l_events = pd.merge(df_l_events, df_quals, on='event_optauuid', how='left')
-        else:
-            df_l_events['qualifiers'] = ''
-
         df_l_events['qual_list'] = df_l_events['qualifiers'].fillna('').str.split(',')
+        
+        # Tilføj Action_Label baseret på event_typeid og qualifiers
+        df_l_events['action_label'] = df_l_events.apply(
+            lambda r: get_action_label(r['event_typeid'], r.get('qual_list', [])), axis=1
+        )
 
         sql_liga_expected = f"""
             SELECT 
@@ -200,6 +189,7 @@ def hent_ligasammenligning_data(_conn, db_name, navn_mapping):
         df_sorted = df_l_events.sort_values(['match_optauuid', 'event_timestamp'])
         df_sorted['assist_player_uuid'] = df_sorted['player_optauuid'].shift(1)
         df_sorted['prev_match'] = df_sorted['match_optauuid'].shift(1)
+        df_sorted['prev_event_typeid'] = df_sorted['event_typeid'].shift(1)
         df_sorted['prev_qualifiers'] = df_sorted['qualifiers'].shift(1)
 
         player_goals = df_sorted[df_sorted['event_typeid'] == 16].groupby(['player_optauuid', 'visningsnavn']).size().reset_index(name='goals')
@@ -364,8 +354,8 @@ def vis_side(dp=None):
     truppen_stats = truppen_stats.set_index('player_optauuid')
 
     # --- OPSETNING AF FANER ---
-    t_team, t_profile, t_pitch, t_phys = st.tabs([
-        "Holdoversigt", "Spillerprofil", "Spilleraktioner", "Fysisk data"
+    t_team, t_profile, t_pitch, t_phys, t_compare = st.tabs([
+        "Holdoversigt", "Spillerprofil", "Spilleraktioner", "Fysisk data", "Sammenligning"
     ])
     with t_team:
         col_t_title, col_t_btn = st.columns([3, 1])
@@ -662,3 +652,88 @@ def vis_side(dp=None):
     
             with t_sub_log:
                 st.data_editor(df_phys, hide_index=True, use_container_width=True, disabled=True)
+    
+    with t_compare:
+        st.markdown('<p style="font-size: 14px; font-weight: bold; margin-bottom: 10px;">SPILLERSAMMENLIGNING PÅ TVÆRS AF LIGAEN</p>', unsafe_allow_html=True)
+        
+        if df_alle_spillere_liga is not None and not df_alle_spillere_liga.empty:
+            df_alle_spillere_liga.columns = [str(c).lower() for c in df_alle_spillere_liga.columns]
+            
+            if 'visningsnavn' in df_alle_spillere_liga.columns:
+                alle_tilgaengelige_spillere = sorted(df_alle_spillere_liga['visningsnavn'].dropna().unique())
+                
+                valgte_sammenligning_spillere = st.multiselect(
+                    "Vælg spillere til sammenligning",
+                    options=alle_tilgaengelige_spillere,
+                    default=alle_tilgaengelige_spillere[:3] if len(alle_tilgaengelige_spillere) >= 3 else alle_tilgaengelige_spillere,
+                    key="ligasammenligning_multiselect"
+                )
+                
+                if valgte_sammenligning_spillere:
+                    df_sammenligning = df_alle_spillere_liga[df_alle_spillere_liga['visningsnavn'].isin(valgte_sammenligning_spillere)].copy()
+                    
+                    kat_sammenligning = st.segmented_control(
+                        "Visningskategori_sammenligning",
+                        options=["Generelt", "Offensiv", "Defensiv"],
+                        default="Generelt",
+                        key="sammenligning_kategori_control",
+                        label_visibility="collapsed"
+                    )
+                    
+                    gen_kolonner_comp = ['visningsnavn', 'hold', 'kampe', 'minutter', 'aktioner', 'pasninger', 'mål', 'assists', 'gule_kort', 'roede_kort']
+                    off_kolonner_comp = ['visningsnavn', 'hold', 'aktioner', 'afslutninger', 'xg', 'chancer_skabt', 'key_passes', 'stikninger', 'indlæg', 'xa', 'driblinger']
+                    def_kolonner_comp = ['visningsnavn', 'hold', 'aktioner', 'erobringer', 'tacklinger', 'clearinger', 'blokeringer', 'interceptioner', 'frispark_imod']
+                    
+                    if kat_sammenligning == "Generelt":
+                        valgte_komp_kolonner = [k for k in gen_kolonner_comp if k in df_sammenligning.columns]
+                    elif kat_sammenligning == "Offensiv":
+                        valgte_komp_kolonner = [k for k in off_kolonner_comp if k in df_sammenligning.columns]
+                    elif kat_sammenligning == "Defensiv":
+                        valgte_komp_kolonner = [k for k in def_kolonner_comp if k in df_sammenligning.columns]
+                    else:
+                        valgte_komp_kolonner = [k for k in df_sammenligning.columns if k != 'player_optauuid']
+                    
+                    df_vis_sammenligning = df_sammenligning[valgte_komp_kolonner].copy()
+                    
+                    if 'visningsnavn' in df_vis_sammenligning.columns:
+                        df_vis_sammenligning = df_vis_sammenligning.set_index('visningsnavn')
+                    
+                    df_vis_sammenligning = df_vis_sammenligning.rename(columns={
+                        'hold': 'Hold',
+                        'kampe': 'Kampe',
+                        'minutter': 'Minutter',
+                        'aktioner': 'Aktioner',
+                        'pasninger': 'Pasninger',
+                        'mål': 'Mål',
+                        'assists': 'Assists',
+                        'gule_kort': 'Gule kort',
+                        'roede_kort': 'Røde kort',
+                        'afslutninger': 'Afslutninger',
+                        'xg': 'xG',
+                        'chancer_skabt': 'Chancer skabt',
+                        'key_passes': 'Key Passes',
+                        'stikninger': 'Stikninger',
+                        'indlæg': 'Indlæg',
+                        'xa': 'xA',
+                        'driblinger': 'Driblinger',
+                        'erobringer': 'Erobringer',
+                        'tacklinger': 'Tacklinger',
+                        'clearinger': 'Clearinger',
+                        'blokeringer': 'Blokeringer',
+                        'interceptioner': 'Interceptioner',
+                        'frispark_imod': 'Frispark imod'
+                    })
+                    
+                    beregnet_hoejde_comp = int(len(df_vis_sammenligning) * 38 + 45)
+                    
+                    st.dataframe(
+                        df_vis_sammenligning,
+                        use_container_width=True,
+                        height=beregnet_hoejde_comp
+                    )
+                else:
+                    st.info("Vælg mindst én spiller ovenfor for at se sammenligningen.")
+            else:
+                st.error("Kolonnen 'visningsnavn' blev ikke fundet i ligadata.")
+        else:
+            st.warning("Ingen ligadata tilgængelig at vise.")
