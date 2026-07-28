@@ -150,7 +150,7 @@ with st.sidebar:
         "SPILLERANALYSE": ["Spillerprofil"],
         "SCOUTING": ["Scoutrapport", "Database", "Emnedatabase", "Transfers"],
         "TILPASNING": ["Spillerdata", "Spiller-score", "Standardsituationer"],
-        "TESTSIDE": ["Perfomance", "Winning Performance", "1. Div-tilpasning", "Sammenligning", "Charts", "Oversigt", "Forecast"],
+        "TESTSIDE": ["Performance", "Winning Performance", "1. Div-tilpasning", "Sammenligning", "Charts", "Oversigt", "Forecast"],
         "ADMIN": ["System Log", "Profil", "Datakatalog", "Konklusion", "Fysisk profil", "Hold: Fysisk profil", "Intern analyse", "Top 5: Spillere", "Ordbog"]
     }
     
