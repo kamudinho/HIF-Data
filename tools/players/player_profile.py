@@ -330,18 +330,63 @@ def vis_side(dp=None):
 
     df_spiller = df_all[df_all['player_optauuid'] == valgt_player_uuid].copy()
 
+    # --- BEREGN TRUP-STATS FØR FANERNE ---
+    def count_event_with_qual(df_group, eid, qids):
+        return df_group.apply(lambda r: har_qualifier(r['event_typeid'], r.get('qual_list', []), eid, qids), axis=1).sum()
+
+    event_stats = df_all.groupby(['player_optauuid', 'visningsnavn']).apply(lambda x: pd.Series({
+        'Gule_kort': count_event_with_qual(x, 17, 31),
+        'Roede_kort': count_event_with_qual(x, 17, 33),
+        'Indskiftet': (x['event_typeid'] == 19).sum(),
+        'Udskiftet': (x['event_typeid'] == 18).sum(),
+        'Pasninger': (x['event_typeid'] == 1).sum(),
+        'Stikninger': count_event_with_qual(x, 1, 4),
+        'Indlæg': count_event_with_qual(x, 1, [2, 155]),
+        'Afslutninger': x['event_typeid'].isin([13, 14, 15, 16]).sum(),
+        'Erobringer': x['event_typeid'].isin([7, 8, 12, 49]).sum(),
+        'Driblinger': (x['event_typeid'] == 3).sum(),
+        'Chancer_skabt': x.apply(lambda r: '210' in r.get('qual_list', []), axis=1).sum(),
+        'Key_Passes': x.apply(lambda r: '210' in r.get('qual_list', []), axis=1).sum()
+    })).reset_index()
+    
+    event_stats = event_stats.drop_duplicates(subset=['player_optauuid']).set_index('player_optauuid')
+    
+    if df_expected is not None and not df_expected.empty:
+        match_stats = df_expected.groupby('player_optauuid').agg({
+            'match_id': 'nunique',
+            'minutes': 'sum',
+            'xg': 'sum',
+            'xa': 'sum'
+        }).rename(columns={'match_id': 'Kampe', 'minutes': 'Minutter', 'xg': 'xG', 'xa': 'xA'})
+        truppen_stats_raw = event_stats.join(match_stats, how='left').fillna(0)
+    else:
+        truppen_stats_raw = event_stats.copy()
+        truppen_stats_raw['Kampe'] = 0
+        truppen_stats_raw['Minutter'] = 0
+        truppen_stats_raw['xG'] = 0.0
+        truppen_stats_raw['xA'] = 0.0
+
+    if df_db_stats is not None and not df_db_stats.empty:
+        db_stats_clean = df_db_stats.drop_duplicates(subset=['player_optauuid']).set_index('player_optauuid')
+        truppen_stats_raw['Mål'] = db_stats_clean['goals']
+        truppen_stats_raw['Assists'] = db_stats_clean['assists']
+    else:
+        truppen_stats_raw['Mål'] = 0
+        truppen_stats_raw['Assists'] = 0
+
+    truppen_stats_raw['Mål'] = truppen_stats_raw['Mål'].fillna(0).astype(int)
+    truppen_stats_raw['Assists'] = truppen_stats_raw['Assists'].fillna(0).astype(int)
+    truppen_stats = truppen_stats_raw.copy()
+
+    # --- OPSETNING AF FANER ---
     t_team, t_profile, t_pitch, t_phys = st.tabs(["Holdoversigt", "Spillerprofil", "Spilleraktioner", "Fysisk data"])
 
     with t_team:
         st.subheader(f"Holdoversigt: {valgt_hold}")
         st.write("Her kan du se det samlede overblik over truppen og spillernes statistik for sæsonen.")
         
-        # Vis tabel over alle spillere i truppen
-        if 'truppen_stats' in locals() and not truppen_stats.empty:
-            # Nulstil indeks så visningsnavn / spiller kommer med som kolonne hvis ønsket, eller behold uuid/navn pænt
+        if not truppen_stats.empty:
             df_vis_truppen = truppen_stats.reset_index()
-            
-            # Vælg/omorganiser evt. relevante kolonner til visning
             kolonne_prioritet = [
                 'visningsnavn', 'Kampe', 'Minutter', 'Mål', 'xG', 'Assists', 'xA', 
                 'Pasninger', 'Stikninger', 'Indlæg', 'Afslutninger', 'Erobringer', 
@@ -356,55 +401,8 @@ def vis_side(dp=None):
             )
         else:
             st.info("Ingen trup-data tilgængelig endnu.")
-            
+
     with t_profile:
-        def count_event_with_qual(df_group, eid, qids):
-            return df_group.apply(lambda r: har_qualifier(r['event_typeid'], r.get('qual_list', []), eid, qids), axis=1).sum()
-
-        event_stats = df_all.groupby(['player_optauuid', 'visningsnavn']).apply(lambda x: pd.Series({
-            'Gule_kort': count_event_with_qual(x, 17, 31),
-            'Roede_kort': count_event_with_qual(x, 17, 33),
-            'Indskiftet': (x['event_typeid'] == 19).sum(),
-            'Udskiftet': (x['event_typeid'] == 18).sum(),
-            'Pasninger': (x['event_typeid'] == 1).sum(),
-            'Stikninger': count_event_with_qual(x, 1, 4),
-            'Indlæg': count_event_with_qual(x, 1, [2, 155]),
-            'Afslutninger': x['event_typeid'].isin([13, 14, 15, 16]).sum(),
-            'Erobringer': x['event_typeid'].isin([7, 8, 12, 49]).sum(),
-            'Driblinger': (x['event_typeid'] == 3).sum(),
-            'Chancer_skabt': x.apply(lambda r: '210' in r.get('qual_list', []), axis=1).sum(),
-            'Key_Passes': x.apply(lambda r: '210' in r.get('qual_list', []), axis=1).sum()
-        })).reset_index()
-        
-        event_stats = event_stats.drop_duplicates(subset=['player_optauuid']).set_index('player_optauuid')
-        
-        if df_expected is not None and not df_expected.empty:
-            match_stats = df_expected.groupby('player_optauuid').agg({
-                'match_id': 'nunique',
-                'minutes': 'sum',
-                'xg': 'sum',
-                'xa': 'sum'
-            }).rename(columns={'match_id': 'Kampe', 'minutes': 'Minutter', 'xg': 'xG', 'xa': 'xA'})
-            truppen_stats_raw = event_stats.join(match_stats, how='left').fillna(0)
-        else:
-            truppen_stats_raw = event_stats.copy()
-            truppen_stats_raw['Kampe'] = 0
-            truppen_stats_raw['Minutter'] = 0
-            truppen_stats_raw['xG'] = 0.0
-            truppen_stats_raw['xA'] = 0.0
-
-        if df_db_stats is not None and not df_db_stats.empty:
-            db_stats_clean = df_db_stats.drop_duplicates(subset=['player_optauuid']).set_index('player_optauuid')
-            truppen_stats_raw['Mål'] = db_stats_clean['goals']
-            truppen_stats_raw['Assists'] = db_stats_clean['assists']
-        else:
-            truppen_stats_raw['Mål'] = 0
-            truppen_stats_raw['Assists'] = 0
-
-        truppen_stats_raw['Mål'] = truppen_stats_raw['Mål'].fillna(0).astype(int)
-        truppen_stats_raw['Assists'] = truppen_stats_raw['Assists'].fillna(0).astype(int)
-
-        truppen_stats = truppen_stats_raw.copy()
         numeric_cols = truppen_stats.drop(columns=['visningsnavn'], errors='ignore')
         ranks = numeric_cols.rank(ascending=False, method='min').astype(int)
         
