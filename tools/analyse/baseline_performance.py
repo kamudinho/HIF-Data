@@ -130,9 +130,9 @@ def vis_side(df_events=None, kamp=None, hold_map=None):
             # --- TAB 1: BASELINE VISNING ---
             with tab1:
                 metric_labels_tab1 = {
-                    "Mål vs. Skud-baseline (Faktiske mål minus forventede ud fra skudvolumen)": "GOALS_VS_BASELINE",
-                    "xG vs. Faktiske Mål (Afslutningskvalitet)": "XG_VS_GOALS",
-                    "Skud på mål (Total)": "SHOTS_ON_TARGET",
+                    "Mål vs. Skud": "GOALS_VS_BASELINE",
+                    "Mål vs. xG": "XG_VS_GOALS",
+                    "Skud på mål": "SHOTS_ON_TARGET",
                     "Hjørnespark": "CORNERS",
                     "Tacklinger": "TACKLES",
                     "Frispark": "FOULS",
@@ -208,20 +208,20 @@ def vis_side(df_events=None, kamp=None, hold_map=None):
                     
                     df_b['BASELINE_VAL'] = df_b['SHOTS'] * league_conversion
                     df_b['DIFF'] = df_b['GOALS'] - df_b['BASELINE_VAL']
-                    chart_title = "Mål over eller under en skud-volumen baseline"
-                    xaxis_title = "mål vs. skud-volumen baseline"
+                    chart_title = "Mål vs. skud"
+                    xaxis_title = "mål vs. skud"
 
                 elif metric_key1 == "XG_VS_GOALS":
                     df_b['DIFF'] = df_b['GOALS'] - df_b['XG']
-                    chart_title = "Faktiske mål minus xG (Over/underpræstation på afslutninger)"
-                    xaxis_title = "mål minus xG"
+                    chart_title = "Mål vs. xG"
+                    xaxis_title = "Mål vs. xG"
 
                 else:
                     league_avg_per_match = df_b[metric_key1].sum() / df_b['MATCHES'].sum()
                     df_b['BASELINE_VAL'] = df_b['MATCHES'] * league_avg_per_match
                     df_b['DIFF'] = df_b[metric_key1] - df_b['BASELINE_VAL']
-                    chart_title = f"{selected_label1} vs. Liga-gennemsnit"
-                    xaxis_title = "forskel i forhold til gennemsnit"
+                    chart_title = f"{selected_label1} vs. Liga"
+                    xaxis_title = "Forskel vs. gennemsnit"
 
                 df_b = df_b.sort_values(by='DIFF', ascending=True)
                 df_b['COLOR_TEAM'] = df_b['TEAM'].apply(lambda x: HIF_RED if str(x).strip().lower() == 'hvidovre' else 'gray')
