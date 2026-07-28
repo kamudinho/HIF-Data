@@ -304,7 +304,7 @@ def vis_side(dp=None):
                 'Key_Passes': 'Key Passes',
                 'Frispark_imod': 'Frispark',
                 'Driblinger_Ialt': 'Driblinger, ialt', 
-                'Driblinger_Succes': 'Driblinger (Succes)', 'Gennembrud_Overtake': 'Gennembrud, 1v1', 'Rum_Driblinger_Space': 'Driblinger, 1v1)', 'Offensive_Dueller': 'Off. dueller'
+                'Driblinger_Succes': 'Driblinger (Succes)', 'Gennembrud_Overtake': 'Gennembrud, 1v1', 'Rum_Driblinger_Space': 'Driblinger, 1v1)', 'Offensive_Dueller': 'Off. dueller',
                 'Defensive_Dueller': 'Def. dueller', 'Defensive_1v1_Stoppet': 'Def. 1v1'
             })
             
