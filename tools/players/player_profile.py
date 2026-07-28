@@ -267,7 +267,7 @@ def vis_side(dp=None):
                   AND ASSIST_PLAYER_UUID IS NOT NULL
                   AND ASSIST_PLAYER_UUID != PLAYER_OPTAUUID
                   AND (
-                      QUALIFIERS LIKE '%29%'           
+                      QUALIFIERS LIKE '%29%'            
                       OR PREV_QUALIFIERS LIKE '%210%'    
                   )
                 GROUP BY ASSIST_PLAYER_UUID
@@ -370,7 +370,7 @@ def vis_side(dp=None):
     truppen_stats_raw['Assists'] = truppen_stats_raw['Assists'].fillna(0).astype(int)
     truppen_stats = truppen_stats_raw.copy()
 
-# --- HENT LIGA-DATA TIL SAMMENLIGNING (CACHELET) ---
+    # --- HENT LIGA-DATA TIL SAMMENLIGNING (CACHELET) ---
     @st.cache_data(ttl=3600)
     def hent_ligasammenligning_data(_conn, db_name, navn_mapping):
         sql_liga = f"""
@@ -396,12 +396,10 @@ def vis_side(dp=None):
             st.error(f"Fejl ved hentning af ligadata: {e}")
         return pd.DataFrame()
 
-        st.write("Debug - ligadata rækker:", len(df_alle_spillere_liga))
-
     # Kald funktionen og send parametrene med
     df_alle_spillere_liga = hent_ligasammenligning_data(conn, DB, navne_map)
     
-# --- OPSETNING AF FANER ---
+    # --- OPSETNING AF FANER ---
     t_team, t_profile, t_pitch, t_phys, t_compare = st.tabs([
         "Holdoversigt", "Spillerprofil", "Spilleraktioner", "Fysisk data", "Sammenligning"
     ])
