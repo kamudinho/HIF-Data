@@ -345,7 +345,7 @@ def vis_side(dp=None):
         st.markdown("### Top aktionstyper for holdet")
         if 'action_label' in df_all.columns:
             action_counts = df_all['action_label'].value_counts().reset_index()
-            action_counts.columns = ['Aktion', Antal] = ['Aktion', 'Antal']
+            action_counts.columns = ['Aktion', 'Antal']
             st.dataframe(action_counts.head(10), use_container_width=True, hide_index=True)
             
     with t_profile:
