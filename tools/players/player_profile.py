@@ -281,17 +281,15 @@ def vis_side(dp=None):
             
             # --- KOLONNE-OPSÆTNING ---
             gen_kolonner = [
-                'visningsnavn', 'Kampe', 'Minutter', 'Aktioner', 'Pasninger', 'Pasningsprocent_Str', 
+                'visningsnavn', 'Kampe', 'Minutter', 'Aktioner', 'Pasninger', 'Pasningsprocent', 'Pasningsprocent_Str', 
                 'Mål', 'Assists', 'Udskiftet', 'Indskiftet', 'Gule_kort', 'Roede_kort'
             ]
             
-            # --- FOKUS PÅ OPBYGNING OG SPILFORDELING ---
             opb_kolonner = [
-                'visningsnavn', 'Aktioner', 'Pasninger', 'Pasningsprocent_Str', 'Key_Passes', 'Stikninger', 
+                'visningsnavn', 'Aktioner', 'Pasninger', 'Pasningsprocent', 'Pasningsprocent_Str', 'Key_Passes', 'Stikninger', 
                 'Driblinger', 'Driblinger_Succes', 'Rum_Driblinger_Space'
             ]
             
-            # --- FOKUS PÅ DEN SIDSTE TREDJEDEL & AFSLUTNINGER ---
             off_kolonner = [
                 'visningsnavn', 'Aktioner', 'Afslutninger', 'xG', 'Chancer_skabt', 
                 'Indlæg', 'xA', 'Offensive_Dueller', 'Gennembrud_Overtake', 'Driblinger_Succes'
@@ -315,6 +313,15 @@ def vis_side(dp=None):
             
             df_visning = df_vis_truppen[eksisterende_kolonner].copy()
             
+            # Sørg for at sortere efter aktioner eller pasningsprocent faldende (højeste først), 
+            # så 100% / flest aktioner kommer øverst i stedet for nederst:
+            if 'Aktioner' in df_visning.columns:
+                df_visning = df_visning.sort_values(by='Aktioner', ascending=False)
+            
+            # Fjern den rå 'Pasningsprocent' kolonne fra visningen, nu hvor vi har '_Str' med %-tegn
+            if 'Pasningsprocent' in df_visning.columns:
+                df_visning = df_visning.drop(columns=['Pasningsprocent'])
+
             df_visning = df_visning.rename(columns={
                 'visningsnavn': 'Spiller',
                 'Pasningsprocent_Str': 'Pasning (%)',
@@ -341,7 +348,8 @@ def vis_side(dp=None):
                 height=beregnet_hoejde
             )
         else:
-            st.info("Ingen trup-data tilgængelig endnu.")    
+            st.info("Ingen trup-data tilgængelig endnu.")
+            
     with t_profile:
         numeric_cols = truppen_stats.drop(columns=['visningsnavn', 'Pasningsprocent_Str'], errors='ignore')
         ranks = (-numeric_cols).rank(ascending=True, method='min').astype(int)
