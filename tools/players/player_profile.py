@@ -334,19 +334,28 @@ def vis_side(dp=None):
 
     with t_team:
         st.subheader(f"Holdoversigt: {valgt_hold}")
-        st.write("Her kan du se det samlede overblik over holdets aktioner og statistik for sæsonen.")
+        st.write("Her kan du se det samlede overblik over truppen og spillernes statistik for sæsonen.")
         
-        # Eksempel på hold-metrikker / tabel
-        col_m1, col_m2, col_m3 = st.columns(3)
-        col_m1.metric("Antal aktioner i alt", len(df_all))
-        col_m2.metric("Unikke spillere", df_all['visningsnavn'].nunique())
-        col_m3.metric("Kampe / Hændelser", df_all['event_timestamp'].dt.date.nunique())
-
-        st.markdown("### Top aktionstyper for holdet")
-        if 'action_label' in df_all.columns:
-            action_counts = df_all['action_label'].value_counts().reset_index()
-            action_counts.columns = ['Aktion', 'Antal']
-            st.dataframe(action_counts.head(10), use_container_width=True, hide_index=True)
+        # Vis tabel over alle spillere i truppen
+        if 'truppen_stats' in locals() and not truppen_stats.empty:
+            # Nulstil indeks så visningsnavn / spiller kommer med som kolonne hvis ønsket, eller behold uuid/navn pænt
+            df_vis_truppen = truppen_stats.reset_index()
+            
+            # Vælg/omorganiser evt. relevante kolonner til visning
+            kolonne_prioritet = [
+                'visningsnavn', 'Kampe', 'Minutter', 'Mål', 'xG', 'Assists', 'xA', 
+                'Pasninger', 'Stikninger', 'Indlæg', 'Afslutninger', 'Erobringer', 
+                'Driblinger', 'Chancer_skabt', 'Key_Passes', 'Gule_kort', 'Roede_kort'
+            ]
+            eksisterende_kolonner = [k for k in kolonne_prioritet if k in df_vis_truppen.columns]
+            
+            st.dataframe(
+                df_vis_truppen[eksisterende_kolonner], 
+                use_container_width=True, 
+                hide_index=True
+            )
+        else:
+            st.info("Ingen trup-data tilgængelig endnu.")
             
     with t_profile:
         def count_event_with_qual(df_group, eid, qids):
