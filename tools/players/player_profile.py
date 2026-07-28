@@ -18,13 +18,6 @@ from data.utils.match_data import classify_take_on
 from data.data_load import _get_snowflake_conn
 from data.utils.mapping import OPTA_EVENT_TYPES, OPTA_QUALIFIERS, get_action_label
 
-# --- IMPORT FRA MAPPING ---
-from data.utils.mapping import (
-    OPTA_EVENT_TYPES, 
-    OPTA_QUALIFIERS,
-    get_action_label
-)
-
 # --- KONFIGURATION (HVIDOVRE-APP / 2026/2027) ---
 DB = "KLUB_HVIDOVREIF.AXIS"
 SEASONNAME = "2026/2027"
