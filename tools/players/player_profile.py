@@ -382,31 +382,43 @@ def vis_side(dp=None):
     t_team, t_profile, t_pitch, t_phys = st.tabs(["Holdoversigt", "Spillerprofil", "Spilleraktioner", "Fysisk data"])
 
     with t_team:
-        st.caption(f"Holdoversigt: {valgt_hold}")
+        st.subheader(f"Holdoversigt: {valgt_hold}")
+        st.write("Her kan du se det samlede overblik over truppen og spillernes statistik for sæsonen.")
         
         if not truppen_stats.empty:
             df_vis_truppen = truppen_stats.reset_index()
             
-            kolonne_prioritet = [
-                'visningsnavn', 'Kampe', 'Minutter', 'Mål', 'xG', 'Assists', 'xA', 
-                'Pasninger', 'Stikninger', 'Indlæg', 'Afslutninger', 'Erobringer', 
-                'Driblinger', 'Chancer_skabt', 'Key_Passes', 'Gule_Kort', 'Rode_Kort'
-            ]
-            eksisterende_kolonner = [k for k in kolonne_prioritet if k in df_vis_truppen.columns]
+            kategori_valg = st.segmented_control(
+                "Visningskategori", 
+                options=["Generelt", "Offensiv", "Defensiv"], 
+                default="Generelt",
+                key="team_kategori_control",
+                label_visibility="collapsed"
+            )
             
-            # Opret en kopi af dataframen med de udvalgte kolonner
+            off_kolonner = ['visningsnavn', 'Kampe', 'Minutter', 'Mål', 'xG', 'Assists', 'xA', 'Pasninger', 'Stikninger', 'Indlæg', 'Afslutninger', 'Driblinger', 'Chancer_skabt', 'Key_Passes']
+            def_kolonner = ['visningsnavn', 'Kampe', 'Minutter', 'Erobringer', 'Gule_kort', 'Roede_kort']
+            
+            if kategori_valg == "Offensiv":
+                eksisterende_kolonner = [k for k in off_kolonner if k in df_vis_truppen.columns]
+            elif kategori_valg == "Defensiv":
+                eksisterende_kolonner = [k for k in def_kolonner if k in df_vis_truppen.columns]
+            else:  
+                # Tilføj 'Aktioner' baseret på len(df_spiller) eller samlet antal aktioner pr. spiller
+                total_akt = len(df_spiller)
+                eksisterende_kolonner = list(df_vis_truppen.columns)
+            
             df_visning = df_vis_truppen[eksisterende_kolonner].copy()
             
-            # Omdøb kolonnerne her (Gammelt navn: 'Nytt navn')
             df_visning = df_visning.rename(columns={
                 'visningsnavn': 'Spiller',
-                'GK': 'Gule kort',
-                'RK': 'Røde kort',
+                'player_optauuid': 'UUID',
+                'Gule_kort': 'Gule kort',
+                'Roede_kort': 'Røde kort',
                 'Chancer_skabt': 'Chancer skabt',
                 'Key_Passes': 'Key Passes'
             })
             
-            # Beregn dynamisk højde (f.eks. 38 pixels pr. række + 45 pixels til header)
             beregnet_hoejde = int(len(df_visning) * 38 + 45)
             
             st.dataframe(
