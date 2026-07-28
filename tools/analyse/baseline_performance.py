@@ -120,33 +120,31 @@ def vis_side(df_events=None, kamp=None, hold_map=None):
             match_counts = df_teams.groupby('TEAM').size().reset_index(name='MATCHES')
             agg_df = pd.merge(agg_df, match_counts, on='TEAM')
 
-            # --- TOP SEKTION: CAPTION OG DROPDOWN ØVERST ---
-            metric_labels = {
-                "Mål vs. Skud-baseline (Faktiske mål minus forventede ud fra skudvolumen)": "GOALS_VS_BASELINE",
-                "xG vs. Faktiske Mål (Afslutningskvalitet)": "XG_VS_GOALS",
-                "Skud på mål (Total)": "SHOTS_ON_TARGET",
-                "Hjørnespark": "CORNERS",
-                "Tacklinger": "TACKLES",
-                "Frispark": "FOULS",
-                "Redninger": "SAVES"
-            }
-
-            col_header, col_dropdown = st.columns([1.2, 1])
-            with col_header:
-                st.caption("1. Division — Over- og Underpræstation mod Baseline")
-            with col_dropdown:
-                selected_label = st.selectbox("Vælg parameter:", list(metric_labels.keys()), label_visibility="collapsed")
-            
-            metric_key = metric_labels[selected_label]
-
-            # --- TABS ---
+            # --- OPRETTELSE AF TABS FØST ---
             tab1, tab2 = st.tabs(["📊 Baseline Oversigt", "📈 Scatterplot"])
 
-            # --- TAB 1: BASELINE SØJLEDIAGRAM ---
+            # --- TAB 1: BASELINE VISNING ---
             with tab1:
+                metric_labels_tab1 = {
+                    "Mål vs. Skud-baseline (Faktiske mål minus forventede ud fra skudvolumen)": "GOALS_VS_BASELINE",
+                    "xG vs. Faktiske Mål (Afslutningskvalitet)": "XG_VS_GOALS",
+                    "Skud på mål (Total)": "SHOTS_ON_TARGET",
+                    "Hjørnespark": "CORNERS",
+                    "Tacklinger": "TACKLES",
+                    "Frispark": "FOULS",
+                    "Redninger": "SAVES"
+                }
+
+                col_header1, col_dropdown1 = st.columns([1.2, 1])
+                with col_header1:
+                    st.caption("1. Division — Over- og Underpræstation mod Baseline")
+                with col_dropdown1:
+                    selected_label1 = st.selectbox("Vælg parameter (baseline):", list(metric_labels_tab1.keys()), label_visibility="collapsed", key="baseline_dropdown")
+                
+                metric_key1 = metric_labels_tab1[selected_label1]
                 df_b = agg_df.copy()
 
-                if metric_key == "GOALS_VS_BASELINE":
+                if metric_key1 == "GOALS_VS_BASELINE":
                     total_league_goals = df_b['GOALS'].sum()
                     total_league_shots = df_b['SHOTS'].sum()
                     league_conversion = total_league_goals / total_league_shots if total_league_shots > 0 else 0.1
@@ -156,16 +154,16 @@ def vis_side(df_events=None, kamp=None, hold_map=None):
                     chart_title = "Mål over eller under en skud-volumen baseline"
                     xaxis_title = "mål vs. skud-volumen baseline"
 
-                elif metric_key == "XG_VS_GOALS":
+                elif metric_key1 == "XG_VS_GOALS":
                     df_b['DIFF'] = df_b['GOALS'] - df_b['XG']
                     chart_title = "Faktiske mål minus xG (Over/underpræstation på afslutninger)"
                     xaxis_title = "mål minus xG"
 
                 else:
-                    league_avg_per_match = df_b[metric_key].sum() / df_b['MATCHES'].sum()
+                    league_avg_per_match = df_b[metric_key1].sum() / df_b['MATCHES'].sum()
                     df_b['BASELINE_VAL'] = df_b['MATCHES'] * league_avg_per_match
-                    df_b['DIFF'] = df_b[metric_key] - df_b['BASELINE_VAL']
-                    chart_title = f"{selected_label} vs. Liga-gennemsnit"
+                    df_b['DIFF'] = df_b[metric_key1] - df_b['BASELINE_VAL']
+                    chart_title = f"{selected_label1} vs. Liga-gennemsnit"
                     xaxis_title = "forskel i forhold til gennemsnit"
 
                 df_b = df_b.sort_values(by='DIFF', ascending=True)
@@ -203,7 +201,7 @@ def vis_side(df_events=None, kamp=None, hold_map=None):
                     paper_bgcolor='rgba(0,0,0,0)',
                     font=dict(color='gray'),
                     title_font=dict(size=18, color='black'),
-                    height=620
+                    height=650
                 )
                 
                 fig1.update_xaxes(showgrid=True, gridwidth=1, gridcolor='#eaeaea')
@@ -211,32 +209,34 @@ def vis_side(df_events=None, kamp=None, hold_map=None):
 
                 st.plotly_chart(fig1, use_container_width=True)
 
-            # --- TAB 2: SCATTERPLOT MED DIN ØNSKEDE STRUKTUR ---
+            # --- TAB 2: SCATTERPLOT VISNING ---
             with tab2:
-                HIF_ID = 38331
-                HIF_RED = '#df003b'
+                metric_labels_tab2 = {
+                    "Skud vs. Mål": {"x": "SHOTS", "y": "GOALS"},
+                    "xG vs. Mål": {"x": "XG", "y": "GOALS"},
+                    "Skud på mål vs. Mål": {"x": "SHOTS_ON_TARGET", "y": "GOALS"},
+                    "Hjørnespark vs. Mål": {"x": "CORNERS", "y": "GOALS"},
+                    "Tacklinger vs. Mål": {"x": "TACKLES", "y": "GOALS"}
+                }
 
                 if 'show_data' not in st.session_state:
                     st.session_state.show_data = False
 
-                # Knap til at vise/skjule tabel ved siden af scatterplottet
-                col_spacer, col_btn = st.columns([3, 1])
-                with col_btn:
-                    if st.button("Data", use_container_width=True):
+                col_header2, col_dropdown2, col_btn2 = st.columns([1.2, 1, 0.5])
+                with col_header2:
+                    st.caption("1. Division — Sammenhæng mellem parametre")
+                with col_dropdown2:
+                    selected_label2 = st.selectbox("Vælg analyse (scatter):", list(metric_labels_tab2.keys()), label_visibility="collapsed", key="scatter_dropdown")
+                with col_btn2:
+                    if st.button("Data", use_container_width=True, key="btn_scatter_data"):
                         st.session_state.show_data = not st.session_state.show_data
 
+                mapping = metric_labels_tab2[selected_label2]
+                x_col, y_col = mapping["x"], mapping["y"]
+
                 df_s = agg_df.copy()
-                
-                # Definer x- og y-akser ud fra den valgte kategori i dropdownen
-                if metric_key == "XG_VS_GOALS":
-                    x_col, y_col = 'XG', 'GOALS'
-                    sc_title = "Sammenhæng mellem xG og Faktiske Mål"
-                elif metric_key == "GOALS_VS_BASELINE":
-                    x_col, y_col = 'SHOTS', 'GOALS'
-                    sc_title = "Sammenhæng mellem Skudvolumen og Faktiske Mål"
-                else:
-                    x_col, y_col = 'MATCHES', metric_key
-                    sc_title = f"Sammenhæng mellem Kampe og {selected_label}"
+                df_s[x_col] = pd.to_numeric(df_s[x_col], errors='coerce').fillna(0)
+                df_s[y_col] = pd.to_numeric(df_s[y_col], errors='coerce').fillna(0)
 
                 if st.session_state.show_data:
                     col_graf, col_data = st.columns([2.5, 1])
@@ -264,8 +264,8 @@ def vis_side(df_events=None, kamp=None, hold_map=None):
                     fig2 = go.Figure()
                     avg_x = df_s[x_col].mean()
                     avg_y = df_s[y_col].mean()
+                    HIF_RED = '#df003b'
 
-                    # Matcher eventuelt hold-id hvis det findes, ellers bruges navnet som ID-tjek
                     for _, row in df_s.iterrows():
                         team_name = row['TEAM']
                         is_hif = ("hvidovre" in team_name.lower())
@@ -281,18 +281,18 @@ def vis_side(df_events=None, kamp=None, hold_map=None):
                                 color=HIF_RED if is_hif else 'rgba(80, 80, 80, 0.7)',
                                 line=dict(width=2, color='white')
                             ),
-                            hovertemplate=f"<b>{team_name}</b><br>{x_col}: %{{x:.2f}}<br>{y_col}: %{{y:.2f}}<extra></extra>"
+                            hovertemplate=f"<b>{team_name}</b><br>Gns. {x_col}: %{{x:.2f}}<br>Gns. {y_col}: %{{y:.2f}}<extra></extra>"
                         ))
 
                     fig2.add_vline(x=avg_x, line_dash="dot", line_color="#999")
                     fig2.add_hline(y=avg_y, line_dash="dot", line_color="#999")
 
                     fig2.update_layout(
-                        title=sc_title,
+                        title=f"Sammenhæng mellem {x_col} og {y_col}",
                         plot_bgcolor='white',
                         xaxis_title=f"Gns. {x_col}",
                         yaxis_title=f"Gns. {y_col}",
-                        height=620,
+                        height=680,
                         margin=dict(t=20, b=20, l=20, r=20),
                         showlegend=False
                     )
