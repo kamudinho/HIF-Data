@@ -240,7 +240,7 @@ def vis_side(dp=None):
     
     # --- UI & VISNING ---
     with t_team:
-        col_t_title, col_t_btn = st.columns([3, 1])
+        col_t_title, col_t_btn = st.columns([2.7, 1.3])
         
         with col_t_title:
             logo_html = ""
