@@ -382,10 +382,11 @@ def vis_side(dp=None):
     t_team, t_profile, t_pitch, t_phys = st.tabs(["Holdoversigt", "Spillerprofil", "Spilleraktioner", "Fysisk data"])
 
     with t_team:
-        st.caption(f"{valgt_hold}")
+        st.caption(f"Holdoversigt: {valgt_hold}")
         
         if not truppen_stats.empty:
             df_vis_truppen = truppen_stats.reset_index()
+            
             kolonne_prioritet = [
                 'visningsnavn', 'Kampe', 'Minutter', 'Mål', 'xG', 'Assists', 'xA', 
                 'Pasninger', 'Stikninger', 'Indlæg', 'Afslutninger', 'Erobringer', 
@@ -393,11 +394,22 @@ def vis_side(dp=None):
             ]
             eksisterende_kolonner = [k for k in kolonne_prioritet if k in df_vis_truppen.columns]
             
+            # Opret en kopi af dataframen med de udvalgte kolonner
+            df_visning = df_vis_truppen[eksisterende_kolonner].copy()
+            
+            # Omdøb kolonnerne her (Gammelt navn: 'Nytt navn')
+            df_visning = df_visning.rename(columns={
+                'visningsnavn': 'Spiller',
+                'GK': 'Gule kort',
+                'RK': 'Røde kort',
+                'Chancer_skabt': 'Chancer skabt',
+                'Key_Passes': 'Key Passes'
+            })
+            
             st.dataframe(
-                df_vis_truppen[eksisterende_kolonner], 
+                df_visning, 
                 use_container_width=True, 
-                hide_index=True,
-                height=800
+                hide_index=True
             )
         else:
             st.info("Ingen trup-data tilgængelig endnu.")
