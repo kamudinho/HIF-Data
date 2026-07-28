@@ -387,6 +387,7 @@ def vis_side(dp=None):
     # --- OPSETNING AF FANER ---
     t_team, t_profile, t_pitch, t_phys = st.tabs(["Holdoversigt", "Spillerprofil", "Spilleraktioner", "Fysisk data"])
 
+    # --- UI & VISNING ---
     with t_team:
         col_t_title, col_t_btn = st.columns([3, 1])
         
