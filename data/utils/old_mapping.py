@@ -33,7 +33,7 @@ OPTA_EVENT_TYPES = {
     "Y2C": "Yellow 2nd/RC", "YC": "Yellow card"
 }
 
-# --- 2. KOMPLET OPTA QUALIFIER MAPPING (Alle 483 fra din liste) ---
+# --- 2. KOMPLET OPTA QUALIFIER MAPPING ---
 OPTA_QUALIFIERS = {
     "1": "Lang aflevering", "2": "Indlæg", "3": "Aflevering (Hoved)", "4": "Stikning", "5": "Free kick taken",
     "6": "Corner taken", "7": "Players caught offside", "8": "Goal disallowed", "9": "Straffespark",
@@ -171,9 +171,10 @@ OPTA_QUALIFIERS = {
 }
 
 EXCLUDE_EVENT_IDS = [
-    5, 27, 28, 30, 32, 34, 35, 36, 37, 40, 43, 64, 66, 70, 71, 75, 76, 212, # Dine nuværende
-    24, 25, 33, 38, 39, 46, 48, 58, 62, 65, 74, 79, 84, 130, 131, 209      # Nye anbefalede
+    5, 27, 28, 30, 32, 34, 35, 36, 37, 40, 43, 64, 66, 70, 71, 75, 76, 212,
+    24, 25, 33, 38, 39, 46, 48, 58, 62, 65, 74, 79, 84, 130, 131, 209
 ]
+
 # --- 3. HJÆLPEFUNKTIONER TIL STREAMLIT ---
 def get_event_name(event_id):
     """Returnerer læsbart navn for et Event ID"""
@@ -185,7 +186,6 @@ def get_qualifier_name(qual_id):
 
 def is_offensive_event(event_id):
     """Tjekker om eventet er en afslutning (Skud, mål etc.)"""
-    # Vi holder os til de numeriske ID'er, som Opta bruger i event-strømmen
     shot_ids = ["13", "14", "15", "16"] 
     return str(event_id) in shot_ids
 
@@ -199,10 +199,7 @@ def get_offensive_map():
     }
 
 def is_assist(qualifiers_list):
-    """
-    Tjekker om en liste af qualifiers indeholder en assist (ID 210).
-    Bruges typisk på et Pass event (ID 1).
-    """
+    """Tjekker om en liste af qualifiers indeholder en assist (ID 210)."""
     return "210" in [str(q) for q in qualifiers_list]
 
 def get_action_label(row):
@@ -211,14 +208,12 @@ def get_action_label(row):
     """
     try:
         eid = str(row['EVENT_TYPEID'])
-        # Vi antager at qualifiers ligger som en liste af strings i 'qual_list'
         ql = row.get('qual_list', [])
         if isinstance(ql, str):
             ql = ql.split(',')
         ql = [str(q).strip() for q in ql]
 
         # --- 1. PRIORITET: DE VIGTIGSTE TAKTISKE QUALIFIERS ---
-        # Disse trumfer alt andet, da de beskriver aktionens unikke karakter
         if "214" in ql: return "Big Chance"
         if "4" in ql:   return "Stikning (Through ball)"
         if "195" in ql: return "Pull back"
@@ -229,8 +224,6 @@ def get_action_label(row):
         if "138" in ql: return "Stolpe/Overligger"
 
         # --- 2. PRIORITET: EVENT-SPECIFIK LOGIK ---
-        
-        # PASNINGER (Event 1)
         if eid == "1":
             if "2" in ql:   return "Indlæg"
             if "107" in ql: return "Indkast"
@@ -238,13 +231,11 @@ def get_action_label(row):
             if "1" in ql:   return "Lang aflevering"
             return "Pasning"
 
-        # SKUD & MÅL (Event 13, 14, 15, 16)
         if eid in ["13", "14", "15", "16"]:
             suffix = " (Hoved)" if ("15" in ql or eid == "44") else ""
             if eid == "16": return f"Mål{suffix}"
             return f"Afslutning{suffix}"
 
-        # DEFENSIVT & DUEL
         if eid == "7":  return "Tackling"
         if eid == "8":  return "Interception"
         if eid == "12": return "Clearing"
@@ -253,13 +244,31 @@ def get_action_label(row):
         if eid == "50": return "Bold tabt (Dispossessed)"
         if eid == "44": return "Luftduel"
 
-        # MÅLMAND
         if eid == "10": return "Redning"
         if eid == "11": return "Felt-indgreb (Claim)"
         if eid == "41": return "Boksning"
 
-        # --- 3. FALLBACK: BRUG STANDARD MAPPING ---
+        # --- 3. FALLBACK ---
         return OPTA_EVENT_TYPES.get(eid, f"Aktion {eid}")
 
     except Exception:
         return "Ukendt Aktion"
+
+def har_qualifier(event_typeid, qualifiers_list, target_event_id, target_qual_ids):
+    """
+    Tjekker om en hændelse matcher en specifik event type samt indeholder specifikke qualifiers.
+    """
+    if str(event_typeid) != str(target_event_id):
+        return False
+        
+    if not qualifiers_list:
+        return False
+        
+    if isinstance(target_qual_ids, (int, str)):
+        target_list = [str(target_qual_ids)]
+    else:
+        target_list = [str(q) for q in target_qual_ids]
+        
+    ql_str = [str(q).strip() for q in qualifiers_list]
+    
+    return any(tq in ql_str for tq in target_list)
