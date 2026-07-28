@@ -172,7 +172,7 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
         df_plot['end_x'], df_plot['end_y'] = df_plot['ENDX'] * 1.05, df_plot['ENDY'] * 0.68
 
         pitch = Pitch(pitch_type='custom', pitch_length=105, pitch_width=68, 
-                      line_color='#333333', goal_type='box', linewidth=0.6)
+                      line_color='#333333', goal_type='box', linewidth=0.5)
         
         fig, ax = pitch.draw(figsize=(8, 5), constrained_layout=True)
         
