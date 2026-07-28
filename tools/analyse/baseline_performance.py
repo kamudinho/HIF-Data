@@ -175,7 +175,7 @@ def vis_side(df_events=None, kamp=None, hold_map=None):
                                 table tr th:nth-child(3), table tr th:nth-child(4) { text-align: center !important; }
                                 table { width: 100%; border-collapse: collapse; font-size: 12px; }
                                 
-                                /* Robust Hvidovre highlighting på tværs af Streamlit celler */
+                                /* Direkte match på navnet "Hvidovre" */
                                 table tr:has(td div:contains("Hvidovre")),
                                 table tr:has(td span:contains("Hvidovre")),
                                 table tr:has(td:contains("Hvidovre")) {
@@ -301,7 +301,7 @@ def vis_side(df_events=None, kamp=None, hold_map=None):
                                 table tr th:nth-child(3), table tr th:nth-child(4) { text-align: center !important; }
                                 table { width: 100%; border-collapse: collapse; font-size: 12px; }
                                 
-                                /* Robust Hvidovre highlighting på tværs af Streamlit celler */
+                                /* Direkte match på navnet "Hvidovre" */
                                 table tr:has(td div:contains("Hvidovre")),
                                 table tr:has(td span:contains("Hvidovre")),
                                 table tr:has(td:contains("Hvidovre")) {
