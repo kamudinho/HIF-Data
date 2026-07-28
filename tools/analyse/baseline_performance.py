@@ -188,14 +188,13 @@ def vis_side():
                 paper_bgcolor='rgba(0,0,0,0)',
                 font=dict(color='gray'),
                 title_font=dict(size=18, color='black'),
-                height=650
+                height=620
             )
             
             fig.update_xaxes(showgrid=True, gridwidth=1, gridcolor='#eaeaea')
             fig.update_yaxes(showgrid=False)
 
             st.plotly_chart(fig, use_container_width=True)
-            st.info("Overpræstation vs. Underpræstation.")
 
     except Exception as e:
         st.error(f"Fejl ved indlæsning af siden: {e}")
