@@ -17,7 +17,7 @@ def vis_side(df_events=None, kamp=None, hold_map=None):
 
         DB = "KLUB_HVIDOVREIF.AXIS"
         
-        valgt_saeson = st.session_state.get("saeson_select", "2025/2026")
+        valgt_saeson = st.session_state.get("saeson_select", "2026/2027")
         competition_uuid = SEASONS.get(valgt_saeson, {}).get(COMPETITION_NAME, "dyjr458hcmrcy87fsabfsy87o")
         
         sql = f"""
