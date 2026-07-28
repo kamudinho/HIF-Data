@@ -123,10 +123,7 @@ def vis_side():
             match_counts = df_teams.groupby('TEAM').size().reset_index(name='MATCHES')
             agg_df = pd.merge(agg_df, match_counts, on='TEAM')
 
-            # --- OPELDRAGNING AF TABS ---
-            tab1, tab2 = st.tabs(["📊 Baseline Oversigt", "📈 Scatterplot"])
-
-            # Fælles dropdown til kategorier (placeret øverst før fanebladene eller delt)
+            # --- TOP SEKTION: CAPTION OG DROPDOWN PÅ SAMME LINJE ---
             metric_labels = {
                 "Mål vs. Skud-baseline (Faktiske mål minus forventede ud fra skudvolumen)": "GOALS_VS_BASELINE",
                 "xG vs. Faktiske Mål (Afslutningskvalitet)": "XG_VS_GOALS",
@@ -137,7 +134,6 @@ def vis_side():
                 "Redninger": "SAVES"
             }
 
-            # Lad os lægge parameter-vælgeren øverst, så den styrer begge visninger
             col1, col2 = st.columns([1.2, 1])
             with col1:
                 st.caption("1. Division — Over- og Underpræstation mod Baseline")
@@ -146,9 +142,11 @@ def vis_side():
             
             metric_key = metric_labels[selected_label]
 
+            # --- TABS PLACERET EFTER TOP-KONTROLERNE ---
+            tab1, tab2 = st.tabs(["📊 Baseline Oversigt", "📈 Scatterplot"])
+
             # --- TAB 1: BASELINE VISNING ---
             with tab1:
-                # Kopiér dataframe for ikke at ødelægge data til tab 2
                 df_b = agg_df.copy()
 
                 if metric_key == "GOALS_VS_BASELINE":
@@ -220,7 +218,6 @@ def vis_side():
             with tab2:
                 df_s = agg_df.copy()
                 
-                # Opsætning af x- og y-akser baseret på den valgte parameter i dropdowns
                 if metric_key == "XG_VS_GOALS":
                     x_col, y_col = 'XG', 'GOALS'
                     sc_title = "Sammenhæng mellem xG (Forventede Mål) og Faktiske Mål"
