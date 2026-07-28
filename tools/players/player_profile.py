@@ -495,7 +495,6 @@ def vis_side(dp=None):
                 img_str = base64.b64encode(buffered.getvalue()).decode()
                 logo_html = f'<img src="data:image/png;base64,{img_str}" style="height: 26px; margin-right: 10px; object-fit: contain;">'
 
-            # Tilføjet padding-top for at skubbe logo/tekst ned, så det matcher segmented_control's fulde højde
             st.markdown(f'<div style="display: flex; align-items: center; padding-top: 20px;">{logo_html}<span style="font-size: 16px; font-weight: bold; line-height: 1;">{valgt_hold.upper()}</span></div>', unsafe_allow_html=True)
             
         with col_t_btn:
@@ -512,7 +511,6 @@ def vis_side(dp=None):
         if not truppen_stats.empty:
             df_vis_truppen = truppen_stats.reset_index()
             
-            # Her defineres hvilke kolonner der skal vises for hver kategori. Ret frit efter behov!
             gen_kolonner = ['visningsnavn', 'Kampe', 'Minutter', 'Aktioner', 'Pasninger', 'Mål', 'Assists', 'Udskiftet', 'Indskiftet', 'Gule_kort', 'Roede_kort']
             off_kolonner = ['visningsnavn', 'Aktioner', 'Afslutninger', 'xG', 'Chancer_skabt', 'Key_Passes', 'Stikninger', 'Indlæg', 'xA', 'Driblinger']
             def_kolonner = ['visningsnavn', 'Aktioner', 'Erobringer', 'Tacklinger', 'Clearinger', 'Blokeringer', 'Interceptioner', 'Frispark_imod']
@@ -808,7 +806,6 @@ def vis_side(dp=None):
                         label_visibility="collapsed"
                     )
                     
-                    # Brug de samme kategorier som i holdoversigten, så det matcher centralt
                     gen_kolonner_comp = ['visningsnavn', 'hold', 'Kampe', 'Minutter', 'Aktioner', 'Pasninger', 'Mål', 'Assists', 'Gule_kort', 'Roede_kort']
                     off_kolonner_comp = ['visningsnavn', 'hold', 'Aktioner', 'Afslutninger', 'xG', 'Chancer_skabt', 'Key_Passes', 'Stikninger', 'Indlæg', 'xA', 'Driblinger']
                     def_kolonner_comp = ['visningsnavn', 'hold', 'Aktioner', 'Erobringer', 'Tacklinger', 'Clearinger', 'Blokeringer', 'Interceptioner', 'Frispark_imod']
@@ -848,6 +845,6 @@ def vis_side(dp=None):
                 st.error("Kolonnen 'visningsnavn' blev ikke fundet i ligadata.")
         else:
             st.warning("Ingen ligadata tilgængelig at vise.")
-        
+
 if __name__ == "__main__":
     vis_side()
