@@ -187,7 +187,8 @@ def vis_side():
                 plot_bgcolor='rgba(0,0,0,0)',
                 paper_bgcolor='rgba(0,0,0,0)',
                 font=dict(color='gray'),
-                title_font=dict(size=18, color='black')
+                title_font=dict(size=18, color='black'),
+                height=650
             )
             
             fig.update_xaxes(showgrid=True, gridwidth=1, gridcolor='#eaeaea')
