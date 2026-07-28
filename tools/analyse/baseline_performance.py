@@ -238,7 +238,7 @@ def vis_side(df_events=None, kamp=None, hold_map=None):
 
                 fig1.update_traces(
                     marker_color=df_b['COLOR_TEAM'],
-                    textfont=dict(size=13, color='white'),
+                    textfont=dict(size=13, color='white'),  # Kun værdierne på søjlerne er hvide
                     hovertemplate=(
                         "<b>%{customdata[0]}</b><br>"
                         "Præstation: %{x:.2f}<br>"
@@ -260,7 +260,8 @@ def vis_side(df_events=None, kamp=None, hold_map=None):
                 )
                 
                 fig1.update_xaxes(showgrid=True, gridwidth=1, gridcolor='#333333')
-                fig1.update_yaxes(showgrid=False, tickfont=dict(size=13, color='white'))
+                # Fjernet 'color' fra yaxis, så holdnavnene ikke gennemtvinges til hvide
+                fig1.update_yaxes(showgrid=False, tickfont=dict(size=13))
 
                 st.plotly_chart(fig1, use_container_width=True)
 
@@ -343,7 +344,7 @@ def vis_side(df_events=None, kamp=None, hold_map=None):
                         mode='markers+text',
                         text=[team_name], 
                         textposition="top center",
-                        textfont=dict(size=13, color='white', weight='bold' if is_hif else 'normal'),
+                        textfont=dict(size=13, weight='bold' if is_hif else 'normal'),
                         marker=dict(
                             size=25 if is_hif else 18, 
                             color=HIF_RED if is_hif else 'gray',
