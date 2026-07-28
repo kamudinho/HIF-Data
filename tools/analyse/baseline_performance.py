@@ -101,7 +101,6 @@ def vis_side():
                     'XG': pd.to_numeric(row.get('HOME_XG'), errors='coerce') or 0.0,
                     'CORNERS': pd.to_numeric(row.get('HOME_CORNERS'), errors='coerce') or 0,
                     'FOULS': pd.to_numeric(row.get('HOME_FOULS'), errors='coerce') or 0,
-                    'YELLOW_CARDS': pd.to_numeric(row.get('HOME_YELLOW'), errors='coerce') or 0,
                     'TACKLES': pd.to_numeric(row.get('HOME_TACKLES'), errors='coerce') or 0,
                     'SAVES': pd.to_numeric(row.get('HOME_SAVES'), errors='coerce') or 0
                 })
@@ -114,7 +113,6 @@ def vis_side():
                     'XG': pd.to_numeric(row.get('AWAY_XG'), errors='coerce') or 0.0,
                     'CORNERS': pd.to_numeric(row.get('AWAY_CORNERS'), errors='coerce') or 0,
                     'FOULS': pd.to_numeric(row.get('AWAY_FOULS'), errors='coerce') or 0,
-                    'YELLOW_CARDS': pd.to_numeric(row.get('AWAY_YELLOW'), errors='coerce') or 0,
                     'TACKLES': pd.to_numeric(row.get('AWAY_TACKLES'), errors='coerce') or 0,
                     'SAVES': pd.to_numeric(row.get('AWAY_SAVES'), errors='coerce') or 0
                 })
@@ -136,7 +134,6 @@ def vis_side():
                 "Hjørnespark": "CORNERS",
                 "Tacklinger": "TACKLES",
                 "Frispark": "FOULS",
-                "Gule kort": "YELLOW_CARDS",
                 "Redninger": "SAVES"
             }
 
@@ -198,7 +195,7 @@ def vis_side():
             fig.update_yaxes(showgrid=False)
 
             st.plotly_chart(fig, use_container_width=True)
-            st.info("Højre for nul = Flere mål/værdi end volumen alene tilsiger; venstre = Færre.")
+            st.info("Overpræstation vs. Underpræstation.")
 
     except Exception as e:
         st.error(f"Fejl ved indlæsning af siden: {e}")
