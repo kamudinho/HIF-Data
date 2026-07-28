@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
+from data.utils.team_mapping import SEASONS, COMPETITION_NAME
+
 def vis_side():
     try:
         st.caption("1. Division — Over- og Underpræstation mod Baseline")
@@ -14,9 +16,14 @@ def vis_side():
             return
 
         DB = "KLUB_HVIDOVREIF.AXIS"
-        SEASONNAME = "2025/2026"
         
-        # SQL oprettet med navne direkte fra OPTA_MATCHINFO for at undgå manglende tabeller
+        # Bruger standard sæsonen eller henter fra session_state hvis tilgængelig
+        valgt_saeson = st.session_state.get("saeson_select", "2025/2026")
+        
+        # Hent det korrekte Opta UUID til turneringen ud fra team_mapping.py
+        competition_uuid = SEASONS.get(valgt_saeson, {}).get(COMPETITION_NAME, "dyjr458hcmrcy87fsabfsy87o")
+        
+        # SQL oprettet med det dynamiske turnering-UUID
         sql = f"""
             WITH MatchBase AS (
                 SELECT 
@@ -25,10 +32,7 @@ def vis_side():
                     CONTESTANTHOME_NAME AS HOME_TEAM_NAME,
                     CONTESTANTAWAY_NAME AS AWAY_TEAM_NAME
                 FROM {DB}.OPTA_MATCHINFO
-                WHERE COMPETITION_OPTAUUID IN (
-                    SELECT COMPETITION_OPTAUUID FROM {DB}.OPTA_TOURNAMENTCALENDAR 
-                    WHERE COMPETITION_WYID = 328 AND SEASONNAME = '{SEASONNAME}'
-                )
+                WHERE TOURNAMENTCALENDAR_OPTAUUID = '{competition_uuid}'
             ),
             StatsPivot AS (
                 SELECT 
@@ -77,7 +81,7 @@ def vis_side():
             df_matches = conn.query(sql) if hasattr(conn, 'query') else pd.read_sql(sql, conn)
 
             if df_matches is None or df_matches.empty:
-                st.warning("Ingen data fundet for 1. division.")
+                st.warning("Ingen data fundet for 1. division i den valgte sæson.")
                 return
 
             df_matches.columns = [str(c).upper() for c in df_matches.columns]
@@ -165,7 +169,7 @@ def vis_side():
             agg_df = agg_df.sort_values(by='DIFF', ascending=True)
             agg_df['COLOR_TYPE'] = agg_df['DIFF'].apply(lambda x: 'Overpræsterer' if x >= 0 else 'Underpræsterer')
 
-            # Plot med Plotly (med de klassiske farvekoder fra eksemplet)
+            # Plot med Plotly (med de klassiske farvekoder)
             fig = px.bar(
                 agg_df,
                 x='DIFF',
