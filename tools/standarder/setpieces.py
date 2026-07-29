@@ -34,7 +34,6 @@ def load_setpiece_data():
     conn = _get_snowflake_conn()
     if not conn: return pd.DataFrame()
     
-    # Helt fri for f-string, så Python aldrig fejler på klammer heri:
     sql = (
         "WITH BaseEvents AS ("
         "    SELECT "
@@ -141,29 +140,35 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
     with col_p:
         t_color = TEAM_COLORS.get(t_sel, {}).get('primary', HIF_RED)
         
-        # Halvbane til hjørnespark, fuld bane til frispark og indkast:
         if sp_type == "Hjørnespark":
             pitch = VerticalPitch(pitch_type='opta', half=True, pitch_color='white', line_color='#333333', linewidth=1.5)
             fig, ax = pitch.draw(figsize=(7, 7))
+            if hold_logo:
+                ax_logo = ax.inset_axes([3.0, 50.0, 6.0, 6.0], transform=ax.transData)
+                ax_logo.imshow(hold_logo)
+                ax_logo.axis('off')
+                ax.text(10.0, 53.0, t_sel.upper(), fontsize=8, fontweight='bold', color='#222222', va='center')
+            ax.text(3.0, 46.0, f"{sp_type.upper()} ({side_sel.upper()})", fontsize=7, fontweight='bold', color='#555555', va='center')
+            spiller_tekst = f"Spiller: {p_sel}" if p_sel != "Alle spillere" else "Alle spillere"
+            stats_line = f"{spiller_tekst} — {total} aktioner ({int(pct)}% succes)"
+            ax.text(3.0, 44.0, stats_line, fontsize=7, color='#666666', va='center')
         else:
             pitch = Pitch(pitch_type='opta', pitch_color='white', line_color='#333333', linewidth=1.5)
             fig, ax = pitch.draw(figsize=(9, 6))
+            if hold_logo:
+                ax_logo = ax.inset_axes([3.0, 91.0, 6.0, 6.0], transform=ax.transData)
+                ax_logo.imshow(hold_logo)
+                ax_logo.axis('off')
+                ax.text(11.0, 94.0, t_sel.upper(), fontsize=8, fontweight='bold', color='#222222', va='center')
+            ax.text(3.0, 87.0, f"{sp_type.upper()} ({side_sel.upper()})", fontsize=7, fontweight='bold', color='#555555', va='center')
+            spiller_tekst = f"Spiller: {p_sel}" if p_sel != "Alle spillere" else "Alle spillere"
+            stats_line = f"{spiller_tekst} — {total} aktioner ({int(pct)}% succes)"
+            ax.text(3.0, 84.0, stats_line, fontsize=7, color='#666666', va='center')
 
         x = df_plot['EVENT_X']
         y = df_plot['EVENT_Y']
         end_x = df_plot['ENDX']
         end_y = df_plot['ENDY']
-
-        if hold_logo:
-            ax_logo = ax.inset_axes([3.0, 91.0, 6.0, 6.0], transform=ax.transData)
-            ax_logo.imshow(hold_logo)
-            ax_logo.axis('off')
-            ax.text(11.0, 94.0, t_sel.upper(), fontsize=8, fontweight='bold', color='#222222', va='center')
-
-        ax.text(3.0, 87.0 if sp_type != "Hjørnespark" else 55.0, f"{sp_type.upper()} ({side_sel.upper()})", fontsize=7, fontweight='bold', color='#555555', va='center')
-        spiller_tekst = f"Spiller: {p_sel}" if p_sel != "Alle spillere" else "Alle spillere"
-        stats_line = f"{spiller_tekst} — {total} aktioner ({int(pct)}% succes)"
-        ax.text(3.0, 84.0 if sp_type != "Hjørnespark" else 52.0, stats_line, fontsize=7, color='#666666', va='center')
 
         if not df_plot.dropna(subset=['ENDX', 'ENDY']).empty:
             if "Zoner" in vis_mode:
@@ -241,11 +246,25 @@ def vis_side():
         t_sel = st.selectbox("Vælg hold", teams, index=default_idx, key="main_team_selectbox", label_visibility="collapsed")
 
     df_team_selected = df_all[df_all['KLUB_NAVN'] == t_sel].copy()
+    
+    # Alle 6 faner genetableret:
     tabs = st.tabs(["Holdoversigt", "Spilleroversigt", "Hjørnespark", "Frispark", "Indkast", "Zoneoversigt"])
     
+    with tabs[0]:
+        st.write("### Holdoversigt for standardsituationer")
+        st.info("Her kan du bygge det overordnede holdoverblik på tværs af standardsituationer.")
+        
+    with tabs[1]:
+        st.write("### Spilleroversigt")
+        st.info("Her kan du indsætte den samlede oversigt per spiller.")
+
     for i, name in enumerate(["Hjørnespark", "Frispark", "Indkast"], 2):
         with tabs[i]: 
             render_setpiece_analysis(df_team_selected, name, t_sel)
+
+    with tabs[5]:
+        st.write("### Zoneoversigt")
+        st.info("Overordnet zoneanalyse for standardsituationer.")
 
 if __name__ == "__main__":
     st.set_page_config(layout="wide", page_title="Standardsituationer")
