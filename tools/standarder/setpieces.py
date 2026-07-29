@@ -34,7 +34,7 @@ def load_setpiece_data():
     conn = _get_snowflake_conn()
     if not conn: return pd.DataFrame()
     
-    sql = """
+    sql = f"""
     WITH BaseEvents AS (
         SELECT 
             e.EVENT_OPTAUUID, e.MATCH_OPTAUUID, e.EVENT_EVENTID,
@@ -49,8 +49,8 @@ def load_setpiece_data():
             LEAD(e.EVENT_TYPEID, 1) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_EVENTID) AS P1_TYPE,
             LEAD(e.EVENT_TYPEID, 2) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_EVENTID) AS P2_TYPE,
             LEAD(e.EVENT_TYPEID, 3) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_EVENTID) AS P3_TYPE
-        FROM """ + DB + """.OPTA_EVENTS e
-        WHERE e.TOURNAMENTCALENDAR_OPTAUUID = '""" + LIGA_UUID + """'
+        FROM {DB}.OPTA_EVENTS e
+        WHERE e.TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
     },
     Quals AS (
         SELECT 
@@ -60,7 +60,7 @@ def load_setpiece_data():
                      WHEN QUALIFIER_QID = 5 THEN 'Frispark' END) AS TYPE_NAVN,
             MAX(CASE WHEN QUALIFIER_QID = 140 THEN QUALIFIER_VALUE END) AS ENDX,
             MAX(CASE WHEN QUALIFIER_QID = 141 THEN QUALIFIER_VALUE END) AS ENDY
-        FROM """ + DB + """.OPTA_QUALIFIERS
+        FROM {DB}.OPTA_QUALIFIERS
         WHERE QUALIFIER_QID IN (5, 6, 107, 140, 141)
         GROUP BY EVENT_OPTAUUID
     )
@@ -94,7 +94,9 @@ def load_setpiece_data():
         shot_types = [13, 14, 15, 16]
         df['ER_AFSLUTNING'] = df.apply(lambda x: 1 if x['P1_TYPE'] in shot_types or x['P2_TYPE'] in shot_types or x['P3_TYPE'] in shot_types else 0, axis=1)
         return df
-    except: return pd.DataFrame()
+    except Exception as e:
+        st.error(SQL-fejl: {e})
+        return pd.DataFrame()
 
 def render_setpiece_analysis(df_team, sp_type, t_sel):
     t_info = next((info for name, info in TEAMS.items() if name == t_sel), None)
@@ -220,7 +222,9 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
 
 def vis_side():
     df_all = load_setpiece_data()
-    if df_all.empty: st.warning("Ingen data fundet."); return
+    if df_all.empty: 
+        st.warning("Ingen data fundet. Tjek om LIGA_UUID matcher turneringen i databasen.")
+        return
 
     uuid_to_name = {v['opta_uuid'].upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
     df_all['KLUB_NAVN'] = df_all['TEAM_UUID'].str.upper().map(uuid_to_name)
