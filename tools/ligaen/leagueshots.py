@@ -1,11 +1,11 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-from mplsoccer import VerticalPitch
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from data.utils.team_mapping import TEAMS, TEAM_COLORS, SEASONS, COMPETITIONS
 from data.data_load import _get_snowflake_conn
+from utils.pitches import get_pitch, get_boundaries
 from PIL import Image
 import requests
 from io import BytesIO
@@ -14,27 +14,8 @@ from io import BytesIO
 HIF_RED = '#cc0000'
 DB = "KLUB_HVIDOVREIF.AXIS"
 
-# --- ZONE DEFINITIONER (105x68 m) ---
-P_L, P_W = 105.0, 68.0
-X_MID_L, X_MID_R = (P_W - 18.32) / 2, (P_W + 18.32) / 2
-X_INN_L, X_INN_R = (P_W - 40.2) / 2, (P_W + 40.2) / 2
-Y_GOAL, Y_6YD, Y_PK, Y_18YD, Y_MID = 105.0, 99.5, 94.0, 88.5, 75.0
-
-ZONE_BOUNDARIES = {
-    "Zone 1": {"y_min": Y_6YD, "y_max": Y_GOAL, "x_min": X_MID_L, "x_max": X_MID_R},
-    "Zone 2": {"y_min": Y_PK, "y_max": Y_6YD, "x_min": X_MID_L, "x_max": X_MID_R},
-    "Zone 3": {"y_min": Y_18YD, "y_max": Y_PK, "x_min": X_MID_L, "x_max": X_MID_R},
-    "Zone 4A": {"y_min": Y_6YD, "y_max": Y_GOAL, "x_min": X_MID_R, "x_max": X_INN_R},
-    "Zone 4B": {"y_min": Y_6YD, "y_max": Y_GOAL, "x_min": X_INN_L, "x_max": X_MID_L},
-    "Zone 5A": {"y_min": Y_18YD, "y_max": Y_6YD, "x_min": X_MID_R, "x_max": X_INN_R},
-    "Zone 5B": {"y_min": Y_18YD, "y_max": Y_6YD, "x_min": X_INN_L, "x_max": X_MID_L},
-    "Zone 6A": {"y_min": Y_18YD, "y_max": Y_GOAL, "x_min": X_INN_R, "x_max": P_W},
-    "Zone 6B": {"y_min": Y_18YD, "y_max": Y_GOAL, "x_min": 0, "x_max": X_INN_L},
-    "Zone 7C": {"y_min": Y_MID, "y_max": Y_18YD, "x_min": 0, "x_max": X_MID_L},
-    "Zone 7B": {"y_min": Y_MID, "y_max": Y_18YD, "x_min": X_MID_L, "x_max": X_MID_R},
-    "Zone 7A": {"y_min": Y_MID, "y_max": Y_18YD, "x_min": X_MID_R, "x_max": P_W},
-    "Zone 8":  {"y_min": 0, "y_max": Y_MID, "x_min": 0, "x_max": P_W}
-}
+# --- ZONE DEFINITIONER ---
+ZONE_BOUNDARIES = get_boundaries()
 
 @st.cache_data(ttl=3600)
 def load_league_data(liga_uuid):
@@ -130,7 +111,6 @@ def vis_side(dp=None):
             tilgængelige_turneringer = list(SEASONS[sæson_sel].keys())
         turnering_sel = st.selectbox("Turnering", tilgængelige_turneringer, index=0)
 
-    # Hent holdene dynamisk ud fra den valgte sæson og turnering via SEASON_LEAGUE_MAPPER
     from data.utils.team_mapping import SEASON_LEAGUE_MAPPER
     teams = SEASON_LEAGUE_MAPPER.get(sæson_sel, {}).get(turnering_sel, sorted(list(TEAMS.keys())))
 
@@ -167,7 +147,6 @@ def vis_side(dp=None):
     df_team['IS_DZ'] = (df_team['X_M'] >= 94.5) & (df_team['Y_M'] >= 25.16) & (df_team['Y_M'] <= 42.84)
 
     tabs = st.tabs(["SPILLEROVERSIGT", "AFSLUTNINGER", "DZ-ANALYSE", "SKUDZONER", "MÅLZONER"])
-    pitch_cfg = {"half": True, "pitch_type": 'custom', "pitch_length": 105, "pitch_width": 68, "line_color": '#cccccc'}
 
     # TAB 0: SPILLEROVERSIGT
     with tabs[0]:
@@ -201,7 +180,7 @@ def vis_side(dp=None):
                 "Spiller": st.column_config.TextColumn("Spiller", width="medium"),
                 "DZ-Andel": st.column_config.ProgressColumn(
                     "DZ-Andel", 
-                    help="Andel af skud foretaget i Danger Zone",
+                    help="Andel af skud foretaget i Danger Zone", 
                     format="%d%%", 
                     min_value=0, 
                     max_value=100,
@@ -228,8 +207,7 @@ def vis_side(dp=None):
             st.markdown(f'<div class="stat-box"><div class="stat-label">Mål</div><div class="stat-value">{m}</div></div>', unsafe_allow_html=True)
             st.markdown(f'<div class="stat-box"><div class="stat-label">Konvertering</div><div class="stat-value">{(m/s*100 if s>0 else 0):.1f}%</div></div>', unsafe_allow_html=True)
         with c1:
-            pitch = VerticalPitch(**pitch_cfg)
-            fig, ax = pitch.draw(figsize=(8, 10)); ax.set_ylim(55, 105)
+            pitch, fig, ax = get_pitch("halv", t_color=t_color)
             pitch.scatter(d_v['X_M'], d_v['Y_M'], s=100, c=(d_v['EVENT_TYPEID']==16).map({True: t_color, False: 'white'}), edgecolors=t_color, ax=ax, zorder=3)
             draw_logo_on_pitch(ax, t_logo); st.pyplot(fig)
 
@@ -246,13 +224,12 @@ def vis_side(dp=None):
             st.markdown(f'<div class="stat-box"><div class="stat-label">DZ Mål</div><div class="stat-value">{m_dz}</div></div>', unsafe_allow_html=True)
             st.markdown(f'<div class="stat-box"><div class="stat-label">DZ Konv.</div><div class="stat-value">{(m_dz/s_dz*100 if s_dz>0 else 0):.1f}%</div></div>', unsafe_allow_html=True)
         with c1:
-            pitch = VerticalPitch(**pitch_cfg)
-            fig, ax = pitch.draw(figsize=(8, 10)); ax.set_ylim(55, 105)
+            pitch, fig, ax = get_pitch("halv", t_color=t_color)
             ax.add_patch(patches.Rectangle((25.16, 94.0), 17.68, 16.5, color=t_color, alpha=0.15, zorder=1))
             pitch.scatter(dz_d['X_M'], dz_d['Y_M'], s=100, c=(dz_d['EVENT_TYPEID']==16).map({True: t_color, False: 'white'}), edgecolors=t_color, ax=ax, zorder=3)
             draw_logo_on_pitch(ax, t_logo); st.pyplot(fig)
 
-    # TAB 3 & 4: ZONER
+    # TAB 3 & 4: ZONER (Skudzoner & Målzoner)
     for i, is_goal in enumerate([False, True]):
         with tabs[i+3]:
             st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
@@ -261,6 +238,7 @@ def vis_side(dp=None):
             total_count = len(plot_df)
             t_color = TEAM_COLORS.get(t_sel, {}).get('primary', HIF_RED)
             t_logo = get_logo_img(TEAMS.get(t_sel, {}).get('logo'))
+            
             with c2:
                 st.write(f"**Zone-stats ({'Mål' if is_goal else 'Skud'})**")
                 z_summary = []
@@ -272,17 +250,12 @@ def vis_side(dp=None):
                 
                 if z_summary:
                     st.dataframe(pd.DataFrame(z_summary).sort_values("Antal", ascending=False), hide_index=True, use_container_width=True, column_config={"Andel": st.column_config.NumberColumn(format="%.1f%%")})
+            
             with c1:
-                pitch = VerticalPitch(**pitch_cfg)
-                fig, ax = pitch.draw(figsize=(8, 10)); ax.set_ylim(55, 105)
-                max_v = plot_df['Zone'].value_counts().max() if not plot_df.empty else 1
-                for z, b in ZONE_BOUNDARIES.items():
-                    if b["y_max"] <= 55: continue
-                    cnt = len(plot_df[plot_df['Zone']==z])
-                    alpha = (cnt/max_v)*0.6 if cnt > 0 else 0.05
-                    ax.add_patch(patches.Rectangle((b["x_min"], max(b["y_min"], 55)), b["x_max"]-b["x_min"], b["y_max"]-max(b["y_min"], 55), facecolor=t_color, alpha=alpha, edgecolor='black', ls='--'))
-                    if cnt > 0: ax.text(b["x_min"]+(b["x_max"]-b["x_min"])/2, max(b["y_min"], 55)+(b["y_max"]-max(b["y_min"], 55))/2, f"{cnt}", ha='center', va='center', fontweight='bold')
-                draw_logo_on_pitch(ax, t_logo); st.pyplot(fig)
+                zone_counts = {z: len(plot_df[plot_df['Zone'] == z]) for z in ZONE_BOUNDARIES.keys()}
+                pitch, fig, ax = get_pitch("halv", zone_boundaries=ZONE_BOUNDARIES, zone_data=zone_counts, t_color=t_color)
+                draw_logo_on_pitch(ax, t_logo)
+                st.pyplot(fig)
 
 if __name__ == "__main__":
     vis_side()
