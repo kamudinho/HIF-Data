@@ -253,7 +253,7 @@ try:
             import tools.players.player_score as pscore
             pscore.vis_side()
         elif s == "Standardsituationer":
-            import tools.standarder.std_analyse as std
+            import tools.standarder.setpieces as std
             std.vis_side()
 
     elif m == "TESTSIDE":
