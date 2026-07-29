@@ -234,13 +234,27 @@ def vis_side():
     col_cfg = {"Succes %": st.column_config.ProgressColumn("Succes %", format="%d%%", min_value=0, max_value=100)}
 
     with tabs[0]: 
-        c = st.segmented_control("k1", ["Hjørnespark", "Frispark", "Indkast"], horizontal=True, key="r1")
-        st.dataframe(get_summary_stats(df_all[df_all['TYPE_NAVN'] == c], 'KLUB_NAVN'), use_container_width=True, hide_index=True, column_config=col_cfg)
+    col_content, col_control = st.columns([3, 1])
+    with col_control:
+        c = st.segmented_control("k1", ["Hjørnespark", "Frispark", "Indkast"], key="r1", label_visibility="collapsed")
+    with col_content:
+        st.markdown("### Holdoversigt")
+        
+    st.dataframe(get_summary_stats(df_all[df_all['TYPE_NAVN'] == c], 'KLUB_NAVN'), use_container_width=True, hide_index=True, column_config=col_cfg)
+
     with tabs[1]: 
-        c2 = st.segmented_control("k2", ["Hjørnespark", "Frispark", "Indkast"], horizontal=True, key="r2")
+        col_content, col_control = st.columns([3, 1])
+        with col_control:
+            c2 = st.segmented_control("k2", ["Hjørnespark", "Frispark", "Indkast"], key="r2", label_visibility="collapsed")
+        with col_content:
+            st.markdown("### Tager-oversigt")
+            
         st.dataframe(get_summary_stats(df_team_selected[df_team_selected['TYPE_NAVN'] == c2], 'TAGER_NAVN'), use_container_width=True, hide_index=True, column_config=col_cfg)
+    
     for i, name in enumerate(["Hjørnespark", "Frispark", "Indkast"], 2):
-        with tabs[i]: render_setpiece_analysis(df_team_selected, name, t_sel)
+        with tabs[i]: 
+            render_setpiece_analysis(df_team_selected, name, t_sel)
+    
     with tabs[5]:
         df_team_selected['ZONE'] = df_team_selected['ENDY'].apply(lambda y: "Venstre" if float(y or 0) < 33 else ("Højre" if float(y or 0) > 66 else "Center"))
         st.dataframe(df_team_selected.groupby(['ZONE', 'TYPE_NAVN']).size().unstack(fill_value=0), use_container_width=True)
