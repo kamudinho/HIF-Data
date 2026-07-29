@@ -183,7 +183,7 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
 
             # Placer logo og tekst pænt i venstre side i toppen af banen
             if hold_logo:
-                ax_logo = ax.inset_axes([3.0, 96.0, 6.0, 6.0], transform=ax.transData)
+                ax_logo = ax.inset_axes([80.0, 4.0, 96.0, 6.0], transform=ax.transData)
                 ax_logo.imshow(hold_logo)
                 ax_logo.axis('off')
                 ax.text(1.0, 99.0, t_sel.upper(), fontsize=7, fontweight='bold', color='#222222', alpha=0.9, va='center')
