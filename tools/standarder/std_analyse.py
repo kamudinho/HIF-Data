@@ -165,18 +165,15 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
         t_color = TEAM_COLORS.get(t_sel, {}).get('primary', HIF_RED)
         
         if sp_type == "Hjørnespark":
-            # --- KORREGERET HALV BANE (VERTICAL PITCH MED half=True) ---
-            # Statsbomb standard for halv bane: X (bredde) = 0 til 80, Y (længde) = 60 til 120
+            # --- HALV BANE (VERTICAL PITCH MED half=True) ---
             pitch = VerticalPitch(pitch_type='statsbomb', pitch_color='white', line_color='#333333', linewidth=1.5, half=True)
             fig, ax = pitch.draw(figsize=(8, 9))
 
-            # Opta (0-100) mappes direkte ind på Statsbomb halvbane (Y: 60-120, X: 0-80)
             df_plot['x'] = (df_plot['EVENT_Y'] / 100.0) * 80.0
             df_plot['y'] = (df_plot['EVENT_X'] / 100.0) * 60.0 + 60.0
             df_plot['end_x'] = (df_plot['ENDY'] / 100.0) * 80.0
             df_plot['end_y'] = (df_plot['ENDX'] / 100.0) * 60.0 + 60.0
 
-            # Sørg for at rammen passer perfekt til halv banen med lidt ekstra luft til tekst i toppen
             ax.set_xlim(0, 80)
             ax.set_ylim(55, 125)
 
@@ -282,7 +279,7 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
         )
         
         mod_agg = mod_agg.sort_values(by='Antal', ascending=False).head(5)
-        mod_agg = mod_agg[['MODTAGER', 'Antal', 'Med afslutning', 'Andel']]
+        mod_agg = mod_agg[['MODTAGER', 'Antal', 'Afslutning_Sum', 'Andel']]
         mod_agg.columns = ['Modtager', 'Antal', 'Med afslutning', 'Andel']
         st.dataframe(mod_agg, use_container_width=True, hide_index=True)
 
