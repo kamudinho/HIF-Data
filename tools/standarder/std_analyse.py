@@ -120,7 +120,7 @@ def get_summary_stats(df, group_col):
     stats['Top Modtager'] = stats[group_col].map(mod_map)
     return stats[[group_col, 'Antal', 'Succes %', 'Top Modtager', 'Afslutning %']]
 
-# --- 5. VISUALISERING AF HJØRNESPARK (REN OG ENKEL HALV BANE) ---
+# --- 5. VISUALISERING AF HJØRNESPARK (KORREKT ROTERET OG PLACERET) ---
 def render_setpiece_analysis(df_team, sp_type, t_sel):
     t_info = next((info for name, info in TEAMS.items() if name == t_sel), None)
     hold_logo = get_logo_img(t_info.get('logo') if t_info else None)
@@ -164,11 +164,11 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
         t_color = TEAM_COLORS.get(t_sel, {}).get('primary', HIF_RED)
         
         if sp_type == "Hjørnespark":
-            # BRUGER VERTICALPITCH MED OPTS-TYPE OG HALF=TRUE (KUN MODSTANDERENS FELT)
+            # BRUGER VERTICALPITCH MED HALF=TRUE (VISER KUN MODSTANDERENS FELT NED TIL MIDTERLINJEN)
             pitch = VerticalPitch(pitch_type='opta', half=True, pitch_color='white', line_color='#333333', linewidth=1.5)
             fig, ax = pitch.draw(figsize=(7, 7))
 
-            # Opta-koordinater bruges direkte uden omregning
+            # Opta-koordinater bruges direkte
             x = df_plot['EVENT_X']
             y = df_plot['EVENT_Y']
             end_x = df_plot['ENDX']
@@ -182,10 +182,11 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
             else:
                 ax.text(3.0, 96.0, t_sel.upper(), fontsize=8.5, fontweight='bold', color='#222222', va='center')
 
-            ax.text(3.0, 90.0, f"HJØRNESPARK ({side_sel.upper()})", fontsize=7, fontweight='bold', color='#555555', va='center')
+            # TEKST PLACERET NEDERST VED MIDTERLINJEN (Y = 52-55 på en halv opta-bane der går fra 50 til 100)
+            ax.text(3.0, 55.0, f"HJØRNESPARK ({side_sel.upper()})", fontsize=7, fontweight='bold', color='#555555', va='center')
             spiller_tekst = f"Spiller: {p_sel}" if p_sel != "Alle spillere" else "Alle spillere"
             stats_line = f"{spiller_tekst} — {total} aktioner ({int(pct)}% succes)"
-            ax.text(3.0, 87.0, stats_line, fontsize=7, color='#666666', va='center')
+            ax.text(3.0, 52.0, stats_line, fontsize=7, color='#666666', va='center')
 
             if not df_plot.dropna(subset=['ENDX', 'ENDY']).empty:
                 if "Zoner" in vis_mode:
