@@ -1,33 +1,6 @@
 from mplsoccer import VerticalPitch, Pitch
 import matplotlib.patches as patches
 
-def get_pitch(type="staaende"):
-    """
-    Returnerer en matplotlib fig og ax med den ønskede bane-type (tilpasset 105x68 meter):
-    - 'staaende' (Vertikal)
-    - 'liggende' (Horisontal)
-    - 'halv' (Halv bane til f.eks. skud- og afslutningsanalyser)
-    """
-    if type == "liggende":
-        pitch = Pitch(pitch_type='custom', pitch_length=105, pitch_width=68, 
-                      pitch_color='#ffffff', line_color='#cccccc', orientation='horizontal')
-        fig, ax = pitch.draw(figsize=(10, 7))
-        
-    elif type == "halv":
-        # Lodret halv bane (fokuseret på den sidste tredjedel / modstanderens felt)
-        pitch = VerticalPitch(pitch_type='custom', pitch_length=105, pitch_width=68, 
-                              pitch_color='#ffffff', line_color='#cccccc')
-        fig, ax = pitch.draw(figsize=(8, 10))
-        ax.set_ylim(55, 105) # Viser fra midterlinjen og op til modstanderens mål
-        
-    else:
-        # Standard stående fuld bane
-        pitch = VerticalPitch(pitch_type='custom', pitch_length=105, pitch_width=68, 
-                              pitch_color='#ffffff', line_color='#cccccc')
-        fig, ax = pitch.draw(figsize=(7, 10))
-        
-    return pitch, fig, ax
-
 def get_boundaries():
     """
     Returnerer standard zone-definitioner (105x68 m banen).
@@ -52,3 +25,69 @@ def get_boundaries():
         "Zone 7A": {"y_min": Y_MID, "y_max": Y_18YD, "x_min": X_MID_R, "x_max": P_W},
         "Zone 8":  {"y_min": 0, "y_max": Y_MID, "x_min": 0, "x_max": P_W}
     }
+
+def get_pitch(type="staaende", zone_boundaries=None, zone_data=None, t_color="#cc0000"):
+    """
+    Returnerer en matplotlib fig og ax med den ønskede bane-type (105x68 meter).
+    Kan automatisk tegne zoner ind, hvis zone_boundaries medsendes.
+    """
+    if type == "liggende":
+        pitch = Pitch(pitch_type='custom', pitch_length=105, pitch_width=68, 
+                      pitch_color='#ffffff', line_color='#cccccc', orientation='horizontal')
+        fig, ax = pitch.draw(figsize=(10, 7))
+        
+    elif type == "halv":
+        pitch = VerticalPitch(pitch_type='custom', pitch_length=105, pitch_width=68, 
+                              pitch_color='#ffffff', line_color='#cccccc')
+        fig, ax = pitch.draw(figsize=(8, 10))
+        ax.set_ylim(55, 105) # Viser fra midterlinjen og op
+        
+    else:
+        pitch = VerticalPitch(pitch_type='custom', pitch_length=105, pitch_width=68, 
+                              pitch_color='#ffffff', line_color='#cccccc')
+        fig, ax = pitch.draw(figsize=(7, 10))
+
+    # Hvis zoner er medsendt, tegnes de automatisk op
+    if zone_boundaries:
+        max_v = max(zone_data.values()) if zone_data else 1
+        if max_v == 0: max_v = 1
+
+        for z, b in zone_boundaries.items():
+            if type == "halv" and b["y_max"] <= 55:
+                continue
+                
+            y_bund = max(b["y_min"], 55) if type == "halv" else b["y_min"]
+            y_hoejde = b["y_max"] - y_bund
+            
+            if y_hoejde <= 0:
+                continue
+
+            cnt = zone_data.get(z, 0) if zone_data else 0
+            alpha = (cnt / max_v) * 0.6 if zone_data and cnt > 0 else 0.05
+
+            rect = patches.Rectangle(
+                (b["x_min"], y_bund), 
+                b["x_max"] - b["x_min"], 
+                y_hoejde, 
+                facecolor=t_color, 
+                alpha=alpha, 
+                edgecolor='black', 
+                ls='--',
+                linewidth=0.8,
+                zorder=2
+            )
+            ax.add_patch(rect)
+
+            if zone_data and cnt > 0:
+                ax.text(
+                    b["x_min"] + (b["x_max"] - b["x_min"]) / 2, 
+                    y_bund + y_hoejde / 2, 
+                    f"{cnt}", 
+                    ha='center', 
+                    va='center', 
+                    fontweight='bold',
+                    fontsize=9,
+                    zorder=4
+                )
+        
+    return pitch, fig, ax
