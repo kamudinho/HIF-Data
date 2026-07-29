@@ -120,7 +120,7 @@ def get_summary_stats(df, group_col):
     stats['Top Modtager'] = stats[group_col].map(mod_map)
     return stats[[group_col, 'Antal', 'Succes %', 'Top Modtager', 'Afslutning %']]
 
-# --- 5. VISUALISERING AF HJØRNESPARK (KORREKT PLACERET LOGO OG TEKST) ---
+# --- 5. VISUALISERING AF HJØRNESPARK ---
 def render_setpiece_analysis(df_team, sp_type, t_sel):
     t_info = next((info for name, info in TEAMS.items() if name == t_sel), None)
     hold_logo = get_logo_img(t_info.get('logo') if t_info else None)
