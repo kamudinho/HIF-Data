@@ -137,7 +137,7 @@ def get_summary_stats(df_subset, group_col):
 
 def render_setpiece_analysis(df_team, sp_type, t_sel):
     t_info = next((info for name, info in TEAMS.items() if name == t_sel), None)
-    hold_logo = get_logo_img(t_info.get('logo') if t_info else None)
+    hold_logo = get_logo_img(t_info.get('opta_uuid') if t_info else None)
 
     f1, f2, f3, f4 = st.columns([1.2, 1.2, 1.2, 1])
     with f1:
