@@ -127,11 +127,11 @@ def get_summary_stats(df_subset, group_col):
     agg = agg.sort_values(by='Antal', ascending=False)
     
     if group_col == 'KLUB_NAVN':
-        agg = agg[['KLUB_NAVN', 'Antal', 'Succes %', 'Afslutning', 'Andel']]
-        agg.columns = ['Hold', 'Antal', 'Succes %', 'Afslutning', 'Andel']
+        agg = agg[['KLUB_NAVN', 'Antal', 'Succes %', 'Med afslutning', 'Andel']]
+        agg.columns = ['Hold', 'Antal', 'Succes %', 'Med afslutning', 'Andel']
     else:
-        agg = agg[['TAGER_NAVN', 'Antal', 'Succes %', 'Afslutning', 'Andel']]
-        agg.columns = ['Spiller', 'Antal', 'Succes %', 'Afslutning', 'Andel']
+        agg = agg[['TAGER_NAVN', 'Antal', 'Succes %', 'Med afslutning', 'Andel']]
+        agg.columns = ['Spiller', 'Antal', 'Succes %', 'Med afslutning', 'Andel']
         
     return agg
 
