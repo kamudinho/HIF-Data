@@ -187,7 +187,7 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
                 ax.text(11.0, 55.0, t_sel.upper(), fontsize=8, fontweight='bold', color='#222222', va='center')
             
             # Tekst og statistik placeret i venstre side over logoet
-            ax.text(36.0, 55.0, f"{sp_type.upper()} ({side_sel.upper()})", fontsize=7, fontweight='bold', color='#555555', va='center')
+            ax.text(97.0, 55.0, f"{sp_type.upper()} ({side_sel.upper()})", fontsize=7, fontweight='bold', color='#555555', va='center')
             spiller_tekst = f"Spiller: {p_sel}" if p_sel != "Alle spillere" else "Alle spillere"
             stats_line = f"{spiller_tekst} — {total} aktioner ({int(pct)}% succes)"
             ax.text(3.0, 65.0, stats_line, fontsize=7, color='#666666', va='center')
