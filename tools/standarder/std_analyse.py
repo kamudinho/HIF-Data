@@ -176,8 +176,6 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
         
         fig, ax = pitch.draw(figsize=(8, 5), constrained_layout=True)
         
-        # --- KORREGERET OG NEDSKALERET TEKST & LOGO ---
-        # 1. Logo og Holdnavn (Pæn lille størrelse)
         if hold_logo:
             ax_logo = ax.inset_axes([2.0, 61.5, 3.5, 3.5], transform=ax.transData)
             ax_logo.imshow(hold_logo)
@@ -186,15 +184,12 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
         else:
             ax.text(2.0, 63.2, t_sel.upper(), fontsize=5, fontweight='bold', color='#222222', alpha=0.9, va='center')
 
-        # 2. Kategori (fx HJØRNESPARK (BEGGE SIDER))
         ax.text(2.0, 59.5, f"{sp_type.upper()} ({side_sel.upper()})", fontsize=4.5, fontweight='bold', color='#555555', alpha=0.85)
         
-        # 3. Antal og succes % (og evt. valgt spiller)
         spiller_tekst = f"Spiller: {p_sel}" if p_sel != "Alle spillere" else "Alle spillere"
         stats_line = f"{spiller_tekst} — {total} aktioner ({int(pct)}% succes)"
         ax.text(2.0, 56.5, stats_line, fontsize=7, color='#666666', va='center')
 
-        # --- DATA PLOTTING ---
         if not df_plot.dropna(subset=['end_x', 'end_y']).empty:
             if "Zoner" in vis_mode:
                 pitch.hexbin(df_plot.end_x, df_plot.end_y, ax=ax, edgecolors='#f0f0f0',
@@ -234,22 +229,24 @@ def vis_side():
     col_cfg = {"Succes %": st.column_config.ProgressColumn("Succes %", format="%d%%", min_value=0, max_value=100)}
 
     with tabs[0]: 
-    col_content, col_control = st.columns([3, 1])
-    with col_control:
-        c = st.segmented_control("k1", ["Hjørnespark", "Frispark", "Indkast"], key="r1", label_visibility="collapsed")
-    with col_content:
-        st.markdown("### Holdoversigt")
-        
-    st.dataframe(get_summary_stats(df_all[df_all['TYPE_NAVN'] == c], 'KLUB_NAVN'), use_container_width=True, hide_index=True, column_config=col_cfg)
+        col_content, col_control = st.columns([3, 1])
+        with col_control:
+            c = st.segmented_control("k1", ["Hjørnespark", "Frispark", "Indkast"], default="Hjørnespark", key="r1", label_visibility="collapsed")
+        with col_content:
+            st.markdown("### Holdoversigt")
+            
+        if c:
+            st.dataframe(get_summary_stats(df_all[df_all['TYPE_NAVN'] == c], 'KLUB_NAVN'), use_container_width=True, hide_index=True, column_config=col_cfg)
 
     with tabs[1]: 
         col_content, col_control = st.columns([3, 1])
         with col_control:
-            c2 = st.segmented_control("k2", ["Hjørnespark", "Frispark", "Indkast"], key="r2", label_visibility="collapsed")
+            c2 = st.segmented_control("k2", ["Hjørnespark", "Frispark", "Indkast"], default="Hjørnespark", key="r2", label_visibility="collapsed")
         with col_content:
             st.markdown("### Tager-oversigt")
             
-        st.dataframe(get_summary_stats(df_team_selected[df_team_selected['TYPE_NAVN'] == c2], 'TAGER_NAVN'), use_container_width=True, hide_index=True, column_config=col_cfg)
+        if c2:
+            st.dataframe(get_summary_stats(df_team_selected[df_team_selected['TYPE_NAVN'] == c2], 'TAGER_NAVN'), use_container_width=True, hide_index=True, column_config=col_cfg)
     
     for i, name in enumerate(["Hjørnespark", "Frispark", "Indkast"], 2):
         with tabs[i]: 
