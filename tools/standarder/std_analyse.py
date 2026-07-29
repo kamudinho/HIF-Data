@@ -186,9 +186,9 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
                 ax_logo = ax.inset_axes([3.0, 96.0, 6.0, 6.0], transform=ax.transData)
                 ax_logo.imshow(hold_logo)
                 ax_logo.axis('off')
-                ax.text(10.0, 99.0, t_sel.upper(), fontsize=7, fontweight='bold', color='#222222', alpha=0.9, va='center')
+                ax.text(1.0, 99.0, t_sel.upper(), fontsize=7, fontweight='bold', color='#222222', alpha=0.9, va='center')
             else:
-                ax.text(3.0, 99.0, t_sel.upper(), fontsize=6, fontweight='bold', color='#222222', alpha=0.9, va='center')
+                ax.text(2.0, 99.0, t_sel.upper(), fontsize=6, fontweight='bold', color='#222222', alpha=0.9, va='center')
 
             ax.text(3.0, 93.0, f"{sp_type.upper()} ({side_sel.upper()})", fontsize=5, fontweight='bold', color='#555555', alpha=0.85)
             spiller_tekst = f"Spiller: {p_sel}" if p_sel != "Alle spillere" else "Alle spillere"
