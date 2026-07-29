@@ -181,10 +181,10 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
             fig, ax = pitch.draw(figsize=(7, 7))
             if hold_logo:
                 # Tilpasset VerticalPitch koordinater i venstre side (nær midterlinjen / bunden)
-                ax_logo = ax.inset_axes([97.0, 52.0, 6.0, 6.0], transform=ax.transData)
+                ax_logo = ax.inset_axes([97.0, 50.0, 6.0, 6.0], transform=ax.transData)
                 ax_logo.imshow(hold_logo)
                 ax_logo.axis('off')
-                ax.text(97.0, 55.0, t_sel.upper(), fontsize=8, fontweight='bold', color='#222222', va='center')
+                ax.text(97.0, 50.0, t_sel.upper(), fontsize=8, fontweight='bold', color='#222222', va='center')
             
             # Tekst og statistik placeret i venstre side over logoet
             ax.text(97.0, 55.0, f"{sp_type.upper()} ({side_sel.upper()})", fontsize=7, fontweight='bold', color='#555555', va='center')
