@@ -479,7 +479,7 @@ def vis_side(dp=None):
             m_r2[3].metric("Indlæg", cross_count)
 
             m_r3 = st.columns(4)
-            m_r3[1].metric("Def. 1v1", def_count)
+            m_r3[0].metric("Def. 1v1", def_count)
             m_r3[1].metric("Regains", regains_count)
             m_r3[2].metric("Erobringer", erob_count)
             m_r3[3].metric("Boldtab", boldtab_count)
