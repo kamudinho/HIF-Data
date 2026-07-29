@@ -220,7 +220,7 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
         st.pyplot(fig, clear_figure=True)
         
     with col_s:
-        st.write("**Top 5-servere**")
+        st.caption("**Top 5-servere**")
         df_server_base = df_team[df_team['TYPE_NAVN'] == sp_type].copy()
         total_team_actions = len(df_server_base)
         
@@ -246,9 +246,7 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
         server_agg.columns = ['Spiller', 'Antal', 'Succes', 'Med afslutning', 'Andel']
         st.dataframe(server_agg, use_container_width=True, hide_index=True)
 
-        st.markdown("---")
-
-        st.write("**Top 5-modtagere**")
+        st.caption("**Top 5-modtagere**")
         df_mod_base = df_team[(df_team['TYPE_NAVN'] == sp_type) & (df_team['MODTAGER'].notna())].copy()
         total_mod_team = len(df_mod_base)
         
@@ -278,7 +276,7 @@ def vis_side():
 
     c_title, c_drop = st.columns([3, 1])
     with c_title:
-        st.subheader("Standardsituationer")
+        st.caption("### Standardsituationer")
     with c_drop:
         default_idx = teams.index("Hvidovre") if "Hvidovre" in teams else 0
         t_sel = st.selectbox("Vælg hold", teams, index=default_idx, key="main_team_selectbox", label_visibility="collapsed")
@@ -292,7 +290,7 @@ def vis_side():
         with col_control:
             c = st.segmented_control("k1", ["Hjørnespark", "Frispark", "Indkast"], default="Hjørnespark", key="r1", label_visibility="collapsed")
         with col_content:
-            st.markdown("### Holdoversigt")
+            st.caption("### Holdoversigt")
             
         if c:
             st.dataframe(get_summary_stats(df_all[df_all['TYPE_NAVN'] == c], 'KLUB_NAVN'), use_container_width=True, hide_index=True, column_config=col_cfg)
@@ -302,7 +300,7 @@ def vis_side():
         with col_control:
             c2 = st.segmented_control("k2", ["Hjørnespark", "Frispark", "Indkast"], default="Hjørnespark", key="r2", label_visibility="collapsed")
         with col_content:
-            st.markdown("### Tager-oversigt")
+            st.caption("### Tager-oversigt")
             
         if c2:
             st.dataframe(get_summary_stats(df_team_selected[df_team_selected['TYPE_NAVN'] == c2], 'TAGER_NAVN'), use_container_width=True, hide_index=True, column_config=col_cfg)
@@ -312,7 +310,7 @@ def vis_side():
             render_setpiece_analysis(df_team_selected, name, t_sel)
     
     with tabs[5]:
-        st.markdown("### Zoneoversigter & Bane")
+        st.caption("### Zoneoversigter & Bane")
         
         pitch = Pitch(pitch_type='statsbomb', pitch_color='white', line_color='#333333', linewidth=1.5)
         fig, ax = pitch.draw(figsize=(10, 7))
