@@ -175,26 +175,25 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
             t_color = TEAM_COLORS.get(t_sel, {}).get('primary', HIF_RED)
             pitch, fig, ax = get_pitch(type="halv", t_color=t_color)
 
-            # Da 'type="halv"' i pitches.py viser y: 55 til 105, 
-            # tilpasser vi koordinaterne, så de rammer den øverste halvdel korrekt:
+            # Korrekt mapping af Opta (0-100) til den halve vertikale bane (x: 0-68, y: 52.5-105)
             df_plot['x'] = df_plot['EVENT_X'] * (68.0 / 100.0)
-            df_plot['y'] = 55.0 + (df_plot['EVENT_Y'] / 100.0) * 50.0
+            df_plot['y'] = 52.5 + (df_plot['EVENT_Y'] / 100.0) * 52.5
             df_plot['end_x'] = df_plot['ENDX'] * (68.0 / 100.0)
-            df_plot['end_y'] = 55.0 + (df_plot['ENDY'] / 100.0) * 50.0
+            df_plot['end_y'] = 52.5 + (df_plot['ENDY'] / 100.0) * 52.5
 
-            # Placer logo og tekst pænt i toppen af den halve bane
+            # Placer logo og tekst pænt i venstre side i toppen af banen
             if hold_logo:
-                ax_logo = ax.inset_axes([2.0, 97.0, 6.0, 6.0], transform=ax.transData)
+                ax_logo = ax.inset_axes([3.0, 96.0, 6.0, 6.0], transform=ax.transData)
                 ax_logo.imshow(hold_logo)
                 ax_logo.axis('off')
-                ax.text(9.0, 100.0, t_sel.upper(), fontsize=7, fontweight='bold', color='#222222', alpha=0.9, va='center')
+                ax.text(10.0, 99.0, t_sel.upper(), fontsize=7, fontweight='bold', color='#222222', alpha=0.9, va='center')
             else:
-                ax.text(2.0, 100.0, t_sel.upper(), fontsize=6, fontweight='bold', color='#222222', alpha=0.9, va='center')
+                ax.text(3.0, 99.0, t_sel.upper(), fontsize=6, fontweight='bold', color='#222222', alpha=0.9, va='center')
 
-            ax.text(2.0, 94.0, f"{sp_type.upper()} ({side_sel.upper()})", fontsize=5, fontweight='bold', color='#555555', alpha=0.85)
+            ax.text(3.0, 93.0, f"{sp_type.upper()} ({side_sel.upper()})", fontsize=5, fontweight='bold', color='#555555', alpha=0.85)
             spiller_tekst = f"Spiller: {p_sel}" if p_sel != "Alle spillere" else "Alle spillere"
             stats_line = f"{spiller_tekst} — {total} aktioner ({int(pct)}% succes)"
-            ax.text(2.0, 90.0, stats_line, fontsize=7, color='#666666', va='center')
+            ax.text(3.0, 89.0, stats_line, fontsize=7, color='#666666', va='center')
 
             if not df_plot.dropna(subset=['end_x', 'end_y']).empty:
                 if "Zoner" in vis_mode:
@@ -204,6 +203,7 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
                     pitch.arrows(df_plot.x, df_plot.y, df_plot.end_x, df_plot.end_y, 
                                  color=t_color, ax=ax, width=1.5, headwidth=3, headlength=3, alpha=0.4)
                     pitch.scatter(df_plot.x, df_plot.y, ax=ax, color=t_color, s=25, alpha=0.6)
+                    
         st.pyplot(fig, clear_figure=True)
         
     with col_s:
