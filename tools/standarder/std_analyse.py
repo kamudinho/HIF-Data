@@ -205,31 +205,40 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
         st.pyplot(fig, clear_figure=True)
         
     with col_s:
-        # 1. Top 5-servere
+        # 1. Top 5-servere (Med Antal, Succes og Andel)
         st.write("**Top 5-servere**")
         df_server_base = df_team[df_team['TYPE_NAVN'] == sp_type]
         total_server_actions = len(df_server_base)
         
-        server_counts = df_server_base['TAGER_NAVN'].value_counts().reset_index()
-        server_counts.columns = ['Spiller', 'Antal']
-        server_counts['Type'] = sp_type
-        server_counts['Andel'] = (server_counts['Antal'] / total_server_actions * 100).round(1).astype(str) + '%' if total_server_actions > 0 else '0%'
-        server_counts = server_counts[['Spiller', 'Type', 'Antal', 'Andel']]
-        st.dataframe(server_counts.head(5), use_container_width=True, hide_index=True)
+        # Aggregerer antal og succesfulde (hvor MODTAGER ikke er tom)
+        server_agg = df_server_base.groupby('TAGER_NAVN').agg(
+            Antal=('MODTAGER', 'count'),
+            Succes=('MODTAGER', lambda x: x.notna().sum())
+        ).reset_index()
+        
+        server_agg = server_agg.sort_values(by='Antal', ascending=False).head(5)
+        server_agg['Andel'] = (server_agg['Antal'] / total_server_actions * 100).round(1).astype(str) + '%' if total_server_actions > 0 else '0%'
+        server_agg = server_agg[['TAGER_NAVN', 'Antal', 'Succes', 'Andel']]
+        server_agg.columns = ['Spiller', 'Antal', 'Succes', 'Andel']
+        st.dataframe(server_agg, use_container_width=True, hide_index=True)
 
         st.markdown("---")
 
-        # 2. Top 5-modtagere
+        # 2. Top 5-modtagere (Med Antal, Succes og Andel)
         st.write("**Top 5-modtagere**")
         df_mod_base = df_plot.dropna(subset=['MODTAGER'])
         total_mod_actions = len(df_mod_base)
         
-        mod_counts = df_mod_base['MODTAGER'].value_counts().reset_index()
-        mod_counts.columns = ['Modtager', 'Antal']
-        mod_counts['Type'] = sp_type
-        mod_counts['Andel'] = (mod_counts['Antal'] / total_mod_actions * 100).round(1).astype(str) + '%' if total_mod_actions > 0 else '0%'
-        mod_counts = mod_counts[['Modtager', 'Type', 'Antal', 'Andel']]
-        st.dataframe(mod_counts.head(5), use_container_width=True, hide_index=True)
+        mod_agg = df_mod_base.groupby('MODTAGER').agg(
+            Antal=('MODTAGER', 'count'),
+            Succes=('MODTAGER', lambda x: x.notna().sum())
+        ).reset_index()
+        
+        mod_agg = mod_agg.sort_values(by='Antal', ascending=False).head(5)
+        mod_agg['Andel'] = (mod_agg['Antal'] / total_mod_actions * 100).round(1).astype(str) + '%' if total_mod_actions > 0 else '0%'
+        mod_agg = mod_agg[['MODTAGER', 'Antal', 'Succes', 'Andel']]
+        mod_agg.columns = ['Modtager', 'Antal', 'Succes', 'Andel']
+        st.dataframe(mod_agg, use_container_width=True, hide_index=True)
 
 # --- 6. HOVEDSIDE ---
 def vis_side():
