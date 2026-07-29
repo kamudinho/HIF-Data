@@ -145,7 +145,6 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
     for c in ['EVENT_X', 'EVENT_Y', 'ENDX', 'ENDY']: 
         df_plot[c] = pd.to_numeric(df_plot[c], errors='coerce')
 
-    # Filtrering på side baseret på Opta Y (0-100)
     if side_sel == "Venstre side":
         df_plot = df_plot[df_plot['EVENT_Y'] > 50]
     elif side_sel == "Højre side":
@@ -164,7 +163,6 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
         t_color = TEAM_COLORS.get(t_sel, {}).get('primary', HIF_RED)
         
         if sp_type == "Hjørnespark":
-            # Laver lodret halv bane (viser modstanderens felt fra midterlinjen og op)
             pitch = VerticalPitch(pitch_type='opta', half=True, pitch_color='white', line_color='#333333', linewidth=1.5)
             fig, ax = pitch.draw(figsize=(7, 7))
 
@@ -173,7 +171,6 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
             end_x = df_plot['ENDX']
             end_y = df_plot['ENDY']
 
-            # LOGO OG HOLDNAVN: Placeret i top-venstre hjørne (ved modstanderens mållinje / venstre side)
             if hold_logo:
                 ax_logo = ax.inset_axes([3.0, 91.0, 6.0, 6.0], transform=ax.transData)
                 ax_logo.imshow(hold_logo)
@@ -182,7 +179,6 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
             else:
                 ax.text(3.0, 94.0, t_sel.upper(), fontsize=8.5, fontweight='bold', color='#222222', va='center')
 
-            # TEKST OG STATISTIK: Placeret nede i venstre side ved midterlinjen (Y tæt på 52-55)
             ax.text(3.0, 55.0, f"HJØRNESPARK ({side_sel.upper()})", fontsize=7, fontweight='bold', color='#555555', va='center')
             spiller_tekst = f"Spiller: {p_sel}" if p_sel != "Alle spillere" else "Alle spillere"
             stats_line = f"{spiller_tekst} — {total} aktioner ({int(pct)}% succes)"
@@ -195,7 +191,6 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
                     pitch.arrows(x, y, end_x, end_y, color=t_color, ax=ax, width=1.5, headwidth=3, headlength=3, alpha=0.5)
                     pitch.scatter(x, y, ax=ax, color=t_color, s=25, alpha=0.7)
         else:
-            # Standard fuld bane til frispark og indkast
             pitch = Pitch(pitch_type='opta', pitch_color='white', line_color='#333333', linewidth=1.5)
             fig, ax = pitch.draw(figsize=(9, 6))
 
@@ -225,7 +220,6 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
         st.pyplot(fig, clear_figure=True)
         
     with col_s:
-        # 1. TOP 5-SERVERE
         st.write("**Top 5-servere**")
         df_server_base = df_team[df_team['TYPE_NAVN'] == sp_type].copy()
         total_team_actions = len(df_server_base)
@@ -254,7 +248,6 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
 
         st.markdown("---")
 
-        # 2. TOP 5-MODTAGERE
         st.write("**Top 5-modtagere**")
         df_mod_base = df_team[(df_team['TYPE_NAVN'] == sp_type) & (df_team['MODTAGER'].notna())].copy()
         total_mod_team = len(df_mod_base)
@@ -331,5 +324,5 @@ def vis_side():
 
 if __name__ == "__main__":
     st.set_page_config(layout="wide", page_title="Standardsituationer")
-    st.markdown(f"<style>header {{visibility: hidden;}}</style>", unsafe_allow_html=True)
+    st.markdown("<style>header {visibility: hidden;}</style>", unsafe_allow_html=True)
     vis_side()
