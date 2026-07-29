@@ -298,7 +298,7 @@ def vis_side():
     df_all['KLUB_NAVN'] = df_all['TEAM_UUID'].str.upper().map(uuid_to_name)
     teams = sorted([n for n in df_all['KLUB_NAVN'].unique() if pd.notna(n)])
 
-    c_title, c_drop = st.columns([3, 1])
+    c_title, c_drop = st.columns([2.5, 1.5])
     with c_title:
         st.subheader("Standardsituationer")
     with c_drop:
