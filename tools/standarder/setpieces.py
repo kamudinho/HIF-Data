@@ -181,15 +181,15 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
             fig, ax = pitch.draw(figsize=(7, 7))
             
             # Tekst og statistik placeret øverst i venstre side (X=3.0)
-            ax.text(3.0, 67.0, f"{sp_type.upper()} ({side_sel.upper()})", fontsize=7, fontweight='bold', color='#555555', va='center')
+            ax.text(89.0, 67.0, f"{sp_type.upper()} ({side_sel.upper()})", fontsize=7, fontweight='bold', color='#555555', va='center')
             spiller_tekst = f"Spiller: {p_sel}" if p_sel != "Alle spillere" else "Alle spillere"
             stats_line = f"{spiller_tekst} — {total} aktioner ({int(pct)}% succes)"
-            ax.text(3.0, 64.0, stats_line, fontsize=7, color='#666666', va='center')
+            ax.text(89.0, 64.0, stats_line, fontsize=7, color='#666666', va='center')
 
             if hold_logo:
                 # Holdnavn og logo placeret nederst i venstre side (X=3.0)
                 ax.text(89.0, 60.0, t_sel.upper(), fontsize=8, fontweight='bold', color='#222222', va='center')
-                ax_logo = ax.inset_axes([89.0, 65.0, 6.0, 6.0], transform=ax.transData)
+                ax_logo = ax.inset_axes([89.0, 60.0, 6.0, 6.0], transform=ax.transData)
                 ax_logo.imshow(hold_logo)
                 ax_logo.axis('off')
         else:
