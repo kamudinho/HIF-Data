@@ -257,7 +257,7 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
         
         server_agg = server_agg.sort_values(by='Antal', ascending=False).head(5)
         server_agg = server_agg[['TAGER_NAVN', 'Antal', 'Succes', 'Afslutning_Sum', 'Andel']]
-        server_agg.columns = ['Spiller', 'Antal', 'Succes', 'Med afslutning', 'Andel']
+        server_agg.columns = ['Spiller', 'Antal', 'Succes', 'Afslutning', 'Andel']
         st.dataframe(server_agg, use_container_width=True, hide_index=True)
 
         # 2. TOP 5-MODTAGERE
@@ -278,7 +278,7 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
         
         mod_agg = mod_agg.sort_values(by='Antal', ascending=False).head(5)
         mod_agg = mod_agg[['MODTAGER', 'Antal', 'Afslutning_Sum', 'Andel']]
-        mod_agg.columns = ['Modtager', 'Antal', 'Med afslutning', 'Andel']
+        mod_agg.columns = ['Modtager', 'Antal', 'Afslutning', 'Andel']
         st.dataframe(mod_agg, use_container_width=True, hide_index=True)
 
 # --- 6. HOVEDSIDE ---
@@ -292,7 +292,7 @@ def vis_side():
 
     c_title, c_drop = st.columns([2.5, 1.5])
     with c_title:
-        st.subheader("Standardsituationer")
+        st.caption("Standardsituationer")
     with c_drop:
         default_idx = teams.index("Hvidovre") if "Hvidovre" in teams else 0
         t_sel = st.selectbox("Vælg hold", teams, index=default_idx, key="main_team_selectbox", label_visibility="collapsed")
@@ -306,7 +306,7 @@ def vis_side():
         with col_control:
             c = st.segmented_control("k1", ["Hjørnespark", "Frispark", "Indkast"], default="Hjørnespark", key="r1", label_visibility="collapsed")
         with col_content:
-            st.markdown("### Holdoversigt")
+            st.caption("### Holdoversigt")
             
         if c:
             st.dataframe(get_summary_stats(df_all[df_all['TYPE_NAVN'] == c], 'KLUB_NAVN'), use_container_width=True, hide_index=True, column_config=col_cfg)
@@ -316,7 +316,7 @@ def vis_side():
         with col_control:
             c2 = st.segmented_control("k2", ["Hjørnespark", "Frispark", "Indkast"], default="Hjørnespark", key="r2", label_visibility="collapsed")
         with col_content:
-            st.markdown("### Tager-oversigt")
+            st.caption("### Tager-oversigt")
             
         if c2:
             st.dataframe(get_summary_stats(df_team_selected[df_team_selected['TYPE_NAVN'] == c2], 'TAGER_NAVN'), use_container_width=True, hide_index=True, column_config=col_cfg)
@@ -326,7 +326,7 @@ def vis_side():
             render_setpiece_analysis(df_team_selected, name, t_sel)
     
     with tabs[5]:
-        st.markdown("### Zoneoversigter & Bane")
+        st.caption("### Zoneoversigter & Bane")
         
         pitch = Pitch(pitch_type='statsbomb', pitch_color='white', line_color='#333333', linewidth=1.5)
         fig, ax = pitch.draw(figsize=(10, 7))
