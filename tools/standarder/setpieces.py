@@ -304,24 +304,11 @@ def vis_side():
     with tabs[0]:
         st.caption(f"### Analyse af standardsituationer: {t_sel}")
         
-        total_team_sets = len(df_team_selected)
-        tot_hj = len(df_team_selected[df_team_selected['TYPE_NAVN'] == 'Hjørnespark'])
-        tot_fr = len(df_team_selected[df_team_selected['TYPE_NAVN'] == 'Frispark'])
-        tot_in = len(df_team_selected[df_team_selected['TYPE_NAVN'] == 'Indkast'])
-        
-        m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Samlede standarder", total_team_sets)
-        m2.metric("Hjørnespark", tot_hj)
-        m3.metric("Frispark", tot_fr)
-        m4.metric("Indkast", tot_in)
-        
-        st.markdown("---")
-        st.subheader("Overordnet udførelse og fordeling")
-        
-        # Oprettet 2 kolonner: Venstre til tekst, Højre til statistikker/tabeller
+        # Oprettet 2 kolonner: Venstre til tekst, Højre til overordnede metrikker og tabellen
         col_text, col_stats = st.columns([1.2, 1.8])
         
         with col_text:
+            st.markdown("##### Overordnet udførelse og fordeling")
             st.write(f"Her ses en samlet oversigt over **{t_sel}s** standardsituationer. Analysen viser fordelingen mellem hjørnespark, frispark og indkast, hvordan sparkene/leveringerne udføres, samt de mest benyttede modtager-zoner.")
             
             df_team_selected['ZONE'] = df_team_selected['ENDY'].apply(lambda y: "Venstre" if float(y or 0) < 33 else ("Højre" if float(y or 0) > 66 else "Center"))
@@ -337,6 +324,18 @@ def vis_side():
                 st.write(f"- **{zone} zone**: {count} aktioner")
                 
         with col_stats:
+            total_team_sets = len(df_team_selected)
+            tot_hj = len(df_team_selected[df_team_selected['TYPE_NAVN'] == 'Hjørnespark'])
+            tot_fr = len(df_team_selected[df_team_selected['TYPE_NAVN'] == 'Frispark'])
+            tot_in = len(df_team_selected[df_team_selected['TYPE_NAVN'] == 'Indkast'])
+            
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("Samlede", total_team_sets)
+            m2.metric("Hjørne", tot_hj)
+            m3.metric("Frispark", tot_fr)
+            m4.metric("Indkast", tot_in)
+            
+            st.markdown("---")
             st.caption("Aktioner fordelt på type og udførelse")
             if not df_team_selected.empty:
                 exec_table = df_team_selected.groupby(['TYPE_NAVN', 'UDFOERELSE']).size().unstack(fill_value=0)
