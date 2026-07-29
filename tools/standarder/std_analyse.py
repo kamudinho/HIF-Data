@@ -122,7 +122,7 @@ def get_summary_stats(df, group_col):
     stats['Top Modtager'] = stats[group_col].map(mod_map)
     return stats[[group_col, 'Antal', 'Succes %', 'Top Modtager', 'Afslutning %']]
 
-# --- 5. VISUALISERING (MED SIDE- OG AFSLUTNINGSFILTER) ---
+# --- 5. VISUALISERING (MED SIDE- OG AFSLUTNINGSFILTER SAMT TOP 5 STATISTIK) ---
 def render_setpiece_analysis(df_team, sp_type, t_sel):
     t_info = next((info for name, info in TEAMS.items() if name == t_sel), None)
     t_uuid = t_info.get('opta_uuid') if t_info else None
@@ -205,9 +205,30 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
         st.pyplot(fig, clear_figure=True)
         
     with col_s:
+        # 1. Top 5-servere
+        st.write("**Top 5-servere**")
+        df_server_base = df_team[df_team['TYPE_NAVN'] == sp_type]
+        total_server_actions = len(df_server_base)
+        
+        server_counts = df_server_base['TAGER_NAVN'].value_counts().reset_index()
+        server_counts.columns = ['Spiller', 'Antal']
+        server_counts['Type'] = sp_type
+        server_counts['Andel'] = (server_counts['Antal'] / total_server_actions * 100).round(1).astype(str) + '%' if total_server_actions > 0 else '0%'
+        server_counts = server_counts[['Spiller', 'Type', 'Antal', 'Andel']]
+        st.dataframe(server_counts.head(5), use_container_width=True, hide_index=True)
+
+        st.markdown("---")
+
+        # 2. Top 5-modtagere
         st.write("**Top 5-modtagere**")
-        mod_counts = df_plot['MODTAGER'].value_counts().reset_index()
-        mod_counts.columns = ['Spiller', 'Antal']
+        df_mod_base = df_plot.dropna(subset=['MODTAGER'])
+        total_mod_actions = len(df_mod_base)
+        
+        mod_counts = df_mod_base['MODTAGER'].value_counts().reset_index()
+        mod_counts.columns = ['Modtager', 'Antal']
+        mod_counts['Type'] = sp_type
+        mod_counts['Andel'] = (mod_counts['Antal'] / total_mod_actions * 100).round(1).astype(str) + '%' if total_mod_actions > 0 else '0%'
+        mod_counts = mod_counts[['Modtager', 'Type', 'Antal', 'Andel']]
         st.dataframe(mod_counts.head(5), use_container_width=True, hide_index=True)
 
 # --- 6. HOVEDSIDE ---
