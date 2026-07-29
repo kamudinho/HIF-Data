@@ -146,12 +146,13 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
     for c in ['EVENT_X', 'EVENT_Y', 'ENDX', 'ENDY']: 
         df_plot[c] = pd.to_numeric(df_plot[c], errors='coerce')
 
-    # Fælles normalisering: Sørg for at alt angriber fra venstre mod højre (X < 50 spejlvendes)
-    mask_left = df_plot['EVENT_X'] < 50
-    df_plot.loc[mask_left, ['EVENT_X', 'ENDX']] = 100 - df_plot.loc[mask_left, ['EVENT_X', 'ENDX']]
-    df_plot.loc[mask_left, ['EVENT_Y', 'ENDY']] = 100 - df_plot.loc[mask_left, ['EVENT_Y', 'ENDY']]
+    # RETTELSE HER: Fjernet automatisk spejlvending baseret på X < 50 for frispark/indkast, 
+    # så hændelserne beholder deres korrekte koordinater fra datakilden (eller tilpasses korrekt til venstre-mod-højre flow, 
+    # hvor egen halvdel er til venstre og modstanderens til højre).
+    # Hvis data i Opta allerede tager udgangspunkt i holdets faktiske retning, lader vi dem være, 
+    # eller vi sikrer at angrebsretningen altid er mod højre (dvs. X er allerede 0-100 fra egen til modstanders mål).
 
-    # Filtrering på side (i angrebsretningen)
+    # Filtrering på side
     if side_sel == "Venstre side":
         df_plot = df_plot[df_plot['EVENT_Y'] > 50]
     elif side_sel == "Højre side":
@@ -203,7 +204,7 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
                     pitch.scatter(df_plot.x, df_plot.y, ax=ax, color=t_color, s=25, alpha=0.7)
 
         else:
-            # --- LIGGENDE BANE (FRISPARK OG INDKAST - ALTID VENSTRE MOD HØJRE) ---
+            # --- LIGGENDE BANE (FRISPARK OG INDKAST) ---
             pitch = Pitch(pitch_type='statsbomb', pitch_color='white', line_color='#333333', linewidth=1.5)
             fig, ax = pitch.draw(figsize=(10, 7))
 
