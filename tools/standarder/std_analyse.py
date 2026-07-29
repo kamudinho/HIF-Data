@@ -120,10 +120,9 @@ def get_summary_stats(df, group_col):
     stats['Top Modtager'] = stats[group_col].map(mod_map)
     return stats[[group_col, 'Antal', 'Succes %', 'Top Modtager', 'Afslutning %']]
 
-# --- 5. VISUALISERING AF HJØRNESPARK (HALV BANE - RÅ OPTO-KOORDINATER) ---
+# --- 5. VISUALISERING AF HJØRNESPARK (REN OG ENKEL HALV BANE) ---
 def render_setpiece_analysis(df_team, sp_type, t_sel):
     t_info = next((info for name, info in TEAMS.items() if name == t_sel), None)
-    t_uuid = t_info.get('opta_uuid') if t_info else None
     hold_logo = get_logo_img(t_info.get('logo') if t_info else None)
 
     f1, f2, f3, f4 = st.columns([1.2, 1.2, 1.2, 1])
@@ -165,19 +164,15 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
         t_color = TEAM_COLORS.get(t_sel, {}).get('primary', HIF_RED)
         
         if sp_type == "Hjørnespark":
-            # BRUGER MPLSOCKER DIREKTE MED 'half=True' FOR AT UNDGÅ KONFLIKTER MED UTILS
-            pitch = VerticalPitch(pitch_type='custom', pitch_length=100, pitch_width=100, 
-                                  pitch_color='white', line_color='#333333', linewidth=1.5, half=True)
-            fig, ax = pitch.draw(figsize=(8, 9))
+            # BRUGER VERTICALPITCH MED OPTS-TYPE OG HALF=TRUE (KUN MODSTANDERENS FELT)
+            pitch = VerticalPitch(pitch_type='opta', half=True, pitch_color='white', line_color='#333333', linewidth=1.5)
+            fig, ax = pitch.draw(figsize=(7, 7))
 
-            # Direkte mapping af rå opta-koordinater til den lodrette halve bane
-            df_plot['x'] = df_plot['EVENT_Y']
-            df_plot['y'] = df_plot['EVENT_X']
-            df_plot['end_x'] = df_plot['ENDY']
-            df_plot['end_y'] = df_plot['ENDX']
-
-            ax.set_xlim(0, 100)
-            ax.set_ylim(50, 100) # Låser visningen, så den kun viser modstanderens felt og mod toppen
+            # Opta-koordinater bruges direkte uden omregning
+            x = df_plot['EVENT_X']
+            y = df_plot['EVENT_Y']
+            end_x = df_plot['ENDX']
+            end_y = df_plot['ENDY']
 
             if hold_logo:
                 ax_logo = ax.inset_axes([3.0, 93.0, 6.0, 6.0], transform=ax.transData)
@@ -192,25 +187,22 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
             stats_line = f"{spiller_tekst} — {total} aktioner ({int(pct)}% succes)"
             ax.text(3.0, 87.0, stats_line, fontsize=7, color='#666666', va='center')
 
-            if not df_plot.dropna(subset=['end_x', 'end_y']).empty:
+            if not df_plot.dropna(subset=['ENDX', 'ENDY']).empty:
                 if "Zoner" in vis_mode:
-                    pitch.hexbin(df_plot['end_x'], df_plot['end_y'], ax=ax, edgecolors='#ffffff', gridsize=(8, 8), cmap='Reds', alpha=0.65)
+                    pitch.hexbin(end_x, end_y, ax=ax, edgecolors='#ffffff', gridsize=(8, 8), cmap='Reds', alpha=0.65)
                 if "Pile" in vis_mode:
-                    pitch.arrows(df_plot['x'], df_plot['y'], df_plot['end_x'], df_plot['end_y'], color=t_color, ax=ax, width=1.5, headwidth=3, headlength=3, alpha=0.5)
-                    pitch.scatter(df_plot['x'], df_plot['y'], ax=ax, color=t_color, s=25, alpha=0.7)
+                    pitch.arrows(x, y, end_x, end_y, color=t_color, ax=ax, width=1.5, headwidth=3, headlength=3, alpha=0.5)
+                    pitch.scatter(x, y, ax=ax, color=t_color, s=25, alpha=0.7)
 
         else:
             # Standard fuld bane til frispark og indkast
-            pitch = Pitch(pitch_type='custom', pitch_length=100, pitch_width=100, pitch_color='white', line_color='#333333', linewidth=1.5)
-            fig, ax = pitch.draw(figsize=(10, 7))
+            pitch = Pitch(pitch_type='opta', pitch_color='white', line_color='#333333', linewidth=1.5)
+            fig, ax = pitch.draw(figsize=(9, 6))
 
-            df_plot['x'] = df_plot['EVENT_X']
-            df_plot['y'] = df_plot['EVENT_Y']
-            df_plot['end_x'] = df_plot['ENDX']
-            df_plot['end_y'] = df_plot['ENDY']
-
-            ax.set_xlim(0, 100)
-            ax.set_ylim(0, 100)
+            x = df_plot['EVENT_X']
+            y = df_plot['EVENT_Y']
+            end_x = df_plot['ENDX']
+            end_y = df_plot['ENDY']
 
             if hold_logo:
                 ax_logo = ax.inset_axes([3.0, 91.0, 6.0, 6.0], transform=ax.transData)
@@ -223,12 +215,12 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
             stats_line = f"{spiller_tekst} — {total} aktioner ({int(pct)}% succes)"
             ax.text(3.0, 84.0, stats_line, fontsize=6.5, color='#666666', va='center')
 
-            if not df_plot.dropna(subset=['end_x', 'end_y']).empty:
+            if not df_plot.dropna(subset=['ENDX', 'ENDY']).empty:
                 if "Zoner" in vis_mode:
-                    pitch.hexbin(df_plot['end_x'], df_plot['end_y'], ax=ax, edgecolors='#ffffff', gridsize=(8, 8), cmap='Reds', alpha=0.65)
+                    pitch.hexbin(end_x, end_y, ax=ax, edgecolors='#ffffff', gridsize=(8, 8), cmap='Reds', alpha=0.65)
                 if "Pile" in vis_mode:
-                    pitch.arrows(df_plot['x'], df_plot['y'], df_plot['end_x'], df_plot['end_y'], color=t_color, ax=ax, width=1.5, headwidth=3, headlength=3, alpha=0.5)
-                    pitch.scatter(df_plot['x'], df_plot['y'], ax=ax, color=t_color, s=25, alpha=0.7)
+                    pitch.arrows(x, y, end_x, end_y, color=t_color, ax=ax, width=1.5, headwidth=3, headlength=3, alpha=0.5)
+                    pitch.scatter(x, y, ax=ax, color=t_color, s=25, alpha=0.7)
                 
         st.pyplot(fig, clear_figure=True)
         
