@@ -60,9 +60,9 @@ def load_setpiece_data():
         "                 WHEN QUALIFIER_QID = 5 THEN 'Frispark' END) AS TYPE_NAVN,"
         "        MAX(CASE WHEN QUALIFIER_QID = 140 THEN QUALIFIER_VALUE END) AS ENDX,"
         "        MAX(CASE WHEN QUALIFIER_QID = 141 THEN QUALIFIER_VALUE END) AS ENDY,"
-        "        MAX(CASE WHEN QUALIFIER_QID = 223 THEN 'In-swinger'"
-        "                 WHEN QUALIFIER_QID = 224 THEN 'Out-swinger'"
-        "                 WHEN QUALIFIER_QID = 225 THEN 'Straight' END) AS SPARK_TYPE,"
+        "        MAX(CASE WHEN QUALIFIER_QID = 223 THEN 'Indadskruet'"
+        "                 WHEN QUALIFIER_QID = 224 THEN 'Udadskruet'"
+        "                 WHEN QUALIFIER_QID = 225 THEN 'Lige' END) AS SPARK_TYPE,"
         "        MAX(CASE WHEN QUALIFIER_QID = 152 THEN 'Direkte'"
         "                 WHEN QUALIFIER_QID = 241 THEN 'Indirekte' END) AS FRISPARK_TYPE,"
         "        MAX(CASE WHEN QUALIFIER_QID = 155 THEN 'Chipped' END) AS LEVERING_TYPE"
@@ -101,7 +101,6 @@ def load_setpiece_data():
         shot_types = [13, 14, 15, 16]
         df['ER_AFSLUTNING'] = df.apply(lambda x: 1 if x['P1_TYPE'] in shot_types or x['P2_TYPE'] in shot_types or x['P3_TYPE'] in shot_types else 0, axis=1)
         
-        # Samlet udførelses-kolonne til overblik
         def get_udfoerelse(row):
             if row['TYPE_NAVN'] == 'Hjørnespark':
                 return row['SPARK_TYPE'] if pd.notna(row['SPARK_TYPE']) else 'Standard / Ukendt'
@@ -198,14 +197,12 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
             pitch = VerticalPitch(pitch_type='opta', half=True, pitch_color='white', line_color='#333333', linewidth=1.5)
             fig, ax = pitch.draw(figsize=(7, 7))
             
-            # Tekst og statistik placeret øverst i venstre side (X=93.0)
             ax.text(93.0, 56.0, f"{sp_type.upper()} ({side_sel.upper()})", fontsize=7, fontweight='bold', color='#555555', va='center')
             spiller_tekst = f"Spiller: {p_sel}" if p_sel != "Alle spillere" else "Alle spillere"
             stats_line = f"{spiller_tekst} — {total} aktioner ({int(pct)}% succes)"
             ax.text(93.0, 53.0, stats_line, fontsize=7, color='#666666', va='center')
 
             if hold_logo:
-                # Holdnavn og logo placeret nederst i venstre side (X=93.0)
                 ax.text(93.0, 58.0, t_sel.upper(), fontsize=8, fontweight='bold', color='#222222', va='center')
                 ax_logo = ax.inset_axes([93.0, 56.0, 4.5, 4.5], transform=ax.transData)
                 ax_logo.imshow(hold_logo)
@@ -323,7 +320,7 @@ def vis_side():
         
         col_text, col_chart = st.columns([1.5, 2])
         with col_text:
-            st.write(f"Her ses en samlet oversikt over **{t_sel}s** standardsituationer. Analysen viser fordelingen mellem hjørnespark, frispark og indkast, hvordan sparkene/leveringerne udføres, samt de mest benyttede modtager-zoner.")
+            st.write(f"Her ses en samlet oversigt over **{t_sel}s** standardsituationer. Analysen viser fordelingen mellem hjørnespark, frispark og indkast, hvordan sparkene/leveringerne udføres, samt de mest benyttede modtager-zoner.")
             
             df_team_selected['ZONE'] = df_team_selected['ENDY'].apply(lambda y: "Venstre" if float(y or 0) < 33 else ("Højre" if float(y or 0) > 66 else "Center"))
             
