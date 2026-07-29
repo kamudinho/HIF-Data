@@ -281,7 +281,6 @@ def vis_side():
 
     df_team_selected = df_all[df_all['KLUB_NAVN'] == t_sel].copy()
     
-    # Ny rækkefølge af faner med "Analyse" som den første
     tabs = st.tabs(["Analyse", "Holdoversigt", "Spilleroversigt", "Hjørnespark", "Frispark", "Indkast"])
     col_cfg = {"Succes %": st.column_config.ProgressColumn("Succes %", format="%d%%", min_value=0, max_value=100)}
 
@@ -306,10 +305,9 @@ def vis_side():
         with col_text:
             st.write(f"Her ses en sammenfatning af **{t_sel}s** standardsituationer i løbet af sæsonen. Analysen viser fordelingen mellem hjørnespark, frispark og indkast, samt hvor ofte du modtager bolden og afslutter på situationerne.")
             
-            # Beregn zoner (venstre, center, højre baseret på ENDY)
             df_team_selected['ZONE'] = df_team_selected['ENDY'].apply(lambda y: "Venstre" if float(y or 0) < 33 else ("Højre" if float(y or 0) > 66 else "Center"))
             zone_counts = df_team_selected['ZONE'].value_counts()
-            st.write(**Mest benyttede modtager-zoner:**)
+            st.write("**Mest benyttede modtager-zoner:**")
             for zone, count in zone_counts.items():
                 st.write(f"- **{zone} zone**: {count} aktioner")
                 
