@@ -473,6 +473,12 @@ def vis_side(dp=None):
             m_r2[1].metric("Chancer", int(chancer_skabt))
             m_r2[2].metric("Indlæg", cross_count)
             m_r2[3].metric("Erobringer", erob_count)
+
+            m_r3 = st.columns(4)
+            m_r3[0].metric("Skud", shots_count)
+            m_r3[1].metric("Chancer", int(chancer_skabt))
+            m_r3[2].metric("Indlæg", cross_count)
+            m_r3[3].metric("Erobringer", erob_count)
     
             st.markdown("<hr style='margin: 15px 0; opacity: 0.5;'>", unsafe_allow_html=True)
             st.write("**Top 10: Aktioner**")
