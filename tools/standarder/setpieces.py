@@ -9,13 +9,16 @@ from mplsoccer import Pitch, VerticalPitch
 from data.utils.team_mapping import TEAMS, TEAM_COLORS
 from data.data_load import _get_snowflake_conn
 
+# --- 1. KONFIGURATION ---
 HIF_RED = '#cc0000'
 DB = "KLUB_HVIDOVREIF.AXIS"
 LIGA_UUID = "2mb332vncy4450vu14paj8844" 
 PLAYER_FILE = 'data/players/1div_overskrivning.csv'
 
+# --- 2. HJÆLPEFUNKTIONER (LOGO & DECODE) ---
 @st.cache_data(ttl=3600)
 def get_logo_img(opta_uuid):
+    """Henter klublogo fra din TEAMS mapping eller via URL"""
     if not opta_uuid: return None
     url = next((info['logo'] for name, info in TEAMS.items() if info.get('opta_uuid') == opta_uuid), None)
     if not url: return None
@@ -25,51 +28,52 @@ def get_logo_img(opta_uuid):
     except: return None
 
 def universal_decode(text):
+    """Fikser ødelagte tegn fra Norden, Baltikum og Sydeuropa."""
     if not isinstance(text, str): return text
     try: return text.encode('latin1').decode('utf-8')
     except: return text
 
+# --- 3. DATA LOAD ---
 @st.cache_data(ttl=3600)
 def load_setpiece_data():
     conn = _get_snowflake_conn()
     if not conn: return pd.DataFrame()
     
-    sql = (
-        "WITH BaseEvents AS ("
-        "    SELECT "
-        "        e.EVENT_OPTAUUID, e.MATCH_OPTAUUID, e.EVENT_EVENTID,"
-        "        e.EVENT_CONTESTANT_OPTAUUID AS TEAM_UUID,"
-        "        e.EVENT_TYPEID,"
-        "        TRIM(e.PLAYER_OPTAUUID) AS PLAYER_UUID,"
-        "        e.PLAYER_NAME,"
-        "        e.EVENT_X, e.EVENT_Y,"
-        "        LEAD(TRIM(e.PLAYER_OPTAUUID), 1) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_EVENTID) AS P1_UUID,"
-        "        LEAD(e.PLAYER_NAME, 1) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_EVENTID) AS P1_NAME,"
-        "        LEAD(e.EVENT_CONTESTANT_OPTAUUID, 1) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_EVENTID) AS P1_TEAM,"
-        "        LEAD(e.EVENT_TYPEID, 1) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_EVENTID) AS P1_TYPE,"
-        "        LEAD(e.EVENT_TYPEID, 2) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_EVENTID) AS P2_TYPE,"
-        "        LEAD(e.EVENT_TYPEID, 3) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_EVENTID) AS P3_TYPE"
-        "    FROM " + DB + ".OPTA_EVENTS e"
-        "    WHERE e.TOURNAMENTCALENDAR_OPTAUUID = '" + LIGA_UUID + "'"
-        "),"
-        "Quals AS ("
-        "    SELECT "
-        "        EVENT_OPTAUUID,"
-        "        MAX(CASE WHEN QUALIFIER_QID = 107 THEN 'Indkast'"
-        "                 WHEN QUALIFIER_QID = 6 THEN 'Hjørnespark'"
-        "                 WHEN QUALIFIER_QID = 5 THEN 'Frispark' END) AS TYPE_NAVN,"
-        "        MAX(CASE WHEN QUALIFIER_QID = 140 THEN QUALIFIER_VALUE END) AS ENDX,"
-        "        MAX(CASE WHEN QUALIFIER_QID = 141 THEN QUALIFIER_VALUE END) AS ENDY"
-        "    FROM " + DB + ".OPTA_QUALIFIERS"
-        "    WHERE QUALIFIER_QID IN (5, 6, 107, 140, 141)"
-        "    GROUP BY EVENT_OPTAUUID"
-        ") "
-        "SELECT b.*, q.TYPE_NAVN, q.ENDX, q.ENDY "
-        "FROM BaseEvents b "
-        "JOIN Quals q ON b.EVENT_OPTAUUID = q.EVENT_OPTAUUID "
-        "WHERE q.TYPE_NAVN IS NOT NULL"
+    sql = f"""
+    WITH BaseEvents AS (
+        SELECT 
+            e.EVENT_OPTAUUID, e.MATCH_OPTAUUID, e.EVENT_EVENTID,
+            e.EVENT_CONTESTANT_OPTAUUID AS TEAM_UUID,
+            e.EVENT_TYPEID,
+            TRIM(e.PLAYER_OPTAUUID) AS PLAYER_UUID,
+            e.PLAYER_NAME,
+            e.EVENT_X, e.EVENT_Y,
+            LEAD(TRIM(e.PLAYER_OPTAUUID), 1) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_EVENTID) AS P1_UUID,
+            LEAD(e.PLAYER_NAME, 1) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_EVENTID) AS P1_NAME,
+            LEAD(e.EVENT_CONTESTANT_OPTAUUID, 1) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_EVENTID) AS P1_TEAM,
+            LEAD(e.EVENT_TYPEID, 1) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_EVENTID) AS P1_TYPE,
+            LEAD(e.EVENT_TYPEID, 2) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_EVENTID) AS P2_TYPE,
+            LEAD(e.EVENT_TYPEID, 3) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_EVENTID) AS P3_TYPE
+        FROM {DB}.OPTA_EVENTS e
+        WHERE e.TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
+    },
+    Quals AS (
+        SELECT 
+            EVENT_OPTAUUID,
+            MAX(CASE WHEN QUALIFIER_QID = 107 THEN 'Indkast'
+                     WHEN QUALIFIER_QID = 6 THEN 'Hjørnespark'
+                     WHEN QUALIFIER_QID = 5 THEN 'Frispark' END) AS TYPE_NAVN,
+            MAX(CASE WHEN QUALIFIER_QID = 140 THEN QUALIFIER_VALUE END) AS ENDX,
+            MAX(CASE WHEN QUALIFIER_QID = 141 THEN QUALIFIER_VALUE END) AS ENDY
+        FROM {DB}.OPTA_QUALIFIERS
+        WHERE QUALIFIER_QID IN (5, 6, 107, 140, 141)
+        GROUP BY EVENT_OPTAUUID
     )
-    
+    SELECT b.*, q.TYPE_NAVN, q.ENDX, q.ENDY
+    FROM BaseEvents b
+    JOIN Quals q ON b.EVENT_OPTAUUID = q.EVENT_OPTAUUID
+    WHERE q.TYPE_NAVN IS NOT NULL
+    """
     try:
         df = conn.query(sql)
         if df is None or df.empty: return pd.DataFrame()
@@ -95,10 +99,28 @@ def load_setpiece_data():
         shot_types = [13, 14, 15, 16]
         df['ER_AFSLUTNING'] = df.apply(lambda x: 1 if x['P1_TYPE'] in shot_types or x['P2_TYPE'] in shot_types or x['P3_TYPE'] in shot_types else 0, axis=1)
         return df
-    except Exception as e:
-        st.error(f"SQL-fejl: {e}")
-        return pd.DataFrame()
+    except: return pd.DataFrame()
 
+# --- 4. STATISTIK BEREGNING ---
+def get_summary_stats(df, group_col):
+    if df.empty: return pd.DataFrame()
+    stats = df.groupby(group_col).agg(
+        Antal=('TYPE_NAVN', 'size'),
+        Succesfulde=('MODTAGER', lambda x: x.notna().sum()),
+        Afslutninger=('ER_AFSLUTNING', 'sum')
+    ).reset_index()
+    stats['Succes %'] = (stats['Succesfulde'] / stats['Antal'] * 100).round(0).fillna(0)
+    stats['Afslutning %'] = (stats['Afslutninger'] / stats['Antal'] * 100).round(0).fillna(0)
+    
+    def get_top_mod(sub_df):
+        m = sub_df['MODTAGER'].value_counts()
+        return f"{m.index[0]} ({m.iloc[0]})" if not m.empty else "-"
+    
+    mod_map = df.groupby(group_col).apply(get_top_mod).to_dict()
+    stats['Top Modtager'] = stats[group_col].map(mod_map)
+    return stats[[group_col, 'Antal', 'Succes %', 'Top Modtager', 'Afslutning %']]
+
+# --- 5. VISUALISERING AF HJØRNESPARK ---
 def render_setpiece_analysis(df_team, sp_type, t_sel):
     t_info = next((info for name, info in TEAMS.items() if name == t_sel), None)
     hold_logo = get_logo_img(t_info.get('logo') if t_info else None)
@@ -143,39 +165,57 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
         if sp_type == "Hjørnespark":
             pitch = VerticalPitch(pitch_type='opta', half=True, pitch_color='white', line_color='#333333', linewidth=1.5)
             fig, ax = pitch.draw(figsize=(7, 7))
+
+            x = df_plot['EVENT_X']
+            y = df_plot['EVENT_Y']
+            end_x = df_plot['ENDX']
+            end_y = df_plot['ENDY']
+
             if hold_logo:
-                ax_logo = ax.inset_axes([3.0, 50.0, 6.0, 6.0], transform=ax.transData)
+                ax_logo = ax.inset_axes([3.0, 91.0, 6.0, 6.0], transform=ax.transData)
                 ax_logo.imshow(hold_logo)
                 ax_logo.axis('off')
-                ax.text(10.0, 53.0, t_sel.upper(), fontsize=8, fontweight='bold', color='#222222', va='center')
-            ax.text(3.0, 46.0, f"{sp_type.upper()} ({side_sel.upper()})", fontsize=7, fontweight='bold', color='#555555', va='center')
+                ax.text(11.0, 94.0, t_sel.upper(), fontsize=8.5, fontweight='bold', color='#222222', va='center')
+            else:
+                ax.text(3.0, 94.0, t_sel.upper(), fontsize=8.5, fontweight='bold', color='#222222', va='center')
+
+            ax.text(3.0, 55.0, f"HJØRNESPARK ({side_sel.upper()})", fontsize=7, fontweight='bold', color='#555555', va='center')
             spiller_tekst = f"Spiller: {p_sel}" if p_sel != "Alle spillere" else "Alle spillere"
             stats_line = f"{spiller_tekst} — {total} aktioner ({int(pct)}% succes)"
-            ax.text(3.0, 44.0, stats_line, fontsize=7, color='#666666', va='center')
+            ax.text(3.0, 52.0, stats_line, fontsize=7, color='#666666', va='center')
+
+            if not df_plot.dropna(subset=['ENDX', 'ENDY']).empty:
+                if "Zoner" in vis_mode:
+                    pitch.hexbin(end_x, end_y, ax=ax, edgecolors='#ffffff', gridsize=(8, 8), cmap='Reds', alpha=0.65)
+                if "Pile" in vis_mode:
+                    pitch.arrows(x, y, end_x, end_y, color=t_color, ax=ax, width=1.5, headwidth=3, headlength=3, alpha=0.5)
+                    pitch.scatter(x, y, ax=ax, color=t_color, s=25, alpha=0.7)
         else:
             pitch = Pitch(pitch_type='opta', pitch_color='white', line_color='#333333', linewidth=1.5)
             fig, ax = pitch.draw(figsize=(9, 6))
+
+            x = df_plot['EVENT_X']
+            y = df_plot['EVENT_Y']
+            end_x = df_plot['ENDX']
+            end_y = df_plot['ENDY']
+
             if hold_logo:
                 ax_logo = ax.inset_axes([3.0, 91.0, 6.0, 6.0], transform=ax.transData)
                 ax_logo.imshow(hold_logo)
                 ax_logo.axis('off')
                 ax.text(11.0, 94.0, t_sel.upper(), fontsize=8, fontweight='bold', color='#222222', va='center')
-            ax.text(3.0, 87.0, f"{sp_type.upper()} ({side_sel.upper()})", fontsize=7, fontweight='bold', color='#555555', va='center')
+
+            ax.text(3.0, 87.0, f"{sp_type.upper()} ({side_sel.upper()})", fontsize=6.5, fontweight='bold', color='#555555', va='center')
             spiller_tekst = f"Spiller: {p_sel}" if p_sel != "Alle spillere" else "Alle spillere"
             stats_line = f"{spiller_tekst} — {total} aktioner ({int(pct)}% succes)"
-            ax.text(3.0, 84.0, stats_line, fontsize=7, color='#666666', va='center')
+            ax.text(3.0, 84.0, stats_line, fontsize=6.5, color='#666666', va='center')
 
-        x = df_plot['EVENT_X']
-        y = df_plot['EVENT_Y']
-        end_x = df_plot['ENDX']
-        end_y = df_plot['ENDY']
-
-        if not df_plot.dropna(subset=['ENDX', 'ENDY']).empty:
-            if "Zoner" in vis_mode:
-                pitch.hexbin(end_x, end_y, ax=ax, edgecolors='#ffffff', gridsize=(8, 8), cmap='Reds', alpha=0.65)
-            if "Pile" in vis_mode:
-                pitch.arrows(x, y, end_x, end_y, color=t_color, ax=ax, width=1.5, headwidth=3, headlength=3, alpha=0.5)
-                pitch.scatter(x, y, ax=ax, color=t_color, s=25, alpha=0.7)
+            if not df_plot.dropna(subset=['ENDX', 'ENDY']).empty:
+                if "Zoner" in vis_mode:
+                    pitch.hexbin(end_x, end_y, ax=ax, edgecolors='#ffffff', gridsize=(8, 8), cmap='Reds', alpha=0.65)
+                if "Pile" in vis_mode:
+                    pitch.arrows(x, y, end_x, end_y, color=t_color, ax=ax, width=1.5, headwidth=3, headlength=3, alpha=0.5)
+                    pitch.scatter(x, y, ax=ax, color=t_color, s=25, alpha=0.7)
                 
         st.pyplot(fig, clear_figure=True)
         
@@ -227,12 +267,11 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
         mod_agg = mod_agg[['MODTAGER', 'Antal', 'Afslutning_Sum', 'Andel']]
         mod_agg.columns = ['Modtager', 'Antal', 'Med afslutning', 'Andel']
         st.dataframe(mod_agg, use_container_width=True, hide_index=True)
-
+        
+# --- 6. HOVEDSIDE ---
 def vis_side():
     df_all = load_setpiece_data()
-    if df_all.empty: 
-        st.warning("Ingen data fundet.")
-        return
+    if df_all.empty: st.warning("Ingen data fundet."); return
 
     uuid_to_name = {v['opta_uuid'].upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
     df_all['KLUB_NAVN'] = df_all['TEAM_UUID'].str.upper().map(uuid_to_name)
@@ -246,25 +285,42 @@ def vis_side():
         t_sel = st.selectbox("Vælg hold", teams, index=default_idx, key="main_team_selectbox", label_visibility="collapsed")
 
     df_team_selected = df_all[df_all['KLUB_NAVN'] == t_sel].copy()
-    
-    # Alle 6 faner genetableret:
     tabs = st.tabs(["Holdoversigt", "Spilleroversigt", "Hjørnespark", "Frispark", "Indkast", "Zoneoversigt"])
-    
-    with tabs[0]:
-        st.write("### Holdoversigt for standardsituationer")
-        st.info("Her kan du bygge det overordnede holdoverblik på tværs af standardsituationer.")
-        
-    with tabs[1]:
-        st.write("### Spilleroversigt")
-        st.info("Her kan du indsætte den samlede oversigt per spiller.")
+    col_cfg = {"Succes %": st.column_config.ProgressColumn("Succes %", format="%d%%", min_value=0, max_value=100)}
 
+    with tabs[0]: 
+        col_content, col_control = st.columns([3, 1])
+        with col_control:
+            c = st.segmented_control("k1", ["Hjørnespark", "Frispark", "Indkast"], default="Hjørnespark", key="r1", label_visibility="collapsed")
+        with col_content:
+            st.markdown("### Holdoversigt")
+            
+        if c:
+            st.dataframe(get_summary_stats(df_all[df_all['TYPE_NAVN'] == c], 'KLUB_NAVN'), use_container_width=True, hide_index=True, column_config=col_cfg)
+
+    with tabs[1]: 
+        col_content, col_control = st.columns([3, 1])
+        with col_control:
+            c2 = st.segmented_control("k2", ["Hjørnespark", "Frispark", "Indkast"], default="Hjørnespark", key="r2", label_visibility="collapsed")
+        with col_content:
+            st.markdown("### Tager-oversigt")
+            
+        if c2:
+            st.dataframe(get_summary_stats(df_team_selected[df_team_selected['TYPE_NAVN'] == c2], 'TAGER_NAVN'), use_container_width=True, hide_index=True, column_config=col_cfg)
+    
     for i, name in enumerate(["Hjørnespark", "Frispark", "Indkast"], 2):
         with tabs[i]: 
             render_setpiece_analysis(df_team_selected, name, t_sel)
-
+    
     with tabs[5]:
-        st.write("### Zoneoversigt")
-        st.info("Overordnet zoneanalyse for standardsituationer.")
+        st.markdown("### Zoneoversigter & Bane")
+        
+        pitch = Pitch(pitch_type='statsbomb', pitch_color='white', line_color='#333333', linewidth=1.5)
+        fig, ax = pitch.draw(figsize=(10, 7))
+        st.pyplot(fig, clear_figure=True)
+        
+        df_team_selected['ZONE'] = df_team_selected['ENDY'].apply(lambda y: "Venstre" if float(y or 0) < 33 else ("Højre" if float(y or 0) > 66 else "Center"))
+        st.dataframe(df_team_selected.groupby(['ZONE', 'TYPE_NAVN']).size().unstack(fill_value=0), use_container_width=True)
 
 if __name__ == "__main__":
     st.set_page_config(layout="wide", page_title="Standardsituationer")
