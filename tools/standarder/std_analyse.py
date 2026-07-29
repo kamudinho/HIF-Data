@@ -171,29 +171,32 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
     
     with col_p:
         if sp_type == "Hjørnespark":
-            # Hent halv bane fra pitches.py
             t_color = TEAM_COLORS.get(t_sel, {}).get('primary', HIF_RED)
-            pitch, fig, ax = get_pitch(type="halv", t_color=t_color)
+            
+            # Opret en ren VerticalPitch (halv bane, angreb opad mod målet)
+            pitch = VerticalPitch(half=True, pitch_type='statsbomb', pitch_color='white', line_color='#333333', linewidth=1.5)
+            fig, ax = pitch.draw(figsize=(8, 10))
 
-            # Korrekt mapping af Opta (0-100) til den halve vertikale bane (x: 0-68, y: 52.5-105)
-            df_plot['x'] = df_plot['EVENT_X'] * (68.0 / 100.0)
-            df_plot['y'] = 52.5 + (df_plot['EVENT_Y'] / 100.0) * 52.5
-            df_plot['end_x'] = df_plot['ENDX'] * (68.0 / 100.0)
-            df_plot['end_y'] = 52.5 + (df_plot['ENDY'] / 100.0) * 52.5
+            # Korrekt mapping af Opta (0-100) til banens dimensioner (x: 0-80, y: 60-120 i Statsbomb standard)
+            # Vi bruger her mplsoccer's indbyggede skala eller standard konvertering:
+            df_plot['x'] = df_plot['EVENT_X'] * (80.0 / 100.0)
+            df_plot['y'] = 60.0 + (df_plot['EVENT_Y'] / 100.0) * 60.0
+            df_plot['end_x'] = df_plot['ENDX'] * (80.0 / 100.0)
+            df_plot['end_y'] = 60.0 + (df_plot['ENDY'] / 100.0) * 60.0
 
             # Placer logo og tekst pænt i venstre side i toppen af banen
             if hold_logo:
-                ax_logo = ax.inset_axes([80.0, 4.0, 96.0, 6.0], transform=ax.transData)
+                ax_logo = ax.inset_axes([3.0, 112.0, 7.0, 7.0], transform=ax.transData)
                 ax_logo.imshow(hold_logo)
                 ax_logo.axis('off')
-                ax.text(1.0, 99.0, t_sel.upper(), fontsize=7, fontweight='bold', color='#222222', alpha=0.9, va='center')
+                ax.text(12.0, 115.5, t_sel.upper(), fontsize=8, fontweight='bold', color='#222222', alpha=0.9, va='center')
             else:
-                ax.text(2.0, 99.0, t_sel.upper(), fontsize=6, fontweight='bold', color='#222222', alpha=0.9, va='center')
+                ax.text(3.0, 115.5, t_sel.upper(), fontsize=8, fontweight='bold', color='#222222', alpha=0.9, va='center')
 
-            ax.text(3.0, 93.0, f"{sp_type.upper()} ({side_sel.upper()})", fontsize=5, fontweight='bold', color='#555555', alpha=0.85)
+            ax.text(3.0, 108.0, f"{sp_type.upper()} ({side_sel.upper()})", fontsize=6, fontweight='bold', color='#555555', alpha=0.85)
             spiller_tekst = f"Spiller: {p_sel}" if p_sel != "Alle spillere" else "Alle spillere"
             stats_line = f"{spiller_tekst} — {total} aktioner ({int(pct)}% succes)"
-            ax.text(3.0, 89.0, stats_line, fontsize=7, color='#666666', va='center')
+            ax.text(3.0, 103.0, stats_line, fontsize=7, color='#666666', va='center')
 
             if not df_plot.dropna(subset=['end_x', 'end_y']).empty:
                 if "Zoner" in vis_mode:
@@ -256,7 +259,6 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
         mod_agg = mod_agg[['MODTAGER', 'Antal', 'Afslutning_Sum', 'Andel']]
         mod_agg.columns = ['Modtager', 'Antal', 'Med afslutning', 'Andel']
         st.dataframe(mod_agg, use_container_width=True, hide_index=True)
-
 # --- 6. HOVEDSIDE ---
 def vis_side():
     df_all = load_setpiece_data()
