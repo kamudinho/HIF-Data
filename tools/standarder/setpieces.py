@@ -34,7 +34,7 @@ def load_setpiece_data():
     conn = _get_snowflake_conn()
     if not conn: return pd.DataFrame()
     
-    sql = f"""
+    sql = """
     WITH BaseEvents AS (
         SELECT 
             e.EVENT_OPTAUUID, e.MATCH_OPTAUUID, e.EVENT_EVENTID,
@@ -49,8 +49,8 @@ def load_setpiece_data():
             LEAD(e.EVENT_TYPEID, 1) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_EVENTID) AS P1_TYPE,
             LEAD(e.EVENT_TYPEID, 2) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_EVENTID) AS P2_TYPE,
             LEAD(e.EVENT_TYPEID, 3) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_EVENTID) AS P3_TYPE
-        FROM {DB}.OPTA_EVENTS e
-        WHERE e.TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
+        FROM """ + DB + """.OPTA_EVENTS e
+        WHERE e.TOURNAMENTCALENDAR_OPTAUUID = '""" + LIGA_UUID + """'
     },
     Quals AS (
         SELECT 
@@ -60,7 +60,7 @@ def load_setpiece_data():
                      WHEN QUALIFIER_QID = 5 THEN 'Frispark' END) AS TYPE_NAVN,
             MAX(CASE WHEN QUALIFIER_QID = 140 THEN QUALIFIER_VALUE END) AS ENDX,
             MAX(CASE WHEN QUALIFIER_QID = 141 THEN QUALIFIER_VALUE END) AS ENDY
-        FROM {DB}.OPTA_QUALIFIERS
+        FROM """ + DB + """.OPTA_QUALIFIERS
         WHERE QUALIFIER_QID IN (5, 6, 107, 140, 141)
         GROUP BY EVENT_OPTAUUID
     )
@@ -137,7 +137,6 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
     with col_p:
         t_color = TEAM_COLORS.get(t_sel, {}).get('primary', HIF_RED)
         
-        # KORREKT BANELOGIK: Halvbane til hjørnespark, fuld bane til frispark og indkast
         if sp_type == "Hjørnespark":
             pitch = VerticalPitch(pitch_type='opta', half=True, pitch_color='white', line_color='#333333', linewidth=1.5)
             fig, ax = pitch.draw(figsize=(7, 7))
