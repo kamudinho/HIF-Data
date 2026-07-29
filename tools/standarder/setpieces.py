@@ -180,16 +180,14 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
             pitch = VerticalPitch(pitch_type='opta', half=True, pitch_color='white', line_color='#333333', linewidth=1.5)
             fig, ax = pitch.draw(figsize=(7, 7))
             
-            # Tekst og statistik placeret øverst i venstre side (X=3.0)
-            ax.text(93.0, 56.0, f"{sp_type.upper()} ({side_sel.upper()})", fontsize=7, fontweight='bold', color='#555555', va='center')
+            ax.text(3.0, 67.0, f"{sp_type.upper()} ({side_sel.upper()})", fontsize=7, fontweight='bold', color='#555555', va='center')
             spiller_tekst = f"Spiller: {p_sel}" if p_sel != "Alle spillere" else "Alle spillere"
             stats_line = f"{spiller_tekst} — {total} aktioner ({int(pct)}% succes)"
-            ax.text(93.0, 53.0, stats_line, fontsize=7, color='#666666', va='center')
+            ax.text(3.0, 64.0, stats_line, fontsize=7, color='#666666', va='center')
 
             if hold_logo:
-                # Holdnavn og logo placeret nederst i venstre side (X=3.0)
-                ax.text(93.0, 58.0, t_sel.upper(), fontsize=8, fontweight='bold', color='#222222', va='center')
-                ax_logo = ax.inset_axes([93.0, 56.0, 4.5, 4.5], transform=ax.transData)
+                ax.text(3.0, 60.0, t_sel.upper(), fontsize=8, fontweight='bold', color='#222222', va='center')
+                ax_logo = ax.inset_axes([3.0, 52.0, 6.0, 6.0], transform=ax.transData)
                 ax_logo.imshow(hold_logo)
                 ax_logo.axis('off')
         else:
@@ -282,10 +280,45 @@ def vis_side():
         t_sel = st.selectbox("Vælg hold", teams, index=default_idx, key="main_team_selectbox", label_visibility="collapsed")
 
     df_team_selected = df_all[df_all['KLUB_NAVN'] == t_sel].copy()
-    tabs = st.tabs(["Holdoversigt", "Spilleroversigt", "Hjørnespark", "Frispark", "Indkast", "Zoneoversigt"])
+    
+    # Ny rækkefølge af faner med "Analyse" som den første
+    tabs = st.tabs(["Analyse", "Holdoversigt", "Spilleroversigt", "Hjørnespark", "Frispark", "Indkast"])
     col_cfg = {"Succes %": st.column_config.ProgressColumn("Succes %", format="%d%%", min_value=0, max_value=100)}
 
-    with tabs[0]: 
+    with tabs[0]:
+        st.caption(f"### Analyse af standardsituationer: {t_sel}")
+        
+        total_team_sets = len(df_team_selected)
+        tot_hj = len(df_team_selected[df_team_selected['TYPE_NAVN'] == 'Hjørnespark'])
+        tot_fr = len(df_team_selected[df_team_selected['TYPE_NAVN'] == 'Frispark'])
+        tot_in = len(df_team_selected[df_team_selected['TYPE_NAVN'] == 'Indkast'])
+        
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Samlede standarder", total_team_sets)
+        m2.metric("Hjørnespark", tot_hj)
+        m3.metric("Frispark", tot_fr)
+        m4.metric("Indkast", tot_in)
+        
+        st.markdown("---")
+        st.subheader("Overordnet udførelse og fordeling")
+        
+        col_text, col_chart = st.columns([1.5, 2])
+        with col_text:
+            st.write(f"Her ses en sammenfatning af **{t_sel}s** standardsituationer i løbet af sæsonen. Analysen viser fordelingen mellem hjørnespark, frispark og indkast, samt hvor ofte du modtager bolden og afslutter på situationerne.")
+            
+            # Beregn zoner (venstre, center, højre baseret på ENDY)
+            df_team_selected['ZONE'] = df_team_selected['ENDY'].apply(lambda y: "Venstre" if float(y or 0) < 33 else ("Højre" if float(y or 0) > 66 else "Center"))
+            zone_counts = df_team_selected['ZONE'].value_counts()
+            st.write(**Mest benyttede modtager-zoner:**)
+            for zone, count in zone_counts.items():
+                st.write(f"- **{zone} zone**: {count} aktioner")
+                
+        with col_chart:
+            st.caption("Aktioner fordelt på type og zone")
+            zone_table = df_team_selected.groupby(['TYPE_NAVN', 'ZONE']).size().unstack(fill_value=0)
+            st.dataframe(zone_table, use_container_width=True)
+
+    with tabs[1]: 
         col_content, col_control = st.columns([3, 1])
         with col_control:
             c = st.segmented_control("k1", ["Hjørnespark", "Frispark", "Indkast"], default="Hjørnespark", key="r1", label_visibility="collapsed")
@@ -295,7 +328,7 @@ def vis_side():
         if c:
             st.dataframe(get_summary_stats(df_all[df_all['TYPE_NAVN'] == c], 'KLUB_NAVN'), use_container_width=True, hide_index=True, column_config=col_cfg)
 
-    with tabs[1]: 
+    with tabs[2]: 
         col_content, col_control = st.columns([3, 1])
         with col_control:
             c2 = st.segmented_control("k2", ["Hjørnespark", "Frispark", "Indkast"], default="Hjørnespark", key="r2", label_visibility="collapsed")
@@ -305,19 +338,9 @@ def vis_side():
         if c2:
             st.dataframe(get_summary_stats(df_team_selected[df_team_selected['TYPE_NAVN'] == c2], 'TAGER_NAVN'), use_container_width=True, hide_index=True, column_config=col_cfg)
     
-    for i, name in enumerate(["Hjørnespark", "Frispark", "Indkast"], 2):
+    for i, name in enumerate(["Hjørnespark", "Frispark", "Indkast"], 3):
         with tabs[i]: 
             render_setpiece_analysis(df_team_selected, name, t_sel)
-    
-    with tabs[5]:
-        st.caption("### Zoneoversigter & Bane")
-        
-        pitch = Pitch(pitch_type='statsbomb', pitch_color='white', line_color='#333333', linewidth=1.5)
-        fig, ax = pitch.draw(figsize=(10, 7))
-        st.pyplot(fig, clear_figure=True)
-        
-        df_team_selected['ZONE'] = df_team_selected['ENDY'].apply(lambda y: "Venstre" if float(y or 0) < 33 else ("Højre" if float(y or 0) > 66 else "Center"))
-        st.dataframe(df_team_selected.groupby(['ZONE', 'TYPE_NAVN']).size().unstack(fill_value=0), use_container_width=True)
 
 if __name__ == "__main__":
     st.set_page_config(layout="wide", page_title="Standardsituationer")
