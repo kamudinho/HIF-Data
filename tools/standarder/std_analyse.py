@@ -234,7 +234,7 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
         
     with col_s:
         # 1. TOP 5-SERVERE
-        st.write("**Top 5-servere**")
+        st.caption("**Top 5-servere**")
         df_server_base = df_team[df_team['TYPE_NAVN'] == sp_type].copy()
         total_team_actions = len(df_server_base)
         
@@ -260,10 +260,8 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
         server_agg.columns = ['Spiller', 'Antal', 'Succes', 'Med afslutning', 'Andel']
         st.dataframe(server_agg, use_container_width=True, hide_index=True)
 
-        st.markdown("---")
-
         # 2. TOP 5-MODTAGERE
-        st.write("**Top 5-modtagere**")
+        st.caption("**Top 5-modtagere**")
         df_mod_base = df_team[(df_team['TYPE_NAVN'] == sp_type) & (df_team['MODTAGER'].notna())].copy()
         total_mod_team = len(df_mod_base)
         
