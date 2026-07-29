@@ -318,7 +318,9 @@ def vis_side():
         st.markdown("---")
         st.subheader("Overordnet udførelse og fordeling")
         
-        col_text, col_chart = st.columns([1.5, 2])
+        # Oprettet 2 kolonner: Venstre til tekst, Højre til statistikker/tabeller
+        col_text, col_stats = st.columns([1.2, 1.8])
+        
         with col_text:
             st.write(f"Her ses en samlet oversigt over **{t_sel}s** standardsituationer. Analysen viser fordelingen mellem hjørnespark, frispark og indkast, hvordan sparkene/leveringerne udføres, samt de mest benyttede modtager-zoner.")
             
@@ -334,7 +336,7 @@ def vis_side():
             for zone, count in zone_counts.items():
                 st.write(f"- **{zone} zone**: {count} aktioner")
                 
-        with col_chart:
+        with col_stats:
             st.caption("Aktioner fordelt på type og udførelse")
             if not df_team_selected.empty:
                 exec_table = df_team_selected.groupby(['TYPE_NAVN', 'UDFOERELSE']).size().unstack(fill_value=0)
