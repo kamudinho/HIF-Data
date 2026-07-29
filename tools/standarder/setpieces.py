@@ -180,18 +180,15 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
             pitch = VerticalPitch(pitch_type='opta', half=True, pitch_color='white', line_color='#333333', linewidth=1.5)
             fig, ax = pitch.draw(figsize=(7, 7))
             if hold_logo:
-                # Placeret i venstre side, oppe ad midterlinjen (X=55.0, Y=3.0)
-                ax_logo = ax.inset_axes([55.0, 3.0, 6.0, 6.0], transform=ax.transData)
+                ax_logo = ax.inset_axes([51.0, 3.0, 6.0, 6.0], transform=ax.transData)
                 ax_logo.imshow(hold_logo)
                 ax_logo.axis('off')
-                # Holdnavn ved siden af logoet
-                ax.text(62.0, 6.0, t_sel.upper(), fontsize=8, fontweight='bold', color='#222222', va='center')
+                ax.text(59.0, 6.0, t_sel.upper(), fontsize=8, fontweight='bold', color='#222222', va='center')
             
-            # Type, spiller og stats placeret i venstre side over logoet
-            ax.text(55.0, 13.0, f"{sp_type.upper()} ({side_sel.upper()})", fontsize=7, fontweight='bold', color='#555555', va='center')
+            ax.text(51.0, 13.0, f"{sp_type.upper()} ({side_sel.upper()})", fontsize=7, fontweight='bold', color='#555555', va='center')
             spiller_tekst = f"Spiller: {p_sel}" if p_sel != "Alle spillere" else "Alle spillere"
             stats_line = f"{spiller_tekst} — {total} aktioner ({int(pct)}% succes)"
-            ax.text(55.0, 16.0, stats_line, fontsize=7, color='#666666', va='center')
+            ax.text(51.0, 16.0, stats_line, fontsize=7, color='#666666', va='center')
         else:
             pitch = Pitch(pitch_type='opta', pitch_color='white', line_color='#333333', linewidth=1.5)
             fig, ax = pitch.draw(figsize=(9, 6))
