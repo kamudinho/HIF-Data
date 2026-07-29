@@ -1,28 +1,28 @@
-from mplsoccer import Pitch
+from mplsoccer import Pitch, VerticalPitch
 
-def get_pitch(type="stảende"):
+def get_pitch(type="staaende"):
     """
-    Returnerer en matplotlib fig og ax med den ønskede bane-type:
-    - 'staaende' (Standard Opta vertikal)
-    - 'liggende' (Horisontal / Landscaped)
-    - 'halv' (Halv bane, typisk til nærbilleder / defensive aktioner)
+    Returnerer en matplotlib fig og ax med den ønskede bane-type (tilpasset 105x68 meter):
+    - 'staaende' (Vertikal)
+    - 'liggende' (Horisontal)
+    - 'halv' (Halv bane til f.eks. skud- og afslutningsanalyser)
     """
     if type == "liggende":
-        # Liggende bane (roteret 90 grader eller med omvendte dimensioner)
-        pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD', orientation='horizontal')
+        pitch = Pitch(pitch_type='custom', pitch_length=105, pitch_width=68, 
+                      pitch_color='#ffffff', line_color='#cccccc', orientation='horizontal')
         fig, ax = pitch.draw(figsize=(10, 7))
         
     elif type == "halv":
-        # Halv bane (fokus på f.eks. egen eller modstanderens banehalvdel, typisk x fra 50 til 100)
-        pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD', orientation='horizontal')
-        fig, ax = pitch.draw(figsize=(8, 7))
-        # Begræns y-aksen/x-aksen til kun at vise den ene halvdel (tilpas evt. efter dine Opta-koordinater)
-        ax.set_xlim(50, 100)
-        ax.set_ylim(0, 100)
+        # Lodret halv bane (fokuseret på den sidste tredjedel / modstanderens felt)
+        pitch = VerticalPitch(pitch_type='custom', pitch_length=105, pitch_width=68, 
+                              pitch_color='#ffffff', line_color='#cccccc')
+        fig, ax = pitch.draw(figsize=(8, 10))
+        ax.set_ylim(55, 105) # Viser fra midterlinjen og op til modstanderens mål
         
     else:
-        # Standard stående bane (vertikal)
-        pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD', orientation='vertical')
+        # Standard stående fuld bane
+        pitch = VerticalPitch(pitch_type='custom', pitch_length=105, pitch_width=68, 
+                              pitch_color='#ffffff', line_color='#cccccc')
         fig, ax = pitch.draw(figsize=(7, 10))
         
     return pitch, fig, ax
