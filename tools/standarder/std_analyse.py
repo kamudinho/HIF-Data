@@ -120,7 +120,7 @@ def get_summary_stats(df, group_col):
     stats['Top Modtager'] = stats[group_col].map(mod_map)
     return stats[[group_col, 'Antal', 'Succes %', 'Top Modtager', 'Afslutning %']]
 
-# --- 5. VISUALISERING (STÅENDE BANE) ---
+# --- 5. VISUALISERING (KORREKT STÅENDE BANE) ---
 def render_setpiece_analysis(df_team, sp_type, t_sel):
     t_info = next((info for name, info in TEAMS.items() if name == t_sel), None)
     t_uuid = t_info.get('opta_uuid') if t_info else None
@@ -146,12 +146,12 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
     for c in ['EVENT_X', 'EVENT_Y', 'ENDX', 'ENDY']: 
         df_plot[c] = pd.to_numeric(df_plot[c], errors='coerce')
 
-    # Standardisering til angreb mod opad (vertikalt)
+    # Standardisering til angreb mod toppen (hvor Opta X går mod 100 = modstanderens mål)
     mask_left = df_plot['EVENT_X'] < 50
     df_plot.loc[mask_left, ['EVENT_X', 'ENDX']] = 100 - df_plot.loc[mask_left, ['EVENT_X', 'ENDX']]
     df_plot.loc[mask_left, ['EVENT_Y', 'ENDY']] = 100 - df_plot.loc[mask_left, ['EVENT_Y', 'ENDY']]
 
-    # Filtrering på banehalvdel / side
+    # Filtrering på side (venstre/højre i angrebsretningen)
     if side_sel == "Venstre side":
         df_plot = df_plot[df_plot['EVENT_Y'] > 50]
     elif side_sel == "Højre side":
@@ -169,13 +169,13 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
     with col_p:
         t_color = TEAM_COLORS.get(t_sel, {}).get('primary', HIF_RED)
         
-        # Opretter VerticalPitch (Statsbomb: x: 0-80, y: 0-120)
+        # Opretter VerticalPitch (Statsbomb: x: 0-80 [bredde], y: 0-120 [længde])
         pitch = VerticalPitch(pitch_type='statsbomb', pitch_color='white', line_color='#333333', linewidth=1.5)
         fig, ax = pitch.draw(figsize=(8, 10))
 
-        # KORREKT KORDIANT-MAPPING TIL STÅENDE STATSBOMB BANE:
-        # Opta X (0-100) bliver Statsbomb Y (0-120) [Længde af banen]
-        # Opta Y (0-100) bliver Statsbomb X (0-80) [Bredde af banen]
+        # RETTET KOORDINAT-MAPPING TIL STÅENDE BANE:
+        # Opta X (0-100, længde) bliver Statsbomb Y (0-120)
+        # Opta Y (0-100, bredde) bliver Statsbomb X (0-80)
         df_plot['x'] = (df_plot['EVENT_Y'] / 100.0) * 80.0
         df_plot['y'] = (df_plot['EVENT_X'] / 100.0) * 120.0
         
@@ -183,7 +183,7 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
         df_plot['end_y'] = (df_plot['ENDX'] / 100.0) * 120.0
 
         if sp_type == "Hjørnespark":
-            # Zooms ind på modstanderens felt / sidste tredjedel (Y: 78 til 120)
+            # Zooms ind på modstanderens felt (Y: 78 til 120)
             ax.set_xlim(0, 80)
             ax.set_ylim(78, 120)
 
@@ -218,7 +218,7 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
             stats_line = f"{spiller_tekst} — {total} aktioner ({int(pct)}% succes)"
             ax.text(2.0, 104.5, stats_line, fontsize=6.5, color='#666666', va='center')
 
-        # TEGNER ZONER OG PILE
+        # TEGNER ZONER OG PILE KORREKT
         if not df_plot.dropna(subset=['end_x', 'end_y']).empty:
             if "Zoner" in vis_mode:
                 pitch.hexbin(df_plot.end_x, df_plot.end_y, ax=ax, edgecolors='#ffffff',
@@ -329,8 +329,6 @@ def vis_side():
         st.markdown("### Zoneoversigter & Bane")
         
         t_color = TEAM_COLORS.get(t_sel, {}).get('primary', HIF_RED)
-        
-        # Eksempel på brug af stående bane i zoneoversigt-fanen
         pitch = VerticalPitch(pitch_type='statsbomb', pitch_color='white', line_color='#333333', linewidth=1.5)
         fig, ax = pitch.draw(figsize=(8, 10))
         st.pyplot(fig, clear_figure=True)
