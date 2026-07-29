@@ -165,32 +165,33 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
         t_color = TEAM_COLORS.get(t_sel, {}).get('primary', HIF_RED)
         
         if sp_type == "Hjørnespark":
-            # --- KORREGERET STÅENDE BANE TIL HJØRNESPARK (Sidste tredjedel) ---
-            # Statsbomb VerticalPitch: X (bredde) = 0 til 80, Y (længde) = 0 til 120
-            pitch = VerticalPitch(pitch_type='statsbomb', pitch_color='white', line_color='#333333', linewidth=1.5)
-            fig, ax = pitch.draw(figsize=(8, 10))
+            # --- KORREGERET HALV BANE (VERTICAL PITCH MED half=True) ---
+            # Statsbomb standard for halv bane: X (bredde) = 0 til 80, Y (længde) = 60 til 120
+            pitch = VerticalPitch(pitch_type='statsbomb', pitch_color='white', line_color='#333333', linewidth=1.5, half=True)
+            fig, ax = pitch.draw(figsize=(8, 9))
 
-            # Mapperværdi for sidste tredjedel (Y fra 80 til 120, X fra 0 til 80)
+            # Opta (0-100) mappes direkte ind på Statsbomb halvbane (Y: 60-120, X: 0-80)
             df_plot['x'] = (df_plot['EVENT_Y'] / 100.0) * 80.0
-            df_plot['y'] = (df_plot['EVENT_X'] / 100.0) * 40.0 + 80.0
+            df_plot['y'] = (df_plot['EVENT_X'] / 100.0) * 60.0 + 60.0
             df_plot['end_x'] = (df_plot['ENDY'] / 100.0) * 80.0
-            df_plot['end_y'] = (df_plot['ENDX'] / 100.0) * 40.0 + 80.0
+            df_plot['end_y'] = (df_plot['ENDX'] / 100.0) * 60.0 + 60.0
 
+            # Sørg for at rammen passer perfekt til halv banen med lidt ekstra luft til tekst i toppen
             ax.set_xlim(0, 80)
-            ax.set_ylim(70, 122) # Giver plads til logo og tekst øverst uden at zoome for hårdt ind i målet
+            ax.set_ylim(55, 125)
 
             if hold_logo:
-                ax_logo = ax.inset_axes([3.0, 114.0, 6.0, 6.0], transform=ax.transData)
+                ax_logo = ax.inset_axes([3.0, 117.0, 5.5, 5.5], transform=ax.transData)
                 ax_logo.imshow(hold_logo)
                 ax_logo.axis('off')
-                ax.text(10.5, 117.0, t_sel.upper(), fontsize=9, fontweight='bold', color='#222222', va='center')
+                ax.text(10.0, 119.75, t_sel.upper(), fontsize=8.5, fontweight='bold', color='#222222', va='center')
             else:
-                ax.text(3.0, 117.0, t_sel.upper(), fontsize=9, fontweight='bold', color='#222222', va='center')
+                ax.text(3.0, 119.75, t_sel.upper(), fontsize=8.5, fontweight='bold', color='#222222', va='center')
 
-            ax.text(3.0, 110.5, f"{sp_type.upper()} ({side_sel.upper()})", fontsize=7, fontweight='bold', color='#555555', va='center')
+            ax.text(3.0, 113.5, f"{sp_type.upper()} ({side_sel.upper()})", fontsize=6.5, fontweight='bold', color='#555555', va='center')
             spiller_tekst = f"Spiller: {p_sel}" if p_sel != "Alle spillere" else "Alle spillere"
             stats_line = f"{spiller_tekst} — {total} aktioner ({int(pct)}% succes)"
-            ax.text(3.0, 107.5, stats_line, fontsize=7.5, color='#666666', va='center')
+            ax.text(3.0, 110.5, stats_line, fontsize=7, color='#666666', va='center')
 
             if not df_plot.dropna(subset=['end_x', 'end_y']).empty:
                 if "Zoner" in vis_mode:
@@ -281,7 +282,7 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
         )
         
         mod_agg = mod_agg.sort_values(by='Antal', ascending=False).head(5)
-        mod_agg = mod_agg[['MODTAGER', 'Antal', 'Afslutning_Sum', 'Andel']]
+        mod_agg = mod_agg[['MODTAGER', 'Antal', 'Med afslutning', 'Andel']]
         mod_agg.columns = ['Modtager', 'Antal', 'Med afslutning', 'Andel']
         st.dataframe(mod_agg, use_container_width=True, hide_index=True)
 
