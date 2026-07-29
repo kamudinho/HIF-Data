@@ -5,11 +5,9 @@ import matplotlib.pyplot as plt
 import requests
 from PIL import Image
 from io import BytesIO
-from mplsoccer import Pitch, VerticalPitch
+from mplsoccer import VerticalPitch
 from data.utils.team_mapping import TEAMS, TEAM_COLORS
 from data.data_load import _get_snowflake_conn
-
-from utils.pitches import get_pitch, get_boundaries, get_lines
 
 # --- 1. KONFIGURATION ---
 HIF_RED = '#cc0000'
@@ -122,7 +120,7 @@ def get_summary_stats(df, group_col):
     stats['Top Modtager'] = stats[group_col].map(mod_map)
     return stats[[group_col, 'Antal', 'Succes %', 'Top Modtager', 'Afslutning %']]
 
-# --- 5. VISUALISERING ---
+# --- 5. VISUALISERING (STÅENDE BANE) ---
 def render_setpiece_analysis(df_team, sp_type, t_sel):
     t_info = next((info for name, info in TEAMS.items() if name == t_sel), None)
     t_uuid = t_info.get('opta_uuid') if t_info else None
@@ -148,18 +146,17 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
     for c in ['EVENT_X', 'EVENT_Y', 'ENDX', 'ENDY']: 
         df_plot[c] = pd.to_numeric(df_plot[c], errors='coerce')
 
-    # Standardiserer til venstre-angreb (EVENT_X < 50 spejlvendes til angreb mod højre/top)
+    # Standardisering til angreb mod opad (vertikalt)
     mask_left = df_plot['EVENT_X'] < 50
     df_plot.loc[mask_left, ['EVENT_X', 'ENDX']] = 100 - df_plot.loc[mask_left, ['EVENT_X', 'ENDX']]
     df_plot.loc[mask_left, ['EVENT_Y', 'ENDY']] = 100 - df_plot.loc[mask_left, ['EVENT_Y', 'ENDY']]
 
-    # Filtrering på side
+    # Filtrering på banehalvdel / side
     if side_sel == "Venstre side":
         df_plot = df_plot[df_plot['EVENT_Y'] > 50]
     elif side_sel == "Højre side":
         df_plot = df_plot[df_plot['EVENT_Y'] <= 50]
 
-    # Filtrering på afslutninger
     if kun_afslutning == "Kun med afslutning":
         df_plot = df_plot[df_plot['ER_AFSLUTNING'] == 1]
 
@@ -172,11 +169,13 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
     with col_p:
         t_color = TEAM_COLORS.get(t_sel, {}).get('primary', HIF_RED)
         
-        # Opretter VerticalPitch (Statsbomb format: x: 0-80, y: 0-120)
+        # Opretter VerticalPitch (Statsbomb: x: 0-80, y: 0-120)
         pitch = VerticalPitch(pitch_type='statsbomb', pitch_color='white', line_color='#333333', linewidth=1.5)
         fig, ax = pitch.draw(figsize=(8, 10))
 
-        # MATEMATISK PRÆCIS MAPPING AF OPTA (0-100) TIL STATSBOMB (x: 0-80, y: 0-120)
+        # KORREKT KORDIANT-MAPPING TIL STÅENDE STATSBOMB BANE:
+        # Opta X (0-100) bliver Statsbomb Y (0-120) [Længde af banen]
+        # Opta Y (0-100) bliver Statsbomb X (0-80) [Bredde af banen]
         df_plot['x'] = (df_plot['EVENT_Y'] / 100.0) * 80.0
         df_plot['y'] = (df_plot['EVENT_X'] / 100.0) * 120.0
         
@@ -184,11 +183,10 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
         df_plot['end_y'] = (df_plot['ENDX'] / 100.0) * 120.0
 
         if sp_type == "Hjørnespark":
-            # Zooms ind på den sidste tredjedel (y: 78 til 120)
+            # Zooms ind på modstanderens felt / sidste tredjedel (Y: 78 til 120)
             ax.set_xlim(0, 80)
             ax.set_ylim(78, 120)
 
-            # BUNDEN TIL VENSTRE (for halvbane/indzoomet hjørnespark)
             if hold_logo:
                 ax_logo = ax.inset_axes([2.0, 86.0, 6.5, 6.5], transform=ax.transData)
                 ax_logo.imshow(hold_logo)
@@ -203,7 +201,7 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
             ax.text(2.0, 80.5, stats_line, fontsize=6.5, color='#666666', va='center')
 
         else:
-            # TOPPEN TIL VENSTRE (for helbane views såsom Frispark og Indkast)
+            # Hel bane for Frispark og Indkast (Y: 0 til 120)
             ax.set_xlim(0, 80)
             ax.set_ylim(0, 120)
 
@@ -331,8 +329,10 @@ def vis_side():
         st.markdown("### Zoneoversigter & Bane")
         
         t_color = TEAM_COLORS.get(t_sel, {}).get('primary', HIF_RED)
-        pitch, fig, ax = get_pitch(type="staaende", t_color=t_color)
         
+        # Eksempel på brug af stående bane i zoneoversigt-fanen
+        pitch = VerticalPitch(pitch_type='statsbomb', pitch_color='white', line_color='#333333', linewidth=1.5)
+        fig, ax = pitch.draw(figsize=(8, 10))
         st.pyplot(fig, clear_figure=True)
         
         df_team_selected['ZONE'] = df_team_selected['ENDY'].apply(lambda y: "Venstre" if float(y or 0) < 33 else ("Højre" if float(y or 0) > 66 else "Center"))
