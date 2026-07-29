@@ -180,14 +180,16 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
             pitch = VerticalPitch(pitch_type='opta', half=True, pitch_color='white', line_color='#333333', linewidth=1.5)
             fig, ax = pitch.draw(figsize=(7, 7))
             
-            ax.text(3.0, 67.0, f"{sp_type.upper()} ({side_sel.upper()})", fontsize=7, fontweight='bold', color='#555555', va='center')
+            # Tekst og statistik placeret øverst i venstre side (X=3.0)
+            ax.text(93.0, 56.0, f"{sp_type.upper()} ({side_sel.upper()})", fontsize=7, fontweight='bold', color='#555555', va='center')
             spiller_tekst = f"Spiller: {p_sel}" if p_sel != "Alle spillere" else "Alle spillere"
             stats_line = f"{spiller_tekst} — {total} aktioner ({int(pct)}% succes)"
-            ax.text(3.0, 64.0, stats_line, fontsize=7, color='#666666', va='center')
+            ax.text(93.0, 53.0, stats_line, fontsize=7, color='#666666', va='center')
 
             if hold_logo:
-                ax.text(3.0, 60.0, t_sel.upper(), fontsize=8, fontweight='bold', color='#222222', va='center')
-                ax_logo = ax.inset_axes([3.0, 52.0, 6.0, 6.0], transform=ax.transData)
+                # Holdnavn og logo placeret nederst i venstre side (X=3.0)
+                ax.text(93.0, 58.0, t_sel.upper(), fontsize=8, fontweight='bold', color='#222222', va='center')
+                ax_logo = ax.inset_axes([93.0, 56.0, 4.5, 4.5], transform=ax.transData)
                 ax_logo.imshow(hold_logo)
                 ax_logo.axis('off')
         else:
