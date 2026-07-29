@@ -91,3 +91,71 @@ def get_pitch(type="staaende", zone_boundaries=None, zone_data=None, t_color="#c
                 )
         
     return pitch, fig, ax
+
+def get_lines(type="staaende", t_color="#cc0000"):
+    """
+    Returnerer en matplotlib fig og ax samt tegner 5 vertikale zoner op:
+    - Siderum (venstre)
+    - Halvrum (venstre)
+    - Centrum
+    - Halvrum (højre)
+    - Siderum (højre)
+    """
+    P_L, P_W = 105.0, 68.0
+    
+    # Definition af de 5 vertikale zoner (x-aksen, bredde 0 til 68)
+    # Standard opdeling: Siderum (0-13.6), Halvrum (13.6-27.2), Centrum (27.2-40.8), Halvrum (40.8-54.4), Siderum (54.4-68)
+    w_zone = P_W / 5  # 13.6 meter pr. zone
+    
+    vertical_zones = [
+        {"navn": "Siderum (V)", "x_min": 0, "x_max": w_zone},
+        {"navn": "Halvrum (V)", "x_min": w_zone, "x_max": w_zone * 2},
+        {"navn": "Centrum",     "x_min": w_zone * 2, "x_max": w_zone * 3},
+        {"navn": "Halvrum (H)", "x_min": w_zone * 3, "x_max": w_zone * 4},
+        {"navn": "Siderum (H)", "x_min": w_zone * 4, "x_max": P_W}
+    ]
+
+    if type == "halv":
+        pitch = VerticalPitch(pitch_type='custom', pitch_length=105, pitch_width=68, 
+                              pitch_color='#ffffff', line_color='#cccccc')
+        fig, ax = pitch.draw(figsize=(8, 10))
+        ax.set_ylim(55, 105)
+        y_min, y_max = 55, 105
+    else:
+        pitch = VerticalPitch(pitch_type='custom', pitch_length=105, pitch_width=68, 
+                              pitch_color='#ffffff', line_color='#cccccc')
+        fig, ax = pitch.draw(figsize=(7, 10))
+        y_min, y_max = 0, 105
+
+    # Tegn de 5 vertikale zoner op
+    for i, zone in enumerate(vertical_zones):
+        # Skift lidt i gennemsigtigheden (alpha) for at gøre dem let genkendelige ved siden af hinanden
+        alpha = 0.08 if i % 2 == 0 else 0.04
+        
+        rect = patches.Rectangle(
+            (zone["x_min"], y_min), 
+            zone["x_max"] - zone["x_min"], 
+            y_max - y_min, 
+            facecolor=t_color, 
+            alpha=alpha, 
+            edgecolor='black', 
+            ls=':',
+            linewidth=0.8,
+            zorder=2
+        )
+        ax.add_patch(rect)
+        
+        # Valgfri: Tilføj små labels i top/bund af zonerne
+        ax.text(
+            zone["x_min"] + (zone["x_max"] - zone["x_min"]) / 2, 
+            y_max - 3, 
+            zone["navn"], 
+            ha='center', 
+            va='center', 
+            fontsize=8, 
+            color='#666666',
+            weight='bold',
+            zorder=4
+        )
+
+    return pitch, fig, ax
