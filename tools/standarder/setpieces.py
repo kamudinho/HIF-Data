@@ -188,8 +188,8 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
 
             if hold_logo:
                 # Holdnavn og logo placeret nederst i venstre side (X=3.0)
-                ax.text(3.0, 60.0, t_sel.upper(), fontsize=8, fontweight='bold', color='#222222', va='center')
-                ax_logo = ax.inset_axes([89.0, 68.0, 6.0, 6.0], transform=ax.transData)
+                ax.text(89.0, 60.0, t_sel.upper(), fontsize=8, fontweight='bold', color='#222222', va='center')
+                ax_logo = ax.inset_axes([89.0, 65.0, 6.0, 6.0], transform=ax.transData)
                 ax_logo.imshow(hold_logo)
                 ax_logo.axis('off')
         else:
