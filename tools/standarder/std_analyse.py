@@ -148,16 +148,16 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
     for c in ['EVENT_X', 'EVENT_Y', 'ENDX', 'ENDY']: 
         df_plot[c] = pd.to_numeric(df_plot[c], errors='coerce')
 
-    # Standardiserer til venstre-angreb (EVENT_X < 50 spejlvendes)
+    # Standardiserer til venstre-angreb (EVENT_X < 50 spejlvendes til angreb mod højre/top)
     mask_left = df_plot['EVENT_X'] < 50
     df_plot.loc[mask_left, ['EVENT_X', 'ENDX']] = 100 - df_plot.loc[mask_left, ['EVENT_X', 'ENDX']]
     df_plot.loc[mask_left, ['EVENT_Y', 'ENDY']] = 100 - df_plot.loc[mask_left, ['EVENT_Y', 'ENDY']]
 
     # Filtrering på side
     if side_sel == "Venstre side":
-        df_plot = df_plot[df_plot['EVENT_Y'] > 34]
+        df_plot = df_plot[df_plot['EVENT_Y'] > 50]
     elif side_sel == "Højre side":
-        df_plot = df_plot[df_plot['EVENT_Y'] < 34]
+        df_plot = df_plot[df_plot['EVENT_Y'] <= 50]
 
     # Filtrering på afslutninger
     if kun_afslutning == "Kun med afslutning":
@@ -170,47 +170,66 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
     col_p, col_s = st.columns([2.2, 0.8]) 
     
     with col_p:
+        t_color = TEAM_COLORS.get(t_sel, {}).get('primary', HIF_RED)
+        
+        # Opretter VerticalPitch (Statsbomb format: x: 0-80, y: 0-120)
+        pitch = VerticalPitch(pitch_type='statsbomb', pitch_color='white', line_color='#333333', linewidth=1.5)
+        fig, ax = pitch.draw(figsize=(8, 10))
+
+        # MATEMATISK PRÆCIS MAPPING AF OPTA (0-100) TIL STATSBOMB (x: 0-80, y: 0-120)
+        df_plot['x'] = (df_plot['EVENT_Y'] / 100.0) * 80.0
+        df_plot['y'] = (df_plot['EVENT_X'] / 100.0) * 120.0
+        
+        df_plot['end_x'] = (df_plot['ENDY'] / 100.0) * 80.0
+        df_plot['end_y'] = (df_plot['ENDX'] / 100.0) * 120.0
+
         if sp_type == "Hjørnespark":
-            t_color = TEAM_COLORS.get(t_sel, {}).get('primary', HIF_RED)
-            
-            # Opret ren VerticalPitch (fuld bane, men vi klipper den til)
-            pitch = VerticalPitch(pitch_type='statsbomb', pitch_color='white', line_color='#333333', linewidth=1.5)
-            fig, ax = pitch.draw(figsize=(8, 10))
-
-            # Zooms ind på den sidste tredjedel af banen (foran målet)
+            # Zooms ind på den sidste tredjedel (y: 78 til 120)
             ax.set_xlim(0, 80)
-            ax.set_ylim(80, 120)
+            ax.set_ylim(78, 120)
 
-            # Korrekt mapping af Opta-koordinater til det indzoomed felt
-            df_plot['x'] = (df_plot['EVENT_Y'] / 100.0) * 80.0
-            df_plot['y'] = 60.0 + (df_plot['EVENT_X'] / 100.0) * 60.0
-            
-            df_plot['end_x'] = (df_plot['ENDY'] / 100.0) * 80.0
-            df_plot['end_y'] = 60.0 + (df_plot['ENDX'] / 100.0) * 60.0
-
-            # Placer logo og tekst i BUNDEN TIL VENSTRE af det udskårne udsnit (omkring y = 84)
+            # BUNDEN TIL VENSTRE (for halvbane/indzoomet hjørnespark)
             if hold_logo:
-                ax_logo = ax.inset_axes([3.0, 82.0, 7.0, 7.0], transform=ax.transData)
+                ax_logo = ax.inset_axes([2.0, 86.0, 6.5, 6.5], transform=ax.transData)
                 ax_logo.imshow(hold_logo)
                 ax_logo.axis('off')
-                ax.text(12.0, 85.5, t_sel.upper(), fontsize=8, fontweight='bold', color='#222222', alpha=0.9, va='center')
+                ax.text(9.5, 89.25, t_sel.upper(), fontsize=8, fontweight='bold', color='#222222', va='center')
             else:
-                ax.text(3.0, 85.5, t_sel.upper(), fontsize=8, fontweight='bold', color='#222222', alpha=0.9, va='center')
+                ax.text(2.0, 89.25, t_sel.upper(), fontsize=8, fontweight='bold', color='#222222', va='center')
 
-            ax.text(3.0, 79.0, f"{sp_type.upper()} ({side_sel.upper()})", fontsize=6, fontweight='bold', color='#555555', alpha=0.85)
+            ax.text(2.0, 83.5, f"{sp_type.upper()} ({side_sel.upper()})", fontsize=6, fontweight='bold', color='#555555', va='center')
             spiller_tekst = f"Spiller: {p_sel}" if p_sel != "Alle spillere" else "Alle spillere"
             stats_line = f"{spiller_tekst} — {total} aktioner ({int(pct)}% succes)"
-            ax.text(3.0, 75.0, stats_line, fontsize=7, color='#666666', va='center')
+            ax.text(2.0, 80.5, stats_line, fontsize=6.5, color='#666666', va='center')
 
-            if not df_plot.dropna(subset=['end_x', 'end_y']).empty:
-                if "Zoner" in vis_mode:
-                    pitch.hexbin(df_plot.end_x, df_plot.end_y, ax=ax, edgecolors='#f0f0f0',
-                                 gridsize=(8, 8), cmap='Reds', alpha=0.7)
-                if "Pile" in vis_mode:
-                    pitch.arrows(df_plot.x, df_plot.y, df_plot.end_x, df_plot.end_y, 
-                                 color=t_color, ax=ax, width=1.5, headwidth=3, headlength=3, alpha=0.4)
-                    pitch.scatter(df_plot.x, df_plot.y, ax=ax, color=t_color, s=25, alpha=0.6)
-                    
+        else:
+            # TOPPEN TIL VENSTRE (for helbane views såsom Frispark og Indkast)
+            ax.set_xlim(0, 80)
+            ax.set_ylim(0, 120)
+
+            if hold_logo:
+                ax_logo = ax.inset_axes([2.0, 110.0, 6.5, 6.5], transform=ax.transData)
+                ax_logo.imshow(hold_logo)
+                ax_logo.axis('off')
+                ax.text(9.5, 113.25, t_sel.upper(), fontsize=8, fontweight='bold', color='#222222', va='center')
+            else:
+                ax.text(2.0, 113.25, t_sel.upper(), fontsize=8, fontweight='bold', color='#222222', va='center')
+
+            ax.text(2.0, 107.5, f"{sp_type.upper()} ({side_sel.upper()})", fontsize=6, fontweight='bold', color='#555555', va='center')
+            spiller_tekst = f"Spiller: {p_sel}" if p_sel != "Alle spillere" else "Alle spillere"
+            stats_line = f"{spiller_tekst} — {total} aktioner ({int(pct)}% succes)"
+            ax.text(2.0, 104.5, stats_line, fontsize=6.5, color='#666666', va='center')
+
+        # TEGNER ZONER OG PILE
+        if not df_plot.dropna(subset=['end_x', 'end_y']).empty:
+            if "Zoner" in vis_mode:
+                pitch.hexbin(df_plot.end_x, df_plot.end_y, ax=ax, edgecolors='#ffffff',
+                             gridsize=(8, 8), cmap='Reds', alpha=0.65)
+            if "Pile" in vis_mode:
+                pitch.arrows(df_plot.x, df_plot.y, df_plot.end_x, df_plot.end_y, 
+                             color=t_color, ax=ax, width=1.5, headwidth=3, headlength=3, alpha=0.5)
+                pitch.scatter(df_plot.x, df_plot.y, ax=ax, color=t_color, s=25, alpha=0.7)
+                
         st.pyplot(fig, clear_figure=True)
         
     with col_s:
@@ -263,6 +282,7 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
         mod_agg = mod_agg[['MODTAGER', 'Antal', 'Afslutning_Sum', 'Andel']]
         mod_agg.columns = ['Modtager', 'Antal', 'Med afslutning', 'Andel']
         st.dataframe(mod_agg, use_container_width=True, hide_index=True)
+
 # --- 6. HOVEDSIDE ---
 def vis_side():
     df_all = load_setpiece_data()
