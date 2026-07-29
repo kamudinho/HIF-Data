@@ -9,6 +9,8 @@ from mplsoccer import Pitch
 from data.utils.team_mapping import TEAMS, TEAM_COLORS
 from data.data_load import _get_snowflake_conn
 
+from utils.pitches import get_pitch, get_boundaries, get_lines
+
 # --- 1. KONFIGURATION ---
 HIF_RED = '#cc0000'
 DB = "KLUB_HVIDOVREIF.AXIS"
