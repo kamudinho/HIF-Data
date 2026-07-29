@@ -146,12 +146,6 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
     for c in ['EVENT_X', 'EVENT_Y', 'ENDX', 'ENDY']: 
         df_plot[c] = pd.to_numeric(df_plot[c], errors='coerce')
 
-    # RETTELSE HER: Fjernet automatisk spejlvending baseret på X < 50 for frispark/indkast, 
-    # så hændelserne beholder deres korrekte koordinater fra datakilden (eller tilpasses korrekt til venstre-mod-højre flow, 
-    # hvor egen halvdel er til venstre og modstanderens til højre).
-    # Hvis data i Opta allerede tager udgangspunkt i holdets faktiske retning, lader vi dem være, 
-    # eller vi sikrer at angrebsretningen altid er mod højre (dvs. X er allerede 0-100 fra egen til modstanders mål).
-
     # Filtrering på side
     if side_sel == "Venstre side":
         df_plot = df_plot[df_plot['EVENT_Y'] > 50]
@@ -165,7 +159,7 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
     succes = int(df_plot['MODTAGER'].notna().sum())
     pct = round((succes / total * 100), 0) if total > 0 else 0
 
-    col_p, col_s = st.columns([2.2, 0.8]) 
+    col_p, col_s = st.columns([2.5, 1.5]) 
     
     with col_p:
         t_color = TEAM_COLORS.get(t_sel, {}).get('primary', HIF_RED)
