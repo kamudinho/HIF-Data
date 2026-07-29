@@ -1,4 +1,5 @@
-from mplsoccer import Pitch, VerticalPitch
+from mplsoccer import VerticalPitch, Pitch
+import matplotlib.patches as patches
 
 def get_pitch(type="staaende"):
     """
