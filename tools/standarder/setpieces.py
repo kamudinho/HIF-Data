@@ -99,6 +99,42 @@ def load_setpiece_data():
         st.error(f"SQL-fejl: {e}")
         return pd.DataFrame()
 
+def get_summary_stats(df_subset, group_col):
+    if df_subset.empty:
+        return pd.DataFrame()
+    
+    total_actions = len(df_subset)
+    df_subset = df_subset.copy()
+    df_subset['ER_SUCCES'] = df_subset['MODTAGER'].notna().astype(int)
+    df_subset['ER_AFSLUTNING'] = pd.to_numeric(df_subset.get('ER_AFSLUTNING', 0), errors='coerce').fillna(0).astype(int)
+    
+    agg = df_subset.groupby(group_col).agg(
+        Antal=(group_col, 'count'),
+        Succes_Sum=('ER_SUCCES', 'sum'),
+        Afslutning_Sum=('ER_AFSLUTNING', 'sum')
+    ).reset_index()
+    
+    agg['Succes %'] = agg.apply(
+        lambda row: int(round((row['Succes_Sum'] / row['Antal']) * 100)) if row['Antal'] > 0 else 0, axis=1
+    )
+    
+    agg['Med afslutning'] = agg['Afslutning_Sum']
+    
+    agg['Andel'] = agg.apply(
+        lambda row: f"{round((row['Antal'] / total_actions) * 100, 1)}%" if total_actions > 0 else "0%", axis=1
+    )
+    
+    agg = agg.sort_values(by='Antal', ascending=False)
+    
+    if group_col == 'KLUB_NAVN':
+        agg = agg[['KLUB_NAVN', 'Antal', 'Succes %', 'Med afslutning', 'Andel']]
+        agg.columns = ['Hold', 'Antal', 'Succes %', 'Med afslutning', 'Andel']
+    else:
+        agg = agg[['TAGER_NAVN', 'Antal', 'Succes %', 'Med afslutning', 'Andel']]
+        agg.columns = ['Spiller', 'Antal', 'Succes %', 'Med afslutning', 'Andel']
+        
+    return agg
+
 def render_setpiece_analysis(df_team, sp_type, t_sel):
     t_info = next((info for name, info in TEAMS.items() if name == t_sel), None)
     hold_logo = get_logo_img(t_info.get('logo') if t_info else None)
@@ -228,7 +264,6 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
         mod_agg.columns = ['Modtager', 'Antal', 'Med afslutning', 'Andel']
         st.dataframe(mod_agg, use_container_width=True, hide_index=True)
         
-# --- 6. HOVEDSIDE ---
 def vis_side():
     df_all = load_setpiece_data()
     if df_all.empty: st.warning("Ingen data fundet."); return
