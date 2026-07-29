@@ -172,7 +172,7 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
             end_x = df_plot['ENDX']
             end_y = df_plot['ENDY']
 
-            # LOGO OG HOLDNAVN ØVERST TIL VENSTRE
+            # LOGO OG HOLDNAVN HELT TIL VENSTRE ØVERST
             if hold_logo:
                 ax_logo = ax.inset_axes([3.0, 91.0, 6.0, 6.0], transform=ax.transData)
                 ax_logo.imshow(hold_logo)
@@ -193,7 +193,6 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
                 if "Pile" in vis_mode:
                     pitch.arrows(x, y, end_x, end_y, color=t_color, ax=ax, width=1.5, headwidth=3, headlength=3, alpha=0.5)
                     pitch.scatter(x, y, ax=ax, color=t_color, s=25, alpha=0.7)
-
         else:
             # Standard fuld bane til frispark og indkast
             pitch = Pitch(pitch_type='opta', pitch_color='white', line_color='#333333', linewidth=1.5)
