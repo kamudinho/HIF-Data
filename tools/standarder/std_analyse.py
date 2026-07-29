@@ -173,32 +173,34 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
         if sp_type == "Hjørnespark":
             t_color = TEAM_COLORS.get(t_sel, {}).get('primary', HIF_RED)
             
-            # Opret ren VerticalPitch (halv bane)
-            pitch = VerticalPitch(half=True, pitch_type='statsbomb', pitch_color='white', line_color='#333333', linewidth=1.5)
+            # Opret ren VerticalPitch (fuld bane, men vi klipper den til)
+            pitch = VerticalPitch(pitch_type='statsbomb', pitch_color='white', line_color='#333333', linewidth=1.5)
             fig, ax = pitch.draw(figsize=(8, 10))
 
-            # KORREKT MAPPING FOR VERTICAL PITCH (Halv bane mod mål i top):
-            # X-aksen (bredde 0-80) kodes ud fra Opta Y (0-100)
-            # Y-aksen (længde 60-120) kodes ud fra Opta X (0-100, hvor mållinjen er i toppen ved 120)
+            # Zooms ind på den sidste tredjedel af banen (foran målet)
+            ax.set_xlim(0, 80)
+            ax.set_ylim(80, 120)
+
+            # Korrekt mapping af Opta-koordinater til det indzoomed felt
             df_plot['x'] = (df_plot['EVENT_Y'] / 100.0) * 80.0
-            df_plot['y'] = 70.0 + (df_plot['EVENT_X'] / 100.0) * 60.0
+            df_plot['y'] = 60.0 + (df_plot['EVENT_X'] / 100.0) * 60.0
             
             df_plot['end_x'] = (df_plot['ENDY'] / 100.0) * 80.0
-            df_plot['end_y'] = 70.0 + (df_plot['ENDX'] / 100.0) * 60.0
+            df_plot['end_y'] = 60.0 + (df_plot['ENDX'] / 100.0) * 60.0
 
-            # Placer logo og tekst i BUNDEN af den halve bane (nær midterlinjen)
+            # Placer logo og tekst i BUNDEN TIL VENSTRE af det udskårne udsnit (omkring y = 84)
             if hold_logo:
-                ax_logo = ax.inset_axes([3.0, 64.0, 7.0, 7.0], transform=ax.transData)
+                ax_logo = ax.inset_axes([3.0, 82.0, 7.0, 7.0], transform=ax.transData)
                 ax_logo.imshow(hold_logo)
                 ax_logo.axis('off')
-                ax.text(12.0, 67.5, t_sel.upper(), fontsize=8, fontweight='bold', color='#222222', alpha=0.9, va='center')
+                ax.text(12.0, 85.5, t_sel.upper(), fontsize=8, fontweight='bold', color='#222222', alpha=0.9, va='center')
             else:
-                ax.text(3.0, 67.5, t_sel.upper(), fontsize=8, fontweight='bold', color='#222222', alpha=0.9, va='center')
+                ax.text(3.0, 85.5, t_sel.upper(), fontsize=8, fontweight='bold', color='#222222', alpha=0.9, va='center')
 
-            ax.text(3.0, 60.0, f"{sp_type.upper()} ({side_sel.upper()})", fontsize=6, fontweight='bold', color='#555555', alpha=0.85)
+            ax.text(3.0, 79.0, f"{sp_type.upper()} ({side_sel.upper()})", fontsize=6, fontweight='bold', color='#555555', alpha=0.85)
             spiller_tekst = f"Spiller: {p_sel}" if p_sel != "Alle spillere" else "Alle spillere"
             stats_line = f"{spiller_tekst} — {total} aktioner ({int(pct)}% succes)"
-            ax.text(3.0, 55.0, stats_line, fontsize=7, color='#666666', va='center')
+            ax.text(3.0, 75.0, stats_line, fontsize=7, color='#666666', va='center')
 
             if not df_plot.dropna(subset=['end_x', 'end_y']).empty:
                 if "Zoner" in vis_mode:
