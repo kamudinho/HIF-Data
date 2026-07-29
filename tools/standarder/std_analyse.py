@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import requests
 from PIL import Image
 from io import BytesIO
-from mplsoccer import Pitch
+from mplsoccer import Pitch, VerticalPitch
 from data.utils.team_mapping import TEAMS, TEAM_COLORS
 from data.data_load import _get_snowflake_conn
 
