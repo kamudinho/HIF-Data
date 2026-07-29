@@ -120,7 +120,7 @@ def get_summary_stats(df, group_col):
     stats['Top Modtager'] = stats[group_col].map(mod_map)
     return stats[[group_col, 'Antal', 'Succes %', 'Top Modtager', 'Afslutning %']]
 
-# --- 5. VISUALISERING (HJØRNESPARK = STÅENDE, FRISPARK/INDKAST = LIGGENDE) ---
+# --- 5. VISUALISERING ---
 def render_setpiece_analysis(df_team, sp_type, t_sel):
     t_info = next((info for name, info in TEAMS.items() if name == t_sel), None)
     t_uuid = t_info.get('opta_uuid') if t_info else None
@@ -146,12 +146,12 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
     for c in ['EVENT_X', 'EVENT_Y', 'ENDX', 'ENDY']: 
         df_plot[c] = pd.to_numeric(df_plot[c], errors='coerce')
 
-    # Standardisering til angreb mod højre (standard for liggende bane i Statsbomb) eller mod toppen (for stående)
+    # Fælles normalisering: Sørg for at alt angriber fra venstre mod højre (X < 50 spejlvendes)
     mask_left = df_plot['EVENT_X'] < 50
     df_plot.loc[mask_left, ['EVENT_X', 'ENDX']] = 100 - df_plot.loc[mask_left, ['EVENT_X', 'ENDX']]
     df_plot.loc[mask_left, ['EVENT_Y', 'ENDY']] = 100 - df_plot.loc[mask_left, ['EVENT_Y', 'ENDY']]
 
-    # Filtrering på side
+    # Filtrering på side (i angrebsretningen)
     if side_sel == "Venstre side":
         df_plot = df_plot[df_plot['EVENT_Y'] > 50]
     elif side_sel == "Højre side":
@@ -170,7 +170,7 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
         t_color = TEAM_COLORS.get(t_sel, {}).get('primary', HIF_RED)
         
         if sp_type == "Hjørnespark":
-            # --- STÅENDE BANE (KUN TIL HJØRNESPARK) ---
+            # --- STÅENDE BANE (SIDSTE TREDJEDEL) ---
             pitch = VerticalPitch(pitch_type='statsbomb', pitch_color='white', line_color='#333333', linewidth=1.5)
             fig, ax = pitch.draw(figsize=(8, 10))
 
@@ -180,7 +180,7 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
             df_plot['end_y'] = (df_plot['ENDX'] / 100.0) * 120.0
 
             ax.set_xlim(0, 80)
-            ax.set_ylim(78, 120)  # Sidste tredjedel
+            ax.set_ylim(78, 120)
 
             if hold_logo:
                 ax_logo = ax.inset_axes([2.0, 86.0, 6.5, 6.5], transform=ax.transData)
@@ -203,11 +203,10 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
                     pitch.scatter(df_plot.x, df_plot.y, ax=ax, color=t_color, s=25, alpha=0.7)
 
         else:
-            # --- LIGGENDE BANE (TIL FRISPARK OG INDKAST) ---
+            # --- LIGGENDE BANE (FRISPARK OG INDKAST - ALTID VENSTRE MOD HØJRE) ---
             pitch = Pitch(pitch_type='statsbomb', pitch_color='white', line_color='#333333', linewidth=1.5)
             fig, ax = pitch.draw(figsize=(10, 7))
 
-            # Opta X (0-100) -> Statsbomb X (0-120), Opta Y (0-100) -> Statsbomb Y (0-80)
             df_plot['x'] = (df_plot['EVENT_X'] / 100.0) * 120.0
             df_plot['y'] = (df_plot['EVENT_Y'] / 100.0) * 80.0
             df_plot['end_x'] = (df_plot['ENDX'] / 100.0) * 120.0
