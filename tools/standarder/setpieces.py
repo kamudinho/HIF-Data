@@ -171,7 +171,7 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
     succes = int(df_plot['MODTAGER'].notna().sum())
     pct = round((succes / total * 100), 0) if total > 0 else 0
 
-    col_p, col_s = st.columns([2.2, 0.8]) 
+    col_p, col_s = st.columns([2.5, 1.5]) 
     
     with col_p:
         t_color = TEAM_COLORS.get(t_sel, {}).get('primary', HIF_RED)
