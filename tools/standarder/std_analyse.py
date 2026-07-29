@@ -331,5 +331,5 @@ def vis_side():
 
 if __name__ == "__main__":
     st.set_page_config(layout="wide", page_title="Standardsituationer")
-    st.markdown("<style>header {visibility: hidden;}}</style>", unsafe_allow_html=True)
+    st.markdown(f"<style>header {{visibility: hidden;}}</style>", unsafe_allow_html=True)
     vis_side()
