@@ -159,36 +159,38 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
     succes = int(df_plot['MODTAGER'].notna().sum())
     pct = round((succes / total * 100), 0) if total > 0 else 0
 
-    col_p, col_s = st.columns([2.5, 1.5]) 
+    col_p, col_s = st.columns([2.2, 0.8]) 
     
     with col_p:
         t_color = TEAM_COLORS.get(t_sel, {}).get('primary', HIF_RED)
         
         if sp_type == "Hjørnespark":
-            # --- STÅENDE BANE (SIDSTE TREDJEDEL) ---
+            # --- KORREGERET STÅENDE BANE TIL HJØRNESPARK (Sidste tredjedel) ---
+            # Vi bruger VerticalPitch (Statsbomb: X=0-80 [bredde], Y=0-120 [længde])
             pitch = VerticalPitch(pitch_type='statsbomb', pitch_color='white', line_color='#333333', linewidth=1.5)
             fig, ax = pitch.draw(figsize=(8, 10))
 
+            # Konvertering af Opta (0-100) til Statsbomb lodrette banekoordinater i den sidste tredjedel
             df_plot['x'] = (df_plot['EVENT_Y'] / 100.0) * 80.0
-            df_plot['y'] = (df_plot['EVENT_X'] / 100.0) * 120.0
+            df_plot['y'] = (df_plot['EVENT_X'] / 100.0) * 40.0 + 80.0  # Sidste tredjedel (Y: 80 til 120)
             df_plot['end_x'] = (df_plot['ENDY'] / 100.0) * 80.0
-            df_plot['end_y'] = (df_plot['ENDX'] / 100.0) * 120.0
+            df_plot['end_y'] = (df_plot['ENDX'] / 100.0) * 40.0 + 80.0
 
             ax.set_xlim(0, 80)
-            ax.set_ylim(78, 120)
+            ax.set_ylim(80, 120)  # Låst til modstanderens målfelt/sidste tredjedel øverst
 
             if hold_logo:
-                ax_logo = ax.inset_axes([2.0, 86.0, 6.5, 6.5], transform=ax.transData)
+                ax_logo = ax.inset_axes([2.0, 113.0, 5.5, 5.5], transform=ax.transData)
                 ax_logo.imshow(hold_logo)
                 ax_logo.axis('off')
-                ax.text(9.5, 89.25, t_sel.upper(), fontsize=8, fontweight='bold', color='#222222', va='center')
+                ax.text(8.5, 115.75, t_sel.upper(), fontsize=8, fontweight='bold', color='#222222', va='center')
             else:
-                ax.text(2.0, 89.25, t_sel.upper(), fontsize=8, fontweight='bold', color='#222222', va='center')
+                ax.text(2.0, 115.75, t_sel.upper(), fontsize=8, fontweight='bold', color='#222222', va='center')
 
-            ax.text(2.0, 83.5, f"{sp_type.upper()} ({side_sel.upper()})", fontsize=6, fontweight='bold', color='#555555', va='center')
+            ax.text(2.0, 110.0, f"{sp_type.upper()} ({side_sel.upper()})", fontsize=6, fontweight='bold', color='#555555', va='center')
             spiller_tekst = f"Spiller: {p_sel}" if p_sel != "Alle spillere" else "Alle spillere"
             stats_line = f"{spiller_tekst} — {total} aktioner ({int(pct)}% succes)"
-            ax.text(2.0, 80.5, stats_line, fontsize=6.5, color='#666666', va='center')
+            ax.text(2.0, 107.5, stats_line, fontsize=6.5, color='#666666', va='center')
 
             if not df_plot.dropna(subset=['end_x', 'end_y']).empty:
                 if "Zoner" in vis_mode:
@@ -234,7 +236,7 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
         
     with col_s:
         # 1. TOP 5-SERVERE
-        st.caption("**Top 5-servere**")
+        st.write("**Top 5-servere**")
         df_server_base = df_team[df_team['TYPE_NAVN'] == sp_type].copy()
         total_team_actions = len(df_server_base)
         
@@ -261,7 +263,7 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
         st.dataframe(server_agg, use_container_width=True, hide_index=True)
 
         # 2. TOP 5-MODTAGERE
-        st.caption("**Top 5-modtagere**")
+        st.write("**Top 5-modtagere**")
         df_mod_base = df_team[(df_team['TYPE_NAVN'] == sp_type) & (df_team['MODTAGER'].notna())].copy()
         total_mod_team = len(df_mod_base)
         
@@ -290,9 +292,9 @@ def vis_side():
     df_all['KLUB_NAVN'] = df_all['TEAM_UUID'].str.upper().map(uuid_to_name)
     teams = sorted([n for n in df_all['KLUB_NAVN'].unique() if pd.notna(n)])
 
-    c_title, c_drop = st.columns([2.5, 1.5])
+    c_title, c_drop = st.columns([3, 1])
     with c_title:
-        st.caption("Standardsituationer")
+        st.subheader("Standardsituationer")
     with c_drop:
         default_idx = teams.index("Hvidovre") if "Hvidovre" in teams else 0
         t_sel = st.selectbox("Vælg hold", teams, index=default_idx, key="main_team_selectbox", label_visibility="collapsed")
@@ -306,7 +308,7 @@ def vis_side():
         with col_control:
             c = st.segmented_control("k1", ["Hjørnespark", "Frispark", "Indkast"], default="Hjørnespark", key="r1", label_visibility="collapsed")
         with col_content:
-            st.caption("### Holdoversigt")
+            st.markdown("### Holdoversigt")
             
         if c:
             st.dataframe(get_summary_stats(df_all[df_all['TYPE_NAVN'] == c], 'KLUB_NAVN'), use_container_width=True, hide_index=True, column_config=col_cfg)
@@ -316,7 +318,7 @@ def vis_side():
         with col_control:
             c2 = st.segmented_control("k2", ["Hjørnespark", "Frispark", "Indkast"], default="Hjørnespark", key="r2", label_visibility="collapsed")
         with col_content:
-            st.caption("### Tager-oversigt")
+            st.markdown("### Tager-oversigt")
             
         if c2:
             st.dataframe(get_summary_stats(df_team_selected[df_team_selected['TYPE_NAVN'] == c2], 'TAGER_NAVN'), use_container_width=True, hide_index=True, column_config=col_cfg)
@@ -326,7 +328,7 @@ def vis_side():
             render_setpiece_analysis(df_team_selected, name, t_sel)
     
     with tabs[5]:
-        st.caption("### Zoneoversigter & Bane")
+        st.markdown("### Zoneoversigter & Bane")
         
         pitch = Pitch(pitch_type='statsbomb', pitch_color='white', line_color='#333333', linewidth=1.5)
         fig, ax = pitch.draw(figsize=(10, 7))
