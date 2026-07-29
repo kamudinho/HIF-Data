@@ -181,10 +181,10 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
             # X-aksen (bredde 0-80) kodes ud fra Opta Y (0-100)
             # Y-aksen (længde 60-120) kodes ud fra Opta X (0-100, hvor mållinjen er i toppen ved 120)
             df_plot['x'] = (df_plot['EVENT_Y'] / 100.0) * 80.0
-            df_plot['y'] = 60.0 + (df_plot['EVENT_X'] / 100.0) * 60.0
+            df_plot['y'] = 70.0 + (df_plot['EVENT_X'] / 100.0) * 60.0
             
             df_plot['end_x'] = (df_plot['ENDY'] / 100.0) * 80.0
-            df_plot['end_y'] = 60.0 + (df_plot['ENDX'] / 100.0) * 60.0
+            df_plot['end_y'] = 70.0 + (df_plot['ENDX'] / 100.0) * 60.0
 
             # Placer logo og tekst i BUNDEN af den halve bane (nær midterlinjen)
             if hold_logo:
