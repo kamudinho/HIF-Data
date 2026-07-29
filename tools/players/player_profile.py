@@ -463,7 +463,7 @@ def vis_side(dp=None):
             touch_count = len(df_spiller[df_spiller['event_typeid'].isin(touch_ids)])
             drib_count = len(df_spiller[df_spiller['event_typeid'].isin([3])])
             regains_count = len(df_spiller[df_spiller['event_typeid'].isin([7, 8, 12, 49])])
-            boldtab_count = len(df_spiller[df_spiller['event_typeid'].isin([50])])
+            boldtab_count = len(df_spiller[df_spiller['event_typeid'].isin([50, 51])])
             def_count = len(df_spiller[df_spiller['event_typeid'].isin([7, 8])])
     
             m_r1 = st.columns(4)
