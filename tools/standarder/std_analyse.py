@@ -170,30 +170,33 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
     col_p, col_s = st.columns([2.2, 0.8]) 
     
     with col_p:
-        # Hvis det er Hjørnespark: Brug halv bane (StatsBomb coops, orientation='horizontal', half=True)
         if sp_type == "Hjørnespark":
-            # For StatsBomb er banen 120 x 80. Vi skalerer Opta (0-100) til Statsbomb-koordinater
-            df_plot['x'] = df_plot['EVENT_X'] * 1.2
-            df_plot['y'] = df_plot['EVENT_Y'] * 0.8
-            df_plot['end_x'] = df_plot['ENDX'] * 1.2
-            df_plot['end_y'] = df_plot['ENDY'] * 0.8
+            # Brug din eksisterende get_pitch funktion med type="halv"
+            t_color = TEAM_COLORS.get(t_sel, {}).get('primary', HIF_RED)
+            pitch, fig, ax = get_pitch(type="halv", t_color=t_color)
 
-            pitch = Pitch(pitch_type='statsbomb', half=True, orientation='horizontal',
+            # Tilpas koordinater til din halve bane (hvis nødvendigt)
+            df_plot['x'] = df_plot['EVENT_X'] * (68 / 100)  # Skalerer x til 0-68 (banebredde)
+            df_plot['y'] = df_plot['EVENT_Y'] * (105 / 100) # Skalerer y til 0-105 (banelængde)
+            df_plot['end_x'] = df_plot['ENDX'] * (68 / 100)
+            df_plot['end_y'] = df_plot['ENDY'] * (105 / 100)
+
+            pitch = Pitch(pitch_type='statsbomb', half=True, 
                           line_color='#333333', goal_type='box', linewidth=0.8)
             fig, ax = pitch.draw(figsize=(6, 5), constrained_layout=True)
 
             if hold_logo:
-                ax_logo = ax.inset_axes([5.0, 72.0, 8.0, 8.0], transform=ax.transData)
+                ax_logo = ax.inset_axes([5.0, 32.0, 8.0, 8.0], transform=ax.transData)
                 ax_logo.imshow(hold_logo)
                 ax_logo.axis('off')
-                ax.text(15.0, 76.0, t_sel.upper(), fontsize=7, fontweight='bold', color='#222222', alpha=0.9, va='center')
+                ax.text(15.0, 36.0, t_sel.upper(), fontsize=7, fontweight='bold', color='#222222', alpha=0.9, va='center')
             else:
-                ax.text(5.0, 76.0, t_sel.upper(), fontsize=6, fontweight='bold', color='#222222', alpha=0.9, va='center')
+                ax.text(5.0, 36.0, t_sel.upper(), fontsize=6, fontweight='bold', color='#222222', alpha=0.9, va='center')
 
-            ax.text(5.0, 68.0, f"{sp_type.upper()} ({side_sel.upper()})", fontsize=5, fontweight='bold', color='#555555', alpha=0.85)
+            ax.text(5.0, 28.0, f"{sp_type.upper()} ({side_sel.upper()})", fontsize=5, fontweight='bold', color='#555555', alpha=0.85)
             spiller_tekst = f"Spiller: {p_sel}" if p_sel != "Alle spillere" else "Alle spillere"
             stats_line = f"{spiller_tekst} — {total} aktioner ({int(pct)}% succes)"
-            ax.text(5.0, 62.0, stats_line, fontsize=7, color='#666666', va='center')
+            ax.text(5.0, 24.0, stats_line, fontsize=7, color='#666666', va='center')
 
             if not df_plot.dropna(subset=['end_x', 'end_y']).empty:
                 if "Zoner" in vis_mode:
@@ -206,7 +209,7 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
                     pitch.scatter(df_plot.x, df_plot.y, ax=ax, color=p_color, s=25, alpha=0.6)
 
         else:
-            # For Frispark og Indkast: Behold fuld bane (Custom / Opta-skala)
+            # Fuld bane til Frispark og Indkast
             df_plot['x'], df_plot['y'] = df_plot['EVENT_X'] * 1.05, df_plot['EVENT_Y'] * 0.68
             df_plot['end_x'], df_plot['end_y'] = df_plot['ENDX'] * 1.05, df_plot['ENDY'] * 0.68
 
