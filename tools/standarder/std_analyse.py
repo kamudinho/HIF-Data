@@ -303,7 +303,7 @@ def vis_side():
         st.markdown("### Zoneoversigter & Bane")
         
         t_color = TEAM_COLORS.get(t_sel, {}).get('primary', HIF_RED)
-        pitch, fig, ax = get_pitch(type="staaende", t_color=t_color)
+        pitch, fig, ax = get_pitch(type="halv", t_color=t_color)
         
         st.pyplot(fig, clear_figure=True)
         
