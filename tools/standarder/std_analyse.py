@@ -122,7 +122,7 @@ def get_summary_stats(df, group_col):
     stats['Top Modtager'] = stats[group_col].map(mod_map)
     return stats[[group_col, 'Antal', 'Succes %', 'Top Modtager', 'Afslutning %']]
 
-# --- 5. VISUALISERING (MED KORREKTE PROCENTBEREGNINGER FOR SERVERE OG MODTAGERE) ---
+# --- 5. VISUALISERING (KORREKTE BEREGNINGER OG AFSLUTNINGS-KOLONNE) ---
 def render_setpiece_analysis(df_team, sp_type, t_sel):
     t_info = next((info for name, info in TEAMS.items() if name == t_sel), None)
     t_uuid = t_info.get('opta_uuid') if t_info else None
@@ -205,47 +205,55 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
         st.pyplot(fig, clear_figure=True)
         
     with col_s:
-        # 1. TOP 5-SERVERE: Antal = totaler, Succes = % succesfulde bolde, Andel = % af holdets samlede standarder
+        # 1. TOP 5-SERVERE: Antal, Succes (%), Med afslutning, Andel (%)
         st.write("**Top 5-servere**")
-        df_server_base = df_team[df_team['TYPE_NAVN'] == sp_type]
+        df_server_base = df_team[df_team['TYPE_NAVN'] == sp_type].copy()
         total_team_actions = len(df_server_base)
         
+        # Sikre at kolonner findes og konverteres korrekt
         df_server_base['ER_SUCCES'] = df_server_base['MODTAGER'].notna().astype(int)
+        df_server_base['ER_AFSLUTNING'] = pd.to_numeric(df_server_base.get('ER_AFSLUTNING', 0), errors='fill_value').fillna(0).astype(int)
         
         server_agg = df_server_base.groupby('TAGER_NAVN').agg(
             Antal=('TAGER_NAVN', 'count'),
-            Succes_Sum=('ER_SUCCES', 'sum')
+            Succes_Sum=('ER_SUCCES', 'sum'),
+            Afslutning_Sum=('ER_AFSLUTNING', 'sum')
         ).reset_index()
         
-        # Udregn succes i % for serveren (f.eks. 1 ud af 5 = 20%)
-        server_agg['Succes'] = (server_agg['Succes_Sum'] / server_agg['Antal'] * 100).round(0).astype(int).astype(str) + '%'
-        # Udregn andel af holdets samlede standarder
-        server_agg['Andel'] = (server_agg['Antal'] / total_team_actions * 100).round(1).astype(str) + '%' if total_team_actions > 0 else '0%'
+        # Udregn korrekt succes i % (f.eks. 1 ud af 5 = 20%, 0 ud af 2 = 0%)
+        server_agg['Succes'] = server_agg.apply(
+            lambda row: f"{int(round((row['Succes_Sum'] / row['Antal']) * 100))}%" if row['Antal'] > 0 else "0%", axis=1
+        )
+        
+        # Andel af holdets samlede standarder
+        server_agg['Andel'] = server_agg.apply(
+            lambda row: f"{round((row['Antal'] / total_team_actions) * 100, 1)}%" if total_team_actions > 0 else "0%", axis=1
+        )
         
         server_agg = server_agg.sort_values(by='Antal', ascending=False).head(5)
-        server_agg = server_agg[['TAGER_NAVN', 'Antal', 'Succes', 'Andel']]
-        server_agg.columns = ['Spiller', 'Antal', 'Succes', 'Andel']
+        server_agg = server_agg[['TAGER_NAVN', 'Antal', 'Succes', 'Afslutning_Sum', 'Andel']]
+        server_agg.columns = ['Spiller', 'Antal', 'Succes', 'Med afslutning', 'Andel']
         st.dataframe(server_agg, use_container_width=True, hide_index=True)
 
         st.markdown("---")
 
-        # 2. TOP 5-MODTAGERE: Antal = antal modtagne bolde, Succes/% = andel af holdets samlede vellykkede modtagelser
+        # 2. TOP 5-MODTAGERE: Antal (antal modtagne bolde) og Andel (% af holdets samlede modtagne bolde)
         st.write("**Top 5-modtagere**")
-        # Vi kigger på de hændelser hvor der rent faktisk er en modtager
-        df_mod_base = df_team[(df_team['TYPE_NAVN'] == sp_type) & (df_team['MODTAGER'].notna())]
+        df_mod_base = df_team[(df_team['TYPE_NAVN'] == sp_type) & (df_team['MODTAGER'].notna())].copy()
         total_mod_team = len(df_mod_base)
         
         mod_agg = df_mod_base.groupby('MODTAGER').agg(
             Antal=('MODTAGER', 'count')
         ).reset_index()
         
-        # Succes/% her viser spillerens andel af holdets samlede modtagne bolde
-        mod_agg['Succes'] = (mod_agg['Antal'] / total_mod_team * 100).round(1).astype(str) + '%' if total_mod_team > 0 else '0%'
-        mod_agg['Andel'] = mod_agg['Succes'] # Bruger samme logik (eller du kan vise andel af alt, men her er succes/andel ens for modtagere)
+        # Andel af holdets samlede modtagne bolde
+        mod_agg['Andel'] = mod_agg.apply(
+            lambda row: f"{round((row['Antal'] / total_mod_team) * 100, 1)}%" if total_mod_team > 0 else "0%", axis=1
+        )
         
         mod_agg = mod_agg.sort_values(by='Antal', ascending=False).head(5)
-        mod_agg = mod_agg[['MODTAGER', 'Antal', 'Succes', 'Andel']]
-        mod_agg.columns = ['Modtager', 'Antal', 'Succes', 'Andel']
+        mod_agg = mod_agg[['MODTAGER', 'Antal', 'Andel']]
+        mod_agg.columns = ['Modtager', 'Antal', 'Andel']
         st.dataframe(mod_agg, use_container_width=True, hide_index=True)
 
 # --- 6. HOVEDSIDE ---
