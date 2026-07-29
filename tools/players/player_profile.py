@@ -459,8 +459,12 @@ def vis_side(dp=None):
             chancer_skabt = akt_stats[akt_stats.index.str.contains("Key Pass|assist|Stor chance", case=False, na=False)]['Total'].sum() if not akt_stats.empty else 0
             shots_count = len(df_spiller[df_spiller['event_typeid'].isin([13, 14, 15, 16])])
             cross_count = len(df_spiller[df_spiller['qual_list'].apply(lambda x: "2" in x if isinstance(x, list) else False)])
-            erob_count = len(df_spiller[df_spiller['event_typeid'].isin([7, 8, 12, 49])])
+            erob_count = len(df_spiller[df_spiller['event_typeid'].isin([49])])
             touch_count = len(df_spiller[df_spiller['event_typeid'].isin(touch_ids)])
+            drib_count = len(df_spiller[df_spiller['event_typeid'].isin([3])])
+            regains_count = len(df_spiller[df_spiller['event_typeid'].isin([7, 8, 12, 49])])
+            boldtab_count = len(df_spiller[df_spiller['event_typeid'].isin([50])])
+            def_count = len(df_spiller[df_spiller['event_typeid'].isin([7, 8])])
     
             m_r1 = st.columns(4)
             m_r1[0].metric("Aktioner", total_akt)
@@ -469,16 +473,16 @@ def vis_side(dp=None):
             m_r1[3].metric("Pasning %", f"{int(pas_acc)}%")
             
             m_r2 = st.columns(4)
-            m_r2[0].metric("Skud", shots_count)
-            m_r2[1].metric("Chancer", int(chancer_skabt))
-            m_r2[2].metric("Indlæg", cross_count)
-            m_r2[3].metric("Erobringer", erob_count)
+            m_r2[0].metric("Driblinger", drib_count)
+            m_r2[1].metric("Skud", shots_count)
+            m_r2[2].metric("Chancer", int(chancer_skabt))
+            m_r2[3].metric("Indlæg", cross_count)
 
             m_r3 = st.columns(4)
-            m_r3[0].metric("Skud", shots_count)
-            m_r3[1].metric("Chancer", int(chancer_skabt))
-            m_r3[2].metric("Indlæg", cross_count)
-            m_r3[3].metric("Erobringer", erob_count)
+            m_r3[1].metric("Def. 1v1", def_count)
+            m_r3[1].metric("Regains", regains_skabt)
+            m_r3[2].metric("Erobringer", erob_count)
+            m_r3[3].metric("Boldtab", boldtab_count)
     
             st.markdown("<hr style='margin: 15px 0; opacity: 0.5;'>", unsafe_allow_html=True)
             st.write("**Top 10: Aktioner**")
