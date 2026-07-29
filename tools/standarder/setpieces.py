@@ -59,12 +59,18 @@ def load_setpiece_data():
         "                 WHEN QUALIFIER_QID = 6 THEN 'Hjørnespark'"
         "                 WHEN QUALIFIER_QID = 5 THEN 'Frispark' END) AS TYPE_NAVN,"
         "        MAX(CASE WHEN QUALIFIER_QID = 140 THEN QUALIFIER_VALUE END) AS ENDX,"
-        "        MAX(CASE WHEN QUALIFIER_QID = 141 THEN QUALIFIER_VALUE END) AS ENDY"
+        "        MAX(CASE WHEN QUALIFIER_QID = 141 THEN QUALIFIER_VALUE END) AS ENDY,"
+        "        MAX(CASE WHEN QUALIFIER_QID = 223 THEN 'In-swinger'"
+        "                 WHEN QUALIFIER_QID = 224 THEN 'Out-swinger'"
+        "                 WHEN QUALIFIER_QID = 225 THEN 'Straight' END) AS SPARK_TYPE,"
+        "        MAX(CASE WHEN QUALIFIER_QID = 152 THEN 'Direkte'"
+        "                 WHEN QUALIFIER_QID = 241 THEN 'Indirekte' END) AS FRISPARK_TYPE,"
+        "        MAX(CASE WHEN QUALIFIER_QID = 155 THEN 'Chipped' END) AS LEVERING_TYPE"
         "    FROM " + DB + ".OPTA_QUALIFIERS"
-        "    WHERE QUALIFIER_QID IN (5, 6, 107, 140, 141)"
+        "    WHERE QUALIFIER_QID IN (5, 6, 107, 140, 141, 152, 155, 223, 224, 225, 241)"
         "    GROUP BY EVENT_OPTAUUID"
         ") "
-        "SELECT b.*, q.TYPE_NAVN, q.ENDX, q.ENDY "
+        "SELECT b.*, q.TYPE_NAVN, q.ENDX, q.ENDY, q.SPARK_TYPE, q.FRISPARK_TYPE, q.LEVERING_TYPE "
         "FROM BaseEvents b "
         "JOIN Quals q ON b.EVENT_OPTAUUID = q.EVENT_OPTAUUID "
         "WHERE q.TYPE_NAVN IS NOT NULL"
@@ -94,6 +100,18 @@ def load_setpiece_data():
         df['MODTAGER'] = df.apply(find_target, axis=1)
         shot_types = [13, 14, 15, 16]
         df['ER_AFSLUTNING'] = df.apply(lambda x: 1 if x['P1_TYPE'] in shot_types or x['P2_TYPE'] in shot_types or x['P3_TYPE'] in shot_types else 0, axis=1)
+        
+        # Samlet udførelses-kolonne til overblik
+        def get_udfoerelse(row):
+            if row['TYPE_NAVN'] == 'Hjørnespark':
+                return row['SPARK_TYPE'] if pd.notna(row['SPARK_TYPE']) else 'Standard / Ukendt'
+            elif row['TYPE_NAVN'] == 'Frispark':
+                return row['FRISPARK_TYPE'] if pd.notna(row['FRISPARK_TYPE']) else 'Åbent / Indlæg'
+            elif row['TYPE_NAVN'] == 'Indkast':
+                return row['LEVERING_TYPE'] if pd.notna(row['LEVERING_TYPE']) else 'Alm. aflevering'
+            return 'Ukendt'
+
+        df['UDFOERELSE'] = df.apply(get_udfoerelse, axis=1)
         return df
     except Exception as e:
         st.error(f"SQL-fejl: {e}")
@@ -180,14 +198,14 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
             pitch = VerticalPitch(pitch_type='opta', half=True, pitch_color='white', line_color='#333333', linewidth=1.5)
             fig, ax = pitch.draw(figsize=(7, 7))
             
-            # Tekst og statistik placeret øverst i venstre side (X=3.0)
+            # Tekst og statistik placeret øverst i venstre side (X=93.0)
             ax.text(93.0, 56.0, f"{sp_type.upper()} ({side_sel.upper()})", fontsize=7, fontweight='bold', color='#555555', va='center')
             spiller_tekst = f"Spiller: {p_sel}" if p_sel != "Alle spillere" else "Alle spillere"
             stats_line = f"{spiller_tekst} — {total} aktioner ({int(pct)}% succes)"
             ax.text(93.0, 53.0, stats_line, fontsize=7, color='#666666', va='center')
 
             if hold_logo:
-                # Holdnavn og logo placeret nederst i venstre side (X=3.0)
+                # Holdnavn og logo placeret nederst i venstre side (X=93.0)
                 ax.text(93.0, 58.0, t_sel.upper(), fontsize=8, fontweight='bold', color='#222222', va='center')
                 ax_logo = ax.inset_axes([93.0, 56.0, 4.5, 4.5], transform=ax.transData)
                 ax_logo.imshow(hold_logo)
@@ -305,18 +323,27 @@ def vis_side():
         
         col_text, col_chart = st.columns([1.5, 2])
         with col_text:
-            st.write(f"Her ses en sammenfatning af **{t_sel}s** standardsituationer i løbet af sæsonen. Analysen viser fordelingen mellem hjørnespark, frispark og indkast, samt hvor ofte du modtager bolden og afslutter på situationerne.")
+            st.write(f"Her ses en samlet oversikt over **{t_sel}s** standardsituationer. Analysen viser fordelingen mellem hjørnespark, frispark og indkast, hvordan sparkene/leveringerne udføres, samt de mest benyttede modtager-zoner.")
             
             df_team_selected['ZONE'] = df_team_selected['ENDY'].apply(lambda y: "Venstre" if float(y or 0) < 33 else ("Højre" if float(y or 0) > 66 else "Center"))
+            
+            st.write("**Fordeling af udførelse / sparketype:**")
+            udf_counts = df_team_selected['UDFOERELSE'].value_counts()
+            for udf_type, count in udf_counts.items():
+                st.write(f"- **{udf_type}**: {count} stk.")
+                
+            st.write("\n**Mest benyttede modtager-zoner:**")
             zone_counts = df_team_selected['ZONE'].value_counts()
-            st.write("**Mest benyttede modtager-zoner:**")
             for zone, count in zone_counts.items():
                 st.write(f"- **{zone} zone**: {count} aktioner")
                 
         with col_chart:
-            st.caption("Aktioner fordelt på type og zone")
-            zone_table = df_team_selected.groupby(['TYPE_NAVN', 'ZONE']).size().unstack(fill_value=0)
-            st.dataframe(zone_table, use_container_width=True)
+            st.caption("Aktioner fordelt på type og udførelse")
+            if not df_team_selected.empty:
+                exec_table = df_team_selected.groupby(['TYPE_NAVN', 'UDFOERELSE']).size().unstack(fill_value=0)
+                st.dataframe(exec_table, use_container_width=True)
+            else:
+                st.info("Ingen data tilgængelig.")
 
     with tabs[1]: 
         col_content, col_control = st.columns([3, 1])
