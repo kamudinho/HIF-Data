@@ -253,6 +253,18 @@ def vis_side():
             render_setpiece_analysis(df_team_selected, name, t_sel)
     
     with tabs[5]:
+        st.markdown("### Zoneoversigter & Bane")
+        
+        # Hent holdets primære farve (eller brug standard rød)
+        t_color = TEAM_COLORS.get(t_sel, {}).get('primary', HIF_RED)
+        
+        # Kald get_pitch fra din utils/pitches.py (her f.eks. stående hel bane)
+        pitch, fig, ax = get_pitch(type="staaende", t_color=t_color)
+        
+        # Vis banen i Streamlit
+        st.pyplot(fig, clear_figure=True)
+        
+        # Din oprindelige tabelvisning nedenunder
         df_team_selected['ZONE'] = df_team_selected['ENDY'].apply(lambda y: "Venstre" if float(y or 0) < 33 else ("Højre" if float(y or 0) > 66 else "Center"))
         st.dataframe(df_team_selected.groupby(['ZONE', 'TYPE_NAVN']).size().unstack(fill_value=0), use_container_width=True)
 
