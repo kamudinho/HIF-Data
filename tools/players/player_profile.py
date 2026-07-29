@@ -485,7 +485,7 @@ def vis_side(dp=None):
             m_r3[3].metric("Boldtab", boldtab_count)
     
             st.markdown("<hr style='margin: 15px 0; opacity: 0.5;'>", unsafe_allow_html=True)
-            st.write("**Top 10: Aktioner**")
+            st.caption("**Top 10: Aktioner**")
             if not akt_stats.empty:
                 bare_antal = ['Erobring', 'Clearing', 'Boldtab', 'Frispark vundet', 'Blokeret skud', 'Interception']
                 for akt, row in akt_stats.head(10).iterrows():
