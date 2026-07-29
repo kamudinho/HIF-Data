@@ -56,7 +56,7 @@ def load_setpiece_data():
             LEAD(e.EVENT_TYPEID, 3) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_EVENTID) AS P3_TYPE
         FROM {DB}.OPTA_EVENTS e
         WHERE e.TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
-    ),
+    },
     Quals AS (
         SELECT 
             EVENT_OPTAUUID,
@@ -120,7 +120,7 @@ def get_summary_stats(df, group_col):
     stats['Top Modtager'] = stats[group_col].map(mod_map)
     return stats[[group_col, 'Antal', 'Succes %', 'Top Modtager', 'Afslutning %']]
 
-# --- 5. VISUALISERING AF HJØRNESPARK (LOGO OG HOLDNAVN ØVERST, TEKST NEDERST TIL VENSTRE) ---
+# --- 5. VISUALISERING AF HJØRNESPARK (KORREKT PLACERET LOGO OG TEKST) ---
 def render_setpiece_analysis(df_team, sp_type, t_sel):
     t_info = next((info for name, info in TEAMS.items() if name == t_sel), None)
     hold_logo = get_logo_img(t_info.get('logo') if t_info else None)
@@ -164,6 +164,7 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
         t_color = TEAM_COLORS.get(t_sel, {}).get('primary', HIF_RED)
         
         if sp_type == "Hjørnespark":
+            # Laver lodret halv bane (viser modstanderens felt fra midterlinjen og op)
             pitch = VerticalPitch(pitch_type='opta', half=True, pitch_color='white', line_color='#333333', linewidth=1.5)
             fig, ax = pitch.draw(figsize=(7, 7))
 
@@ -172,7 +173,7 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
             end_x = df_plot['ENDX']
             end_y = df_plot['ENDY']
 
-            # LOGO OG HOLDNAVN HELT TIL VENSTRE ØVERST
+            # LOGO OG HOLDNAVN: Placeret i top-venstre hjørne (ved modstanderens mållinje / venstre side)
             if hold_logo:
                 ax_logo = ax.inset_axes([3.0, 91.0, 6.0, 6.0], transform=ax.transData)
                 ax_logo.imshow(hold_logo)
@@ -181,7 +182,7 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
             else:
                 ax.text(3.0, 94.0, t_sel.upper(), fontsize=8.5, fontweight='bold', color='#222222', va='center')
 
-            # TEKST NEDERST TIL VENSTRE VED MIDTERLINJEN
+            # TEKST OG STATISTIK: Placeret nede i venstre side ved midterlinjen (Y tæt på 52-55)
             ax.text(3.0, 55.0, f"HJØRNESPARK ({side_sel.upper()})", fontsize=7, fontweight='bold', color='#555555', va='center')
             spiller_tekst = f"Spiller: {p_sel}" if p_sel != "Alle spillere" else "Alle spillere"
             stats_line = f"{spiller_tekst} — {total} aktioner ({int(pct)}% succes)"
