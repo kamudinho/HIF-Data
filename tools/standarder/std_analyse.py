@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import requests
 from PIL import Image
 from io import BytesIO
-from mplsoccer import VerticalPitch
+from mplsoccer import Pitch, VerticalPitch
 from data.utils.team_mapping import TEAMS, TEAM_COLORS
 from data.data_load import _get_snowflake_conn
 
@@ -120,7 +120,7 @@ def get_summary_stats(df, group_col):
     stats['Top Modtager'] = stats[group_col].map(mod_map)
     return stats[[group_col, 'Antal', 'Succes %', 'Top Modtager', 'Afslutning %']]
 
-# --- 5. VISUALISERING (KORREKT STÅENDE BANE) ---
+# --- 5. VISUALISERING (HJØRNESPARK = STÅENDE, FRISPARK/INDKAST = LIGGENDE) ---
 def render_setpiece_analysis(df_team, sp_type, t_sel):
     t_info = next((info for name, info in TEAMS.items() if name == t_sel), None)
     t_uuid = t_info.get('opta_uuid') if t_info else None
@@ -146,12 +146,12 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
     for c in ['EVENT_X', 'EVENT_Y', 'ENDX', 'ENDY']: 
         df_plot[c] = pd.to_numeric(df_plot[c], errors='coerce')
 
-    # Standardisering til angreb mod toppen (hvor Opta X går mod 100 = modstanderens mål)
+    # Standardisering til angreb mod højre (standard for liggende bane i Statsbomb) eller mod toppen (for stående)
     mask_left = df_plot['EVENT_X'] < 50
     df_plot.loc[mask_left, ['EVENT_X', 'ENDX']] = 100 - df_plot.loc[mask_left, ['EVENT_X', 'ENDX']]
     df_plot.loc[mask_left, ['EVENT_Y', 'ENDY']] = 100 - df_plot.loc[mask_left, ['EVENT_Y', 'ENDY']]
 
-    # Filtrering på side (venstre/højre i angrebsretningen)
+    # Filtrering på side
     if side_sel == "Venstre side":
         df_plot = df_plot[df_plot['EVENT_Y'] > 50]
     elif side_sel == "Højre side":
@@ -169,23 +169,18 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
     with col_p:
         t_color = TEAM_COLORS.get(t_sel, {}).get('primary', HIF_RED)
         
-        # Opretter VerticalPitch (Statsbomb: x: 0-80 [bredde], y: 0-120 [længde])
-        pitch = VerticalPitch(pitch_type='statsbomb', pitch_color='white', line_color='#333333', linewidth=1.5)
-        fig, ax = pitch.draw(figsize=(8, 10))
-
-        # RETTET KOORDINAT-MAPPING TIL STÅENDE BANE:
-        # Opta X (0-100, længde) bliver Statsbomb Y (0-120)
-        # Opta Y (0-100, bredde) bliver Statsbomb X (0-80)
-        df_plot['x'] = (df_plot['EVENT_Y'] / 100.0) * 80.0
-        df_plot['y'] = (df_plot['EVENT_X'] / 100.0) * 120.0
-        
-        df_plot['end_x'] = (df_plot['ENDY'] / 100.0) * 80.0
-        df_plot['end_y'] = (df_plot['ENDX'] / 100.0) * 120.0
-
         if sp_type == "Hjørnespark":
-            # Zooms ind på modstanderens felt (Y: 78 til 120)
+            # --- STÅENDE BANE (KUN TIL HJØRNESPARK) ---
+            pitch = VerticalPitch(pitch_type='statsbomb', pitch_color='white', line_color='#333333', linewidth=1.5)
+            fig, ax = pitch.draw(figsize=(8, 10))
+
+            df_plot['x'] = (df_plot['EVENT_Y'] / 100.0) * 80.0
+            df_plot['y'] = (df_plot['EVENT_X'] / 100.0) * 120.0
+            df_plot['end_x'] = (df_plot['ENDY'] / 100.0) * 80.0
+            df_plot['end_y'] = (df_plot['ENDX'] / 100.0) * 120.0
+
             ax.set_xlim(0, 80)
-            ax.set_ylim(78, 120)
+            ax.set_ylim(78, 120)  # Sidste tredjedel
 
             if hold_logo:
                 ax_logo = ax.inset_axes([2.0, 86.0, 6.5, 6.5], transform=ax.transData)
@@ -200,33 +195,46 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
             stats_line = f"{spiller_tekst} — {total} aktioner ({int(pct)}% succes)"
             ax.text(2.0, 80.5, stats_line, fontsize=6.5, color='#666666', va='center')
 
+            if not df_plot.dropna(subset=['end_x', 'end_y']).empty:
+                if "Zoner" in vis_mode:
+                    pitch.hexbin(df_plot.end_x, df_plot.end_y, ax=ax, edgecolors='#ffffff', gridsize=(8, 8), cmap='Reds', alpha=0.65)
+                if "Pile" in vis_mode:
+                    pitch.arrows(df_plot.x, df_plot.y, df_plot.end_x, df_plot.end_y, color=t_color, ax=ax, width=1.5, headwidth=3, headlength=3, alpha=0.5)
+                    pitch.scatter(df_plot.x, df_plot.y, ax=ax, color=t_color, s=25, alpha=0.7)
+
         else:
-            # Hel bane for Frispark og Indkast (Y: 0 til 120)
-            ax.set_xlim(0, 80)
-            ax.set_ylim(0, 120)
+            # --- LIGGENDE BANE (TIL FRISPARK OG INDKAST) ---
+            pitch = Pitch(pitch_type='statsbomb', pitch_color='white', line_color='#333333', linewidth=1.5)
+            fig, ax = pitch.draw(figsize=(10, 7))
+
+            # Opta X (0-100) -> Statsbomb X (0-120), Opta Y (0-100) -> Statsbomb Y (0-80)
+            df_plot['x'] = (df_plot['EVENT_X'] / 100.0) * 120.0
+            df_plot['y'] = (df_plot['EVENT_Y'] / 100.0) * 80.0
+            df_plot['end_x'] = (df_plot['ENDX'] / 100.0) * 120.0
+            df_plot['end_y'] = (df_plot['ENDY'] / 100.0) * 80.0
+
+            ax.set_xlim(0, 120)
+            ax.set_ylim(0, 80)
 
             if hold_logo:
-                ax_logo = ax.inset_axes([2.0, 110.0, 6.5, 6.5], transform=ax.transData)
+                ax_logo = ax.inset_axes([6.0, 71.0, 5.5, 5.5], transform=ax.transData)
                 ax_logo.imshow(hold_logo)
                 ax_logo.axis('off')
-                ax.text(9.5, 113.25, t_sel.upper(), fontsize=8, fontweight='bold', color='#222222', va='center')
+                ax.text(12.5, 73.75, t_sel.upper(), fontsize=8, fontweight='bold', color='#222222', va='center')
             else:
-                ax.text(2.0, 113.25, t_sel.upper(), fontsize=8, fontweight='bold', color='#222222', va='center')
+                ax.text(6.0, 73.75, t_sel.upper(), fontsize=8, fontweight='bold', color='#222222', va='center')
 
-            ax.text(2.0, 107.5, f"{sp_type.upper()} ({side_sel.upper()})", fontsize=6, fontweight='bold', color='#555555', va='center')
+            ax.text(6.0, 67.5, f"{sp_type.upper()} ({side_sel.upper()})", fontsize=6, fontweight='bold', color='#555555', va='center')
             spiller_tekst = f"Spiller: {p_sel}" if p_sel != "Alle spillere" else "Alle spillere"
             stats_line = f"{spiller_tekst} — {total} aktioner ({int(pct)}% succes)"
-            ax.text(2.0, 104.5, stats_line, fontsize=6.5, color='#666666', va='center')
+            ax.text(6.0, 64.5, stats_line, fontsize=6.5, color='#666666', va='center')
 
-        # TEGNER ZONER OG PILE KORREKT
-        if not df_plot.dropna(subset=['end_x', 'end_y']).empty:
-            if "Zoner" in vis_mode:
-                pitch.hexbin(df_plot.end_x, df_plot.end_y, ax=ax, edgecolors='#ffffff',
-                             gridsize=(8, 8), cmap='Reds', alpha=0.65)
-            if "Pile" in vis_mode:
-                pitch.arrows(df_plot.x, df_plot.y, df_plot.end_x, df_plot.end_y, 
-                             color=t_color, ax=ax, width=1.5, headwidth=3, headlength=3, alpha=0.5)
-                pitch.scatter(df_plot.x, df_plot.y, ax=ax, color=t_color, s=25, alpha=0.7)
+            if not df_plot.dropna(subset=['end_x', 'end_y']).empty:
+                if "Zoner" in vis_mode:
+                    pitch.hexbin(df_plot.end_x, df_plot.end_y, ax=ax, edgecolors='#ffffff', gridsize=(8, 8), cmap='Reds', alpha=0.65)
+                if "Pile" in vis_mode:
+                    pitch.arrows(df_plot.x, df_plot.y, df_plot.end_x, df_plot.end_y, color=t_color, ax=ax, width=1.5, headwidth=3, headlength=3, alpha=0.5)
+                    pitch.scatter(df_plot.x, df_plot.y, ax=ax, color=t_color, s=25, alpha=0.7)
                 
         st.pyplot(fig, clear_figure=True)
         
@@ -328,9 +336,8 @@ def vis_side():
     with tabs[5]:
         st.markdown("### Zoneoversigter & Bane")
         
-        t_color = TEAM_COLORS.get(t_sel, {}).get('primary', HIF_RED)
-        pitch = VerticalPitch(pitch_type='statsbomb', pitch_color='white', line_color='#333333', linewidth=1.5)
-        fig, ax = pitch.draw(figsize=(8, 10))
+        pitch = Pitch(pitch_type='statsbomb', pitch_color='white', line_color='#333333', linewidth=1.5)
+        fig, ax = pitch.draw(figsize=(10, 7))
         st.pyplot(fig, clear_figure=True)
         
         df_team_selected['ZONE'] = df_team_selected['ENDY'].apply(lambda y: "Venstre" if float(y or 0) < 33 else ("Højre" if float(y or 0) > 66 else "Center"))
