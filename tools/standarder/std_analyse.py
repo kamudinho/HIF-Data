@@ -234,13 +234,16 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
 
         st.markdown("---")
 
-        # 2. TOP 5-MODTAGERE
+        # 2. TOP 5-MODTAGERE (Inkluderer nu også kolonnen "Med afslutning")
         st.write("**Top 5-modtagere**")
         df_mod_base = df_team[(df_team['TYPE_NAVN'] == sp_type) & (df_team['MODTAGER'].notna())].copy()
         total_mod_team = len(df_mod_base)
         
+        df_mod_base['ER_AFSLUTNING'] = pd.to_numeric(df_mod_base.get('ER_AFSLUTNING', 0), errors='coerce').fillna(0).astype(int)
+        
         mod_agg = df_mod_base.groupby('MODTAGER').agg(
-            Antal=('MODTAGER', 'count')
+            Antal=('MODTAGER', 'count'),
+            Afslutning_Sum=('ER_AFSLUTNING', 'sum')
         ).reset_index()
         
         mod_agg['Andel'] = mod_agg.apply(
@@ -248,8 +251,8 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
         )
         
         mod_agg = mod_agg.sort_values(by='Antal', ascending=False).head(5)
-        mod_agg = mod_agg[['MODTAGER', 'Antal', 'Andel']]
-        mod_agg.columns = ['Modtager', 'Antal', 'Andel']
+        mod_agg = mod_agg[['MODTAGER', 'Antal', 'Afslutning_Sum', 'Andel']]
+        mod_agg.columns = ['Modtager', 'Antal', 'Med afslutning', 'Andel']
         st.dataframe(mod_agg, use_container_width=True, hide_index=True)
 
 # --- 6. HOVEDSIDE ---
