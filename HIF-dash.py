@@ -150,7 +150,7 @@ with st.sidebar:
         "SPILLERANALYSE": ["Spillerprofil"],
         "SCOUTING": ["Scoutrapport", "Database", "Emnedatabase", "Transfers"],
         "TILPASNING": ["Spillerdata", "Spiller-score", "Standardsituationer"],
-        "TESTSIDE": ["Performance", "Winning Performance", "1. Div-tilpasning", "Sammenligning", "Charts", "Oversigt", "Forecast"],
+        "TESTSIDE": ["xG Model", "Performance", "Winning Performance", "1. Div-tilpasning", "Sammenligning", "Charts", "Oversigt", "Forecast"],
         "ADMIN": ["System Log", "Profil", "Datakatalog", "Konklusion", "Fysisk profil", "Hold: Fysisk profil", "Intern analyse", "Top 5: Spillere", "Ordbog"]
     }
     
@@ -269,6 +269,9 @@ try:
         elif s == "Performance":
             import tools.analyse.baseline_performance as bp
             bp.vis_side()
+        elif s == "xG Model":
+            import tools.analyse.xg_model as xg
+            xg.vis_side()
 
     elif m == "ADMIN":
         if s == "System Log":
