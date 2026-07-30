@@ -270,7 +270,7 @@ try:
             import tools.analyse.baseline_performance as bp
             bp.vis_side()
         elif s == "xG Model":
-            import tools.ligaen.xg_model as xg
+            import tools.ligaen.xG_model as xg
             xg.vis_side()
 
     elif m == "ADMIN":
