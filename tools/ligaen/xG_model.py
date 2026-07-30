@@ -3,8 +3,8 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 
-def create_match_momentum_and_shotmap(events_df, match_info_df, match_uuid):
-  """Genererer en xG-tidslinje (Race Chart) og et skudkort for en given kamp
+def vis_side(events_df, match_info_df, match_uuid):
+  """Genererer og viser en xG-tidslinje (Race Chart) og et skudkort for en given kamp
 
   baseret på Opta-data fra Hvidovre-appens tabeller.
   """
@@ -88,8 +88,6 @@ def create_match_momentum_and_shotmap(events_df, match_info_df, match_uuid):
     )
 
   # --- AFSNIT 2: SKUDKORT (Shot Map på bane) ---
-  # Opta banekoordinater er typisk 0-100 (X) og 0-100 (Y)
-  # Vi plotter skud for hjemmehold og udehold med farvekoder
   color_map = {16: "green", 15: "orange", 14: "gray", 13: "black"}  # 16=Mål osv.
 
   for side_df, name in [(home_shots, home_team), (away_shots, away_team)]:
