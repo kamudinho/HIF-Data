@@ -149,8 +149,8 @@ with st.sidebar:
         "HOLDANALYSE": ["Modstanderanalyse", "Ligaoversigt", "Kampoversigt", "Afslutninger", "Fysisk data", "Grafer"],
         "SPILLERANALYSE": ["Spillerprofil"],
         "SCOUTING": ["Scoutrapport", "Database", "Emnedatabase", "Transfers"],
-        "TILPASNING": ["Spillerdata", "Spiller-score", "Standardsituationer"],
-        "TESTSIDE": ["Model", "Performance", "Winning Performance", "1. Div-tilpasning", "Sammenligning", "Charts", "Oversigt", "Forecast"],
+        "TILPASNING": ["Spillerdata", "Spiller-score", "Standardsituationer", "Model"],
+        "TESTSIDE": ["Performance", "Winning Performance", "1. Div-tilpasning", "Sammenligning", "Charts", "Oversigt", "Forecast"],
         "ADMIN": ["System Log", "Profil", "Datakatalog", "Konklusion", "Fysisk profil", "Hold: Fysisk profil", "Intern analyse", "Top 5: Spillere", "Ordbog"]
     }
     
