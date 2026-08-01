@@ -594,7 +594,6 @@ def vis_side(dp=None):
     with t_matches:
         st.markdown(f'<div class="player-header">Kampoversigt for {valgt_hold}</div>', unsafe_allow_html=True)
         
-        # Hent kampdata baseret på din struktur
         sql_matches = f"""
             SELECT 
                 MATCH_OPTAUUID,
@@ -608,7 +607,7 @@ def vis_side(dp=None):
                 TOTAL_HOME_SCORE,
                 TOTAL_AWAY_SCORE
             FROM {DB}.OPTA_MATCHINFO
-            WHERE TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS}
+            WHERE TOURNAMENTCALENDAR_NAME = '{SEASONNAME}'
               AND (CONTESTANTHOME_OPTAUUID = '{valgt_uuid_hold}' OR CONTESTANTAWAY_OPTAUUID = '{valgt_uuid_hold}')
             ORDER BY MATCH_DATE_FULL DESC
         """
@@ -616,17 +615,22 @@ def vis_side(dp=None):
         
         if df_matches is not None and not df_matches.empty:
             df_matches.columns = df_matches.columns.str.lower()
-            df_matches['match_date_full'] = pd.to_datetime(df_matches['match_date_full'])
             
-            # Formater kolonner til pæn visning
+            # Konverter dato-kolonne sikkert
+            df_matches['match_date_full'] = pd.to_datetime(df_matches['match_date_full'], errors='coerce')
+            
             df_matches['Dato'] = df_matches['match_date_full'].dt.strftime('%Y-%m-%d')
             df_matches['Runde'] = df_matches['week']
             df_matches['Kamp'] = df_matches['contestanthome_name'] + " vs " + df_matches['contestantanway_name']
             
-            # Håndter resultat (viser '-' hvis kampen ikke er spillet endnu)
+            # Håndter resultat baseret på status ('Played' vs 'Fixture')
             def format_score(row):
-                if str(row['match_status']).lower() == 'played' or (not pd.isna(row['total_home_score']) and not pd.isna(row['total_away_score'])):
-                    return f"{int(row['total_home_score'])} - {int(row['total_away_score'])}"
+                status = str(row.get('match_status', '')).lower()
+                home_score = row.get('total_home_score')
+                away_score = row.get('total_away_score')
+                
+                if status == 'played' and not pd.isna(home_score) and not pd.isna(away_score):
+                    return f"{int(home_score)} - {int(away_score)}"
                 return "Ikke spillet"
 
             df_matches['Resultat'] = df_matches.apply(format_score, axis=1)
@@ -636,4 +640,4 @@ def vis_side(dp=None):
             
             st.dataframe(df_vis_matches, use_container_width=True, hide_index=True)
         else:
-            st.info("Ingen kampdata fundet for dette hold i de valgte ligaer.")
+            st.info("Ingen kampdata fundet for dette hold i den valgte sæson.")
