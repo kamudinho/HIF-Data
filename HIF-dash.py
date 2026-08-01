@@ -147,7 +147,7 @@ with st.sidebar:
     menu_map = {
         "HVIDOVRE IF": ["Forside"],
         "HOLDANALYSE": ["Modstanderanalyse", "Ligaoversigt", "Kampoversigt", "Afslutninger", "Fysisk data", "Grafer"],
-        "SPILLERANALYSE": ["Spillerprofil"],
+        "SPILLERANALYSE": ["Spillere"],
         "SCOUTING": ["Scoutrapport", "Database", "Emnedatabase", "Transfers"],
         "TILPASNING": ["Spillerdata", "Spiller-score", "Standardsituationer", "Model"],
         "TESTSIDE": ["Performance", "Winning Performance", "1. Div-tilpasning", "Sammenligning", "Charts", "Oversigt", "Forecast"],
@@ -221,7 +221,7 @@ try:
         if s == "Charts":
             import tools.ligaen.chart as pc
             pc.vis_side()
-        elif s == "Spillerprofil":
+        elif s == "Spillere":
             import tools.players.player_profile as pp
             pp.vis_side()
 
