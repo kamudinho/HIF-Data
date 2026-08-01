@@ -615,6 +615,7 @@ def vis_side(dp=None):
             )
             st.markdown('</div>', unsafe_allow_html=True)
         
+        # Filtreret til kun at hente kampe hvor MATCH_STATUS = 'Played'
         sql_matches = f"""
             SELECT 
                 MATCH_OPTAUUID,
@@ -625,6 +626,7 @@ def vis_side(dp=None):
                 TOTAL_AWAY_SCORE
             FROM {DB}.OPTA_MATCHINFO
             WHERE TOURNAMENTCALENDAR_NAME = '{SEASONNAME}'
+              AND MATCH_STATUS = 'Played'
               AND (CONTESTANTHOME_OPTAUUID = '{valgt_uuid_hold}' OR CONTESTANTAWAY_OPTAUUID = '{valgt_uuid_hold}')
             ORDER BY MATCH_DATE_FULL DESC
         """
@@ -637,14 +639,12 @@ def vis_side(dp=None):
             
             kamp_options = {}
             for _, r in df_matches.iterrows():
-                status_tekst = f"({r['match_status']})" if 'match_status' in r else ""
-                label = f"Runde {r['week']} - Dato: {r['dato_str']} {status_tekst}"
+                label = f"Runde {r['week']} - Dato: {r['dato_str']}"
                 kamp_options[label] = str(r['match_optauuid'])
                 
             valgt_kamp_label = st.selectbox("Vælg kamp", list(kamp_options.keys()), key="valgt_kamp_dropdown")
-            valgt_kamp_uuid = kamp_options[valgt_kamp_label] # Dette er allerede en str
+            valgt_kamp_uuid = kamp_options[valgt_kamp_label]
             
-            # Find matcher-kolonne i df_all
             match_col_in_all = None
             for col in ['match_optauuid', 'match_id']:
                 if col in df_all.columns:
@@ -653,7 +653,6 @@ def vis_side(dp=None):
             
             df_kamp_events = pd.DataFrame()
             if match_col_in_all is not None and not df_all.empty:
-                # Konverter kun kolonnen i DataFrame til str her, ikke vores str-variabel
                 df_kamp_events = df_all[df_all[match_col_in_all].astype(str) == valgt_kamp_uuid].copy()
             
             if not df_kamp_events.empty:
@@ -694,7 +693,7 @@ def vis_side(dp=None):
                     kamp_stats['xG'] = 0.0
                     kamp_stats['xA'] = 0.0
                 
-                kamp_stats['Assists'] = 0  # Sikkerhed for feltet
+                kamp_stats['Assists'] = 0
                 
                 kamp_stats['Pasningsprocent'] = (
                     (kamp_stats['Pasninger_Succes'] / kamp_stats['Pasninger']) * 100
@@ -759,4 +758,4 @@ def vis_side(dp=None):
             else:
                 st.info("Ingen hændelsesdata tilgængelig for denne kamp endnu.")
         else:
-            st.info("Ingen kampdata fundet for dette hold i den valgte sæson.")
+            st.info("Ingen spillede kampe fundet for dette hold i den valgte sæson.")
