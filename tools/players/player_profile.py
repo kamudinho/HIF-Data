@@ -601,9 +601,7 @@ def vis_side(dp=None):
                 WEEK,
                 MATCH_STATUS,
                 CONTESTANTHOME_OPTAUUID,
-                CONTESTANTHOME_NAME,
                 CONTESTANTAWAY_OPTAUUID,
-                CONTESTANTAWAY_NAME,
                 TOTAL_HOME_SCORE,
                 TOTAL_AWAY_SCORE
             FROM {DB}.OPTA_MATCHINFO
