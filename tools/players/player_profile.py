@@ -248,7 +248,7 @@ def vis_side(dp=None):
     truppen_stats['Pasningsprocent_Str'] = truppen_stats['Pasningsprocent'].astype(str) + "%"
   
     # --- OPSETNING AF FANER ---
-    t_team, t_profile, t_pitch, t_phys, t_matches = st.tabs(["Holdoversigt", "Kampoversigt", "Spillerprofil", "Spilleraktioner", "Fysisk data"])
+    t_team, t_matches, t_profile, t_pitch, t_phys = st.tabs(["Holdoversigt", "Kampoversigt", "Spillerprofil", "Spilleraktioner", "Fysisk data"])
     
     # --- UI & VISNING ---
     with t_team:
