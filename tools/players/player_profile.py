@@ -345,41 +345,6 @@ def vis_side(dp=None):
         else:
             st.info("Ingen trup-data tilgængelig endnu.")
 
-    with t_matches:
-        st.markdown(f'<div style="font-size: 18px; font-weight: bold; margin-bottom: 10px;">Kampoversigt for {valgt_hold}</div>', unsafe_allow_html=True)
-        
-        # Hent kampdata fra Opta Matchinfo for det valgte hold og sæson
-        sql_matches = f"""
-            SELECT 
-                MATCH_ID,
-                MATCH_DATE,
-                CONTESTANTHOME_NAME,
-                CONTESTANTAWAY_NAME,
-                CONTESTANTHOME_SCORE,
-                CONTESTANTAWAY_SCORE,
-                TOURNAMENTCALENDAR_OPTAUUID
-            FROM {DB}.OPTA_MATCHINFO
-            WHERE (CONTESTANTHOME_OPTAUUID = '{valgt_uuid_hold}' OR CONTESTANTAWAY_OPTAUUID = '{valgt_uuid_hold}')
-            AND TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS}
-            ORDER BY MATCH_DATE DESC
-        """
-        df_matches = conn.query(sql_matches)
-        
-        if df_matches is not None and not df_matches.empty:
-            df_matches.columns = df_matches.columns.str.lower()
-            df_matches['match_date'] = pd.to_datetime(df_matches['match_date'])
-            
-            # Formatér data til pæn visning
-            df_matches['Dato'] = df_matches['match_date'].dt.strftime('%Y-%m-%d')
-            df_matches['Kamp'] = df_matches['contestanthome_name'] + " vs " + df_matches['contestantanway_name']
-            df_matches['Resultat'] = df_matches['contestanthome_score'].astype(str) + " - " + df_matches['contestantanway_score'].astype(str)
-            
-            df_vis_matches = df_matches[['Dato', 'Kamp', 'Resultat']].copy()
-            
-            st.dataframe(df_vis_matches, use_container_width=True, hide_index=True)
-        else:
-            st.info("Ingen kampdata fundet for dette hold i de valgte ligaer.")
-
     with t_profile:
         numeric_cols = truppen_stats.drop(columns=['visningsnavn', 'Pasningsprocent_Str'], errors='ignore')
         ranks = (-numeric_cols).rank(ascending=True, method='min').astype(int)
@@ -625,3 +590,39 @@ def vis_side(dp=None):
                     'hi_runs': 'Højintense løb'
                 })
                 st.dataframe(df_log, use_container_width=True, hide_index=True)
+
+    with t_matches:
+        st.markdown(f'<div style="font-size: 18px; font-weight: bold; margin-bottom: 10px;">Kampoversigt for {valgt_hold}</div>', unsafe_allow_html=True)
+        
+        # Hent kampdata fra Opta Matchinfo for det valgte hold og sæson
+        sql_matches = f"""
+            SELECT 
+                MATCH_OPTAUUID, 
+                MATCH_DATE_FULL,
+                CONTESTANTHOME_NAME,
+                CONTESTANTAWAY_NAME,
+                CONTESTANTHOME_SCORE,
+                CONTESTANTAWAY_SCORE,
+                TOURNAMENTCALENDAR_OPTAUUID
+            FROM {DB}.OPTA_MATCHINFO
+            WHERE (CONTESTANTHOME_OPTAUUID = '{valgt_uuid_hold}' OR CONTESTANTAWAY_OPTAUUID = '{valgt_uuid_hold}')
+            AND TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS}
+            ORDER BY MATCH_DATE DESC
+        """
+        df_matches = conn.query(sql_matches)
+        
+        if df_matches is not None and not df_matches.empty:
+            df_matches.columns = df_matches.columns.str.lower()
+            df_matches['match_date'] = pd.to_datetime(df_matches['match_date'])
+            
+            # Formatér data til pæn visning
+            df_matches['Dato'] = df_matches['match_date'].dt.strftime('%Y-%m-%d')
+            df_matches['Kamp'] = df_matches['contestanthome_name'] + " vs " + df_matches['contestantanway_name']
+            df_matches['Resultat'] = df_matches['contestanthome_score'].astype(str) + " - " + df_matches['contestantanway_score'].astype(str)
+            
+            df_vis_matches = df_matches[['Dato', 'Kamp', 'Resultat']].copy()
+            
+            st.dataframe(df_vis_matches, use_container_width=True, hide_index=True)
+        else:
+            st.info("Ingen kampdata fundet for dette hold i de valgte ligaer.")
+
