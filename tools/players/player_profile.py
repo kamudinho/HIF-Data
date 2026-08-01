@@ -199,7 +199,7 @@ def vis_side(dp=None):
         'Gennembrud_Overtake': x.apply(lambda r: 1 if str(r['event_typeid']) == "3" and "465" in [str(q).strip() for q in (r.get('qual_list', []) if isinstance(r.get('qual_list', []), list) else str(r.get('qual_list', '')).split(','))] else 0, axis=1).sum(),
         'Rum_Driblinger_Space': x.apply(lambda r: 1 if str(r['event_typeid']) == "3" and "464" in [str(q).strip() for q in (r.get('qual_list', []) if isinstance(r.get('qual_list', []), list) else str(r.get('qual_list', '')).split(','))] else 0, axis=1).sum(),
         'Offensive_Dueller': x.apply(lambda r: 1 if "286" in [str(q).strip() for q in (r.get('qual_list', []) if isinstance(r.get('qual_list', []), list) else str(r.get('qual_list', '')).split(','))] else 0, axis=1).sum(),
-        'Defensive_Dueller': x.apply(lambda r: 1 if "285" in [str(q).strip() for q in (r.get('qual_list', []) if isinstance(r.get('qual_list', []), list) else str(r.get('qual_list', '')).split(','))] else 0, axis=1).sum(),
+        'Defensive_Dueller': x.apply(lambda r: 1 if "285" in [str(q).strip() for q in (r.get('qual_list', []), list) else str(r.get('qual_list', '')).split(','))] else 0, axis=1).sum(),
         'Defensive_1v1_Stoppet': x.apply(lambda r: 1 if "467" in [str(q).strip() for q in (r.get('qual_list', []) if isinstance(r.get('qual_list', []), list) else str(r.get('qual_list', '')).split(','))] else 0, axis=1).sum(),
         
         'Chancer_skabt': x.apply(lambda r: '210' in r.get('qual_list', []), axis=1).sum(),
@@ -245,13 +245,12 @@ def vis_side(dp=None):
         (truppen_stats['Pasninger_Succes'] / truppen_stats['Pasninger']) * 100
     ).where(truppen_stats['Pasninger'] > 0, 0).round(1)
     
-    # Konverter til procent-streng med '%' efter, så det vises korrekt i tabellen
     truppen_stats['Pasningsprocent_Str'] = truppen_stats['Pasningsprocent'].astype(str) + "%"
     
-    # --- OPSETNING AF FANER ---
-    t_team, t_profile, t_pitch, t_phys = st.tabs(["Holdoversigt", "Spillerprofil", "Spilleraktioner", "Fysisk data"])
+    # --- OPSETNING AF FANER (Inkl. t_matches) ---
+    t_team, t_matches, t_profile, t_pitch, t_phys = st.tabs(["Holdoversigt", "Kampe", "Spillerprofil", "Spilleraktioner", "Fysisk data"])
     
-    # --- UI & VISNING ---
+    # --- TAB 1: HOLDOVERSIGT (t_team) ---
     with t_team:
         col_t_title, col_t_btn = st.columns([2.7, 1.3])
         
@@ -262,7 +261,7 @@ def vis_side(dp=None):
                 hold_logo.save(buffered, format="PNG")
                 img_str = base64.b64encode(buffered.getvalue()).decode()
                 logo_html = f'<img src="data:image/png;base64,{img_str}" style="height: 26px; margin-right: 10px; object-fit: contain;">'
-    
+        
             st.markdown(f'<div style="display: flex; align-items: center; padding-top: 20px;">{logo_html}<span style="font-size: 16px; font-weight: bold; line-height: 1;">{valgt_hold.upper()}</span></div>', unsafe_allow_html=True)
             
         with col_t_btn:
@@ -279,22 +278,18 @@ def vis_side(dp=None):
         if not truppen_stats.empty:
             df_vis_truppen = truppen_stats.reset_index()
             
-            # --- KOLONNE-OPSÆTNING (Vi beholder Pasningsprocent som tal) ---
             gen_kolonner = [
                 'visningsnavn', 'Kampe', 'Minutter', 'Aktioner', 'Pasninger', 'Pasningsprocent', 
                 'Mål', 'Assists', 'Udskiftet', 'Indskiftet', 'Gule_kort', 'Roede_kort'
             ]
-            
             opb_kolonner = [
                 'visningsnavn', 'Aktioner', 'Pasninger', 'Pasningsprocent', 'Key_Passes', 'Stikninger', 
                 'Driblinger', 'Driblinger_Succes', 'Rum_Driblinger_Space'
             ]
-            
             off_kolonner = [
                 'visningsnavn', 'Aktioner', 'Afslutninger', 'xG', 'Chancer_skabt', 
                 'Indlæg', 'xA', 'Offensive_Dueller', 'Gennembrud_Overtake', 'Driblinger_Succes'
             ]
-            
             def_kolonner = [
                 'visningsnavn', 'Aktioner', 'Erobringer', 'Tacklinger', 'Clearinger', 
                 'Blokeringer', 'Interceptioner', 'Defensive_Dueller', 'Defensive_1v1_Stoppet', 'Frispark_imod'
@@ -313,7 +308,6 @@ def vis_side(dp=None):
             
             df_visning = df_vis_truppen[eksisterende_kolonner].copy()
             
-            # Sørg for at sortere faldende, så de største tal (f.eks. flest aktioner) kommer øverst
             if 'Aktioner' in df_visning.columns:
                 df_visning = df_visning.sort_values(by='Aktioner', ascending=False)
             
@@ -336,8 +330,6 @@ def vis_side(dp=None):
             
             beregnet_hoejde = int(len(df_visning) * 38 + 45)
             
-            # Brug column_config til at vise Pasning (%) pænt som decimaltal, 
-            # så Streamlit behandler det som et rigtigt tal og sorterer korrekt.
             st.dataframe(
                 df_visning, 
                 use_container_width=True, 
@@ -352,6 +344,76 @@ def vis_side(dp=None):
             )
         else:
             st.info("Ingen trup-data tilgængelig endnu.")
+
+    # --- TAB 2: KAMPE (t_matches) ---
+    with t_matches:
+        col_m_title, col_m_select = st.columns([2.0, 2.0])
+        
+        with col_m_title:
+            logo_html = ""
+            if hold_logo is not None:
+                buffered = io.BytesIO()
+                hold_logo.save(buffered, format="PNG")
+                img_str = base64.b64encode(buffered.getvalue()).decode()
+                logo_html = f'<img src="data:image/png;base64,{img_str}" style="height: 26px; margin-right: 10px; object-fit: contain;">'
+            
+            st.markdown(f'<div style="display: flex; align-items: center; padding-top: 20px;">{logo_html}<span style="font-size: 16px; font-weight: bold; line-height: 1;">KAMPSTATISTIK - {valgt_hold.upper()}</span></div>', unsafe_allow_html=True)
+            
+        with col_m_select:
+            # Hent unike kampe fra df_expected eller df_all (afhænger af om match_id eller kampnavn findes)
+            if df_expected is not None and 'match_id' in df_expected.columns:
+                # Hvis der er en kolonne med modstander/dato eller vi kan bruge match_id
+                kampe_liste = df_expected['match_id'].unique().tolist()
+                valgt_kamp = st.selectbox(
+                    "Vælg kamp",
+                    options=kampe_liste,
+                    key="match_select_control",
+                    label_visibility="collapsed"
+                )
+            else:
+                valgt_kamp = st.selectbox(
+                    "Vælg kamp",
+                    options=["Ingen kampe fundet"],
+                    key="match_select_control",
+                    label_visibility="collapsed"
+                )
+
+        # Logik til visning af spillere for den valgte kamp
+        if df_expected is not None and not df_expected.empty and valgt_kamp != "Ingen kampe fundet":
+            df_kamp_visning = df_expected[df_expected['match_id'] == valgt_kamp].copy()
+            
+            if not df_kamp_visning.empty:
+                # Sammensæt evt. med navne hvis nødvendigt eller brug direkte kolonner
+                if 'visningsnavn' not in df_kamp_visning.columns and 'player_optauuid' in df_kamp_visning.columns:
+                    # Map navne på via df_spillere_unikke eller df_all
+                    mapping_navn = dict(zip(df_spillere_unikke['player_optauuid'], df_spillere_unikke['visningsnavn']))
+                    df_kamp_visning['visningsnavn'] = df_kamp_visning['player_optauuid'].map(mapping_navn)
+
+                kamp_kolonner = [k for k in ['visningsnavn', 'minutes', 'xg', 'xa'] if k in df_kamp_visning.columns]
+                df_kamp_visning = df_kamp_visning[kamp_kolonner].copy()
+                
+                if 'minutes' in df_kamp_visning.columns:
+                    df_kamp_visning = df_kamp_visning.sort_values(by='minutes', ascending=False)
+                
+                df_kamp_visning = df_kamp_visning.rename(columns={
+                    'visningsnavn': 'Spiller',
+                    'minutes': 'Minutter',
+                    'xg': 'xG',
+                    'xa': 'xA'
+                })
+                
+                beregnet_hoejde_kamp = int(len(df_kamp_visning) * 38 + 45)
+                
+                st.dataframe(
+                    df_kamp_visning,
+                    use_container_width=True,
+                    hide_index=True,
+                    height=beregnet_hoejde_kamp
+                )
+            else:
+                st.info("Ingen statistik tilgængelig for denne kamp.")
+        else:
+            st.info("Ingen kamp-data indlæst endnu.")
             
     with t_profile:
         numeric_cols = truppen_stats.drop(columns=['visningsnavn', 'Pasningsprocent_Str'], errors='ignore')
