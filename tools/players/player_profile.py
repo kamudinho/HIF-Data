@@ -594,18 +594,17 @@ def vis_side(dp=None):
     with t_matches:
         st.markdown(f'<div class="player-header">Kampoversigt for {valgt_hold}</div>', unsafe_allow_html=True)
         
+        # 1. Hent kampe for holdet i den valgte sæson
         sql_matches = f"""
             SELECT 
                 MATCH_OPTAUUID,
                 MATCH_DATE_FULL,
                 WEEK,
-                MATCH_STATUS,
-                CONTESTANTHOME_OPTAUUID,
                 CONTESTANTHOME_NAME,
-                CONTESTANTAWAY_OPTAUUID,
                 CONTESTANTAWAY_NAME,
                 TOTAL_HOME_SCORE,
-                TOTAL_AWAY_SCORE
+                TOTAL_AWAY_SCORE,
+                MATCH_STATUS
             FROM {DB}.OPTA_MATCHINFO
             WHERE TOURNAMENTCALENDAR_NAME = '{SEASONNAME}'
               AND (CONTESTANTHOME_OPTAUUID = '{valgt_uuid_hold}' OR CONTESTANTAWAY_OPTAUUID = '{valgt_uuid_hold}')
@@ -616,30 +615,69 @@ def vis_side(dp=None):
         if df_matches is not None and not df_matches.empty:
             df_matches.columns = df_matches.columns.str.lower()
             
-            # Konverter dato-kolonne sikkert
+            # Byg pæne labels til dropdown-menuen (f.eks. "Runde 1: Hvidovre vs Vendsyssel (2026-07-25)")
             df_matches['match_date_full'] = pd.to_datetime(df_matches['match_date_full'], errors='coerce')
+            df_matches['dato_str'] = df_matches['match_date_full'].dt.strftime('%Y-%m-%d')
+            df_matches['kamp_navn'] = df_matches['contestanthome_name'] + " vs " + df_matches['contestantaway_name']
             
-            df_matches['Dato'] = df_matches['match_date_full'].dt.strftime('%Y-%m-%d')
-            df_matches['Runde'] = df_matches['week']
-            
-            # Bruger de korrekte små bogstaver med 'away' (med 'w')
-            df_matches['Kamp'] = df_matches['contestanthome_name'] + " vs " + df_matches['contestantaway_name']
-            
-            # Håndter resultat baseret på status ('Played' vs 'Fixture')
-            def format_score(row):
-                status = str(row.get('match_status', '')).lower()
-                home_score = row.get('total_home_score')
-                away_score = row.get('total_away_score')
+            # Opret en ordbog til selectbox
+            kamp_options = {}
+            for _, r in df_matches.iterrows():
+                label = f"Runde {r['week']}: {r['kamp_navn']} ({r['dato_str']})"
+                kamp_options[label] = r['match_optauuid']
                 
-                if status == 'played' and not pd.isna(home_score) and not pd.isna(away_score):
-                    return f"{int(home_score)} - {int(away_score)}"
-                return "Ikke spillet"
-
-            df_matches['Resultat'] = df_matches.apply(format_score, axis=1)
+            valgt_kamp_label = st.selectbox("Vælg kamp", list(kamp_options.keys()), key="valgt_kamp_dropdown")
+            valgt_kamp_uuid = kamp_options[valgt_kamp_label]
             
-            df_vis_matches = df_matches[['Dato', 'Runde', 'Kamp', 'Resultat', 'match_status']].copy()
-            df_vis_matches.columns = ['Dato', 'Runde', 'Kamp', 'Resultat', 'Status']
+            # 2. Filtrér hændelser og expected-data for den valgte kamp
+            df_kamp_events = df_all[df_all['match_optauuid'] == valgt_kamp_uuid].copy() if 'match_optauuid' in df_all.columns else pd.DataFrame()
             
-            st.dataframe(df_vis_matches, use_container_width=True, hide_index=True)
+            if not df_kamp_events.empty:
+                # Beregn statistik for spillerne i netop denne kamp (samme logik som Holdoversigt)
+                def count_kamp_qual(df_group, eid, qids):
+                    return df_group.apply(lambda r: har_qualifier(r['event_typeid'], r.get('qual_list', []), eid, qids), axis=1).sum()
+                
+                kamp_event_stats = df_kamp_events.groupby(['player_optauuid', 'visningsnavn']).apply(lambda x: pd.Series({
+                    'Aktioner': len(x),
+                    'Gule_kort': count_kamp_qual(x, 17, 31),
+                    'Roede_kort': count_kamp_qual(x, 17, 33),
+                    'Pasninger': (x['event_typeid'] == 1).sum(),
+                    'Pasninger_Succes': ((x['event_typeid'] == 1) & (x['outcome'] == 1)).sum(),
+                    'Afslutninger': x['event_typeid'].isin([13, 14, 15, 16]).sum(),
+                    'Erobringer': x['event_typeid'].isin([7, 8, 12, 49]).sum(),
+                    'Indskiftet': (x['event_typeid'] == 19).sum(),
+                    'Udskiftet': (x['event_typeid'] == 18).sum()
+                })).reset_index().drop_duplicates(subset=['player_optauuid']).set_index('player_optauuid')
+                
+                # Hent minutter og xG/xA for denne kamp hvis tilgængelig
+                if df_expected is not None and not df_expected.empty:
+                    df_kamp_exp = df_expected[df_expected['match_id'].astype(str) == str(valgt_kamp_uuid)]
+                    kamp_match_stats = df_kamp_exp.groupby('player_optauuid').agg({
+                        'minutes': 'sum',
+                        'xg': 'sum',
+                        'xa': 'sum'
+                    }).rename(columns={'minutes': 'Minutter', 'xg': 'xG', 'xa': 'xA'})
+                    kamp_stats_final = kamp_event_stats.join(kamp_match_stats, how='left').fillna(0)
+                else:
+                    kamp_stats_final = kamp_event_stats.copy()
+                    kamp_stats_final['Minutter'] = 0
+                    kamp_stats_final['xG'] = 0.0
+                    kamp_stats_final['xA'] = 0.0
+                
+                # Pasningsprocent
+                kamp_stats_final['Pasning (%)'] = (
+                    (kamp_stats_final['Pasninger_Succes'] / kamp_stats_final['Pasninger']) * 100
+                ).where(kamp_stats_final['Pasninger'] > 0, 0).round(1).astype(str) + "%"
+                
+                # Gør klar til visning (samme kolonner som Holdoversigt)
+                df_vis_kamp = kamp_stats_final.reset_index()
+                df_vis_kamp = df_vis_kamp.rename(columns={'visningsnavn': 'Spiller'})
+                
+                kolonne_rekkefolge = ['Spiller', 'Minutter', 'Aktioner', 'Pasninger', 'Pasning (%)', 'Afslutninger', 'Erobringer', 'Udskiftet', 'Indskiftet', 'Gule_kort', 'Roede_kort']
+                tilgængelige_kolonner = [col for col in kolonne_rekkefolge if col in df_vis_kamp.columns]
+                
+                st.dataframe(df_vis_kamp[tilgængelige_kolonner], use_container_width=True, hide_index=True)
+            else:
+                st.info("Ingen hændelsesdata tilgængelig for denne kamp endnu.")
         else:
             st.info("Ingen kampdata fundet for dette hold i den valgte sæson.")
