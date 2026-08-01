@@ -25,7 +25,7 @@ from data.sql.liga_spillere import hent_match_og_haendelsesdata
 DB = "KLUB_HVIDOVREIF.AXIS"
 SEASONNAME = "2026/2027"
 TEAM_WYID = 7490
-COMPETITION_WYID = (328,)
+COMPETITION_WYID = (328)
 COMP_MAP = { 
     335: "Superliga", 
     328: "NordicBet Liga", 
