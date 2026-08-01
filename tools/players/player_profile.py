@@ -615,7 +615,6 @@ def vis_side(dp=None):
             )
             st.markdown('</div>', unsafe_allow_html=True)
         
-        # 1. Hent kampe udelukkende via sikre ID'er og datoer
         sql_matches = f"""
             SELECT 
                 MATCH_OPTAUUID,
@@ -636,18 +635,25 @@ def vis_side(dp=None):
             df_matches['match_date_full'] = pd.to_datetime(df_matches['match_date_full'], errors='coerce')
             df_matches['dato_str'] = df_matches['match_date_full'].dt.strftime('%Y-%m-%d')
             
-            # Opret en pæn dropdown baseret på runde og dato (helt uden navne-kolonnefejl)
             kamp_options = {}
             for _, r in df_matches.iterrows():
                 status_tekst = f"({r['match_status']})" if 'match_status' in r else ""
                 label = f"Runde {r['week']} - Dato: {r['dato_str']} {status_tekst}"
-                kamp_options[label] = r['match_optauuid']
+                kamp_options[label] = str(r['match_optauuid'])
                 
             valgt_kamp_label = st.selectbox("Vælg kamp", list(kamp_options.keys()), key="valgt_kamp_dropdown")
             valgt_kamp_uuid = kamp_options[valgt_kamp_label]
             
-            # 2. Filtrér df_all og df_expected til den valgte kamp
-            df_kamp_events = df_all[df_all['match_optauuid'] == valgt_kamp_uuid].copy() if 'match_optauuid' in df_all.columns else pd.DataFrame()
+            # Find den korrekte kolonne i df_all til at matche kamp-id
+            match_col_in_all = None
+            for col in ['match_optauuid', 'match_id']:
+                if col in df_all.columns:
+                    match_col_in_all = col
+                    break
+            
+            df_kamp_events = pd.DataFrame()
+            if match_col_in_all is not None and not df_all.empty:
+                df_kamp_events = df_all[df_all[match_col_in_all].astype(str) == valgt_kamp_uuid].copy()
             
             if not df_kamp_events.empty:
                 def count_kamp_qual(df_group, eid, qids):
@@ -674,7 +680,7 @@ def vis_side(dp=None):
                 })).reset_index().drop_duplicates(subset=['player_optauuid']).set_index('player_optauuid')
                 
                 if df_expected is not None and not df_expected.empty:
-                    df_kamp_exp = df_expected[df_expected['match_id'].astype(str) == str(valgt_kamp_uuid)]
+                    df_kamp_exp = df_expected[df_expected['match_id'].astype(str) == valgt_kamp_uuid]
                     kamp_match_exp = df_kamp_exp.groupby('player_optauuid').agg({
                         'minutes': 'sum',
                         'xg': 'sum',
