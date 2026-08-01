@@ -511,7 +511,7 @@ def vis_side(dp=None):
                     ax.scatter(goals.event_x, goals.event_y, color=primær_farve, s=120, marker='s', edgecolors='black', zorder=5)
                 elif visning == "Erobringer":
                     d = df_plot[df_plot['event_typeid'].isin([7, 8, 12, 49])]
-                    ax.scatter(d.event_x, d.event_y, color='orange', s=100, edgecolors['white'])
+                    ax.scatter(d.event_x, d.event_y, color='orange', s=100, edgecolors='white')
             
             st.pyplot(fig, use_container_width=True)
 
