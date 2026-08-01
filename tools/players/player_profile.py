@@ -591,7 +591,7 @@ def vis_side(dp=None):
                 })
                 st.dataframe(df_log, use_container_width=True, hide_index=True)
 
-    with t_matches:
+   with t_matches:
         st.markdown(f'<div class="player-header">Kampoversigt for {valgt_hold}</div>', unsafe_allow_html=True)
         
         sql_matches = f"""
@@ -601,7 +601,9 @@ def vis_side(dp=None):
                 WEEK,
                 MATCH_STATUS,
                 CONTESTANTHOME_OPTAUUID,
+                CONTESTANTHOME_NAME,
                 CONTESTANTAWAY_OPTAUUID,
+                CONTESTANTAWAY_NAME,
                 TOTAL_HOME_SCORE,
                 TOTAL_AWAY_SCORE
             FROM {DB}.OPTA_MATCHINFO
