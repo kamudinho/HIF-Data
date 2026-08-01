@@ -615,17 +615,15 @@ def vis_side(dp=None):
             )
             st.markdown('</div>', unsafe_allow_html=True)
         
-        # 1. Hent kampe for holdet i den valgte sæson
+        # 1. Hent kampe udelukkende via sikre ID'er og datoer
         sql_matches = f"""
             SELECT 
                 MATCH_OPTAUUID,
                 MATCH_DATE_FULL,
                 WEEK,
-                CONTESTANTHOME_NAME,
-                CONTESTANTAWAY_NAME,
+                MATCH_STATUS,
                 TOTAL_HOME_SCORE,
-                TOTAL_AWAY_SCORE,
-                MATCH_STATUS
+                TOTAL_AWAY_SCORE
             FROM {DB}.OPTA_MATCHINFO
             WHERE TOURNAMENTCALENDAR_NAME = '{SEASONNAME}'
               AND (CONTESTANTHOME_OPTAUUID = '{valgt_uuid_hold}' OR CONTESTANTAWAY_OPTAUUID = '{valgt_uuid_hold}')
@@ -637,12 +635,12 @@ def vis_side(dp=None):
             df_matches.columns = df_matches.columns.str.lower()
             df_matches['match_date_full'] = pd.to_datetime(df_matches['match_date_full'], errors='coerce')
             df_matches['dato_str'] = df_matches['match_date_full'].dt.strftime('%Y-%m-%d')
-            df_matches['kamp_navn'] = df_matches['contestanthome_name'] + " vs " + df_matches['contestantanway_name']
             
-            # Opret dropdown med kampe
+            # Opret en pæn dropdown baseret på runde og dato (helt uden navne-kolonnefejl)
             kamp_options = {}
             for _, r in df_matches.iterrows():
-                label = f"Runde {r['week']}: {r['kamp_navn']} ({r['dato_str']})"
+                status_tekst = f"({r['match_status']})" if 'match_status' in r else ""
+                label = f"Runde {r['week']} - Dato: {r['dato_str']} {status_tekst}"
                 kamp_options[label] = r['match_optauuid']
                 
             valgt_kamp_label = st.selectbox("Vælg kamp", list(kamp_options.keys()), key="valgt_kamp_dropdown")
@@ -652,7 +650,6 @@ def vis_side(dp=None):
             df_kamp_events = df_all[df_all['match_optauuid'] == valgt_kamp_uuid].copy() if 'match_optauuid' in df_all.columns else pd.DataFrame()
             
             if not df_kamp_events.empty:
-                # Beregn statistik pr. spiller for denne specifikke kamp
                 def count_kamp_qual(df_group, eid, qids):
                     return df_group.apply(lambda r: har_qualifier(r['event_typeid'], r.get('qual_list', []), eid, qids), axis=1).sum()
                 
@@ -666,7 +663,7 @@ def vis_side(dp=None):
                     'Erobringer': x['event_typeid'].isin([7, 8, 12, 49]).sum(),
                     'Indskiftet': (x['event_typeid'] == 19).sum(),
                     'Udskiftet': (x['event_typeid'] == 18).sum(),
-                    'Key_Passes': count_kamp_qual(x, 1, 2), # Juster evt efter din logik
+                    'Key_Passes': count_kamp_qual(x, 1, 2),
                     'Stikninger': count_kamp_qual(x, 1, 4),
                     'Driblinger': (x['event_typeid'] == 3).sum(),
                     'Driblinger_Succes': ((x['event_typeid'] == 3) & (x['outcome'] == 1)).sum(),
@@ -676,7 +673,6 @@ def vis_side(dp=None):
                     'Interceptioner': (x['event_typeid'] == 8).sum()
                 })).reset_index().drop_duplicates(subset=['player_optauuid']).set_index('player_optauuid')
                 
-                # Hent minutter og xG/xA for den valgte kamp
                 if df_expected is not None and not df_expected.empty:
                     df_kamp_exp = df_expected[df_expected['match_id'].astype(str) == str(valgt_kamp_uuid)]
                     kamp_match_exp = df_kamp_exp.groupby('player_optauuid').agg({
@@ -690,14 +686,12 @@ def vis_side(dp=None):
                     kamp_stats['xG'] = 0.0
                     kamp_stats['xA'] = 0.0
                 
-                # Pasningsprocent
                 kamp_stats['Pasningsprocent'] = (
                     (kamp_stats['Pasninger_Succes'] / kamp_stats['Pasninger']) * 100
                 ).where(kamp_stats['Pasninger'] > 0, 0).round(1)
                 
                 df_vis_kamp = kamp_stats.reset_index()
                 
-                # Samme kolonner som i t_team
                 gen_kolonner = [
                     'visningsnavn', 'Minutter', 'Aktioner', 'Pasninger', 'Pasningsprocent', 
                     'Mål', 'Assists', 'Udskiftet', 'Indskiftet', 'Gule_kort', 'Roede_kort'
