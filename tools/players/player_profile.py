@@ -644,7 +644,7 @@ def vis_side(dp=None):
             valgt_kamp_label = st.selectbox("Vælg kamp", list(kamp_options.keys()), key="valgt_kamp_dropdown")
             valgt_kamp_uuid = kamp_options[valgt_kamp_label]
             
-            # Find den korrekte kolonne i df_all til at matche kamp-id
+            # Find matcher-kolonne
             match_col_in_all = None
             for col in ['match_optauuid', 'match_id']:
                 if col in df_all.columns:
@@ -659,8 +659,10 @@ def vis_side(dp=None):
                 def count_kamp_qual(df_group, eid, qids):
                     return df_group.apply(lambda r: har_qualifier(r['event_typeid'], r.get('qual_list', []), eid, qids), axis=1).sum()
                 
+                # Beregn statistik inkl. mål (event_typeid == 16)
                 kamp_stats = df_kamp_events.groupby(['player_optauuid', 'visningsnavn']).apply(lambda x: pd.Series({
                     'Aktioner': len(x),
+                    'Mål': (x['event_typeid'] == 16).sum(),
                     'Gule_kort': count_kamp_qual(x, 17, 31),
                     'Roede_kort': count_kamp_qual(x, 17, 33),
                     'Pasninger': (x['event_typeid'] == 1).sum(),
@@ -679,6 +681,7 @@ def vis_side(dp=None):
                     'Interceptioner': (x['event_typeid'] == 8).sum()
                 })).reset_index().drop_duplicates(subset=['player_optauuid']).set_index('player_optauuid')
                 
+                # Hent minutter, xG og xA for denne kamp
                 if df_expected is not None and not df_expected.empty:
                     df_kamp_exp = df_expected[df_expected['match_id'].astype(str) == valgt_kamp_uuid]
                     kamp_match_exp = df_kamp_exp.groupby('player_optauuid').agg({
@@ -692,6 +695,21 @@ def vis_side(dp=None):
                     kamp_stats['xG'] = 0.0
                     kamp_stats['xA'] = 0.0
                 
+                # Sæt assists ind fra din samlede df_db_stats hvis muligt, ellers 0
+                if 'df_db_stats' in locals() and df_db_stats is not None and not df_db_stats.empty and 'assists' in df_db_stats.columns:
+                    # Prøv at mappe assists hvis match_name / spiller matcher, ellers sæt 0
+                    if 'match_name' in df_db_stats.columns:
+                        db_sub = df_db_stats[df_db_stats.get('match_optauuid', '').astype(str) == valgt_kamp_uuid]
+                        if not db_sub.empty and 'assists' in db_sub.columns:
+                            as_map = db_sub.set_index('player_optauuid')['assists'].to_dict()
+                            kamp_stats['Assists'] = kamp_stats.index.map(as_map).fillna(0)
+                        else:
+                            kamp_stats['Assists'] = 0
+                    else:
+                        kamp_stats['Assists'] = 0
+                else:
+                    kamp_stats['Assists'] = 0
+
                 kamp_stats['Pasningsprocent'] = (
                     (kamp_stats['Pasninger_Succes'] / kamp_stats['Pasninger']) * 100
                 ).where(kamp_stats['Pasninger'] > 0, 0).round(1)
