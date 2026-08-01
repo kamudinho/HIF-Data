@@ -592,36 +592,48 @@ def vis_side(dp=None):
                 st.dataframe(df_log, use_container_width=True, hide_index=True)
 
     with t_matches:
-        st.markdown(f'<div style="font-size: 18px; font-weight: bold; margin-bottom: 10px;">Kampoversigt for {valgt_hold}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="player-header">Kampoversigt for {valgt_hold}</div>', unsafe_allow_html=True)
         
-        # Hent kampdata fra Opta Matchinfo for det valgte hold og sæson
+        # Hent kampdata baseret på din struktur
         sql_matches = f"""
             SELECT 
-                MATCH_OPTAUUID, 
+                MATCH_OPTAUUID,
                 MATCH_DATE_FULL,
+                WEEK,
+                MATCH_STATUS,
+                CONTESTANTHOME_OPTAUUID,
                 CONTESTANTHOME_NAME,
+                CONTESTANTAWAY_OPTAUUID,
                 CONTESTANTAWAY_NAME,
-                TOTAL_HOME_SCORE, TOTAL_AWAY_SCORE
-                TOURNAMENTCALENDAR_OPTAUUID
+                TOTAL_HOME_SCORE,
+                TOTAL_AWAY_SCORE
             FROM {DB}.OPTA_MATCHINFO
-            WHERE (CONTESTANTHOME_OPTAUUID = '{valgt_uuid_hold}' OR CONTESTANTAWAY_OPTAUUID = '{valgt_uuid_hold}')
-            AND TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS}
-            ORDER BY MATCH_DATE DESC
+            WHERE TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS}
+              AND (CONTESTANTHOME_OPTAUUID = '{valgt_uuid_hold}' OR CONTESTANTAWAY_OPTAUUID = '{valgt_uuid_hold}')
+            ORDER BY MATCH_DATE_FULL DESC
         """
         df_matches = conn.query(sql_matches)
         
         if df_matches is not None and not df_matches.empty:
             df_matches.columns = df_matches.columns.str.lower()
-            df_matches['match_date'] = pd.to_datetime(df_matches['match_date'])
+            df_matches['match_date_full'] = pd.to_datetime(df_matches['match_date_full'])
             
-            # Formatér data til pæn visning
-            df_matches['Dato'] = df_matches['match_date'].dt.strftime('%Y-%m-%d')
+            # Formater kolonner til pæn visning
+            df_matches['Dato'] = df_matches['match_date_full'].dt.strftime('%Y-%m-%d')
+            df_matches['Runde'] = df_matches['week']
             df_matches['Kamp'] = df_matches['contestanthome_name'] + " vs " + df_matches['contestantanway_name']
-            df_matches['Resultat'] = df_matches['contestanthome_score'].astype(str) + " - " + df_matches['contestantanway_score'].astype(str)
             
-            df_vis_matches = df_matches[['Dato', 'Kamp', 'Resultat']].copy()
+            # Håndter resultat (viser '-' hvis kampen ikke er spillet endnu)
+            def format_score(row):
+                if str(row['match_status']).lower() == 'played' or (not pd.isna(row['total_home_score']) and not pd.isna(row['total_away_score'])):
+                    return f"{int(row['total_home_score'])} - {int(row['total_away_score'])}"
+                return "Ikke spillet"
+
+            df_matches['Resultat'] = df_matches.apply(format_score, axis=1)
+            
+            df_vis_matches = df_matches[['Dato', 'Runde', 'Kamp', 'Resultat', 'match_status']].copy()
+            df_vis_matches.columns = ['Dato', 'Runde', 'Kamp', 'Resultat', 'Status']
             
             st.dataframe(df_vis_matches, use_container_width=True, hide_index=True)
         else:
             st.info("Ingen kampdata fundet for dette hold i de valgte ligaer.")
-
