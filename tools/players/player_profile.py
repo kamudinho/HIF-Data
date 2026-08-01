@@ -601,8 +601,7 @@ def vis_side(dp=None):
                 MATCH_DATE_FULL,
                 CONTESTANTHOME_NAME,
                 CONTESTANTAWAY_NAME,
-                CONTESTANTHOME_SCORE,
-                CONTESTANTAWAY_SCORE,
+                TOTAL_HOME_SCORE, TOTAL_AWAY_SCORE
                 TOURNAMENTCALENDAR_OPTAUUID
             FROM {DB}.OPTA_MATCHINFO
             WHERE (CONTESTANTHOME_OPTAUUID = '{valgt_uuid_hold}' OR CONTESTANTAWAY_OPTAUUID = '{valgt_uuid_hold}')
