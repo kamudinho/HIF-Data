@@ -183,6 +183,10 @@ def vis_side(dp=None):
     if not df_kamp_events.empty:
                 def count_kamp_qual(df_group, eid, qids):
                     return df_group.apply(lambda r: har_qualifier(r['event_typeid'], r.get('qual_list', []), eid, qids), axis=1).sum()
+
+    if not df_kamp_events.empty:
+                def count_kamp_qual(df_group, eid, qids):
+                    return df_group.apply(lambda r: har_qualifier(r['event_typeid'], r.get('qual_list', []), eid, qids), axis=1).sum()
                 
                 event_stats_kamp = df_kamp_events.groupby(['player_optauuid', 'visningsnavn']).apply(lambda x: pd.Series({
                     'Kampe': 1,
