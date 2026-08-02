@@ -149,7 +149,6 @@ def vis_side(dp=None):
     if valgt_seq:
         sekvens_df = df_all[df_all['sequenceid'] == valgt_seq].sort_values(by='event_timestamp').copy()
         
-        # Tilføj et række-nummer (1, 2, 3...) til hver hændelse i sekvensen
         sekvens_df['sekvens_nr'] = range(1, len(sekvens_df) + 1)
         
         maal_row = sekvens_df[sekvens_df['event_typeid'] == 16]
@@ -175,7 +174,6 @@ def vis_side(dp=None):
             sekvens_plot_df = sekvens_df.dropna(subset=['raw_x', 'raw_y'])
 
             if not sekvens_plot_df.empty:
-                # Tegn pile mellem hændelserne
                 if len(sekvens_plot_df) > 1:
                     pitch.arrows(
                         sekvens_plot_df['raw_x'].iloc[:-1], 
@@ -191,19 +189,16 @@ def vis_side(dp=None):
                     nr_str = str(row['sekvens_nr'])
                     er_maal = (row['event_typeid'] == 16)
 
-                    # Prikkens farve og størrelse (mål er rødt, ellers sort)
                     prik_farve = '#df003b' if er_maal else 'black'
                     prik_str = 70 if er_maal else 45
 
                     pitch.scatter(r_x, r_y, color=prik_farve, s=prik_str, ax=ax, zorder=4)
 
-                    # Skriv nummeret (1, 2, 3...) midt i prikken i hvid skrift for maksimalt overblik
                     ax.text(
                         r_x, r_y, nr_str,
                         fontsize=6.5, fontweight='bold', ha='center', va='center', color='white', zorder=5
                     )
 
-                    # Skriv spillernavnet lidt forskudt ved siden af (eller under), så det kan læses
                     navn = str(row.get('player_name', ''))
                     if navn and navn != 'nan':
                         ax.text(
@@ -216,7 +211,7 @@ def vis_side(dp=None):
             st.markdown(
                 f"<div style='display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; color: #555; background-color: #fcfcfc; padding: 6px 10px; border-radius: 4px; border: 1px solid #eaeaea; margin-top: -5px;'>"
                 f"<span><b>Målscorer:</b> {målscorer}</span>"
-                f><span><b>Slutresultat:</b> {slut_stilling}</span>"
+                f"<span><b>Slutresultat:</b> {slut_stilling}</span>"
                 f"<span><b>Kamp:</b> {kamp_navn} ({dato_str})</span>"
                 f"</div>",
                 unsafe_allow_html=True
