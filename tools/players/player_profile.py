@@ -221,7 +221,7 @@ def vis_side(dp=None):
             'xg': 'sum',
             'xa': 'sum'
         }).rename(columns={'match_id': 'Kampe', 'minutes': 'Minutter', 'xg': 'xG', 'xa': 'xA'})
-        truppen_stats_raw = event_stats.join(match_stats, how='left').fillna(0)
+        truppen_stats_raw = event_stats.join(match_stats, how='left', rsuffix='_exp').fillna(0)
     else:
         truppen_stats_raw = event_stats.copy()
         truppen_stats_raw['Kampe'] = 0
@@ -471,7 +471,7 @@ def vis_side(dp=None):
                             'xg': 'sum',
                             'xa': 'sum'
                         }).rename(columns={'minutes': 'Minutter', 'xg': 'xG', 'xa': 'xA'})
-                        truppen_stats_kamp_raw = event_stats_kamp.join(match_stats_kamp, how='left').fillna(0)
+                        truppen_stats_kamp_raw = event_stats_kamp.join(match_stats_kamp, how='left', rsuffix='_exp').fillna(0)
                     else:
                         truppen_stats_kamp_raw = event_stats_kamp.copy()
                         truppen_stats_kamp_raw['Minutter'] = 0
