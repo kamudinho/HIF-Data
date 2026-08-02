@@ -6,7 +6,7 @@ from mplsoccer import Pitch
 from data.data_load import _get_snowflake_conn
 from data.utils.team_mapping import TEAMS, SEASON_LEAGUE_MAPPER
 from data.utils.mapping import OPTA_EVENT_TYPES, get_action_label, har_qualifier
-from utils.helpers import get_logo_img, oversæt_qualifiers  # <-- Bruger din eksisterende helper
+from utils.helpers import get_logo_img, oversæt_qualifiers
 
 # --- KONFIGURATION (HVIDOVRE-APP / 2026/2027) ---
 DB = "KLUB_HVIDOVREIF.AXIS"
@@ -92,8 +92,8 @@ def vis_side(dp=None):
             e.EVENT_TIMESTAMP,
             e.PLAYER_NAME,
             e.EVENT_TYPEID,
-            e.EVENT_MIN,
-            e.EVENT_SEC,
+            e.EVENT_MINUTE,
+            e.EVENT_SECOND,
             e.EVENT_X as RAW_X,
             e.EVENT_Y as RAW_Y,
             e.EVENT_CONTESTANT_OPTAUUID,
@@ -256,7 +256,7 @@ def vis_side(dp=None):
         info_row = dropdown_df[dropdown_df['sequenceid'] == valgt_seq].iloc[0]
         maal_row = sekvens_df[sekvens_df['event_typeid'].astype(str) == '16']
         målscorer = maal_row['player_name'].iloc[0] if not maal_row.empty else "Ukendt"
-        maal_minut = int(maal_row['event_min'].iloc[0]) if not maal_row.empty and pd.notna(maal_row['event_min'].iloc[0]) else 0
+        maal_minut = int(maal_row['event_minute'].iloc[0]) if not maal_row.empty and pd.notna(maal_row['event_minute'].iloc[0]) else 0
 
         col_banen, col_tabel = st.columns([2, 1])
 
@@ -301,7 +301,6 @@ def vis_side(dp=None):
                             fontsize=6, ha='center', va='top', color='#333333', zorder=5
                         )
 
-            # Hent logoer vha. din eksisterende get_logo_img funktion
             img_home = get_logo_img(info_row['home_uuid'])
             img_away = get_logo_img(info_row['away_uuid'])
 
