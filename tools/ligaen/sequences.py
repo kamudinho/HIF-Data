@@ -22,7 +22,6 @@ def vis_side(dp=None):
         st.warning("Kunne ikke oprette forbindelse til databasen.")
         st.stop()
 
-    # Hent hold udelukkende baseret på Opta-mappet for den aktuelle sæson og liga
     tilladte_hold = SEASON_LEAGUE_MAPPER.get(SEASONNAME, {}).get(AKTIV_LIGA_NAVN, [])
     
     hold_liste = [h for h in tilladte_hold if h in TEAMS]
@@ -47,38 +46,40 @@ def vis_side(dp=None):
             SELECT DISTINCT MATCH_OPTAUUID 
             FROM {DB}.OPTA_MATCHINFO 
             WHERE TOURNAMENTCALENDAR_NAME = '{SEASONNAME}'
-              AND TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
+              AND TOURNAMENTCALENDAR_OPTAUUID IN ('{LIGA_UUID}', '2mb332vncy4450vu14paj8844', 'e5p78j2r7v8h3u9s5k0l2m4n6', 'f6q89k3s8w9i4v0t6l1m3n5o7', '335', '328', '329', '43319', '331')
         ),
         GoalEvents AS (
             SELECT DISTINCT 
                 e.SEQUENCEID, 
                 e.MATCH_OPTAUUID,
-                e.EVENT_TIMESTAMP as GOAL_TIMESTAMP
+                e.EVENT_TIMESTAMP as GOAL_TIMESTAMP,
+                e.EVENT_TIMEMIN AS EVENT_MINUTE,
+                e.EVENT_OPTAUUID as GOAL_EVENT_OPTAUUID,
+                e.EVENT_CONTESTANT_OPTAUUID
             FROM {DB}.OPTA_EVENTS e
             WHERE e.MATCH_OPTAUUID IN (SELECT MATCH_OPTAUUID FROM MatchIDs)
             AND e.EVENT_TYPEID = 16 
             AND e.EVENT_CONTESTANT_OPTAUUID = '{team_opta_uuid}'
         ),
-        RankedMatchEvents AS (
+        SequenceBounds AS (
             SELECT 
-                e.*,
+                g.SEQUENCEID,
+                g.MATCH_OPTAUUID,
                 g.GOAL_TIMESTAMP,
-                g.SEQUENCEID as TARGET_SEQUENCEID,
-                ROW_NUMBER() OVER (
-                    PARTITION BY e.MATCH_OPTAUUID, g.GOAL_TIMESTAMP 
-                    ORDER BY e.EVENT_TIMESTAMP DESC
-                ) as rn
-            FROM {DB}.OPTA_EVENTS e
-            JOIN GoalEvents g 
-                ON e.MATCH_OPTAUUID = g.MATCH_OPTAUUID
-            WHERE e.EVENT_TIMESTAMP <= g.GOAL_TIMESTAMP
-              AND e.EVENT_TIMESTAMP >= DATEADD('millisecond', -20000, g.GOAL_TIMESTAMP)
-              AND e.EVENT_CONTESTANT_OPTAUUID = '{team_opta_uuid}'
+                g.GOAL_EVENT_OPTAUUID,
+                MIN(e.EVENT_TIMESTAMP) AS SEQ_START_TIMESTAMP
+            FROM GoalEvents g
+            JOIN {DB}.OPTA_EVENTS e ON g.SEQUENCEID = e.SEQUENCEID AND g.MATCH_OPTAUUID = e.MATCH_OPTAUUID
+            GROUP BY g.SEQUENCEID, g.MATCH_OPTAUUID, g.GOAL_TIMESTAMP, g.GOAL_EVENT_OPTAUUID
         ),
         FilteredEvents AS (
-            SELECT *
-            FROM RankedMatchEvents
-            WHERE rn <= 7
+            SELECT e.*, sb.GOAL_EVENT_OPTAUUID
+            FROM {DB}.OPTA_EVENTS e
+            JOIN SequenceBounds sb 
+                ON e.SEQUENCEID = sb.SEQUENCEID 
+                AND e.MATCH_OPTAUUID = sb.MATCH_OPTAUUID
+            WHERE e.EVENT_TIMESTAMP >= sb.SEQ_START_TIMESTAMP 
+              AND e.EVENT_TIMESTAMP <= sb.GOAL_TIMESTAMP
         ),
         EventQualifiers AS (
             SELECT 
@@ -86,23 +87,36 @@ def vis_side(dp=None):
                 LISTAGG(QUALIFIER_QID, ',') AS QUALIFIER_LIST
             FROM {DB}.OPTA_QUALIFIERS
             GROUP BY EVENT_OPTAUUID
+        ),
+        MatchRunningScores AS (
+            SELECT 
+                e.MATCH_OPTAUUID,
+                e.EVENT_OPTAUUID as GOAL_EVENT_OPTAUUID,
+                SUM(CASE WHEN e.EVENT_CONTESTANT_OPTAUUID = m.CONTESTANTHOME_OPTAUUID THEN 1 ELSE 0 END) 
+                    OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_TIMESTAMP ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS CURRENT_HOME_SCORE,
+                SUM(CASE WHEN e.EVENT_CONTESTANT_OPTAUUID = m.CONTESTANTAWAY_OPTAUUID THEN 1 ELSE 0 END) 
+                    OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_TIMESTAMP ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS CURRENT_AWAY_SCORE
+            FROM {DB}.OPTA_EVENTS e
+            JOIN {DB}.OPTA_MATCHINFO m ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
+            WHERE e.EVENT_TYPEID = 16
         )
         SELECT 
             e.MATCH_OPTAUUID,
-            e.TARGET_SEQUENCEID as SEQUENCEID,
+            e.SEQUENCEID,
             e.EVENT_TIMESTAMP,
+            e.EVENT_TIMEMIN AS EVENT_MINUTE,
             e.PLAYER_NAME,
             e.EVENT_TYPEID,
-            e.EVENT_MINUTE,
             e.EVENT_X as RAW_X,
             e.EVENT_Y as RAW_Y,
-            e.EVENT_CONTESTANT_OPTAUUID,
             q.QUALIFIER_LIST,
             m.CONTESTANTHOME_NAME,
             m.CONTESTANTAWAY_NAME,
             m.MATCH_DATE_FULL,
             m.TOTAL_HOME_SCORE AS FINAL_HOME_SCORE,
             m.TOTAL_AWAY_SCORE AS FINAL_AWAY_SCORE,
+            COALESCE(rs.CURRENT_HOME_SCORE, 0) AS GOAL_HOME_SCORE,
+            COALESCE(rs.CURRENT_AWAY_SCORE, 0) AS GOAL_AWAY_SCORE,
             m.CONTESTANTHOME_OPTAUUID,
             m.CONTESTANTAWAY_OPTAUUID
         FROM FilteredEvents e
@@ -110,7 +124,9 @@ def vis_side(dp=None):
             ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
         LEFT JOIN {DB}.OPTA_MATCHINFO m 
             ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
-        ORDER BY m.MATCH_DATE_FULL ASC, e.EVENT_TIMESTAMP ASC;
+        LEFT JOIN MatchRunningScores rs 
+            ON e.GOAL_EVENT_OPTAUUID = rs.GOAL_EVENT_OPTAUUID
+        ORDER BY e.SEQUENCEID, e.EVENT_TIMESTAMP ASC;
     """
 
     with st.spinner("Henter målsekvenser fra Snowflake..."):
@@ -131,9 +147,7 @@ def vis_side(dp=None):
     df_all['AKTION'] = df_all.apply(get_action_label, axis=1)
     df_all['DETALJER'] = df_all['QUALIFIER_LIST'].apply(oversæt_qualifiers)
 
-    # Fjern hændelser uden gyldig aktion
     df_all = df_all[df_all['AKTION'].notna() & (df_all['AKTION'] != "") & (df_all['AKTION'] != "Ukendt aktion")].copy()
-
     df_all.columns = [c.lower() for c in df_all.columns]
 
     if df_all.empty:
@@ -147,30 +161,6 @@ def vis_side(dp=None):
     kamp_nr_dict = dict(zip(unikke_kampe['match_optauuid'], unikke_kampe['kamp_nummer']))
     df_all['kamp_nummer'] = df_all['match_optauuid'].map(kamp_nr_dict)
 
-    # Hent ALLE mål for de pågældende kampe for at kunne udregne den rigtige stilling (inklusiv modstanderens mål)
-    match_uuids = tuple(unikke_kampe['match_optauuid'].tolist())
-    match_uuid_str = f"('{match_uuids[0]}')" if len(match_uuids) == 1 else str(match_uuids)
-
-    sql_alle_maal = f"""
-        SELECT 
-            MATCH_OPTAUUID,
-            EVENT_TIMESTAMP,
-            EVENT_CONTESTANT_OPTAUUID,
-            SEQUENCEID
-        FROM {DB}.OPTA_EVENTS
-        WHERE MATCH_OPTAUUID IN {match_uuid_str}
-          AND EVENT_TYPEID = 16
-        ORDER BY EVENT_TIMESTAMP ASC;
-    """
-    try:
-        alle_maal_df = conn.query(sql_alle_maal)
-        if alle_maal_df is not None and not alle_maal_df.empty:
-            alle_maal_df.columns = [c.lower() for c in alle_maal_df.columns]
-        else:
-            alle_maal_df = pd.DataFrame()
-    except Exception:
-        alle_maal_df = pd.DataFrame()
-
     maal_df = df_all[df_all['event_typeid'].astype(str) == '16'].copy()
     maal_df = maal_df.sort_values(by=['match_date_full', 'event_timestamp'])
 
@@ -178,7 +168,6 @@ def vis_side(dp=None):
 
     for _, m_row in maal_df.iterrows():
         seq_id = m_row['sequenceid']
-        m_uuid = m_row['match_optauuid']
         k_nr = m_row['kamp_nummer']
         
         home_name = m_row['contestanthome_name']
@@ -189,30 +178,8 @@ def vis_side(dp=None):
         er_hjemmehold = (team_opta_uuid == home_uuid)
         modstander = away_name if er_hjemmehold else home_name
 
-        # Hent ALLE mål i denne kamp kronologisk for at tælle korrekt op til dette mål
-        if not alle_maal_df.empty:
-            kamp_alle_maal = alle_maal_df[alle_maal_df['match_optauuid'] == m_uuid].sort_values('event_timestamp')
-        else:
-            kamp_alle_maal = pd.DataFrame()
-        
-        h_maal = 0
-        a_maal = 0
-        
-        if not kamp_alle_maal.empty:
-            for _, sub_m in kamp_alle_maal.iterrows():
-                is_home_goal = (sub_m['event_contestant_optauuid'] == home_uuid)
-                if is_home_goal:
-                    h_maal += 1
-                else:
-                    a_maal += 1
-                    
-                # Stop når vi når det aktuelle mål i sekvensen
-                if sub_m['sequenceid'] == seq_id:
-                    break
-        
-        if h_maal == 0 and a_maal == 0:
-            h_maal = 1 if er_hjemmehold else 0
-            a_maal = 0 if er_hjemmehold else 1
+        h_maal = int(m_row['goal_home_score']) if pd.notna(m_row.get('goal_home_score')) else 0
+        a_maal = int(m_row['goal_away_score']) if pd.notna(m_row.get('goal_away_score')) else 0
 
         stilling_hjemme_ude = f"{h_maal}-{a_maal}"
         aktuel_stilling = f"{h_maal}-{a_maal}" if er_hjemmehold else f"{a_maal}-{h_maal}"
@@ -261,7 +228,10 @@ def vis_side(dp=None):
         info_row = dropdown_df[dropdown_df['sequenceid'] == valgt_seq].iloc[0]
         maal_row = sekvens_df[sekvens_df['event_typeid'].astype(str) == '16']
         målscorer = maal_row['player_name'].iloc[0] if not maal_row.empty else "Ukendt"
-        maal_minut = int(maal_row['event_minute'].iloc[0]) if not maal_row.empty and pd.notna(maal_row['event_minute'].iloc[0]) else 0
+        
+        # Hent minuttallet direkte fra databasen og læg +1 til som aftalt
+        raw_min = int(maal_row['event_minute'].iloc[0]) if not maal_row.empty and pd.notna(maal_row['event_minute'].iloc[0]) else 0
+        maal_minut = raw_min + 1
 
         col_banen, col_tabel = st.columns([2, 1])
 
@@ -306,7 +276,7 @@ def vis_side(dp=None):
                             fontsize=6, ha='center', va='top', color='#333333', zorder=5
                         )
 
-            # Hent logoer vha. get_logo_img og placer dem nederst på banen
+            # Logoer placeret nederst på banen
             img_home = get_logo_img(info_row['home_uuid'])
             img_away = get_logo_img(info_row['away_uuid'])
 
@@ -318,7 +288,7 @@ def vis_side(dp=None):
             if img_away:
                 pitch.inset_image(x=13, y=9, image=img_away, height=7, ax=ax, zorder=6)
 
-            # Dato, stilling og minut placeret i bunden
+            # Dato, stilling og minut (+1) i bunden
             tekst_bund = f"{info_row['dato']} | Stilling: {info_row['stilling_hjemme_ude']} ({maal_minut}. min)"
             ax.text(2, 3.5, tekst_bund, fontsize=8, color='#555555', ha='left', va='center', zorder=6)
 
