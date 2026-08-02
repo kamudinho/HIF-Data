@@ -224,7 +224,7 @@ try:
             pp.vis_side()
         elif s == "Målsekvenser":
             import tools.hifanalyse.sequences as ms
-            ms.vis_side(dp)
+            ms.vis_side()
 
     elif m == "FYSISK DATA":
         if s == "Charts":
