@@ -222,7 +222,11 @@ def vis_side(dp=None):
         )
 
     if valgt_seq:
-        sekvens_df = df_all[df_all['sequenceid'] == valgt_seq].sort_values(by='event_timestamp').copy()
+        # Sørg for at sortere fuldstændigt stringent efter timestamp, så aktionerne kommer ikrudt-rækkefølge
+        sekvens_df = df_all[df_all['sequenceid'] == valgt_seq].sort_values(by='event_timestamp', ascending=True).copy()
+        
+        # Nulstil index og tildel fortløbende sekvensnummer (1, 2, 3...)
+        sekvens_df = sekvens_df.reset_index(drop=True)
         sekvens_df['sekvens_nr'] = range(1, len(sekvens_df) + 1)
         
         info_row = dropdown_df[dropdown_df['sequenceid'] == valgt_seq].iloc[0]
@@ -235,7 +239,6 @@ def vis_side(dp=None):
         col_banen, col_tabel = st.columns([2, 1])
 
         with col_banen:
-            # Infobaren er rykket op her i toppen i stedet for den gamle overskrift
             st.markdown(
                 f"<div style='display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; color: #555; background-color: #fcfcfc; padding: 6px 10px; border-radius: 4px; border: 1px solid #eaeaea; margin-bottom: 5px;'>"
                 f"<span><b>Målscorer:</b> {målscorer}</span>"
@@ -283,7 +286,6 @@ def vis_side(dp=None):
                             fontsize=6, ha='center', va='top', color='#333333', zorder=5
                         )
 
-            # Logoer placeret nederst på banen
             img_home = get_logo_img(info_row['home_uuid'])
             img_away = get_logo_img(info_row['away_uuid'])
 
@@ -295,7 +297,6 @@ def vis_side(dp=None):
             if img_away:
                 pitch.inset_image(x=13, y=9, image=img_away, height=7, ax=ax, zorder=6)
 
-            # Dato, stilling og minut (+1) i bunden af banen
             tekst_bund = f"{info_row['dato']} | Stilling: {info_row['stilling_hjemme_ude']} ({maal_minut}. min)"
             ax.text(2, 3.5, tekst_bund, fontsize=8, color='#555555', ha='left', va='center', zorder=6)
 
