@@ -54,7 +54,7 @@ def vis_side(dp=None):
         st.error(f"Kunne ikke finde Opta UUID for holdet: {valgt_hold_navn}")
         st.stop()
 
-    # --- FORENKLET OG SIKKER SQL-FORESPØRGSEL ---
+    # --- SQL-FORESPØRGSEL ---
     sql_query = f"""
         WITH MatchIDs AS (
             SELECT DISTINCT MATCH_OPTAUUID 
@@ -136,7 +136,6 @@ def vis_side(dp=None):
     df_all.columns = [c.lower() for c in df_all.columns]
     df_all['kamp_label'] = df_all['contestanthome_name'] + " vs. " + df_all['contestantaway_name']
     
-    # Oversæt event_typeid ved hjælp af central OPTA_EVENT_TYPES mapping
     df_all['aktion'] = df_all['event_typeid'].map(OPTA_EVENT_TYPES).fillna("Ukendt (" + df_all['event_typeid'].astype(str) + ")")
     df_all['detaljer'] = df_all['qualifier_list'].apply(oversæt_qualifiers)
 
@@ -160,19 +159,20 @@ def vis_side(dp=None):
         match_ts = sekvens_df['match_date_full'].iloc[0] if 'match_date_full' in sekvens_df.columns else ""
         dato_str = pd.to_datetime(match_ts).strftime('%d/%m/%Y') if pd.notna(match_ts) else ""
 
-        # Hent slutstilling til visning
         if not maal_row.empty and 'final_home_score' in maal_row.columns and pd.notna(maal_row['final_home_score'].iloc[0]):
             slut_stilling = f"{int(maal_row['final_home_score'].iloc[0])}-{int(maal_row['final_away_score'].iloc[0])}"
         else:
-            slut_stilling = "Ukiendt"
+            slut_stilling = "Ukendt"
 
         # --- OPSETNING: BANEN TIL VENSTRE, TABELLEN TIL HØJRE ---
         col_banen, col_tabel = st.columns([2, 1])
 
         with col_banen:
             st.markdown("##### Sekvensopbygning på banen (fra bolden vindes)")
-            pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#7f7f7f', line_zorder=2)
-            fig, ax = pitch.draw(figsize=(8, 4.2))
+            
+            # Justeret figsize og linjetykkelse på banen
+            pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#7f7f7f', line_zorder=2, linewidth=1.2)
+            fig, ax = pitch.draw(figsize=(9, 4.5))
 
             sekvens_plot_df = sekvens_df.dropna(subset=['raw_x', 'raw_y'])
 
@@ -183,20 +183,22 @@ def vis_side(dp=None):
                         sekvens_plot_df['raw_y'].iloc[:-1],
                         sekvens_plot_df['raw_x'].iloc[1:], 
                         sekvens_plot_df['raw_y'].iloc[1:], 
-                        ax=ax, width=1.5, headwidth=3, color="#cccccc", alpha=0.8, zorder=3
+                        ax=ax, width=1.0, headwidth=2.5, color="#b0b0b0", alpha=0.8, zorder=3
                     )
 
+                # Mindre prikker (s=30 i stedet for 80)
                 pitch.scatter(
                     sekvens_plot_df['raw_x'], sekvens_plot_df['raw_y'],
-                    color='black', s=80, ax=ax, zorder=4
+                    color='black', s=30, ax=ax, zorder=4
                 )
 
                 for _, row in sekvens_plot_df.iterrows():
                     if pd.notna(row.get('player_name')) and pd.notna(row.get('raw_x')):
                         if row.get('event_typeid') != 16:
+                            # Mindre skriftstørrelse på spillernavne (fontsize=6.5)
                             ax.text(
-                                row['raw_x'], row['raw_y'] + 3, row['player_name'],
-                                fontsize=8, ha='center', va='bottom', color='black', zorder=5
+                                row['raw_x'], row['raw_y'] + 2.2, row['player_name'],
+                                fontsize=6.5, ha='center', va='bottom', color='#333333', zorder=5
                             )
 
                 if not maal_row.empty:
@@ -204,13 +206,14 @@ def vis_side(dp=None):
                     m_y = maal_row['raw_y'].iloc[0]
                     m_navn = maal_row['player_name'].iloc[0]
 
+                    # Lidt større prik til målet, men ikke for voldsom (s=55)
                     pitch.scatter(
                         m_x, m_y,
-                        color='#df003b', s=120, ax=ax, zorder=6
+                        color='#df003b', s=55, ax=ax, zorder=6
                     )
                     ax.text(
-                        m_x, m_y + 3, m_navn,
-                        fontsize=8, fontweight='bold', ha='center', va='bottom', color='black', zorder=7
+                        m_x, m_y + 2.2, m_navn,
+                        fontsize=7, fontweight='bold', ha='center', va='bottom', color='#df003b', zorder=7
                     )
 
             st.pyplot(fig, use_container_width=True)
