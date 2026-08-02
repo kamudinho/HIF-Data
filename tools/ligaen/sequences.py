@@ -109,7 +109,7 @@ def vis_side(dp=None):
             q.QUALIFIER_LIST,
             m.CONTESTANTHOME_NAME,
             m.CONTESTANTAWAY_NAME,
-            m.MATCH_TIMESTAMP,
+            m.MATCH_DATE_FULL,
             m.HOMESCORECURRENT,
             m.AWAYSCORECURRENT
         FROM FilteredEvents e
