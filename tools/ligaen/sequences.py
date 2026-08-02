@@ -157,6 +157,30 @@ def vis_side(dp=None):
     kamp_nr_dict = dict(zip(unikke_kampe['match_optauuid'], unikke_kampe['kamp_nummer']))
     df_all['kamp_nummer'] = df_all['match_optauuid'].map(kamp_nr_dict)
 
+    # Hent ALLE mål for de pågældende kampe for at kunne udregne den rigtige stilling (inklusiv modstanderens mål)
+    match_uuids = tuple(unikke_kampe['match_optauuid'].tolist())
+    match_uuid_str = f"('{match_uuids[0]}')" if len(match_uuids) == 1 else str(match_uuids)
+
+    sql_alle_maal = f"""
+        SELECT 
+            MATCH_OPTAUUID,
+            EVENT_TIMESTAMP,
+            EVENT_CONTESTANT_OPTAUUID,
+            SEQUENCEID
+        FROM {DB}.OPTA_EVENTS
+        WHERE MATCH_OPTAUUID IN {match_uuid_str}
+          AND EVENT_TYPEID = 16
+        ORDER BY EVENT_TIMESTAMP ASC;
+    """
+    try:
+        alle_maal_df = conn.query(sql_alle_maal)
+        if alle_maal_df is not None and not alle_maal_df.empty:
+            alle_maal_df.columns = [c.lower() for c in alle_maal_df.columns]
+        else:
+            alle_maal_df = pd.DataFrame()
+    except Exception:
+        alle_maal_df = pd.DataFrame()
+
     maal_df = df_all[df_all['event_typeid'].astype(str) == '16'].copy()
     maal_df = maal_df.sort_values(by=['match_date_full', 'event_timestamp'])
 
@@ -175,25 +199,31 @@ def vis_side(dp=None):
         modstander = away_name if er_hjemmehold else home_name
 
         # Hent ALLE mål i denne kamp kronologisk for at tælle korrekt op til dette mål
-        kamp_alle_maal = df_all[
-            (df_all['match_optauuid'] == m_uuid) & 
-            (df_all['event_typeid'].astype(str) == '16')
-        ].sort_values('event_timestamp')
+        if not alle_maal_df.empty:
+            kamp_alle_maal = alle_maal_df[alle_maal_df['match_optauuid'] == m_uuid].sort_values('event_timestamp')
+        else:
+            kamp_alle_maal = pd.DataFrame()
         
         h_maal = 0
         a_maal = 0
-        for _, sub_m in kamp_alle_maal.iterrows():
-            is_home_goal = (sub_m['event_contestant_optauuid'] == home_uuid)
-            if is_home_goal:
-                h_maal += 1
-            else:
-                a_maal += 1
-                
-            # Stop når vi når det aktuelle mål i sekvensen
-            if sub_m['sequenceid'] == seq_id:
-                break
+        
+        if not kamp_alle_maal.empty:
+            for _, sub_m in kamp_alle_maal.iterrows():
+                is_home_goal = (sub_m['event_contestant_optauuid'] == home_uuid)
+                if is_home_goal:
+                    h_maal += 1
+                else:
+                    a_maal += 1
+                    
+                # Stop når vi når det aktuelle mål i sekvensen
+                if sub_m['sequenceid'] == seq_id:
+                    break
+        
+        if h_maal == 0 and a_maal == 0:
+            h_maal = 1 if er_hjemmehold else 0
+            a_maal = 0 if er_hjemmehold else 1
 
-        # Sæt rekkefølgen korrekt op (Hjemmehold - Udehold) fra holdets perspektiv
+        # Sæt rækkefølgen korrekt op (Hjemmehold - Udehold) fra holdets perspektiv
         if er_hjemmehold:
             aktuel_stilling = f"{h_maal}-{a_maal}"
         else:
