@@ -346,7 +346,8 @@ def vis_side(dp=None):
             st.info("Ingen trup-data tilgængelig endnu.")
 
     with t_matches:
-        col_t_title, col_t_btn = st.columns([2.7, 1.3])
+        # Tre kolonner på samme række: Titel, Dropdown (Kampe) og Kategori-vælger (Knapper)
+        col_t_title, col_t_matches, col_t_btn = st.columns([1.5, 1.8, 1.7])
         
         with col_t_title:
             logo_html = ""
@@ -356,20 +357,9 @@ def vis_side(dp=None):
                 img_str = base64.b64encode(buffered.getvalue()).decode()
                 logo_html = f'<img src="data:image/png;base64,{img_str}" style="height: 26px; margin-right: 10px; object-fit: contain;">'
             
-            st.markdown(f'<div style="display: flex; align-items: center; padding-top: 20px;">{logo_html}<span style="font-size: 16px; font-weight: bold; line-height: 1;">KAMPOVERSIGT - {valgt_hold.upper()}</span></div>', unsafe_allow_html=True)
+            st.markdown(f'<div style="display: flex; align-items: center; padding-top: 5px;">{logo_html}<span style="font-size: 15px; font-weight: bold; line-height: 1;">KAMPOVERSIGT</span></div>', unsafe_allow_html=True)
             
-        with col_t_btn:
-            st.markdown('<div style="display: flex; justify-content: flex-end;">', unsafe_allow_html=True)
-            kategori_valg = st.segmented_control(
-                "Visningskategori Kamp", 
-                options=["Generelt", "Opbygning", "Offensiv", "Defensiv"], 
-                default="Generelt",
-                key="match_kategori_control",
-                label_visibility="collapsed"
-            )
-            st.markdown('</div>', unsafe_allow_html=True)
-        
-        # Filtreret til kun at hente kampe hvor MATCH_STATUS = 'Played'
+        # SQL til at hente spillede kampe
         sql_matches = f"""
             SELECT 
                 MATCH_OPTAUUID,
@@ -386,6 +376,7 @@ def vis_side(dp=None):
         """
         df_matches = conn.query(sql_matches)
         
+        valgt_kamp_uuid = None
         if df_matches is not None and not df_matches.empty:
             df_matches.columns = df_matches.columns.str.lower()
             df_matches['match_date_full'] = pd.to_datetime(df_matches['match_date_full'], errors='coerce')
@@ -393,12 +384,27 @@ def vis_side(dp=None):
             
             kamp_options = {}
             for _, r in df_matches.iterrows():
-                label = f"Runde {r['week']} - Dato: {r['dato_str']}"
+                label = f"Runde {r['week']} ({r['dato_str']})"
                 kamp_options[label] = str(r['match_optauuid'])
                 
-            valgt_kamp_label = st.selectbox("Vælg kamp", list(kamp_options.keys()), key="valgt_kamp_dropdown")
-            valgt_kamp_uuid = kamp_options[valgt_kamp_label]
-            
+            with col_t_matches:
+                valgt_kamp_label = st.selectbox("Vælg kamp", list(kamp_options.keys()), key="valgt_kamp_dropdown", label_visibility="collapsed")
+                valgt_kamp_uuid = kamp_options[valgt_kamp_label]
+        
+        with col_t_btn:
+            st.markdown('<div style="display: flex; justify-content: flex-end;">', unsafe_allow_html=True)
+            kategori_valg = st.segmented_control(
+                "Visningskategori Kamp", 
+                options=["Generelt", "Opbygning", "Offensiv", "Defensiv"], 
+                default="Generelt",
+                key="match_kategori_control",
+                label_visibility="collapsed"
+            )
+            st.markdown('</div>', unsafe_allow_html=True)
+        
+        st.markdown("<div style='margin-bottom: 10px;'></div>", unsafe_allow_html=True)
+        
+        if df_matches is not None and not df_matches.empty and valgt_kamp_uuid:
             match_col_in_all = None
             for col in ['match_optauuid', 'match_id']:
                 if col in df_all.columns:
