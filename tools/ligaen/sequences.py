@@ -95,8 +95,7 @@ def oversæt_qualifiers(qual_str):
 def vis_side():
     DB = "KLUB_HVIDOVREIF.AXIS"
 
-    st.title("⚽ Målsekvenser")
-    st.markdown("Gennemgang af holdets målsekvenser fra bolden vindes, til målet falder.")
+    st.caption("Gennemgang af holdets målsekvenser fra bolden vindes, til målet falder.")
 
     conn = _get_snowflake_conn()
     if not conn:
@@ -256,7 +255,7 @@ def vis_side():
         col_banen, col_tabel = st.columns([1.2, 1])
 
         with col_banen:
-            st.markdown("### Sekvensopbygning på banen (fra bolden vindes)")
+            st.caption("### Sekvensopbygning på banen (fra bolden vindes)")
             pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#7f7f7f', line_zorder=2)
             fig, ax = pitch.draw(figsize=(8, 5))
 
@@ -302,15 +301,12 @@ def vis_side():
             st.pyplot(fig, use_container_width=True)
 
         with col_tabel:
-            st.markdown("### Aktioner i sekvensen")
-            vis_cols = [c for c in ['event_timestamp', 'player_name', 'aktion', 'detaljer', 'raw_x', 'raw_y'] if c in sekvens_df.columns]
+            st.caption("### Aktioner i sekvensen")
+            vis_cols = [c for c in ['player_name', 'aktion', 'detaljer'] if c in sekvens_df.columns]
             
             tabel_df = sekvens_df[vis_cols].rename(columns={
-                'event_timestamp': 'Tid',
                 'player_name': 'Spiller',
                 'aktion': 'Aktion',
-                'detaljer': 'Detaljer',
-                'raw_x': 'X',
-                'raw_y': 'Y'
+                'detaljer': 'Detaljer'
             })
             st.dataframe(tabel_df, use_container_width=True, hide_index=True, height=380)
