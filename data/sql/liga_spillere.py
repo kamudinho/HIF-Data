@@ -79,10 +79,11 @@ def hent_match_og_haendelsesdata(conn, db_navn, valgt_uuid_hold, liga_ids, navne
             FROM EventQualifiers
         ),
         PlayerGoals AS (
-            SELECT PLAYER_OPTAUUID, MATCH_NAME, FIRST_NAME, SHORT_LAST_NAME,
+            SELECT PLAYER_OPTAUUID, 
+                MAX(MATCH_NAME) AS MATCH_NAME, MAX(FIRST_NAME) AS FIRST_NAME, MAX(SHORT_LAST_NAME) AS SHORT_LAST_NAME,
                 SUM(CASE WHEN EVENT_TYPEID = 16 THEN 1 ELSE 0 END) AS GOALS
             FROM SortedEvents
-            GROUP BY PLAYER_OPTAUUID, MATCH_NAME, FIRST_NAME, SHORT_LAST_NAME
+            GROUP BY PLAYER_OPTAUUID
         ),
         PlayerAssists AS (
             SELECT ASSIST_PLAYER_UUID AS PLAYER_OPTAUUID, COUNT(*) AS ASSISTS
@@ -103,6 +104,8 @@ def hent_match_og_haendelsesdata(conn, db_navn, valgt_uuid_hold, liga_ids, navne
     df_db_stats = conn.query(sql_db_stats)
     if df_db_stats is not None:
         df_db_stats.columns = df_db_stats.columns.str.lower()
+        # Sikrer at vi fjerner eventuelle dubletter på spiller-id i Pandas, så der kun er 1 række pr spiller
+        df_db_stats = df_db_stats.drop_duplicates(subset=['player_optauuid']).copy()
         df_db_stats['visningsnavn'] = df_db_stats.apply(fix_name, axis=1)
         df_db_stats['visningsnavn'] = df_db_stats.apply(lambda r: navne_map.get(str(r['player_optauuid']), r['visningsnavn']), axis=1)
 
