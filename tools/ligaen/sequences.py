@@ -34,7 +34,7 @@ OPTA_EVENT_TYPES = {
     24: "Bold ude",
     25: "Godkendelse/VAR",
     26: "Modtagelse efter aflevering",
-    27: "Bollbesiddelse",
+    27: "Boldbesiddelse",
     28: "Fejl i opspillet",
     29: "Keeper indgreb",
     30: "Keeper opsamling",
@@ -49,32 +49,54 @@ OPTA_EVENT_TYPES = {
     39: "Brændt straffespark",
     40: "Selvmål",
     41: "Assist",
-    42: "Blokeret skud",
-    43: "Foul",
-    44: "Card",
-    45: "Substitution",
-    46: "Offside provoked",
-    47: "Air duel",
-    48: "Tackle",
-    49: "Interception",
-    50: "Save",
-    51: "Claim",
-    52: "Clearance",
-    53: "Miss",
-    54: "Post",
-    55: "Attempt saved",
-    60: "Fejl",
-    61: "Keeper claim",
-    62: "Keeper punch",
-    63: "Keeper pick up",
-    74: "Blocked pass",
-    80: "Boldeobeskrivelse"
+    42: "Blokeret skud"
 }
+
+# Opta Qualifier ID til læsevenlig tekst (oversigt over væsentlige qualifiers)
+OPTA_QUALIFIERS_MAP = {
+    1: "Lang aflevering",
+    2: "Indlæg",
+    3: "Hovedstød",
+    4: "Stikning",
+    5: "Frispark udført",
+    6: "Hjørnespark udført",
+    15: "Hoved",
+    20: "Højreben",
+    22: "Almindeligt spil",
+    23: "Kontraangreb",
+    24: "Standardsituation",
+    25: "Fra hjørnespark",
+    26: "Frispark",
+    29: "Assisteret",
+    72: "Venstreben",
+    107: "Indkast",
+    108: "Flugtning",
+    156: "Aflevering tilbage / Lay-off",
+    168: "Flick-on",
+    169: "Fører til forsøg",
+    170: "Fører til mål",
+    214: "Stor chance",
+    215: "Individuel aktion"
+}
+
+def oversæt_qualifiers(qual_str):
+    if not qual_str or pd.isna(qual_str):
+        return ""
+    q_ids = str(qual_str).split(",")
+    tekster = []
+    for qid in q_ids:
+        qid_clean = qid.strip()
+        if qid_clean.isdigit():
+            q_int = int(qid_clean)
+            if q_int in OPTA_QUALIFIERS_MAP:
+                tekster.append(OPTA_QUALIFIERS_MAP[q_int])
+    return ", ".join(tekster)
 
 def vis_side():
     DB = "KLUB_HVIDOVREIF.AXIS"
 
-    st.caption("Gennemgang af holdets målsekvenser fra bolden vindes, til målet falder.")
+    st.title("⚽ Målsekvenser")
+    st.markdown("Gennemgang af holdets målsekvenser fra bolden vindes, til målet falder.")
 
     conn = _get_snowflake_conn()
     if not conn:
@@ -115,9 +137,9 @@ def vis_side():
         st.stop()
 
     # --- SQL-FORESPØRGSEL ---
-    # Vi henter målene (EVENT_TYPEID = 16) og følger selve sekvensen (SEQUENCEID), men filtrerer/afkorter den, 
-    # så den starter fra det tidspunkt holdet vinder bolden (f.eks. første hændelse i sekvensen for holdet, eller hvor besiddelsen starter) 
-    # og frem til målet falder.
+    # Finder målet (EVENT_TYPEID = 16) og følger sekvensen (SEQUENCEID). 
+    # For at sikre at vi fanger hele forløbet fra bolden vindes, udvider vi vinduet bagud til den første hændelse i samme sekvens,
+    # hvor holdet er i boldbesiddelse eller starter opspillet, indtil målet falder.
     sql_query = f"""
         WITH MatchIDs AS (
             SELECT DISTINCT MATCH_OPTAUUID 
@@ -135,7 +157,6 @@ def vis_side():
             AND e.EVENT_CONTESTANT_OPTAUUID = '{team_opta_uuid}'
         ),
         SequenceBounds AS (
-            -- Finder starttidspunktet for sekvensen (eller hvor holdet reelt starter sekvensen/vinder bolden op til målet)
             SELECT 
                 g.SEQUENCEID,
                 g.MATCH_OPTAUUID,
@@ -200,8 +221,9 @@ def vis_side():
     df_all.columns = [c.lower() for c in df_all.columns]
     df_all['kamp_label'] = df_all['contestanthome_name'] + " vs. " + df_all['contestantaway_name']
     
-    # Oversæt event_typeid til læsevenlig tekst i en ny kolonne
-    df_all['aktion'] = df_all['event_typeid'].map(OPTA_EVENT_TYPES).fillna("Ukendt hændelse (" + df_all['event_typeid'].astype(str) + ")")
+    # Oversæt event_typeid og qualifiers til dansk
+    df_all['aktion'] = df_all['event_typeid'].map(OPTA_EVENT_TYPES).fillna("Ukendt (" + df_all['event_typeid'].astype(str) + ")")
+    df_all['detaljer'] = df_all['qualifier_list'].apply(oversæt_qualifiers)
 
     sekvens_ids = df_all['sequenceid'].unique()
 
@@ -281,14 +303,13 @@ def vis_side():
 
         with col_tabel:
             st.markdown("### Aktioner i sekvensen")
-            # Vis 'aktion' i stedet for blot event_typeid
-            vis_cols = [c for c in ['event_timestamp', 'player_name', 'aktion', 'raw_x', 'raw_y'] if c in sekvens_df.columns]
+            vis_cols = [c for c in ['event_timestamp', 'player_name', 'aktion', 'detaljer', 'raw_x', 'raw_y'] if c in sekvens_df.columns]
             
-            # Opret en pæn kopi til tabellen med overskrifter på dansk
             tabel_df = sekvens_df[vis_cols].rename(columns={
                 'event_timestamp': 'Tid',
                 'player_name': 'Spiller',
                 'aktion': 'Aktion',
+                'detaljer': 'Detaljer',
                 'raw_x': 'X',
                 'raw_y': 'Y'
             })
