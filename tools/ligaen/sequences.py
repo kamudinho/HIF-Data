@@ -114,7 +114,7 @@ def vis_side(dp=None):
             ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
         LEFT JOIN {DB}.OPTA_MATCHINFO m 
             ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
-        ORDER BY e.SEQUENCEID, e.EVENT_TIMESTAMP ASC;
+        ORDER BY m.MATCH_DATE_FULL ASC, e.EVENT_TIMESTAMP ASC;
     """
 
     with st.spinner("Henter målsekvenser fra Snowflake..."):
@@ -136,14 +136,24 @@ def vis_side(dp=None):
     df_all['aktion'] = df_all['event_typeid'].map(OPTA_EVENT_TYPES).fillna("Ukendt (" + df_all['event_typeid'].astype(str) + ")")
     df_all['detaljer'] = df_all['qualifier_list'].apply(oversæt_qualifiers)
 
-    sekvens_ids = df_all['sequenceid'].unique()
+    # --- DEFINER MÅL 1, MÅL 2 OSV. KRONOLOGISK FOR HOLDET ---
+    # Vi finder unikke sekvenser i kronologisk rækkefølge og tildeler dem et mål-nummer
+    unikke_maal = df_all[df_all['event_typeid'] == 16][['sequenceid', 'match_date_full', 'kamp_label', 'player_name']].drop_duplicates()
+    unikke_maal = unikke_maal.sort_values(by=['match_date_full', 'sequenceid']).reset_index(drop=True)
+    unikke_maal['maal_nummer'] = range(1, len(unikke_maal) + 1)
+    
+    # Map mål-nummeret tilbage til hoveddatarammen
+    seq_til_maal_nr = dict(zip(unikke_maal['sequenceid'], unikke_maal['maal_nummer']))
+    df_all['maal_nummer'] = df_all['sequenceid'].map(seq_til_maal_nr)
+
+    sekvens_ids = unikke_maal['sequenceid'].tolist()
 
     with col_s:
         valgt_seq = st.selectbox(
             "Vælg målsekvens", 
             sekvens_ids, 
             key="seq_main_dropdown",
-            format_func=lambda x: f"ID: {x} ({df_all[df_all['sequenceid'] == x]['kamp_label'].iloc[0]})"
+            format_func=lambda x: f"Mål {seq_til_maal_nr[x]}: {unikke_maal[unikke_maal['sequenceid'] == x]['player_name'].iloc[0]} ({unikke_maal[unikke_maal['sequenceid'] == x]['kamp_label'].iloc[0]})"
         )
 
     if valgt_seq:
@@ -154,6 +164,7 @@ def vis_side(dp=None):
         maal_row = sekvens_df[sekvens_df['event_typeid'] == 16]
         målscorer = maal_row['player_name'].iloc[0] if not maal_row.empty else "Ukendt"
         kamp_navn = sekvens_df['kamp_label'].iloc[0]
+        aktuelt_maal_nr = sekvens_df['maal_nummer'].iloc[0]
         
         match_ts = sekvens_df['match_date_full'].iloc[0] if 'match_date_full' in sekvens_df.columns else ""
         dato_str = pd.to_datetime(match_ts).strftime('%d/%m/%Y') if pd.notna(match_ts) else ""
@@ -166,7 +177,7 @@ def vis_side(dp=None):
         col_banen, col_tabel = st.columns([2, 1])
 
         with col_banen:
-            st.markdown("##### Sekvensopbygning på banen (fra bolden vindes)")
+            st.markdown(f"##### Mål {aktuelt_maal_nr}: Sekvensopbygning på banen")
             
             pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#7f7f7f', line_zorder=2, linewidth=1.0)
             fig, ax = pitch.draw(figsize=(9, 4.5))
