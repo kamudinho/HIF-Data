@@ -68,6 +68,7 @@ OPTA_QUALIFIERS_MAP = {
     25: "Fra hjørnespark",
     26: "Frispark",
     29: "Assisteret",
+    44: "Hovedstød",
     72: "Venstreben",
     107: "Indkast",
     108: "Flugtning",
