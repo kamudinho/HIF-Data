@@ -93,6 +93,7 @@ def vis_side(dp=None):
             e.EVENT_TIMESTAMP,
             e.PLAYER_NAME,
             e.EVENT_TYPEID,
+            e.EVENT_MINUTE,
             e.EVENT_X as RAW_X,
             e.EVENT_Y as RAW_Y,
             e.EVENT_CONTESTANT_OPTAUUID,
@@ -260,6 +261,7 @@ def vis_side(dp=None):
         info_row = dropdown_df[dropdown_df['sequenceid'] == valgt_seq].iloc[0]
         maal_row = sekvens_df[sekvens_df['event_typeid'].astype(str) == '16']
         målscorer = maal_row['player_name'].iloc[0] if not maal_row.empty else "Ukendt"
+        maal_minut = int(maal_row['event_minute'].iloc[0]) if not maal_row.empty and pd.notna(maal_row['event_minute'].iloc[0]) else 0
 
         col_banen, col_tabel = st.columns([2, 1])
 
@@ -304,17 +306,21 @@ def vis_side(dp=None):
                             fontsize=6, ha='center', va='top', color='#333333', zorder=5
                         )
 
-            # Hent logoer vha. get_logo_img
+            # Hent logoer vha. get_logo_img og placer dem nederst på banen
             img_home = get_logo_img(info_row['home_uuid'])
             img_away = get_logo_img(info_row['away_uuid'])
 
             if img_home:
-                pitch.inset_image(x=4, y=91, image=img_home, height=7, ax=ax, zorder=6)
+                pitch.inset_image(x=4, y=9, image=img_home, height=7, ax=ax, zorder=6)
 
-            ax.text(8.5, 91, "vs.", fontsize=9, fontweight='bold', ha='center', va='center', color='#333333', zorder=6)
+            ax.text(8.5, 12.5, "vs.", fontsize=9, fontweight='bold', ha='center', va='center', color='#333333', zorder=6)
 
             if img_away:
-                pitch.inset_image(x=13, y=91, image=img_away, height=7, ax=ax, zorder=6)
+                pitch.inset_image(x=13, y=9, image=img_away, height=7, ax=ax, zorder=6)
+
+            # Dato, stilling og minut placeret i bunden
+            tekst_bund = f"{info_row['dato']} | Stilling: {info_row['stilling_hjemme_ude']} ({maal_minut}. min)"
+            ax.text(2, 3.5, tekst_bund, fontsize=8, color='#555555', ha='left', va='center', zorder=6)
 
             st.pyplot(fig, use_container_width=True)
 
