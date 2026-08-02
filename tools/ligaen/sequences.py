@@ -242,7 +242,7 @@ def vis_side():
         kamp_navn = sekvens_df['kamp_label'].iloc[0]
         
         # Ekstrakt dato / tid / stilling hvis tilgængelig i kolonnerne
-        match_ts = sekvens_df['match_timestamp'].iloc[0] if 'match_timestamp' in sekvens_df.columns else ""
+        match_ts = sekvens_df['event_timestamp'].iloc[0] if 'match_timestamp' in sekvens_df.columns else ""
         dato_str = pd.to_datetime(match_ts).strftime('%d/%m/%Y') if pd.notna(match_ts) else ""
         
         # Hent minut for målet hvis muligt, ellers fallback
