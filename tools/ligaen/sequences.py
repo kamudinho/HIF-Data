@@ -5,26 +5,14 @@ from mplsoccer import Pitch
 # --- CENTRAL DATA & MAPPING ---
 from data.data_load import _get_snowflake_conn
 from data.utils.team_mapping import TEAMS, SEASON_LEAGUE_MAPPER
-from data.utils.mapping import OPTA_EVENT_TYPES, OPTA_QUALIFIERS, get_action_label, har_qualifier
+from data.utils.mapping import OPTA_EVENT_TYPES, get_action_label, har_qualifier
+from data.utils.helpers import get_logo_img, oversæt_qualifiers  # <-- Bruger din eksisterende helper
 
 # --- KONFIGURATION (HVIDOVRE-APP / 2026/2027) ---
 DB = "KLUB_HVIDOVREIF.AXIS"
 SEASONNAME = "2026/2027"
 AKTIV_LIGA_NAVN = "1. Division"
 LIGA_UUID = "2mb332vncy4450vu14paj8844"
-
-def oversæt_qualifiers(qual_str):
-    if not qual_str or pd.isna(qual_str):
-        return ""
-    q_ids = str(qual_str).split(",")
-    tekster = []
-    for qid in q_ids:
-        qid_clean = qid.strip()
-        if qid_clean.isdigit():
-            q_int = int(qid_clean)
-            if q_int in OPTA_QUALIFIERS:
-                tekster.append(OPTA_QUALIFIERS[q_int])
-    return ", ".join(tekster)
 
 def vis_side(dp=None):
     st.caption("Gennemgang af holdets målsekvenser fra bolden vindes, til målet falder.")
@@ -34,7 +22,6 @@ def vis_side(dp=None):
         st.warning("Kunne ikke oprette forbindelse til databasen.")
         st.stop()
 
-    # Hent hold udelukkende baseret på Opta-mappet for den aktuelle sæson og liga
     tilladte_hold = SEASON_LEAGUE_MAPPER.get(SEASONNAME, {}).get(AKTIV_LIGA_NAVN, [])
     
     hold_liste = [h for h in tilladte_hold if h in TEAMS]
@@ -105,6 +92,8 @@ def vis_side(dp=None):
             e.EVENT_TIMESTAMP,
             e.PLAYER_NAME,
             e.EVENT_TYPEID,
+            e.EVENT_MIN,
+            e.EVENT_SEC,
             e.EVENT_X as RAW_X,
             e.EVENT_Y as RAW_Y,
             e.EVENT_CONTESTANT_OPTAUUID,
@@ -114,7 +103,8 @@ def vis_side(dp=None):
             m.MATCH_DATE_FULL,
             m.TOTAL_HOME_SCORE AS FINAL_HOME_SCORE,
             m.TOTAL_AWAY_SCORE AS FINAL_AWAY_SCORE,
-            m.CONTESTANTHOME_OPTAUUID
+            m.CONTESTANTHOME_OPTAUUID,
+            m.CONTESTANTAWAY_OPTAUUID
         FROM FilteredEvents e
         LEFT JOIN EventQualifiers q 
             ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
@@ -141,23 +131,20 @@ def vis_side(dp=None):
     df_all['AKTION'] = df_all.apply(get_action_label, axis=1)
     df_all['DETALJER'] = df_all['QUALIFIER_LIST'].apply(oversæt_qualifiers)
 
-    # Fjern hændelser uden gyldig aktion
     df_all = df_all[df_all['AKTION'].notna() & (df_all['AKTION'] != "") & (df_all['AKTION'] != "Ukendt aktion")].copy()
-
     df_all.columns = [c.lower() for c in df_all.columns]
 
     if df_all.empty:
         st.warning("Ingen gyldige aktioner fundet efter filtrering.")
         return
 
-    unikke_kampe = df_all[['match_optauuid', 'match_date_full', 'contestanthome_name', 'contestantaway_name', 'contestanthome_optauuid']].drop_duplicates()
+    unikke_kampe = df_all[['match_optauuid', 'match_date_full', 'contestanthome_name', 'contestantaway_name', 'contestanthome_optauuid', 'contestantaway_optauuid']].drop_duplicates()
     unikke_kampe = unikke_kampe.sort_values(by='match_date_full').reset_index(drop=True)
     unikke_kampe['kamp_nummer'] = range(1, len(unikke_kampe) + 1)
     
     kamp_nr_dict = dict(zip(unikke_kampe['match_optauuid'], unikke_kampe['kamp_nummer']))
     df_all['kamp_nummer'] = df_all['match_optauuid'].map(kamp_nr_dict)
 
-    # Hent ALLE mål for de pågældende kampe for at kunne udregne den rigtige stilling (inklusiv modstanderens mål)
     match_uuids = tuple(unikke_kampe['match_optauuid'].tolist())
     match_uuid_str = f"('{match_uuids[0]}')" if len(match_uuids) == 1 else str(match_uuids)
 
@@ -194,11 +181,11 @@ def vis_side(dp=None):
         home_name = m_row['contestanthome_name']
         away_name = m_row['contestantaway_name']
         home_uuid = m_row['contestanthome_optauuid']
+        away_uuid = m_row['contestantaway_optauuid']
         
         er_hjemmehold = (team_opta_uuid == home_uuid)
         modstander = away_name if er_hjemmehold else home_name
 
-        # Hent ALLE mål i denne kamp kronologisk for at tælle korrekt op til dette mål
         if not alle_maal_df.empty:
             kamp_alle_maal = alle_maal_df[alle_maal_df['match_optauuid'] == m_uuid].sort_values('event_timestamp')
         else:
@@ -215,7 +202,6 @@ def vis_side(dp=None):
                 else:
                     a_maal += 1
                     
-                # Stop når vi når det aktuelle mål i sekvensen
                 if sub_m['sequenceid'] == seq_id:
                     break
         
@@ -223,11 +209,8 @@ def vis_side(dp=None):
             h_maal = 1 if er_hjemmehold else 0
             a_maal = 0 if er_hjemmehold else 1
 
-        # Sæt rækkefølgen korrekt op (Hjemmehold - Udehold) fra holdets perspektiv
-        if er_hjemmehold:
-            aktuel_stilling = f"{h_maal}-{a_maal}"
-        else:
-            aktuel_stilling = f"{a_maal}-{h_maal}"
+        stilling_hjemme_ude = f"{h_maal}-{a_maal}"
+        aktuel_stilling = f"{h_maal}-{a_maal}" if er_hjemmehold else f"{a_maal}-{h_maal}"
 
         f_home = int(m_row['final_home_score']) if pd.notna(m_row.get('final_home_score')) else 0
         f_away = int(m_row['final_away_score']) if pd.notna(m_row.get('final_away_score')) else 0
@@ -239,8 +222,13 @@ def vis_side(dp=None):
             'sequenceid': seq_id,
             'label': label_tekst,
             'kamp_nr': k_nr,
+            'home_uuid': home_uuid,
+            'away_uuid': away_uuid,
+            'home_name': home_name,
+            'away_name': away_name,
             'modstander': modstander,
             'aktuel_stilling': aktuel_stilling,
+            'stilling_hjemme_ude': stilling_hjemme_ude,
             'slut_res': slut_res,
             'kamp_navn': f"{home_name} vs. {away_name}",
             'dato': pd.to_datetime(m_row['match_date_full']).strftime('%d/%m/%Y') if pd.notna(m_row['match_date_full']) else ""
@@ -268,6 +256,7 @@ def vis_side(dp=None):
         info_row = dropdown_df[dropdown_df['sequenceid'] == valgt_seq].iloc[0]
         maal_row = sekvens_df[sekvens_df['event_typeid'].astype(str) == '16']
         målscorer = maal_row['player_name'].iloc[0] if not maal_row.empty else "Ukendt"
+        maal_minut = int(maal_row['event_min'].iloc[0]) if not maal_row.empty and pd.notna(maal_row['event_min'].iloc[0]) else 0
 
         col_banen, col_tabel = st.columns([2, 1])
 
@@ -275,7 +264,7 @@ def vis_side(dp=None):
             st.markdown(f"##### Kamp {info_row['kamp_nr']} ({info_row['aktuel_stilling']} vs. {info_row['modstander']}): Sekvensopbygning")
             
             pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#7f7f7f', line_zorder=2, linewidth=1.0)
-            fig, ax = pitch.draw(figsize=(9, 4.5))
+            fig, ax = pitch.draw(figsize=(9, 5))
 
             sekvens_plot_df = sekvens_df.dropna(subset=['raw_x', 'raw_y'])
 
@@ -311,6 +300,21 @@ def vis_side(dp=None):
                             r_x, r_y - 2.5, navn,
                             fontsize=6, ha='center', va='top', color='#333333', zorder=5
                         )
+
+            # Hent logoer vha. din eksisterende get_logo_img funktion
+            img_home = get_logo_img(info_row['home_uuid'])
+            img_away = get_logo_img(info_row['away_uuid'])
+
+            if img_home:
+                pitch.inset_image(x=4, y=91, image=img_home, height=7, ax=ax, zorder=6)
+
+            ax.text(8.5, 91, "vs.", fontsize=9, fontweight='bold', ha='center', va='center', color='#333333', zorder=6)
+
+            if img_away:
+                pitch.inset_image(x=13, y=91, image=img_away, height=7, ax=ax, zorder=6)
+
+            tekst_bund = f"{info_row['dato']} | Stilling: {info_row['stilling_hjemme_ude']} ({maal_minut}. min)"
+            ax.text(2, 97, tekst_bund, fontsize=8, color='#555555', ha='left', va='center', zorder=6)
 
             st.pyplot(fig, use_container_width=True)
 
