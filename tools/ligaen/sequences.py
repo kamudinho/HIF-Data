@@ -11,7 +11,7 @@ from data.utils.mapping import OPTA_EVENT_TYPES, OPTA_QUALIFIERS, get_action_lab
 DB = "KLUB_HVIDOVREIF.AXIS"
 SEASONNAME = "2026/2027"
 AKTIV_ LIGA_NAVN = "1. Division"
-LIGA_UUID = "2mb332vncy4450vu14paj8844"  # Opta UUID for 1. Division i 2026/2027
+LIGA_UUID = "2mb332vncy4450vu14paj8844"
 
 def oversæt_qualifiers(qual_str):
     if not qual_str or pd.isna(qual_str):
