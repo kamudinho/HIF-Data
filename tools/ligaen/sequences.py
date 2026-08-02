@@ -9,13 +9,23 @@ from data.utils.team_mapping import SEASONS, COMPETITIONS, TEAMS, SEASON_LEAGUE_
 def vis_side():
     DB = "KLUB_HVIDOVREIF.AXIS"
 
-    st.caption("Gennemgang af holdets målsekvenser baseret på centrale indstillinger og sekvensdata.")
+    st.title("⚽ Målsekvenser")
+    st.markdown("Gennemgang af holdets målsekvenser baseret på centrale indstillinger og sekvensdata.")
 
-    # --- DROPWODNS PÅ SAMME LINJE ---
-    col_s, col_t, col_h = st.columns(3)
+    conn = _get_snowflake_conn()
+    if not conn:
+        st.warning("Kunne ikke oprette forbindelse til databasen.")
+        st.stop()
+
+    # Fastlåst sæson til 2026/2027
+    valgt_saeson = "2026/2027"
+    if valgt_saeson not in SEASONS:
+        # Fallback hvis 2026/2027 ikke findes i nøglerne endnu
+        valgt_saeson = list(SEASONS.keys())[0]
+
+    # --- 3 KOLONNER PÅ SAMME LINJE: Turnering, Hold og Målsekvens ---
+    col_t, col_h, col_s = st.columns(3)
     
-    with col_s:
-        valgt_saeson = st.selectbox("Vælg sæson", list(SEASONS.keys()), index=0)
     with col_t:
         valgt_turnering = st.selectbox("Vælg turnering", list(SEASONS[valgt_saeson].keys()), index=0)
 
@@ -38,11 +48,6 @@ def vis_side():
 
     if not team_opta_uuid:
         st.error(f"Kunne ikke finde Opta UUID for holdet: {valgt_hold_navn}")
-        st.stop()
-
-    conn = _get_snowflake_conn()
-    if not conn:
-        st.warning("Kunne ikke oprette forbindelse til databasen.")
         st.stop()
 
     # --- SQL-FORESPØRGSEL ---
@@ -100,21 +105,20 @@ def vis_side():
             st.stop()
 
     if df_all is None or df_all.empty:
+        with col_s:
+            st.selectbox("Vælg målsekvens", ["Ingen sekvenser fundet"])
         st.warning(f"Ingen målsekvenser fundet for {valgt_hold_navn} i {valgt_turnering} ({valgt_saeson}).")
-        st.stop()
+        return
 
     df_all.columns = [c.lower() for c in df_all.columns]
     df_all['kamp_label'] = df_all['contestanthome_name'] + " vs. " + df_all['contestantaway_name']
     sekvens_ids = df_all['sequenceid'].unique()
 
-    st.markdown("---")
-    
-    col_sel, col_info = st.columns([2, 1])
-    with col_sel:
+    with col_s:
         valgt_seq = st.selectbox(
             "Vælg målsekvens", 
             sekvens_ids, 
-            format_func=lambda x: f"Sekvens ID: {x} (Kamp: {df_all[df_all['sequenceid'] == x]['kamp_label'].iloc[0]})"
+            format_func=lambda x: f"ID: {x} ({df_all[df_all['sequenceid'] == x]['kamp_label'].iloc[0]})"
         )
 
     if valgt_seq:
@@ -124,8 +128,13 @@ def vis_side():
         målscorer = maal_row['player_name'].iloc[0] if not maal_row.empty else "Ukendt"
         kamp_navn = sekvens_df['kamp_label'].iloc[0]
 
-        with col_info:
+        st.markdown("---")
+
+        # Vis info om målscorer og kamp kompakt
+        col_info1, col_info2 = st.columns(2)
+        with col_info1:
             st.metric("Målscorer", str(målscorer))
+        with col_info2:
             st.metric("Kamp", kamp_navn)
 
         st.markdown("---")
