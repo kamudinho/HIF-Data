@@ -229,7 +229,7 @@ def vis_side(dp=None):
         maal_row = sekvens_df[sekvens_df['event_typeid'].astype(str) == '16']
         målscorer = maal_row['player_name'].iloc[0] if not maal_row.empty else "Ukendt"
         
-        # Hent minuttallet direkte fra databasen og læg +1 til som aftalt
+        # Hent minuttallet direkte fra databasen via EVENT_TIMEMIN, plus 1
         raw_min = int(maal_row['event_minute'].iloc[0]) if not maal_row.empty and pd.notna(maal_row['event_minute'].iloc[0]) else 0
         maal_minut = raw_min + 1
 
