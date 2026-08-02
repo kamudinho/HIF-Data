@@ -158,7 +158,7 @@ def vis_side(dp=None):
     df_all['kamp_nummer'] = df_all['match_optauuid'].map(kamp_nr_dict)
 
     maal_df = df_all[df_all['event_typeid'].astype(str) == '16'].copy()
-    maal_df = maal_df.sort_values(by=['match_date_full', 'event_timestamp']).drop_duplicates(subset=['sequenceid'])
+    maal_df = maal_df.sort_values(by=['match_date_full', 'event_timestamp'])
 
     dropdown_data = []
 
@@ -174,7 +174,11 @@ def vis_side(dp=None):
         er_hjemmehold = (team_opta_uuid == home_uuid)
         modstander = away_name if er_hjemmehold else home_name
 
-        kamp_alle_maal = maal_df[maal_df['match_optauuid'] == m_uuid].sort_values('event_timestamp')
+        # Hent ALLE mål i denne kamp kronologisk for at tælle korrekt op til dette mål
+        kamp_alle_maal = df_all[
+            (df_all['match_optauuid'] == m_uuid) & 
+            (df_all['event_typeid'].astype(str) == '16')
+        ].sort_values('event_timestamp')
         
         h_maal = 0
         a_maal = 0
@@ -185,9 +189,11 @@ def vis_side(dp=None):
             else:
                 a_maal += 1
                 
+            # Stop når vi når det aktuelle mål i sekvensen
             if sub_m['sequenceid'] == seq_id:
                 break
 
+        # Sæt rekkefølgen korrekt op (Hjemmehold - Udehold) fra holdets perspektiv
         if er_hjemmehold:
             aktuel_stilling = f"{h_maal}-{a_maal}"
         else:
