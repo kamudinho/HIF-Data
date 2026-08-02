@@ -180,11 +180,7 @@ def vis_side(dp=None):
     def count_event_with_qual(df_group, eid, qids):
         return df_group.apply(lambda r: har_qualifier(r['event_typeid'], r.get('qual_list', []), eid, qids), axis=1).sum()
 
-    if not df_kamp_events.empty:
-                def count_kamp_qual(df_group, eid, qids):
-                    return df_group.apply(lambda r: har_qualifier(r['event_typeid'], r.get('qual_list', []), eid, qids), axis=1).sum()
-
-    if not df_kamp_events.empty:
+        if not df_kamp_events.empty:
                 def count_kamp_qual(df_group, eid, qids):
                     return df_group.apply(lambda r: har_qualifier(r['event_typeid'], r.get('qual_list', []), eid, qids), axis=1).sum()
                 
@@ -216,8 +212,9 @@ def vis_side(dp=None):
                     'Interceptioner': (x['event_typeid'] == 5).sum(),
                     'Frispark_imod': (x['event_typeid'] == 4).sum()
                 })).reset_index()
-        
-    event_stats = event_stats.drop_duplicates(subset=['player_optauuid']).set_index('player_optauuid')
+
+                event_stats_kamp = event_stats_kamp.drop_duplicates(subset=['player_optauuid']).set_index('player_optauuid')
+
 
     if df_expected is not None and not df_expected.empty:
         match_stats = df_expected.groupby('player_optauuid').agg({
