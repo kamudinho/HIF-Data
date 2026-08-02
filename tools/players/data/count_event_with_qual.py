@@ -1,12 +1,6 @@
-# --- BEREGN TRUP-STATS INKL. DRIBLINGER OG DUEL chiar ---
+# --- BEREGN TRUP-STATS INKL. DRIBLINGER OG DUELLER ---
     def count_event_with_qual(df_group, eid, qids):
         return df_group.apply(lambda r: har_qualifier(r['event_typeid'], r.get('qual_list', []), eid, qids), axis=1).sum()
-        
-    # Hjælpefunktion til hurtigt at tjekke qualifiers uden tunge split-operationer pr. række
-    def has_q(qual_list, q_target):
-        if not isinstance(qual_list, list):
-            return False
-        return str(q_target) in [str(q).strip() for q in qual_list]
 
     event_stats = df_all.groupby(['player_optauuid', 'visningsnavn']).apply(lambda x: pd.Series({
         'Aktioner': len(x),
@@ -21,17 +15,17 @@
         'Afslutninger': x['event_typeid'].isin([13, 14, 15, 16]).sum(),
         'Erobringer': x['event_typeid'].isin([7, 8, 12, 49]).sum(),
         
-        # --- DRIBLINGER OG DUEL STATS ---
+        # --- DRIBLING OG DUEL STATS ---
         'Driblinger': (x['event_typeid'] == 3).sum(),
-        'Driblinger_Succes': x.apply(lambda r: 1 if str(r['event_typeid']) == "3" and not has_q(r.get('qual_list'), 211) else 0, axis=1).sum(),
-        'Gennembrud_Overtake': x.apply(lambda r: 1 if str(r['event_typeid']) == "3" and has_q(r.get('qual_list'), 465) else 0, axis=1).sum(),
-        'Rum_Driblinger_Space': x.apply(lambda r: 1 if str(r['event_typeid']) == "3" and has_q(r.get('qual_list'), 464) else 0, axis=1).sum(),
-        'Offensive_Dueller': x.apply(lambda r: 1 if has_q(r.get('qual_list'), 286) else 0, axis=1).sum(),
-        'Defensive_Dueller': x.apply(lambda r: 1 if has_q(r.get('qual_list'), 285) else 0, axis=1).sum(),
-        'Defensive_1v1_Stoppet': x.apply(lambda r: 1 if has_q(r.get('qual_list'), 467) else 0, axis=1).sum(),
+        'Driblinger_Succes': x.apply(lambda r: 1 if str(r['event_typeid']) == "3" and "211" not in [str(q).strip() for q in (r.get('qual_list', []) if isinstance(r.get('qual_list', []), list) else str(r.get('qual_list', '')).split(','))] else 0, axis=1).sum(),
+        'Gennembrud_Overtake': x.apply(lambda r: 1 if str(r['event_typeid']) == "3" and "465" in [str(q).strip() for q in (r.get('qual_list', []) if isinstance(r.get('qual_list', []), list) else str(r.get('qual_list', '')).split(','))] else 0, axis=1).sum(),
+        'Rum_Driblinger_Space': x.apply(lambda r: 1 if str(r['event_typeid']) == "3" and "464" in [str(q).strip() for q in (r.get('qual_list', []) if isinstance(r.get('qual_list', []), list) else str(r.get('qual_list', '')).split(','))] else 0, axis=1).sum(),
+        'Offensive_Dueller': x.apply(lambda r: 1 if "286" in [str(q).strip() for q in (r.get('qual_list', []) if isinstance(r.get('qual_list', []), list) else str(r.get('qual_list', '')).split(','))] else 0, axis=1).sum(),
+        'Defensive_Dueller': x.apply(lambda r: 1 if "285" in [str(q).strip() for q in (r.get('qual_list', []) if isinstance(r.get('qual_list', []), list) else str(r.get('qual_list', '')).split(','))] else 0, axis=1).sum(),
+        'Defensive_1v1_Stoppet': x.apply(lambda r: 1 if "467" in [str(q).strip() for q in (r.get('qual_list', []) if isinstance(r.get('qual_list', []), list) else str(r.get('qual_list', '')).split(','))] else 0, axis=1).sum(),
         
-        'Chancer_skabt': x.apply(lambda r: has_q(r.get('qual_list'), 210), axis=1).sum(),
-        'Key_Passes': x.apply(lambda r: has_q(r.get('qual_list'), 210), axis=1).sum(),
+        'Chancer_skabt': x.apply(lambda r: '210' in r.get('qual_list', []), axis=1).sum(),
+        'Key_Passes': x.apply(lambda r: '210' in r.get('qual_list', []), axis=1).sum(),
         'Tacklinger': (x['event_typeid'] == 7).sum(),
         'Clearinger': (x['event_typeid'] == 12).sum(),
         'Blokeringer': (x['event_typeid'] == 55).sum(),
@@ -68,7 +62,7 @@
     truppen_stats_raw['Assists'] = truppen_stats_raw['Assists'].fillna(0).astype(int)
     truppen_stats = truppen_stats_raw.copy()
     
-    # --- BEREGN PASNINGSPROCENT ---
+    # --- BEREGN PASNINGSPROCENT DIREKTE PÅ TRUPPEN_STATS ---
     truppen_stats['Pasningsprocent'] = (
         (truppen_stats['Pasninger_Succes'] / truppen_stats['Pasninger']) * 100
     ).where(truppen_stats['Pasninger'] > 0, 0).round(1)
