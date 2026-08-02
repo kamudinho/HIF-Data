@@ -19,7 +19,6 @@ def vis_side():
     with col_t:
         valgt_turnering = st.selectbox("Vælg turnering", list(SEASONS[valgt_saeson].keys()), index=0)
 
-    # Hent det korrekte turnering-UUID og Wyscout ID via team_mapping
     tournament_opta_uuid = SEASONS[valgt_saeson][valgt_turnering]
     turnering_info = COMPETITIONS.get(valgt_turnering, {})
     competition_wyid = turnering_info.get("wyid")
@@ -27,7 +26,6 @@ def vis_side():
     # 2. Hent tilladte hold for den valgte sæson og turnering
     tilladte_hold_navne = SEASON_LEAGUE_MAPPER.get(valgt_saeson, {}).get(valgt_turnering, list(TEAMS.keys()))
     
-    # Sorter holdene alfabetisk, men sørg for at Hvidovre står først hvis den findes
     hold_liste = sorted([h for h in tilladte_hold_navne if h in TEAMS])
     if "Hvidovre" in hold_liste:
         hold_liste.remove("Hvidovre")
@@ -35,7 +33,6 @@ def vis_side():
 
     valgt_hold_navn = st.selectbox("Vælg hold", hold_liste)
     
-    # Hent holdets specifikke Opta UUID fra TEAMS
     valgt_hold_data = TEAMS.get(valgt_hold_navn, {})
     team_opta_uuid = valgt_hold_data.get("opta_uuid")
 
@@ -48,7 +45,7 @@ def vis_side():
         st.warning("Kunne ikke oprette forbindelse til databasen.")
         st.stop()
 
-    # --- SQL-FORESPØRGSEL (Inkl. alle LAG-koordinater og qualifiers) ---
+    # --- SQL-FORESPØRGSEL (Bruger EVENT_TIMESTAMP til LAG og sortering) ---
     sql_query = f"""
         WITH MatchIDs AS (
             SELECT DISTINCT MATCH_OPTAUUID 
@@ -75,17 +72,16 @@ def vis_side():
             e.EVENT_TIMESTAMP,
             e.PLAYER_NAME,
             e.EVENT_TYPEID,
-            -- LAG-koordinater til opbygning og pile
-            LAG(e.EVENT_X, 1) OVER (PARTITION BY e.SEQUENCEID ORDER BY e.EVENT_TIMESTAMP) as PREV_X_1,
-            LAG(e.EVENT_Y, 1) OVER (PARTITION BY e.SEQUENCEID ORDER BY e.EVENT_TIMESTAMP) as PREV_Y_1,
-            LAG(e.EVENT_X, 2) OVER (PARTITION BY e.SEQUENCEID ORDER BY e.EVENT_TIMESTAMP) as PREV_X_2,
-            LAG(e.EVENT_Y, 2) OVER (PARTITION BY e.SEQUENCEID ORDER BY e.EVENT_TIMESTAMP) as PREV_Y_2,
+            -- Sikrer at LAG bruger EVENT_TIMESTAMP korrekt
+            LAG(e.EVENT_X, 1) OVER (PARTITION BY e.SEQUENCEID ORDER BY e.EVENT_TIMESTAMP ASC) as PREV_X_1,
+            LAG(e.EVENT_Y, 1) OVER (PARTITION BY e.SEQUENCEID ORDER BY e.EVENT_TIMESTAMP ASC) as PREV_Y_1,
+            LAG(e.EVENT_X, 2) OVER (PARTITION BY e.SEQUENCEID ORDER BY e.EVENT_TIMESTAMP ASC) as PREV_X_2,
+            LAG(e.EVENT_Y, 2) OVER (PARTITION BY e.SEQUENCEID ORDER BY e.EVENT_TIMESTAMP ASC) as PREV_Y_2,
             e.EVENT_X as RAW_X,
             e.EVENT_Y as RAW_Y,
             q.QUALIFIER_LIST,
             m.CONTESTANTHOME_NAME,
-            m.CONTESTANTAWAY_NAME,
-            m.MATCH_DATE
+            m.CONTESTANTAWAY_NAME
         FROM {DB}.OPTA_EVENTS e
         INNER JOIN GoalSequences gs 
             ON e.SEQUENCEID = gs.SEQUENCEID 
@@ -108,10 +104,9 @@ def vis_side():
         st.warning(f"Ingen målsekvenser fundet for {valgt_hold_navn} i {valgt_turnering} ({valgt_saeson}).")
         st.stop()
 
-    # Gør kolonnenavne små for konsekvens
     df_all.columns = [c.lower() for c in df_all.columns]
 
-    df_all['kamp_label'] = df_all['contestanthome_name'] + " vs. " + df_all['contestantaway_name'] + " (" + df_all['match_date'].astype(str) + ")"
+    df_all['kamp_label'] = df_all['contestanthome_name'] + " vs. " + df_all['contestantaway_name']
     sekvens_ids = df_all['sequenceid'].unique()
 
     col_sel, col_info = st.columns([2, 1])
@@ -128,12 +123,10 @@ def vis_side():
         maal_row = sekvens_df[sekvens_df['event_typeid'] == 16]
         målscorer = maal_row['player_name'].iloc[0] if not maal_row.empty else "Ukendt"
         kamp_navn = sekvens_df['kamp_label'].iloc[0]
-        match_dato = sekvens_df['match_date'].iloc[0]
 
         with col_info:
             st.metric("Målscorer", str(målscorer))
             st.metric("Kamp", kamp_navn)
-            st.caption(f"Dato: {match_dato}")
 
         # --- TEGN BANEN ---
         st.markdown("### Sekvensopbygning på banen")
@@ -143,7 +136,6 @@ def vis_side():
         sekvens_df = sekvens_df.dropna(subset=['raw_x', 'raw_y'])
 
         if not sekvens_df.empty:
-            # Tegn pile mellem hændelserne i sekvensen ved at bruge RAW_X / RAW_Y sekventielt
             if len(sekvens_df) > 1:
                 pitch.arrows(
                     sekvens_df['raw_x'].iloc[:-1], 
@@ -153,7 +145,6 @@ def vis_side():
                     ax=ax, width=1.5, headwidth=3, color="#cccccc", alpha=0.8, zorder=3
                 )
 
-            # Tegn prikker for alle aktioner
             pitch.scatter(
                 sekvens_df['raw_x'], sekvens_df['raw_y'],
                 color='black', s=80, ax=ax, zorder=4
@@ -167,7 +158,6 @@ def vis_side():
                             fontsize=9, ha='center', va='bottom', color='black', zorder=5
                         )
 
-            # Marker selve målet (typeid == 16) med rødt
             if not maal_row.empty:
                 m_x = maal_row['raw_x'].iloc[0]
                 m_y = maal_row['raw_y'].iloc[0]
