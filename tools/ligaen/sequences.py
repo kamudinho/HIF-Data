@@ -135,12 +135,16 @@ def vis_side(dp=None):
         st.warning(f"Ingen målsekvenser fundet for {valgt_hold_navn} i sæson {SEASONNAME}.")
         return
 
-    df_all.columns = [c.lower() for c in df_all.columns]
+    # Sørg for at gemme med store bogstaver, så mapping.py's row['EVENT_TYPEID'] virker direkte
+    df_all.columns = [c.upper() for c in df_all.columns]
     
-    # Korrekt mapping af qualifiers og aktioner
-    df_all['qual_list'] = df_all['qualifier_list']
-    df_all['aktion'] = df_all.apply(get_action_label, axis=1)
-    df_all['detaljer'] = df_all['qualifier_list'].apply(oversæt_qualifiers)
+    # Klargør kolonner til get_action_label
+    df_all['QUAL_LIST'] = df_all['QUALIFIER_LIST']
+    df_all['AKTION'] = df_all.apply(get_action_label, axis=1)
+    df_all['DETALJER'] = df_all['QUALIFIER_LIST'].apply(oversæt_qualifiers)
+
+    # Gør kolonnenavnene små igen til resten af Streamlit-siden
+    df_all.columns = [c.lower() for c in df_all.columns]
 
     unikke_kampe = df_all[['match_optauuid', 'match_date_full', 'contestanthome_name', 'contestantaway_name', 'contestanthome_optauuid']].drop_duplicates()
     unikke_kampe = unikke_kampe.sort_values(by='match_date_full').reset_index(drop=True)
@@ -149,7 +153,7 @@ def vis_side(dp=None):
     kamp_nr_dict = dict(zip(unikke_kampe['match_optauuid'], unikke_kampe['kamp_nummer']))
     df_all['kamp_nummer'] = df_all['match_optauuid'].map(kamp_nr_dict)
 
-    maal_df = df_all[df_all['event_typeid'] == 16].copy()
+    maal_df = df_all[df_all['event_typeid'].astype(str) == '16'].copy()
     maal_df = maal_df.sort_values(by=['match_date_full', 'event_timestamp']).drop_duplicates(subset=['sequenceid'])
 
     dropdown_data = []
@@ -218,7 +222,7 @@ def vis_side(dp=None):
         sekvens_df['sekvens_nr'] = range(1, len(sekvens_df) + 1)
         
         info_row = dropdown_df[dropdown_df['sequenceid'] == valgt_seq].iloc[0]
-        maal_row = sekvens_df[sekvens_df['event_typeid'] == 16]
+        maal_row = sekvens_df[sekvens_df['event_typeid'].astype(str) == '16']
         målscorer = maal_row['player_name'].iloc[0] if not maal_row.empty else "Ukendt"
 
         col_banen, col_tabel = st.columns([2, 1])
@@ -245,7 +249,7 @@ def vis_side(dp=None):
                     r_x = row['raw_x']
                     r_y = row['raw_y']
                     nr_str = str(row['sekvens_nr'])
-                    er_maal = (row['event_typeid'] == 16)
+                    er_maal = (str(row['event_typeid']) == '16')
 
                     prik_farve = '#df003b' if er_maal else 'black'
                     prik_str = 70 if er_maal else 45
