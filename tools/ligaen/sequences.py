@@ -10,9 +10,6 @@ from data.utils.mapping import OPTA_EVENT_TYPES, OPTA_QUALIFIERS, get_action_lab
 # --- KONFIGURATION (HVIDOVRE-APP - 2026/2027) ---
 DB = "KLUB_HVIDOVREIF.AXIS"
 SEASONNAME = "2026/2027"
-TEAM_WYID = 7490
-COMPETITION_WYID = (328,)
-COMP_MAP = { 328: "1. Division", 335: "3F Superliga", 329: "2. division", 43319: "3. division", 331: "Oddset Pokalen", 1305: "U19 Ligaen" }
 LIGA_IDS = "('2mb332vncy4450vu14paj8844')"
 
 def oversæt_qualifiers(qual_str):
