@@ -157,7 +157,7 @@ def vis_side(dp=None):
         målscorer = maal_row['player_name'].iloc[0] if not maal_row.empty else "Ukendt"
         kamp_navn = sekvens_df['kamp_label'].iloc[0]
         
-        match_ts = sekvens_df['event_timestamp'].iloc[0] if 'match_timestamp' in sekvens_df.columns else ""
+        match_ts = sekvens_df['match_date_full'].iloc[0] if 'match_date_full' in sekvens_df.columns else ""
         dato_str = pd.to_datetime(match_ts).strftime('%d/%m/%Y') if pd.notna(match_ts) else ""
 
         # --- OPSETNING: BANEN TIL VENSTRE, TABELLEN TIL HØJRE ---
