@@ -252,7 +252,7 @@ def vis_side():
         st.markdown("---")
 
         # --- OPSETNING: BANEN TIL VENSTRE, TABELLEN TIL HØJRE ---
-        col_banen, col_tabel = st.columns([1.2, 1])
+        col_banen, col_tabel = st.columns([2, 1])
 
         with col_banen:
             st.caption("### Sekvensopbygning på banen (fra bolden vindes)")
