@@ -9,7 +9,6 @@ from data.utils.team_mapping import SEASONS, COMPETITIONS, TEAMS, SEASON_LEAGUE_
 def vis_side():
     DB = "KLUB_HVIDOVREIF.AXIS"
 
-    st.title("⚽ Målsekvenser")
     st.markdown("Gennemgang af holdets målsekvenser baseret på centrale indstillinger og sekvensdata.")
 
     conn = _get_snowflake_conn()
@@ -17,17 +16,14 @@ def vis_side():
         st.warning("Kunne ikke oprette forbindelse til databasen.")
         st.stop()
 
-    # Fastlåst sæson til 2026/2027
+    # Fastlåst sæson og fastlåst turnering ("NordicBet Liga" / 1. division)
     valgt_saeson = "2026/2027"
     if valgt_saeson not in SEASONS:
-        # Fallback hvis 2026/2027 ikke findes i nøglerne endnu
         valgt_saeson = list(SEASONS.keys())[0]
 
-    # --- 3 KOLONNER PÅ SAMME LINJE: Turnering, Hold og Målsekvens ---
-    col_t, col_h, col_s = st.columns(3)
-    
-    with col_t:
-        valgt_turnering = st.selectbox("Vælg turnering", list(SEASONS[valgt_saeson].keys()), index=0)
+    valgt_turnering = "NordicBet Liga"
+    if valgt_turnering not in SEASONS[valgt_saeson]:
+        valgt_turnering = list(SEASONS[valgt_saeson].keys())[0]
 
     tournament_opta_uuid = SEASONS[valgt_saeson][valgt_turnering]
     turnering_info = COMPETITIONS.get(valgt_turnering, {})
@@ -40,6 +36,9 @@ def vis_side():
         hold_liste.remove("Hvidovre")
         hold_liste.insert(0, "Hvidovre")
 
+    # --- 2 KOLONNER PÅ SAMME LINJE: Hold og Målsekvens (Turnering er fastlåst til 1. division) ---
+    col_h, col_s = st.columns(2)
+    
     with col_h:
         valgt_hold_navn = st.selectbox("Vælg hold", hold_liste)
     
@@ -51,18 +50,32 @@ def vis_side():
         st.stop()
 
     # --- SQL-FORESPØRGSEL ---
+    # Vi henter målet (EVENT_TYPEID = 16) samt udvider sekvensen ved at inkludere hændelser op til 20 sekunder før målets timestamp inden for samme kamp.
     sql_query = f"""
         WITH MatchIDs AS (
             SELECT DISTINCT MATCH_OPTAUUID 
             FROM {DB}.OPTA_MATCHINFO 
             WHERE TOURNAMENTCALENDAR_OPTAUUID = '{tournament_opta_uuid}'
         ),
-        GoalSequences AS (
-            SELECT DISTINCT e.SEQUENCEID, e.MATCH_OPTAUUID
+        GoalEvents AS (
+            SELECT DISTINCT 
+                e.SEQUENCEID, 
+                e.MATCH_OPTAUUID,
+                e.EVENT_TIMESTAMP as GOAL_TIMESTAMP
             FROM {DB}.OPTA_EVENTS e
             WHERE e.MATCH_OPTAUUID IN (SELECT MATCH_OPTAUUID FROM MatchIDs)
             AND e.EVENT_TYPEID = 16 
             AND e.EVENT_CONTESTANT_OPTAUUID = '{team_opta_uuid}'
+        ),
+        ExtendedSequenceEvents AS (
+            SELECT DISTINCT e.*
+            FROM {DB}.OPTA_EVENTS e
+            INNER JOIN GoalEvents g 
+                ON e.MATCH_OPTAUUID = g.MATCH_OPTAUUID
+                AND (
+                    e.SEQUENCEID = g.SEQUENCEID 
+                    OR (e.EVENT_TIMESTAMP >= g.GOAL_TIMESTAMP - 20 AND e.EVENT_TIMESTAMP <= g.GOAL_TIMESTAMP)
+                )
         ),
         EventQualifiers AS (
             SELECT 
@@ -86,10 +99,7 @@ def vis_side():
             q.QUALIFIER_LIST,
             m.CONTESTANTHOME_NAME,
             m.CONTESTANTAWAY_NAME
-        FROM {DB}.OPTA_EVENTS e
-        INNER JOIN GoalSequences gs 
-            ON e.SEQUENCEID = gs.SEQUENCEID 
-            AND e.MATCH_OPTAUUID = gs.MATCH_OPTAUUID
+        FROM ExtendedSequenceEvents e
         LEFT JOIN EventQualifiers q 
             ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
         LEFT JOIN {DB}.OPTA_MATCHINFO m 
@@ -97,7 +107,7 @@ def vis_side():
         ORDER BY e.SEQUENCEID, e.EVENT_TIMESTAMP ASC;
     """
 
-    with st.spinner("Henter målsekvenser fra Snowflake..."):
+    with st.spinner("Henter målsekvenser og opspil fra Snowflake..."):
         try:
             df_all = conn.query(sql_query)
         except Exception as e:
@@ -143,7 +153,7 @@ def vis_side():
         col_banen, col_tabel = st.columns([1.2, 1])
 
         with col_banen:
-            st.markdown("### Sekvensopbygning på banen")
+            st.markdown("### Sekvensopbygning på banen (inkl. 20 sek. opspil)")
             pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#7f7f7f', line_zorder=2)
             fig, ax = pitch.draw(figsize=(8, 5))
 
