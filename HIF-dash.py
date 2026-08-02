@@ -251,6 +251,9 @@ try:
         elif s == "Grafer":
             import tools.ligaen.dataviz as dviz
             dviz.vis_side()
+        elif s == "Målsekvenser":
+            import tools.hifanalyse.sequences as ms
+            ms.vis_side()
 
     elif m == "TILPASNING":
         if s == "Spillerdata":
