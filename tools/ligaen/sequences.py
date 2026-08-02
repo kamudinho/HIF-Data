@@ -49,7 +49,8 @@ OPTA_EVENT_TYPES = {
     39: "Brændt straffespark",
     40: "Selvmål",
     41: "Assist",
-    42: "Blokeret skud"
+    42: "Blokeret skud",
+    44: "Luftduel"
 }
 
 # Opta Qualifier ID til læsevenlig tekst (oversigt over væsentlige qualifiers)
@@ -68,7 +69,6 @@ OPTA_QUALIFIERS_MAP = {
     25: "Fra hjørnespark",
     26: "Frispark",
     29: "Assisteret",
-    44: "Hovedstød",
     72: "Venstreben",
     107: "Indkast",
     108: "Flugtning",
@@ -137,9 +137,6 @@ def vis_side():
         st.stop()
 
     # --- SQL-FORESPØRGSEL ---
-    # Finder målet (EVENT_TYPEID = 16) og følger sekvensen (SEQUENCEID). 
-    # For at sikre at vi fanger hele forløbet fra bolden vindes, udvider vi vinduet bagud til den første hændelse i samme sekvens,
-    # hvor holdet er i boldbesiddelse eller starter opspillet, indtil målet falder.
     sql_query = f"""
         WITH MatchIDs AS (
             SELECT DISTINCT MATCH_OPTAUUID 
@@ -196,7 +193,10 @@ def vis_side():
             e.EVENT_Y as RAW_Y,
             q.QUALIFIER_LIST,
             m.CONTESTANTHOME_NAME,
-            m.CONTESTANTAWAY_NAME
+            m.CONTESTANTAWAY_NAME,
+            m.MATCH_TIMESTAMP,
+            m.HOMESCORECURRENT,
+            m.AWAYSCORECURRENT
         FROM FilteredEvents e
         LEFT JOIN EventQualifiers q 
             ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
@@ -240,23 +240,21 @@ def vis_side():
         maal_row = sekvens_df[sekvens_df['event_typeid'] == 16]
         målscorer = maal_row['player_name'].iloc[0] if not maal_row.empty else "Ukendt"
         kamp_navn = sekvens_df['kamp_label'].iloc[0]
-
-        st.markdown("---")
-
-        # Vis info om målscorer og kamp kompakt
-        col_info1, col_info2 = st.columns(2)
-        with col_info1:
-            st.caption("Målscorer", str(målscorer))
-        with col_info2:
-            st.caption("Kamp", kamp_navn)
+        
+        # Ekstrakt dato / tid / stilling hvis tilgængelig i kolonnerne
+        match_ts = sekvens_df['match_timestamp'].iloc[0] if 'match_timestamp' in sekvens_df.columns else ""
+        dato_str = pd.to_datetime(match_ts).strftime('%d/%m/%Y') if pd.notna(match_ts) else ""
+        
+        # Hent minut for målet hvis muligt, ellers fallback
+        event_ts = maal_row['event_timestamp'].iloc[0] if not maal_row.empty else sekvens_df['event_timestamp'].iloc[0]
 
         # --- OPSETNING: BANEN TIL VENSTRE, TABELLEN TIL HØJRE ---
         col_banen, col_tabel = st.columns([2, 1])
 
         with col_banen:
-            st.caption("# Sekvensopbygning på banen (fra bolden vindes)")
+            st.markdown("##### Sekvensopbygning på banen (fra bolden vindes)")
             pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#7f7f7f', line_zorder=2)
-            fig, ax = pitch.draw(figsize=(8, 5))
+            fig, ax = pitch.draw(figsize=(8, 4.2))
 
             sekvens_plot_df = sekvens_df.dropna(subset=['raw_x', 'raw_y'])
 
@@ -299,8 +297,18 @@ def vis_side():
 
             st.pyplot(fig, use_container_width=True)
 
+            # Kompakt metadata-linje i bunden af venstre kolonne, designet som i billedet (med ikoner/tekst i bunden)
+            st.markdown(
+                f"<div style='display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; color: #555; background-color: #fcfcfc; padding: 6px 10px; border-radius: 4px; border: 1px solid #eaeaea; margin-top: -5px;'>"
+                f"<span><b>Målscorer:</b> {målscorer}</span>"
+                f"<span><b>Kamp:</b> {kamp_navn}</span>"
+                f"<span>{dato_str}</span>"
+                f"</div>",
+                unsafe_allow_html=True
+            )
+
         with col_tabel:
-            st.caption("# Aktioner i sekvensen")
+            st.markdown("##### Aktioner i sekvensen")
             vis_cols = [c for c in ['player_name', 'aktion', 'detaljer'] if c in sekvens_df.columns]
             
             tabel_df = sekvens_df[vis_cols].rename(columns={
