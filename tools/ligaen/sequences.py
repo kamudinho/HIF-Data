@@ -108,7 +108,8 @@ def vis_side(dp=None):
             m.CONTESTANTAWAY_NAME,
             m.MATCH_DATE_FULL,
             m.TOTAL_HOME_SCORE AS FINAL_HOME_SCORE,
-            m.TOTAL_AWAY_SCORE AS FINAL_AWAY_SCORE
+            m.TOTAL_AWAY_SCORE AS FINAL_AWAY_SCORE,
+            m.CONTESTANTHOME_OPTAUUID
         FROM FilteredEvents e
         LEFT JOIN EventQualifiers q 
             ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
@@ -131,53 +132,120 @@ def vis_side(dp=None):
         return
 
     df_all.columns = [c.lower() for c in df_all.columns]
-    df_all['kamp_label'] = df_all['contestanthome_name'] + " vs. " + df_all['contestantaway_name']
-    
     df_all['aktion'] = df_all['event_typeid'].map(OPTA_EVENT_TYPES).fillna("Ukendt (" + df_all['event_typeid'].astype(str) + ")")
     df_all['detaljer'] = df_all['qualifier_list'].apply(oversæt_qualifiers)
 
-    # --- DEFINER MÅL 1, MÅL 2 OSV. KRONOLOGISK FOR HOLDET ---
-    # Vi finder unikke sekvenser i kronologisk rækkefølge og tildeler dem et mål-nummer
-    unikke_maal = df_all[df_all['event_typeid'] == 16][['sequenceid', 'match_date_full', 'kamp_label', 'player_name']].drop_duplicates()
-    unikke_maal = unikke_maal.sort_values(by=['match_date_full', 'sequenceid']).reset_index(drop=True)
-    unikke_maal['maal_nummer'] = range(1, len(unikke_maal) + 1)
+    # --- BEREGN KAMP-NUMRE OG MÅL-STILLING KRONOLOGISK ---
+    # 1. Hent alle unikke kampe for holdet i kronologisk rækkefølge
+    unikke_kampe = df_all[['match_optauuid', 'match_date_full', 'contestanthome_name', 'contestantaway_name', 'contestanthome_optauuid']].drop_duplicates()
+    unikke_kampe = unikke_kampe.sort_values(by='match_date_full').reset_index(drop=True)
+    unikke_kampe['kamp_nummer'] = range(1, len(unikke_kampe) + 1)
     
-    # Map mål-nummeret tilbage til hoveddatarammen
-    seq_til_maal_nr = dict(zip(unikke_maal['sequenceid'], unikke_maal['maal_nummer']))
-    df_all['maal_nummer'] = df_all['sequenceid'].map(seq_til_maal_nr)
+    kamp_nr_dict = dict(zip(unikke_kampe['match_optauuid'], unikke_kampe['kamp_nummer']))
+    df_all['kamp_nummer'] = df_all['match_optauuid'].map(kamp_nr_dict)
 
-    sekvens_ids = unikke_maal['sequenceid'].tolist()
+    # 2. Find alle mål-hændelser (event_typeid == 16) for at udregne holdets stilling da målet faldt
+    maal_df = df_all[df_all['event_typeid'] == 16].copy()
+    maal_df = maal_df.sort_values(by=['match_date_full', 'event_timestamp']).drop_duplicates(subset=['sequenceid'])
+
+    dropdown_data = []
+
+    for _, m_row in maal_df.iterrows():
+        seq_id = m_row['sequenceid']
+        m_uuid = m_row['match_optauuid']
+        k_nr = m_row['kamp_nummer']
+        
+        home_name = m_row['contestanthome_name']
+        away_name = m_row['contestantaway_name']
+        home_uuid = m_row['contestanthome_optauuid']
+        
+        er_hjemmehold = (team_opta_uuid == home_uuid)
+        modstander = away_name if er_hjemmehold else home_name
+
+        # Find alle mål i samme kamp, der faldt TIDLIGERE end eller SAMTIDIG med dette mål
+        kamp_maal = maal_df[(maal_df['match_optauuid'] == m_uuid) & (maal_df['event_timestamp'] <= m_row['event_timestamp'])]
+        
+        # Beregn stillingen fra det valgte holds perspektiv
+        hjemme_maal_tal = sum(kamp_maal['contestant_optauuid'] == home_uuid) if 'contestant_optauuid' in kamp_maal.columns else sum(kamp_maal['event_contestant_optauuid'] == home_uuid) if 'event_contestant_optauuid' in kamp_maal.columns else 0
+        
+        # En mere robust tælling baseret på hvem der scorede i rækken:
+        hjemme_maal_tal = 0
+        ude_maal_tal = 0
+        
+        kamp_alle_maal = maal_df[maal_df['match_optauuid'] == m_uuid].sort_values('event_timestamp')
+        for _, sub_m in kamp_alle_maal.iterrows():
+            if sub_m['event_timestamp'] <= m_row['event_timestamp']:
+                if sub_m['contestant_optauuid'] == home_uuid if 'contestant_optauuid' in sub_m else True: # Fallback
+                    # Tjek om holdet er hjemme eller ude
+                    if sub_m['contestant_optauuid'] == home_uuid:
+                        hjemme_maal_tal += 1
+                    else:
+                        ude_maal_tal += 1
+                if sub_m['event_timestamp'] == m_row['event_timestamp']:
+                    break
+
+        # Simpel og præcis beregning baseret på holdets status:
+        # Lad os tælle direkte ud fra rækkerne:
+        h_maal = 0
+        a_maal = 0
+        for _, sub_m in kamp_alle_maal.iterrows():
+            # Tjek om det er hjemmehold der scorer
+            is_home_goal = (sub_m['contestant_optauuid'] == home_uuid) if 'contestant_optauuid' in sub_m else True
+            if is_home_goal:
+                h_maal += 1
+            else:
+                a_maal += 1
+                
+            if sub_m['sequenceid'] == seq_id:
+                break
+
+        # Sæt holdets mål først og modstanderens sidst i stillings-stringen
+        if er_hjemmehold:
+            aktuel_stilling = f"{h_maal}-{a_maal}"
+        else:
+            aktuel_stilling = f"{a_maal}-{h_maal}"
+
+        # Slutresultat formatering
+        f_home = int(m_row['final_home_score']) if pd.notna(m_row.get('final_home_score')) else 0
+        f_away = int(m_row['final_away_score']) if pd.notna(m_row.get('final_away_score')) else 0
+        slut_res = f"{f_home}-{f_away}" if er_hjemmehold else f"{f_away}-{f_home}"
+
+        label_tekst = f"Kamp {k_nr}: {aktuel_stilling} vs. {modstander} ({slut_res})"
+        
+        dropdown_data.append({
+            'sequenceid': seq_id,
+            'label': label_tekst,
+            'kamp_nr': k_nr,
+            'modstander': modstander,
+            'aktuel_stilling': aktuel_stilling,
+            'slut_res': slut_res,
+            'kamp_navn': f"{home_name} vs. {away_name}",
+            'dato': pd.to_datetime(m_row['match_date_full']).strftime('%d/%m/%Y') if pd.notna(m_row['match_date_full']) else ""
+        })
+
+    dropdown_df = pd.DataFrame(dropdown_data)
+    sekvens_ids = dropdown_df['sequenceid'].tolist()
 
     with col_s:
         valgt_seq = st.selectbox(
             "Vælg målsekvens", 
             sekvens_ids, 
             key="seq_main_dropdown",
-            format_func=lambda x: f"Mål {seq_til_maal_nr[x]}: {unikke_maal[unikke_maal['sequenceid'] == x]['player_name'].iloc[0]} ({unikke_maal[unikke_maal['sequenceid'] == x]['kamp_label'].iloc[0]})"
+            format_func=lambda x: dropdown_df[dropdown_df['sequenceid'] == x]['label'].iloc[0]
         )
 
     if valgt_seq:
         sekvens_df = df_all[df_all['sequenceid'] == valgt_seq].sort_values(by='event_timestamp').copy()
-        
         sekvens_df['sekvens_nr'] = range(1, len(sekvens_df) + 1)
         
+        info_row = dropdown_df[dropdown_df['sequenceid'] == valgt_seq].iloc[0]
         maal_row = sekvens_df[sekvens_df['event_typeid'] == 16]
         målscorer = maal_row['player_name'].iloc[0] if not maal_row.empty else "Ukendt"
-        kamp_navn = sekvens_df['kamp_label'].iloc[0]
-        aktuelt_maal_nr = sekvens_df['maal_nummer'].iloc[0]
-        
-        match_ts = sekvens_df['match_date_full'].iloc[0] if 'match_date_full' in sekvens_df.columns else ""
-        dato_str = pd.to_datetime(match_ts).strftime('%d/%m/%Y') if pd.notna(match_ts) else ""
-
-        if not maal_row.empty and 'final_home_score' in maal_row.columns and pd.notna(maal_row['final_home_score'].iloc[0]):
-            slut_stilling = f"{int(maal_row['final_home_score'].iloc[0])}-{int(maal_row['final_away_score'].iloc[0])}"
-        else:
-            slut_stilling = "Ukendt"
 
         col_banen, col_tabel = st.columns([2, 1])
 
         with col_banen:
-            st.markdown(f"##### Mål {aktuelt_maal_nr}: Sekvensopbygning på banen")
+            st.markdown(f"##### Kamp {info_row['kamp_nr']} ({info_row['aktuel_stilling']} vs. {info_row['modstander']}): Sekvensopbygning")
             
             pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#7f7f7f', line_zorder=2, linewidth=1.0)
             fig, ax = pitch.draw(figsize=(9, 4.5))
@@ -222,8 +290,8 @@ def vis_side(dp=None):
             st.markdown(
                 f"<div style='display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; color: #555; background-color: #fcfcfc; padding: 6px 10px; border-radius: 4px; border: 1px solid #eaeaea; margin-top: -5px;'>"
                 f"<span><b>Målscorer:</b> {målscorer}</span>"
-                f"<span><b>Slutresultat:</b> {slut_stilling}</span>"
-                f"<span><b>Kamp:</b> {kamp_navn} ({dato_str})</span>"
+                f"<span><b>Slutresultat:</b> {info_row['slut_res']}</span>"
+                f"<span><b>Kamp:</b> {info_row['kamp_navn']} ({info_row['dato']})</span>"
                 f"</div>",
                 unsafe_allow_html=True
             )
