@@ -6,7 +6,7 @@ from mplsoccer import Pitch
 from data.data_load import _get_snowflake_conn
 from data.utils.team_mapping import TEAMS, SEASON_LEAGUE_MAPPER
 from data.utils.mapping import OPTA_EVENT_TYPES, get_action_label, har_qualifier
-from data.utils.helpers import get_logo_img, oversæt_qualifiers  # <-- Bruger din eksisterende helper
+from utils.helpers import get_logo_img, oversæt_qualifiers  # <-- Bruger din eksisterende helper
 
 # --- KONFIGURATION (HVIDOVRE-APP / 2026/2027) ---
 DB = "KLUB_HVIDOVREIF.AXIS"
