@@ -2,22 +2,18 @@ import streamlit as st
 import pandas as pd
 from mplsoccer import Pitch
 
-# --- DATA OG MAPPING (Genbruger dine eksisterende stier) ---
+# --- DATA OG MAPPING ---
 from data.data_load import _get_snowflake_conn
 from data.utils.team_mapping import TEAMS
 from data.utils.mapping import get_action_label
 from data.sql.liga_spillere import hent_match_og_haendelsesdata
 
 def vis_side():
-    # --- KONFIGURATION ---
     DB = "KLUB_HVIDOVREIF.AXIS"
-    SEASONNAME = "2026/2027"
-    TEAM_WYID = 7490
-    COMPETITION_WYID = (328,)
     LIGA_IDS = "('2mb332vncy4450vu14paj8844', 'e5p78j2r7v8h3u9s5k0l2m4n6', 'f6q89k3s8w9i4v0t6l1m3n5o7', '335', '328', '329', '43319', '331')"
 
     st.title("⚽ Målsekvenser")
-    st.markdown("Her kan du gennemgå holdets målsekvenser helt rent og uden dubletter.")
+    st.markdown("Her kan du gennemgå holdets målsekvenser rent og visuelt.")
 
     conn = _get_snowflake_conn()
     if not conn:
@@ -44,7 +40,7 @@ def vis_side():
     valgt_hold = st.selectbox("Vælg hold", team_names, index=default_team_idx)
     valgt_uuid_hold = team_map[valgt_hold]
 
-    # 2. Hent hændelsesdata via din eksisterende funktion
+    # 2. Hent hændelsesdata
     with st.spinner("Henter målsekvenser..."):
         df_all, df_expected, df_db_stats = hent_match_og_haendelsesdata(
             conn, DB, valgt_uuid_hold, LIGA_IDS, {}
@@ -54,7 +50,7 @@ def vis_side():
         st.warning("Ingen hændelsesdata fundet.")
         st.stop()
 
-    # Rens for generelle dubletter med det samme
+    # Rens for dubletter
     df_all = df_all.dropna(subset=['visningsnavn'])
     subset_cols = [c for c in ['event_typeid', 'event_x', 'event_y', 'minute', 'second', 'player_optauuid', 'match_id'] if c in df_all.columns]
     if subset_cols:
@@ -71,7 +67,6 @@ def vis_side():
     if maal_df.empty:
         st.info("Ingen mål fundet i det aktuelle datasæt.")
     else:
-        # Opret en pæn label til vælgeren
         kamp_kolonne = 'match_teams' if 'match_teams' in maal_df.columns else 'match_id'
         maal_df['maal_label'] = (
             "Kamp: " + maal_df[kamp_kolonne].astype(str) + 
@@ -89,7 +84,7 @@ def vis_side():
             maal_minut = aktuelt_maal['minute']
             maal_periode = aktuelt_maal.get('period_id', 1)
 
-            # Hent opbygningssekvensen (f.eks. 2 minutter før målet i samme kamp/periode)
+            # Hent sekvensen op til målet (fx 2 minutter før)
             sekvens_df = df_all[
                 (df_all['match_id'] == kamp_id) & 
                 (df_all.get('period_id', 1) == maal_periode) & 
@@ -97,7 +92,6 @@ def vis_side():
                 (df_all['minute'] >= maal_minut - 2)
             ].copy()
 
-            # Rens sekvensen yderligere for dubletter og sorter kronologisk
             sekvens_cols = [c for c in ['event_typeid', 'event_x', 'event_y', 'minute', 'second'] if c in sekvens_df.columns]
             if sekvens_cols:
                 sekvens_df = sekvens_df.drop_duplicates(subset=sekvens_cols)
@@ -109,32 +103,52 @@ def vis_side():
                 st.metric("Målscorer", str(aktuelt_maal['visningsnavn']))
                 st.metric("Tidspunkt", f"{int(maal_minut)}' minut")
 
-            # 4. Tegn banen med målsekvensen
+            # 4. Tegn banen præcis som på billedet
             st.markdown("### Sekvensopbygning på banen")
-            pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
-            fig, ax = pitch.draw(figsize=(10, 6))
+            pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#7f7f7f', line_zorder=2)
+            fig, ax = pitch.draw(figsize=(11, 7))
 
             if not sekvens_df.empty and 'event_x' in sekvens_df.columns:
                 sekvens_df = sekvens_df.dropna(subset=['event_x', 'event_y'])
                 
+                # Tegn grå/lyse opbygningspile mellem hændelserne
                 if len(sekvens_df) > 1:
                     pitch.arrows(
                         sekvens_df['event_x'].iloc[:-1], 
                         sekvens_df['event_y'].iloc[:-1],
                         sekvens_df['event_x'].iloc[1:], 
                         sekvens_df['event_y'].iloc[1:], 
-                        ax=ax, width=2, headwidth=3, color="#df003b", alpha=0.7, label="Opbygning"
+                        ax=ax, width=1.5, headwidth=3, color="#cccccc", alpha=0.8, zorder=3
                     )
-                
-                # Marker selve målet
-                ax.scatter(
-                    aktuelt_maal['event_x'], aktuelt_maal['event_y'], 
-                    color='green', s=150, marker='s', edgecolors='black', zorder=5, label="Mål"
+
+                # Tegn sorte prikker for opbygningsaktioner
+                pitch.scatter(
+                    sekvens_df['event_x'], sekvens_df['event_y'],
+                    color='black', s=80, ax=ax, zorder=4
                 )
+
+                # Tilføj spillernavne over punkterne
+                for _, row in sekvens_df.iterrows():
+                    if pd.notna(row.get('visningsnavn')) and pd.notna(row.get('event_x')):
+                        ax.text(
+                            row['event_x'], row['event_y'] + 3, row['visningsnavn'],
+                            fontsize=9, ha='center', va='bottom', color='black', zorder=5
+                        )
+
+                # Marker selve målet med en rød prik til sidst, så den ligger øverst
+                if 'event_typeid' in aktuelt_maal and aktuelt_maal['event_typeid'] == 16:
+                    pitch.scatter(
+                        aktuelt_maal['event_x'], aktuelt_maal['event_y'],
+                        color='#df003b', s=120, ax=ax, zorder=6
+                    )
+                    ax.text(
+                        aktuelt_maal['event_x'], aktuelt_maal['event_y'] + 3, aktuelt_maal['visningsnavn'],
+                        fontsize=9, fontweight='bold', ha='center', va='bottom', color='black', zorder=7
+                    )
 
             st.pyplot(fig, use_container_width=True)
 
-            # 5. Vis tabel over aktionerne i sekvensen
+            # 5. Vis tabel over sekvensen
             st.markdown("### Aktioner i sekvensen")
             vis_cols = [c for c in ['minute', 'second', 'visningsnavn', 'Action_Label', 'outcome'] if c in sekvens_df.columns]
             if vis_cols:
