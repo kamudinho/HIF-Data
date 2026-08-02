@@ -54,7 +54,7 @@ def vis_side(dp=None):
         st.error(f"Kunne ikke finde Opta UUID for holdet: {valgt_hold_navn}")
         st.stop()
 
-    # --- SQL-FORESPØRGSEL MED MÅL-STILLING OG SLUTRESULTAT ---
+    # --- SQL-FORESPØRGSEL ---
     sql_query = f"""
         WITH MatchIDs AS (
             SELECT DISTINCT MATCH_OPTAUUID 
@@ -67,8 +67,7 @@ def vis_side(dp=None):
                 e.SEQUENCEID, 
                 e.MATCH_OPTAUUID,
                 e.EVENT_TIMESTAMP as GOAL_TIMESTAMP,
-                e.EVENT_OPTAUUID as GOAL_EVENT_OPTAUUID,
-                e.EVENT_CONTESTANT_OPTAUUID
+                e.EVENT_OPTAUUID as GOAL_EVENT_OPTAUUID
             FROM {DB}.OPTA_EVENTS e
             WHERE e.MATCH_OPTAUUID IN (SELECT MATCH_OPTAUUID FROM MatchIDs)
             AND e.EVENT_TYPEID = 16 
