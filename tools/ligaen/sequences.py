@@ -324,15 +324,15 @@ def vis_side(dp=None):
             img_away = get_logo_img(info_row['away_uuid'])
 
             if img_home:
-                pitch.inset_image(x=6.5, y=3.5, image=img_home, height=4.5, ax=ax, zorder=6)
+                pitch.inset_image(x=2.5, y=3.5, image=img_home, height=3.0, ax=ax, zorder=6)
 
-            ax.text(8.5, 5.75, "vs.", fontsize=8, fontweight='bold', ha='center', va='center', color='#333333', zorder=6)
+            ax.text(4.25, 3.5, "vs.", fontsize=7, fontweight='bold', ha='center', va='center', color='#333333', zorder=6)
 
             if img_away:
-                pitch.inset_image(x=10.5, y=3.5, image=img_away, height=4.5, ax=ax, zorder=6)
+                pitch.inset_image(x=6.0, y=3.5, image=img_away, height=3.0, ax=ax, zorder=6)
 
             tekst_bund = f"{info_row['dato']} | Stilling: {info_row['stilling_hjemme_ude']} ({maal_minut}. min)"
-            ax.text(2, 3.5, tekst_bund, fontsize=8, color='#555555', ha='left', va='center', zorder=6)
+            ax.text(8.0, 3.5, tekst_bund, fontsize=8, color='#555555', ha='left', va='center', zorder=6)
 
             st.pyplot(fig, use_container_width=True)
 
