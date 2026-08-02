@@ -83,7 +83,6 @@ def vis_side(dp=None):
             JOIN GoalEvents g 
                 ON e.MATCH_OPTAUUID = g.MATCH_OPTAUUID
             WHERE e.EVENT_TIMESTAMP <= g.GOAL_TIMESTAMP
-              -- Vi tillader hændelser op til 20 sekunder før målet, uanset om sekvens-id'et er skiftet
               AND e.EVENT_TIMESTAMP >= DATEADD('millisecond', -20000, g.GOAL_TIMESTAMP)
               AND e.EVENT_CONTESTANT_OPTAUUID = '{team_opta_uuid}'
         ),
@@ -137,7 +136,10 @@ def vis_side(dp=None):
         return
 
     df_all.columns = [c.lower() for c in df_all.columns]
-    df_all['aktion'] = df_all['event_typeid'].map(OPTA_EVENT_TYPES).fillna("Ukendt (" + df_all['event_typeid'].astype(str) + ")")
+    
+    # Mapper qualifiers ind i det format get_action_label forventer
+    df_all['qual_list'] = df_all['qualifier_list']
+    df_all['aktion'] = df_all.apply(get_action_label, axis=1)
     df_all['detaljer'] = df_all['qualifier_list'].apply(oversæt_qualifiers)
 
     unikke_kampe = df_all[['match_optauuid', 'match_date_full', 'contestanthome_name', 'contestantaway_name', 'contestanthome_optauuid']].drop_duplicates()
