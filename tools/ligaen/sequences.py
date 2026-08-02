@@ -273,7 +273,6 @@ def vis_side(dp=None):
         col_banen, col_tabel = st.columns([2, 1])
 
         with col_banen:
-            # Grå boks vist over banen
             st.markdown(
                 f"<div style='display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; color: #555; background-color: #fcfcfc; padding: 6px 10px; border-radius: 4px; border: 1px solid #eaeaea; margin-bottom: 5px;'>"
                 f"<span><b>Målscorer:</b> {målscorer}</span>"
@@ -321,17 +320,16 @@ def vis_side(dp=None):
                             fontsize=6, ha='center', va='top', color='#333333', zorder=5
                         )
 
-            # Logoer og kampinfo i bunden af banen
             img_home = get_logo_img(info_row['home_uuid'])
             img_away = get_logo_img(info_row['away_uuid'])
 
             if img_home:
-                pitch.inset_image(x=4, y=9, image=img_home, height=7, ax=ax, zorder=6)
+                pitch.inset_image(x=6.5, y=3.5, image=img_home, height=4.5, ax=ax, zorder=6)
 
-            ax.text(8.5, 12.5, "vs.", fontsize=9, fontweight='bold', ha='center', va='center', color='#333333', zorder=6)
+            ax.text(8.5, 5.75, "vs.", fontsize=8, fontweight='bold', ha='center', va='center', color='#333333', zorder=6)
 
             if img_away:
-                pitch.inset_image(x=13, y=9, image=img_away, height=7, ax=ax, zorder=6)
+                pitch.inset_image(x=10.5, y=3.5, image=img_away, height=4.5, ax=ax, zorder=6)
 
             tekst_bund = f"{info_row['dato']} | Stilling: {info_row['stilling_hjemme_ude']} ({maal_minut}. min)"
             ax.text(2, 3.5, tekst_bund, fontsize=8, color='#555555', ha='left', va='center', zorder=6)
@@ -340,12 +338,11 @@ def vis_side(dp=None):
 
         with col_tabel:
             st.markdown("##### Aktioner i sekvensen")
-            vis_cols = [c for c in ['sekvens_nr', 'player_name', 'aktion', 'detaljer'] if c in sekvens_df.columns]
+            vis_cols = [c for c in ['sekvens_nr', 'player_name', 'aktion'] if c in sekvens_df.columns]
             
             tabel_df = sekvens_df[vis_cols].rename(columns={
                 'sekvens_nr': 'Nr.',
                 'player_name': 'Spiller',
-                'aktion': 'Aktion',
-                'detaljer': 'Detaljer'
+                'aktion': 'Aktion'
             })
             st.dataframe(tabel_df, use_container_width=True, hide_index=True, height=380)
