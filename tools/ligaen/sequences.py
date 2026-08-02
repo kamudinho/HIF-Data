@@ -7,14 +7,13 @@ from data.data_load import _get_snowflake_conn
 from data.utils.team_mapping import TEAMS, SEASON_LEAGUE_MAPPER
 from data.utils.mapping import OPTA_EVENT_TYPES, OPTA_QUALIFIERS, get_action_label, har_qualifier
 
-# --- KONFIGURATION (HVIDOVRE-APP - KUN 1. DIV) ---
+# --- KONFIGURATION (HVIDOVRE-APP) ---
 DB = "KLUB_HVIDOVREIF.AXIS"
-SEASONNAME = "2025/2026"  # Tilpasset din standard Hvidovre-sæson
+SEASONNAME = "2026/2027"
 TEAM_WYID = 7490
 COMPETITION_WYID = (328,)
-COMP_MAP = { 328: "NordicBet Liga" }
-# Kun NordicBet Liga Opta UUID / ID i denne kontering (fjerner Superliga mm.)
-LIGA_IDS = "('328')" 
+COMP_MAP = { 335: "Superliga", 328: "NordicBet Liga", 329: "2. division", 43319: "3. division", 331: "Oddset Pokalen", 1305: "U19 Ligaen" }
+LIGA_IDS = "('2mb332vncy4450vu14paj8844', 'e5p78j2r7v8h3u9s5k0l2m4n6', 'f6q89k3s8w9i4v0t6l1m3n5o7', '335', '328', '329', '43319', '331')"
 
 def oversæt_qualifiers(qual_str):
     if not qual_str or pd.isna(qual_str):
