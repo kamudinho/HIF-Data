@@ -35,7 +35,7 @@ def vis_side(dp=None):
         st.stop()
 
     # Hent hold udelukkende baseret på Opta-mappet for den aktuelle sæson og liga
-    tilladte_hold = SEASON_LEAGUE_MAPPER.get(SEASONNAME, {}).get(AKTIV_ LIGA_NAVN, [])
+    tilladte_hold = SEASON_LEAGUE_MAPPER.get(SEASONNAME, {}).get(AKTIV_LIGA_NAVN, [])
     
     hold_liste = [h for h in tilladte_hold if h in TEAMS]
     if "Hvidovre" in hold_liste:
