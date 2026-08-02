@@ -1,122 +1,142 @@
 import streamlit as st
 import pandas as pd
 from mplsoccer import Pitch
-import matplotlib.pyplot as plt
 
-# HIF Design-konstanter
-HIF_RED = '#cc0000'
-ASSIST_BLUE = '#1e90ff'
-HIF_UUID = '8gxd9ry2580pu1b1dd5ny9ymy'
+# --- DATA OG MAPPING (Genbruger dine eksisterende stier) ---
+from data.data_load import _get_snowflake_conn
+from data.utils.team_mapping import TEAMS
+from data.utils.mapping import get_action_label
+from data.sql.liga_spillere import hent_match_og_haendelsesdata
 
-OPTA_MAP_DK = {
-    1: "Aflevering", 2: "Aflevering", 3: "Dribling", 4: "Tackling", 
-    5: "Frispark", 6: "Hjørnespark", 7: "Tackling", 8: "Interception",
-    10: "Redning", 12: "Skud", 13: "Skud", 14: "Skud", 15: "Skud", 
-    16: "MÅL", 43: "Frispark", 44: "Indkast", 49: "Opsamling", 50: "Opsnapning",
-    107: "Restart"
-}
+# --- KONFIGURATION ---
+DB = "KLUB_HVIDOVREIF.AXIS"
+SEASONNAME = "2026/2027"
+TEAM_WYID = 7490
+COMPETITION_WYID = (328,)
+LIGA_IDS = "('2mb332vncy4450vu14paj8844', 'e5p78j2r7v8h3u9s5k0l2m4n6', 'f6q89k3s8w9i4v0t6l1m3n5o7', '335', '328', '329', '43319', '331')"
 
-def vis_side(dp):
-    # CSS: Optimeret til minimal luft og skarpt fokus
-    st.markdown(f"""
-        <style>
-            .block-container {{ padding-top: 1rem; }}
-            .stat-box-side {{ 
-                background-color: #f8f9fa; 
-                padding: 8px 12px; 
-                border-radius: 5px; 
-                border-left: 5px solid {HIF_RED}; 
-                margin-bottom: 6px; 
-            }}
-            .dot {{ height: 10px; width: 10px; border-radius: 50%; display: inline-block; margin-right: 8px; }}
-            .play-flow-container {{ 
-                background: #ffffff; 
-                padding: 12px; 
-                border-radius: 8px; 
-                border: 1px solid #eee; 
-                margin-top: 5px; 
-            }}
-            .flow-step {{ font-weight: 700; color: #333; font-size: 0.85rem; }}
-            .flow-action {{ color: #666; font-size: 0.75rem; font-weight: 400; }}
-            .flow-arrow {{ color: {HIF_RED}; margin: 0 4px; font-weight: bold; }}
-            /* Tabel styling */
-            .stTable {{ margin-top: -10px; font-size: 0.8rem; }}
-        </style>
-    """, unsafe_allow_html=True)
+st.set_page_config(page_title="Målsekvenser | Hvidovre", layout="wide")
 
-    df_raw = dp.get('opta', {}).get('opta_sequence_map', pd.DataFrame())
-    if df_raw.empty: return
+st.title("⚽ Målsekvenser")
+st.markdown("Her kan du gennemgå holdets målsekvenser helt rent og uden dubletter.")
 
-    df = df_raw.copy()
-    df.columns = [c.upper() for c in df.columns]
+conn = _get_snowflake_conn()
+if not conn:
+    st.warning("Kunne ikke oprette forbindelse til databasen.")
+    st.stop()
 
-    col_x = 'RAW_X' if 'RAW_X' in df.columns else ('EVENT_X' if 'EVENT_X' in df.columns else None)
-    col_y = 'RAW_Y' if 'RAW_Y' in df.columns else ('EVENT_Y' if 'EVENT_Y' in df.columns else None)
-    if not col_x: return
+# 1. Hent holddata og vælg hold
+df_teams_raw = conn.query(f"SELECT DISTINCT CONTESTANTHOME_NAME, CONTESTANTHOME_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS}")
+if df_teams_raw is not None:
+    df_teams_raw.columns = df_teams_raw.columns.str.lower()
 
-    df['EVENT_CONTESTANT_OPTAUUID'] = df['EVENT_CONTESTANT_OPTAUUID'].astype(str).str.lower()
-    local_hif_uuid = HIF_UUID.lower()
-    
-    goals = df[df['EVENT_TYPEID'] == 16].sort_values('EVENT_TIMESTAMP', ascending=False)
-    if goals.empty: return
-    goals['LABEL'] = goals.apply(lambda x: f"{x['EVENT_TIMEMIN']}'. min: {x['PLAYER_NAME']}", axis=1)
-    
-    col_main, col_side = st.columns([2.5, 1])
+mapping_lookup = {str(info['opta_uuid']).lower().replace('t', ''): name for name, info in TEAMS.items() if 'opta_uuid' in info}
 
-    with col_side:
-        sel_label = st.selectbox("Vælg mål", options=goals['LABEL'].unique(), label_visibility="collapsed")
-        sel_row = goals[goals['LABEL'] == sel_label].iloc[0]
+team_map = {}
+if df_teams_raw is not None:
+    for _, r in df_teams_raw.iterrows():
+        uuid_clean = str(r['contestanthome_optauuid']).lower().replace('t','')
+        if uuid_clean in mapping_lookup:
+            team_map[mapping_lookup[uuid_clean]] = r['contestanthome_optauuid']
+
+team_names = sorted(list(team_map.keys()))
+default_team_idx = next((i for i, name in enumerate(team_names) if "hvidovre" in name.lower()), 0)
+
+valgt_hold = st.selectbox("Vælg hold", team_names, index=default_team_idx)
+valgt_uuid_hold = team_map[valgt_hold]
+
+# 2. Hent hændelsesdata via din eksisterende funktion
+with st.spinner("Henter målsekvenser..."):
+    df_all, df_expected, df_db_stats = hent_match_og_haendelsesdata(
+        conn, DB, valgt_uuid_hold, LIGA_IDS, {}
+    )
+
+if df_all is None or df_all.empty:
+    st.warning("Ingen hændelsesdata fundet.")
+    st.stop()
+
+# Rens for generelle dubletter med det samme
+df_all = df_all.dropna(subset=['visningsnavn'])
+subset_cols = [c for c in ['event_typeid', 'event_x', 'event_y', 'minute', 'second', 'player_optauuid', 'match_id'] if c in df_all.columns]
+if subset_cols:
+    df_all = df_all.drop_duplicates(subset=subset_cols)
+
+df_all['Action_Label'] = df_all.apply(get_action_label, axis=1)
+
+# 3. Filtrer kun mål (event_typeid == 16)
+if 'event_typeid' in df_all.columns:
+    maal_df = df_all[df_all['event_typeid'] == 16].copy()
+else:
+    maal_df = pd.DataFrame()
+
+if maal_df.empty:
+    st.info("Ingen mål fundet i det aktuelle datasæt.")
+else:
+    # Opret en pæn label til vælgeren
+    kamp_kolonne = 'match_teams' if 'match_teams' in maal_df.columns else 'match_id'
+    maal_df['maal_label'] = (
+        "Kamp: " + maal_df[kamp_kolonne].astype(str) + 
+        " | Minut: " + maal_df['minute'].astype(str) + "'" +
+        " | Målscorer: " + maal_df['visningsnavn'].astype(str)
+    )
+
+    col_sel, col_info = st.columns([2, 1])
+    with col_sel:
+        valgt_maal_label = st.selectbox("Vælg målsekvens", maal_df['maal_label'].unique())
+
+    if valgt_maal_label:
+        aktuelt_maal = maal_df[maal_df['maal_label'] == valgt_maal_label].iloc[0]
+        kamp_id = aktuelt_maal.get('match_id')
+        maal_minut = aktuelt_maal['minute']
+        maal_periode = aktuelt_maal.get('period_id', 1)
+
+        # Hent opbygningssekvensen (f.eks. 2 minutter før målet i samme kamp/periode)
+        sekvens_df = df_all[
+            (df_all['match_id'] == kamp_id) & 
+            (df_all.get('period_id', 1) == maal_periode) & 
+            (df_all['minute'] <= maal_minut) & 
+            (df_all['minute'] >= maal_minut - 2)
+        ].copy()
+
+        # Rens sekvensen yderligere for dubletter og sorter kronologisk
+        sekvens_cols = [c for c in ['event_typeid', 'event_x', 'event_y', 'minute', 'second'] if c in sekvens_df.columns]
+        if sekvens_cols:
+            sekvens_df = sekvens_df.drop_duplicates(subset=sekvens_cols)
         
-        # FILTRERING: Kun aktioner for den VALGTE sekvens
-        hif_seq = df[(df['SEQUENCEID'] == sel_row['SEQUENCEID']) & (df['EVENT_CONTESTANT_OPTAUUID'] == local_hif_uuid)].copy()
-        hif_seq = hif_seq.sort_values('EVENT_TIMESTAMP').reset_index(drop=True)
+        if 'second' in sekvens_df.columns:
+            sekvens_df = sekvens_df.sort_values(by=['minute', 'second'])
 
-        if not hif_seq.empty:
-            scorer = hif_seq.iloc[-1]['PLAYER_NAME'].split()[-1] if pd.notnull(hif_seq.iloc[-1]['PLAYER_NAME']) else "HIF"
-            assist = hif_seq.iloc[-2]['PLAYER_NAME'].split()[-1] if len(hif_seq) > 1 else "Solo"
+        with col_info:
+            st.metric("Målscorer", str(aktuelt_maal['visningsnavn']))
+            st.metric("Tidspunkt", f"{int(maal_minut)}' minut")
+
+        # 4. Tegn banen med målsekvensen
+        st.markdown("### Sekvensopbygning på banen")
+        pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
+        fig, ax = pitch.draw(figsize=(10, 6))
+
+        if not sekvens_df.empty and 'event_x' in sekvens_df.columns:
+            sekvens_df = sekvens_df.dropna(subset=['event_x', 'event_y'])
             
-            st.markdown(f'<div class="stat-box-side"><span class="dot" style="background-color:{HIF_RED}"></span><b>Målscorer:</b> {scorer}</div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="stat-box-side" style="border-left-color:{ASSIST_BLUE}"><span class="dot" style="background-color:{ASSIST_BLUE}"></span><b>Assist:</b> {assist}</div>', unsafe_allow_html=True)
-
-            st.markdown("<br>", unsafe_allow_html=True)
-            st.caption("Deltagere i dette angreb")
+            if len(sekvens_df) > 1:
+                pitch.arrows(
+                    sekvens_df['event_x'].iloc[:-1], 
+                    sekvens_df['event_y'].iloc[:-1],
+                    sekvens_df['event_x'].iloc[1:], 
+                    sekvens_df['event_y'].iloc[1:], 
+                    ax=ax, width=2, headwidth=3, color="#df003b", alpha=0.7, label="Opbygning"
+                )
             
-            # TABEL: Tæller kun spillere i hif_seq (den specifikke sekvens)
-            hif_seq['Spiller'] = hif_seq['PLAYER_NAME'].apply(lambda x: x.split()[-1] if pd.notnull(x) else "HIF")
-            involvement = hif_seq['Spiller'].value_counts().reset_index()
-            involvement.columns = ['Spiller', 'Aktioner']
-            st.table(involvement)
+            # Marker selve målet
+            ax.scatter(
+                aktuelt_maal['event_x'], aktuelt_maal['event_y'], 
+                color='green', s=150, marker='s', edgecolors='black', zorder=5, label="Mål"
+            )
 
-    with col_main:
-        pitch = Pitch(pitch_type='opta', pitch_color='white', line_color='#cccccc')
-        fig, ax = pitch.draw(figsize=(9, 6))
-        fig.set_facecolor('none')
-        
-        flip = True if sel_row[col_x] < 50 else False
-        
-        prev = None
-        for i, r in hif_seq.iterrows():
-            cx, cy = (100 - r[col_x] if flip else r[col_x]), (100 - r[col_y] if flip else r[col_y])
-            if prev:
-                ax.annotate('', xy=(cx, cy), xytext=(prev[0], prev[1]),
-                            arrowprops=dict(arrowstyle='->', color='#ccc', lw=1.5, alpha=0.4, shrinkA=5, shrinkB=5))
-            
-            p_name = r['PLAYER_NAME'].split()[-1] if pd.notnull(r['PLAYER_NAME']) else ""
-            dot_col = HIF_RED if r['EVENT_TYPEID'] == 16 else (ASSIST_BLUE if p_name == assist else '#aaaaaa')
-            pitch.scatter(cx, cy, s=180, color=dot_col, edgecolors='white', ax=ax, zorder=5)
-            ax.text(cx, cy + 2.5, p_name, fontsize=8, ha='center', fontweight='bold')
-            prev = (cx, cy)
-        
-        st.pyplot(fig, bbox_inches='tight', pad_inches=0)
+        st.pyplot(fig, use_container_width=True)
 
-        # Sekvens-oversigt
-        steps = []
-        for _, r in hif_seq.iterrows():
-            p = r['PLAYER_NAME'].split()[-1] if pd.notnull(r['PLAYER_NAME']) else "HIF"
-            tid = int(r['EVENT_TYPEID'])
-            h = OPTA_MAP_DK.get(tid, f"Aktion {tid}")
-            if tid == 16: h = "MÅL"
-            steps.append(f'<span class="flow-step">{p}</span> <span class="flow-action">({h})</span>')
-        
-        flow_string = ' <span class="flow-arrow">→</span> '.join(steps)
-        st.markdown(f'<div class="play-flow-container">{flow_string}</div>', unsafe_allow_html=True)
+        # 5. Vis tabel over aktionerne i sekvensen
+        st.markdown("### Aktioner i sekvensen")
+        vis_cols = [c for c in ['minute', 'second', 'visningsnavn', 'Action_Label', 'outcome'] if c in sekvens_df.columns]
+        if vis_cols:
+            st.dataframe(sekvens_df[vis_cols], use_container_width=True, hide_index=True)
