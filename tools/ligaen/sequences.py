@@ -77,7 +77,7 @@ def vis_side(dp=None):
                 g.GOAL_TIMESTAMP,
                 GREATEST(
                     MIN(e.EVENT_TIMESTAMP), 
-                    g.GOAL_TIMESTAMP - 15000
+                    DATEADD('millisecond', -15000, g.GOAL_TIMESTAMP)
                 ) AS SEQ_START_TIMESTAMP
             FROM GoalEvents g
             JOIN {DB}.OPTA_EVENTS e ON g.SEQUENCEID = e.SEQUENCEID AND g.MATCH_OPTAUUID = e.MATCH_OPTAUUID
