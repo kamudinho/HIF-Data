@@ -103,6 +103,7 @@ def vis_side(dp=None):
             e.EVENT_TYPEID,
             e.EVENT_X as RAW_X,
             e.EVENT_Y as RAW_Y,
+            e.EVENT_CONTESTANT_OPTAUUID,
             q.QUALIFIER_LIST,
             m.CONTESTANTHOME_NAME,
             m.CONTESTANTAWAY_NAME,
@@ -136,7 +137,6 @@ def vis_side(dp=None):
     df_all['detaljer'] = df_all['qualifier_list'].apply(oversæt_qualifiers)
 
     # --- BEREGN KAMP-NUMRE OG MÅL-STILLING KRONOLOGISK ---
-    # 1. Hent alle unikke kampe for holdet i kronologisk rækkefølge
     unikke_kampe = df_all[['match_optauuid', 'match_date_full', 'contestanthome_name', 'contestantaway_name', 'contestanthome_optauuid']].drop_duplicates()
     unikke_kampe = unikke_kampe.sort_values(by='match_date_full').reset_index(drop=True)
     unikke_kampe['kamp_nummer'] = range(1, len(unikke_kampe) + 1)
@@ -144,7 +144,6 @@ def vis_side(dp=None):
     kamp_nr_dict = dict(zip(unikke_kampe['match_optauuid'], unikke_kampe['kamp_nummer']))
     df_all['kamp_nummer'] = df_all['match_optauuid'].map(kamp_nr_dict)
 
-    # 2. Find alle mål-hændelser (event_typeid == 16) for at udregne holdets stilling da målet faldt
     maal_df = df_all[df_all['event_typeid'] == 16].copy()
     maal_df = maal_df.sort_values(by=['match_date_full', 'event_timestamp']).drop_duplicates(subset=['sequenceid'])
 
@@ -162,35 +161,12 @@ def vis_side(dp=None):
         er_hjemmehold = (team_opta_uuid == home_uuid)
         modstander = away_name if er_hjemmehold else home_name
 
-        # Find alle mål i samme kamp, der faldt TIDLIGERE end eller SAMTIDIG med dette mål
-        kamp_maal = maal_df[(maal_df['match_optauuid'] == m_uuid) & (maal_df['event_timestamp'] <= m_row['event_timestamp'])]
-        
-        # Beregn stillingen fra det valgte holds perspektiv
-        hjemme_maal_tal = sum(kamp_maal['contestant_optauuid'] == home_uuid) if 'contestant_optauuid' in kamp_maal.columns else sum(kamp_maal['event_contestant_optauuid'] == home_uuid) if 'event_contestant_optauuid' in kamp_maal.columns else 0
-        
-        # En mere robust tælling baseret på hvem der scorede i rækken:
-        hjemme_maal_tal = 0
-        ude_maal_tal = 0
-        
         kamp_alle_maal = maal_df[maal_df['match_optauuid'] == m_uuid].sort_values('event_timestamp')
-        for _, sub_m in kamp_alle_maal.iterrows():
-            if sub_m['event_timestamp'] <= m_row['event_timestamp']:
-                if sub_m['contestant_optauuid'] == home_uuid if 'contestant_optauuid' in sub_m else True: # Fallback
-                    # Tjek om holdet er hjemme eller ude
-                    if sub_m['contestant_optauuid'] == home_uuid:
-                        hjemme_maal_tal += 1
-                    else:
-                        ude_maal_tal += 1
-                if sub_m['event_timestamp'] == m_row['event_timestamp']:
-                    break
-
-        # Simpel og præcis beregning baseret på holdets status:
-        # Lad os tælle direkte ud fra rækkerne:
+        
         h_maal = 0
         a_maal = 0
         for _, sub_m in kamp_alle_maal.iterrows():
-            # Tjek om det er hjemmehold der scorer
-            is_home_goal = (sub_m['contestant_optauuid'] == home_uuid) if 'contestant_optauuid' in sub_m else True
+            is_home_goal = (sub_m['event_contestant_optauuid'] == home_uuid)
             if is_home_goal:
                 h_maal += 1
             else:
@@ -199,13 +175,11 @@ def vis_side(dp=None):
             if sub_m['sequenceid'] == seq_id:
                 break
 
-        # Sæt holdets mål først og modstanderens sidst i stillings-stringen
         if er_hjemmehold:
             aktuel_stilling = f"{h_maal}-{a_maal}"
         else:
             aktuel_stilling = f"{a_maal}-{h_maal}"
 
-        # Slutresultat formatering
         f_home = int(m_row['final_home_score']) if pd.notna(m_row.get('final_home_score')) else 0
         f_away = int(m_row['final_away_score']) if pd.notna(m_row.get('final_away_score')) else 0
         slut_res = f"{f_home}-{f_away}" if er_hjemmehold else f"{f_away}-{f_home}"
