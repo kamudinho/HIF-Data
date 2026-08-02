@@ -74,7 +74,12 @@ def vis_side(dp=None):
                 g.SEQUENCEID,
                 g.MATCH_OPTAUUID,
                 g.GOAL_TIMESTAMP,
-                MIN(e.EVENT_TIMESTAMP) AS SEQ_START_TIMESTAMP
+                -- Vi sætter et tidsvindue på f.eks. 30 sekunder (30000 millisekunder) op til målet, 
+                -- eller beholder sekvensstart, hvis den er kortere, for at undgå at det starter helt i den anden ende.
+                GREATEST(
+                    MIN(e.EVENT_TIMESTAMP), 
+                    g.GOAL_TIMESTAMP - 35000
+                ) AS SEQ_START_TIMESTAMP
             FROM GoalEvents g
             JOIN {DB}.OPTA_EVENTS e ON g.SEQUENCEID = e.SEQUENCEID AND g.MATCH_OPTAUUID = e.MATCH_OPTAUUID
             GROUP BY g.SEQUENCEID, g.MATCH_OPTAUUID, g.GOAL_TIMESTAMP
@@ -136,7 +141,6 @@ def vis_side(dp=None):
     df_all['aktion'] = df_all['event_typeid'].map(OPTA_EVENT_TYPES).fillna("Ukendt (" + df_all['event_typeid'].astype(str) + ")")
     df_all['detaljer'] = df_all['qualifier_list'].apply(oversæt_qualifiers)
 
-    # --- BEREGN KAMP-NUMRE OG MÅL-STILLING KRONOLOGISK ---
     unikke_kampe = df_all[['match_optauuid', 'match_date_full', 'contestanthome_name', 'contestantaway_name', 'contestanthome_optauuid']].drop_duplicates()
     unikke_kampe = unikke_kampe.sort_values(by='match_date_full').reset_index(drop=True)
     unikke_kampe['kamp_nummer'] = range(1, len(unikke_kampe) + 1)
