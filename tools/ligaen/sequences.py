@@ -70,27 +70,25 @@ def vis_side(dp=None):
             AND e.EVENT_TYPEID = 16 
             AND e.EVENT_CONTESTANT_OPTAUUID = '{team_opta_uuid}'
         ),
-        SequenceBounds AS (
+        RankedEvents AS (
             SELECT 
-                g.SEQUENCEID,
-                g.MATCH_OPTAUUID,
+                e.*,
                 g.GOAL_TIMESTAMP,
-                GREATEST(
-                    MIN(e.EVENT_TIMESTAMP), 
-                    DATEADD('millisecond', -15000, g.GOAL_TIMESTAMP)
-                ) AS SEQ_START_TIMESTAMP
-            FROM GoalEvents g
-            JOIN {DB}.OPTA_EVENTS e ON g.SEQUENCEID = e.SEQUENCEID AND g.MATCH_OPTAUUID = e.MATCH_OPTAUUID
-            GROUP BY g.SEQUENCEID, g.MATCH_OPTAUUID, g.GOAL_TIMESTAMP
+                ROW_NUMBER() OVER (
+                    PARTITION BY e.MATCH_OPTAUUID, e.SEQUENCEID 
+                    ORDER BY e.EVENT_TIMESTAMP DESC
+                ) as rn
+            FROM {DB}.OPTA_EVENTS e
+            JOIN GoalEvents g 
+                ON e.SEQUENCEID = g.SEQUENCEID 
+                AND e.MATCH_OPTAUUID = g.MATCH_OPTAUUID
+            WHERE e.EVENT_TIMESTAMP <= g.GOAL_TIMESTAMP
         ),
         FilteredEvents AS (
-            SELECT e.*
-            FROM {DB}.OPTA_EVENTS e
-            JOIN SequenceBounds sb 
-                ON e.SEQUENCEID = sb.SEQUENCEID 
-                AND e.MATCH_OPTAUUID = sb.MATCH_OPTAUUID
-            WHERE e.EVENT_TIMESTAMP >= sb.SEQ_START_TIMESTAMP 
-              AND e.EVENT_TIMESTAMP <= sb.GOAL_TIMESTAMP
+            SELECT *
+            FROM RankedEvents
+            -- Vi tager de sidste 6 hændelser op til og med målet, så indlæg/opbouw altid kommer med
+            WHERE rn <= 6 
         ),
         EventQualifiers AS (
             SELECT 
