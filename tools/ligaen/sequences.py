@@ -245,15 +245,15 @@ def vis_side():
         # Vis info om målscorer og kamp kompakt
         col_info1, col_info2 = st.columns(2)
         with col_info1:
-            st.metric("Målscorer", str(målscorer))
+            st.caption("Målscorer", str(målscorer))
         with col_info2:
-            st.metric("Kamp", kamp_navn)
+            st.caption("Kamp", kamp_navn)
 
         # --- OPSETNING: BANEN TIL VENSTRE, TABELLEN TIL HØJRE ---
         col_banen, col_tabel = st.columns([2, 1])
 
         with col_banen:
-            st.caption("## Sekvensopbygning på banen (fra bolden vindes)")
+            st.caption("# Sekvensopbygning på banen (fra bolden vindes)")
             pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#7f7f7f', line_zorder=2)
             fig, ax = pitch.draw(figsize=(8, 5))
 
@@ -299,7 +299,7 @@ def vis_side():
             st.pyplot(fig, use_container_width=True)
 
         with col_tabel:
-            st.caption("## Aktioner i sekvensen")
+            st.caption("# Aktioner i sekvensen")
             vis_cols = [c for c in ['player_name', 'aktion', 'detaljer'] if c in sekvens_df.columns]
             
             tabel_df = sekvens_df[vis_cols].rename(columns={
