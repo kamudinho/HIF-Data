@@ -70,25 +70,27 @@ def vis_side(dp=None):
             AND e.EVENT_TYPEID = 16 
             AND e.EVENT_CONTESTANT_OPTAUUID = '{team_opta_uuid}'
         ),
-        RankedEvents AS (
+        RankedMatchEvents AS (
             SELECT 
                 e.*,
                 g.GOAL_TIMESTAMP,
+                g.SEQUENCEID as TARGET_SEQUENCEID,
                 ROW_NUMBER() OVER (
-                    PARTITION BY e.MATCH_OPTAUUID, e.SEQUENCEID 
+                    PARTITION BY e.MATCH_OPTAUUID, g.GOAL_TIMESTAMP 
                     ORDER BY e.EVENT_TIMESTAMP DESC
                 ) as rn
             FROM {DB}.OPTA_EVENTS e
             JOIN GoalEvents g 
-                ON e.SEQUENCEID = g.SEQUENCEID 
-                AND e.MATCH_OPTAUUID = g.MATCH_OPTAUUID
+                ON e.MATCH_OPTAUUID = g.MATCH_OPTAUUID
             WHERE e.EVENT_TIMESTAMP <= g.GOAL_TIMESTAMP
+              -- Vi tillader hændelser op til 20 sekunder før målet, uanset om sekvens-id'et er skiftet
+              AND e.EVENT_TIMESTAMP >= DATEADD('millisecond', -20000, g.GOAL_TIMESTAMP)
+              AND e.EVENT_CONTESTANT_OPTAUUID = '{team_opta_uuid}'
         ),
         FilteredEvents AS (
             SELECT *
-            FROM RankedEvents
-            -- Vi tager de sidste 6 hændelser op til og med målet, så indlæg/opbouw altid kommer med
-            WHERE rn <= 6 
+            FROM RankedMatchEvents
+            WHERE rn <= 7
         ),
         EventQualifiers AS (
             SELECT 
@@ -99,7 +101,7 @@ def vis_side(dp=None):
         )
         SELECT 
             e.MATCH_OPTAUUID,
-            e.SEQUENCEID,
+            e.TARGET_SEQUENCEID as SEQUENCEID,
             e.EVENT_TIMESTAMP,
             e.PLAYER_NAME,
             e.EVENT_TYPEID,
