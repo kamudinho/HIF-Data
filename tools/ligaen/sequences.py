@@ -6,17 +6,82 @@ from mplsoccer import Pitch
 from data.data_load import _get_snowflake_conn
 from data.utils.team_mapping import SEASONS, COMPETITIONS, TEAMS, SEASON_LEAGUE_MAPPER
 
+# Opta Event Type Mapping (Standard Opta F24 Event Types)
+OPTA_EVENT_TYPES = {
+    1: "Aflevering",
+    2: "Modtagelse",
+    3: "Duell",
+    4: "Berøring",
+    5: "Fejl",
+    6: "Clearence",
+    7: "Blokering",
+    8: "Afskærmning",
+    9: "Skud",
+    10: "Målmand",
+    11: "Indgreb",
+    12: "Kort",
+    13: "Udskiftning",
+    14: "Fejlaflevering",
+    15: "Frispark",
+    16: "Mål",
+    17: "Hjørnespark",
+    18: "Indkast",
+    19: "Frisparksindlæg",
+    20: "Offside",
+    21: "Straffespark",
+    22: "Start på periode",
+    23: "Slut på periode",
+    24: "Bold ude",
+    25: "Godkendelse/VAR",
+    26: "Modtagelse efter aflevering",
+    27: "Bollbesiddelse",
+    28: "Fejl i opspillet",
+    29: "Keeper indgreb",
+    30: "Keeper opsamling",
+    31: "Forsøg på dribling",
+    32: "Klassespil",
+    33: "Luftduel",
+    34: "Tackling",
+    35: "Interception",
+    36: "Frispark begået",
+    37: "Stangskud",
+    38: "Mål på straffespark",
+    39: "Brændt straffespark",
+    40: "Selvmål",
+    41: "Assist",
+    42: "Blokeret skud",
+    43: "Foul",
+    44: "Card",
+    45: "Substitution",
+    46: "Offside provoked",
+    47: "Air duel",
+    48: "Tackle",
+    49: "Interception",
+    50: "Save",
+    51: "Claim",
+    52: "Clearance",
+    53: "Miss",
+    54: "Post",
+    55: "Attempt saved",
+    60: "Fejl",
+    61: "Keeper claim",
+    62: "Keeper punch",
+    63: "Keeper pick up",
+    74: "Blocked pass",
+    80: "Boldeobeskrivelse"
+}
+
 def vis_side():
     DB = "KLUB_HVIDOVREIF.AXIS"
 
-    st.markdown("Gennemgang af holdets målsekvenser baseret på centrale indstillinger og sekvensdata.")
+    st.caption("Gennemgang af holdets målsekvenser fra bolden vindes, til målet falder.")
 
     conn = _get_snowflake_conn()
     if not conn:
         st.warning("Kunne ikke oprette forbindelse til databasen.")
         st.stop()
 
-    # Fastlåst sæson og fastlåst turnering ("NordicBet Liga" / 1. division)
+    # Fastlåst sæson (2026/2027) og fastlåst turnering ("NordicBet Liga")
     valgt_saeson = "2026/2027"
     if valgt_saeson not in SEASONS:
         valgt_saeson = list(SEASONS.keys())[0]
@@ -36,7 +101,7 @@ def vis_side():
         hold_liste.remove("Hvidovre")
         hold_liste.insert(0, "Hvidovre")
 
-    # --- 2 KOLONNER PÅ SAMME LINJE: Hold og Målsekvens (Turnering er fastlåst til 1. division) ---
+    # --- 2 KOLONNER PÅ SAMME LINJE: Hold og Målsekvens ---
     col_h, col_s = st.columns(2)
     
     with col_h:
@@ -50,7 +115,9 @@ def vis_side():
         st.stop()
 
     # --- SQL-FORESPØRGSEL ---
-    # Vi henter målet (EVENT_TYPEID = 16) samt udvider sekvensen ved at inkludere hændelser op til 20 sekunder før målets timestamp inden for samme kamp.
+    # Vi henter målene (EVENT_TYPEID = 16) og følger selve sekvensen (SEQUENCEID), men filtrerer/afkorter den, 
+    # så den starter fra det tidspunkt holdet vinder bolden (f.eks. første hændelse i sekvensen for holdet, eller hvor besiddelsen starter) 
+    # og frem til målet falder.
     sql_query = f"""
         WITH MatchIDs AS (
             SELECT DISTINCT MATCH_OPTAUUID 
@@ -67,15 +134,25 @@ def vis_side():
             AND e.EVENT_TYPEID = 16 
             AND e.EVENT_CONTESTANT_OPTAUUID = '{team_opta_uuid}'
         ),
-        ExtendedSequenceEvents AS (
-            SELECT DISTINCT e.*
+        SequenceBounds AS (
+            -- Finder starttidspunktet for sekvensen (eller hvor holdet reelt starter sekvensen/vinder bolden op til målet)
+            SELECT 
+                g.SEQUENCEID,
+                g.MATCH_OPTAUUID,
+                g.GOAL_TIMESTAMP,
+                MIN(e.EVENT_TIMESTAMP) AS SEQ_START_TIMESTAMP
+            FROM GoalEvents g
+            JOIN {DB}.OPTA_EVENTS e ON g.SEQUENCEID = e.SEQUENCEID AND g.MATCH_OPTAUUID = e.MATCH_OPTAUUID
+            GROUP BY g.SEQUENCEID, g.MATCH_OPTAUUID, g.GOAL_TIMESTAMP
+        ),
+        FilteredEvents AS (
+            SELECT e.*
             FROM {DB}.OPTA_EVENTS e
-            INNER JOIN GoalEvents g 
-                ON e.MATCH_OPTAUUID = g.MATCH_OPTAUUID
-                AND (
-                    e.SEQUENCEID = g.SEQUENCEID 
-                    OR (e.EVENT_TIMESTAMP >= g.GOAL_TIMESTAMP - 20 AND e.EVENT_TIMESTAMP <= g.GOAL_TIMESTAMP)
-                )
+            JOIN SequenceBounds sb 
+                ON e.SEQUENCEID = sb.SEQUENCEID 
+                AND e.MATCH_OPTAUUID = sb.MATCH_OPTAUUID
+            WHERE e.EVENT_TIMESTAMP >= sb.SEQ_START_TIMESTAMP 
+              AND e.EVENT_TIMESTAMP <= sb.GOAL_TIMESTAMP
         ),
         EventQualifiers AS (
             SELECT 
@@ -99,7 +176,7 @@ def vis_side():
             q.QUALIFIER_LIST,
             m.CONTESTANTHOME_NAME,
             m.CONTESTANTAWAY_NAME
-        FROM ExtendedSequenceEvents e
+        FROM FilteredEvents e
         LEFT JOIN EventQualifiers q 
             ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
         LEFT JOIN {DB}.OPTA_MATCHINFO m 
@@ -107,7 +184,7 @@ def vis_side():
         ORDER BY e.SEQUENCEID, e.EVENT_TIMESTAMP ASC;
     """
 
-    with st.spinner("Henter målsekvenser og opspil fra Snowflake..."):
+    with st.spinner("Henter målsekvenser fra Snowflake..."):
         try:
             df_all = conn.query(sql_query)
         except Exception as e:
@@ -122,6 +199,10 @@ def vis_side():
 
     df_all.columns = [c.lower() for c in df_all.columns]
     df_all['kamp_label'] = df_all['contestanthome_name'] + " vs. " + df_all['contestantaway_name']
+    
+    # Oversæt event_typeid til læsevenlig tekst i en ny kolonne
+    df_all['aktion'] = df_all['event_typeid'].map(OPTA_EVENT_TYPES).fillna("Ukendt hændelse (" + df_all['event_typeid'].astype(str) + ")")
+
     sekvens_ids = df_all['sequenceid'].unique()
 
     with col_s:
@@ -153,7 +234,7 @@ def vis_side():
         col_banen, col_tabel = st.columns([1.2, 1])
 
         with col_banen:
-            st.markdown("### Sekvensopbygning på banen (inkl. 20 sek. opspil)")
+            st.markdown("### Sekvensopbygning på banen (fra bolden vindes)")
             pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#7f7f7f', line_zorder=2)
             fig, ax = pitch.draw(figsize=(8, 5))
 
@@ -200,5 +281,15 @@ def vis_side():
 
         with col_tabel:
             st.markdown("### Aktioner i sekvensen")
-            vis_cols = [c for c in ['event_timestamp', 'player_name', 'event_typeid', 'raw_x', 'raw_y'] if c in sekvens_df.columns]
-            st.dataframe(sekvens_df[vis_cols], use_container_width=True, hide_index=True, height=380)
+            # Vis 'aktion' i stedet for blot event_typeid
+            vis_cols = [c for c in ['event_timestamp', 'player_name', 'aktion', 'raw_x', 'raw_y'] if c in sekvens_df.columns]
+            
+            # Opret en pæn kopi til tabellen med overskrifter på dansk
+            tabel_df = sekvens_df[vis_cols].rename(columns={
+                'event_timestamp': 'Tid',
+                'player_name': 'Spiller',
+                'aktion': 'Aktion',
+                'raw_x': 'X',
+                'raw_y': 'Y'
+            })
+            st.dataframe(tabel_df, use_container_width=True, hide_index=True, height=380)
