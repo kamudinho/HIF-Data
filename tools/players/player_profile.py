@@ -544,7 +544,9 @@ def vis_side(dp=None):
                 TOTAL_HOME_SCORE,
                 TOTAL_AWAY_SCORE
             FROM {DB}.OPTA_MATCHINFO
-            WHERE (CONTESTANTHOME_OPTAUUID = '{valgt_uuid_hold}' OR CONTESTANTAWAY_OPTAUUID = '{valgt_uuid_hold}')
+            WHERE TOURNAMENTCALENDAR_NAME = '{SEASONNAME}'
+              AND MATCH_STATUS = 'Played'
+              AND (CONTESTANTHOME_OPTAUUID = '{valgt_uuid_hold}' OR CONTESTANTAWAY_OPTAUUID = '{valgt_uuid_hold}')
             ORDER BY MATCH_DATE_FULL DESC
         """
         df_matches = conn.query(sql_matches)
@@ -618,7 +620,7 @@ def vis_side(dp=None):
                     'Gennembrud_Overtake': x.apply(lambda r: 1 if str(r['event_typeid']) == "3" and "465" in [str(q).strip() for q in (r.get('qual_list', []) if isinstance(r.get('qual_list', []), list) else str(r.get('qual_list', '')).split(','))] else 0, axis=1).sum(),
                     'Rum_Driblinger_Space': x.apply(lambda r: 1 if str(r['event_typeid']) == "3" and "464" in [str(q).strip() for q in (r.get('qual_list', []) if isinstance(r.get('qual_list', []), list) else str(r.get('qual_list', '')).split(','))] else 0, axis=1).sum(),
                     'Offensive_Dueller': x.apply(lambda r: 1 if "286" in [str(q).strip() for q in (r.get('qual_list', []) if isinstance(r.get('qual_list', []), list) else str(r.get('qual_list', '')).split(','))] else 0, axis=1).sum(),
-                    'Defensive_Dueller': x.apply(lambda r: 1 if "285" in [str(q).strip() for q in (r.get('qual_list', []) if isinstance(r.get('qual_list', []), list) else str(r.get('qual_list', '')).split(','))] else 0, axis=1).sum(),
+                    'Defensive_Dueller': x.apply(lambda r: 1 if "285" in [str(q).strip() for q in (r.get('qual_list', []), list) if isinstance(r.get('qual_list', []), list) else str(r.get('qual_list', '')).split(','))] else 0, axis=1).sum(),
                     'Defensive_1v1_Stoppet': x.apply(lambda r: 1 if "467" in [str(q).strip() for q in (r.get('qual_list', []) if isinstance(r.get('qual_list', []), list) else str(r.get('qual_list', '')).split(','))] else 0, axis=1).sum(),
                     'Chancer_skabt': x.apply(lambda r: '210' in [str(q).strip() for q in (r.get('qual_list', []) if isinstance(r.get('qual_list', []), list) else str(r.get('qual_list', '')).split(','))], axis=1).sum(),
                     'Key_Passes': x.apply(lambda r: '210' in [str(q).strip() for q in (r.get('qual_list', []) if isinstance(r.get('qual_list', []), list) else str(r.get('qual_list', '')).split(','))], axis=1).sum(),
@@ -631,7 +633,6 @@ def vis_side(dp=None):
 
                 event_stats_kamp = event_stats_kamp.drop_duplicates(subset=['player_optauuid']).set_index('player_optauuid')
 
-                # Hent minut- og xG-data for den valgte kamp
                 if df_expected is not None and not df_expected.empty:
                     match_col_exp = None
                     for col in ['match_optauuid', 'match_id']:
@@ -661,8 +662,20 @@ def vis_side(dp=None):
                 truppen_stats_kamp_raw['Mål'] = df_kamp_events[df_kamp_events['event_typeid'] == 16].groupby('player_optauuid').size()
                 truppen_stats_kamp_raw['Mål'] = truppen_stats_kamp_raw['Mål'].fillna(0).astype(int)
                 
+                # Sikker wrapper omkring is_assist for at undgå signatur-fejl
+                def safe_is_assist(ev_id, q_lst):
+                    try:
+                        return 1 if is_assist(ev_id, q_lst) else 0
+                    except TypeError:
+                        try:
+                            return 1 if is_assist(ev_id) else 0
+                        except:
+                            return 0
+                    except:
+                        return 0
+
                 truppen_stats_kamp_raw['Assists'] = df_kamp_events.apply(
-                    lambda r: 1 if is_assist(r.get('event_typeid'), r.get('qual_list', [])) else 0, axis=1
+                    lambda r: safe_is_assist(r.get('event_typeid'), r.get('qual_list', [])), axis=1
                 ).groupby(df_kamp_events['player_optauuid']).sum()
                 truppen_stats_kamp_raw['Assists'] = truppen_stats_kamp_raw['Assists'].fillna(0).astype(int)
 
@@ -714,24 +727,16 @@ def vis_side(dp=None):
                     hide_index=True,
                     height=beregnet_hoejde_kamp,
                     column_config={
-                        "Pasning (%)": st.column_config.NumberColumn(
-                            "Pasning (%)",
-                            format="%.1f%%"
-                        ),
-                        "xG": st.column_config.NumberColumn(
-                            "xG",
-                            format="%.2f"
-                        ),
-                        "xA": st.column_config.NumberColumn(
-                            "xA",
-                            format="%.2f"
-                        )
+                        "Pasning (%)": st.column_config.NumberColumn("Pasning (%)", format="%.1f%%"),
+                        "xG": st.column_config.NumberColumn("xG", format="%.2f"),
+                        "xA": st.column_config.NumberColumn("xA", format="%.2f")
                     }
                 )
             else:
                 st.info("Ingen hændelsesdata for denne kamp.")
         else:
-            st.warning("Ingen kampe fundet.")
+            st.warning("Ingen spillede kampe fundet i denne sæson.")
+            
     with t_phys:
         df_phys = get_physical_data(valgt_spiller, valgt_player_uuid, valgt_hold, conn)
 
