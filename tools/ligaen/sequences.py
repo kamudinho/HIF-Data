@@ -2,18 +2,19 @@ import streamlit as st
 import pandas as pd
 from mplsoccer import Pitch
 
-# --- CENTRAL DATA & MAPPING ---
+# --- CENTRAL DATA & MAPPING (KUN 1. DIVISION / NORDICBET LIGA) ---
 from data.data_load import _get_snowflake_conn
 from data.utils.team_mapping import TEAMS, SEASON_LEAGUE_MAPPER
 from data.utils.mapping import OPTA_EVENT_TYPES, OPTA_QUALIFIERS, get_action_label, har_qualifier
 
-# --- KONFIGURATION (HVIDOVRE-APP) ---
+# --- KONFIGURATION (HVIDOVRE-APP - KUN 1. DIV) ---
 DB = "KLUB_HVIDOVREIF.AXIS"
-SEASONNAME = "2026/2027"
+SEASONNAME = "2025/2026"  # Tilpasset din standard Hvidovre-sæson
 TEAM_WYID = 7490
 COMPETITION_WYID = (328,)
-COMP_MAP = { 335: "Superliga", 328: "NordicBet Liga", 329: "2. division", 43319: "3. division", 331: "Oddset Pokalen", 1305: "U19 Ligaen" }
-LIGA_IDS = "('2mb332vncy4450vu14paj8844', 'e5p78j2r7v8h3u9s5k0l2m4n6', 'f6q89k3s8w9i4v0t6l1m3n5o7', '335', '328', '329', '43319', '331')"
+COMP_MAP = { 328: "NordicBet Liga" }
+# Kun NordicBet Liga Opta UUID / ID i denne kontering (fjerner Superliga mm.)
+LIGA_IDS = "('328')" 
 
 def oversæt_qualifiers(qual_str):
     if not qual_str or pd.isna(qual_str):
@@ -29,7 +30,7 @@ def oversæt_qualifiers(qual_str):
     return ", ".join(tekster)
 
 def vis_side(dp=None):
-    st.caption("Gennemgang af holdets målsekvenser fra bolden vindes, til målet falder.")
+    st.caption("Gennemgang af holdets målsekvenser fra bolden vindes, til målet falder (kun NordicBet Liga).")
 
     conn = _get_snowflake_conn()
     if not conn:
@@ -135,16 +136,21 @@ def vis_side(dp=None):
         st.warning(f"Ingen målsekvenser fundet for {valgt_hold_navn} i sæson {SEASONNAME}.")
         return
 
-    # Sørg for at gemme med store bogstaver, så mapping.py's row['EVENT_TYPEID'] virker direkte
-    df_all.columns = [c.upper() for c in df_all.columns]
-    
     # Klargør kolonner til get_action_label
+    df_all.columns = [c.upper() for c in df_all.columns]
     df_all['QUAL_LIST'] = df_all['QUALIFIER_LIST']
     df_all['AKTION'] = df_all.apply(get_action_label, axis=1)
     df_all['DETALJER'] = df_all['QUALIFIER_LIST'].apply(oversæt_qualifiers)
 
+    # Filtrer hændelser fra, hvor aktionen returnerer None (ukendte/uinteressante hændelser)
+    df_all = df_all[df_all['AKTION'].notna()].copy()
+
     # Gør kolonnenavnene små igen til resten af Streamlit-siden
     df_all.columns = [c.lower() for c in df_all.columns]
+
+    if df_all.empty:
+        st.warning("Ingen gyldige aktioner fundet efter filtrering.")
+        return
 
     unikke_kampe = df_all[['match_optauuid', 'match_date_full', 'contestanthome_name', 'contestantaway_name', 'contestanthome_optauuid']].drop_duplicates()
     unikke_kampe = unikke_kampe.sort_values(by='match_date_full').reset_index(drop=True)
@@ -205,6 +211,10 @@ def vis_side(dp=None):
             'kamp_navn': f"{home_name} vs. {away_name}",
             'dato': pd.to_datetime(m_row['match_date_full']).strftime('%d/%m/%Y') if pd.notna(m_row['match_date_full']) else ""
         })
+
+    if not dropdown_data:
+        st.warning("Ingen målsekvenser matcher de valgte filtre.")
+        return
 
     dropdown_df = pd.DataFrame(dropdown_data)
     sekvens_ids = dropdown_df['sequenceid'].tolist()
