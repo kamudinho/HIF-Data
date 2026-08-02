@@ -23,7 +23,7 @@ from data.sql.liga_spillere import hent_match_og_haendelsesdata
 
 # --- KONFIGURATION (HVIDOVRE-APP / 2025/2026) ---
 DB = "KLUB_HVIDOVREIF.AXIS"
-SEASONNAME = "2025/2026"
+SEASONNAME = "2026/2027"
 TEAM_WYID = 7490
 COMPETITION_WYID = (328,)
 COMP_MAP = { 
