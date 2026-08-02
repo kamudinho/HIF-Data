@@ -686,21 +686,32 @@ def vis_side(dp=None):
             draw_player_info_box(ax, hold_logo, valgt_spiller, SEASONNAME, visning)
     
             df_plot = df_spiller.dropna(subset=['event_x', 'event_y'])
-            if not df_plot.empty:
-                if visning == "Heatmap":
-                    pitch.kdeplot(df_plot.event_x, df_plot.event_y, ax=ax, cmap='Blues', fill=True, alpha=0.6, levels=50)
-                elif visning == "Berøringer":
-                    d = df_plot[df_plot['event_typeid'].isin(touch_ids)]
-                    ax.scatter(d.event_x, d.event_y, color=primær_farve, s=40, edgecolors='white', alpha=0.5)
-                elif visning == "Afslutninger":
-                    d = df_plot[df_plot['event_typeid'].isin([13, 14, 15, 16])]
-                    goals = d[d['event_typeid'] == 16]
-                    misses = d[d['event_typeid'].isin([13, 14, 15])]
-                    ax.scatter(misses.event_x, misses.event_y, color='grey', s=60, edgecolors='black', alpha=0.6)
-                    ax.scatter(goals.event_x, goals.event_y, color=primær_farve, s=120, marker='s', edgecolors='black', zorder=5)
-                elif visning == "Erobringer":
-                    d = df_plot[df_plot['event_typeid'].isin([7, 8, 12, 49])]
-                    ax.scatter(d.event_x, d.event_y, color='orange', s=100, edgecolors='white')
+        
+        # Sørg for at fjerne eventuelle dubletter af samme hændelse
+        if not df_plot.empty:
+            # Hvis dine hændelser har et unikt ID (f.eks. 'event_id' eller 'id'), kan du bruge det:
+            # df_plot = df_plot.drop_duplicates(subset=['id'])
+            
+            # Ellers fjerner vi identiske hændelser baseret på type og koordinater:
+            subset_cols = ['event_typeid', 'event_x', 'event_y']
+            if 'minute' in df_plot.columns and 'second' in df_plot.columns:
+                subset_cols.extend(['minute', 'second'])
+            df_plot = df_plot.drop_duplicates(subset=subset_cols)
+
+            if visning == "Heatmap":
+                pitch.kdeplot(df_plot.event_x, df_plot.event_y, ax=ax, cmap='Blues', fill=True, alpha=0.6, levels=50)
+            elif visning == "Berøringer":
+                d = df_plot[df_plot['event_typeid'].isin(touch_ids)]
+                ax.scatter(d.event_x, d.event_y, color=primær_farve, s=40, edgecolors='white', alpha=0.5)
+            elif visning == "Afslutninger":
+                d = df_plot[df_plot['event_typeid'].isin([13, 14, 15, 16])]
+                goals = d[d['event_typeid'] == 16]
+                misses = d[d['event_typeid'].isin([13, 14, 15])]
+                ax.scatter(misses.event_x, misses.event_y, color='grey', s=60, edgecolors='black', alpha=0.6)
+                ax.scatter(goals.event_x, goals.event_y, color=primær_farve, s=120, marker='s', edgecolors='black', zorder=5)
+            elif visning == "Erobringer":
+                d = df_plot[df_plot['event_typeid'].isin([7, 8, 12, 49])]
+                ax.scatter(d.event_x, d.event_y, color='orange', s=100, edgecolors='white')
             
             st.pyplot(fig, use_container_width=True)
 
