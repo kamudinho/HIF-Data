@@ -229,14 +229,21 @@ def vis_side(dp=None):
         maal_row = sekvens_df[sekvens_df['event_typeid'].astype(str) == '16']
         målscorer = maal_row['player_name'].iloc[0] if not maal_row.empty else "Ukendt"
         
-        # Hent minuttallet direkte fra databasen via EVENT_TIMEMIN, plus 1
         raw_min = int(maal_row['event_minute'].iloc[0]) if not maal_row.empty and pd.notna(maal_row['event_minute'].iloc[0]) else 0
         maal_minut = raw_min + 1
 
         col_banen, col_tabel = st.columns([2, 1])
 
         with col_banen:
-            st.markdown(f"##### Kamp {info_row['kamp_nr']} ({info_row['aktuel_stilling']} vs. {info_row['modstander']}): Sekvensopbygning")
+            # Infobaren er rykket op her i toppen i stedet for den gamle overskrift
+            st.markdown(
+                f"<div style='display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; color: #555; background-color: #fcfcfc; padding: 6px 10px; border-radius: 4px; border: 1px solid #eaeaea; margin-bottom: 5px;'>"
+                f"<span><b>Målscorer:</b> {målscorer}</span>"
+                f"<span><b>Slutresultat:</b> {info_row['slut_res']}</span>"
+                f"<span><b>Kamp:</b> {info_row['kamp_navn']} ({info_row['dato']})</span>"
+                f"</div>",
+                unsafe_allow_html=True
+            )
             
             pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#7f7f7f', line_zorder=2, linewidth=1.0)
             fig, ax = pitch.draw(figsize=(9, 4.5))
@@ -288,20 +295,11 @@ def vis_side(dp=None):
             if img_away:
                 pitch.inset_image(x=13, y=9, image=img_away, height=7, ax=ax, zorder=6)
 
-            # Dato, stilling og minut (+1) i bunden
+            # Dato, stilling og minut (+1) i bunden af banen
             tekst_bund = f"{info_row['dato']} | Stilling: {info_row['stilling_hjemme_ude']} ({maal_minut}. min)"
             ax.text(2, 3.5, tekst_bund, fontsize=8, color='#555555', ha='left', va='center', zorder=6)
 
             st.pyplot(fig, use_container_width=True)
-
-            st.markdown(
-                f"<div style='display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; color: #555; background-color: #fcfcfc; padding: 6px 10px; border-radius: 4px; border: 1px solid #eaeaea; margin-top: -5px;'>"
-                f"<span><b>Målscorer:</b> {målscorer}</span>"
-                f"<span><b>Slutresultat:</b> {info_row['slut_res']}</span>"
-                f"<span><b>Kamp:</b> {info_row['kamp_navn']} ({info_row['dato']})</span>"
-                f"</div>",
-                unsafe_allow_html=True
-            )
 
         with col_tabel:
             st.markdown("##### Aktioner i sekvensen")
