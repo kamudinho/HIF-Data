@@ -166,47 +166,37 @@ def vis_side(dp=None):
         with col_banen:
             st.markdown("##### Sekvensopbygning på banen (fra bolden vindes)")
             
-            # ÆNDRING HER: Vi bruger half=True, så vi kun viser modstanderens banehalvdel (fra midterlinjen til mål)
-            pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#7f7f7f', line_zorder=2, linewidth=1.2, half=True)
-            fig, ax = pitch.draw(figsize=(8, 5))
+            # Tilbage til fuld bane, pæn proportioneret størrelse
+            pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#7f7f7f', line_zorder=2, linewidth=1.0)
+            fig, ax = pitch.draw(figsize=(9, 4.5))
 
             sekvens_plot_df = sekvens_df.dropna(subset=['raw_x', 'raw_y'])
 
             if not sekvens_plot_df.empty:
+                # Tegn pile for sekvensen
                 if len(sekvens_plot_df) > 1:
                     pitch.arrows(
                         sekvens_plot_df['raw_x'].iloc[:-1], 
                         sekvens_plot_df['raw_y'].iloc[:-1],
                         sekvens_plot_df['raw_x'].iloc[1:], 
                         sekvens_plot_df['raw_y'].iloc[1:], 
-                        ax=ax, width=1.0, headwidth=2.5, color="#b0b0b0", alpha=0.8, zorder=3
+                        ax=ax, width=1.0, headwidth=2.5, color="#aaaaaa", alpha=0.8, zorder=3
                     )
 
+                # Normale hændelser som små, elegante sorte prikker uden tekstkaos
                 pitch.scatter(
                     sekvens_plot_df['raw_x'], sekvens_plot_df['raw_y'],
-                    color='black', s=25, ax=ax, zorder=4
+                    color='black', s=35, ax=ax, zorder=4
                 )
 
-                for _, row in sekvens_plot_df.iterrows():
-                    if pd.notna(row.get('player_name')) and pd.notna(row.get('raw_x')):
-                        if row.get('event_typeid') != 16:
-                            ax.text(
-                                row['raw_x'], row['raw_y'] + 1.8, row['player_name'],
-                                fontsize=6, ha='center', va='bottom', color='#333333', zorder=5
-                            )
-
+                # Fremhæv selve målet med en rød prik
                 if not maal_row.empty:
                     m_x = maal_row['raw_x'].iloc[0]
                     m_y = maal_row['raw_y'].iloc[0]
-                    m_navn = maal_row['player_name'].iloc[0]
 
                     pitch.scatter(
                         m_x, m_y,
-                        color='#df003b', s=50, ax=ax, zorder=6
-                    )
-                    ax.text(
-                        m_x, m_y + 1.8, m_navn,
-                        fontsize=6.5, fontweight='bold', ha='center', va='bottom', color='#df003b', zorder=7
+                        color='#df003b', s=60, ax=ax, zorder=6
                     )
 
             st.pyplot(fig, use_container_width=True)
