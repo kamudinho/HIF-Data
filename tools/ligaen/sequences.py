@@ -48,7 +48,7 @@ def vis_side():
         st.warning("Kunne ikke oprette forbindelse til databasen.")
         st.stop()
 
-    # --- SQL-FORESPØRGSEL (Bruger værdierne fra din centralmapping) ---
+    # --- SQL-FORESPØRGSEL (Inkl. alle LAG-koordinater og qualifiers) ---
     sql_query = f"""
         WITH MatchIDs AS (
             SELECT DISTINCT MATCH_OPTAUUID 
@@ -75,8 +75,13 @@ def vis_side():
             e.EVENT_TIMESTAMP,
             e.PLAYER_NAME,
             e.EVENT_TYPEID,
-            e.EVENT_X,
-            e.EVENT_Y,
+            -- LAG-koordinater til opbygning og pile
+            LAG(e.EVENT_X, 1) OVER (PARTITION BY e.SEQUENCEID ORDER BY e.EVENT_TIMESTAMP) as PREV_X_1,
+            LAG(e.EVENT_Y, 1) OVER (PARTITION BY e.SEQUENCEID ORDER BY e.EVENT_TIMESTAMP) as PREV_Y_1,
+            LAG(e.EVENT_X, 2) OVER (PARTITION BY e.SEQUENCEID ORDER BY e.EVENT_TIMESTAMP) as PREV_X_2,
+            LAG(e.EVENT_Y, 2) OVER (PARTITION BY e.SEQUENCEID ORDER BY e.EVENT_TIMESTAMP) as PREV_Y_2,
+            e.EVENT_X as RAW_X,
+            e.EVENT_Y as RAW_Y,
             q.QUALIFIER_LIST,
             m.CONTESTANTHOME_NAME,
             m.CONTESTANTAWAY_NAME,
@@ -135,34 +140,37 @@ def vis_side():
         pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#7f7f7f', line_zorder=2)
         fig, ax = pitch.draw(figsize=(11, 7))
 
-        sekvens_df = sekvens_df.dropna(subset=['event_x', 'event_y'])
+        sekvens_df = sekvens_df.dropna(subset=['raw_x', 'raw_y'])
 
         if not sekvens_df.empty:
+            # Tegn pile mellem hændelserne i sekvensen ved at bruge RAW_X / RAW_Y sekventielt
             if len(sekvens_df) > 1:
                 pitch.arrows(
-                    sekvens_df['event_x'].iloc[:-1], 
-                    sekvens_df['event_y'].iloc[:-1],
-                    sekvens_df['event_x'].iloc[1:], 
-                    sekvens_df['event_y'].iloc[1:], 
+                    sekvens_df['raw_x'].iloc[:-1], 
+                    sekvens_df['raw_y'].iloc[:-1],
+                    sekvens_df['raw_x'].iloc[1:], 
+                    sekvens_df['raw_y'].iloc[1:], 
                     ax=ax, width=1.5, headwidth=3, color="#cccccc", alpha=0.8, zorder=3
                 )
 
+            # Tegn prikker for alle aktioner
             pitch.scatter(
-                sekvens_df['event_x'], sekvens_df['event_y'],
+                sekvens_df['raw_x'], sekvens_df['raw_y'],
                 color='black', s=80, ax=ax, zorder=4
             )
 
             for _, row in sekvens_df.iterrows():
-                if pd.notna(row.get('player_name')) and pd.notna(row.get('event_x')):
+                if pd.notna(row.get('player_name')) and pd.notna(row.get('raw_x')):
                     if row.get('event_typeid') != 16:
                         ax.text(
-                            row['event_x'], row['event_y'] + 3, row['player_name'],
+                            row['raw_x'], row['raw_y'] + 3, row['player_name'],
                             fontsize=9, ha='center', va='bottom', color='black', zorder=5
                         )
 
+            # Marker selve målet (typeid == 16) med rødt
             if not maal_row.empty:
-                m_x = maal_row['event_x'].iloc[0]
-                m_y = maal_row['event_y'].iloc[0]
+                m_x = maal_row['raw_x'].iloc[0]
+                m_y = maal_row['raw_y'].iloc[0]
                 m_navn = maal_row['player_name'].iloc[0]
 
                 pitch.scatter(
@@ -178,5 +186,5 @@ def vis_side():
 
         # --- TABEL OVER SEKVENSEN ---
         st.markdown("### Aktioner i sekvensen (Kronologisk)")
-        vis_cols = [c for c in ['event_timestamp', 'player_name', 'event_typeid', 'qualifier_list'] if c in sekvens_df.columns]
+        vis_cols = [c for c in ['event_timestamp', 'player_name', 'event_typeid', 'raw_x', 'raw_y', 'prev_x_1', 'prev_y_1', 'qualifier_list'] if c in sekvens_df.columns]
         st.dataframe(sekvens_df[vis_cols], use_container_width=True, hide_index=True)
