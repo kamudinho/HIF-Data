@@ -2,15 +2,16 @@ import streamlit as st
 import pandas as pd
 from mplsoccer import Pitch
 
-# --- CENTRAL DATA & MAPPING (KUN 1. DIVISION / NORDICBET LIGA) ---
+# --- CENTRAL DATA & MAPPING ---
 from data.data_load import _get_snowflake_conn
 from data.utils.team_mapping import TEAMS, SEASON_LEAGUE_MAPPER
 from data.utils.mapping import OPTA_EVENT_TYPES, OPTA_QUALIFIERS, get_action_label, har_qualifier
 
-# --- KONFIGURATION (HVIDOVRE-APP - 2026/2027) ---
+# --- KONFIGURATION (HVIDOVRE-APP / 2026/2027) ---
 DB = "KLUB_HVIDOVREIF.AXIS"
 SEASONNAME = "2026/2027"
-LIGA_IDS = "('2mb332vncy4450vu14paj8844')"
+AKTIV_ LIGA_NAVN = "1. Division"
+LIGA_UUID = "2mb332vncy4450vu14paj8844"  # Opta UUID for 1. Division i 2026/2027
 
 def oversæt_qualifiers(qual_str):
     if not qual_str or pd.isna(qual_str):
@@ -26,14 +27,17 @@ def oversæt_qualifiers(qual_str):
     return ", ".join(tekster)
 
 def vis_side(dp=None):
-    st.caption("Gennemgang af holdets målsekvenser fra bolden vindes, til målet falder (kun NordicBet Liga).")
+    st.caption("Gennemgang af holdets målsekvenser fra bolden vindes, til målet falder.")
 
     conn = _get_snowflake_conn()
     if not conn:
         st.warning("Kunne ikke oprette forbindelse til databasen.")
         st.stop()
 
-    hold_liste = sorted(list(TEAMS.keys()))
+    # Hent hold udelukkende baseret på Opta-mappet for den aktuelle sæson og liga
+    tilladte_hold = SEASON_LEAGUE_MAPPER.get(SEASONNAME, {}).get(AKTIV_ LIGA_NAVN, [])
+    
+    hold_liste = [h for h in tilladte_hold if h in TEAMS]
     if "Hvidovre" in hold_liste:
         hold_liste.remove("Hvidovre")
         hold_liste.insert(0, "Hvidovre")
@@ -55,7 +59,7 @@ def vis_side(dp=None):
             SELECT DISTINCT MATCH_OPTAUUID 
             FROM {DB}.OPTA_MATCHINFO 
             WHERE TOURNAMENTCALENDAR_NAME = '{SEASONNAME}'
-              AND TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS}
+              AND TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
         ),
         GoalEvents AS (
             SELECT DISTINCT 
@@ -132,16 +136,14 @@ def vis_side(dp=None):
         st.warning(f"Ingen målsekvenser fundet for {valgt_hold_navn} i sæson {SEASONNAME}.")
         return
 
-    # Klargør kolonner til get_action_label
     df_all.columns = [c.upper() for c in df_all.columns]
     df_all['QUAL_LIST'] = df_all['QUALIFIER_LIST']
     df_all['AKTION'] = df_all.apply(get_action_label, axis=1)
     df_all['DETALJER'] = df_all['QUALIFIER_LIST'].apply(oversæt_qualifiers)
 
-    # Filtrer hændelser fra, hvor aktionen returnerer None (ukendte/uinteressante hændelser)
-    df_all = df_all[df_all['AKTION'].notna()].copy()
+    # Fjern hændelser uden gyldig aktion
+    df_all = df_all[df_all['AKTION'].notna() & (df_all['AKTION'] != "") & (df_all['AKTION'] != "Ukendt aktion")].copy()
 
-    # Gør kolonnenavnene små igen til resten af Streamlit-siden
     df_all.columns = [c.lower() for c in df_all.columns]
 
     if df_all.empty:
