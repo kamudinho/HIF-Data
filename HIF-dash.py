@@ -125,7 +125,7 @@ with st.sidebar:
     }
 
     # HOVEDMENU
-    alle_omraader = ["HVIDOVRE IF", "HOLDANALYSE", "SPILLERANALYSE", "SCOUTING", "TILPASNING", "TESTSIDE", "ADMIN"]
+    alle_omraader = ["HVIDOVRE IF", "HOLDANALYSE", "SPILLERANALYSE", "FYSISK DATA", "SCOUTING", "TILPASNING", "TESTSIDE", "ADMIN"]
     user_info = USER_DB.get(st.session_state["user"], {})
     restriktioner = [r.lower().strip() for r in user_info.get("restricted", [])]
     synlige_hoved_options = [o for o in alle_omraader if o.lower().strip() not in restriktioner]
@@ -146,8 +146,9 @@ with st.sidebar:
     # UNDERMENU LOGIK
     menu_map = {
         "HVIDOVRE IF": ["Forside"],
-        "HOLDANALYSE": ["Modstanderanalyse", "Ligaoversigt", "Kampoversigt", "Afslutninger", "Fysisk data", "Grafer"],
+        "HOLDANALYSE": ["Modstanderanalyse", "Ligaoversigt", "Kampoversigt", "Afslutninger", "Målsekvenser", "Grafer"],
         "SPILLERANALYSE": ["Spillere"],
+        "FYSISK DATA": ["Fysisk data"],
         "SCOUTING": ["Scoutrapport", "Database", "Emnedatabase", "Transfers"],
         "TILPASNING": ["Spillerdata", "Spiller-score", "Standardsituationer", "Model"],
         "TESTSIDE": ["Performance", "Winning Performance", "1. Div-tilpasning", "Sammenligning", "Charts", "Oversigt", "Forecast"],
@@ -218,12 +219,21 @@ try:
             t_input.vis_side()
 
     elif m == "SPILLERANALYSE":
+        if s == "Spillere":
+            import tools.players.player_profile as pp
+            pp.vis_side()
+        elif s == "Målsekvenser":
+            import tools.hifanalyse.sequences as ms
+            ms.vis_side()
+
+    elif m == "FYSISK DATA":
         if s == "Charts":
             import tools.ligaen.chart as pc
             pc.vis_side()
-        elif s == "Spillere":
-            import tools.players.player_profile as pp
-            pp.vis_side()
+        elif s == "Fysisk data":
+            import tools.ligaen.fysisk as fd_page
+            fd_page.vis_side(_get_snowflake_conn())
+
 
     elif m == "HOLDANALYSE":
         if s == "Ligaoversigt":
@@ -235,9 +245,6 @@ try:
         elif s == "Afslutninger":
             import tools.ligaen.leagueshots as ls
             ls.vis_side()
-        elif s == "Fysisk data":
-            import tools.ligaen.fysisk as fd_page
-            fd_page.vis_side(_get_snowflake_conn())
         elif s == "Modstanderanalyse":
             import tools.ligaen.modstanderanalyse as ma
             ma.vis_side()
