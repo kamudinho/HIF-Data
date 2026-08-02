@@ -390,7 +390,7 @@ def vis_side(dp=None):
             for _, r in df_matches.iterrows():
                 # Afgør hvem der er modstander og sæt score op (Hjemmehold vs Udehold)
                 er_hjemme = str(r['contestanthome_optauuid']) == str(valgt_uuid_hold)
-                modstander = r['contestantanway_name'] if er_hjemme else r['contestanthome_name']
+                modstander = r['contestantaway_name'] if er_hjemme else r['contestanthome_name']
                 
                 hjemme_maal = int(r['total_home_score']) if pd.notna(r['total_home_score']) else 0
                 ude_maal = int(r['total_away_score']) if pd.notna(r['total_away_score']) else 0
