@@ -519,19 +519,109 @@ def vis_side(dp=None):
             st.pyplot(fig, use_container_width=True)
 
     with t_matches:
-        st.markdown(f'<div class="player-header">Kampe for {valgt_spiller}</div>', unsafe_allow_html=True)
-        if not df_spiller.empty and 'match_id' in df_spiller.columns:
-            match_list = df_spiller['match_id'].unique()
-            st.info(f"Spilleren har optrådt i {len(match_list)} kampe i datasættet.")
-            
-            # Grupper efter kamp for at vise en oversigt
-            match_summary = df_spiller.groupby('match_id').agg(
-                Aktioner=('event_typeid', 'count'),
-                Minutter=('minute', 'max')
-            ).reset_index()
-            st.dataframe(match_summary, use_container_width=True, hide_index=True)
+        col_m_title, col_m_btn = st.columns([2.7, 1.3])
+
+        with col_m_title:
+            logo_html = ""
+            if hold_logo is not None:
+                buffered = io.BytesIO()
+                hold_logo.save(buffered, format="PNG")
+                img_str = base64.b64encode(buffered.getvalue()).decode()
+                logo_html = f'<img src="data:image/png;base64,{img_str}" style="height: 26px; margin-right: 10px; object-fit: contain;">'
+
+            st.markdown(f'<div style="display: flex; align-items: center; padding-top: 20px;">{logo_html}<span style="font-size: 16px; font-weight: bold; line-height: 1;">KAMPETABEL — {valgt_hold.upper()}</span></div>', unsafe_allow_html=True)
+
+        with col_m_btn:
+            st.markdown('<div style="display: flex; justify-content: flex-end;">', unsafe_allow_html=True)
+            kamp_kategori = st.segmented_control(
+                "Kampvisning", 
+                options=["Generelt", "Offensiv", "Defensiv"], 
+                default="Generelt",
+                key="kamp_kategori_control",
+                label_visibility="collapsed"
+            )
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        if not df_all.empty and 'match_id' in df_all.columns:
+            # Hent kampinformation (datoer/modstandere) hvis muligt, ellers grupper direkte på match_id
+            match_spiller_stats = df_all.groupby(['match_id', 'player_optauuid', 'visningsnavn']).apply(lambda x: pd.Series({
+                'Aktioner': len(x),
+                'Pasninger': x['Pasninger_Total'].sum(),
+                'Pasninger_Succes': x['Pasninger_Succes'].sum(),
+                'Afslutninger': x['event_typeid'].isin([13, 14, 15, 16]).sum(),
+                'Erobringer': x['event_typeid'].isin([7, 8, 12, 49]).sum(),
+                'Driblinger': (x['event_typeid'] == 3).sum(),
+                'Gule_kort': count_event_with_qual(x, 17, 31),
+                'Roede_kort': count_event_with_qual(x, 17, 33)
+            })).reset_index()
+
+            match_spiller_stats['Pasningsprocent'] = (
+                (match_spiller_stats['Pasninger_Succes'] / match_spiller_stats['Pasninger']) * 100
+            ).where(match_spiller_stats['Pasninger'] > 0, 0).round(1)
+
+            # Tilføj minutter og xG fra expected hvis tilgængelig pr kamp/spiller
+            if df_expected is not None and not df_expected.empty and 'match_id' in df_expected.columns:
+                match_min_xg = df_expected.groupby(['match_id', 'player_optauuid']).agg({
+                    'minutes': 'sum',
+                    'xg': 'sum',
+                    'xa': 'sum'
+                }).reset_index().rename(columns={'minutes': 'Minutter', 'xg': 'xG', 'xa': 'xA'})
+                match_spiller_stats = pd.merge(match_spiller_stats, match_min_xg, on=['match_id', 'player_optauuid'], how='left')
+            else:
+                match_spiller_stats['Minutter'] = 0
+                match_spiller_stats['xG'] = 0.0
+                match_spiller_stats['xA'] = 0.0
+
+            match_spiller_stats['Minutter'] = match_spiller_stats['Minutter'].fillna(0).astype(int)
+            match_spiller_stats['xG'] = match_spiller_stats['xG'].fillna(0.0)
+            match_spiller_stats['xA'] = match_spiller_stats['xA'].fillna(0.0)
+
+            unikt_kampe = sorted(df_all['match_id'].unique(), reverse=True)
+            kamp_options = {f"Kamp ID: {m}": m for m in unikt_kampe}
+            valgt_kamp_label = st.selectbox("Vælg kamp", list(kamp_options.keys()), label_visibility="collapsed", key="valgt_kamp_selectbox")
+            valgt_kamp_id = kamp_options[valgt_kamp_label]
+
+            df_kamp_visning = match_spiller_stats[match_spiller_stats['match_id'] == valgt_kamp_id].copy()
+
+            if not df_kamp_visning.empty:
+                gen_kamp_kolonner = ['visningsnavn', 'Minutter', 'Aktioner', 'Pasninger', 'Pasningsprocent', 'Afslutninger', 'xG', 'Erobringer', 'Gule_kort', 'Roede_kort']
+                off_kamp_kolonner = ['visningsnavn', 'Minutter', 'Aktioner', 'Afslutninger', 'xG', 'xA', 'Driblinger']
+                def_kamp_kolonner = ['visningsnavn', 'Minutter', 'Aktioner', 'Erobringer', 'Gule_kort', 'Roede_kort']
+
+                if kamp_kategori == "Generelt":
+                    aktive_kolonner = [k for k in gen_kamp_kolonner if k in df_kamp_visning.columns]
+                elif kamp_kategori == "Offensiv":
+                    aktive_kolonner = [k for k in off_kamp_kolonner if k in df_kamp_visning.columns]
+                elif kamp_kategori == "Defensiv":
+                    aktive_kolonner = [k for k in def_kamp_kolonner if k in df_kamp_visning.columns]
+                else:
+                    aktive_kolonner = list(df_kamp_visning.columns)
+
+                df_kamp_tabel = df_kamp_visning[aktive_kolonner].sort_values(by='Aktioner', ascending=False)
+                df_kamp_tabel = df_kamp_tabel.rename(columns={
+                    'visningsnavn': 'Spiller',
+                    'Pasningsprocent': 'Pasning (%)',
+                    'Gule_kort': 'Gule kort',
+                    'Roede_kort': 'Røde kort'
+                })
+
+                beregnet_hoejde_kamp = int(len(df_kamp_tabel) * 38 + 45)
+
+                st.dataframe(
+                    df_kamp_tabel,
+                    use_container_width=True,
+                    hide_index=True,
+                    height=beregnet_hoejde_kamp,
+                    column_config={
+                        "Pasning (%)": st.column_config.NumberColumn("Pasning (%)", format="%.1f%%"),
+                        "xG": st.column_config.NumberColumn("xG", format="%.2f"),
+                        "xA": st.column_config.NumberColumn("xA", format="%.2f")
+                    }
+                )
+            else:
+                st.info("Ingen spillerdata for denne kamp.")
         else:
-            st.warning("Ingen kampdata fundet for denne spiller.")
+            st.warning("Ingen kampdata tilgængelig.")
 
     with t_phys:
         df_phys = get_physical_data(valgt_spiller, valgt_player_uuid, valgt_hold, conn)
