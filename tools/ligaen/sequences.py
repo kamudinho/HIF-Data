@@ -137,7 +137,7 @@ def vis_side(dp=None):
 
     df_all.columns = [c.lower() for c in df_all.columns]
     
-    # Mapper qualifiers ind i det format get_action_label forventer
+    # Korrekt mapping af qualifiers og aktioner
     df_all['qual_list'] = df_all['qualifier_list']
     df_all['aktion'] = df_all.apply(get_action_label, axis=1)
     df_all['detaljer'] = df_all['qualifier_list'].apply(oversæt_qualifiers)
