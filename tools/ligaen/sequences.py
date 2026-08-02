@@ -149,6 +149,9 @@ def vis_side(dp=None):
     if valgt_seq:
         sekvens_df = df_all[df_all['sequenceid'] == valgt_seq].sort_values(by='event_timestamp').copy()
         
+        # Tilføj et række-nummer (1, 2, 3...) til hver hændelse i sekvensen
+        sekvens_df['sekvens_nr'] = range(1, len(sekvens_df) + 1)
+        
         maal_row = sekvens_df[sekvens_df['event_typeid'] == 16]
         målscorer = maal_row['player_name'].iloc[0] if not maal_row.empty else "Ukendt"
         kamp_navn = sekvens_df['kamp_label'].iloc[0]
@@ -166,14 +169,13 @@ def vis_side(dp=None):
         with col_banen:
             st.markdown("##### Sekvensopbygning på banen (fra bolden vindes)")
             
-            # Tilbage til fuld bane, pæn proportioneret størrelse
             pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#7f7f7f', line_zorder=2, linewidth=1.0)
             fig, ax = pitch.draw(figsize=(9, 4.5))
 
             sekvens_plot_df = sekvens_df.dropna(subset=['raw_x', 'raw_y'])
 
             if not sekvens_plot_df.empty:
-                # Tegn pile for sekvensen
+                # Tegn pile mellem hændelserne
                 if len(sekvens_plot_df) > 1:
                     pitch.arrows(
                         sekvens_plot_df['raw_x'].iloc[:-1], 
@@ -183,28 +185,38 @@ def vis_side(dp=None):
                         ax=ax, width=1.0, headwidth=2.5, color="#aaaaaa", alpha=0.8, zorder=3
                     )
 
-                # Normale hændelser som små, elegante sorte prikker uden tekstkaos
-                pitch.scatter(
-                    sekvens_plot_df['raw_x'], sekvens_plot_df['raw_y'],
-                    color='black', s=35, ax=ax, zorder=4
-                )
+                for _, row in sekvens_plot_df.iterrows():
+                    r_x = row['raw_x']
+                    r_y = row['raw_y']
+                    nr_str = str(row['sekvens_nr'])
+                    er_maal = (row['event_typeid'] == 16)
 
-                # Fremhæv selve målet med en rød prik
-                if not maal_row.empty:
-                    m_x = maal_row['raw_x'].iloc[0]
-                    m_y = maal_row['raw_y'].iloc[0]
+                    # Prikkens farve og størrelse (mål er rødt, ellers sort)
+                    prik_farve = '#df003b' if er_maal else 'black'
+                    prik_str = 70 if er_maal else 45
 
-                    pitch.scatter(
-                        m_x, m_y,
-                        color='#df003b', s=60, ax=ax, zorder=6
+                    pitch.scatter(r_x, r_y, color=prik_farve, s=prik_str, ax=ax, zorder=4)
+
+                    # Skriv nummeret (1, 2, 3...) midt i prikken i hvid skrift for maksimalt overblik
+                    ax.text(
+                        r_x, r_y, nr_str,
+                        fontsize=6.5, fontweight='bold', ha='center', va='center', color='white', zorder=5
                     )
+
+                    # Skriv spillernavnet lidt forskudt ved siden af (eller under), så det kan læses
+                    navn = str(row.get('player_name', ''))
+                    if navn and navn != 'nan':
+                        ax.text(
+                            r_x, r_y - 2.5, navn,
+                            fontsize=6, ha='center', va='top', color='#333333', zorder=5
+                        )
 
             st.pyplot(fig, use_container_width=True)
 
             st.markdown(
                 f"<div style='display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; color: #555; background-color: #fcfcfc; padding: 6px 10px; border-radius: 4px; border: 1px solid #eaeaea; margin-top: -5px;'>"
                 f"<span><b>Målscorer:</b> {målscorer}</span>"
-                f"<span><b>Slutresultat:</b> {slut_stilling}</span>"
+                f><span><b>Slutresultat:</b> {slut_stilling}</span>"
                 f"<span><b>Kamp:</b> {kamp_navn} ({dato_str})</span>"
                 f"</div>",
                 unsafe_allow_html=True
@@ -212,9 +224,10 @@ def vis_side(dp=None):
 
         with col_tabel:
             st.markdown("##### Aktioner i sekvensen")
-            vis_cols = [c for c in ['player_name', 'aktion', 'detaljer'] if c in sekvens_df.columns]
+            vis_cols = [c for c in ['sekvens_nr', 'player_name', 'aktion', 'detaljer'] if c in sekvens_df.columns]
             
             tabel_df = sekvens_df[vis_cols].rename(columns={
+                'sekvens_nr': 'Nr.',
                 'player_name': 'Spiller',
                 'aktion': 'Aktion',
                 'detaljer': 'Detaljer'
