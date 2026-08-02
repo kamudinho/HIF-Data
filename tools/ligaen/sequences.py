@@ -54,7 +54,7 @@ def vis_side(dp=None):
         st.error(f"Kunne ikke finde Opta UUID for holdet: {valgt_hold_navn}")
         st.stop()
 
-    # --- SQL-FORESPØRGSEL ---
+    # --- SQL-FORESPØRGSEL MED MÅL-STILLING OG SLUTRESULTAT ---
     sql_query = f"""
         WITH MatchIDs AS (
             SELECT DISTINCT MATCH_OPTAUUID 
@@ -66,7 +66,9 @@ def vis_side(dp=None):
             SELECT DISTINCT 
                 e.SEQUENCEID, 
                 e.MATCH_OPTAUUID,
-                e.EVENT_TIMESTAMP as GOAL_TIMESTAMP
+                e.EVENT_TIMESTAMP as GOAL_TIMESTAMP,
+                e.EVENT_OPTAUUID as GOAL_EVENT_OPTAUUID,
+                e.EVENT_CONTESTANT_OPTAUUID
             FROM {DB}.OPTA_EVENTS e
             WHERE e.MATCH_OPTAUUID IN (SELECT MATCH_OPTAUUID FROM MatchIDs)
             AND e.EVENT_TYPEID = 16 
@@ -77,13 +79,14 @@ def vis_side(dp=None):
                 g.SEQUENCEID,
                 g.MATCH_OPTAUUID,
                 g.GOAL_TIMESTAMP,
+                g.GOAL_EVENT_OPTAUUID,
                 MIN(e.EVENT_TIMESTAMP) AS SEQ_START_TIMESTAMP
             FROM GoalEvents g
             JOIN {DB}.OPTA_EVENTS e ON g.SEQUENCEID = e.SEQUENCEID AND g.MATCH_OPTAUUID = e.MATCH_OPTAUUID
-            GROUP BY g.SEQUENCEID, g.MATCH_OPTAUUID, g.GOAL_TIMESTAMP
+            GROUP BY g.SEQUENCEID, g.MATCH_OPTAUUID, g.GOAL_TIMESTAMP, g.GOAL_EVENT_OPTAUUID
         ),
         FilteredEvents AS (
-            SELECT e.*
+            SELECT e.*, sb.GOAL_EVENT_OPTAUUID
             FROM {DB}.OPTA_EVENTS e
             JOIN SequenceBounds sb 
                 ON e.SEQUENCEID = sb.SEQUENCEID 
@@ -97,6 +100,18 @@ def vis_side(dp=None):
                 LISTAGG(QUALIFIER_QID, ',') AS QUALIFIER_LIST
             FROM {DB}.OPTA_QUALIFIERS
             GROUP BY EVENT_OPTAUUID
+        ),
+        MatchRunningScores AS (
+            SELECT 
+                e.MATCH_OPTAUUID,
+                e.EVENT_OPTAUUID as GOAL_EVENT_OPTAUUID,
+                SUM(CASE WHEN e.EVENT_CONTESTANT_OPTAUUID = m.CONTESTANTHOME_OPTAUUID THEN 1 ELSE 0 END) 
+                    OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_TIMESTAMP ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS CURRENT_HOME_SCORE,
+                SUM(CASE WHEN e.EVENT_CONTESTANT_OPTAUUID = m.CONTESTANTAWAY_OPTAUUID THEN 1 ELSE 0 END) 
+                    OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_TIMESTAMP ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS CURRENT_AWAY_SCORE
+            FROM {DB}.OPTA_EVENTS e
+            JOIN {DB}.OPTA_MATCHINFO m ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
+            WHERE e.EVENT_TYPEID = 16
         )
         SELECT 
             e.MATCH_OPTAUUID,
@@ -110,13 +125,17 @@ def vis_side(dp=None):
             m.CONTESTANTHOME_NAME,
             m.CONTESTANTAWAY_NAME,
             m.MATCH_DATE_FULL,
-            m.HOMESCORECURRENT,
-            m.AWAYSCORECURRENT
+            m.TOTAL_HOME_SCORE AS FINAL_HOME_SCORE,
+            m.TOTAL_AWAY_SCORE AS FINAL_AWAY_SCORE,
+            COALESCE(rs.CURRENT_HOME_SCORE, 0) AS GOAL_HOME_SCORE,
+            COALESCE(rs.CURRENT_AWAY_SCORE, 0) AS GOAL_AWAY_SCORE
         FROM FilteredEvents e
         LEFT JOIN EventQualifiers q 
             ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
         LEFT JOIN {DB}.OPTA_MATCHINFO m 
             ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
+        LEFT JOIN MatchRunningScores rs 
+            ON e.GOAL_EVENT_OPTAUUID = rs.GOAL_EVENT_OPTAUUID
         ORDER BY e.SEQUENCEID, e.EVENT_TIMESTAMP ASC;
     """
 
@@ -159,6 +178,14 @@ def vis_side(dp=None):
         
         match_ts = sekvens_df['match_date_full'].iloc[0] if 'match_date_full' in sekvens_df.columns else ""
         dato_str = pd.to_datetime(match_ts).strftime('%d/%m/%Y') if pd.notna(match_ts) else ""
+
+        # Hent score-data til visning
+        if not maal_row.empty:
+            mål_stilling = f"{int(maal_row['goal_home_score'].iloc[0])}-{int(maal_row['goal_away_score'].iloc[0])}"
+            slut_stilling = f"{int(maal_row['final_home_score'].iloc[0])}-{int(maal_row['final_away_score'].iloc[0])}"
+        else:
+            mål_stilling = "0-0"
+            slut_stilling = "0-0"
 
         # --- OPSETNING: BANEN TIL VENSTRE, TABELLEN TIL HØJRE ---
         col_banen, col_tabel = st.columns([2, 1])
@@ -212,8 +239,8 @@ def vis_side(dp=None):
             st.markdown(
                 f"<div style='display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; color: #555; background-color: #fcfcfc; padding: 6px 10px; border-radius: 4px; border: 1px solid #eaeaea; margin-top: -5px;'>"
                 f"<span><b>Målscorer:</b> {målscorer}</span>"
-                f"<span><b>Kamp:</b> {kamp_navn}</span>"
-                f"<span>{dato_str}</span>"
+                f"<span><b>Stilling:</b> {mål_stilling} (Slut: {slut_stilling})</span>"
+                f"<span><b>Kamp:</b> {kamp_navn} ({dato_str})</span>"
                 f"</div>",
                 unsafe_allow_html=True
             )
