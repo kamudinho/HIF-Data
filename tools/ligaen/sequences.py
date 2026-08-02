@@ -12,6 +12,7 @@ DB = "KLUB_HVIDOVREIF.AXIS"
 SEASONNAME = "2026/2027"
 TEAM_WYID = 7490
 COMPETITION_WYID = (328,)
+COMP_MAP = { 335: "Superliga", 328: "NordicBet Liga", 329: "2. division", 43319: "3. division", 331: "Oddset Pokalen", 1305: "U19 Ligaen" }
 LIGA_IDS = "('2mb332vncy4450vu14paj8844', 'e5p78j2r7v8h3u9s5k0l2m4n6', 'f6q89k3s8w9i4v0t6l1m3n5o7', '335', '328', '329', '43319', '331')"
 
 def oversæt_qualifiers(qual_str):
@@ -74,11 +75,9 @@ def vis_side(dp=None):
                 g.SEQUENCEID,
                 g.MATCH_OPTAUUID,
                 g.GOAL_TIMESTAMP,
-                -- Vi sætter et tidsvindue på f.eks. 30 sekunder (30000 millisekunder) op til målet, 
-                -- eller beholder sekvensstart, hvis den er kortere, for at undgå at det starter helt i den anden ende.
                 GREATEST(
                     MIN(e.EVENT_TIMESTAMP), 
-                    g.GOAL_TIMESTAMP - 35000
+                    g.GOAL_TIMESTAMP - 15000
                 ) AS SEQ_START_TIMESTAMP
             FROM GoalEvents g
             JOIN {DB}.OPTA_EVENTS e ON g.SEQUENCEID = e.SEQUENCEID AND g.MATCH_OPTAUUID = e.MATCH_OPTAUUID
