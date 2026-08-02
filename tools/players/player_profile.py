@@ -346,8 +346,8 @@ def vis_side(dp=None):
             st.info("Ingen trup-data tilgængelig endnu.")
 
     with t_matches:
-        # Tre kolonner på samme række med vertikal centrering via CSS
-        col_t_title, col_t_matches, col_t_btn = st.columns([1.4, 2.0, 1.8])
+        # Brug vertical_alignment="center" så alle kolonner centreres perfekt på linjen
+        col_t_title, col_t_matches, col_t_btn = st.columns([1.4, 2.0, 1.8], vertical_alignment="center")
         
         with col_t_title:
             logo_html = ""
@@ -357,9 +357,9 @@ def vis_side(dp=None):
                 img_str = base64.b64encode(buffered.getvalue()).decode()
                 logo_html = f'<img src="data:image/png;base64,{img_str}" style="height: 26px; margin-right: 10px; object-fit: contain;">'
             
-            st.markdown(f'<div style="display: flex; align-items: center; height: 38px;">{logo_html}<span style="font-size: 15px; font-weight: bold; line-height: 1;">KAMPOVERSIGT</span></div>', unsafe_allow_html=True)
+            # Ingen fast højde her, da vertical_alignment klarer centreringen
+            st.markdown(f'<div style="display: flex; align-items: center;">{logo_html}<span style="font-size: 15px; font-weight: bold; line-height: 1;">KAMPOVERSIGT</span></div>', unsafe_allow_html=True)
             
-        # SQL der henter holdnavne og score, så vi kan vise modstander og resultat
         sql_matches = f"""
             SELECT 
                 MATCH_OPTAUUID,
@@ -388,9 +388,8 @@ def vis_side(dp=None):
             
             kamp_options = {}
             for _, r in df_matches.iterrows():
-                # Afgør hvem der er modstander og sæt score op (Hjemmehold vs Udehold)
                 er_hjemme = str(r['contestanthome_optauuid']) == str(valgt_uuid_hold)
-                modstander = r['contestantaway_name'] if er_hjemme else r['contestanthome_name']
+                modstander = r['contestantanway_name'] if er_hjemme else r['contestanthome_name']
                 
                 hjemme_maal = int(r['total_home_score']) if pd.notna(r['total_home_score']) else 0
                 ude_maal = int(r['total_away_score']) if pd.notna(r['total_away_score']) else 0
@@ -402,14 +401,11 @@ def vis_side(dp=None):
                 kamp_options[label] = str(r['match_optauuid'])
                 
             with col_t_matches:
-                # Wrapper til at tvinge dropdown til samme højde som knapper/titel (38px standard)
-                st.markdown('<div style="margin-top: -3px;">', unsafe_allow_html=True)
                 valgt_kamp_label = st.selectbox("Vælg kamp", list(kamp_options.keys()), key="valgt_kamp_dropdown", label_visibility="collapsed")
-                st.markdown('</div>', unsafe_allow_html=True)
                 valgt_kamp_uuid = kamp_options[valgt_kamp_label]
         
         with col_t_btn:
-            st.markdown('<div style="display: flex; justify-content: flex-end; align-items: center; height: 38px;">', unsafe_allow_html=True)
+            st.markdown('<div style="display: flex; justify-content: flex-end; align-items: center;">', unsafe_allow_html=True)
             kategori_valg = st.segmented_control(
                 "Visningskategori Kamp", 
                 options=["Generelt", "Opbygning", "Offensiv", "Defensiv"], 
