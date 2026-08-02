@@ -46,6 +46,25 @@ def get_ordinal(n):
         suffix = {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')
     return f"{n}{suffix}"
 
+def oversæt_qualifiers(qualifier_list_str):
+    """Oversætter Opta qualifier-IDs til læsevenlige tekster."""
+    if not qualifier_list_str or not isinstance(qualifier_list_str, str):
+        return ""
+    
+    # Eksempel på mapping - tilpas eller udvid denne efter behov i din app
+    mapping = {
+        "56": "Lang bold",
+        "140": "Hovedstød",
+        "9": "Fod",
+        "210": "Indeni feltet",
+        "212": "Langskud"
+        # Tilføj flere Opta qualifier ID'er her hvis nødvendigt
+    }
+    
+    q_ids = qualifier_list_str.split(",")
+    oversatte = [mapping.get(q.strip(), f"Q:{q.strip()}") for q in q_ids if q.strip()]
+    return ", ".join(oversatte)
+
 def draw_player_info_box(ax, team_logo, player_name, season_str, category_str):
     """Tegner en spillerinfobox på et matplotlib/mplsoccer plot."""
     if team_logo:
