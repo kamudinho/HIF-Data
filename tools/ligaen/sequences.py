@@ -35,13 +35,11 @@ def vis_side(dp=None):
         st.warning("Kunne ikke oprette forbindelse til databasen.")
         st.stop()
 
-    # Hent hold til dropdown baseret på TEAMS
     hold_liste = sorted(list(TEAMS.keys()))
     if "Hvidovre" in hold_liste:
         hold_liste.remove("Hvidovre")
         hold_liste.insert(0, "Hvidovre")
 
-    # --- 2 KOLONNER PÅ SAMME LINJE: Hold og Målsekvens ---
     col_h, col_s = st.columns(2)
     
     with col_h:
@@ -54,7 +52,6 @@ def vis_side(dp=None):
         st.error(f"Kunne ikke finde Opta UUID for holdet: {valgt_hold_navn}")
         st.stop()
 
-    # --- SQL-FORESPØRGSEL ---
     sql_query = f"""
         WITH MatchIDs AS (
             SELECT DISTINCT MATCH_OPTAUUID 
@@ -164,15 +161,14 @@ def vis_side(dp=None):
         else:
             slut_stilling = "Ukendt"
 
-        # --- OPSETNING: BANEN TIL VENSTRE, TABELLEN TIL HØJRE ---
         col_banen, col_tabel = st.columns([2, 1])
 
         with col_banen:
             st.markdown("##### Sekvensopbygning på banen (fra bolden vindes)")
             
-            # Justeret figsize og linjetykkelse på banen
-            pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#7f7f7f', line_zorder=2, linewidth=1.2)
-            fig, ax = pitch.draw(figsize=(9, 4.5))
+            # ÆNDRING HER: Vi bruger half=True, så vi kun viser modstanderens banehalvdel (fra midterlinjen til mål)
+            pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#7f7f7f', line_zorder=2, linewidth=1.2, half=True)
+            fig, ax = pitch.draw(figsize=(8, 5))
 
             sekvens_plot_df = sekvens_df.dropna(subset=['raw_x', 'raw_y'])
 
@@ -186,19 +182,17 @@ def vis_side(dp=None):
                         ax=ax, width=1.0, headwidth=2.5, color="#b0b0b0", alpha=0.8, zorder=3
                     )
 
-                # Mindre prikker (s=30 i stedet for 80)
                 pitch.scatter(
                     sekvens_plot_df['raw_x'], sekvens_plot_df['raw_y'],
-                    color='black', s=30, ax=ax, zorder=4
+                    color='black', s=25, ax=ax, zorder=4
                 )
 
                 for _, row in sekvens_plot_df.iterrows():
                     if pd.notna(row.get('player_name')) and pd.notna(row.get('raw_x')):
                         if row.get('event_typeid') != 16:
-                            # Mindre skriftstørrelse på spillernavne (fontsize=6.5)
                             ax.text(
-                                row['raw_x'], row['raw_y'] + 2.2, row['player_name'],
-                                fontsize=6.5, ha='center', va='bottom', color='#333333', zorder=5
+                                row['raw_x'], row['raw_y'] + 1.8, row['player_name'],
+                                fontsize=6, ha='center', va='bottom', color='#333333', zorder=5
                             )
 
                 if not maal_row.empty:
@@ -206,14 +200,13 @@ def vis_side(dp=None):
                     m_y = maal_row['raw_y'].iloc[0]
                     m_navn = maal_row['player_name'].iloc[0]
 
-                    # Lidt større prik til målet, men ikke for voldsom (s=55)
                     pitch.scatter(
                         m_x, m_y,
-                        color='#df003b', s=55, ax=ax, zorder=6
+                        color='#df003b', s=50, ax=ax, zorder=6
                     )
                     ax.text(
-                        m_x, m_y + 2.2, m_navn,
-                        fontsize=7, fontweight='bold', ha='center', va='bottom', color='#df003b', zorder=7
+                        m_x, m_y + 1.8, m_navn,
+                        fontsize=6.5, fontweight='bold', ha='center', va='bottom', color='#df003b', zorder=7
                     )
 
             st.pyplot(fig, use_container_width=True)
