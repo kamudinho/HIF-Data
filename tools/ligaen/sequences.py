@@ -9,11 +9,11 @@ from data.utils.team_mapping import SEASONS, COMPETITIONS, TEAMS, SEASON_LEAGUE_
 def vis_side():
     DB = "KLUB_HVIDOVREIF.AXIS"
 
-    st.title("⚽ Målsekvenser")
-    st.markdown("Gennemgang af holdets målsekvenser baseret på centrale indstillinger og sekvensdata.")
+    st.caption("Gennemgang af holdets målsekvenser baseret på centrale indstillinger og sekvensdata.")
 
-    # 1. Vælg sæson og turnering fra central struktur
-    col_s, col_t = st.columns(2)
+    # --- DROPWODNS PÅ SAMME LINJE ---
+    col_s, col_t, col_h = st.columns(3)
+    
     with col_s:
         valgt_saeson = st.selectbox("Vælg sæson", list(SEASONS.keys()), index=0)
     with col_t:
@@ -23,7 +23,6 @@ def vis_side():
     turnering_info = COMPETITIONS.get(valgt_turnering, {})
     competition_wyid = turnering_info.get("wyid")
 
-    # 2. Hent tilladte hold for den valgte sæson og turnering
     tilladte_hold_navne = SEASON_LEAGUE_MAPPER.get(valgt_saeson, {}).get(valgt_turnering, list(TEAMS.keys()))
     
     hold_liste = sorted([h for h in tilladte_hold_navne if h in TEAMS])
@@ -31,7 +30,8 @@ def vis_side():
         hold_liste.remove("Hvidovre")
         hold_liste.insert(0, "Hvidovre")
 
-    valgt_hold_navn = st.selectbox("Vælg hold", hold_liste)
+    with col_h:
+        valgt_hold_navn = st.selectbox("Vælg hold", hold_liste)
     
     valgt_hold_data = TEAMS.get(valgt_hold_navn, {})
     team_opta_uuid = valgt_hold_data.get("opta_uuid")
@@ -45,7 +45,7 @@ def vis_side():
         st.warning("Kunne ikke oprette forbindelse til databasen.")
         st.stop()
 
-    # --- SQL-FORESPØRGSEL (Bruger EVENT_TIMESTAMP til LAG og sortering) ---
+    # --- SQL-FORESPØRGSEL ---
     sql_query = f"""
         WITH MatchIDs AS (
             SELECT DISTINCT MATCH_OPTAUUID 
@@ -72,7 +72,6 @@ def vis_side():
             e.EVENT_TIMESTAMP,
             e.PLAYER_NAME,
             e.EVENT_TYPEID,
-            -- Sikrer at LAG bruger EVENT_TIMESTAMP korrekt
             LAG(e.EVENT_X, 1) OVER (PARTITION BY e.SEQUENCEID ORDER BY e.EVENT_TIMESTAMP ASC) as PREV_X_1,
             LAG(e.EVENT_Y, 1) OVER (PARTITION BY e.SEQUENCEID ORDER BY e.EVENT_TIMESTAMP ASC) as PREV_Y_1,
             LAG(e.EVENT_X, 2) OVER (PARTITION BY e.SEQUENCEID ORDER BY e.EVENT_TIMESTAMP ASC) as PREV_X_2,
@@ -105,10 +104,11 @@ def vis_side():
         st.stop()
 
     df_all.columns = [c.lower() for c in df_all.columns]
-
     df_all['kamp_label'] = df_all['contestanthome_name'] + " vs. " + df_all['contestantaway_name']
     sekvens_ids = df_all['sequenceid'].unique()
 
+    st.markdown("---")
+    
     col_sel, col_info = st.columns([2, 1])
     with col_sel:
         valgt_seq = st.selectbox(
@@ -128,53 +128,58 @@ def vis_side():
             st.metric("Målscorer", str(målscorer))
             st.metric("Kamp", kamp_navn)
 
-        # --- TEGN BANEN ---
-        st.markdown("### Sekvensopbygning på banen")
-        pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#7f7f7f', line_zorder=2)
-        fig, ax = pitch.draw(figsize=(11, 7))
+        st.markdown("---")
 
-        sekvens_df = sekvens_df.dropna(subset=['raw_x', 'raw_y'])
+        # --- OPSETNING: BANEN TIL VENSTRE, TABELLEN TIL HØJRE ---
+        col_banen, col_tabel = st.columns([1.2, 1])
 
-        if not sekvens_df.empty:
-            if len(sekvens_df) > 1:
-                pitch.arrows(
-                    sekvens_df['raw_x'].iloc[:-1], 
-                    sekvens_df['raw_y'].iloc[:-1],
-                    sekvens_df['raw_x'].iloc[1:], 
-                    sekvens_df['raw_y'].iloc[1:], 
-                    ax=ax, width=1.5, headwidth=3, color="#cccccc", alpha=0.8, zorder=3
-                )
+        with col_banen:
+            st.markdown("### Sekvensopbygning på banen")
+            pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#7f7f7f', line_zorder=2)
+            fig, ax = pitch.draw(figsize=(8, 5))
 
-            pitch.scatter(
-                sekvens_df['raw_x'], sekvens_df['raw_y'],
-                color='black', s=80, ax=ax, zorder=4
-            )
+            sekvens_plot_df = sekvens_df.dropna(subset=['raw_x', 'raw_y'])
 
-            for _, row in sekvens_df.iterrows():
-                if pd.notna(row.get('player_name')) and pd.notna(row.get('raw_x')):
-                    if row.get('event_typeid') != 16:
-                        ax.text(
-                            row['raw_x'], row['raw_y'] + 3, row['player_name'],
-                            fontsize=9, ha='center', va='bottom', color='black', zorder=5
-                        )
-
-            if not maal_row.empty:
-                m_x = maal_row['raw_x'].iloc[0]
-                m_y = maal_row['raw_y'].iloc[0]
-                m_navn = maal_row['player_name'].iloc[0]
+            if not sekvens_plot_df.empty:
+                if len(sekvens_plot_df) > 1:
+                    pitch.arrows(
+                        sekvens_plot_df['raw_x'].iloc[:-1], 
+                        sekvens_plot_df['raw_y'].iloc[:-1],
+                        sekvens_plot_df['raw_x'].iloc[1:], 
+                        sekvens_plot_df['raw_y'].iloc[1:], 
+                        ax=ax, width=1.5, headwidth=3, color="#cccccc", alpha=0.8, zorder=3
+                    )
 
                 pitch.scatter(
-                    m_x, m_y,
-                    color='#df003b', s=120, ax=ax, zorder=6
-                )
-                ax.text(
-                    m_x, m_y + 3, m_navn,
-                    fontsize=9, fontweight='bold', ha='center', va='bottom', color='black', zorder=7
+                    sekvens_plot_df['raw_x'], sekvens_plot_df['raw_y'],
+                    color='black', s=80, ax=ax, zorder=4
                 )
 
-        st.pyplot(fig, use_container_width=True)
+                for _, row in sekvens_plot_df.iterrows():
+                    if pd.notna(row.get('player_name')) and pd.notna(row.get('raw_x')):
+                        if row.get('event_typeid') != 16:
+                            ax.text(
+                                row['raw_x'], row['raw_y'] + 3, row['player_name'],
+                                fontsize=8, ha='center', va='bottom', color='black', zorder=5
+                            )
 
-        # --- TABEL OVER SEKVENSEN ---
-        st.markdown("### Aktioner i sekvensen (Kronologisk)")
-        vis_cols = [c for c in ['event_timestamp', 'player_name', 'event_typeid', 'raw_x', 'raw_y', 'prev_x_1', 'prev_y_1', 'qualifier_list'] if c in sekvens_df.columns]
-        st.dataframe(sekvens_df[vis_cols], use_container_width=True, hide_index=True)
+                if not maal_row.empty:
+                    m_x = maal_row['raw_x'].iloc[0]
+                    m_y = maal_row['raw_y'].iloc[0]
+                    m_navn = maal_row['player_name'].iloc[0]
+
+                    pitch.scatter(
+                        m_x, m_y,
+                        color='#df003b', s=120, ax=ax, zorder=6
+                    )
+                    ax.text(
+                        m_x, m_y + 3, m_navn,
+                        fontsize=8, fontweight='bold', ha='center', va='bottom', color='black', zorder=7
+                    )
+
+            st.pyplot(fig, use_container_width=True)
+
+        with col_tabel:
+            st.markdown("### Aktioner i sekvensen")
+            vis_cols = [c for c in ['event_timestamp', 'player_name', 'event_typeid', 'raw_x', 'raw_y'] if c in sekvens_df.columns]
+            st.dataframe(sekvens_df[vis_cols], use_container_width=True, hide_index=True, height=380)
