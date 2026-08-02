@@ -547,7 +547,7 @@ def vis_side(dp=None):
         if not df_filtreret.empty:
             akt_stats = df_filtreret.groupby('Action_Label').agg(Total=('outcome', 'count'), Succes=('outcome', 'sum')).sort_values('Total', ascending=False)
     
-        c_stats_side, c_buffer, c_pitch_side = st.columns([1, 0.05, 2.2])
+        c_stats_side, c_pitch_side = st.columns([1, 2.2])
     
         with c_stats_side:
             logo_html = ""
@@ -566,6 +566,7 @@ def vis_side(dp=None):
                 </div>
             """, unsafe_allow_html=True)
             st.markdown("<hr style='margin: 15px 0; opacity: 0.5;'>", unsafe_allow_html=True)
+            
             total_akt = len(df_spiller)
             pas_df = df_spiller[df_spiller['event_typeid'] == 1]
             pas_count = len(pas_df)
@@ -609,11 +610,9 @@ def vis_side(dp=None):
                     st.markdown(f'<div style="display:flex; justify-content:space-between; font-size:11px; border-bottom:0.5px solid #eee; padding:5px 0;"><span>{akt}</span><span style="font-family:monospace;">{stats_html}</span></div>', unsafe_allow_html=True)
     
         with c_pitch_side:
-            c_side_spacer, c_desc_col, c_menu_col = st.columns([0.2, 2.0, 1.0])
-            with c_menu_col:
-                visning = st.selectbox("Visning", list(descriptions.keys()), key="pitch_view_sel", label_visibility="collapsed")
-            with c_desc_col:
-                st.markdown(f'<div style="text-align: right; margin-top: 8px; line-height: 1.2;"><span style="color: #666; font-size: 0.85rem;">{descriptions.get(visning)}</span></div>', unsafe_allow_html=True)
+            # Placer dropdown og beskrivelse over hinanden i kolonnen i stedet for at indlejre unødige underkolonner
+            visning = st.selectbox("Visning", list(descriptions.keys()), key="pitch_view_sel")
+            st.markdown(f'<div style="margin-bottom: 8px; line-height: 1.2;"><span style="color: #666; font-size: 0.85rem;">{descriptions.get(visning)}</span></div>', unsafe_allow_html=True)
     
             pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
             fig, ax = pitch.draw(figsize=(10, 7))
@@ -621,31 +620,26 @@ def vis_side(dp=None):
     
             df_plot = df_spiller.dropna(subset=['event_x', 'event_y'])
         
-        # Sørg for at fjerne eventuelle dubletter af samme hændelse
-        if not df_plot.empty:
-            # Hvis dine hændelser har et unikt ID (f.eks. 'event_id' eller 'id'), kan du bruge det:
-            # df_plot = df_plot.drop_duplicates(subset=['id'])
-            
-            # Ellers fjerner vi identiske hændelser baseret på type og koordinater:
-            subset_cols = ['event_typeid', 'event_x', 'event_y']
-            if 'minute' in df_plot.columns and 'second' in df_plot.columns:
-                subset_cols.extend(['minute', 'second'])
-            df_plot = df_plot.drop_duplicates(subset=subset_cols)
+            if not df_plot.empty:
+                subset_cols = ['event_typeid', 'event_x', 'event_y']
+                if 'minute' in df_plot.columns and 'second' in df_plot.columns:
+                    subset_cols.extend(['minute', 'second'])
+                df_plot = df_plot.drop_duplicates(subset=subset_cols)
 
-            if visning == "Heatmap":
-                pitch.kdeplot(df_plot.event_x, df_plot.event_y, ax=ax, cmap='Blues', fill=True, alpha=0.6, levels=50)
-            elif visning == "Berøringer":
-                d = df_plot[df_plot['event_typeid'].isin(touch_ids)]
-                ax.scatter(d.event_x, d.event_y, color=primær_farve, s=40, edgecolors='white', alpha=0.5)
-            elif visning == "Afslutninger":
-                d = df_plot[df_plot['event_typeid'].isin([13, 14, 15, 16])]
-                goals = d[d['event_typeid'] == 16]
-                misses = d[d['event_typeid'].isin([13, 14, 15])]
-                ax.scatter(misses.event_x, misses.event_y, color='grey', s=60, edgecolors='black', alpha=0.6)
-                ax.scatter(goals.event_x, goals.event_y, color=primær_farve, s=120, marker='s', edgecolors='black', zorder=5)
-            elif visning == "Erobringer":
-                d = df_plot[df_plot['event_typeid'].isin([7, 8, 12, 49])]
-                ax.scatter(d.event_x, d.event_y, color='orange', s=100, edgecolors='white')
+                if visning == "Heatmap":
+                    pitch.kdeplot(df_plot.event_x, df_plot.event_y, ax=ax, cmap='Blues', fill=True, alpha=0.6, levels=50)
+                elif visning == "Berøringer":
+                    d = df_plot[df_plot['event_typeid'].isin(touch_ids)]
+                    ax.scatter(d.event_x, d.event_y, color=primær_farve, s=40, edgecolors='white', alpha=0.5)
+                elif visning == "Afslutninger":
+                    d = df_plot[df_plot['event_typeid'].isin([13, 14, 15, 16])]
+                    goals = d[d['event_typeid'] == 16]
+                    misses = d[d['event_typeid'].isin([13, 14, 15])]
+                    ax.scatter(misses.event_x, misses.event_y, color='grey', s=60, edgecolors='black', alpha=0.6)
+                    ax.scatter(goals.event_x, goals.event_y, color=primær_farve, s=120, marker='s', edgecolors='black', zorder=5)
+                elif visning == "Erobringer":
+                    d = df_plot[df_plot['event_typeid'].isin([7, 8, 12, 49])]
+                    ax.scatter(d.event_x, d.event_y, color='orange', s=100, edgecolors='white')
             
             st.pyplot(fig, use_container_width=True)
 
