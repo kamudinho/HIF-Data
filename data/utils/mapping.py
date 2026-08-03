@@ -103,7 +103,12 @@ def get_action_label(row):
 
         # Skudtyper
         if eid in ["13", "14", "15", "16"]:
-            suffix = " (Hovedstød)" if "15" in ql else ""
+            suffix_parts = []
+            if "15" in ql: suffix_parts.append("Hovedstød")
+            if "9" in ql: suffix_parts.append("Straffespark")
+            
+            suffix = f" ({', '.join(suffix_parts)})" if suffix_parts else ""
+            
             if eid == "16": return f"MÅL{suffix}"
             if "138" in ql or eid == "14": return f"Skud på stolpe{suffix}"
             if eid == "15": return f"Skud på mål{suffix}"
