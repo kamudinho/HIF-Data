@@ -151,6 +151,7 @@ def vis_side(dp=None):
             SELECT DISTINCT PLAYER_OPTAUUID, TRIM(FIRST_NAME) || ' ' || TRIM(LAST_NAME) as P_NAME
             FROM {DB}.OPTA_MATCH_LINEUPS
             WHERE FIRST_NAME IS NOT NULL
+            GROUP BY PLAYER_OPTAUUID
         )
         SELECT 
             e.MATCH_OPTAUUID,
