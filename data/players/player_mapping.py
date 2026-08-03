@@ -122,6 +122,7 @@ PLAYER_MAPPING = [
     {"klub": "AaB", "navn": "Cornelius Axel Olsson", "position": "Defender", "player_optauuid": "5uo9saax5iqsctxq7w3si8w0k", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
     {"klub": "AaB", "navn": "Kornelius Normann Hansen", "position": "Attacker", "player_optauuid": "48sqqhgtmfmpqb3602iirspd6", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
     {"klub": "AaB", "navn": "Marc Nielsen", "position": "Defender", "player_optauuid": "bcdp9e3dezuaybm8ndrsanbx0", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
+    {"klub": "AaB", "navn": "Frederik Lindbøg Børsting", "position": "Midfielder", "player_optauuid": "egwhlgopjtjkop7ozy7ltk1cl", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
     {"klub": "AaB", "navn": "Alexander Lien Håpnes", "position": "Midfielder", "player_optauuid": "5y2mfgruizah0ylcz7q1abw9g", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
     {"klub": "AaB", "navn": "Uche Brian Seo Nwadike", "position": "Attacker", "player_optauuid": "91cvtiaq4im9hiydjiualozdg", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
     {"klub": "AaB", "navn": "Vincent Carsten Maria Müller", "position": "Goalkeeper", "player_optauuid": "a2l4ep71txn2edtjjcgewai5m", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
