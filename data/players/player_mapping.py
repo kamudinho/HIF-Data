@@ -281,23 +281,22 @@ PLAYER_MAPPING = [
     {"klub": "Vejle Boldklub", "navn": "Bismark Edjeodji", "position": "Midfielder", "player_wyid": 9271754, "player_optauuid": "nzauesd85d6utkwdc1s1a1as"},
     
     # Vendsyssel FF
-    {"klub": "Vendsyssel FF", "navn": "Bilal Konteh", "position": "Defender", "player_wyid": 9152663, "player_optauuid": "ylz4gki78fg6jxbbzae0hgk4"},
-    {"klub": "Vendsyssel FF", "navn": "Marcus Hannesbo", "position": "Midfielder", "player_wyid": 9851527, "player_optauuid": "ar33yy0wd5ah5o8om1l12pgq"},
-    {"klub": "Vendsyssel FF", "navn": "Stephen Fumen Michael", "position": "Midfielder", "player_wyid": 12318425, "player_optauuid": "jhfvec5tqv3sjtzejmu4b47o"},
-    {"klub": "Vendsyssel FF", "navn": "Precious Tonye Williams", "position": "Attacker", "player_wyid": 93043261, "player_optauuid": "c83cudouly28512clb83cic3"},
-    {"klub": "Vendsyssel FF", "navn": "Andreas Rise Kristiansen", "position": "Midfielder", "player_wyid": "9vbxe5gvruap8h546efz3nx1w", "player_optauuid": "9vbxe5gvruap8h546efz3nx1w"},
-    {"klub": "Vendsyssel FF", "navn": "Malthe Holt Nielsen", "position": "Midfielder", "player_wyid": 11429693, "player_optauuid": "rxtektemoyt390x6pq1xreac"},
-    {"klub": "Vendsyssel FF", "navn": "Steven Simpson", "position": "Attacker", "player_wyid": 7545507, "player_optauuid": "t811fc39zstqmkqyb56flogk"},
-    {"klub": "Vendsyssel FF", "navn": "Ari Olsen", "position": "Defender", "player_wyid": 10994686, "player_optauuid": "282fmbmx8lzirvh1ljkf33rp"},
-    {"klub": "Vendsyssel FF", "navn": "Lasse Steffensen", "position": "Attacker", "player_wyid": 5458469, "player_optauuid": "l89n30nejpn2u22ygvchwnze"},
-    {"klub": "Vendsyssel FF", "navn": "Rasmus Vilhelm Schüller", "position": "Midfielder", "player_wyid": 354717, "player_optauuid": "pel84swlqfux6obt6lznze1h"},
-    {"klub": "Vendsyssel FF", "navn": "Adam Vendelbo", "position": "Attacker", "player_wyid": 5793536, "player_optauuid": "miatayfy07pf4og7qc7c7pqs"},
-    {"klub": "Vendsyssel FF", "navn": "Benjamin Clemmensen", "position": "Defender", "player_wyid": 7646208, "player_optauuid": "rn42gm9xm3yunk883yan9vdg"},
-    {"klub": "Vendsyssel FF", "navn": "Mads Nyboe Lauritsen", "position": "Defender", "player_wyid": 782048, "player_optauuid": "oywgthoxa153nf48la1j8v10"},
-    {"klub": "Vendsyssel FF", "navn": "Sebastian Lodberg", "position": "Attacker", "player_wyid": 678062, "player_optauuid": "b2e6na1kcw3l5tu7n32w1awwk"},
-    {"klub": "Vendsyssel FF", "navn": "Emil Grønn Pedersen", "position": "Attacker", "player_wyid": 1114180, "player_optauuid": "d25swlwty2q67c514p61ci7f8"},
-    {"klub": "Vendsyssel FF", "navn": "Lasse William Schulz", "position": "Goalkeeper", "player_wyid": 6868916, "player_optauuid": "4vlnkuqfh7rnymg8qku8amwa"},
-]
+    {"klub": "Vendsyssel FF", "navn": "Adam Vendelbo Clement", "position": "Attacker", "player_optauuid": "6miatayfy07pf4og7qc7c7pqs", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
+    {"klub": "Vendsyssel FF", "navn": "Andreas Rise Kristiansen", "position": "Midfielder", "player_optauuid": "9vbxe5gvruap8h546efz3nx1w", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
+    {"klub": "Vendsyssel FF", "navn": "Ari Olsen", "position": "Defender", "player_optauuid": "6282fmbmx8lzirvh1ljkf33rp", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
+    {"klub": "Vendsyssel FF", "navn": "Benjamin Clemmensen", "position": "Defender", "player_optauuid": "8rn42gm9xm3yunk883yan9vdg", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
+    {"klub": "Vendsyssel FF", "navn": "Bilal Konteh Krubally", "position": "Defender", "player_optauuid": "3ylz4gki78fg6jxbbzae0hgk4", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
+    {"klub": "Vendsyssel FF", "navn": "Emil Grønn Pedersen", "position": "Attacker", "player_optauuid": "d25swlwty2q67c514p61ci7f8", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
+    {"klub": "Vendsyssel FF", "navn": "Lasse Steffensen", "position": "Attacker", "player_optauuid": "9l89n30nejpn2u22ygvchwnze", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
+    {"klub": "Vendsyssel FF", "navn": "Lasse William Schulz", "position": "Goalkeeper", "player_optauuid": "64vlnkuqfh7rnymg8qku8amwa", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
+    {"klub": "Vendsyssel FF", "navn": "Mads Nyboe Lauritsen", "position": "Defender", "player_optauuid": "oywgthoxa153nf48la1j8v10", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
+    {"klub": "Vendsyssel FF", "navn": "Malthe Holt Nielsen", "position": "Midfielder", "player_optauuid": "3rxtektemoyt390x6pq1xreac", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
+    {"klub": "Vendsyssel FF", "navn": "Marcus Serup Hannesbo", "position": "Midfielder", "player_optauuid": "7ar33yy0wd5ah5o8om1l12pgq", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
+    {"klub": "Vendsyssel FF", "navn": "Precious Tonye Williams", "position": "Attacker", "player_optauuid": "61c83cudouly28512clb83cic", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
+    {"klub": "Vendsyssel FF", "navn": "Rasmus Vilhelm Schüller", "position": "Midfielder", "player_optauuid": "7pel84swlqfux6obt6lznze1h", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
+    {"klub": "Vendsyssel FF", "navn": "Sebastian Lodberg Oppenhagen", "position": "Attacker", "player_optauuid": "b2e6na1kcw3l5tu7n32w1awwk", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
+    {"klub": "Vendsyssel FF", "navn": "Stephen Fumen Michael", "position": "Midfielder", "player_optauuid": "5jhfvec5tqv3sjtzejmu4b47o", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
+    {"klub": "Vendsyssel FF", "navn": "Steven Jamal Simpson", "position": "Attacker", "player_optauuid": "7t811fc39zstqmkqyb56flogk", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"}
 
 player_mapping = PlayerMapping(PLAYER_MAPPING)
 
