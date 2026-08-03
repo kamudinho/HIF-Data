@@ -78,7 +78,7 @@ def vis_side(dp=None):
                 team_map[team_name] = info["opta_uuid"]
 
     if not team_map:
-        team_map = {name: info["opta_uuid"] for name, info in TEAMS.items() if info.get("opta_uuid")}
+        team_map = {name: info["opta_uuid"] for name, info in TEAMS.items() info.get("opta_uuid")}
 
     sorted_teams = sorted(list(team_map.keys()))
     default_index = sorted_teams.index("Hvidovre") if "Hvidovre" in sorted_teams else 0
@@ -93,9 +93,9 @@ def vis_side(dp=None):
     valgt_uuid = team_map[valgt_hold_navn]
     hold_logo = get_logo_img(valgt_uuid)
 
-    st.caption("Gennemgang af holdets målsekvenser (inkl. modstanderens berøringer spejlvendt).")
+    st.caption("Gennemgang af holdets målsekvenser (inkl. udvidet tidsvindue ved standardsituationer/hjørnespark).")
 
-    # --- SQL HENTNING AF MÅLSEKVENSER MED SPEJLVENDT MODSTANDER-KOORDINAT ---
+    # --- SQL HENTNING AF MÅLSEKVENSER MED UDVIDET VINDUE VED HJØRNESPARK ---
     sql_seq = f"""
         WITH SeasonMatches AS (
             SELECT MATCH_OPTAUUID, CONTESTANTHOME_NAME, CONTESTANTAWAY_NAME, 
@@ -110,7 +110,7 @@ def vis_side(dp=None):
             WHERE EVENT_TYPEID = 16 AND EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}'
             AND MATCH_OPTAUUID IN (SELECT MATCH_OPTAUUID FROM SeasonMatches)
         ),
-        RankedMatchEvents AS (
+        BaseMatchEvents AS (
             SELECT 
                 e.*,
                 tg.G_TIME as GOAL_TIMESTAMP,
@@ -123,23 +123,48 @@ def vis_side(dp=None):
                 m.CONTESTANTHOME_OPTAUUID,
                 m.CONTESTANTAWAY_OPTAUUID,
                 m.TOTAL_HOME_SCORE,
-                m.TOTAL_AWAY_SCORE,
-                ROW_NUMBER() OVER (
-                    PARTITION BY e.MATCH_OPTAUUID, tg.G_TIME 
-                    ORDER BY e.EVENT_TIMESTAMP DESC
-                ) as rn
+                m.TOTAL_AWAY_SCORE
             FROM {DB}.OPTA_EVENTS e
             JOIN TargetGoals tg 
                 ON e.MATCH_OPTAUUID = tg.MATCH_OPTAUUID
             JOIN SeasonMatches m 
                 ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
             WHERE e.EVENT_TIMESTAMP <= tg.G_TIME
-              AND e.EVENT_TIMESTAMP >= DATEADD('millisecond', -20000, tg.G_TIME)
+              AND e.EVENT_TIMESTAMP >= DATEADD('millisecond', -60000, tg.G_TIME)
         ),
-        FilteredEvents AS (
+        CornerCheck AS (
+            SELECT MATCH_OPTAUUID, GOAL_TIMESTAMP, MIN(EVENT_TIMESTAMP) AS MIN_CORNER_TIME
+            FROM BaseMatchEvents
+            WHERE EVENT_TYPEID = 6
+              AND EVENT_TIMESTAMP >= DATEADD('millisecond', -45000, GOAL_TIMESTAMP)
+            GROUP BY MATCH_OPTAUUID, GOAL_TIMESTAMP
+        ),
+        DynamicWindowEvents AS (
+            SELECT 
+                b.*,
+                COALESCE(c.MIN_CORNER_TIME, DATEADD('millisecond', -20000, b.GOAL_TIMESTAMP)) AS EFFECTIVE_START_TIME
+            FROM BaseMatchEvents b
+            LEFT JOIN CornerCheck c 
+                ON b.MATCH_OPTAUUID = c.MATCH_OPTAUUID AND b.GOAL_TIMESTAMP = c.GOAL_TIMESTAMP
+        ),
+        FilteredTimeEvents AS (
+            SELECT *
+            FROM DynamicWindowEvents
+            WHERE EVENT_TIMESTAMP >= EFFECTIVE_START_TIME
+        ),
+        RankedMatchEvents AS (
+            SELECT 
+                *,
+                ROW_NUMBER() OVER (
+                    PARTITION BY MATCH_OPTAUUID, GOAL_TIMESTAMP 
+                    ORDER BY EVENT_TIMESTAMP DESC
+                ) as rn
+            FROM FilteredTimeEvents
+        ),
+        FinalSelectedEvents AS (
             SELECT *
             FROM RankedMatchEvents
-            WHERE rn <= 8
+            WHERE rn <= 12
         ),
         EventQualifiers AS (
             SELECT 
@@ -169,7 +194,6 @@ def vis_side(dp=None):
             e.PLAYER_NAME,
             e.EVENT_CONTESTANT_OPTAUUID,
             e.EVENT_TYPEID,
-            -- SPEJLVEND MODSTANDERENS KOORDINATER (100 - X, 100 - Y) HVIS DET IKKE ER VORES HOLD
             CASE 
                 WHEN e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' THEN e.EVENT_X 
                 ELSE (100.0 - e.EVENT_X) 
@@ -191,7 +215,7 @@ def vis_side(dp=None):
             m.TOTAL_AWAY_SCORE AS FINAL_AWAY_SCORE,
             COALESCE(rs.CURRENT_HOME_SCORE, 0) AS GOAL_HOME_SCORE,
             COALESCE(rs.CURRENT_AWAY_SCORE, 0) AS GOAL_AWAY_SCORE
-        FROM FilteredEvents e
+        FROM FinalSelectedEvents e
         LEFT JOIN EventQualifiers q 
             ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
         LEFT JOIN {DB}.OPTA_MATCHINFO m 
