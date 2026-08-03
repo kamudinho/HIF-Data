@@ -55,8 +55,6 @@ class PlayerMapping:
 
 
 # --- OVERSIGT OVER SPILLERE ---
-# player_mapping.py
-
 SEASONNAME = "2025/2026"
 TEAM_WYID = 7490
 COMPETITION_WYID = (328,)
@@ -70,7 +68,6 @@ COMP_MAP = {
     331: "Oddset Pokalen",
     1305: "U19 Ligaen"
 }
-
 # Samlet oversigt over spillere fordelt på klubber i NordicBet Ligaen
 PLAYER_MAPPING = [
     # Aalborg BK
