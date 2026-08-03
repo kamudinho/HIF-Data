@@ -111,7 +111,7 @@ OVERWRITE_PLAYERS = {
         ("Kelvin Pius John", "Angriber", 568923, "5vrsflxiv2dgfa8199a2qxsve"),
         ("Kornelius Normann", "Angriber", 1103136, "48sqqhgtmfmpqb3602iirspd6"),
         ("Mads Bomholt", "Midtbanespiller", 625600, "ejixz16616b7krftxyzv9yiac"),
-        ("Marc Nielsen", "Forsvarsspiller", 1222413, "bcdp9e3dezuaybm8ndrsanbx0"),
+        ("Marc Målscorer", "Forsvarsspiller", 1222413, "bcdp9e3dezuaybm8ndrsanbx0"),
         ("Marcus Bonde", "Midtbanespiller", 760812, "e7wytawxwiszq1aass5ujio7o"),
         ("Markus Andre Kaasa", "Midtbanespiller", 472140, "e0j0uakuzduvis9wqsocngwrt"),
         ("Mathias Jørgensen", "Angriber", 1184840, "1arzd8hqj73byhduozscqz5uy"),
