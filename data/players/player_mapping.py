@@ -78,6 +78,23 @@ class PlayerMapping:
     def get_player_by_name(self, navn):
         return self.players_by_name.get(str(navn).lower(), [])
 
+    def register_players_from_df(self, df, uuid_col='PLAYER_OPTAUUID', name_col='PLAYER_NAME'):
+            """Registrerer spillere dynamisk fra en DataFrame, hvis de mangler i den statiske liste."""
+            if df is None or df.empty:
+                return
+                
+            if uuid_col not in df.columns or name_col not in df.columns:
+                return
+    
+            for _, row in df.dropna(subset=[uuid_col]).iterrows():
+                opta_uuid = str(row[uuid_col]).strip()
+                navn = str(row.get(name_col, "")).strip()
+    
+                if opta_uuid and opta_uuid != "None" and navn and navn != "nan" and navn != "Ukendt":
+                    # Hvis spilleren ikke findes i forvejen, tilføj den til cachen
+                    if opta_uuid not in self.optauuid_to_name:
+                        self.optauuid_to_name[opta_uuid] = navn
+
 
 # --- OVERSIGT OVER SPILLERE ---
 SEASONNAME = "2026/2027"
