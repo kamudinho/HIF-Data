@@ -6,7 +6,7 @@ from mplsoccer import Pitch
 from data.data_load import _get_snowflake_conn
 from data.utils.team_mapping import TEAMS, SEASON_LEAGUE_MAPPER, SEASONS, COMPETITIONS, COMPETITION_NAME
 from data.utils.mapping import OPTA_EVENT_TYPES, OPTA_QUALIFIERS, get_action_label, har_qualifier
-from data.players.player_mapping import PlayerMapping
+from data.players.player_mapping import player_mapping  # Bruger den globale PlayerMapping instans/klasse
 from utils.helpers import get_logo_img
 
 # Snowflake database sti
@@ -41,27 +41,6 @@ def vis_side(dp=None):
     if not conn:
         st.warning("Kunne ikke oprette forbindelse til databasen.")
         st.stop()
-
-    # --- HENT SPILLERE OG INITIALISER PLAYER MAPPING DINAMISK ---
-    player_mapping = None
-    try:
-        sql_players = f"""
-            SELECT DISTINCT 
-                NULL as klub,
-                TRIM(FIRST_NAME) || ' ' || TRIM(LAST_NAME) as navn,
-                NULL as position,
-                NULL as player_wyid,
-                PLAYER_OPTAUUID as player_optauuid
-            FROM {DB}.OPTA_MATCH_LINEUPS
-            WHERE FIRST_NAME IS NOT NULL AND PLAYER_OPTAUUID IS NOT NULL
-        """
-        df_players = conn.query(sql_players)
-        if df_players is not None and not df_players.empty:
-            df_players.columns = [c.lower() for c in df_players.columns]
-            player_list = df_players.to_dict(orient="records")
-            player_mapping = PlayerMapping(player_list)
-    except Exception:
-        player_mapping = None
 
     # --- SÆSON- OG HOLDVÆLGER I TOPPEN ---
     available_seasons = sorted(list(SEASONS.keys()), reverse=True)
@@ -116,7 +95,7 @@ def vis_side(dp=None):
 
     st.caption("Gennemgang af holdets målsekvenser fra bolden vindes, til målet falder.")
 
-    # --- SQL HENTNING AF MÅLSEKVENSER ---
+    # --- SQL HENTNING AF MÅLSEKVENSER (Fjernet unødvendig PlayerNames JOIN, henter blot Opta UUID) ---
     sql_seq = f"""
         WITH SeasonMatches AS (
             SELECT MATCH_OPTAUUID, CONTESTANTHOME_NAME, CONTESTANTAWAY_NAME, 
@@ -168,19 +147,12 @@ def vis_side(dp=None):
                 LISTAGG(QUALIFIER_QID, ',') AS QUALIFIER_LIST
             FROM {DB}.OPTA_QUALIFIERS
             GROUP BY EVENT_OPTAUUID
-        ),
-        PlayerNames AS (
-            SELECT PLAYER_OPTAUUID, ANY_VALUE(TRIM(FIRST_NAME) || ' ' || TRIM(LAST_NAME)) as P_NAME
-            FROM {DB}.OPTA_MATCH_LINEUPS
-            WHERE FIRST_NAME IS NOT NULL
-            GROUP BY PLAYER_OPTAUUID
         )
         SELECT 
             e.MATCH_OPTAUUID,
             e.TARGET_SEQUENCEID as SEQUENCEID,
             e.EVENT_TIMESTAMP,
             e.GOAL_MIN,
-            COALESCE(pn.P_NAME, 'Ukendt') as PLAYER_NAME,
             e.PLAYER_OPTAUUID,
             e.EVENT_TYPEID,
             e.EVENT_X as RAW_X,
@@ -198,8 +170,6 @@ def vis_side(dp=None):
         FROM FilteredEvents e
         LEFT JOIN EventQualifiers q 
             ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
-        LEFT JOIN PlayerNames pn 
-            ON e.PLAYER_OPTAUUID = pn.PLAYER_OPTAUUID
         ORDER BY e.MATCH_LOCALDATE DESC, e.GOAL_TIMESTAMP DESC, e.EVENT_TIMESTAMP ASC;
     """
 
@@ -216,12 +186,17 @@ def vis_side(dp=None):
 
     df_all.columns = [c.upper() for c in df_all.columns]
 
-    # --- OVERSKRIV NAVNE FRA PLAYER_MAPPING ---
-    if player_mapping:
-        df_all['PLAYER_NAME'] = df_all.apply(
-            lambda row: player_mapping.get_name_by_opta_uuid(row.get('PLAYER_OPTAUUID')) or row.get('PLAYER_NAME'),
-            axis=1
-        )
+    # --- OVERSKRIV NAVNE VED HJÆLP AF PLAYER_MAPPING (OPTA UUID) ---
+    def map_spiller_navn(row):
+        p_uuid = row.get('PLAYER_OPTAUUID')
+        if pd.notna(p_uuid) and p_uuid:
+            # Forsøg at hente navnet fra din player_mapping
+            mapped_name = player_mapping.get_name_by_opta_uuid(p_uuid)
+            if mapped_name:
+                return mapped_name
+        return 'Ukendt'
+
+    df_all['PLAYER_NAME'] = df_all.apply(map_spiller_navn, axis=1)
 
     df_all['AKTION'] = df_all.apply(get_action_label, axis=1)
     df_all['DETALJER'] = df_all['QUALIFIER_LIST'].apply(oversæt_qualifiers)
@@ -353,7 +328,7 @@ def vis_side(dp=None):
                 )
 
                 navn = str(row.get('PLAYER_NAME', ''))
-                if navn and navn != 'nan':
+                if navn and navn != 'nan' and navn != 'Ukendt':
                     ax.text(
                         r_x, r_y - 2.5, navn,
                         fontsize=6, ha='center', va='top', color='#333333', zorder=5
