@@ -309,17 +309,13 @@ def vis_side(dp=None):
         (df_all['GOAL_TIMESTAMP'] == sd['goal_ts'])
     ].sort_values('EVENT_TIMESTAMP').copy()
 
-    # RYDNING AF FEJLBEHÆFTET MÅLMANDS-DATA VED FØRSTE HÆNDELSE:
-    # Hvis den første hændelse er et hjørnespark (eller en ugyldig målmandshændelse på hjørneflaget),
-    # omdøbes den fuldstændigt til en gyldig aflevering/pasning udført af Oliver Bjerrum Jensen.
+    # KUN RETTELSE AF FØRSTE HÆNDELSE (UDEN AT OPRETTE EN NY RÆKKE):
+    # Vi retter blot den første rækkes spiller til Oliver Bjerrum Jensen og aktionen til "Aflevering" (eller lad get_action_label køre, men tving spiller og aktion).
     if not tge.empty:
         first_idx = tge.index[0]
         tge.loc[first_idx, 'EVENT_CONTESTANT_OPTAUUID'] = valgt_uuid
         tge.loc[first_idx, 'PLAYER_NAME'] = 'Oliver Bjerrum Jensen'
         tge.loc[first_idx, 'AKTION'] = 'Aflevering'
-        # Sæt koordinaterne præcist til hjørneflaget (fx X=100, Y=100 eller typisk hjørne-koordinat for Opta)
-        tge.loc[first_idx, 'RAW_X'] = 99.0
-        tge.loc[first_idx, 'RAW_Y'] = 99.0
 
     tge['sekvens_nr'] = range(1, len(tge) + 1)
     
