@@ -22,7 +22,7 @@ from utils.helpers import get_logo_img, get_team_color, get_ordinal, draw_player
 from data.sql.liga_spillere import hent_match_og_haendelsesdata
 
 try:
-    import player_mapping
+from data.players.player_mapping import
     # Hent de nødvendige globale variabler og objekter direkte
     valgt_player_uuid = st.session_state.get('valgt_player_uuid', getattr(player_mapping, 'valgt_player_uuid', None))
     valgt_spiller = st.session_state.get('valgt_spiller', getattr(player_mapping, 'valgt_spiller', None))
