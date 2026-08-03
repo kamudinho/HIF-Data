@@ -78,7 +78,7 @@ def vis_side(dp=None):
                 team_map[team_name] = info["opta_uuid"]
 
     if not team_map:
-        team_map = {name: info["opta_uuid"] for name, info in TEAMS.items() info.get("opta_uuid")}
+        team_map = {name: info["opta_uuid"] for name, info in TEAMS.items() if info.get("opta_uuid")}
 
     sorted_teams = sorted(list(team_map.keys()))
     default_index = sorted_teams.index("Hvidovre") if "Hvidovre" in sorted_teams else 0
