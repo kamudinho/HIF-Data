@@ -6,7 +6,7 @@ from mplsoccer import Pitch
 from data.data_load import _get_snowflake_conn
 from data.utils.team_mapping import TEAMS, SEASON_LEAGUE_MAPPER, SEASONS, COMPETITIONS, COMPETITION_NAME
 from data.utils.mapping import OPTA_EVENT_TYPES, OPTA_QUALIFIERS, get_action_label, har_qualifier
-from data.players.player_mapping import player_mapping  # Bruger den globale PlayerMapping instans/klasse
+from data.players.player_mapping import player_mapping  
 from utils.helpers import get_logo_img
 
 # Snowflake database sti
@@ -93,9 +93,9 @@ def vis_side(dp=None):
     valgt_uuid = team_map[valgt_hold_navn]
     hold_logo = get_logo_img(valgt_uuid)
 
-    st.caption("Gennemgang af holdets målsekvenser (inkl. udvidet tidsvindue ved standardsituationer/hjørnespark).")
+    st.caption("Gennemgang af holdets målsekvenser (udelukkende holdets egne offensive aktioner fra hjørnespark til mål).")
 
-    # --- SQL HENTNING AF MÅLSEKVENSER MED UDVIDET VINDUE VED HJØRNESPARK ---
+    # --- SQL HENTNING AF MÅLSEKVENSER (KUN VALGTE HOLDS AKTIONER VED HJØRNESPARK) ---
     sql_seq = f"""
         WITH SeasonMatches AS (
             SELECT MATCH_OPTAUUID, CONTESTANTHOME_NAME, CONTESTANTAWAY_NAME, 
@@ -129,7 +129,8 @@ def vis_side(dp=None):
                 ON e.MATCH_OPTAUUID = tg.MATCH_OPTAUUID
             JOIN SeasonMatches m 
                 ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
-            WHERE e.EVENT_TIMESTAMP <= tg.G_TIME
+            WHERE e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}'
+              AND e.EVENT_TIMESTAMP <= tg.G_TIME
               AND e.EVENT_TIMESTAMP >= DATEADD('millisecond', -60000, tg.G_TIME)
         ),
         CornerCheck AS (
@@ -334,16 +335,11 @@ def vis_side(dp=None):
                 r_y = row['RAW_Y']
                 nr_str = str(row['sekvens_nr'])
                 er_maal = (str(row['EVENT_TYPEID']) == '16')
-                er_modstander = (str(row['EVENT_CONTESTANT_OPTAUUID']) != str(valgt_uuid))
 
                 if er_maal:
                     prik_farve = '#df003b'
                     prik_str = 70
                     tekst_farve = '#333333'
-                elif er_modstander:
-                    prik_farve = '#999999'  # Grå cirkel til modstander
-                    prik_str = 45
-                    tekst_farve = '#777777'
                 else:
                     prik_farve = 'black'
                     prik_str = 45
