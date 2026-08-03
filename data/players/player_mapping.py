@@ -46,9 +46,34 @@ class PlayerMapping:
     def get_wy_id(self, player_optauuid):
         return self.optauuid_to_wy.get(str(player_optauuid))
 
-    def get_name_by_opta_uuid(self, player_optauuid):
-        """Henter det korrekte navn ud fra Opta UUID"""
-        return self.optauuid_to_name.get(str(player_optauuid))
+    def get_name_by_opta_uuid(self, player_optauuid, conn=None, db_name="KLUB_HVIDOVREIF.AXIS"):
+        """
+        Henter det korrekte navn ud fra Opta UUID. 
+        Hvis det ikke findes i den statiske liste, kan den slå op i databasen via 'conn'.
+        """
+        if not player_optauuid or str(player_optauuid) == "None":
+            return "Ukendt"
+            
+        uuid_str = str(player_optauuid).strip()
+        
+        # 1. Tjek den eksisterende cache/liste først
+        if uuid_str in self.optauuid_to_name:
+            return self.optauuid_to_name[uuid_str]
+            
+        # 2. Hvis ikke den findes, og der er givet en database-forbindelse med, slå op live
+        if conn is not None:
+            try:
+                sql = f"SELECT PLAYER_NAME FROM {db_name}.OPTA_PLAYERMAPPING WHERE PLAYER_OPTAUUID = '{uuid_str}' LIMIT 1"
+                res = conn.query(sql)
+                if res is not None and not res.empty:
+                    navn = str(res.iloc[0]['PLAYER_NAME']).strip()
+                    # Gem den i cachen, så vi ikke slår op flere gange for samme spiller i samme session
+                    self.optauuid_to_name[uuid_str] = navn
+                    return navn
+            except Exception:
+                pass
+                
+        return "Ukendt"
 
     def get_player_by_name(self, navn):
         return self.players_by_name.get(str(navn).lower(), [])
