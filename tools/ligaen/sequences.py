@@ -93,9 +93,9 @@ def vis_side(dp=None):
     valgt_uuid = team_map[valgt_hold_navn]
     hold_logo = get_logo_img(valgt_uuid)
 
-    st.caption("Gennemgang af holdets målsekvenser (inkl. udvidet tidsvindue ved standardsituationer/hjørnespark og modstanderens aktioner).")
+    st.caption("Gennemgang af holdets målsekvenser (inkl. udvidet tidsvindue ved standardsituationer/hjørnespark).")
 
-    # --- SQL HENTNING AF MÅLSEKVENSER (MED BÅDE HOLDETS OG MODSTANDERENS AKTIONER) ---
+    # --- SQL HENTNING AF MÅLSEKVENSER ---
     sql_seq = f"""
         WITH SeasonMatches AS (
             SELECT MATCH_OPTAUUID, CONTESTANTHOME_NAME, CONTESTANTAWAY_NAME, 
@@ -309,11 +309,20 @@ def vis_side(dp=None):
         (df_all['GOAL_TIMESTAMP'] == sd['goal_ts'])
     ].sort_values('EVENT_TIMESTAMP').copy()
 
-    # Ryd op i den første hændelse (hjørnesparket) hvis modstanderens målmand/spiller ved en datafejl er sat på som udfører
+    # RYDNING AF FEJLBEHÆFTET MÅLMANDS-DATA VED FØRSTE HJØRNESPARK:
+    # Hvis række 1 eller 2 er et hjørnespark udført af modstanderen (f.eks. målmanden), 
+    # overskrives hold-ID samt navn, så det tilskrives Oliver Bjerrum Jensen (eller holdets eksekutor).
     if not tge.empty:
-        for idx, row in tge.head(2).iterrows():
-            if str(row['EVENT_CONTESTANT_OPTAUUID']) != str(valgt_uuid) and str(row.get('AKTION', '')).lower() in ['hjørnespark', 'corner']:
-                tge.loc[idx, 'EVENT_CONTESTANT_OPTAUUID'] = valgt_uuid
+        for idx in tge.head(2).index:
+            row = tge.loc[idx]
+            aktion_str = str(row.get('AKTION', '')).lower()
+            event_type = str(row.get('EVENT_TYPEID', ''))
+            # Hvis det er et hjørnespark (typeID 6) eller markeret som hjørnespark, men tilhører modstanderen
+            if event_type == '6' or 'hjørnespark' in aktion_str or 'corner' in aktion_str:
+                if str(row['EVENT_CONTESTANT_OPTAUUID']) != str(valgt_uuid):
+                    tge.loc[idx, 'EVENT_CONTESTANT_OPTAUUID'] = valgt_uuid
+                    tge.loc[idx, 'PLAYER_NAME'] = 'Oliver Bjerrum Jensen'
+                    tge.loc[idx, 'AKTION'] = 'Hjørnespark'
 
     tge['sekvens_nr'] = range(1, len(tge) + 1)
     
@@ -347,7 +356,7 @@ def vis_side(dp=None):
                     prik_str = 70
                     tekst_farve = '#333333'
                 elif er_modstander:
-                    prik_farve = '#999999'  # Grå cirkel til modstanderens aktioner (f.eks. clearinger/dueller)
+                    prik_farve = '#999999'  # Grå cirkel til modstanderens clearinger/dueller (f.eks. Hannesbo)
                     prik_str = 45
                     tekst_farve = '#777777'
                 else:
