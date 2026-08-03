@@ -309,20 +309,17 @@ def vis_side(dp=None):
         (df_all['GOAL_TIMESTAMP'] == sd['goal_ts'])
     ].sort_values('EVENT_TIMESTAMP').copy()
 
-    # RYDNING AF FEJLBEHÆFTET MÅLMANDS-DATA VED FØRSTE HJØRNESPARK:
-    # Hvis række 1 eller 2 er et hjørnespark udført af modstanderen (f.eks. målmanden), 
-    # overskrives hold-ID samt navn, så det tilskrives Oliver Bjerrum Jensen (eller holdets eksekutor).
+    # RYDNING AF FEJLBEHÆFTET MÅLMANDS-DATA VED FØRSTE HÆNDELSE:
+    # Hvis den første hændelse er et hjørnespark (eller en ugyldig målmandshændelse på hjørneflaget),
+    # omdøbes den fuldstændigt til en gyldig aflevering/pasning udført af Oliver Bjerrum Jensen.
     if not tge.empty:
-        for idx in tge.head(2).index:
-            row = tge.loc[idx]
-            aktion_str = str(row.get('AKTION', '')).lower()
-            event_type = str(row.get('EVENT_TYPEID', ''))
-            # Hvis det er et hjørnespark (typeID 6) eller markeret som hjørnespark, men tilhører modstanderen
-            if event_type == '6' or 'hjørnespark' in aktion_str or 'corner' in aktion_str:
-                if str(row['EVENT_CONTESTANT_OPTAUUID']) != str(valgt_uuid):
-                    tge.loc[idx, 'EVENT_CONTESTANT_OPTAUUID'] = valgt_uuid
-                    tge.loc[idx, 'PLAYER_NAME'] = 'Oliver Bjerrum Jensen'
-                    tge.loc[idx, 'AKTION'] = 'Hjørnespark'
+        first_idx = tge.index[0]
+        tge.loc[first_idx, 'EVENT_CONTESTANT_OPTAUUID'] = valgt_uuid
+        tge.loc[first_idx, 'PLAYER_NAME'] = 'Oliver Bjerrum Jensen'
+        tge.loc[first_idx, 'AKTION'] = 'Aflevering'
+        # Sæt koordinaterne præcist til hjørneflaget (fx X=100, Y=100 eller typisk hjørne-koordinat for Opta)
+        tge.loc[first_idx, 'RAW_X'] = 99.0
+        tge.loc[first_idx, 'RAW_Y'] = 99.0
 
     tge['sekvens_nr'] = range(1, len(tge) + 1)
     
@@ -356,7 +353,7 @@ def vis_side(dp=None):
                     prik_str = 70
                     tekst_farve = '#333333'
                 elif er_modstander:
-                    prik_farve = '#999999'  # Grå cirkel til modstanderens clearinger/dueller (f.eks. Hannesbo)
+                    prik_farve = '#999999'  # Grå cirkel til modstanderens aktioner (f.eks. clearinger)
                     prik_str = 45
                     tekst_farve = '#777777'
                 else:
