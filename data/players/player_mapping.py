@@ -300,7 +300,6 @@ PLAYER_MAPPING = [
     {"klub": "Vendsyssel FF", "navn": "Emil Grønn Pedersen", "position": "Attacker", "player_wyid": 1114180, "player_optauuid": "d25swlwty2q67c514p61ci7f8"},
     {"klub": "Vendsyssel FF", "navn": "Lasse William Schulz", "position": "Goalkeeper", "player_wyid": 6868916, "player_optauuid": "4vlnkuqfh7rnymg8qku8amwa"},
 ]
-}
 # Format pr. spiller på linjen: (NAVN, POSITION, PLAYER_WYID, PLAYER_OPTAUUID)
 OVERWRITE_PLAYERS = {
     "AB": [
