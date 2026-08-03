@@ -21,6 +21,22 @@ from utils.helpers import get_logo_img, get_team_color, get_ordinal, draw_player
 # --- IMPORT AF SPILLERE OG SQL ---
 from data.sql.liga_spillere import hent_match_og_haendelsesdata
 
+try:
+    import player_mapping
+    # Hent de nødvendige globale variabler og objekter direkte
+    valgt_player_uuid = st.session_state.get('valgt_player_uuid', getattr(player_mapping, 'valgt_player_uuid', None))
+    valgt_spiller = st.session_state.get('valgt_spiller', getattr(player_mapping, 'valgt_spiller', None))
+    truppen_stats = getattr(player_mapping, 'truppen_stats', None)
+    df_spiller = getattr(player_mapping, 'df_spiller', None)
+    hold_logo = getattr(player_mapping, 'hold_logo', None)
+    primær_farve = getattr(player_mapping, 'primær_farve', "#df003b")
+    valgt_hold = getattr(player_mapping, 'valgt_hold', "Hvidovre")
+    conn = getattr(player_mapping, 'conn', None)
+    SEASONNAME = getattr(player_mapping, 'SEASONNAME', "2026/2027")
+except ImportError:
+    st.error("Kunne ikke finde eller indlæse 'player_mapping.py'. Sørg for filen ligger i mappen.")
+    st.stop()
+
 # --- KONFIGURATION (HVIDOVRE-APP / 2026/2027) ---
 DB = "KLUB_HVIDOVREIF.AXIS"
 SEASONNAME = "2026/2027"
