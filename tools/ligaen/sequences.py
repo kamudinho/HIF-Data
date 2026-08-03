@@ -30,7 +30,7 @@ def vis_side(dp=None):
         st.warning("Kunne ikke oprette forbindelse til databasen.")
         st.stop()
 
-    # --- SÆSON- OG HOLDVÆLGER I TOPPEN (fra modstanderanalyse.py) ---
+    # --- SÆSON- OG HOLDVÆLGER I TOPPEN ---
     available_seasons = sorted(list(SEASONS.keys()), reverse=True)
     
     col_spacer_top, col_saeson, col_hold = st.columns([2.5, 1, 1])
@@ -183,7 +183,6 @@ def vis_side(dp=None):
     df_all['AKTION'] = df_all.apply(get_action_label, axis=1)
     df_all['DETALJER'] = df_all['QUALIFIER_LIST'].apply(oversæt_qualifiers)
 
-    # Udled målets præcise stilling på tidspunktet vha. alle mål i kampene
     match_uuids = tuple(df_all['MATCH_OPTAUUID'].unique())
     match_uuid_str = f"('{match_uuids[0]}')" if len(match_uuids) == 1 else str(match_uuids)
 
@@ -224,7 +223,6 @@ def vis_side(dp=None):
 
         kamp_res = f"{int(r['TOTAL_HOME_SCORE'])}-{int(r['TOTAL_AWAY_SCORE'])}"
 
-        # Beregn målets specifikke stilling i det øjeblik målet falder
         h_maal = 0
         a_maal = 0
         if not alle_maal_df.empty:
@@ -277,21 +275,9 @@ def vis_side(dp=None):
 
     tge['sekvens_nr'] = range(1, len(tge) + 1)
     
-    maal_row = tge[tge['EVENT_TYPEID'].astype(str) == '16']
-    målscorer = maal_row['PLAYER_NAME'].iloc[0] if not maal_row.empty else "Ukendt"
-
     col_banen, col_tabel = st.columns([2.5, 1])
 
     with col_banen:
-        st.markdown(
-            f"<div style='display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; color: #555; background-color: #fcfcfc; padding: 6px 10px; border-radius: 4px; border: 1px solid #eaeaea; margin-bottom: 5px;'>"
-            f"<span><b>Målscorer:</b> {målscorer}</span>"
-            f"<span><b>Slutresultat:</b> {sd['score_str']}</span>"
-            f"<span><b>Dato:</b> {sd['date']}</span>"
-            f"</div>",
-            unsafe_allow_html=True
-        )
-
         pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#7f7f7f', line_zorder=2, linewidth=1.0)
         fig, ax = pitch.draw(figsize=(9, 4.5))
 
@@ -331,8 +317,6 @@ def vis_side(dp=None):
                     )
 
         opp_logo = get_logo_img(sd['opp_uuid'])
-
-        # Fælles Y-koordinat for absolut vandret alignment (2 rækker: top logoer/vs/logoer, bund tekst)
         y_top = 5.2
         y_bot = 2.0
 
@@ -344,7 +328,7 @@ def vis_side(dp=None):
         if opp_logo:
             pitch.inset_image(x=5.2, y=y_top, image=opp_logo, height=4.0, ax=ax, zorder=6)
 
-        tekst_bund = f"{sd['date']} | Stilling: {sd['stilling_hjemme_ude']} ({sd['min']}. min)"
+        tekst_bund = f"{sd['date']} | Stilling: {sd['stilling_hjemme_ude']} ({sd['min']}. min) | Slutresultat: {sd['score_str']}"
         ax.text(2.2, y_bot, tekst_bund, fontsize=8, color='#555555', ha='left', va='center', zorder=6)
 
         st.pyplot(fig, use_container_width=True)
