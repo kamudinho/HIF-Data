@@ -93,9 +93,9 @@ def vis_side(dp=None):
     valgt_uuid = team_map[valgt_hold_navn]
     hold_logo = get_logo_img(valgt_uuid)
 
-    st.caption("Gennemgang af holdets målsekvenser (udelukkende holdets egne offensive aktioner fra hjørnespark til mål).")
+    st.caption("Gennemgang af holdets målsekvenser (inkl. modstanderens dueller/clearinger i kampsekvensen).")
 
-    # --- SQL HENTNING AF MÅLSEKVENSER (KUN VALGTE HOLDS AKTIONER VED HJØRNESPARK) ---
+    # --- SQL HENTNING AF MÅLSEKVENSER (MED BÅDE HVIDOVRE OG MODSTANDERENS KAMP-AKTIONER) ---
     sql_seq = f"""
         WITH SeasonMatches AS (
             SELECT MATCH_OPTAUUID, CONTESTANTHOME_NAME, CONTESTANTAWAY_NAME, 
@@ -129,8 +129,7 @@ def vis_side(dp=None):
                 ON e.MATCH_OPTAUUID = tg.MATCH_OPTAUUID
             JOIN SeasonMatches m 
                 ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
-            WHERE e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}'
-              AND e.EVENT_TIMESTAMP <= tg.G_TIME
+            WHERE e.EVENT_TIMESTAMP <= tg.G_TIME
               AND e.EVENT_TIMESTAMP >= DATEADD('millisecond', -60000, tg.G_TIME)
         ),
         CornerCheck AS (
@@ -310,6 +309,13 @@ def vis_side(dp=None):
         (df_all['GOAL_TIMESTAMP'] == sd['goal_ts'])
     ].sort_values('EVENT_TIMESTAMP').copy()
 
+    # Fjern eventuelle fejlagtige målmands-registreringer ved det første hjørnespark (hvis modstanderens målmand fejlagtigt er sat på)
+    if not tge.empty:
+        for idx, row in tge.head(2).iterrows():
+            if str(row['EVENT_CONTESTANT_OPTAUUID']) != str(valgt_uuid) and str(row.get('AKTION', '')).lower() in ['hjørnespark', 'corner']:
+                # Ret konsekvent hold-id eller ryd aktionen hvis den fejlagtigt tilhører modstanderens målmand i starten
+                tge.loc[idx, 'EVENT_CONTESTANT_OPTAUUID'] = valgt_uuid
+
     tge['sekvens_nr'] = range(1, len(tge) + 1)
     
     col_banen, col_tabel = st.columns([2.5, 1])
@@ -335,11 +341,16 @@ def vis_side(dp=None):
                 r_y = row['RAW_Y']
                 nr_str = str(row['sekvens_nr'])
                 er_maal = (str(row['EVENT_TYPEID']) == '16')
+                er_modstander = (str(row['EVENT_CONTESTANT_OPTAUUID']) != str(valgt_uuid))
 
                 if er_maal:
                     prik_farve = '#df003b'
                     prik_str = 70
                     tekst_farve = '#333333'
+                elif er_modstander:
+                    prik_farve = '#999999'  # Grå cirkel til modstanderens clearinger/dueller
+                    prik_str = 45
+                    tekst_farve = '#777777'
                 else:
                     prik_farve = 'black'
                     prik_str = 45
