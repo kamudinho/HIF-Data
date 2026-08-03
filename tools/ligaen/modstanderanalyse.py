@@ -24,6 +24,13 @@ from data.utils.mapping import (
     get_action_label
 )
 
+# --- SPILLER MAPPING IMPORT ---
+from data.players.player_mapping import player_mapping, PLAYER_MAPPING
+
+# Sørg for at den statiske liste er indlæst i klassen
+if not player_mapping.optauuid_to_name:
+    player_mapping._load_data(PLAYER_MAPPING)
+
 # Snowflake database sti
 DB = "KLUB_HVIDOVREIF.AXIS"
 
@@ -183,11 +190,12 @@ def vis_side(dp=None):
             sql_all_h = f"""
                 SELECT 
                     e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, 
+                    e.PLAYER_OPTAUUID,
                     TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME) as PLAYER_NAME, 
                     e.MATCH_OPTAUUID, e.EVENT_TIMESTAMP, e.EVENT_OUTCOME as OUTCOME,
                     LISTAGG(q.QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY q.QUALIFIER_QID) as QUALIFIERS
                 FROM {DB}.OPTA_EVENTS e
-                JOIN (
+                LEFT JOIN (
                     SELECT DISTINCT PLAYER_OPTAUUID, FIRST_NAME, LAST_NAME 
                     FROM {DB}.OPTA_MATCH_LINEUPS 
                     WHERE FIRST_NAME IS NOT NULL
@@ -195,11 +203,24 @@ def vis_side(dp=None):
                 LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
                 WHERE e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' 
                 AND e.MATCH_OPTAUUID IN {m_ids_str}
-                GROUP BY 1, 2, 3, 4, 5, 6, 7
+                GROUP BY 1, 2, 3, 4, 5, 6, 7, 8
             """
             df_all_h = conn.query(sql_all_h)
             
             if df_all_h is not None and not df_all_h.empty:
+                # --- MAPPER SPILLERNAVN KORREKT VIA PLAYER_MAPPING ---
+                def map_spiller_navn(row):
+                    p_uuid = row.get('PLAYER_OPTAUUID')
+                    if pd.notna(p_uuid) and str(p_uuid).strip() not in ["", "None", "nan"]:
+                        mapped_name = player_mapping.get_name_by_opta_uuid(p_uuid, conn=conn, db_name=DB)
+                        if mapped_name and str(mapped_name).strip() not in ["", "Ukendt", "None", "nan"]:
+                            return str(mapped_name).strip()
+                    db_name = row.get('PLAYER_NAME')
+                    if pd.notna(db_name) and str(db_name).strip() not in ["", "None", "nan"]:
+                        return str(db_name).strip()
+                    return 'Ukendt'
+
+                df_all_h['PLAYER_NAME'] = df_all_h.apply(map_spiller_navn, axis=1)
                 df_all_h['qual_list'] = df_all_h['QUALIFIERS'].fillna('').str.split(',')
                 df_all_h['Action_Label'] = df_all_h.apply(get_action_label, axis=1)
                 df_all_h = df_all_h.dropna(subset=['Action_Label'])
@@ -219,6 +240,7 @@ def vis_side(dp=None):
                 AND MATCH_OPTAUUID IN (SELECT MATCH_OPTAUUID FROM SeasonMatches)
             )
             SELECT e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, 
+                   e.PLAYER_OPTAUUID,
                    TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME) as PLAYER_NAME, 
                    e.EVENT_TIMESTAMP, e.MATCH_OPTAUUID,
                    m.MATCH_LOCALDATE, m.CONTESTANTHOME_NAME, m.CONTESTANTAWAY_NAME, 
@@ -227,7 +249,7 @@ def vis_side(dp=None):
                    tg.G_TIME as GOAL_TIME, tg.G_MIN as GOAL_MIN,
                    LISTAGG(q.QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY q.QUALIFIER_QID) as QUALIFIERS
             FROM {DB}.OPTA_EVENTS e
-            JOIN (
+            LEFT JOIN (
                 SELECT DISTINCT PLAYER_OPTAUUID, FIRST_NAME, LAST_NAME 
                 FROM {DB}.OPTA_MATCH_LINEUPS 
                 WHERE FIRST_NAME IS NOT NULL
@@ -238,12 +260,13 @@ def vis_side(dp=None):
                 AND e.EVENT_TIMESTAMP <= tg.G_TIME
             LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
             WHERE e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}'
-            GROUP BY 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15
+            GROUP BY 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16
             """
             
             try: 
                 df_all_events = conn.query(sql_seq)
                 if df_all_events is not None and not df_all_events.empty:
+                    df_all_events['PLAYER_NAME'] = df_all_events.apply(map_spiller_navn, axis=1)
                     df_all_events['qual_list'] = df_all_events['QUALIFIERS'].fillna('').str.split(',')
             except Exception as e:
                 df_all_events = pd.DataFrame()
@@ -292,10 +315,7 @@ def vis_side(dp=None):
 
             df_res['RES'] = df_res.apply(calc_res, axis=1)
 
-            # Opdel i spillede og kommende
-            # df_played: Sorteret med senest spillede øverst
             df_played = df_res[df_res['IS_PLAYED']].sort_values('MATCH_LOCALDATE_DT', ascending=False)
-            # df_upcoming: Sorteret kronologisk fremad i tid
             df_upcoming = df_res[~df_res['IS_PLAYED']].sort_values('MATCH_LOCALDATE_DT', ascending=True)
             
             target_total = 10
@@ -305,19 +325,14 @@ def vis_side(dp=None):
             remaining_slots = target_total - len(df_played_sel)
             df_upcoming_sel = df_upcoming.head(remaining_slots) if remaining_slots > 0 else pd.DataFrame(columns=df_res.columns)
             
-            # TABELLEN:
-            # 1. Spillede kampe først (med den seneste øverst, og ældre nedefter)
-            # 2. Derefter kommende kampe (kronologisk fremad i tid)
             if not df_upcoming_sel.empty and not df_played_sel.empty:
                 df_res = pd.concat([
                     df_played_sel.sort_values('MATCH_LOCALDATE_DT', ascending=False),
                     df_upcoming_sel.sort_values('MATCH_LOCALDATE_DT', ascending=True)
                 ])
             elif not df_upcoming_sel.empty:
-                # Kun kommende kampe (sæsonstart)
                 df_res = df_upcoming_sel.sort_values('MATCH_LOCALDATE_DT', ascending=True).head(10)
             else:
-                # Kun spillede kampe (afsluttet sæson)
                 df_res = df_played_sel.sort_values('MATCH_LOCALDATE_DT', ascending=False).head(10)
 
             df_vol = df_all_h.groupby('MATCH_OPTAUUID').agg(
@@ -333,7 +348,6 @@ def vis_side(dp=None):
                 F_suc=('EVENT_TYPEID', lambda x: (x == 4).sum())
             ).reset_index()
 
-            # GRAFEN: Bruger udelukkende de spillede kampe sorteret kronologisk til graferne
             df_plot_source = df_played_sel.sort_values('MATCH_LOCALDATE_DT', ascending=True)
             df_plot = df_plot_source.merge(df_vol, on='MATCH_OPTAUUID', how='left').fillna(0)
             
@@ -585,10 +599,9 @@ def vis_side(dp=None):
                     """, unsafe_allow_html=True)
             else:
                 st.info("Ingen data fundet for dette område.")
-                
+            
     with t4:
         if not df_all_events.empty:
-            # Sorterer så seneste kamp/mål kommer først (hvis der er flere mål på samme tidspunkt, sorteres efter tidspunkt faldende)
             gl = df_all_events.drop_duplicates(['MATCH_OPTAUUID', 'GOAL_TIME']).sort_values(
                 ['MATCH_LOCALDATE', 'EVENT_TIMESTAMP'], ascending=[False, False]
             )
@@ -600,22 +613,18 @@ def vis_side(dp=None):
                 dato_str = pd.to_datetime(r['MATCH_LOCALDATE']).strftime('%d/%m')
                 opp_navn = r['CONTESTANTAWAY_NAME'] if r['CONTESTANTHOME_OPTAUUID'] == valgt_uuid else r['CONTESTANTHOME_NAME']
                 
-                # Kampens endelige resultat
                 kamp_res = f"{int(r['TOTAL_HOME_SCORE'])}-{int(r['TOTAL_AWAY_SCORE'])}"
                 
-                # Hent målets specifikke stilling i det øjeblik det blev scoret (hvis feltene findes, ellers fallback til samlet resultat)
                 mål_hjemme = int(r['HOME_SCORE']) if 'HOME_SCORE' in r and pd.notna(r['HOME_SCORE']) else int(r['TOTAL_HOME_SCORE'])
                 mål_ude = int(r['AWAY_SCORE']) if 'AWAY_SCORE' in r and pd.notna(r['AWAY_SCORE']) else int(r['TOTAL_AWAY_SCORE'])
                 mål_stilling = f"{mål_hjemme}-{mål_ude}"
 
-                # Lægger 1 minut til (f.eks. 0 -> 1, 14 -> 15 osv.)
                 raw_min = r['GOAL_MIN']
                 if pd.isna(raw_min):
                     minuttal = 1
                 else:
                     minuttal = int(raw_min) + 1
                 
-                # Ønsket format: "25/7: 1-0 (1. min) vs. Vendssyssel (2-2)"
                 label_tekst = f"{dato_str}: {mål_stilling} ({minuttal}. min) vs. {opp_navn} ({kamp_res})"
 
                 opts[key] = {
@@ -675,10 +684,8 @@ def vis_side(dp=None):
             
     with t5:
         if not df_all_events.empty:
-            # 1. Databehandling
             df_mål_stats = df_all_events.copy()
             
-            # Definitioner
             df_mål_stats['is_cross'] = df_mål_stats['qual_list'].apply(lambda x: '2' in x)
             df_mål_stats['is_shot_assist'] = df_mål_stats['qual_list'].apply(lambda x: '210' in x or '209' in x)
             df_mål_stats['is_shot'] = df_mål_stats['EVENT_TYPEID'].isin([13, 14, 15])
@@ -686,7 +693,6 @@ def vis_side(dp=None):
 
             total_goals_count = df_mål_stats['GOAL_TIME'].nunique()
 
-            # Aggregér
             player_stats = df_mål_stats.groupby('PLAYER_NAME').agg(
                 Involveringer=('GOAL_TIME', 'nunique'),
                 Aktioner=('EVENT_TYPEID', 'count'),
@@ -701,19 +707,16 @@ def vis_side(dp=None):
             player_stats['Involvering_Pct'] = (player_stats['Involveringer'] / total_goals_count * 100).round(1)
             player_stats = player_stats.sort_values('Involveringer', ascending=False)
 
-            # 2. Layout
             col_tabel, col_graf = st.columns([3.5, 1])
 
             with col_tabel:
                 st.write("**Statistik i målsekvenser**")
                 
-                # Omdøb for visning
                 df_display = player_stats.rename(columns={
                     'PLAYER_NAME': 'Spiller',
                     'Skud_Ass': 'Skud Ass.'
                 })[['Spiller', 'Involveringer', 'Aktioner', 'Mål', 'Pasninger', 'Indlæg', 'Skud', 'Skud Ass.', 'Erobringer']]
 
-                # Dataframe med tvungen centrering via NumberColumn
                 st.dataframe(
                     df_display,
                     use_container_width=True,
@@ -732,10 +735,8 @@ def vis_side(dp=None):
                 )
 
             with col_graf:
-                # Viser holdets samlede mål i overskriften
                 st.write(f"**Målinvolveringer (Samlet mål: {total_goals_count})**")
                 
-                # Vi tager de 12 mest involverede spillere
                 for _, r in player_stats.head(12).iterrows():
                     rel_width = r['Involvering_Pct']
                     
