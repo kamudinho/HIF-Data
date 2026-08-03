@@ -309,13 +309,17 @@ def vis_side(dp=None):
         (df_all['GOAL_TIMESTAMP'] == sd['goal_ts'])
     ].sort_values('EVENT_TIMESTAMP').copy()
 
-    # KUN RETTELSE AF FØRSTE HÆNDELSE (UDEN AT OPRETTE EN NY RÆKKE):
-    # Vi retter blot den første rækkes spiller til Oliver Bjerrum Jensen og aktionen til "Aflevering" (eller lad get_action_label køre, men tving spiller og aktion).
+    # KUN KORREKTION VED HJØRNESPARK (KONTROLLÉR OM FØRSTE HÆNDELSE ER ET HJØRNESPARK / TYPE 6):
+    # Hvis sekvensen starter med et hjørnespark (Event type 6), og målmanden (eller en anden forkert spiller) fejlagtigt ersat,
+    # rettes aktøren til Oliver Bjerrum Jensen i netop det specifikke tilfælde.
     if not tge.empty:
-        first_idx = tge.index[0]
-        tge.loc[first_idx, 'EVENT_CONTESTANT_OPTAUUID'] = valgt_uuid
-        tge.loc[first_idx, 'PLAYER_NAME'] = 'Oliver Bjerrum Jensen'
-        tge.loc[first_idx, 'AKTION'] = 'Aflevering'
+        first_row = tge.iloc[0]
+        # Tjek om første hændelse er et hjørnespark (Event type 6)
+        if str(first_row['EVENT_TYPEID']) == '6':
+            first_idx = tge.index[0]
+            tge.loc[first_idx, 'EVENT_CONTESTANT_OPTAUUID'] = valgt_uuid
+            tge.loc[first_idx, 'PLAYER_NAME'] = 'Oliver Bjerrum Jensen'
+            tge.loc[first_idx, 'AKTION'] = 'Hjørnespark'
 
     tge['sekvens_nr'] = range(1, len(tge) + 1)
     
