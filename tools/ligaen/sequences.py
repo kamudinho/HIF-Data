@@ -93,7 +93,7 @@ def vis_side(dp=None):
     valgt_uuid = team_map[valgt_hold_navn]
     hold_logo = get_logo_img(valgt_uuid)
 
-    st.caption("Gennemgang af holdets målsekvenser (inkl. udvidet tidsvindue ved standardsituationer/hjørnespark).")
+    st.caption("Gennemgang af holdets målsekvenser (inkl. præcis afklipning ved hjørnespark).")
 
     # --- SQL HENTNING AF MÅLSEKVENSER ---
     sql_seq = f"""
@@ -130,19 +130,19 @@ def vis_side(dp=None):
             JOIN SeasonMatches m 
                 ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
             WHERE e.EVENT_TIMESTAMP <= tg.G_TIME
-              AND e.EVENT_TIMESTAMP >= DATEADD('millisecond', -60000, tg.G_TIME)
+              AND e.EVENT_TIMESTAMP >= DATEADD('millisecond', -45000, tg.G_TIME)
         ),
         CornerCheck AS (
             SELECT MATCH_OPTAUUID, GOAL_TIMESTAMP, MIN(EVENT_TIMESTAMP) AS MIN_CORNER_TIME
             FROM BaseMatchEvents
             WHERE EVENT_TYPEID = 6
-              AND EVENT_TIMESTAMP >= DATEADD('millisecond', -45000, GOAL_TIMESTAMP)
+              AND EVENT_TIMESTAMP >= DATEADD('millisecond', -40000, GOAL_TIMESTAMP)
             GROUP BY MATCH_OPTAUUID, GOAL_TIMESTAMP
         ),
         DynamicWindowEvents AS (
             SELECT 
                 b.*,
-                COALESCE(c.MIN_CORNER_TIME, DATEADD('millisecond', -20000, b.GOAL_TIMESTAMP)) AS EFFECTIVE_START_TIME
+                COALESCE(c.MIN_CORNER_TIME, DATEADD('millisecond', -15000, b.GOAL_TIMESTAMP)) AS EFFECTIVE_START_TIME
             FROM BaseMatchEvents b
             LEFT JOIN CornerCheck c 
                 ON b.MATCH_OPTAUUID = c.MATCH_OPTAUUID AND b.GOAL_TIMESTAMP = c.GOAL_TIMESTAMP
@@ -309,16 +309,12 @@ def vis_side(dp=None):
         (df_all['GOAL_TIMESTAMP'] == sd['goal_ts'])
     ].sort_values('EVENT_TIMESTAMP').copy()
 
-    # KUN KORREKTION VED HJØRNESPARK (KONTROLLÉR OM FØRSTE HÆNDELSE ER ET HJØRNESPARK / TYPE 6):
-    # Hvis sekvensen starter med et hjørnespark (Event type 6), og målmanden (eller en anden forkert spiller) fejlagtigt ersat,
-    # rettes aktøren til Oliver Bjerrum Jensen i netop det specifikke tilfælde.
+    # HVIS FØRSTE HÆNDELSE ER ET HJØRNESPARK (EVENT TYPE 6), SÅ OMDØBES DEN TIL "HJØRNESPARK"
+    # OG ALT FØR DETTE PUNKT ER ALLEREDE SKÅRET FRA VIA SQL VINDUET.
     if not tge.empty:
         first_row = tge.iloc[0]
-        # Tjek om første hændelse er et hjørnespark (Event type 6)
         if str(first_row['EVENT_TYPEID']) == '6':
             first_idx = tge.index[0]
-            tge.loc[first_idx, 'EVENT_CONTESTANT_OPTAUUID'] = valgt_uuid
-            tge.loc[first_idx, 'PLAYER_NAME'] = 'Oliver Bjerrum Jensen'
             tge.loc[first_idx, 'AKTION'] = 'Hjørnespark'
 
     tge['sekvens_nr'] = range(1, len(tge) + 1)
@@ -353,7 +349,7 @@ def vis_side(dp=None):
                     prik_str = 70
                     tekst_farve = '#333333'
                 elif er_modstander:
-                    prik_farve = '#999999'  # Grå cirkel til modstanderens aktioner (f.eks. clearinger)
+                    prik_farve = '#999999'  # Grå cirkel til modstanderens aktioner
                     prik_str = 45
                     tekst_farve = '#777777'
                 else:
