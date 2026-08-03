@@ -236,7 +236,7 @@ PLAYER_MAPPING = [
     {"klub": "Hvidovre IF", "navn": "Emmanuel Aby", "position": "Attacker", "player_wyid": 7486249, "player_optauuid": "07vtkod58b7986k7u1619gr8"},
     {"klub": "Hvidovre IF", "navn": "Daniel Stenderup", "position": "Defender", "player_wyid": 56017, "player_optauuid": "a30gduuv9d1s4pkthgu2jhyol"},
     {"klub": "Hvidovre IF", "navn": "Malte Kiilerich", "position": "Defender", "player_wyid": 3702696, "player_optauuid": "30daj1ef34rczbhng0eoncvd"},
-    {"klub": "Hvidovre IF", "navn": "Donavan Bagou", "position": "Attacker", "player_wyid": 6070331, "player_optauuid": "hlx5mvl8th7y82gocnuxacd0"},
+    {"klub": "Hvidovre IF", "navn": "Donavan Bagou", "position": "Attacker", "player_wyid": 6070331, "player_optauuid": "1hlx5mvl8th7y82gocnuxacd0"},
     {"klub": "Hvidovre IF", "navn": "Frederik Rask Høgh Jensen", "position": "Attacker", "player_wyid": 9, "player_optauuid": "tt9eo9bsff7dp7aqjal1obo4"},
 
     # Kolding IF
