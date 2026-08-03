@@ -114,6 +114,7 @@ COMP_MAP = {
 # Samlet oversigt over spillere fordelt på klubber i NordicBet Ligaen
 PLAYER_MAPPING = [
     # Aalborg BK
+    {"klub": "AaB", "navn": "Markus André Kaasa", "position": "Midfielder", "player_optauuid": "e0j0uakuzduvis9wqsocngwrt", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
     {"klub": "AaB", "navn": "Valdemar Møller Damgaard", "position": "Midfielder", "player_optauuid": "5521epytthhw9afm2r3jn3384", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
     {"klub": "AaB", "navn": "Jubril Chukwu-Emeka Adedeji", "position": "Attacker", "player_optauuid": "4sgxth7onhb5mu29bgyupby3u", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
     {"klub": "AaB", "navn": "Marcus Bondee", "position": "Midfielder", "player_optauuid": "7wytawxwiszq1aass5ujio7o", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
