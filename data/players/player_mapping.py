@@ -281,6 +281,7 @@ PLAYER_MAPPING = [
     {"klub": "Vejle Boldklub", "navn": "Bismark Edjeodji", "position": "Midfielder", "player_wyid": 9271754, "player_optauuid": "nzauesd85d6utkwdc1s1a1as"},
     
     # Vendsyssel FF
+    PLAYER_MAPPING = [
     {"klub": "Vendsyssel FF", "navn": "Adam Vendelbo Clement", "position": "Attacker", "player_optauuid": "6miatayfy07pf4og7qc7c7pqs", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
     {"klub": "Vendsyssel FF", "navn": "Andreas Rise Kristiansen", "position": "Midfielder", "player_optauuid": "9vbxe5gvruap8h546efz3nx1w", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
     {"klub": "Vendsyssel FF", "navn": "Ari Olsen", "position": "Defender", "player_optauuid": "6282fmbmx8lzirvh1ljkf33rp", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
@@ -297,6 +298,6 @@ PLAYER_MAPPING = [
     {"klub": "Vendsyssel FF", "navn": "Sebastian Lodberg Oppenhagen", "position": "Attacker", "player_optauuid": "b2e6na1kcw3l5tu7n32w1awwk", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
     {"klub": "Vendsyssel FF", "navn": "Stephen Fumen Michael", "position": "Midfielder", "player_optauuid": "5jhfvec5tqv3sjtzejmu4b47o", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
     {"klub": "Vendsyssel FF", "navn": "Steven Jamal Simpson", "position": "Attacker", "player_optauuid": "7t811fc39zstqmkqyb56flogk", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"}
-
+]
 player_mapping = PlayerMapping(PLAYER_MAPPING)
 
