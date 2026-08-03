@@ -93,9 +93,9 @@ def vis_side(dp=None):
     valgt_uuid = team_map[valgt_hold_navn]
     hold_logo = get_logo_img(valgt_uuid)
 
-    st.caption("Gennemgang af holdets målsekvenser (inkl. præcis afklipning ved standardsituationer som hjørnespark og frispark).")
+    st.caption("Gennemgang af holdets målsekvenser (startende efter clearing eller interception).")
 
-    # --- SQL HENTNING AF MÅLSEKVENSER ---
+    # --- SQL HENTNING AF MÅLSEKVENSER (KUN EFTER CLEARING (12) ELLER INTERCEPTION (7)) ---
     sql_seq = f"""
         WITH SeasonMatches AS (
             SELECT MATCH_OPTAUUID, CONTESTANTHOME_NAME, CONTESTANTAWAY_NAME, 
@@ -132,20 +132,20 @@ def vis_side(dp=None):
             WHERE e.EVENT_TIMESTAMP <= tg.G_TIME
               AND e.EVENT_TIMESTAMP >= DATEADD('millisecond', -45000, tg.G_TIME)
         ),
-        SetPieceCheck AS (
-            SELECT MATCH_OPTAUUID, GOAL_TIMESTAMP, MIN(EVENT_TIMESTAMP) AS MIN_SETPIECE_TIME
+        RecoveryCheck AS (
+            SELECT MATCH_OPTAUUID, GOAL_TIMESTAMP, MIN(EVENT_TIMESTAMP) AS MIN_RECOVERY_TIME
             FROM BaseMatchEvents
-            WHERE EVENT_TYPEID IN (5, 6)  -- 5 = Frispark, 6 = Hjørnespark
+            WHERE EVENT_TYPEID IN (7, 12)  -- 7 = Interception, 12 = Clearance
               AND EVENT_TIMESTAMP >= DATEADD('millisecond', -40000, GOAL_TIMESTAMP)
             GROUP BY MATCH_OPTAUUID, GOAL_TIMESTAMP
         ),
         DynamicWindowEvents AS (
             SELECT 
                 b.*,
-                COALESCE(s.MIN_SETPIECE_TIME, DATEADD('millisecond', -15000, b.GOAL_TIMESTAMP)) AS EFFECTIVE_START_TIME
+                COALESCE(r.MIN_RECOVERY_TIME, DATEADD('millisecond', -15000, b.GOAL_TIMESTAMP)) AS EFFECTIVE_START_TIME
             FROM BaseMatchEvents b
-            LEFT JOIN SetPieceCheck s 
-                ON b.MATCH_OPTAUUID = s.MATCH_OPTAUUID AND b.GOAL_TIMESTAMP = s.GOAL_TIMESTAMP
+            LEFT JOIN RecoveryCheck r 
+                ON b.MATCH_OPTAUUID = r.MATCH_OPTAUUID AND b.GOAL_TIMESTAMP = r.GOAL_TIMESTAMP
         ),
         FilteredTimeEvents AS (
             SELECT *
@@ -233,7 +233,7 @@ def vis_side(dp=None):
             st.stop()
 
     if df_all is None or df_all.empty:
-        st.warning(f"Ingen målsekvenser fundet for {valgt_hold_navn} i sæson {valgt_saeson}.")
+        st.warning(f"Ingen målsekvenser fundet for {valgt_hold_navn} i sæson {valgt_saeson} baseret på clearing/interception.")
         return
 
     df_all.columns = [c.upper() for c in df_all.columns]
@@ -309,15 +309,15 @@ def vis_side(dp=None):
         (df_all['GOAL_TIMESTAMP'] == sd['goal_ts'])
     ].sort_values('EVENT_TIMESTAMP').copy()
 
-    # DYNAMISK NAVNGIVNING AF FØRSTE HÆNDELSE VED STANDARDSITUATIONS-OPSTART:
+    # NAVNGIVNING AF FØRSTE HÆNDELSE HVIS DET ER CLEARING (12) ELLER INTERCEPTION (7):
     if not tge.empty:
         first_row = tge.iloc[0]
         ev_type = str(first_row['EVENT_TYPEID'])
         first_idx = tge.index[0]
-        if ev_type == '6':
-            tge.loc[first_idx, 'AKTION'] = 'Hjørnespark'
-        elif ev_type == '5':
-            tge.loc[first_idx, 'AKTION'] = 'Frispark'
+        if ev_type == '12':
+            tge.loc[first_idx, 'AKTION'] = 'Klarering'
+        elif ev_type == '7':
+            tge.loc[first_idx, 'AKTION'] = 'Interception'
 
     tge['sekvens_nr'] = range(1, len(tge) + 1)
     
@@ -351,7 +351,7 @@ def vis_side(dp=None):
                     prik_str = 70
                     tekst_farve = '#333333'
                 elif er_modstander:
-                    prik_farve = '#999999'  # Grå cirkel til modstanderens aktioner
+                    prik_farve = '#999999'
                     prik_str = 45
                     tekst_farve = '#777777'
                 else:
