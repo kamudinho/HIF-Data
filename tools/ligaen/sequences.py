@@ -148,7 +148,7 @@ def vis_side(dp=None):
             GROUP BY EVENT_OPTAUUID
         ),
         PlayerNames AS (
-            SELECT DISTINCT PLAYER_OPTAUUID, TRIM(FIRST_NAME) || ' ' || TRIM(LAST_NAME) as P_NAME
+            SELECT PLAYER_OPTAUUID, ANY_VALUE(TRIM(FIRST_NAME) || ' ' || TRIM(LAST_NAME)) as P_NAME
             FROM {DB}.OPTA_MATCH_LINEUPS
             WHERE FIRST_NAME IS NOT NULL
             GROUP BY PLAYER_OPTAUUID
