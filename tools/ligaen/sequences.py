@@ -343,9 +343,6 @@ def vis_side(dp=None):
         st.markdown("##### Aktioner i sekvensen")
         
         def get_final_label_t4(row):
-            qual_str = str(row.get('QUALIFIER_LIST', ''))
-            if str(row['EVENT_TYPEID']) == "16" and "9" in qual_str:
-                return "STRAFFESPARK"
             if 'AKTION' in row and pd.notna(row['AKTION']) and row['AKTION'] != "":
                 return row['AKTION']
             label = get_action_label(row)
