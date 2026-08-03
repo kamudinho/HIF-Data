@@ -42,7 +42,7 @@ def vis_side(dp=None):
         st.warning("Kunne ikke oprette forbindelse til databasen.")
         st.stop()
 
-    # --- HENT SPILLERE OG INITIALISER PLAYER MAPPING DINAMISK ---
+    # --- HENT SPILLERE OG INITIALISER PLAYER MAPPING ---
     player_mapping = None
     try:
         sql_players = f"""
@@ -116,7 +116,7 @@ def vis_side(dp=None):
 
     st.caption("Gennemgang af holdets målsekvenser fra bolden vindes, til målet falder.")
 
-    # --- SQL HENTNING AF MÅLSEKVENSER ---
+    # --- SQL HENTNING AF MÅLSEKVENSER (MED ROBUST SPILLER-MAPPUNDERSØGELSE) ---
     sql_seq = f"""
         WITH SeasonMatches AS (
             SELECT MATCH_OPTAUUID, CONTESTANTHOME_NAME, CONTESTANTAWAY_NAME, 
@@ -170,9 +170,9 @@ def vis_side(dp=None):
             GROUP BY EVENT_OPTAUUID
         ),
         PlayerNames AS (
-            SELECT PLAYER_OPTAUUID, ANY_VALUE(TRIM(FIRST_NAME) || ' ' || TRIM(LAST_NAME)) as P_NAME
+            SELECT PLAYER_OPTAUUID, MAX(TRIM(FIRST_NAME) || ' ' || TRIM(LAST_NAME)) as P_NAME
             FROM {DB}.OPTA_MATCH_LINEUPS
-            WHERE FIRST_NAME IS NOT NULL
+            WHERE FIRST_NAME IS NOT NULL AND PLAYER_OPTAUUID IS NOT NULL
             GROUP BY PLAYER_OPTAUUID
         )
         SELECT 
@@ -216,12 +216,19 @@ def vis_side(dp=None):
 
     df_all.columns = [c.upper() for c in df_all.columns]
 
-    # --- OVERSKRIV NAVNE FRA PLAYER_MAPPING ---
+    # --- OVERSKRIV NAVNE FRA PLAYER_MAPPING (HVIS TILGÆNGELIG OG MATCHERR) ---
     if player_mapping:
-        df_all['PLAYER_NAME'] = df_all.apply(
-            lambda row: player_mapping.get_name_by_opta_uuid(row.get('PLAYER_OPTAUUID')) or row.get('PLAYER_NAME'),
-            axis=1
-        )
+        def get_mapped_name(row):
+            uuid = row.get('PLAYER_OPTAUUID')
+            if not uuid or pd.isna(uuid):
+                return row.get('PLAYER_NAME')
+            # Prøv at hente via player_mapping
+            mapped = player_mapping.get_name_by_opta_uuid(uuid)
+            if mapped and mapped != 'Ukendt':
+                return mapped
+            return row.get('PLAYER_NAME')
+
+        df_all['PLAYER_NAME'] = df_all.apply(get_mapped_name, axis=1)
 
     df_all['AKTION'] = df_all.apply(get_action_label, axis=1)
     df_all['DETALJER'] = df_all['QUALIFIER_LIST'].apply(oversæt_qualifiers)
