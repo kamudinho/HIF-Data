@@ -24,7 +24,7 @@ def oversæt_qualifiers(qual_str):
                 tekster.append(OPTA_QUALIFIERS[q_int])
     return ", ".join(tekster)
 
-def draw_match_info_box(ax, scoring_team_logo, opp_team_logo, date_str, score_str, min_str):
+def draw_match_info_box(ax, hold_logo, opp_logo, sd['date'], sd['stilling_hjemme_ude'], sd['min']):
     """Tegner info-boks med logoer pænt ved siden af hinanden i venstre side"""
     if scoring_team_logo:
         ax_l1 = ax.inset_axes([0.02, 0.08, 0.04, 0.04], transform=ax.transAxes)
