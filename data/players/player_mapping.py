@@ -1,60 +1,60 @@
 # data/players/player_mapping.py
 
 class PlayerMapping:
-    def __init__(self, players_by_club=None):
+    def __init__(self, player_list=None):
         self.wy_to_optauuid = {}
         self.optauuid_to_wy = {}
         self.optauuid_to_name = {}
         self.players_by_name = {}
         
-        if players_by_club:
-            self._load_data(players_by_club)
+        if player_list:
+            self._load_data(player_list)
 
-    def _load_data(self, players_by_club):
-        for klub, spillere in players_by_club.items():
-            for navn, position, wy_id, opta_uuid in spillere:
-                navn = str(navn).strip()
-                position = str(position).strip()
-                wy_id = str(wy_id).strip()
-                opta_uuid = str(opta_uuid).strip()
+    def _load_data(self, player_list):
+        for p in player_list:
+            klub = p.get("klub")
+            navn = str(p.get("navn", "")).strip()
+            position = str(p.get("position", "")).strip()
+            wy_id = p.get("player_wyid")
+            opta_uuid = p.get("player_optauuid")
 
-                wy_id_int = int(wy_id) if wy_id.isdigit() and wy_id != "0" else None
-                opta_uuid_val = opta_uuid if opta_uuid and opta_uuid != "None" else None
+            wy_id_int = int(wy_id) if str(wy_id).isdigit() and str(wy_id) != "0" else None
+            opta_uuid_val = str(opta_uuid).strip() if opta_uuid and str(opta_uuid) != "None" else None
 
-                player_info = {
-                    "klub": klub,
-                    "navn": navn,
-                    "position": position,
-                    "player_wyid": wy_id_int,
-                    "player_optauuid": opta_uuid_val
-                }
+            player_info = {
+                "klub": klub,
+                "navn": navn,
+                "position": position,
+                "player_wyid": wy_id_int,
+                "player_optauuid": opta_uuid_val
+            }
 
-                if wy_id_int:
-                    self.wy_to_optauuid[wy_id_int] = opta_uuid_val
-                
-                if opta_uuid_val:
-                    self.optauuid_to_wy[opta_uuid_val] = wy_id_int
-                    if navn:
-                        self.optauuid_to_name[opta_uuid_val] = navn
-                
+            if wy_id_int:
+                self.wy_to_optauuid[wy_id_int] = opta_uuid_val
+            
+            if opta_uuid_val:
+                self.optauuid_to_wy[opta_uuid_val] = wy_id_int
                 if navn:
-                    self.players_by_name.setdefault(navn.lower(), []).append(player_info)
+                    self.optauuid_to_name[opta_uuid_val] = navn
+            
+            if navn:
+                self.players_by_name.setdefault(navn.lower(), []).append(player_info)
 
     def get_opta_uuid(self, player_wyid):
         return self.wy_to_optauuid.get(int(player_wyid))
 
     def get_wy_id(self, player_optauuid):
-        return self.optauuid_to_wy.get(player_optauuid)
+        return self.optauuid_to_wy.get(str(player_optauuid))
 
     def get_name_by_opta_uuid(self, player_optauuid):
         """Henter det korrekte navn ud fra Opta UUID"""
-        return self.optauuid_to_name.get(player_optauuid)
+        return self.optauuid_to_name.get(str(player_optauuid))
 
     def get_player_by_name(self, navn):
-        return self.players_by_name.get(navn.lower(), [])
+        return self.players_by_name.get(str(navn).lower(), [])
 
 
-# --- OVERSIGT OVER SPILLERE OPDELT EFTER KLUB ---
+# --- OVERSIGT OVER SPILLERE ---
 # player_mapping.py
 
 SEASONNAME = "2025/2026"
