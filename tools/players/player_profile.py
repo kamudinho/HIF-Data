@@ -21,9 +21,9 @@ from utils.helpers import get_logo_img, get_team_color, get_ordinal, draw_player
 # --- IMPORT AF SPILLERE OG SQL ---
 from data.sql.liga_spillere import hent_match_og_haendelsesdata
 
-# --- KONFIGURATION (HVIDOVRE-APP / 2025/2026) ---
+# --- KONFIGURATION (HVIDOVRE-APP / 2026/2027) ---
 DB = "KLUB_HVIDOVREIF.AXIS"
-SEASONNAME = "2025/2026"
+SEASONNAME = "2026/2027"
 TEAM_WYID = 7490
 COMPETITION_WYID = (328,)
 COMP_MAP = { 
@@ -65,7 +65,7 @@ def get_physical_data(player_name, player_opta_uuid, valgt_hold_navn, db_conn):
     sql = f"""
         SELECT * FROM KLUB_HVIDOVREIF.AXIS.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS
         WHERE UPPER(PLAYER_NAME) LIKE UPPER('%{efternavn}%')
-        AND MATCH_DATE >= '2025-07-01'
+        AND MATCH_DATE >= '2026-07-01'
     """
     df = db_conn.query(sql)
     if df is not None and not df.empty:
@@ -199,7 +199,7 @@ def vis_side(dp=None):
         'Driblinger': (x['event_typeid'] == 3).sum(),
         'Driblinger_Succes': x.apply(lambda r: 1 if str(r['event_typeid']) == "3" and "211" not in [str(q).strip() for q in (r.get('qual_list', []) if isinstance(r.get('qual_list', []), list) else str(r.get('qual_list', '')).split(','))] else 0, axis=1).sum(),
         'Gennembrud_Overtake': x.apply(lambda r: 1 if str(r['event_typeid']) == "3" and "465" in [str(q).strip() for q in (r.get('qual_list', []) if isinstance(r.get('qual_list', []), list) else str(r.get('qual_list', '')).split(','))] else 0, axis=1).sum(),
-        'Rum_Driblinger_Space': x.apply(lambda r: 1 if str(r['event_typeid']) == "3" and "464" in [str(q).strip() for q in (r.get('qual_list', []) if isinstance(r.get('qual_list', []), list) else str(r.get('qual_list', '')).split(','))] else 0, axis=1).sum(),
+        'Rum_Driblinger_Space': x.apply(lambda r: 1 if str(r['event_typeid']) == "3" and "464" in [str(q).strip() for q in (r.get('qual_list', []), list) if isinstance(r.get('qual_list', []), list) else str(r.get('qual_list', '')).split(','))] else 0, axis=1).sum(),
         'Offensive_Dueller': x.apply(lambda r: 1 if "286" in [str(q).strip() for q in (r.get('qual_list', []) if isinstance(r.get('qual_list', []), list) else str(r.get('qual_list', '')).split(','))] else 0, axis=1).sum(),
         'Defensive_Dueller': x.apply(lambda r: 1 if "285" in [str(q).strip() for q in (r.get('qual_list', []) if isinstance(r.get('qual_list', []), list) else str(r.get('qual_list', '')).split(','))] else 0, axis=1).sum(),
         'Defensive_1v1_Stoppet': x.apply(lambda r: 1 if "467" in [str(q).strip() for q in (r.get('qual_list', []) if isinstance(r.get('qual_list', []), list) else str(r.get('qual_list', '')).split(','))] else 0, axis=1).sum(),
@@ -757,7 +757,7 @@ def vis_side(dp=None):
                 mapping = {"HSR (m)": ("hsr", 1, "m"), "Sprint (m)": ("sprinting", 1, "m"), "Distance (km)": ("distance", 1000, "km"), "Topfart (km/t)": ("top_speed", 1, "km/t")}
                 col_key, div, suffix = mapping[cat_choice]
 
-                df_chart = df_phys[df_phys['match_date'] >= '2025-07-01'].copy()
+                df_chart = df_phys[df_phys['match_date'] >= '2026-07-01'].copy()
                 df_chart = df_chart.drop_duplicates(subset=['match_date', 'match_teams'])
                 df_chart = df_chart.sort_values('match_date', ascending=True)
 
