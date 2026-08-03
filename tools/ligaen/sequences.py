@@ -93,7 +93,7 @@ def vis_side(dp=None):
     valgt_uuid = team_map[valgt_hold_navn]
     hold_logo = get_logo_img(valgt_uuid)
 
-    st.caption("Gennemgang af holdets målsekvenser (inkl. præcis afklipning ved hjørnespark).")
+    st.caption("Gennemgang af holdets målsekvenser (inkl. præcis afklipning ved standardsituationer som hjørnespark og frispark).")
 
     # --- SQL HENTNING AF MÅLSEKVENSER ---
     sql_seq = f"""
@@ -132,20 +132,20 @@ def vis_side(dp=None):
             WHERE e.EVENT_TIMESTAMP <= tg.G_TIME
               AND e.EVENT_TIMESTAMP >= DATEADD('millisecond', -45000, tg.G_TIME)
         ),
-        CornerCheck AS (
-            SELECT MATCH_OPTAUUID, GOAL_TIMESTAMP, MIN(EVENT_TIMESTAMP) AS MIN_CORNER_TIME
+        SetPieceCheck AS (
+            SELECT MATCH_OPTAUUID, GOAL_TIMESTAMP, MIN(EVENT_TIMESTAMP) AS MIN_SETPIECE_TIME
             FROM BaseMatchEvents
-            WHERE EVENT_TYPEID = 6
+            WHERE EVENT_TYPEID IN (5, 6)  -- 5 = Frispark, 6 = Hjørnespark
               AND EVENT_TIMESTAMP >= DATEADD('millisecond', -40000, GOAL_TIMESTAMP)
             GROUP BY MATCH_OPTAUUID, GOAL_TIMESTAMP
         ),
         DynamicWindowEvents AS (
             SELECT 
                 b.*,
-                COALESCE(c.MIN_CORNER_TIME, DATEADD('millisecond', -15000, b.GOAL_TIMESTAMP)) AS EFFECTIVE_START_TIME
+                COALESCE(s.MIN_SETPIECE_TIME, DATEADD('millisecond', -15000, b.GOAL_TIMESTAMP)) AS EFFECTIVE_START_TIME
             FROM BaseMatchEvents b
-            LEFT JOIN CornerCheck c 
-                ON b.MATCH_OPTAUUID = c.MATCH_OPTAUUID AND b.GOAL_TIMESTAMP = c.GOAL_TIMESTAMP
+            LEFT JOIN SetPieceCheck s 
+                ON b.MATCH_OPTAUUID = s.MATCH_OPTAUUID AND b.GOAL_TIMESTAMP = s.GOAL_TIMESTAMP
         ),
         FilteredTimeEvents AS (
             SELECT *
@@ -309,13 +309,15 @@ def vis_side(dp=None):
         (df_all['GOAL_TIMESTAMP'] == sd['goal_ts'])
     ].sort_values('EVENT_TIMESTAMP').copy()
 
-    # HVIS FØRSTE HÆNDELSE ER ET HJØRNESPARK (EVENT TYPE 6), SÅ OMDØBES DEN TIL "HJØRNESPARK"
-    # OG ALT FØR DETTE PUNKT ER ALLEREDE SKÅRET FRA VIA SQL VINDUET.
+    # DYNAMISK NAVNGIVNING AF FØRSTE HÆNDELSE VED STANDARDSITUATIONS-OPSTART:
     if not tge.empty:
         first_row = tge.iloc[0]
-        if str(first_row['EVENT_TYPEID']) == '6':
-            first_idx = tge.index[0]
+        ev_type = str(first_row['EVENT_TYPEID'])
+        first_idx = tge.index[0]
+        if ev_type == '6':
             tge.loc[first_idx, 'AKTION'] = 'Hjørnespark'
+        elif ev_type == '5':
+            tge.loc[first_idx, 'AKTION'] = 'Frispark'
 
     tge['sekvens_nr'] = range(1, len(tge) + 1)
     
