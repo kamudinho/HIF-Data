@@ -92,7 +92,7 @@ def vis_side(dp=None):
     valgt_uuid = team_map[valgt_hold_navn]
     hold_logo = get_logo_img(valgt_uuid)
 
-    st.caption("Gennemgang af holdets målsekvenser fra bolden vindes, til målet falder.")
+    st.caption("Gennemgang af holdets målsekvenser")
 
     # --- SQL HENTNING AF MÅLSEKVENSER ---
     sql_seq = f"""
