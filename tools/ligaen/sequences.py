@@ -199,6 +199,14 @@ def vis_side(dp=None):
         return
 
     df_all.columns = [c.upper() for c in df_all.columns]
+
+    # --- OVERSKRIV NAVNE FRA PLAYER_MAPPING (1div_overskrivning.csv) ---
+    if player_mapping:
+        df_all['PLAYER_NAME'] = df_all.apply(
+            lambda row: player_mapping.get_name_by_opta_uuid(row.get('PLAYER_OPTAUUID')) or row.get('PLAYER_NAME'),
+            axis=1
+        )
+
     df_all['AKTION'] = df_all.apply(get_action_label, axis=1)
     df_all['DETALJER'] = df_all['QUALIFIER_LIST'].apply(oversæt_qualifiers)
 
@@ -335,7 +343,6 @@ def vis_side(dp=None):
                         fontsize=6, ha='center', va='top', color='#333333', zorder=5
                     )
 
-        # Brug af draw_match_info_box til at indsætte logoer og info i bunden af banen
         opp_logo = get_logo_img(sd['opp_uuid'])
         draw_match_info_box(ax, hold_logo, opp_logo, sd['date'], sd['stilling_hjemme_ude'], sd['min'])
 
