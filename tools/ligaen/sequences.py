@@ -95,7 +95,7 @@ def vis_side(dp=None):
 
     st.caption("Gennemgang af holdets målsekvenser fra bolden vindes, til målet falder.")
 
-    # --- SQL HENTNING AF MÅLSEKVENSER (Fjernet unødvendig PlayerNames JOIN, henter blot Opta UUID) ---
+    # --- SQL HENTNING AF MÅLSEKVENSER ---
     sql_seq = f"""
         WITH SeasonMatches AS (
             SELECT MATCH_OPTAUUID, CONTESTANTHOME_NAME, CONTESTANTAWAY_NAME, 
@@ -153,28 +153,24 @@ def vis_side(dp=None):
             e.SEQUENCEID,
             e.EVENT_TIMESTAMP,
             e.EVENT_TIMEMIN AS EVENT_MINUTE,
-            e.PLAYER_OPTAUUID,   -- <-- DENNE SKAL TILFØJES, SÅ PLAYER_MAPPING VIRKER!
-            e.PLAYER_NAME,        -- Indbygget fallback fra databasen
+            e.PLAYER_OPTAUUID,   -- Sørg for at hente PLAYER_OPTAUUID
+            e.PLAYER_NAME,        -- Brug som standard database fallback
             e.EVENT_TYPEID,
             e.EVENT_X as RAW_X,
             e.EVENT_Y as RAW_Y,
             q.QUALIFIER_LIST,
             m.CONTESTANTHOME_NAME,
             m.CONTESTANTAWAY_NAME,
-            m.MATCH_DATE_FULL,
-            -- Kampens samlede slutresultat
+            m.MATCH_LOCALDATE,
             m.TOTAL_HOME_SCORE AS FINAL_HOME_SCORE,
             m.TOTAL_AWAY_SCORE AS FINAL_AWAY_SCORE,
-            -- Stillingen i det øjeblik målet blev scoret
-            COALESCE(rs.CURRENT_HOME_SCORE, 0) AS GOAL_HOME_SCORE,
-            COALESCE(rs.CURRENT_AWAY_SCORE, 0) AS GOAL_AWAY_SCORE
+            0 AS GOAL_HOME_SCORE,
+            0 AS GOAL_AWAY_SCORE
         FROM FilteredEvents e
         LEFT JOIN EventQualifiers q 
             ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
-        LEFT JOIN KLUB_HVIDOVREIF.AXIS.OPTA_MATCHINFO m 
+        LEFT JOIN {DB}.OPTA_MATCHINFO m 
             ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
-        LEFT JOIN MatchRunningScores rs 
-            ON e.GOAL_EVENT_OPTAUUID = rs.GOAL_EVENT_OPTAUUID
         ORDER BY e.SEQUENCEID, e.EVENT_TIMESTAMP ASC;
     """
 
@@ -191,21 +187,21 @@ def vis_side(dp=None):
 
     df_all.columns = [c.upper() for c in df_all.columns]
 
-    # --- OVERSKRIV NAVNE VED HJÆLP AF PLAYER_MAPPING (OPTA UUID) ---
+    # --- ROBUST OVERSKRIVNING AF NAVNE VED HJÆLP AF PLAYER_MAPPING ---
     def map_spiller_navn(row):
         p_uuid = row.get('PLAYER_OPTAUUID')
         
-        # 1. Prøv slå op via PlayerMapping ud fra Opta UUID
+        # 1. Prøv først at slå op via player_mapping med UUID
         if pd.notna(p_uuid) and str(p_uuid).strip() not in ["", "None", "nan"]:
             mapped_name = player_mapping.get_name_by_opta_uuid(p_uuid)
             if mapped_name and str(mapped_name).strip() not in ["", "Ukendt", "None", "nan"]:
                 return str(mapped_name).strip()
-        
-        # 2. Fallback til det navn, som Opta selv har skrevet i e.PLAYER_NAME i databasen
+                
+        # 2. Fallback: Brug navnet direkte fra databasen (PLAYER_NAME)
         db_name = row.get('PLAYER_NAME')
         if pd.notna(db_name) and str(db_name).strip() not in ["", "None", "nan"]:
             return str(db_name).strip()
-
+            
         return 'Ukendt'
 
     df_all['PLAYER_NAME'] = df_all.apply(map_spiller_navn, axis=1)
@@ -236,22 +232,65 @@ def vis_side(dp=None):
     except Exception:
         alle_maal_df = pd.DataFrame()
 
-    maal_df = df_all[df_all['EVENT_TYPEID'].astype(str) == '16'].drop_duplicates(subset=['MATCH_OPTAUUID', 'GOAL_TIMESTAMP']).copy()
+    # Udled GOAL_TIMESTAMP fra rækker hvor EVENT_TYPEID == 16 (eller brug de gemte)
+    # Da vi filtrerede med RANK() <= 7, sikrer vi at vi finder målet (typisk bagerst eller via filter)
+    maal_df = df_all[df_all['EVENT_TYPEID'].astype(str) == '16'].copy()
+    if maal_df.empty:
+        # Hvis målet selv er faldet uden for top 7, finder vi det direkte fra databasen for disse kampe
+        sql_mal_fix = f"""
+            SELECT MATCH_OPTAUUID, EVENT_TIMESTAMP as GOAL_TIMESTAMP, SEQUENCEID, EVENT_TIMEMIN as GOAL_MIN
+            FROM {DB}.OPTA_EVENTS
+            WHERE MATCH_OPTAUUID IN {match_uuid_str} AND EVENT_TYPEID = 16 AND EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}'
+        """
+        try:
+            maal_df = conn.query(sql_mal_fix)
+            maal_df.columns = [c.upper() for c in maal_df.columns]
+        except Exception:
+            pass
+
+    if maal_df.empty:
+        st.warning("Kunne ikke lokalisere de specifikke mål-hændelser til dropdown.")
+        return
+
+    maal_df = maal_df.drop_duplicates(subset=['MATCH_OPTAUUID', 'SEQUENCEID']).copy()
 
     opts = {}
     for _, r in maal_df.iterrows():
         seq_id = r['SEQUENCEID']
         m_uuid = r['MATCH_OPTAUUID']
-        g_ts = r['GOAL_TIMESTAMP']
+        
+        # Hent matchinfo for denne kamp fra df_all
+        match_subset = df_all[df_all['MATCH_OPTAUUID'] == m_uuid]
+        if match_subset.empty:
+            continue
+        first_row = match_subset.iloc[0]
+
+        g_ts = r['GOAL_TIMESTAMP'] if 'GOAL_TIMESTAMP' in r else first_row['EVENT_TIMESTAMP']
         key = f"{m_uuid}_{g_ts}_{seq_id}"
 
-        dato_str = pd.to_datetime(r['MATCH_LOCALDATE']).strftime('%d/%m')
-        h_uuid = r['CONTESTANTHOME_OPTAUUID']
-        a_uuid = r['CONTESTANTAWAY_OPTAUUID']
-        opp_navn = r['CONTESTANTAWAY_NAME'] if h_uuid == valgt_uuid else r['CONTESTANTHOME_NAME']
+        dato_str = pd.to_datetime(first_row['MATCH_LOCALDATE']).strftime('%d/%m')
+        
+        # Find hjemme/ude via en af rækkerne
+        sql_match_meta = f"""
+            SELECT CONTESTANTHOME_OPTAUUID, CONTESTANTAWAY_OPTAUUID, CONTESTANTHOME_NAME, CONTESTANTAWAY_NAME, TOTAL_HOME_SCORE, TOTAL_AWAY_SCORE, MATCH_LOCALDATE
+            FROM {DB}.OPTA_MATCHINFO WHERE MATCH_OPTAUUID = '{m_uuid}'
+        """
+        meta_res = conn.query(sql_match_meta)
+        if meta_res.empty:
+            continue
+        
+        h_uuid = meta_res['CONTESTANTHOME_OPTAUUID'].iloc[0]
+        a_uuid = meta_res['CONTESTANTAWAY_OPTAUUID'].iloc[0]
+        h_navn = meta_res['CONTESTANTHOME_NAME'].iloc[0]
+        a_navn = meta_res['CONTESTANTAWAY_NAME'].iloc[0]
+        t_home = meta_res['TOTAL_HOME_SCORE'].iloc[0]
+        t_away = meta_res['TOTAL_AWAY_SCORE'].iloc[0]
+        m_date = meta_res['MATCH_LOCALDATE'].iloc[0]
+
+        opp_navn = a_navn if h_uuid == valgt_uuid else h_navn
         opp_uuid = a_uuid if h_uuid == valgt_uuid else h_uuid
 
-        kamp_res = f"{int(r['TOTAL_HOME_SCORE'])}-{int(r['TOTAL_AWAY_SCORE'])}"
+        kamp_res = f"{int(t_home)}-{int(t_away)}"
 
         h_maal = 0
         a_maal = 0
@@ -274,7 +313,7 @@ def vis_side(dp=None):
         er_hjemmehold = (valgt_uuid == h_uuid)
         mål_stilling = f"{h_maal}-{a_maal}" if er_hjemmehold else f"{a_maal}-{h_maal}"
 
-        raw_min = r['GOAL_MIN']
+        raw_min = r['GOAL_MIN'] if 'GOAL_MIN' in r else first_row.get('EVENT_MINUTE', 0)
         minuttal = 1 if pd.isna(raw_min) else int(raw_min) + 1
 
         label_tekst = f"{dato_str}: {mål_stilling} ({minuttal}. min) vs. {opp_navn} ({kamp_res})"
@@ -286,7 +325,7 @@ def vis_side(dp=None):
             'seq_id': seq_id,
             'opp_uuid': opp_uuid,
             'min': minuttal,
-            'date': pd.to_datetime(r['MATCH_LOCALDATE']).strftime('%d/%m/%Y'),
+            'date': pd.to_datetime(m_date).strftime('%d/%m/%Y'),
             'score_str': kamp_res,
             'stilling_hjemme_ude': f"{h_maal}-{a_maal}"
         }
