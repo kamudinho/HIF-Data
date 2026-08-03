@@ -447,7 +447,7 @@ def vis_side(dp=None):
                     'Defensive_Dueller': x.apply(lambda r: 1 if "285" in [str(q).strip() for q in (r.get('qual_list', []) if isinstance(r.get('qual_list', []), list) else str(r.get('qual_list', '')).split(','))] else 0, axis=1).sum(),
                     'Defensive_1v1_Stoppet': x.apply(lambda r: 1 if "467" in [str(q).strip() for q in (r.get('qual_list', []) if isinstance(r.get('qual_list', []), list) else str(r.get('qual_list', '')).split(','))] else 0, axis=1).sum(),
                     'Chancer_skabt': x.apply(lambda r: 1 if '210' in [str(q).strip() for q in (r.get('qual_list', []) if isinstance(r.get('qual_list', []), list) else str(r.get('qual_list', '')).split(','))] else 0, axis=1).sum(),
-                    'Key_Passes': x.apply(lambda r: 1 if '210' in [str(q).strip() for q in (r.get('qual_list', []), list) if isinstance(r.get('qual_list', []), list) else str(r.get('qual_list', '')).split(','))] else 0, axis=1).sum(),
+                    'Key_Passes': x.apply(lambda r: 1 if '210' in [str(q).strip() for q in (r.get('qual_list', []) if isinstance(r.get('qual_list', []), list) else str(r.get('qual_list', '')).split(','))] else 0, axis=1).sum(),
                     'Tacklinger': (x['event_typeid'] == 7).sum(),
                     'Clearinger': (x['event_typeid'] == 12).sum(),
                     'Blokeringer': (x['event_typeid'] == 55).sum(),
