@@ -298,6 +298,7 @@ PLAYER_MAPPING = [
     {"klub": "Vendsyssel FF", "navn": "Lasse William Schulz", "position": "Goalkeeper", "player_wyid": 6868916, "player_optauuid": "4vlnkuqfh7rnymg8qku8amwa"},
 ]
 
+player_mapping = PlayerMapping(PLAYER_MAPPING)
 # Format pr. spiller på linjen: (NAVN, POSITION, PLAYER_WYID, PLAYER_OPTAUUID)
 OVERWRITE_PLAYERS = {
        "AC Horsens": [
