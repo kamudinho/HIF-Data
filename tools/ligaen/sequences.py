@@ -204,7 +204,7 @@ def vis_side(dp=None):
     # --- OVERSKRIV NAVNE FRA PLAYER_MAPPING ---
     if player_mapping:
         df_all['PLAYER_NAME'] = df_all.apply(
-            lambda row: player_mapping.get_player_name(row.get('PLAYER_OPTAUUID')) or row.get('PLAYER_NAME'),
+            lambda row: player_mapping.get_name_by_opta_uuid(row.get('PLAYER_OPTAUUID')) or row.get('PLAYER_NAME'),
             axis=1
         )
 
