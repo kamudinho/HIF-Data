@@ -24,22 +24,22 @@ def oversæt_qualifiers(qual_str):
                 tekster.append(OPTA_QUALIFIERS[q_int])
     return ", ".join(tekster)
 
-def draw_match_info_box(ax, scoring_team_logo, opp_team_logo, date_str, score_str, min_str):
+def draw_match_info_box(pitch, ax, scoring_team_logo, opp_team_logo, date_str, score_str, min_str):
     """Tegner info-boks ved mål-sekvenser med korrekt placering i banens koordinatsystem"""
     y_top = 5.2
     y_bot = 2.0
 
     if scoring_team_logo:
-        ax.inset_image(x=2.2, y=y_top, image=scoring_team_logo, height=4.0, ax=ax, zorder=6)
+        pitch.inset_image(x=2.2, y=y_top, image=scoring_team_logo, height=4.0, ax=ax, zorder=6)
 
     ax.text(3.7, y_top, "vs.", fontsize=7, fontweight='bold', ha='center', va='center', color='#333333', zorder=6)
 
     if opp_team_logo:
-        ax.inset_image(x=5.2, y=y_top, image=opp_team_logo, height=4.0, ax=ax, zorder=6)
+        pitch.inset_image(x=5.2, y=y_top, image=opp_team_logo, height=4.0, ax=ax, zorder=6)
 
     tekst_bund = f"{date_str} | Stilling: {score_str} ({min_str}. min)"
     ax.text(2.2, y_bot, tekst_bund, fontsize=8, color='#555555', ha='left', va='center', zorder=6)
-    
+
 def vis_side(dp=None):
     conn = _get_snowflake_conn()
     if not conn:
@@ -332,9 +332,9 @@ def vis_side(dp=None):
                         fontsize=6, ha='center', va='top', color='#333333', zorder=5
                     )
 
-        # Brug af draw_match_info_box til at indsætte logoer og info i bunden af banen
+        # Brug af den korrekte draw_match_info_box
         opp_logo = get_logo_img(sd['opp_uuid'])
-        draw_match_info_box(ax, hold_logo, opp_logo, sd['date'], sd['stilling_hjemme_ude'], sd['min'])
+        draw_match_info_box(pitch, ax, hold_logo, opp_logo, sd['date'], sd['stilling_hjemme_ude'], sd['min'])
 
         st.pyplot(fig, use_container_width=True)
 
