@@ -93,9 +93,9 @@ def vis_side(dp=None):
     valgt_uuid = team_map[valgt_hold_navn]
     hold_logo = get_logo_img(valgt_uuid)
 
-    st.caption("Gennemgang af holdets målsekvenser fra bolden vindes, til målet falder.")
+    st.caption("Gennemgang af holdets målsekvenser (inkl. modstanderens berøringer i opspillet).")
 
-    # --- SQL HENTNING AF MÅLSEKVENSER (BAGLÆNS FRA MÅL) ---
+    # --- SQL HENTNING AF MÅLSEKVENSER (INKL. MODSTANDERE I TIDSVINDUET) ---
     sql_seq = f"""
         WITH SeasonMatches AS (
             SELECT MATCH_OPTAUUID, CONTESTANTHOME_NAME, CONTESTANTAWAY_NAME, 
@@ -135,12 +135,12 @@ def vis_side(dp=None):
                 ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
             WHERE e.EVENT_TIMESTAMP <= tg.G_TIME
               AND e.EVENT_TIMESTAMP >= DATEADD('millisecond', -20000, tg.G_TIME)
-              AND e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}'
+              -- Fjerner det strenge hold-filter her, så modstanderens berøringer/dueller kommer med
         ),
         FilteredEvents AS (
             SELECT *
             FROM RankedMatchEvents
-            WHERE rn <= 7
+            WHERE rn <= 8
         ),
         EventQualifiers AS (
             SELECT 
@@ -168,6 +168,7 @@ def vis_side(dp=None):
             e.EVENT_TIMEMIN AS EVENT_MINUTE,
             e.PLAYER_OPTAUUID,
             e.PLAYER_NAME,
+            e.EVENT_CONTESTANT_OPTAUUID, -- Vigtigt for at kende holdet bag hændelsen
             e.EVENT_TYPEID,
             e.EVENT_X as RAW_X,
             e.EVENT_Y as RAW_Y,
@@ -191,7 +192,7 @@ def vis_side(dp=None):
             ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
         LEFT JOIN MatchRunningScores rs 
             ON e.G_EVENT_UUID = rs.GOAL_EVENT_OPTAUUID
-        ORDER BY e.SEQUENCEID, e.EVENT_TIMESTAMP ASC;
+        ORDER BY e.EVENT_TIMESTAMP ASC;
     """
 
     with st.spinner("Henter målsekvenser fra Snowflake..."):
@@ -275,7 +276,7 @@ def vis_side(dp=None):
 
     tge = df_all[
         (df_all['MATCH_OPTAUUID'] == sd['match_id']) & 
-        (df_all['SEQUENCEID'] == sd['seq_id'])
+        (df_all['GOAL_TIMESTAMP'] == sd['goal_ts'])
     ].sort_values('EVENT_TIMESTAMP').copy()
 
     tge['sekvens_nr'] = range(1, len(tge) + 1)
@@ -303,9 +304,21 @@ def vis_side(dp=None):
                 r_y = row['RAW_Y']
                 nr_str = str(row['sekvens_nr'])
                 er_maal = (str(row['EVENT_TYPEID']) == '16')
+                er_modstander = (str(row['EVENT_CONTESTANT_OPTAUUID']) != str(valgt_uuid))
 
-                prik_farve = '#df003b' if er_maal else 'black'
-                prik_str = 70 if er_maal else 45
+                # Farve- og formlogik: Mål = rød, Modstander = grå, Eget hold = sort
+                if er_maal:
+                    prik_farve = '#df003b'
+                    prik_str = 70
+                    tekst_farve = '#333333'
+                elif er_modstander:
+                    prik_farve = '#999999'  # Grå cirkel til modstander
+                    prik_str = 45
+                    tekst_farve = '#777777'
+                else:
+                    prik_farve = 'black'
+                    prik_str = 45
+                    tekst_farve = '#333333'
 
                 pitch.scatter(r_x, r_y, color=prik_farve, s=prik_str, ax=ax, zorder=4)
 
@@ -318,7 +331,7 @@ def vis_side(dp=None):
                 if navn and navn != 'nan' and navn != 'Ukendt':
                     ax.text(
                         r_x, r_y - 2.5, navn,
-                        fontsize=6, ha='center', va='top', color='#333333', zorder=5
+                        fontsize=6, ha='center', va='top', color=tekst_farve, zorder=5
                     )
 
         opp_logo = get_logo_img(sd['opp_uuid'])
@@ -337,6 +350,7 @@ def vis_side(dp=None):
 
         tge['Aktion'] = tge.apply(get_final_label_t4, axis=1)
         
+        # Tilføj evt. en kolonne eller markering for modstander i tabellen, hvis ønsket
         vis_cols = ['sekvens_nr', 'PLAYER_NAME', 'Aktion']
         tabel_df = tge[vis_cols].rename(columns={
             'sekvens_nr': 'Nr.',
