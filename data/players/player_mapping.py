@@ -222,23 +222,23 @@ PLAYER_MAPPING = [
 
     # Hvidovre IF
     {"klub": "Hvidovre IF", "navn": "Andreas Smed", "position": "Midfielder", "player_wyid": 562692, "player_optauuid": "dncrhma6gwcn6pxiu7hfc6qz8"},
-    {"klub": "Hvidovre IF", "navn": "Alexander Johansen", "position": "Attacker", "player_wyid": 10232857, "player_optauuid": "ymn0ytcqi6l43nqraxt9s1zo"},
+    {"klub": "Hvidovre IF", "navn": "Alexander Johansen", "position": "Attacker", "player_wyid": 1023285, "player_optauuid": "7ymn0ytcqi6l43nqraxt9s1zo"},
     {"klub": "Hvidovre IF", "navn": "Marius Elvius", "position": "Defender", "player_wyid": 5053926, "player_optauuid": "c2isptqoy4cq5c8rlr9s1roq"},
     {"klub": "Hvidovre IF", "navn": "Nicolai Clausen", "position": "Defender", "player_wyid": 6232526, "player_optauuid": "dzg820946z4848whaa6ny2nd"},
     {"klub": "Hvidovre IF", "navn": "Nicolaj Jungvig", "position": "Defender", "player_wyid": 5793933, "player_optauuid": "pk6hii2s8tbv2zux8mvbapec"},
-    {"klub": "Hvidovre IF", "navn": "Louka Prip Andreasen", "position": "Attacker", "player_wyid": 5625039, "player_optauuid": "dnceiwcpsatrdrj2m1uz6pnu"},
+    {"klub": "Hvidovre IF", "navn": "Louka Prip Andreasen", "position": "Attacker", "player_wyid": 562503, "player_optauuid": "9dnceiwcpsatrdrj2m1uz6pnu"},
     {"klub": "Hvidovre IF", "navn": "Oliver Bjerrum Jensen", "position": "Midfielder", "player_wyid": 11298524, "player_optauuid": "e7sicg0km2z5jq80ptgaxo4q"},
-    {"klub": "Hvidovre IF", "navn": "Filip Đukić", "position": "Goalkeeper", "player_wyid": 471964, "player_optauuid": "d9hh01mit4geyadol3gmzco93"},
-    {"klub": "Hvidovre IF", "navn": "Oliver Juul", "position": "Defender", "player_wyid": 519715, "player_optauuid": "aejgqvdw1jftxaa538kaa15w"},
+    {"klub": "Hvidovre IF", "navn": "Filip Đukić", "position": "Goalkeeper", "player_wyid": 471964, "player_optauuid": "d9hh01mit4geyadol3gmzco9"},
+    {"klub": "Hvidovre IF", "navn": "Oliver Juul", "position": "Defender", "player_wyid": 519715, "player_optauuid": "aejgqvdw1jftxaa538kaa15w4"},
     {"klub": "Hvidovre IF", "navn": "Oliver Kjærgaard", "position": "Midfielder", "player_wyid": 435879, "player_optauuid": "cl4xl80n4gew1ox03r3ooshrd"},
     {"klub": "Hvidovre IF", "navn": "Ahmed Iljazovski", "position": "Defender", "player_wyid": 879754, "player_optauuid": "bfvdr7ckiersz26ya2kq9f1g4"},
     {"klub": "Hvidovre IF", "navn": "Zamir Aliji", "position": "Midfielder", "player_wyid": 620821, "player_optauuid": "aajgld24isoem1ycoysyxxp1w"},
-    {"klub": "Hvidovre IF", "navn": "Emmanuel Aby", "position": "Attacker", "player_wyid": 7486249, "player_optauuid": "07vtkod58b7986k7u1619gr8"},
+    {"klub": "Hvidovre IF", "navn": "Emmanuel Aby", "position": "Attacker", "player_wyid": 748624, "player_optauuid": "907vtkod58b7986k7u1619gr8"},
     {"klub": "Hvidovre IF", "navn": "Daniel Stenderup", "position": "Defender", "player_wyid": 56017, "player_optauuid": "a30gduuv9d1s4pkthgu2jhyol"},
     {"klub": "Hvidovre IF", "navn": "Malte Kiilerich", "position": "Defender", "player_wyid": 3702696, "player_optauuid": "30daj1ef34rczbhng0eoncvd"},
     {"klub": "Hvidovre IF", "navn": "Donavan Bagou", "position": "Attacker", "player_wyid": 6070331, "player_optauuid": "1hlx5mvl8th7y82gocnuxacd0"},
-    {"klub": "Hvidovre IF", "navn": "Frederik Rask Høgh Jensen", "position": "Attacker", "player_wyid": 9, "player_optauuid": "tt9eo9bsff7dp7aqjal1obo4"},
-
+    {"klub": "Hvidovre IF", "navn": "Frederik Rask Høgh Jensen", "position": "Attacker", "player_wyid": None, "player_optauuid": "9tt9eo9bsff7dp7aqjal1obo4"},
+    
     # Kolding IF
     {"klub": "Kolding IF", "navn": "Jeffrey Papayaw Adjei-Broni", "position": "Attacker", "player_wyid": 6123421, "player_optauuid": "cumsropo1r0msfzxxteml1w"},
     {"klub": "Kolding IF", "navn": "Jonas Graabæk Hansen", "position": "Defender", "player_wyid": 11856451, "player_optauuid": "ju0n48qswe2v63ubre4ozt3o"},
