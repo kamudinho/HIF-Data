@@ -42,7 +42,7 @@ def vis_side(dp=None):
         st.warning("Kunne ikke oprette forbindelse til databasen.")
         st.stop()
 
-    # --- HENT SPILLERE OG INITIALISER PLAYER MAPPING ---
+    # --- HENT SPILLERE OG INITIALISER PLAYER MAPPING DINAMISK ---
     player_mapping = None
     try:
         sql_players = f"""
