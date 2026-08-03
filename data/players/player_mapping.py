@@ -278,7 +278,7 @@ PLAYER_MAPPING = [
     {"klub": "#Hvidovre IF", "navn": "Nicolai Clausen", "position": "Defender", "player_optauuid": "6dzg820946z4848whaa6ny2nd", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
     {"klub": "#Hvidovre IF", "navn": "Andreas Smed", "position": "Midfielder", "player_optauuid": "dncrhma6gwcn6pxiu7hfc6qz8", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
     {"klub": "#Hvidovre IF", "navn": "Emmanuel Aby", "position": "Attacker", "player_optauuid": "907vtkod58b7986k7u1619gr8", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
-    {"klub": "#Hvidovre IF", "navn": "Malte Kiilerich", "position": "Defender", "player_optauuid": "630daj1ef34rczbhng0eoncvd", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
+    {"klub": "#Hvidovre IF", "navn": "Malte Kiilerich Hansen", "position": "Defender", "player_optauuid": "630daj1ef34rczbhng0eoncvd", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
     {"klub": "#Hvidovre IF", "navn": "Filip Đukić", "position": "Goalkeeper", "player_optauuid": "d9hh01mit4geyadol3gmzco9", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
     {"klub": "#Hvidovre IF", "navn": "Daniel Stenderup", "position": "Defender", "player_optauuid": "a30gduuv9d1s4pkthgu2jhyol", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
     # Kolding
