@@ -103,13 +103,16 @@ def get_action_label(row):
 
         # Skudtyper
         if eid in ["13", "14", "15", "16"]:
-            suffix_parts = []
-            if "15" in ql: suffix_parts.append("Hovedstød")
-            if "9" in ql: suffix_parts.append("Straffespark")
-            
-            suffix = f" ({', '.join(suffix_parts)})" if suffix_parts else ""
-            
-            if eid == "16": return f"MÅL{suffix}"
+            # TVING EVENT 16 TIL ALTID AT VÆRE MÅL FØRST
+            if eid == "16":
+                if "9" in ql:
+                    return "MÅL (Straffespark)"
+                if "15" in ql:
+                    return "MÅL (Hovedstød)"
+                return "MÅL"
+                
+            # Resten af afslutningerne (forbi, stolpe, reddet)
+            suffix = " (Hovedstød)" if "15" in ql else ""
             if "138" in ql or eid == "14": return f"Skud på stolpe{suffix}"
             if eid == "15": return f"Skud på mål{suffix}"
             return f"Afslutning{suffix}"
