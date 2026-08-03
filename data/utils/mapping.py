@@ -131,7 +131,7 @@ def get_action_label(row):
     except Exception:
         return "Ukendt aktion"
 
-def is_assist(qualifiers_list):
+def is_assist(event_typeid, qualifiers=None):
     """Hurtig tjek om en aktion er en assist (ID 210)."""
     return "210" in [str(q) for q in qualifiers_list]
 
