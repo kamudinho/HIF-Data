@@ -8,14 +8,15 @@ from data.utils.team_mapping import TEAMS, SEASON_LEAGUE_MAPPER, SEASONS, COMPET
 from data.utils.mapping import OPTA_EVENT_TYPES, OPTA_QUALIFIERS, get_action_label, har_qualifier
 from data.players.player_mapping import PlayerMapping
 from utils.helpers import get_logo_img
-from pathlib import Path
 
 # Snowflake database sti
 DB = "KLUB_HVIDOVREIF.AXIS"
 
-# Initialiser PlayerMapping (sørg for at stien til din CSV-fil matcher)
-player_map_path = Path("data/players/1div_overskrivning.csv")
-player_mapping = PlayerMapping(player_map_path) if player_map_path.exists() else None
+# Initialiser PlayerMapping direkte uden CSV-sti
+try:
+    player_mapping = PlayerMapping()
+except Exception:
+    player_mapping = None
 
 def oversæt_qualifiers(qual_str):
     if not qual_str or pd.isna(qual_str):
@@ -200,10 +201,10 @@ def vis_side(dp=None):
 
     df_all.columns = [c.upper() for c in df_all.columns]
 
-    # --- OVERSKRIV NAVNE FRA PLAYER_MAPPING (1div_overskrivning.csv) ---
+    # --- OVERSKRIV NAVNE FRA PLAYER_MAPPING ---
     if player_mapping:
         df_all['PLAYER_NAME'] = df_all.apply(
-            lambda row: player_mapping.get_name_by_opta_uuid(row.get('PLAYER_OPTAUUID')) or row.get('PLAYER_NAME'),
+            lambda row: player_mapping.get_player_name(row.get('PLAYER_OPTAUUID')) or row.get('PLAYER_NAME'),
             axis=1
         )
 
