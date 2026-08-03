@@ -22,7 +22,7 @@ from utils.helpers import get_logo_img, get_team_color, get_ordinal, draw_player
 from data.sql.liga_spillere import hent_match_og_haendelsesdata
 
 try:
-from data.players.player_mapping import
+    from data.players import player_mapping
     # Hent de nødvendige globale variabler og objekter direkte
     valgt_player_uuid = st.session_state.get('valgt_player_uuid', getattr(player_mapping, 'valgt_player_uuid', None))
     valgt_spiller = st.session_state.get('valgt_spiller', getattr(player_mapping, 'valgt_spiller', None))
@@ -102,7 +102,7 @@ def vis_side(dp=None):
         csv_path = os.path.join(os.getcwd(), 'data', 'players', '1div_overskrivning.csv')
         df_csv = pd.read_csv(csv_path)
         navne_map = dict(zip(df_csv['PLAYER_OPTAUUID'].astype(str), df_csv['NAVN']))
-    except:
+    except Exception:
         navne_map = {}
 
     st.markdown("""
@@ -193,9 +193,6 @@ def vis_side(dp=None):
     df_spiller = df_all[df_all['player_optauuid'] == valgt_player_uuid].copy()
 
     # --- BEREGN TRUP-STATS INKL. DRIBLINGER OG DUELLER ---
-    def count_event_with_qual(df_group, eid, qids):
-        return df_group.apply(lambda r: har_qualifier(r['event_typeid'], r.get('qual_list', []), eid, qids), axis=1).sum()
-
     def count_kamp_qual(df_group, eid, qids):
         return df_group.apply(lambda r: har_qualifier(r['event_typeid'], r.get('qual_list', []), eid, qids), axis=1).sum()
 
@@ -217,10 +214,10 @@ def vis_side(dp=None):
         'Gennembrud_Overtake': x.apply(lambda r: 1 if str(r['event_typeid']) == "3" and "465" in [str(q).strip() for q in (r.get('qual_list', []) if isinstance(r.get('qual_list', []), list) else str(r.get('qual_list', '')).split(','))] else 0, axis=1).sum(),
         'Rum_Driblinger_Space': x.apply(lambda r: 1 if str(r['event_typeid']) == "3" and "464" in [str(q).strip() for q in (r.get('qual_list', []) if isinstance(r.get('qual_list', []), list) else str(r.get('qual_list', '')).split(','))] else 0, axis=1).sum(),
         'Offensive_Dueller': x.apply(lambda r: 1 if "286" in [str(q).strip() for q in (r.get('qual_list', []) if isinstance(r.get('qual_list', []), list) else str(r.get('qual_list', '')).split(','))] else 0, axis=1).sum(),
-        'Defensive_Dueller': x.apply(lambda r: 1 if "285" in [str(q).strip() for q in (r.get('qual_list', []) if isinstance(r.get('qual_list', []), list) else str(r.get('qual_list', '')).split(','))] else 0, axis=1).sum(),
-        'Defensive_1v1_Stoppet': x.apply(lambda r: 1 if "467" in [str(q).strip() for q in (r.get('qual_list', []) if isinstance(r.get('qual_list', []), list) else str(r.get('qual_list', '')).split(','))] else 0, axis=1).sum(),
-        'Chancer_skabt': x.apply(lambda r: 1 if '210' in [str(q).strip() for q in (r.get('qual_list', []) if isinstance(r.get('qual_list', []), list) else str(r.get('qual_list', '')).split(','))] else 0, axis=1).sum(),
-        'Key_Passes': x.apply(lambda r: 1 if '210' in [str(q).strip() for q in (r.get('qual_list', []) if isinstance(r.get('qual_list', []), list) else str(r.get('qual_list', '')).split(','))] else 0, axis=1).sum(),
+        'Defensive_Dueller': x.apply(lambda r: 1 if "285" in [str(q).strip() for q in (r.get('qual_list', []), list) if isinstance(r.get('qual_list', []), list) else str(r.get('qual_list', '')).split(','))] else 0, axis=1).sum(),
+        'Defensive_1v1_Stoppet': x.apply(lambda r: 1 if "467" in [str(q).strip() for q in (r.get('qual_list', []), list) if isinstance(r.get('qual_list', []), list) else str(r.get('qual_list', '')).split(','))] else 0, axis=1).sum(),
+        'Chancer_skabt': x.apply(lambda r: 1 if '210' in [str(q).strip() for q in (r.get('qual_list', []), list) if isinstance(r.get('qual_list', []), list) else str(r.get('qual_list', '')).split(','))] else 0, axis=1).sum(),
+        'Key_Passes': x.apply(lambda r: 1 if '210' in [str(q).strip() for q in (r.get('qual_list', []), list) if isinstance(r.get('qual_list', []), list) else str(r.get('qual_list', '')).split(','))] else 0, axis=1).sum(),
         'Tacklinger': (x['event_typeid'] == 7).sum(),
         'Clearinger': (x['event_typeid'] == 12).sum(),
         'Blokeringer': (x['event_typeid'] == 55).sum(),
@@ -505,7 +502,7 @@ def vis_side(dp=None):
                 def safe_is_assist(ev_id, q_lst):
                     try:
                         return 1 if is_assist(ev_id, q_lst) else 0
-                    except:
+                    except Exception:
                         return 0
 
                 truppen_stats_kamp_raw['Assists'] = df_kamp_events.apply(
