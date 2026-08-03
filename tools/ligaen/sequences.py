@@ -25,16 +25,21 @@ def oversæt_qualifiers(qual_str):
     return ", ".join(tekster)
 
 def draw_match_info_box(ax, scoring_team_logo, opp_team_logo, date_str, score_str, min_str):
-    """Tegner info-boks ved mål-sekvenser"""
-    if scoring_team_logo:
-        ax_l1 = ax.inset_axes([0.02, 0.08, 0.05, 0.05], transform=ax.transAxes)
-        ax_l1.imshow(scoring_team_logo); ax_l1.axis('off')
-    ax.text(0.08, 0.105, "vs.", transform=ax.transAxes, fontsize=8, fontweight='bold', va='center')
-    if opp_team_logo:
-        ax_l2 = ax.inset_axes([0.10, 0.08, 0.05, 0.05], transform=ax.transAxes)
-        ax_l2.imshow(opp_team_logo); ax_l2.axis('off')
-    ax.text(0.03, 0.07, f"{date_str} | Stilling: {score_str} ({min_str}. min)", transform=ax.transAxes, fontsize=8, color='#444444', va='top')
+    """Tegner info-boks ved mål-sekvenser med korrekt placering i banens koordinatsystem"""
+    y_top = 5.2
+    y_bot = 2.0
 
+    if scoring_team_logo:
+        ax.inset_image(x=2.2, y=y_top, image=scoring_team_logo, height=4.0, ax=ax, zorder=6)
+
+    ax.text(3.7, y_top, "vs.", fontsize=7, fontweight='bold', ha='center', va='center', color='#333333', zorder=6)
+
+    if opp_team_logo:
+        ax.inset_image(x=5.2, y=y_top, image=opp_team_logo, height=4.0, ax=ax, zorder=6)
+
+    tekst_bund = f"{date_str} | Stilling: {score_str} ({min_str}. min)"
+    ax.text(2.2, y_bot, tekst_bund, fontsize=8, color='#555555', ha='left', va='center', zorder=6)
+    
 def vis_side(dp=None):
     conn = _get_snowflake_conn()
     if not conn:
