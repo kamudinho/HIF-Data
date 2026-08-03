@@ -7,6 +7,7 @@ class PlayerMapping:
     def __init__(self, csv_file_path):
         self.wy_to_optauuid = {}
         self.optauuid_to_wy = {}
+        self.optauuid_to_name = {}
         self.players_by_name = {}
         self._load_data(csv_file_path)
 
@@ -34,8 +35,11 @@ class PlayerMapping:
 
                 if wy_id and wy_id != "0":
                     self.wy_to_optauuid[int(wy_id)] = opta_uuid
+                
                 if opta_uuid:
                     self.optauuid_to_wy[opta_uuid] = int(wy_id) if wy_id.isdigit() and wy_id != "0" else None
+                    if navn:
+                        self.optauuid_to_name[opta_uuid] = navn
                 
                 self.players_by_name.setdefault(navn.lower(), []).append(player_info)
 
@@ -44,6 +48,10 @@ class PlayerMapping:
 
     def get_wy_id(self, player_optauuid):
         return self.optauuid_to_wy.get(player_optauuid)
+
+    def get_name_by_opta_uuid(self, player_optauuid):
+        """Henter det korrekte navn ud fra Opta UUID"""
+        return self.optauuid_to_name.get(player_optauuid)
 
     def get_player_by_name(self, navn):
         return self.players_by_name.get(navn.lower(), [])
