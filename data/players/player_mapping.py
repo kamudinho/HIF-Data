@@ -120,7 +120,6 @@ PLAYER_MAPPING = [
     {"klub": "AaB", "navn": "Marcus Bondee", "position": "Midfielder", "player_optauuid": "7wytawxwiszq1aass5ujio7o", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
     {"klub": "AaB", "navn": "William Thomsen", "position": "Attacker", "player_optauuid": "14ur60ict5k3l9nv02o7psw0k", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
     {"klub": "AaB", "navn": "Cornelius Axel Olsson", "position": "Defender", "player_optauuid": "5uo9saax5iqsctxq7w3si8w0k", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
-    {"klub": "AaB", "navn": "Frederik Lindbøg Børsting", "position": "Midfielder", "player_optauuid": "egwhlgopjtjkop7ozy7ltk1cl", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
     {"klub": "AaB", "navn": "Kornelius Normann Hansen", "position": "Attacker", "player_optauuid": "48sqqhgtmfmpqb3602iirspd6", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
     {"klub": "AaB", "navn": "Marc Nielsen", "position": "Defender", "player_optauuid": "bcdp9e3dezuaybm8ndrsanbx0", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
     {"klub": "AaB", "navn": "Alexander Lien Håpnes", "position": "Midfielder", "player_optauuid": "5y2mfgruizah0ylcz7q1abw9g", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
