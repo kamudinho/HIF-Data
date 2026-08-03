@@ -93,9 +93,9 @@ def vis_side(dp=None):
     valgt_uuid = team_map[valgt_hold_navn]
     hold_logo = get_logo_img(valgt_uuid)
 
-    st.caption("Gennemgang af holdets målsekvenser (inkl. modstanderens dueller/clearinger i kampsekvensen).")
+    st.caption("Gennemgang af holdets målsekvenser (inkl. udvidet tidsvindue ved standardsituationer/hjørnespark og modstanderens aktioner).")
 
-    # --- SQL HENTNING AF MÅLSEKVENSER (MED BÅDE HVIDOVRE OG MODSTANDERENS KAMP-AKTIONER) ---
+    # --- SQL HENTNING AF MÅLSEKVENSER (MED BÅDE HOLDETS OG MODSTANDERENS AKTIONER) ---
     sql_seq = f"""
         WITH SeasonMatches AS (
             SELECT MATCH_OPTAUUID, CONTESTANTHOME_NAME, CONTESTANTAWAY_NAME, 
@@ -309,11 +309,10 @@ def vis_side(dp=None):
         (df_all['GOAL_TIMESTAMP'] == sd['goal_ts'])
     ].sort_values('EVENT_TIMESTAMP').copy()
 
-    # Fjern eventuelle fejlagtige målmands-registreringer ved det første hjørnespark (hvis modstanderens målmand fejlagtigt er sat på)
+    # Ryd op i den første hændelse (hjørnesparket) hvis modstanderens målmand/spiller ved en datafejl er sat på som udfører
     if not tge.empty:
         for idx, row in tge.head(2).iterrows():
             if str(row['EVENT_CONTESTANT_OPTAUUID']) != str(valgt_uuid) and str(row.get('AKTION', '')).lower() in ['hjørnespark', 'corner']:
-                # Ret konsekvent hold-id eller ryd aktionen hvis den fejlagtigt tilhører modstanderens målmand i starten
                 tge.loc[idx, 'EVENT_CONTESTANT_OPTAUUID'] = valgt_uuid
 
     tge['sekvens_nr'] = range(1, len(tge) + 1)
@@ -348,7 +347,7 @@ def vis_side(dp=None):
                     prik_str = 70
                     tekst_farve = '#333333'
                 elif er_modstander:
-                    prik_farve = '#999999'  # Grå cirkel til modstanderens clearinger/dueller
+                    prik_farve = '#999999'  # Grå cirkel til modstanderens aktioner (f.eks. clearinger/dueller)
                     prik_str = 45
                     tekst_farve = '#777777'
                 else:
