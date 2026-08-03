@@ -24,19 +24,16 @@ def oversæt_qualifiers(qual_str):
                 tekster.append(OPTA_QUALIFIERS[q_int])
     return ", ".join(tekster)
 
-def draw_match_info_box(ax, hold_logo, opp_logo, sd['date'], sd['stilling_hjemme_ude'], sd['min'])
-    """Tegner info-boks med logoer pænt ved siden af hinanden i venstre side"""
+def draw_match_info_box(ax, scoring_team_logo, opp_team_logo, date_str, score_str, min_str):
+    """Tegner info-boks ved mål-sekvenser"""
     if scoring_team_logo:
-        ax_l1 = ax.inset_axes([0.02, 0.08, 0.04, 0.04], transform=ax.transAxes)
+        ax_l1 = ax.inset_axes([0.02, 0.08, 0.05, 0.05], transform=ax.transAxes)
         ax_l1.imshow(scoring_team_logo); ax_l1.axis('off')
-        
-    ax.text(0.068, 0.10, "vs.", transform=ax.transAxes, fontsize=8, fontweight='bold', va='center', ha='center', color='#333333')
-    
+    ax.text(0.08, 0.105, "vs.", transform=ax.transAxes, fontsize=8, fontweight='bold', va='center')
     if opp_team_logo:
-        ax_l2 = ax.inset_axes([0.082, 0.08, 0.04, 0.04], transform=ax.transAxes)
+        ax_l2 = ax.inset_axes([0.10, 0.08, 0.05, 0.05], transform=ax.transAxes)
         ax_l2.imshow(opp_team_logo); ax_l2.axis('off')
-        
-    ax.text(0.02, 0.035, f"{date_str} | Stilling: {score_str} ({min_str}. min)", transform=ax.transAxes, fontsize=8, color='#444444', va='bottom', ha='left')
+    ax.text(0.03, 0.07, f"{date_str} | Stilling: {score_str} ({min_str}. min)", transform=ax.transAxes, fontsize=8, color='#444444', va='top')
 
 def vis_side(dp=None):
     conn = _get_snowflake_conn()
@@ -95,7 +92,7 @@ def vis_side(dp=None):
     valgt_uuid = team_map[valgt_hold_navn]
     hold_logo = get_logo_img(valgt_uuid)
 
-    st.caption("Gennemgang af holdets målsekvenser")
+    st.caption("Gennemgang af holdets målsekvenser fra bolden vindes, til målet falder.")
 
     # --- SQL HENTNING AF MÅLSEKVENSER ---
     sql_seq = f"""
@@ -330,9 +327,9 @@ def vis_side(dp=None):
                         fontsize=6, ha='center', va='top', color='#333333', zorder=5
                     )
 
-        # Brug af den korrekte draw_match_info_box
+        # Brug af draw_match_info_box til at indsætte logoer og info i bunden af banen
         opp_logo = get_logo_img(sd['opp_uuid'])
-        draw_match_info_box(pitch, ax, hold_logo, opp_logo, sd['date'], sd['stilling_hjemme_ude'], sd['min'])
+        draw_match_info_box(ax, hold_logo, opp_logo, sd['date'], sd['stilling_hjemme_ude'], sd['min'])
 
         st.pyplot(fig, use_container_width=True)
 
