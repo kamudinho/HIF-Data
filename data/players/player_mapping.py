@@ -278,7 +278,7 @@ PLAYER_MAPPING = [
     {"klub": "Vejle Boldklub", "navn": "Christian Sørensen", "position": "Defender", "player_wyid": 7358148, "player_optauuid": "mcb1hiuk9rzf48cx3vj5i3th"},
     {"klub": "Vejle Boldklub", "navn": "Nicolai Oppen Larsen", "position": "Goalkeeper", "player_wyid": 623781, "player_optauuid": "b2492j7qzdo7g3ysxz6gq4g5x"},
     {"klub": "Vejle Boldklub", "navn": "Giorgi Tabatadze", "position": "Defender", "player_wyid": 771159, "player_optauuid": "d1uqdyoqq6vyafeqbnsi6xo2c"},
-    {"klub": "Vejle Boldklub", "navn": "Bismark Edjeodji", "position": "Midfielder", "player_wyid": 9271754, "player_optauuid": "nzauesd85d6utkwdc1s1a1as"}
+    {"klub": "Vejle Boldklub", "navn": "Bismark Edjeodji", "position": "Midfielder", "player_wyid": 9271754, "player_optauuid": "nzauesd85d6utkwdc1s1a1as"},
     
     # Vendsyssel FF
     {"klub": "Vendsyssel FF", "navn": "Bilal Konteh", "position": "Defender", "player_wyid": 9152663, "player_optauuid": "ylz4gki78fg6jxbbzae0hgk4"},
