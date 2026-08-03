@@ -6,10 +6,16 @@ from mplsoccer import Pitch
 from data.data_load import _get_snowflake_conn
 from data.utils.team_mapping import TEAMS, SEASON_LEAGUE_MAPPER, SEASONS, COMPETITIONS, COMPETITION_NAME
 from data.utils.mapping import OPTA_EVENT_TYPES, OPTA_QUALIFIERS, get_action_label, har_qualifier
+from data.players.player_mapping import PlayerMapping
 from utils.helpers import get_logo_img
+from pathlib import Path
 
 # Snowflake database sti
 DB = "KLUB_HVIDOVREIF.AXIS"
+
+# Initialiser PlayerMapping (sørg for at stien til din CSV-fil matcher)
+player_map_path = Path("data/players/player_mapping.csv")
+player_mapping = PlayerMapping(player_map_path) if player_map_path.exists() else None
 
 def oversæt_qualifiers(qual_str):
     if not qual_str or pd.isna(qual_str):
@@ -159,6 +165,7 @@ def vis_side(dp=None):
             e.EVENT_TIMESTAMP,
             e.GOAL_MIN,
             COALESCE(pn.P_NAME, 'Ukendt') as PLAYER_NAME,
+            e.PLAYER_OPTAUUID,
             e.EVENT_TYPEID,
             e.EVENT_X as RAW_X,
             e.EVENT_Y as RAW_Y,
