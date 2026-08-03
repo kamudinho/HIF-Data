@@ -133,7 +133,9 @@ def get_action_label(row):
 
 def is_assist(event_typeid, qualifiers=None):
     """Hurtig tjek om en aktion er en assist (ID 210)."""
-    return "210" in [str(q) for q in qualifiers_list]
+    if qualifiers is None:
+        return False
+    return "210" in [str(q) for q in qualifiers]
 
 def har_qualifier(event_typeid, qualifiers_list, target_event_id, target_qual_ids):
     """
