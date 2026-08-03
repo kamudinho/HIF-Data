@@ -95,7 +95,7 @@ def vis_side(dp=None):
 
     st.caption("Gennemgang af holdets målsekvenser fra bolden vindes, til målet falder.")
 
-    # --- SQL HENTNING AF MÅLSEKVENSER INKL. LØBENDE STILLING ---
+    # --- SQL HENTNING AF MÅLSEKVENSER (BAGLÆNS FRA MÅL) ---
     sql_seq = f"""
         WITH SeasonMatches AS (
             SELECT MATCH_OPTAUUID, CONTESTANTHOME_NAME, CONTESTANTAWAY_NAME, 
@@ -105,44 +105,36 @@ def vis_side(dp=None):
             WHERE TOURNAMENTCALENDAR_OPTAUUID IN {liga_ids_sql}
         ),
         TargetGoals AS (
-            SELECT DISTINCT 
-                e.SEQUENCEID, 
-                e.MATCH_OPTAUUID,
-                e.EVENT_TIMESTAMP as GOAL_TIMESTAMP,
-                e.EVENT_OPTAUUID as GOAL_EVENT_OPTAUUID,
-                e.EVENT_TIMEMIN as GOAL_MIN
-            FROM {DB}.OPTA_EVENTS e
-            WHERE e.MATCH_OPTAUUID IN (SELECT MATCH_OPTAUUID FROM SeasonMatches)
-            AND e.EVENT_TYPEID = 16 
-            AND e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}'
-        ),
-        SequenceBounds AS (
-            SELECT 
-                g.SEQUENCEID,
-                g.MATCH_OPTAUUID,
-                g.GOAL_TIMESTAMP,
-                g.GOAL_EVENT_OPTAUUID,
-                g.GOAL_MIN,
-                MIN(e.EVENT_TIMESTAMP) AS SEQ_START_TIMESTAMP
-            FROM TargetGoals g
-            JOIN {DB}.OPTA_EVENTS e ON g.SEQUENCEID = e.SEQUENCEID AND g.MATCH_OPTAUUID = e.MATCH_OPTAUUID
-            GROUP BY g.SEQUENCEID, g.MATCH_OPTAUUID, g.GOAL_TIMESTAMP, g.GOAL_EVENT_OPTAUUID, g.GOAL_MIN
+            SELECT MATCH_OPTAUUID, EVENT_TIMESTAMP as G_TIME, EVENT_TIMEMIN as G_MIN, SEQUENCEID, EVENT_OPTAUUID as G_EVENT_UUID
+            FROM {DB}.OPTA_EVENTS 
+            WHERE EVENT_TYPEID = 16 AND EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}'
+            AND MATCH_OPTAUUID IN (SELECT MATCH_OPTAUUID FROM SeasonMatches)
         ),
         RankedMatchEvents AS (
             SELECT 
                 e.*,
-                sb.GOAL_TIMESTAMP,
-                sb.GOAL_EVENT_OPTAUUID,
-                sb.GOAL_MIN,
+                tg.G_TIME as GOAL_TIMESTAMP,
+                tg.SEQUENCEID as TARGET_SEQUENCEID,
+                tg.G_MIN as GOAL_MIN,
+                tg.G_EVENT_UUID,
+                m.MATCH_LOCALDATE,
+                m.CONTESTANTHOME_NAME,
+                m.CONTESTANTAWAY_NAME,
+                m.CONTESTANTHOME_OPTAUUID,
+                m.CONTESTANTAWAY_OPTAUUID,
+                m.TOTAL_HOME_SCORE,
+                m.TOTAL_AWAY_SCORE,
                 ROW_NUMBER() OVER (
-                    PARTITION BY e.MATCH_OPTAUUID, sb.GOAL_TIMESTAMP 
+                    PARTITION BY e.MATCH_OPTAUUID, tg.G_TIME 
                     ORDER BY e.EVENT_TIMESTAMP DESC
                 ) as rn
             FROM {DB}.OPTA_EVENTS e
-            JOIN SequenceBounds sb 
-                ON e.MATCH_OPTAUUID = sb.MATCH_OPTAUUID
-            WHERE e.EVENT_TIMESTAMP <= sb.GOAL_TIMESTAMP
-              AND e.EVENT_TIMESTAMP >= sb.SEQ_START_TIMESTAMP
+            JOIN TargetGoals tg 
+                ON e.MATCH_OPTAUUID = tg.MATCH_OPTAUUID
+            JOIN SeasonMatches m 
+                ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
+            WHERE e.EVENT_TIMESTAMP <= tg.G_TIME
+              AND e.EVENT_TIMESTAMP >= DATEADD('millisecond', -20000, tg.G_TIME)
               AND e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}'
         ),
         FilteredEvents AS (
@@ -180,7 +172,7 @@ def vis_side(dp=None):
             e.EVENT_X as RAW_X,
             e.EVENT_Y as RAW_Y,
             e.GOAL_TIMESTAMP,
-            e.GOAL_EVENT_OPTAUUID,
+            e.G_EVENT_UUID AS GOAL_EVENT_OPTAUUID,
             e.GOAL_MIN,
             q.QUALIFIER_LIST,
             m.CONTESTANTHOME_NAME,
@@ -198,7 +190,7 @@ def vis_side(dp=None):
         LEFT JOIN {DB}.OPTA_MATCHINFO m 
             ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
         LEFT JOIN MatchRunningScores rs 
-            ON e.GOAL_EVENT_OPTAUUID = rs.GOAL_EVENT_OPTAUUID
+            ON e.G_EVENT_UUID = rs.GOAL_EVENT_OPTAUUID
         ORDER BY e.SEQUENCEID, e.EVENT_TIMESTAMP ASC;
     """
 
