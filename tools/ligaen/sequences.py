@@ -190,8 +190,19 @@ def vis_side(dp=None):
     # --- OVERSKRIV NAVNE VED HJÆLP AF PLAYER_MAPPING (OPTA UUID) ---
     def map_spiller_navn(row):
         p_uuid = row.get('PLAYER_OPTAUUID')
-        # Sender 'conn' med, så player_mapping selv henter det fra databasen, hvis det mangler
-        return player_mapping.get_name_by_opta_uuid(p_uuid, conn=conn)
+        
+        # 1. Prøv først at slå op via player_mapping
+        if pd.notna(p_uuid) and p_uuid:
+            mapped_name = player_mapping.get_name_by_opta_uuid(p_uuid)
+            if mapped_name:
+                return mapped_name
+                
+        # 2. Fallback: Brug navnet direkte fra databasen, hvis det findes
+        db_name = row.get('RAW_DB_PLAYER_NAME')
+        if pd.notna(db_name) and str(db_name).strip() != "" and str(db_name) != "nan":
+            return str(db_name).strip()
+            
+        return 'Ukendt'
 
     df_all['PLAYER_NAME'] = df_all.apply(map_spiller_navn, axis=1)
 
