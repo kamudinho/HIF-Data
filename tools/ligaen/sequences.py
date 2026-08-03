@@ -154,6 +154,7 @@ def vis_side(dp=None):
             e.EVENT_TIMESTAMP,
             e.GOAL_MIN,
             e.PLAYER_OPTAUUID,
+            e.PLAYER_NAME AS RAW_DB_PLAYER_NAME,
             e.EVENT_TYPEID,
             e.EVENT_X as RAW_X,
             e.EVENT_Y as RAW_Y,
