@@ -93,9 +93,9 @@ def vis_side(dp=None):
     valgt_uuid = team_map[valgt_hold_navn]
     hold_logo = get_logo_img(valgt_uuid)
 
-    st.caption("Gennemgang af holdets målsekvenser (inkl. modstanderens berøringer i opspillet).")
+    st.caption("Gennemgang af holdets målsekvenser (inkl. modstanderens berøringer spejlvendt).")
 
-    # --- SQL HENTNING AF MÅLSEKVENSER (INKL. MODSTANDERE I TIDSVINDUET) ---
+    # --- SQL HENTNING AF MÅLSEKVENSER MED SPEJLVENDT MODSTANDER-KOORDINAT ---
     sql_seq = f"""
         WITH SeasonMatches AS (
             SELECT MATCH_OPTAUUID, CONTESTANTHOME_NAME, CONTESTANTAWAY_NAME, 
@@ -135,7 +135,6 @@ def vis_side(dp=None):
                 ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
             WHERE e.EVENT_TIMESTAMP <= tg.G_TIME
               AND e.EVENT_TIMESTAMP >= DATEADD('millisecond', -20000, tg.G_TIME)
-              -- Fjerner det strenge hold-filter her, så modstanderens berøringer/dueller kommer med
         ),
         FilteredEvents AS (
             SELECT *
@@ -168,10 +167,17 @@ def vis_side(dp=None):
             e.EVENT_TIMEMIN AS EVENT_MINUTE,
             e.PLAYER_OPTAUUID,
             e.PLAYER_NAME,
-            e.EVENT_CONTESTANT_OPTAUUID, -- Vigtigt for at kende holdet bag hændelsen
+            e.EVENT_CONTESTANT_OPTAUUID,
             e.EVENT_TYPEID,
-            e.EVENT_X as RAW_X,
-            e.EVENT_Y as RAW_Y,
+            -- SPEJLVEND MODSTANDERENS KOORDINATER (100 - X, 100 - Y) HVIS DET IKKE ER VORES HOLD
+            CASE 
+                WHEN e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' THEN e.EVENT_X 
+                ELSE (100.0 - e.EVENT_X) 
+            END as RAW_X,
+            CASE 
+                WHEN e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' THEN e.EVENT_Y 
+                ELSE (100.0 - e.EVENT_Y) 
+            END as RAW_Y,
             e.GOAL_TIMESTAMP,
             e.G_EVENT_UUID AS GOAL_EVENT_OPTAUUID,
             e.GOAL_MIN,
@@ -306,7 +312,6 @@ def vis_side(dp=None):
                 er_maal = (str(row['EVENT_TYPEID']) == '16')
                 er_modstander = (str(row['EVENT_CONTESTANT_OPTAUUID']) != str(valgt_uuid))
 
-                # Farve- og formlogik: Mål = rød, Modstander = grå, Eget hold = sort
                 if er_maal:
                     prik_farve = '#df003b'
                     prik_str = 70
@@ -350,7 +355,6 @@ def vis_side(dp=None):
 
         tge['Aktion'] = tge.apply(get_final_label_t4, axis=1)
         
-        # Tilføj evt. en kolonne eller markering for modstander i tabellen, hvis ønsket
         vis_cols = ['sekvens_nr', 'PLAYER_NAME', 'Aktion']
         tabel_df = tge[vis_cols].rename(columns={
             'sekvens_nr': 'Nr.',
