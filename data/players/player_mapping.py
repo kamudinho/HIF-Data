@@ -224,7 +224,7 @@ PLAYER_MAPPING = [
     {"klub": "Hobro IK", "navn": "Martin Huldahl", "position": "Attacker", "player_wyid": 6393348, "player_optauuid": "76cmwkx9p9wsqgdddfzmipzo"},
 
     # Hvidovre IF
-    {"klub": "Hvidovre IF", "navn": "Andreas Kiel Smed", "position": "Midfielder", "player_wyid": 562692, "player_optauuid": "dncrhma6gwcn6pxiu7hfc6qz8"},
+    {"klub": "Hvidovre IF", "navn": "Andreas Smed", "position": "Midfielder", "player_wyid": 562692, "player_optauuid": "dncrhma6gwcn6pxiu7hfc6qz8"},
     {"klub": "Hvidovre IF", "navn": "Alexander Johansen", "position": "Attacker", "player_wyid": 10232857, "player_optauuid": "ymn0ytcqi6l43nqraxt9s1zo"},
     {"klub": "Hvidovre IF", "navn": "Marius Elvius", "position": "Defender", "player_wyid": 5053926, "player_optauuid": "c2isptqoy4cq5c8rlr9s1roq"},
     {"klub": "Hvidovre IF", "navn": "Nicolai Clausen", "position": "Defender", "player_wyid": 6232526, "player_optauuid": "dzg820946z4848whaa6ny2nd"},
