@@ -150,28 +150,32 @@ def vis_side(dp=None):
         )
         SELECT 
             e.MATCH_OPTAUUID,
-            e.TARGET_SEQUENCEID as SEQUENCEID,
+            e.SEQUENCEID,
             e.EVENT_TIMESTAMP,
-            e.GOAL_MIN,
-            e.PLAYER_OPTAUUID,
-            e.PLAYER_NAME AS RAW_DB_PLAYER_NAME,
+            e.EVENT_TIMEMIN AS EVENT_MINUTE,
+            e.PLAYER_OPTAUUID,   -- <-- DENNE SKAL TILFØJES, SÅ PLAYER_MAPPING VIRKER!
+            e.PLAYER_NAME,        -- Indbygget fallback fra databasen
             e.EVENT_TYPEID,
             e.EVENT_X as RAW_X,
             e.EVENT_Y as RAW_Y,
-            e.EVENT_CONTESTANT_OPTAUUID,
             q.QUALIFIER_LIST,
-            e.CONTESTANTHOME_NAME,
-            e.CONTESTANTAWAY_NAME,
-            e.MATCH_LOCALDATE,
-            e.TOTAL_HOME_SCORE,
-            e.TOTAL_AWAY_SCORE,
-            e.CONTESTANTHOME_OPTAUUID,
-            e.CONTESTANTAWAY_OPTAUUID,
-            e.GOAL_TIMESTAMP
+            m.CONTESTANTHOME_NAME,
+            m.CONTESTANTAWAY_NAME,
+            m.MATCH_DATE_FULL,
+            -- Kampens samlede slutresultat
+            m.TOTAL_HOME_SCORE AS FINAL_HOME_SCORE,
+            m.TOTAL_AWAY_SCORE AS FINAL_AWAY_SCORE,
+            -- Stillingen i det øjeblik målet blev scoret
+            COALESCE(rs.CURRENT_HOME_SCORE, 0) AS GOAL_HOME_SCORE,
+            COALESCE(rs.CURRENT_AWAY_SCORE, 0) AS GOAL_AWAY_SCORE
         FROM FilteredEvents e
         LEFT JOIN EventQualifiers q 
             ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
-        ORDER BY e.MATCH_LOCALDATE DESC, e.GOAL_TIMESTAMP DESC, e.EVENT_TIMESTAMP ASC;
+        LEFT JOIN KLUB_HVIDOVREIF.AXIS.OPTA_MATCHINFO m 
+            ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
+        LEFT JOIN MatchRunningScores rs 
+            ON e.GOAL_EVENT_OPTAUUID = rs.GOAL_EVENT_OPTAUUID
+        ORDER BY e.SEQUENCEID, e.EVENT_TIMESTAMP ASC;
     """
 
     with st.spinner("Henter målsekvenser fra Snowflake..."):
