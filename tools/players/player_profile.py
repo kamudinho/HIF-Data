@@ -557,44 +557,185 @@ def vis_side(dp=None):
         else:
             st.info("Ingen spillerdata tilgængelig.")
  
+    # --- 4. SPILLERAKTIONER ---
     with t_pitch:
-        df_filtreret = df_spiller[~df_spiller['Action_Label'].isin(['Pasning', 'Indkast'])] if not df_spiller.empty else pd.DataFrame()
- 
+        descriptions = {
+            "Heatmap": "Viser spillerens generelle bevægelsesmønster og intensitet på banen.",
+            "Berøringer": "Alle aktioner hvor spilleren har været i kontakt med bolden.",
+            "Afslutninger": "Oversigt over alle skudforsøg (Mål = firkant, skud = cirkel).",
+            "Erobringer": "Tacklinger, bolderobringer og opsnappede afleveringer."
+        }
+        touch_ids = [1, 3, 7, 10, 11, 12, 13, 14, 15, 16, 42, 44, 49, 50, 51, 54, 61, 73]
+        df_filtreret = df_spiller[~df_spiller['Action_Label'].isin(['Pasning', 'Indkast'])]
+
+        akt_stats = pd.DataFrame()
+        if not df_filtreret.empty:
+            akt_stats = df_filtreret.groupby('Action_Label').agg(Total=('outcome', 'count'), Succes=('outcome', 'sum')).sort_values('Total', ascending=False)
+
         c_stats_side, c_buffer, c_pitch_side = st.columns([1, 0.05, 2.2])
- 
+
         with c_stats_side:
+            logo_html = ""
             if hold_logo is not None:
                 buffered = io.BytesIO()
                 hold_logo.save(buffered, format="PNG")
                 img_str = base64.b64encode(buffered.getvalue()).decode()
-                st.markdown(f'<img src="data:image/png;base64,{img_str}" style="height: 30px; margin-bottom: 10px;">', unsafe_allow_html=True)
-            st.markdown("### Aktioner")
-            if not df_filtreret.empty:
-                akt_stats = df_filtreret.groupby('Action_Label').agg(Total=('outcome', 'count'), Succes=('outcome', 'sum')).sort_values('Total', ascending=False)
-                st.dataframe(akt_stats, use_container_width=True)
-            else:
-                st.info("Ingen aktionsdata for spilleren.")
- 
+                logo_html = f'<img src="data:image/png;base64,{img_str}" style="height: 35px; margin-right: 12px; object-fit: contain;">'
+
+            st.markdown(f"""
+                <div style="display: flex; align-items: center; margin-bottom: 10px;">
+                    {logo_html}
+                    <div class="player-header" style="margin: 0; line-height: 1.2; font-size: 18px; font-weight: bold;">
+                        {valgt_spiller}
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+            st.markdown("<hr style='margin: 15px 0; opacity: 0.5;'>", unsafe_allow_html=True)
+            total_akt = len(df_spiller)
+            pas_df = df_spiller[df_spiller['event_typeid'] == 1]
+            pas_count = len(pas_df)
+            pas_acc = (pas_df['outcome'].sum() / pas_count * 100) if pas_count > 0 else 0
+
+            chancer_skabt = akt_stats[akt_stats.index.str.contains("Key Pass|assist|Stor chance", case=False, na=False)]['Total'].sum() if not akt_stats.empty else 0
+            shots_count = len(df_spiller[df_spiller['event_typeid'].isin([13, 14, 15, 16])])
+            cross_count = len(df_spiller[df_spiller['qual_list'].apply(lambda x: "2" in x if isinstance(x, list) else False)])
+            erob_count = len(df_spiller[df_spiller['event_typeid'].isin([49])])
+            touch_count = len(df_spiller[df_spiller['event_typeid'].isin(touch_ids)])
+            drib_count = len(df_spiller[df_spiller['event_typeid'].isin([3])])
+            regains_count = len(df_spiller[df_spiller['event_typeid'].isin([7, 8, 12, 49])])
+            boldtab_count = len(df_spiller[df_spiller['event_typeid'].isin([50, 51])])
+            def_count = len(df_spiller[df_spiller['event_typeid'].isin([7, 8])])
+
+            m_r1 = st.columns(4)
+            m_r1[0].metric("Aktioner", total_akt)
+            m_r1[1].metric("Berøringer", touch_count)
+            m_r1[2].metric("Pasninger", pas_count)
+            m_r1[3].metric("Pasning %", f"{int(pas_acc)}%")
+
+            m_r2 = st.columns(4)
+            m_r2[0].metric("Driblinger", drib_count)
+            m_r2[1].metric("Skud", shots_count)
+            m_r2[2].metric("Chancer", int(chancer_skabt))
+            m_r2[3].metric("Indlæg", cross_count)
+
+            m_r3 = st.columns(4)
+            m_r3[0].metric("Def. 1v1", def_count)
+            m_r3[1].metric("Regains", regains_count)
+            m_r3[2].metric("Erobringer", erob_count)
+            m_r3[3].metric("Boldtab", boldtab_count)
+
+            st.markdown("<hr style='margin: 15px 0; opacity: 0.5;'>", unsafe_allow_html=True)
+            st.caption("**Top 10: Aktioner**")
+            if not akt_stats.empty:
+                bare_antal = ['Erobring', 'Clearing', 'Boldtab', 'Frispark vundet', 'Blokeret skud', 'Interception']
+                for akt, row in akt_stats.head(10).iterrows():
+                    total, succes = int(row['Total']), int(row['Succes'])
+                    stats_html = f"<b>{total}</b>" if akt in bare_antal else f"{succes}/{total} <b>({int(succes/total*100)}%)</b>"
+                    st.markdown(f'<div style="display:flex; justify-content:space-between; font-size:11px; border-bottom:0.5px solid #eee; padding:5px 0;"><span>{akt}</span><span style="font-family:monospace;">{stats_html}</span></div>', unsafe_allow_html=True)
+
         with c_pitch_side:
-            st.markdown("### Baneoversigt")
-            pitch = Pitch(pitch_type='opta', pitch_color='white', line_color='black')
-            fig, ax = pitch.draw(figsize=(8, 5))
-            if not df_spiller.empty and 'event_x' in df_spiller.columns and 'event_y' in df_spiller.columns:
-                pitch.scatter(df_spiller['event_x'], df_spiller['event_y'], ax=ax, color=primær_farve, s=40, alpha=0.7)
-            st.pyplot(fig)
- 
+            c_side_spacer, c_desc_col, c_menu_col = st.columns([0.2, 2.0, 1.0])
+            with c_menu_col:
+                visning = st.selectbox("Visning", list(descriptions.keys()), key="pitch_view_sel", label_visibility="collapsed")
+            with c_desc_col:
+                st.markdown(f'<div style="text-align: right; margin-top: 8px; line-height: 1.2;"><span style="color: #666; font-size: 0.85rem;">{descriptions.get(visning)}</span></div>', unsafe_allow_html=True)
+
+            pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
+            fig, ax = pitch.draw(figsize=(10, 7))
+            draw_player_info_box(ax, hold_logo, valgt_spiller, SEASONNAME, visning)
+
+            df_plot = df_spiller.dropna(subset=['event_x', 'event_y'])
+            if not df_plot.empty:
+                if visning == "Heatmap":
+                    pitch.kdeplot(df_plot.event_x, df_plot.event_y, ax=ax, cmap='Blues', fill=True, alpha=0.6, levels=50)
+                elif visning == "Berøringer":
+                    d = df_plot[df_plot['event_typeid'].isin(touch_ids)]
+                    ax.scatter(d.event_x, d.event_y, color=primær_farve, s=40, edgecolors='white', alpha=0.5)
+                elif visning == "Afslutninger":
+                    d = df_plot[df_plot['event_typeid'].isin([13, 14, 15, 16])]
+                    goals = d[d['event_typeid'] == 16]
+                    misses = d[d['event_typeid'].isin([13, 14, 15])]
+                    ax.scatter(misses.event_x, misses.event_y, color='grey', s=60, edgecolors='black', alpha=0.6)
+                    ax.scatter(goals.event_x, goals.event_y, color=primær_farve, s=120, marker='s', edgecolors='black', zorder=5)
+                elif visning == "Erobringer":
+                    d = df_plot[df_plot['event_typeid'].isin([7, 8, 12, 49])]
+                    ax.scatter(d.event_x, d.event_y, color='orange', s=100, edgecolors='white')
+
+            st.pyplot(fig, use_container_width=True)
+            
+    # --- 5. FYSISK DATA ---
     with t_phys:
-        st.markdown("### Fysisk data")
-        if valgt_spiller:
-            df_phys = get_physical_data(valgt_spiller, valgt_player_uuid, valgt_hold, conn)
-            if not df_phys.empty:
-                st.dataframe(df_phys, use_container_width=True)
-            else:
-                st.info("Ingen fysisk data fundet for spilleren.")
+        df_phys = get_physical_data(valgt_spiller, valgt_player_uuid, valgt_hold, conn)
+
+        if df_phys is None or df_phys.empty:
+            st.warning("Data findes endnu ikke hos Second Spectrum")
         else:
-            st.info("Vælg en spiller for at se fysisk data.")
- 
- 
-if __name__ == "__main__":
-    vis_side()
- 
+            df_phys.columns = df_phys.columns.str.lower()
+            df_phys['match_date'] = pd.to_datetime(df_phys['match_date'])
+            df_phys = df_phys.sort_values('match_date', ascending=False)
+
+            hsr_val = df_phys.get('hsr', df_phys.get('high speed running', pd.Series(0, index=df_phys.index)))
+            spr_val = df_phys.get('sprinting', df_phys.get('sprint', pd.Series(0, index=df_phys.index)))
+
+            df_phys['hsr_total'] = hsr_val + spr_val
+            latest = df_phys.iloc[0]
+
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("Distance", f"{round(latest.get('distance', 0)/1000, 2)} km")
+            m2.metric("HSR", f"{int(latest.get('hsr_total', 0))} m")
+            m3.metric("Topfart", f"{round(float(latest.get('top_speed', 0)), 1)} km/t")
+            m4.metric("Højintense", int(latest.get('hi_runs', 0)))
+
+            t_sub_log, t_sub_charts = st.tabs(["Kampoversigt", "Grafer"])
+
+            with t_sub_charts:
+                cat_choice = st.segmented_control("Vælg metrik", options=["HSR (m)", "Sprint (m)", "Distance (km)", "Topfart (km/t)"], default="HSR (m)", key="phys_graph_control")
+                mapping = {"HSR (m)": ("hsr", 1, "m"), "Sprint (m)": ("sprinting", 1, "m"), "Distance (km)": ("distance", 1000, "km"), "Topfart (km/t)": ("top_speed", 1, "km/t")}
+                col_key, div, suffix = mapping[cat_choice]
+
+                df_chart = df_phys[df_phys['match_date'] >= '2025-07-01'].copy()
+                df_chart = df_chart.drop_duplicates(subset=['match_date', 'match_teams'])
+                df_chart = df_chart.sort_values('match_date', ascending=True)
+
+                if not df_chart.empty:
+                    def get_opponent(teams_str, my_team):
+                        if not teams_str: return "?"
+                        parts = [p.strip() for p in teams_str.split('-')]
+                        if len(parts) < 2: return teams_str
+                        return parts[1] if parts[0].lower() in my_team.lower() else parts[0]
+
+                    df_chart['opponent'] = df_chart['match_teams'].apply(lambda x: get_opponent(str(x), valgt_hold))
+                    df_chart['dato_str'] = df_chart['match_date'].dt.strftime('%d/%m')
+                    df_chart['hover_label'] = df_chart['dato_str'] + " vs " + df_chart['opponent']
+                    df_chart['y_val'] = df_chart[col_key] / div
+
+                    fig_phys = go.Figure(go.Bar(
+                        x=df_chart['hover_label'],
+                        y=df_chart['y_val'],
+                        marker_color=primær_farve,
+                        text=df_chart['y_val'].round(1),
+                        textposition='auto',
+                    ))
+                    fig_phys.update_layout(
+                        margin=dict(t=20, b=20, l=20, r=20),
+                        height=300,
+                        xaxis=dict(tickangle=-30),
+                        yaxis=dict(title=suffix)
+                    )
+                    st.plotly_chart(fig_phys, use_container_width=True)
+
+            with t_sub_log:
+                df_log = df_phys[['match_date', 'match_teams', 'distance', 'hsr_total', 'top_speed', 'hi_runs']].copy()
+                df_log['match_date'] = df_log['match_date'].dt.strftime('%Y-%m-%d')
+                df_log['distance'] = (df_log['distance'] / 1000).round(2)
+                df_log['top_speed'] = df_log['top_speed'].round(1)
+
+                df_log = df_log.rename(columns={
+                    'match_date': 'Dato',
+                    'match_teams': 'Kamp',
+                    'distance': 'Distance (km)',
+                    'hsr_total': 'HSR (m)',
+                    'top_speed': 'Topfart (km/t)',
+                    'hi_runs': 'Højintense løb'
+                })
+                st.dataframe(df_log, use_container_width=True, hide_index=True)
