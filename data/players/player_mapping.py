@@ -254,7 +254,6 @@ PLAYER_MAPPING = [
     {"klub": "#Hvidovre IF", "navn": "Ahmed Iljazovski", "position": "Defender", "player_optauuid": "bfvdr7ckiersz26ya2kq9f1g4", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
     {"klub": "#Hvidovre IF", "navn": "Frederik Rask Høgh Jensen", "position": "Attacker", "player_optauuid": "9tt9eo9bsff7dp7aqjal1obo4", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
     {"klub": "#Hvidovre IF", "navn": "Alexander Johansen", "position": "Attacker", "player_optauuid": "7ymn0ytcqi6l43nqraxt9s1zo", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
-    {"klub": "#Hvidovre IF", "navn": "Louka Prip", "position": "Attacker", "player_optauuid": "9dnceiwcpsatrdrj2m1uz6pnu", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
     {"klub": "#Hvidovre IF", "navn": "Zamir Aliji", "position": "Midfielder", "player_optauuid": "aajgld24isoem1ycoysyxxp1w", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
     {"klub": "#Hvidovre IF", "navn": "Nicolaj Jungvig", "position": "Defender", "player_optauuid": "3pk6hii2s8tbv2zux8mvbapec", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
     {"klub": "#Hvidovre IF", "navn": "Oliver Kjærgaard", "position": "Midfielder", "player_optauuid": "cl4xl80n4gew1ox03r3ooshrd", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
