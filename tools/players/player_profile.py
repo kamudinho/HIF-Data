@@ -23,7 +23,7 @@ from data.sql.liga_spillere import hent_match_og_haendelsesdata
 
 # --- KONFIGURATION (HVIDOVRE-APP / 2025/2026) ---
 DB = "KLUB_HVIDOVREIF.AXIS"
-SEASONNAME = "2026/2027"
+SEASONNAME = "2025/2026"
 TEAM_WYID = 7490
 COMPETITION_WYID = (328,)
 COMP_MAP = { 
@@ -555,6 +555,7 @@ def vis_side(dp=None):
         else:
             st.warning("Ingen spillede kampe fundet i denne sæson.")
 
+    # --- 3. SPILLERPROFIL ---
     with t_profile:
         numeric_cols = truppen_stats.drop(columns=['visningsnavn', 'Pasningsprocent_Str'], errors='ignore')
         ranks = (-numeric_cols).rank(ascending=True, method='min').astype(int)
@@ -620,6 +621,7 @@ def vis_side(dp=None):
                         fig = create_relative_donut(player_val, truppen_stats[k_id].max(), label, get_ordinal(spiller_ranks[k_id]), color=primær_farve)
                         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False}, key=f"p_{k_id}_{i}_{j}")
 
+    # --- 4. SPILLERAKTIONER ---
     with t_pitch:
         descriptions = {
             "Heatmap": "Viser spillerens generelle bevægelsesmønster og intensitet på banen.",
@@ -725,6 +727,7 @@ def vis_side(dp=None):
 
             st.pyplot(fig, use_container_width=True)
             
+    # --- 5. FYSISK DATA ---
     with t_phys:
         df_phys = get_physical_data(valgt_spiller, valgt_player_uuid, valgt_hold, conn)
 
@@ -754,7 +757,7 @@ def vis_side(dp=None):
                 mapping = {"HSR (m)": ("hsr", 1, "m"), "Sprint (m)": ("sprinting", 1, "m"), "Distance (km)": ("distance", 1000, "km"), "Topfart (km/t)": ("top_speed", 1, "km/t")}
                 col_key, div, suffix = mapping[cat_choice]
 
-                df_chart = df_phys[df_phys['match_date'] >= '2026-07-01'].copy()
+                df_chart = df_phys[df_phys['match_date'] >= '2025-07-01'].copy()
                 df_chart = df_chart.drop_duplicates(subset=['match_date', 'match_teams'])
                 df_chart = df_chart.sort_values('match_date', ascending=True)
 
