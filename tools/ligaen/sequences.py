@@ -14,7 +14,7 @@ from pathlib import Path
 DB = "KLUB_HVIDOVREIF.AXIS"
 
 # Initialiser PlayerMapping (sørg for at stien til din CSV-fil matcher)
-player_map_path = Path("data/players/1div.csv")
+player_map_path = Path("data/players/1div_overskrivning.csv")
 player_mapping = PlayerMapping(player_map_path) if player_map_path.exists() else None
 
 def oversæt_qualifiers(qual_str):
