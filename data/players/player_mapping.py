@@ -298,6 +298,6 @@ PLAYER_MAPPING = [
     {"klub": "Vendsyssel FF", "navn": "Sebastian Lodberg Oppenhagen", "position": "Attacker", "player_optauuid": "b2e6na1kcw3l5tu7n32w1awwk", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
     {"klub": "Vendsyssel FF", "navn": "Stephen Fumen Michael", "position": "Midfielder", "player_optauuid": "5jhfvec5tqv3sjtzejmu4b47o", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
     {"klub": "Vendsyssel FF", "navn": "Steven Jamal Simpson", "position": "Attacker", "player_optauuid": "7t811fc39zstqmkqyb56flogk", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"}
-]
+    ]
 player_mapping = PlayerMapping(PLAYER_MAPPING)
 
