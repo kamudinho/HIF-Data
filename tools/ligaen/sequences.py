@@ -53,7 +53,7 @@ def vis_side(dp=None):
     
     col_spacer_top, col_saeson, col_hold = st.columns([2.5, 1, 1])
     
-    default_season_idx = available_seasons.index("2026/2027") if "2026/2027" in available_seasons else 0
+    default_season_idx = available_seasons.index("2025/2026") if "2025/2026" in available_seasons else 0
     valgt_saeson = col_saeson.selectbox(
         "Vælg sæson", 
         available_seasons, 
@@ -353,7 +353,8 @@ def vis_side(dp=None):
         st.markdown("##### Aktioner i sekvensen")
         
         def get_final_label_t4(row):
-            if str(row['EVENT_TYPEID']) == "16" and "9" in row.get('qual_list', []):
+            qual_str = str(row.get('QUALIFIER_LIST', ''))
+            if str(row['EVENT_TYPEID']) == "16" and "9" in qual_str:
                 return "STRAFFESPARK"
             if 'AKTION' in row and pd.notna(row['AKTION']) and row['AKTION'] != "":
                 return row['AKTION']
