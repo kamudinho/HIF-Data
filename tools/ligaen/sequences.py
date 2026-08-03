@@ -12,12 +12,6 @@ from utils.helpers import get_logo_img
 # Snowflake database sti
 DB = "KLUB_HVIDOVREIF.AXIS"
 
-# Initialiser PlayerMapping direkte uden CSV-sti
-try:
-    player_mapping = PlayerMapping()
-except Exception:
-    player_mapping = None
-
 def oversæt_qualifiers(qual_str):
     if not qual_str or pd.isna(qual_str):
         return ""
@@ -47,6 +41,27 @@ def vis_side(dp=None):
     if not conn:
         st.warning("Kunne ikke oprette forbindelse til databasen.")
         st.stop()
+
+    # --- HENT SPILLERE OG INITIALISER PLAYER MAPPING ---
+    player_mapping = None
+    try:
+        sql_players = f"""
+            SELECT DISTINCT 
+                NULL as klub,
+                TRIM(FIRST_NAME) || ' ' || TRIM(LAST_NAME) as navn,
+                NULL as position,
+                NULL as player_wyid,
+                PLAYER_OPTAUUID as player_optauuid
+            FROM {DB}.OPTA_MATCH_LINEUPS
+            WHERE FIRST_NAME IS NOT NULL AND PLAYER_OPTAUUID IS NOT NULL
+        """
+        df_players = conn.query(sql_players)
+        if df_players is not None and not df_players.empty:
+            df_players.columns = [c.lower() for c in df_players.columns]
+            player_list = df_players.to_dict(orient="records")
+            player_mapping = PlayerMapping(player_list)
+    except Exception:
+        player_mapping = None
 
     # --- SÆSON- OG HOLDVÆLGER I TOPPEN ---
     available_seasons = sorted(list(SEASONS.keys()), reverse=True)
