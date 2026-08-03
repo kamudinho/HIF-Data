@@ -1,3 +1,5 @@
+# data/players/player_mapping.py
+
 import csv
 from pathlib import Path
 
@@ -30,23 +32,18 @@ class PlayerMapping:
                     "player_optauuid": opta_uuid if opta_uuid else None
                 }
 
-                # Gem i opslagstavler
                 if wy_id and wy_id != "0":
                     self.wy_to_optauuid[int(wy_id)] = opta_uuid
                 if opta_uuid:
                     self.optauuid_to_wy[opta_uuid] = int(wy_id) if wy_id.isdigit() and wy_id != "0" else None
                 
-                # Gør det muligt at søge på navn (gemmer i en liste, da navne kan forekomme flere steder)
                 self.players_by_name.setdefault(navn.lower(), []).append(player_info)
 
     def get_opta_uuid(self, player_wyid):
-        """Finder Opta UUID ud fra Wyscout ID"""
         return self.wy_to_optauuid.get(int(player_wyid))
 
     def get_wy_id(self, player_optauuid):
-        """Finder Wyscout ID ud fra Opta UUID"""
         return self.optauuid_to_wy.get(player_optauuid)
 
     def get_player_by_name(self, navn):
-        """Finder spillerdetaljer ud fra navn"""
         return self.players_by_name.get(navn.lower(), [])
