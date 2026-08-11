@@ -51,18 +51,20 @@ def load_data(periode, start, split, slut, calendar_uuid, wyid):
     
     df_wy = pd.DataFrame()
     if wyid:
-        # NOTE: AVG(adv.GOALS_AGAINST) forudsætter, at WYSCOUT_MATCHADVANCEDSTATS_GENERAL
-        # har en GOALS_AGAINST-kolonne parallelt med GOALS. Tjek kolonnenavnet i jeres
-        # Snowflake-skema (fx via DESCRIBE TABLE) og ret navnet her, hvis det hedder noget andet
-        # (fx GOALS_CONCEDED / CONCEDED_GOALS).
+        # GOALS_AGAINST findes ikke som kolonne i WYSCOUT_MATCHADVANCEDSTATS_GENERAL.
+        # Den udledes i stedet ved at selv-joine WYSCOUT_TEAMMATCHES på samme MATCH_WYID
+        # men det MODSATTE hold (opp), og hente MODSTANDERENS GOALS fra adv-tabellen —
+        # det er pr. definition holdets "mål imod" i den kamp.
         df_wy = conn.query(f"""
             SELECT 
                 tm.TEAM_WYID, 
                 AVG(adv.XG) as XG, AVG(adv.SHOTS) as SHOTS, AVG(adv.GOALS) as GOALS,
-                AVG(adv.GOALS_AGAINST) as GOALS_AGAINST,
+                AVG(opp_adv.GOALS) as GOALS_AGAINST,
                 AVG(md.PPDA) as PPDA, AVG(mp.PASSES) as PASSES
             FROM {db}.WYSCOUT_TEAMMATCHES tm 
             LEFT JOIN {db}.WYSCOUT_MATCHADVANCEDSTATS_GENERAL adv ON tm.MATCH_WYID = adv.MATCH_WYID AND tm.TEAM_WYID = adv.TEAM_WYID 
+            LEFT JOIN {db}.WYSCOUT_TEAMMATCHES opp ON tm.MATCH_WYID = opp.MATCH_WYID AND tm.TEAM_WYID <> opp.TEAM_WYID
+            LEFT JOIN {db}.WYSCOUT_MATCHADVANCEDSTATS_GENERAL opp_adv ON opp.MATCH_WYID = opp_adv.MATCH_WYID AND opp.TEAM_WYID = opp_adv.TEAM_WYID
             LEFT JOIN {db}.WYSCOUT_MATCHADVANCEDSTATS_DEFENCE md ON tm.MATCH_WYID = md.MATCH_WYID AND tm.TEAM_WYID = md.TEAM_WYID 
             LEFT JOIN {db}.WYSCOUT_MATCHADVANCEDSTATS_PASSES mp ON tm.MATCH_WYID = mp.MATCH_WYID AND tm.TEAM_WYID = mp.TEAM_WYID
             WHERE tm.COMPETITION_WYID = {wyid} 
