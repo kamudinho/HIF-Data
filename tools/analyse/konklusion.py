@@ -6,6 +6,7 @@ from data.utils.team_mapping import (
     TEAMS,
     COMPETITIONS,
     SEASONS,
+    SEASON_LEAGUE_MAPPER,
     COMPETITION_NAME,
     TOURNAMENTCALENDAR_NAME as SAESON_NAVN,
 )
