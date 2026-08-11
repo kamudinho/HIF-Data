@@ -52,7 +52,15 @@ def vis_side(dp=None):
             SUM(CASE WHEN STAT_TYPE = 'expectedGoalsConceded' THEN STAT_VALUE ELSE 0 END) as XGC,
             SUM(CASE WHEN STAT_TYPE = 'expectedGoalsontargetConceded' THEN STAT_VALUE ELSE 0 END) as XGOT_CONCEDED,
             SUM(CASE WHEN STAT_TYPE = 'expectedGoalsSetplay' THEN STAT_VALUE ELSE 0 END) as XG_SETPLAY,
-            SUM(CASE WHEN STAT_TYPE = 'totalYellowCard' THEN STAT_VALUE ELSE 0 END) as YELLOW_CARDS
+            SUM(CASE WHEN STAT_TYPE = 'totalYellowCard' THEN STAT_VALUE ELSE 0 END) as YELLOW_CARDS,
+            -- Afslutningsmetrikker & Scenarier
+            SUM(CASE WHEN STAT_TYPE = 'totalScoringAtt' THEN STAT_VALUE ELSE 0 END) as TOTAL_SHOTS,
+            SUM(CASE WHEN STAT_TYPE = 'ontargetScoringAtt' THEN STAT_VALUE ELSE 0 END) as SHOTS_ON_TARGET,
+            SUM(CASE WHEN STAT_TYPE = 'attCorner' THEN STAT_VALUE ELSE 0 END) as SHOTS_CORNERS,
+            SUM(CASE WHEN STAT_TYPE = 'attSetpiece' THEN STAT_VALUE ELSE 0 END) as SHOTS_SETPIECE,
+            SUM(CASE WHEN STAT_TYPE = 'attOpenplay' THEN STAT_VALUE ELSE 0 END) as SHOTS_OPENPLAY,
+            SUM(CASE WHEN STAT_TYPE = 'attFastbreak' THEN STAT_VALUE ELSE 0 END) as SHOTS_COUNTER,
+            SUM(CASE WHEN STAT_TYPE = 'hitWoodwork' THEN STAT_VALUE ELSE 0 END) as WOODWORK
         FROM {DB}.OPTA_MATCHEXPECTEDGOALS_TEAM
         WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
         GROUP BY 1
@@ -67,7 +75,14 @@ def vis_side(dp=None):
            COALESCE(e.XGC, 0) as XGC,
            COALESCE(e.XGOT_CONCEDED, 0) as XGOT_CONCEDED,
            COALESCE(e.XG_SETPLAY, 0) as XG_SETPLAY,
-           COALESCE(e.YELLOW_CARDS, 0) as YELLOW_CARDS
+           COALESCE(e.YELLOW_CARDS, 0) as YELLOW_CARDS,
+           COALESCE(e.TOTAL_SHOTS, 0) as TOTAL_SHOTS,
+           COALESCE(e.SHOTS_ON_TARGET, 0) as SHOTS_ON_TARGET,
+           COALESCE(e.SHOTS_CORNERS, 0) as SHOTS_CORNERS,
+           COALESCE(e.SHOTS_SETPIECE, 0) as SHOTS_SETPIECE,
+           COALESCE(e.SHOTS_OPENPLAY, 0) as SHOTS_OPENPLAY,
+           COALESCE(e.SHOTS_COUNTER, 0) as SHOTS_COUNTER,
+           COALESCE(e.WOODWORK, 0) as WOODWORK
     FROM MatchStats m
     LEFT JOIN ExpectedStats e ON m.TEAM_ID = e.TEAM_ID
     '''
@@ -80,7 +95,9 @@ def vis_side(dp=None):
         cols_to_float = [
             'GOALS', 'XG', 'XG_FH', 'XG_SH', 'XA', 'BIG_CHANCES', 
             'TOUCHES_OPP_BOX', 'POSS', 'TOUCHES', 'XGC', 
-            'XGOT_CONCEDED', 'XG_SETPLAY', 'YELLOW_CARDS'
+            'XGOT_CONCEDED', 'XG_SETPLAY', 'YELLOW_CARDS',
+            'TOTAL_SHOTS', 'SHOTS_ON_TARGET', 'SHOTS_CORNERS', 
+            'SHOTS_SETPIECE', 'SHOTS_OPENPLAY', 'SHOTS_COUNTER', 'WOODWORK'
         ]
         for col in cols_to_float:
             if col in df.columns:
@@ -106,11 +123,11 @@ def vis_side(dp=None):
             border-radius: 5px; 
             margin-bottom: 20px; 
             background-color: white; 
-            min-height: 270px; 
+            min-height: 290px; 
         }
-        .section-title { font-weight: bold; margin-bottom: 10px; font-size: 1.2rem; border-bottom: 2px solid #C8102E; padding-bottom: 5px; }
-        .conclusion-text { color: #C8102E; font-weight: bold; margin-top: 15px; text-transform: uppercase; font-size: 0.85rem; }
-        .stat-line { margin-bottom: 8px; font-size: 0.95rem; }
+        .section-title { font-weight: bold; margin-bottom: 10px; font-size: 1.15rem; border-bottom: 2px solid #C8102E; padding-bottom: 5px; }
+        .conclusion-text { color: #C8102E; font-weight: bold; margin-top: 15px; text-transform: uppercase; font-size: 0.8rem; }
+        .stat-line { margin-bottom: 7px; font-size: 0.92rem; }
         </style>
     """, unsafe_allow_html=True)
 
@@ -144,8 +161,8 @@ def vis_side(dp=None):
         return
     row = row_match.iloc[0]
 
-    # --- 6. VISNING I GRID (2x2 Kolonner) ---
-    col1, col2 = st.columns(2)
+    # --- 6. VISNING I KOLONNER (3 + 2 layout) ---
+    col1, col2, col3 = st.columns(3)
 
     with col1:
         # Opbygningsspil
@@ -158,40 +175,60 @@ def vis_side(dp=None):
             <div class="stat-line">• {get_rank('POSS')} højeste boldbesiddelse ({row['POSS']:.1f}%)</div>
             <div class="stat-line">• {get_rank('TOUCHES')} flest berøringer i alt ({int(row['TOUCHES'])})</div>
             <div class="stat-line">• {get_rank('TOUCHES_OPP_BOX')} berøringer i modstanderens felt ({int(row['TOUCHES_OPP_BOX'])})</div>
-            <div class="stat-line">• Foretrukken formation: {f_pretty}</div>
-            <div class="conclusion-text">Konklusion – Benytter primært en {f_pretty} struktur.</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-        # Forsvarsspil
-        st.markdown(f"""
-        <div class="analysis-card">
-            <div class="section-title">Forsvarsspil</div>
-            <div class="stat-line">• {get_rank('XGC', ascending=True)} færreste forventede mål imod (xGC: {row['XGC']:.1f})</div>
-            <div class="stat-line">• {get_rank('XGOT_CONCEDED', ascending=True)} færreste xGOT imod ({row['XGOT_CONCEDED']:.1f})</div>
-            <div class="conclusion-text">Konklusion – Defensivt tillades {row['XGC']:.1f} xG i snit.</div>
+            <div class="stat-line">• Foretrukken struktur: {f_pretty}</div>
+            <div class="conclusion-text">Konklusion – Benytter primært {f_pretty}.</div>
         </div>
         """, unsafe_allow_html=True)
 
     with col2:
-        # Afslutningsspil
+        # Afslutningsspil & Skudtrussel
         st.markdown(f"""
         <div class="analysis-card">
-            <div class="section-title">Afslutningsspil & Dynamik</div>
-            <div class="stat-line">• {get_rank('GOALS')} flest mål scoret ({int(row['GOALS'])})</div>
+            <div class="section-title">Afslutningsspil & Trussel</div>
+            <div class="stat-line">• {get_rank('TOTAL_SHOTS')} flest afslutninger ({int(row['TOTAL_SHOTS'])})</div>
+            <div class="stat-line">• {get_rank('SHOTS_ON_TARGET')} skud på mål ({int(row['SHOTS_ON_TARGET'])})</div>
             <div class="stat-line">• {get_rank('XG')} højeste xG ({row['XG']:.1f}) | xA ({row['XA']:.1f})</div>
             <div class="stat-line">• {get_rank('BIG_CHANCES')} store chancer skabt ({int(row['BIG_CHANCES'])})</div>
-            <div class="stat-line">• xG fordeling: {row['XG_FH']:.1f} (1. halvleg) / {row['XG_SH']:.1f} (2. halvleg)</div>
-            <div class="conclusion-text">Konklusion – {valgt_navn} har {row['GOALS'] - row['XG']:.1f} mål vs xG.</div>
+            <div class="stat-line">• Træværkstræffere: {int(row['WOODWORK'])}</div>
+            <div class="conclusion-text">Konklusion – Over/under xG: {row['GOALS'] - row['XG']:.1f} mål.</div>
         </div>
         """, unsafe_allow_html=True)
 
-        # Standarder & Disciplin
+    with col3:
+        # Standarder & Dødboldstrussel
         st.markdown(f"""
         <div class="analysis-card">
-            <div class="section-title">Standarder & Disciplin</div>
+            <div class="section-title">Standarder & Dødboldsspil</div>
             <div class="stat-line">• {get_rank('XG_SETPLAY')} xG skabt på standarder ({row['XG_SETPLAY']:.1f})</div>
+            <div class="stat-line">• {get_rank('SHOTS_CORNERS')} afslutninger efter hjørnespark ({int(row['SHOTS_CORNERS'])})</div>
+            <div class="stat-line">• {get_rank('SHOTS_SETPIECE')} samlede standard-afslutninger ({int(row['SHOTS_SETPIECE'])})</div>
+            <div class="conclusion-text">Konklusion – Dødboldstrussel vurderet til {row['XG_SETPLAY']:.1f} xG.</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # Anden række (2 kolonner til forsvar og offensiv spillestil)
+    col4, col5 = st.columns(2)
+
+    with col4:
+        # Forsvarsspil
+        st.markdown(f"""
+        <div class="analysis-card">
+            <div class="section-title">Forsvarsspil & Tryk</div>
+            <div class="stat-line">• {get_rank('XGC', ascending=True)} færreste forventede mål imod (xGC: {row['XGC']:.1f})</div>
+            <div class="stat-line">• {get_rank('XGOT_CONCEDED', ascending=True)} færreste xGOT imod ({row['XGOT_CONCEDED']:.1f})</div>
             <div class="stat-line">• {get_rank('YELLOW_CARDS', ascending=True)} færreste gule kort ({int(row['YELLOW_CARDS'])})</div>
-            <div class="conclusion-text">Konklusion – Standard-trussel vurderet til {row['XG_SETPLAY']:.1f} xG.</div>
+            <div class="conclusion-text">Konklusion – Defensivt tillades {row['XGC']:.1f} xG i snit.</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with col5:
+        # Offensiv Stil (Åbent spil & Omstillinger)
+        st.markdown(f"""
+        <div class="analysis-card">
+            <div class="section-title">Offensiv Spillestil & Mønstre</div>
+            <div class="stat-line">• {get_rank('SHOTS_OPENPLAY')} afslutninger i åbent spil ({int(row['SHOTS_OPENPLAY'])})</div>
+            <div class="stat-line">• {get_rank('SHOTS_COUNTER')} afslutninger efter kontra/omstilling ({int(row['SHOTS_COUNTER'])})</div>
+            <div class="stat-line">• 1. halvleg xG: {row['XG_FH']:.1f} vs 2. halvleg xG: {row['XG_SH']:.1f}</div>
+            <div class="conclusion-text">Konklusion – Primærttryk ligger i {"2. halvleg" if row['XG_SH'] > row['XG_FH'] else "1. halvleg"}.</div>
         </div>
         """, unsafe_allow_html=True)
