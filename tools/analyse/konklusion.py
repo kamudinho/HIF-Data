@@ -111,10 +111,19 @@ def vis_side(dp=None):
             return "**?**"
 
     # --- 5. FILTRERING ---
-    hold_options = {n: i.get("opta_uuid") for n, i in TEAMS.items() if i.get("league") == COMPETITION_NAME}
+    # TEAMS har ingen "league"-nøgle på holdene, så det er SEASON_LEAGUE_MAPPER,
+    # der er den korrekte kilde til hvilke hold der hører til den valgte
+    # sæson+turnering (samme mønster som bruges til hold-dropdown andre steder i appen).
+    hold_navne = SEASON_LEAGUE_MAPPER.get(SAESON_NAVN, {}).get(COMPETITION_NAME, [])
+    hold_options = {n: TEAMS[n].get("opta_uuid") for n in hold_navne if n in TEAMS}
+
     if not hold_options:
-        st.warning(f"⚠️ Ingen hold fundet i TEAMS med league == '{COMPETITION_NAME}'.")
+        st.warning(f"⚠️ Ingen hold fundet for '{COMPETITION_NAME}' i sæsonen '{SAESON_NAVN}'. Tjek SEASON_LEAGUE_MAPPER og TEAMS i team_mapping.py.")
         return
+
+    manglende = [n for n in hold_navne if n not in TEAMS]
+    if manglende:
+        st.caption(f"⚠️ Følgende hold i SEASON_LEAGUE_MAPPER mangler stamdata i TEAMS og vises ikke: {', '.join(manglende)}")
 
     valgt_navn = st.selectbox("Vælg hold", sorted(hold_options.keys()))
     target_uuid = str(hold_options[valgt_navn]).strip().upper()
