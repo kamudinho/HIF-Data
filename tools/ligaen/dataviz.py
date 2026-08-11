@@ -51,10 +51,15 @@ def load_data(periode, start, split, slut, calendar_uuid, wyid):
     
     df_wy = pd.DataFrame()
     if wyid:
+        # NOTE: AVG(adv.GOALS_AGAINST) forudsætter, at WYSCOUT_MATCHADVANCEDSTATS_GENERAL
+        # har en GOALS_AGAINST-kolonne parallelt med GOALS. Tjek kolonnenavnet i jeres
+        # Snowflake-skema (fx via DESCRIBE TABLE) og ret navnet her, hvis det hedder noget andet
+        # (fx GOALS_CONCEDED / CONCEDED_GOALS).
         df_wy = conn.query(f"""
             SELECT 
                 tm.TEAM_WYID, 
                 AVG(adv.XG) as XG, AVG(adv.SHOTS) as SHOTS, AVG(adv.GOALS) as GOALS,
+                AVG(adv.GOALS_AGAINST) as GOALS_AGAINST,
                 AVG(md.PPDA) as PPDA, AVG(mp.PASSES) as PASSES
             FROM {db}.WYSCOUT_TEAMMATCHES tm 
             LEFT JOIN {db}.WYSCOUT_MATCHADVANCEDSTATS_GENERAL adv ON tm.MATCH_WYID = adv.MATCH_WYID AND tm.TEAM_WYID = adv.TEAM_WYID 
@@ -112,18 +117,26 @@ def calculate_split_table(df_opta, valgt_saeson, valgt_turnering):
     df_played = pd.DataFrame()
     if df_opta is not None and not df_opta.empty and 'MATCH_STATUS' in df_opta.columns:
         df_played = df_opta[df_opta['MATCH_STATUS'].str.contains('Played|Full|Finish', case=False, na=False)].sort_values('MATCH_DATE_FULL')
-    
-    # Sorter efter Point, Måldifference og til slut alfabetisk
-    df_r22 = df_played.head(132) if not df_played.empty else df_played
-    tabel_r22 = get_points(df_r22).sort_values(['P', 'MD', 'NAME'], ascending=[False, False, True])
-    top_6_uuids = tabel_r22.head(6)['OPTA_UUID'].tolist()
-    
-    tabel_nu = get_points(df_played)
-    
-    top_6_final = tabel_nu[tabel_nu['OPTA_UUID'].isin(top_6_uuids)].sort_values(['P', 'MD', 'NAME'], ascending=[False, False, True])
-    bund_6_final = tabel_nu[~tabel_nu['OPTA_UUID'].isin(top_6_uuids)].sort_values(['P', 'MD', 'NAME'], ascending=[False, False, True])
-    
-    final_table = pd.concat([top_6_final, bund_6_final]).reset_index(drop=True)
+
+    tabel_nu = get_points(df_played).sort_values(['P', 'MD', 'NAME'], ascending=[False, False, True])
+
+    # Kun Superligaen bruger en fast top-6/bund-6-split efter runde 22. For alle andre
+    # turneringer (fx NordicBet Liga) er det en almindelig, løbende tabel, ellers kan
+    # hold ende med at "sidde fast" i den forkerte halvdel selvom de reelt har flere
+    # point end et hold i den anden halvdel.
+    is_superliga = "superliga" in str(valgt_turnering).lower()
+
+    if is_superliga:
+        df_r22 = df_played.head(132) if not df_played.empty else df_played
+        tabel_r22 = get_points(df_r22).sort_values(['P', 'MD', 'NAME'], ascending=[False, False, True])
+        top_6_uuids = tabel_r22.head(6)['OPTA_UUID'].tolist()
+
+        top_6_final = tabel_nu[tabel_nu['OPTA_UUID'].isin(top_6_uuids)].sort_values(['P', 'MD', 'NAME'], ascending=[False, False, True])
+        bund_6_final = tabel_nu[~tabel_nu['OPTA_UUID'].isin(top_6_uuids)].sort_values(['P', 'MD', 'NAME'], ascending=[False, False, True])
+        final_table = pd.concat([top_6_final, bund_6_final]).reset_index(drop=True)
+    else:
+        final_table = tabel_nu.reset_index(drop=True)
+
     final_table['#'] = final_table.index + 1
     return final_table
 
@@ -269,6 +282,7 @@ def vis_side():
                 'XG': perf['XG'].iloc[0] if not perf.empty and 'XG' in perf.columns else np.nan,
                 'SHOTS': perf['SHOTS'].iloc[0] if not perf.empty and 'SHOTS' in perf.columns else np.nan,
                 'GOALS': perf['GOALS'].iloc[0] if not perf.empty and 'GOALS' in perf.columns else np.nan,
+                'GOALS_AGAINST': perf['GOALS_AGAINST'].iloc[0] if not perf.empty and 'GOALS_AGAINST' in perf.columns else np.nan,
                 'PASSES': perf['PASSES'].iloc[0] if not perf.empty and 'PASSES' in perf.columns else np.nan,
                 'PPDA': perf['PPDA'].iloc[0] if not perf.empty and 'PPDA' in perf.columns else np.nan,
                 'DIST': fysisk['DIST_KM'].iloc[0] if not fysisk.empty and 'DIST_KM' in fysisk.columns else np.nan,
