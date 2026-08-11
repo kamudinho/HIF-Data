@@ -91,6 +91,12 @@ def load_data(periode, start, split, slut, calendar_uuid, wyid):
     return df_opta, df_wy, df_ss
 
 def calculate_split_table(df_opta, valgt_saeson, valgt_turnering):
+    # Sorteringsrækkefølge for tabellen: point -> måldifference -> scorede mål -> navn.
+    # Navnet er KUN et allersidste nødopgør (fx to hold der reelt aldrig har spillet),
+    # og må ikke afgøre rækkefølgen, når hold reelt er adskilt af scorede mål.
+    SORT_COLS = ['P', 'MD', 'GF', 'NAME']
+    SORT_ASC = [False, False, False, True]
+
     def get_points(df):
         stats = {}
         forventede_hold = SEASON_LEAGUE_MAPPER.get(valgt_saeson, {}).get(valgt_turnering, [])
@@ -101,15 +107,16 @@ def calculate_split_table(df_opta, valgt_saeson, valgt_turnering):
         for h_navn in forventede_hold:
             info = TEAMS.get(h_navn, {})
             u_id = info.get('opta_uuid', h_navn)
-            stats[u_id] = {'P': 0, 'MD': 0, 'NAME': h_navn}
+            stats[u_id] = {'P': 0, 'MD': 0, 'GF': 0, 'NAME': h_navn}
 
         if df is not None and not df.empty:
             for _, row in df.iterrows():
                 h_uuid, a_uuid = row['CONTESTANTHOME_OPTAUUID'], row['CONTESTANTAWAY_OPTAUUID']
                 for uuid in [h_uuid, a_uuid]:
-                    if uuid not in stats: stats[uuid] = {'P': 0, 'MD': 0, 'NAME': 'Ukendt'}
+                    if uuid not in stats: stats[uuid] = {'P': 0, 'MD': 0, 'GF': 0, 'NAME': 'Ukendt'}
                 h_g, a_g = int(row.get('TOTAL_HOME_SCORE', 0) or 0), int(row.get('TOTAL_AWAY_SCORE', 0) or 0)
                 stats[h_uuid]['MD'] += (h_g - a_g); stats[a_uuid]['MD'] += (a_g - h_g)
+                stats[h_uuid]['GF'] += h_g; stats[a_uuid]['GF'] += a_g
                 if h_g > a_g: stats[h_uuid]['P'] += 3
                 elif a_g > h_g: stats[a_uuid]['P'] += 3
                 else: stats[h_uuid]['P'] += 1; stats[a_uuid]['P'] += 1
@@ -120,7 +127,7 @@ def calculate_split_table(df_opta, valgt_saeson, valgt_turnering):
     if df_opta is not None and not df_opta.empty and 'MATCH_STATUS' in df_opta.columns:
         df_played = df_opta[df_opta['MATCH_STATUS'].str.contains('Played|Full|Finish', case=False, na=False)].sort_values('MATCH_DATE_FULL')
 
-    tabel_nu = get_points(df_played).sort_values(['P', 'MD', 'NAME'], ascending=[False, False, True])
+    tabel_nu = get_points(df_played).sort_values(SORT_COLS, ascending=SORT_ASC)
 
     # Kun Superligaen bruger en fast top-6/bund-6-split efter runde 22. For alle andre
     # turneringer (fx NordicBet Liga) er det en almindelig, løbende tabel, ellers kan
@@ -130,11 +137,11 @@ def calculate_split_table(df_opta, valgt_saeson, valgt_turnering):
 
     if is_superliga:
         df_r22 = df_played.head(132) if not df_played.empty else df_played
-        tabel_r22 = get_points(df_r22).sort_values(['P', 'MD', 'NAME'], ascending=[False, False, True])
+        tabel_r22 = get_points(df_r22).sort_values(SORT_COLS, ascending=SORT_ASC)
         top_6_uuids = tabel_r22.head(6)['OPTA_UUID'].tolist()
 
-        top_6_final = tabel_nu[tabel_nu['OPTA_UUID'].isin(top_6_uuids)].sort_values(['P', 'MD', 'NAME'], ascending=[False, False, True])
-        bund_6_final = tabel_nu[~tabel_nu['OPTA_UUID'].isin(top_6_uuids)].sort_values(['P', 'MD', 'NAME'], ascending=[False, False, True])
+        top_6_final = tabel_nu[tabel_nu['OPTA_UUID'].isin(top_6_uuids)].sort_values(SORT_COLS, ascending=SORT_ASC)
+        bund_6_final = tabel_nu[~tabel_nu['OPTA_UUID'].isin(top_6_uuids)].sort_values(SORT_COLS, ascending=SORT_ASC)
         final_table = pd.concat([top_6_final, bund_6_final]).reset_index(drop=True)
     else:
         final_table = tabel_nu.reset_index(drop=True)
