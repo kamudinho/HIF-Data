@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from data.utils.team_mapping import TEAMS, TEAM_COLORS, SEASONS, COMPETITIONS
 from data.data_load import _get_snowflake_conn
+from data.players.player_mapping import player_mapping
 from utils.pitches import get_pitch, get_boundaries
 from PIL import Image
 import requests
@@ -44,14 +45,62 @@ def load_league_data(liga_uuid):
     try:
         df = conn.query(sql) if hasattr(conn, 'query') else pd.read_sql(sql, conn)
         df.columns = [c.upper() for c in df.columns]
-        
-        if 'FULL_PLAYER_NAME' in df.columns:
-            df['PLAYER_NAME'] = df['FULL_PLAYER_NAME'].fillna(df.get('PLAYER_NAME', 'Ukendt'))
-            
+
+        df = resolve_player_names(df, conn)
+
         return df
     except Exception as e:
         st.error(f"Fejl ved indlæsning af data fra Snowflake: {e}")
         return pd.DataFrame()
+
+
+def resolve_player_names(df, conn=None):
+    """
+    Udfylder PLAYER_NAME på df ved brug af player_mapping (data/players/player_mapping.py).
+
+    Rækkefølge:
+      1. Statisk liste i player_mapping (optauuid_to_name) — hurtigst, ingen DB-kald.
+      2. FULL_PLAYER_NAME fra OPTA_MATCH_LINEUPS-joinet (allerede hentet i SQL'en ovenfor).
+      3. Ét live DB-opslag pr. unikt resterende UUID via player_mapping.get_name_by_opta_uuid.
+      4. Alt der stadig mangler navn -> "Ukendt".
+
+    Nyligt fundne navne caches automatisk tilbage i player_mapping, så fremtidige
+    kald (i denne session) slipper for at slå dem op igen.
+    """
+    if df.empty or 'PLAYER_OPTAUUID' not in df.columns:
+        if 'PLAYER_NAME' not in df.columns:
+            df['PLAYER_NAME'] = "Ukendt"
+        else:
+            df['PLAYER_NAME'] = df['PLAYER_NAME'].fillna("Ukendt")
+        return df
+
+    # 1. Statisk mapping (vektoriseret opslag, ingen DB-kald)
+    resolved = df['PLAYER_OPTAUUID'].map(player_mapping.optauuid_to_name)
+
+    # 2. Fald tilbage på navnet fra lineup-joinet, hvis den statiske liste ikke kender spilleren
+    if 'FULL_PLAYER_NAME' in df.columns:
+        resolved = resolved.fillna(df['FULL_PLAYER_NAME'])
+
+    df['PLAYER_NAME'] = resolved
+
+    # 3. For de resterende ukendte: ét live-opslag pr. unikt UUID (ikke pr. række)
+    missing_mask = df['PLAYER_NAME'].isna() | (df['PLAYER_NAME'].astype(str).str.strip() == '')
+    missing_uuids = df.loc[missing_mask, 'PLAYER_OPTAUUID'].dropna().unique()
+
+    if len(missing_uuids) > 0 and conn is not None:
+        for uuid in missing_uuids:
+            navn = player_mapping.get_name_by_opta_uuid(uuid, conn=conn, db_name=DB)
+            if navn and navn != "Ukendt":
+                df.loc[df['PLAYER_OPTAUUID'] == uuid, 'PLAYER_NAME'] = navn
+
+    # 4. Sidste fallback
+    df['PLAYER_NAME'] = df['PLAYER_NAME'].fillna("Ukendt")
+    df.loc[df['PLAYER_NAME'].astype(str).str.strip() == '', 'PLAYER_NAME'] = "Ukendt"
+
+    # Cache nye navne tilbage i player_mapping til senere brug i sessionen
+    player_mapping.register_players_from_df(df, uuid_col='PLAYER_OPTAUUID', name_col='PLAYER_NAME')
+
+    return df
 
 @st.cache_data(ttl=3600)
 def get_logo_img(url):
