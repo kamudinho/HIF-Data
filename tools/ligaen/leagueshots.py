@@ -128,8 +128,6 @@ def vis_side(dp=None):
         if not df_all.empty:
             df_all['KLUB_NAVN'] = None
 
-    st.markdown("---")
-
     if df_all.empty or not teams or t_sel == "Der er ingen data at vise":
         st.warning("Ingen data at vise for den valgte sæson/turnering.")
         return
