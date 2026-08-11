@@ -16,9 +16,7 @@ def vis_side(dp=None):
     # --- 1. SETUP ---
     DB = "KLUB_HVIDOVREIF.AXIS"
 
-    # Turnerings-UUID slås op sæson-bevidst (samme mønster som position_performance.py),
-    # i stedet for den statiske COMPETITIONS[COMPETITION_NAME]["COMPETITION_OPTAUUID"],
-    # som ikke opdaterer sig når sæsonen skifter.
+    # Turnerings-UUID slås op sæson-bevidst
     LIGA_UUID = SEASONS.get(SAESON_NAVN, {}).get(COMPETITION_NAME)
 
     conn = _get_snowflake_conn()
@@ -31,6 +29,7 @@ def vis_side(dp=None):
         return
 
     # --- 2. SQL ---
+    # Opdateret til at bruge OPTA_MATCHEXPECTEDGOALS_TEAM for at få adgang til STAT_FH og STAT_SH samt nye metrikker
     sql = f'''
     WITH MatchStats AS (
         SELECT 
@@ -47,12 +46,24 @@ def vis_side(dp=None):
         SELECT 
             UPPER(TRIM(CONTESTANT_OPTAUUID)) as TEAM_ID,
             SUM(CASE WHEN STAT_TYPE = 'expectedGoals' THEN STAT_VALUE ELSE 0 END) as XG,
+            SUM(CASE WHEN STAT_TYPE = 'expectedGoals' THEN STAT_FH ELSE 0 END) as XG_FH,
+            SUM(CASE WHEN STAT_TYPE = 'expectedGoals' THEN STAT_SH ELSE 0 END) as XG_SH,
+            SUM(CASE WHEN STAT_TYPE = 'expectedAssists' THEN STAT_VALUE ELSE 0 END) as XA,
+            SUM(CASE WHEN STAT_TYPE = 'bigChanceCreated' THEN STAT_VALUE ELSE 0 END) as BIG_CHANCES,
+            SUM(CASE WHEN STAT_TYPE = 'touchesInOppBox' THEN STAT_VALUE ELSE 0 END) as TOUCHES_OPP_BOX,
             SUM(CASE WHEN STAT_TYPE = 'touches' THEN STAT_VALUE ELSE 0 END) as TOUCHES
-        FROM {DB}.OPTA_MATCHEXPECTEDGOALS
+        FROM {DB}.OPTA_MATCHEXPECTEDGOALS_TEAM
         WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
         GROUP BY 1
     )
-    SELECT m.*, COALESCE(e.XG, 0) as XG, COALESCE(e.TOUCHES, 0) as TOUCHES
+    SELECT m.*, 
+           COALESCE(e.XG, 0) as XG, 
+           COALESCE(e.XG_FH, 0) as XG_FH, 
+           COALESCE(e.XG_SH, 0) as XG_SH, 
+           COALESCE(e.XA, 0) as XA, 
+           COALESCE(e.BIG_CHANCES, 0) as BIG_CHANCES, 
+           COALESCE(e.TOUCHES_OPP_BOX, 0) as TOUCHES_OPP_BOX, 
+           COALESCE(e.TOUCHES, 0) as TOUCHES
     FROM MatchStats m
     LEFT JOIN ExpectedStats e ON m.TEAM_ID = e.TEAM_ID
     '''
@@ -61,8 +72,9 @@ def vis_side(dp=None):
         df = conn.query(sql) if hasattr(conn, 'query') else pd.read_sql(sql, conn)
         df.columns = [str(c).upper() for c in df.columns]
         
-        # FIX: Konverter Decimal til float for at undgå beregningsfejl
-        for col in ['GOALS', 'XG', 'POSS', 'TOUCHES']:
+        # Konverter til float for at undgå beregningsfejl
+        cols_to_float = ['GOALS', 'XG', 'XG_FH', 'XG_SH', 'XA', 'BIG_CHANCES', 'TOUCHES_OPP_BOX', 'POSS', 'TOUCHES']
+        for col in cols_to_float:
             if col in df.columns:
                 df[col] = df[col].astype(float)
         
@@ -87,7 +99,7 @@ def vis_side(dp=None):
             border-radius: 5px; 
             margin-bottom: 20px; 
             background-color: white;
-            min-height: 250px;
+            min-height: 270px;
         }
         .section-title { font-weight: bold; margin-bottom: 10px; font-size: 1.2rem; border-bottom: 2px solid #C8102E; padding-bottom: 5px; }
         .conclusion-text { color: #C8102E; font-weight: bold; margin-top: 15px; text-transform: uppercase; font-size: 0.85rem; }
@@ -112,9 +124,6 @@ def vis_side(dp=None):
             return "**?**"
 
     # --- 5. FILTRERING ---
-    # TEAMS har ingen "league"-nøgle på holdene, så det er SEASON_LEAGUE_MAPPER,
-    # der er den korrekte kilde til hvilke hold der hører til den valgte
-    # sæson+turnering (samme mønster som bruges til hold-dropdown andre steder i appen).
     hold_navne = SEASON_LEAGUE_MAPPER.get(SAESON_NAVN, {}).get(COMPETITION_NAME, [])
     hold_options = {n: TEAMS[n].get("opta_uuid") for n in hold_navne if n in TEAMS}
 
@@ -135,19 +144,8 @@ def vis_side(dp=None):
         return
     row = row_match.iloc[0]
 
-    # --- 6. VISNING I TO KOLONNER ---
-    col1, col2 = st.columns(2)
-
-    with col2:
-        st.markdown(f"""
-        <div class="analysis-card">
-            <div class="section-title">Afslutningsspil</div>
-            <div class="stat-line">• {get_rank('GOALS')} flest mål scoret ({int(row['GOALS'])})</div>
-            <div class="stat-line">• {get_rank('XG')} højeste expected goals ({row['XG']:.1f} xG)</div>
-            <div class="stat-line">• Forskel: {row['GOALS'] - row['XG']:.1f} mål vs xG</div>
-            <div class="conclusion-text">Konklusion – {valgt_navn} præsterer med en xG på {row['XG']:.1f}.</div>
-        </div>
-        """, unsafe_allow_html=True)
+    # --- 6. VISNING I TRE KOLONNER ---
+    col1, col2, col3 = st.columns(3)
 
     with col1:
         f_raw = str(int(row['FORMATION'])) if pd.notnull(row['FORMATION']) else "N/A"
@@ -158,7 +156,31 @@ def vis_side(dp=None):
             <div class="section-title">Opbygningsspil</div>
             <div class="stat-line">• {get_rank('POSS')} højeste boldbesiddelse ({row['POSS']:.1f}%)</div>
             <div class="stat-line">• {get_rank('TOUCHES')} flest berøringer i alt ({int(row['TOUCHES'])})</div>
+            <div class="stat-line">• {get_rank('TOUCHES_OPP_BOX')} berøringer i feltet ({int(row['TOUCHES_OPP_BOX'])})</div>
             <div class="stat-line">• Foretrukken formation: {f_pretty}</div>
-            <div class="conclusion-text">Konklusion – Benytter primært en {f_pretty} struktur.</div>
+            <div class="conclusion-text">Konklusion – Benytter primært {f_pretty}.</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with col2:
+        st.markdown(f"""
+        <div class="analysis-card">
+            <div class="section-title">Afslutningsspil</div>
+            <div class="stat-line">• {get_rank('GOALS')} flest mål scoret ({int(row['GOALS'])})</div>
+            <div class="stat-line">• {get_rank('XG')} højeste xG ({row['XG']:.1f})</div>
+            <div class="stat-line">• {get_rank('XA')} højeste xA ({row['XA']:.1f})</div>
+            <div class="stat-line">• {get_rank('BIG_CHANCES')} store chancer ({int(row['BIG_CHANCES'])})</div>
+            <div class="conclusion-text">Konklusion – Over/under xG: {row['GOALS'] - row['XG']:.1f}.</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with col3:
+        st.markdown(f"""
+        <div class="analysis-card">
+            <div class="section-title">Halvlegs-dynamik</div>
+            <div class="stat-line">• 1. Halvleg xG: {row['XG_FH']:.1f}</div>
+            <div class="stat-line">• 2. Halvleg xG: {row['XG_SH']:.1f}</div>
+            <div class="stat-line">• Primærtryk: {"2. Halvleg" if row['XG_SH'] > row['XG_FH'] else "1. Halvleg"}</div>
+            <div class="conclusion-text">Konklusion – Halvlegsfordeling analyseret.</div>
         </div>
         """, unsafe_allow_html=True)
