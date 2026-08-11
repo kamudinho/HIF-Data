@@ -1,16 +1,32 @@
+#HIF-Data/tools/analyse/konklusion.py
+
 import streamlit as st
 import pandas as pd
-from data.utils.team_mapping import TEAMS, COMPETITIONS, COMPETITION_NAME
+from data.utils.team_mapping import (
+    TEAMS,
+    COMPETITIONS,
+    SEASONS,
+    COMPETITION_NAME,
+    TOURNAMENTCALENDAR_NAME as SAESON_NAVN,
+)
 from data.data_load import _get_snowflake_conn
 
 def vis_side(dp=None):
     # --- 1. SETUP ---
-    LIGA_UUID = COMPETITIONS[COMPETITION_NAME]["COMPETITION_OPTAUUID"]
     DB = "KLUB_HVIDOVREIF.AXIS"
-    
+
+    # Turnerings-UUID slås op sæson-bevidst (samme mønster som position_performance.py),
+    # i stedet for den statiske COMPETITIONS[COMPETITION_NAME]["COMPETITION_OPTAUUID"],
+    # som ikke opdaterer sig når sæsonen skifter.
+    LIGA_UUID = SEASONS.get(SAESON_NAVN, {}).get(COMPETITION_NAME)
+
     conn = _get_snowflake_conn()
     if not conn:
         st.error("❌ Kunne ikke forbinde til Snowflake.")
+        return
+
+    if not LIGA_UUID:
+        st.warning(f"⚠️ Ingen turnerings-UUID fundet for '{COMPETITION_NAME}' i sæsonen '{SAESON_NAVN}'. Tjek SEASONS-mappingen i team_mapping.py.")
         return
 
     # --- 2. SQL ---
@@ -57,6 +73,10 @@ def vis_side(dp=None):
         st.error(f"❌ SQL Fejl: {e}")
         return
 
+    if df.empty:
+        st.warning(f"⚠️ Ingen kampstatistik fundet for turneringen '{COMPETITION_NAME}' i sæsonen '{SAESON_NAVN}'.")
+        return
+
     # --- 3. UI STYLING ---
     st.markdown("""
         <style>
@@ -92,6 +112,10 @@ def vis_side(dp=None):
 
     # --- 5. FILTRERING ---
     hold_options = {n: i.get("opta_uuid") for n, i in TEAMS.items() if i.get("league") == COMPETITION_NAME}
+    if not hold_options:
+        st.warning(f"⚠️ Ingen hold fundet i TEAMS med league == '{COMPETITION_NAME}'.")
+        return
+
     valgt_navn = st.selectbox("Vælg hold", sorted(hold_options.keys()))
     target_uuid = str(hold_options[valgt_navn]).strip().upper()
     
