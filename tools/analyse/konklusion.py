@@ -81,7 +81,6 @@ def vis_side(dp=None):
                      THEN CAST(STAT_TOTAL AS FLOAT) END) as POSS,
             SUM(CASE WHEN STAT_TYPE = 'accuratePass' THEN STAT_TOTAL ELSE 0 END) as PASSES_ACCURATE,
             SUM(CASE WHEN STAT_TYPE = 'totalPass' THEN STAT_TOTAL ELSE 0 END) as PASSES_TOTAL,
-            SUM(CASE WHEN STAT_TYPE = 'cornerTaken' THEN STAT_TOTAL ELSE 0 END) as CORNERS_TAKEN,
             MAX(CASE WHEN STAT_TYPE = 'formationUsed' THEN STAT_TOTAL ELSE NULL END) as FORMATION,
 
             -- Defensivt spil
@@ -99,6 +98,7 @@ def vis_side(dp=None):
             SUM(CASE WHEN STAT_TYPE = 'penaltySave' THEN STAT_TOTAL ELSE 0 END) as PENALTY_SAVES,
             SUM(CASE WHEN STAT_TYPE = 'penaltyWon' THEN STAT_TOTAL ELSE 0 END) as PENALTIES_WON,
             SUM(CASE WHEN STAT_TYPE = 'penaltyConceded' THEN STAT_TOTAL ELSE 0 END) as PENALTIES_CONCEDED,
+            SUM(CASE WHEN STAT_TYPE = 'cornerTaken' THEN STAT_TOTAL ELSE 0 END) as CORNERS_TAKEN,
             SUM(CASE WHEN STAT_TYPE = 'ownGoals' THEN STAT_TOTAL ELSE 0 END) as OWN_GOALS,
 
             -- Disciplin
