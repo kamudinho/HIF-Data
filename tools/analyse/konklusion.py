@@ -280,7 +280,7 @@ def vis_side(dp=None):
     if manglende:
         st.caption(f"Følgende hold i SEASON_LEAGUE_MAPPER mangler stamdata i TEAMS og vises ikke: {', '.join(manglende)}")
 
-    # --- 5b. TOP LINJE: DROPDOWN OG RADIO KNAPPER I TO KOLONNER ---
+    # --- 5b. TOP LINJE: DROPDOWN OG SEGMENTED CONTROL I TO KOLONNER (MED HØJDEJUSTERING) ---
     col_top1, col_top2 = st.columns([1, 1])
 
     with col_top1:
@@ -288,9 +288,10 @@ def vis_side(dp=None):
 
     with col_top2:
         visning = st.segmented_control(
-            "Visning",
-            ["Enkelt hold", "Alle hold"],
-            label_visibility="collapsed",
+            " ",
+            ["Enkelt hold", "Alle hold (bedste og dårligste pr. metric)"],
+            default="Enkelt hold",
+            selection_mode="single"
         )
 
     target_uuid = str(hold_options[valgt_navn]).strip().upper()
