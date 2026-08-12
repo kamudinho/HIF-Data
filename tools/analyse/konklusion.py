@@ -251,12 +251,10 @@ def vis_side(dp=None):
         if temp.empty:
             return None, None, None, None
         
-        # Bedste hold
         temp_best = temp.sort_values(col, ascending=ascending)
         best = temp_best.iloc[0]
         best_name = uuid_to_name.get(best['TEAM_ID'], best['TEAM_ID'])
         
-        # Dårligste hold (modsat rækkefølge)
         temp_worst = temp.sort_values(col, ascending=not ascending)
         worst = temp_worst.iloc[0]
         worst_name = uuid_to_name.get(worst['TEAM_ID'], worst['TEAM_ID'])
@@ -289,7 +287,7 @@ def vis_side(dp=None):
     with col_top2:
         visning = st.segmented_control(
             " ",
-            ["Enkelt hold", "Alle hold (bedste og dårligste pr. metric)"],
+            ["Enkelt hold", "Alle hold (bedste og dårligste pr. metric)", "Holdtabel (Y-akse)"],
             default="Enkelt hold",
             selection_mode="single"
         )
@@ -325,12 +323,48 @@ def vis_side(dp=None):
             )
         return
 
+    elif visning == "Holdtabel (Y-akse)":
+        table_rows = []
+        for _, r in df.iterrows():
+            t_name = uuid_to_name.get(r['TEAM_ID'], r['TEAM_ID'])
+            row_data = {"Hold": t_name}
+            for label, col, _, decimals, suffix, _ in METRIC_DEFS:
+                if col in r:
+                    row_data[label] = safe_val(r[col], decimals, suffix)
+                else:
+                    row_data[label] = "N/A"
+            table_rows.append(row_data)
+
+        if not table_rows:
+            st.warning("Ingen data at vise i tabellen.")
+            return
+
+        df_table = pd.DataFrame(table_rows)
+        df_table = df_table.set_index("Hold")
+        st.dataframe(df_table, use_container_width=True)
+        return
+
     # --- 6. ENKELT HOLD-VISNING ---
     row_match = df[df['TEAM_ID'] == target_uuid]
     if row_match.empty:
         st.warning(f"Ingen data fundet for {valgt_navn}.")
         return
     row = row_match.iloc[0]
+
+    # Beregning af over-/under-/normalpræstation for afslutningsspil (mål vs xG)
+    goals_val = row.get('GOALS', 0)
+    xg_val = row.get('XG', 0)
+    diff = goals_val - xg_val
+    if diff > 2.0:
+        præstation_tekst = "overpræsterer markant (flere mål end xG)"
+    elif diff > 0.5:
+        præstation_tekst = "overpræsterer (flere mål end xG)"
+    elif diff < -2.0:
+        præstation_tekst = "underpræsterer markant (færre mål end xG)"
+    elif diff < -0.5:
+        præstation_tekst = "underpræsterer (færre mål end xG)"
+    else:
+        præstation_tekst = "præsterer normalt i forhold til xG"
 
     # Række 1: Afslutningsspil / Opbygningsspil
     col1, col2 = st.columns(2)
@@ -346,7 +380,7 @@ def vis_side(dp=None):
             <div class="stat-line">• Skudpræcision: {safe_val(row['SHOT_ACCURACY'], suffix='%')}</div>
             <div class="stat-line">• {get_rank('BIG_CHANCES_CREATED')} flest store chancer skabt ({int(row['BIG_CHANCES_CREATED'])})</div>
             <div class="stat-line">• Ramt stolpe/overligger: {int(row['WOODWORK'])}</div>
-            <div class="conclusion-text">Konklusion – {valgt_navn} præsterer med en xG på {row['XG']:.1f}.</div>
+            <div class="conclusion-text">Konklusion – {valgt_navn} {præstation_tekst} med {goals_val:.0f} mål mod {xg_val:.1f} xG.</div>
         </div>
         """, unsafe_allow_html=True)
 
