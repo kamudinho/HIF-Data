@@ -220,6 +220,10 @@ def vis_side(dp=None):
         .section-title { font-weight: bold; margin-bottom: 10px; font-size: 1.2rem; border-bottom: 2px solid #C8102E; padding-bottom: 5px; }
         .conclusion-text { color: #C8102E; font-weight: bold; margin-top: 15px; text-transform: uppercase; font-size: 0.85rem; }
         .stat-line { margin-bottom: 8px; font-size: 0.95rem; }
+        /* Centrerer indhold og tilføjer styling for tabeller */
+        table { text-align: center !important; }
+        th { text-align: center !important; }
+        td { text-align: center !important; }
         </style>
     """, unsafe_allow_html=True)
 
@@ -329,29 +333,80 @@ def vis_side(dp=None):
             if cat not in kategorier:
                 kategorier.append(cat)
 
-        team_data = []
+        raw_team_data = []
         for _, r in df.iterrows():
             t_name = uuid_to_name.get(r['TEAM_ID'], r['TEAM_ID'])
-            row_data = {"Hold": t_name}
-            for label, col, _, decimals, suffix, _ in METRIC_DEFS:
+            row_data = {"Hold": t_name, "TEAM_ID": r['TEAM_ID']}
+            for label, col, _, _, _, _ in METRIC_DEFS:
                 if col in r:
-                    row_data[label] = safe_val(r[col], decimals, suffix)
+                    row_data[col] = r[col]
                 else:
-                    row_data[label] = "N/A"
-            team_data.append(row_data)
+                    row_data[col] = pd.NA
+            raw_team_data.append(row_data)
 
-        if not team_data:
+        if not raw_team_data:
             st.warning("Ingen data at vise i tabellen.")
             return
 
-        df_full = pd.DataFrame(team_data)
+        df_raw_teams = pd.DataFrame(raw_team_data)
 
         for cat in kategorier:
             st.markdown(f"### {cat}")
-            cat_metrics = [label for label, _, _, _, _, c in METRIC_DEFS if c == cat]
-            cols_to_show = ["Hold"] + cat_metrics
-            df_cat = df_full[cols_to_show].set_index("Hold")
-            st.table(df_cat)
+            cat_defs = [m for m in METRIC_DEFS if m[5] == cat]
+            
+            # Byg DataFrame for denne kategori med faktiske værdier til farvning
+            display_rows = []
+            style_dicts = []
+            
+            for _, r in df_raw_teams.iterrows():
+                t_name = r["Hold"]
+                row_disp = {"Hold": t_name}
+                row_styles = {"Hold": ""}
+                
+                for label, col, ascending, decimals, suffix, _ in cat_defs:
+                    val = r[col]
+                    row_disp[label] = safe_val(val, decimals, suffix)
+                    
+                    # Beregn gradient farve baseret på rangering blandt holdene
+                    if pd.isna(val):
+                        row_styles[label] = ""
+                    else:
+                        temp_sorted = df_raw_teams.dropna(subset=[col]).sort_values(col, ascending=ascending).reset_index(drop=True)
+                        try:
+                            rank_idx = temp_sorted[temp_sorted['TEAM_ID'] == r['TEAM_ID']].index[0] + 1
+                            total_n = len(temp_sorted)
+                            
+                            # Top 3 grøn gradient (1. bedst, 2. næstbedst, 3. tredjehøjeste/laveste)
+                            if rank_idx == 1:
+                                row_styles[label] = 'background-color: rgba(40, 167, 69, 0.35); text-align: center;'
+                            elif rank_idx == 2:
+                                row_styles[label] = 'background-color: rgba(40, 167, 69, 0.22); text-align: center;'
+                            elif rank_idx == 3:
+                                row_styles[label] = 'background-color: rgba(40, 167, 69, 0.12); text-align: center;'
+                            # Dårligste 3 rød gradient
+                            elif rank_idx == total_n:
+                                row_styles[label] = 'background-color: rgba(220, 53, 69, 0.35); text-align: center;'
+                            elif rank_idx == total_n - 1:
+                                row_styles[label] = 'background-color: rgba(220, 53, 69, 0.22); text-align: center;'
+                            elif rank_idx == total_n - 2:
+                                row_styles[label] = 'background-color: rgba(220, 53, 69, 0.12); text-align: center;'
+                            else:
+                                row_styles[label] = 'text-align: center;'
+                        except Exception:
+                            row_styles[label] = 'text-align: center;'
+                
+                display_rows.append(row_disp)
+                style_dicts.append(row_styles)
+            
+            df_cat = pd.DataFrame(display_rows).set_index("Hold")
+            df_styles = pd.DataFrame(style_dicts).set_index("Hold")
+            
+            # Anvend styling og centrer alle celler via Pandas Styler
+            def apply_styles(val):
+                return ""
+            
+            styled_df = df_cat.style.apply(lambda x: df_styles[x.name], axis=0).set_properties(**{'text-align': 'center'})
+            st.dataframe(styled_df, use_container_width=True)
         return
 
     # --- 6. ENKELT HOLD-VISNING ---
