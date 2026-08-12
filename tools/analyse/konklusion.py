@@ -51,18 +51,15 @@ def vis_side(dp=None):
     # --- 1. SETUP ---
     DB = "KLUB_HVIDOVREIF.AXIS"
 
-    # Turnerings-UUID slås op sæson-bevidst (samme mønster som position_performance.py),
-    # i stedet for den statiske COMPETITIONS[COMPETITION_NAME]["COMPETITION_OPTAUUID"],
-    # som ikke opdaterer sig når sæsonen skifter.
     LIGA_UUID = SEASONS.get(SAESON_NAVN, {}).get(COMPETITION_NAME)
 
     conn = _get_snowflake_conn()
     if not conn:
-        st.error("❌ Kunne ikke forbinde til Snowflake.")
+        st.error("Kunne ikke forbinde til Snowflake.")
         return
 
     if not LIGA_UUID:
-        st.warning(f"⚠️ Ingen turnerings-UUID fundet for '{COMPETITION_NAME}' i sæsonen '{SAESON_NAVN}'. Tjek SEASONS-mappingen i team_mapping.py.")
+        st.warning(f"Ingen turnerings-UUID fundet for '{COMPETITION_NAME}' i sæsonen '{SAESON_NAVN}'. Tjek SEASONS-mappingen i team_mapping.py.")
         return
 
     # --- 2. SQL: OPTA_MATCHSTATS (hovedstatistik) ---
@@ -153,31 +150,26 @@ def vis_side(dp=None):
         df = conn.query(sql) if hasattr(conn, 'query') else pd.read_sql(sql, conn)
         df.columns = [str(c).upper() for c in df.columns]
 
-        # FIX: Konverter Decimal til float for at undgå beregningsfejl
         for col in NUMERIC_COLS:
             if col in df.columns:
                 df[col] = df[col].astype(float)
 
-        # Possession fix
         if df['POSS'].mean() < 1:
             df['POSS'] = df['POSS'] * 100
 
-        # Afledte procenter (undgå division med 0)
         df['SHOT_ACCURACY'] = (df['SHOTS_ON_TARGET'] / df['SHOTS_TOTAL'].replace(0, pd.NA)) * 100
         df['PASS_ACCURACY'] = (df['PASSES_ACCURATE'] / df['PASSES_TOTAL'].replace(0, pd.NA)) * 100
         df['TACKLE_SUCCESS'] = (df['TACKLES_WON'] / df['TACKLES_TOTAL'].replace(0, pd.NA)) * 100
 
     except Exception as e:
-        st.error(f"❌ SQL Fejl: {e}")
+        st.error(f"SQL Fejl: {e}")
         return
 
     if df.empty:
-        st.warning(f"⚠️ Ingen kampstatistik fundet for turneringen '{COMPETITION_NAME}' i sæsonen '{SAESON_NAVN}'.")
+        st.warning(f"Ingen kampstatistik fundet for turneringen '{COMPETITION_NAME}' i sæsonen '{SAESON_NAVN}'.")
         return
 
-    # --- 2b. SQL: PPDA fra Wyscout (samme mønster som position_performance.py) ---
-    # PPDA ligger ikke i OPTA_MATCHSTATS, så den hentes separat fra Wyscout og kobles
-    # på via TEAM_WYID -> opta_uuid (TEAMS-mappingen).
+    # --- 2b. SQL: PPDA fra Wyscout ---
     wyid = COMPETITIONS.get(COMPETITION_NAME, {}).get("wyid")
 
     if '/' in SAESON_NAVN:
@@ -212,7 +204,7 @@ def vis_side(dp=None):
 
             df = df.drop(columns=['PPDA']).merge(df_ppda[['TEAM_ID', 'PPDA']], on='TEAM_ID', how='left')
         except Exception as e:
-            st.caption(f"⚠️ Kunne ikke hente PPDA fra Wyscout: {e}")
+            st.caption(f"Kunne ikke hente PPDA fra Wyscout: {e}")
 
     # --- 3. UI STYLING ---
     st.markdown("""
@@ -245,7 +237,6 @@ def vis_side(dp=None):
         return f"{n}{suffix}"
 
     def get_rank(col, ascending=False):
-        # ascending=True bruges til stats hvor LAVEST er bedst (fx mål imod, kort, PPDA)
         temp = df.dropna(subset=[col]).sort_values(col, ascending=ascending).reset_index(drop=True)
         try:
             rank = temp[temp['TEAM_ID'] == target_uuid].index[0] + 1
@@ -253,17 +244,24 @@ def vis_side(dp=None):
         except Exception:
             return "**?**"
 
-    def get_leader(col, ascending=False):
-        # Returnerer (holdnavn, værdi) for det hold der ligger bedst på en given metric
+    def get_leader_and_worst(col, ascending=False):
         if col not in df.columns:
-            return None, None
+            return None, None, None, None
         temp = df.dropna(subset=[col])
         if temp.empty:
-            return None, None
-        temp = temp.sort_values(col, ascending=ascending)
-        best = temp.iloc[0]
-        team_name = uuid_to_name.get(best['TEAM_ID'], best['TEAM_ID'])
-        return team_name, best[col]
+            return None, None, None, None
+        
+        # Bedste hold
+        temp_best = temp.sort_values(col, ascending=ascending)
+        best = temp_best.iloc[0]
+        best_name = uuid_to_name.get(best['TEAM_ID'], best['TEAM_ID'])
+        
+        # Dårligste hold (modsat rækkefølge)
+        temp_worst = temp.sort_values(col, ascending=not ascending)
+        worst = temp_worst.iloc[0]
+        worst_name = uuid_to_name.get(worst['TEAM_ID'], worst['TEAM_ID'])
+        
+        return best_name, best[col], worst_name, worst[col]
 
     def safe_val(val, decimals=1, suffix=""):
         if pd.isna(val):
@@ -271,62 +269,66 @@ def vis_side(dp=None):
         return f"{val:.{decimals}f}{suffix}"
 
     # --- 5. FILTRERING ---
-    # TEAMS har ingen "league"-nøgle på holdene, så det er SEASON_LEAGUE_MAPPER,
-    # der er den korrekte kilde til hvilke hold der hører til den valgte
-    # sæson+turnering (samme mønster som bruges til hold-dropdown andre steder i appen).
     hold_navne = SEASON_LEAGUE_MAPPER.get(SAESON_NAVN, {}).get(COMPETITION_NAME, [])
     hold_options = {n: TEAMS[n].get("opta_uuid") for n in hold_navne if n in TEAMS}
 
     if not hold_options:
-        st.warning(f"⚠️ Ingen hold fundet for '{COMPETITION_NAME}' i sæsonen '{SAESON_NAVN}'. Tjek SEASON_LEAGUE_MAPPER og TEAMS i team_mapping.py.")
+        st.warning(f"Ingen hold fundet for '{COMPETITION_NAME}' i sæsonen '{SAESON_NAVN}'. Tjek SEASON_LEAGUE_MAPPER og TEAMS i team_mapping.py.")
         return
 
     manglende = [n for n in hold_navne if n not in TEAMS]
     if manglende:
-        st.caption(f"⚠️ Følgende hold i SEASON_LEAGUE_MAPPER mangler stamdata i TEAMS og vises ikke: {', '.join(manglende)}")
+        st.caption(f"Følgende hold i SEASON_LEAGUE_MAPPER mangler stamdata i TEAMS og vises ikke: {', '.join(manglende)}")
 
-    # --- 5b. VISNINGSVALG: Enkelt hold vs. Alle hold (bedste pr. metric) ---
-    visning = st.radio(
-        "Visning",
-        ["📋 Enkelt hold", "🏆 Alle hold (bedste pr. metric)"],
-        horizontal=True,
-        label_visibility="collapsed",
-    )
+    # --- 5b. TOP LINJE: DROPDOWN OG RADIO KNAPPER I TO KOLONNER ---
+    col_top1, col_top2 = st.columns([1, 1])
 
-    if visning == "🏆 Alle hold (bedste pr. metric)":
+    with col_top1:
+        valgt_navn = st.selectbox("Vælg hold", sorted(hold_options.keys()))
+
+    with col_top2:
+        visning = st.radio(
+            "Visning",
+            ["Enkelt hold", "Alle hold (bedste og dårligste pr. metric)"],
+            horizontal=True,
+            label_visibility="collapsed",
+        )
+
+    target_uuid = str(hold_options[valgt_navn]).strip().upper()
+
+    if visning == "Alle hold (bedste og dårligste pr. metric)":
         rows = []
         for label, col, ascending, decimals, suffix, kategori in METRIC_DEFS:
-            team, val = get_leader(col, ascending=ascending)
-            if team is None:
+            best_team, best_val, worst_team, worst_val = get_leader_and_worst(col, ascending=ascending)
+            if best_team is None:
                 continue
             rows.append({
                 "Kategori": kategori,
                 "Metric": label,
-                "Bedste hold": team,
-                "Værdi": safe_val(val, decimals, suffix),
+                "Bedste hold": best_team,
+                "Bedste værdi": safe_val(best_val, decimals, suffix),
+                "Dårligste hold": worst_team,
+                "Dårligste værdi": safe_val(worst_val, decimals, suffix),
             })
 
         if not rows:
-            st.warning("⚠️ Ingen data at vise for de valgte metrics.")
+            st.warning("Ingen data at vise for de valgte metrics.")
             return
 
         df_leaders = pd.DataFrame(rows)
         for kategori in df_leaders['Kategori'].unique():
             st.markdown(f"**{kategori}**")
             st.dataframe(
-                df_leaders[df_leaders['Kategori'] == kategori][['Metric', 'Bedste hold', 'Værdi']],
+                df_leaders[df_leaders['Kategori'] == kategori][['Metric', 'Bedste hold', 'Bedste værdi', 'Dårligste hold', 'Dårligste værdi']],
                 hide_index=True,
                 use_container_width=True,
             )
         return
 
     # --- 6. ENKELT HOLD-VISNING ---
-    valgt_navn = st.selectbox("Vælg hold", sorted(hold_options.keys()))
-    target_uuid = str(hold_options[valgt_navn]).strip().upper()
-
     row_match = df[df['TEAM_ID'] == target_uuid]
     if row_match.empty:
-        st.warning(f"⚠️ Ingen data fundet for {valgt_navn}.")
+        st.warning(f"Ingen data fundet for {valgt_navn}.")
         return
     row = row_match.iloc[0]
 
