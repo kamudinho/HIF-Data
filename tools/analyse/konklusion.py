@@ -324,7 +324,12 @@ def vis_side(dp=None):
         return
 
     elif visning == "Holdtabel (Y-akse)":
-        table_rows = []
+        kategorier = []
+        for _, _, _, _, _, cat in METRIC_DEFS:
+            if cat not in kategorier:
+                kategorier.append(cat)
+
+        team_data = []
         for _, r in df.iterrows():
             t_name = uuid_to_name.get(r['TEAM_ID'], r['TEAM_ID'])
             row_data = {"Hold": t_name}
@@ -333,15 +338,20 @@ def vis_side(dp=None):
                     row_data[label] = safe_val(r[col], decimals, suffix)
                 else:
                     row_data[label] = "N/A"
-            table_rows.append(row_data)
+            team_data.append(row_data)
 
-        if not table_rows:
+        if not team_data:
             st.warning("Ingen data at vise i tabellen.")
             return
 
-        df_table = pd.DataFrame(table_rows)
-        df_table = df_table.set_index("Hold")
-        st.dataframe(df_table, use_container_width=True)
+        df_full = pd.DataFrame(team_data)
+
+        for cat in kategorier:
+            st.markdown(f"### {cat}")
+            cat_metrics = [label for label, _, _, _, _, c in METRIC_DEFS if c == cat]
+            cols_to_show = ["Hold"] + cat_metrics
+            df_cat = df_full[cols_to_show].set_index("Hold")
+            st.table(df_cat)
         return
 
     # --- 6. ENKELT HOLD-VISNING ---
