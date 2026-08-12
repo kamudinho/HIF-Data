@@ -220,7 +220,6 @@ def vis_side(dp=None):
         .section-title { font-weight: bold; margin-bottom: 10px; font-size: 1.2rem; border-bottom: 2px solid #C8102E; padding-bottom: 5px; }
         .conclusion-text { color: #C8102E; font-weight: bold; margin-top: 15px; text-transform: uppercase; font-size: 0.85rem; }
         .stat-line { margin-bottom: 8px; font-size: 0.95rem; }
-        /* Centrerer indhold og tilføjer styling for tabeller */
         table { text-align: center !important; }
         th { text-align: center !important; }
         td { text-align: center !important; }
@@ -282,7 +281,7 @@ def vis_side(dp=None):
     if manglende:
         st.caption(f"Følgende hold i SEASON_LEAGUE_MAPPER mangler stamdata i TEAMS og vises ikke: {', '.join(manglende)}")
 
-    # --- 5b. TOP LINJE: DROPDOWN OG SEGMENTED CONTROL I TO KOLONNER (MED HØJDEJUSTERING) ---
+    # --- 5b. TOP LINJE: DROPDOWN OG SEGMENTED CONTROL I TO KOLONNER ---
     col_top1, col_top2 = st.columns([1, 1])
 
     with col_top1:
@@ -354,7 +353,6 @@ def vis_side(dp=None):
             st.markdown(f"### {cat}")
             cat_defs = [m for m in METRIC_DEFS if m[5] == cat]
             
-            # Byg DataFrame for denne kategori med faktiske værdier til farvning
             display_rows = []
             style_dicts = []
             
@@ -367,7 +365,6 @@ def vis_side(dp=None):
                     val = r[col]
                     row_disp[label] = safe_val(val, decimals, suffix)
                     
-                    # Beregn gradient farve baseret på rangering blandt holdene
                     if pd.isna(val):
                         row_styles[label] = ""
                     else:
@@ -376,14 +373,12 @@ def vis_side(dp=None):
                             rank_idx = temp_sorted[temp_sorted['TEAM_ID'] == r['TEAM_ID']].index[0] + 1
                             total_n = len(temp_sorted)
                             
-                            # Top 3 grøn gradient (1. bedst, 2. næstbedst, 3. tredjehøjeste/laveste)
                             if rank_idx == 1:
                                 row_styles[label] = 'background-color: rgba(40, 167, 69, 0.35); text-align: center;'
                             elif rank_idx == 2:
                                 row_styles[label] = 'background-color: rgba(40, 167, 69, 0.22); text-align: center;'
                             elif rank_idx == 3:
                                 row_styles[label] = 'background-color: rgba(40, 167, 69, 0.12); text-align: center;'
-                            # Dårligste 3 rød gradient
                             elif rank_idx == total_n:
                                 row_styles[label] = 'background-color: rgba(220, 53, 69, 0.35); text-align: center;'
                             elif rank_idx == total_n - 1:
@@ -398,14 +393,10 @@ def vis_side(dp=None):
                 display_rows.append(row_disp)
                 style_dicts.append(row_styles)
             
-            df_cat = pd.DataFrame(display_rows).set_index("Hold")
-            df_styles = pd.DataFrame(style_dicts).set_index("Hold")
+            df_cat = pd.DataFrame(display_rows)
+            df_styles = pd.DataFrame(style_dicts)
             
-            # Anvend styling og centrer alle celler via Pandas Styler
-            def apply_styles(val):
-                return ""
-            
-            styled_df = df_cat.style.apply(lambda x: df_styles[x.name], axis=0).set_properties(**{'text-align': 'center'})
+            styled_df = df_cat.style.hide(axis="index").apply(lambda s: df_styles[s.name], axis=0).set_properties(**{'text-align': 'center'})
             st.dataframe(styled_df, use_container_width=True)
         return
 
@@ -416,7 +407,6 @@ def vis_side(dp=None):
         return
     row = row_match.iloc[0]
 
-    # Beregning af over-/under-/normalpræstation for afslutningsspil (mål vs xG)
     goals_val = row.get('GOALS', 0)
     xg_val = row.get('XG', 0)
     diff = goals_val - xg_val
@@ -431,7 +421,6 @@ def vis_side(dp=None):
     else:
         præstation_tekst = "præsterer normalt i forhold til xG"
 
-    # Række 1: Afslutningsspil / Opbygningsspil
     col1, col2 = st.columns(2)
 
     with col2:
@@ -466,7 +455,6 @@ def vis_side(dp=None):
         </div>
         """, unsafe_allow_html=True)
 
-    # Række 2: Defensivt spil / Målmand & dødbolde
     col3, col4 = st.columns(2)
 
     with col3:
@@ -496,7 +484,6 @@ def vis_side(dp=None):
         </div>
         """, unsafe_allow_html=True)
 
-    # Række 3: Disciplin
     col5, _ = st.columns(2)
 
     with col5:
@@ -505,7 +492,7 @@ def vis_side(dp=None):
         <div class="analysis-card">
             <div class="section-title">Disciplin</div>
             <div class="stat-line">• {get_rank('YELLOW_CARDS', ascending=True)} færrest gule kort ({int(row['YELLOW_CARDS'])})</div>
-            <div class="stat-line">• Direkte røde kort: {int(row['RED_CARDS'])}</div>
+            <div class="stat-line">• Direkte røde kort: {int(row['RED_CARDS'])})</div>
             <div class="stat-line">• Udvisninger efter 2. gule: {int(row['SECOND_YELLOWS'])}</div>
             <div class="stat-line">• {get_rank('FOULS_CONCEDED', ascending=True)} færrest frispark begået ({int(row['FOULS_CONCEDED'])})</div>
             <div class="conclusion-text">Konklusion – {total_kort} kort i alt denne sæson.</div>
