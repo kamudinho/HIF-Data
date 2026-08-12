@@ -290,7 +290,6 @@ def vis_side(dp=None):
         visning = st.segmented_control(
             "Visning",
             ["Enkelt hold", "Alle hold"],
-            horizontal=True,
             label_visibility="collapsed",
         )
 
