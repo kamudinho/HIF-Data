@@ -223,6 +223,17 @@ def vis_side(dp=None):
         table { text-align: center !important; }
         th { text-align: center !important; }
         td { text-align: center !important; }
+        /* Gør Hold-kolonnen bredere og sikrer at den ikke cutter navne af */
+        [data-testid="stDataFrame"] th:first-child, 
+        [data-testid="stDataFrame"] td:first-child {
+            min-width: 180px !important;
+            max-width: 220px !important;
+            white-space: normal !important;
+            text-align: left !important;
+        }
+        [data-testid="stDataFrame"] th:first-child {
+            text-align: left !important;
+        }
         </style>
     """, unsafe_allow_html=True)
 
