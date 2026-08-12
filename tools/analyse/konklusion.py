@@ -287,9 +287,9 @@ def vis_side(dp=None):
         valgt_navn = st.selectbox("Vælg hold", sorted(hold_options.keys()))
 
     with col_top2:
-        visning = st.radio(
+        visning = st.segmented_control(
             "Visning",
-            ["Enkelt hold", "Alle hold (bedste og dårligste pr. metric)"],
+            ["Enkelt hold", "Alle hold"],
             horizontal=True,
             label_visibility="collapsed",
         )
