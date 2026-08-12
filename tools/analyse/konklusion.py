@@ -63,7 +63,7 @@ def vis_side(dp=None):
         st.warning(f"Ingen turnerings-UUID fundet for '{COMPETITION_NAME}' i sæsonen '{SAESON_NAVN}'. Tjek SEASONS-mappingen i team_mapping.py.")
         return
 
-    # --- 2. SQL: OPTA_MATCHSTATS (hovedstatistik + hjørnespark imod via modstander) ---
+    # --- 2. SQL: OPTA_MATCHSTATS (hovedstatistik) ---
     sql = f'''
     WITH MatchStats AS (
         SELECT 
@@ -81,6 +81,7 @@ def vis_side(dp=None):
                      THEN CAST(STAT_TOTAL AS FLOAT) END) as POSS,
             SUM(CASE WHEN STAT_TYPE = 'accuratePass' THEN STAT_TOTAL ELSE 0 END) as PASSES_ACCURATE,
             SUM(CASE WHEN STAT_TYPE = 'totalPass' THEN STAT_TOTAL ELSE 0 END) as PASSES_TOTAL,
+            SUM(CASE WHEN STAT_TYPE = 'cornerTaken' THEN STAT_TOTAL ELSE 0 END) as CORNERS_TAKEN,
             MAX(CASE WHEN STAT_TYPE = 'formationUsed' THEN STAT_TOTAL ELSE NULL END) as FORMATION,
 
             -- Defensivt spil
@@ -99,7 +100,6 @@ def vis_side(dp=None):
             SUM(CASE WHEN STAT_TYPE = 'penaltyWon' THEN STAT_TOTAL ELSE 0 END) as PENALTIES_WON,
             SUM(CASE WHEN STAT_TYPE = 'penaltyConceded' THEN STAT_TOTAL ELSE 0 END) as PENALTIES_CONCEDED,
             SUM(CASE WHEN STAT_TYPE = 'ownGoals' THEN STAT_TOTAL ELSE 0 END) as OWN_GOALS,
-            SUM(CASE WHEN STAT_TYPE = 'cornerTaken' THEN STAT_TOTAL ELSE 0 END) as CORNERS_TAKEN,
 
             -- Disciplin
             SUM(CASE WHEN STAT_TYPE = 'totalYellowCard' THEN STAT_TOTAL ELSE 0 END) as YELLOW_CARDS,
@@ -128,14 +128,13 @@ def vis_side(dp=None):
     CornersAgainst AS (
         SELECT 
             UPPER(TRIM(s1.CONTESTANT_OPTAUUID)) as TEAM_ID,
-            SUM(s2.STAT_TOTAL) as CORNERS_CONCEDED
+            SUM(CASE WHEN s2.STAT_TYPE = 'cornerTaken' THEN s2.STAT_TOTAL ELSE 0 END) as CORNERS_CONCEDED
         FROM {DB}.OPTA_MATCHSTATS s1
         JOIN {DB}.OPTA_MATCHSTATS s2 
             ON s1.MATCH_ID = s2.MATCH_ID 
             AND UPPER(TRIM(s1.CONTESTANT_OPTAUUID)) <> UPPER(TRIM(s2.CONTESTANT_OPTAUUID))
         WHERE s1.TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
           AND s2.TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
-          AND s2.STAT_TYPE = 'cornerTaken'
         GROUP BY 1
     )
     SELECT m.*, 
@@ -239,15 +238,15 @@ def vis_side(dp=None):
         table { text-align: center !important; }
         th { text-align: center !important; }
         td { text-align: center !important; }
-        /* Gør Hold-kolonnen bredere og sikrer at den gælder på tværs af alle tabeller uanset struktur */
-        [data-testid="stDataFrame"] th:first-child, 
-        [data-testid="stDataFrame"] td:first-child {
+        /* Gør Hold-kolonnen bredere og sikrer at den gælder på tværs af tabeller */
+        [data-testid="stDataFrame"] th:nth-child(1), 
+        [data-testid="stDataFrame"] td:nth-child(1) {
             min-width: 180px !important;
             max-width: 220px !important;
             white-space: normal !important;
             text-align: left !important;
         }
-        [data-testid="stDataFrame"] th:first-child {
+        [data-testid="stDataFrame"] th:nth-child(1) {
             text-align: left !important;
         }
         </style>
@@ -528,7 +527,7 @@ def vis_side(dp=None):
             <div class="section-title">Disciplin</div>
             <div class="stat-line">• {get_rank('YELLOW_CARDS', ascending=True)} færrest gule kort ({int(row['YELLOW_CARDS'])})</div>
             <div class="stat-line">• Direkte røde kort: {int(row['RED_CARDS'])}</div>
-            <div class="stat-line">• Udvisninger efter 2. gule: {int(row['SECOND_YELLOWS'])}</div>
+            <div class="stat-line">• Udvisninger efter 2. gule: {int(row['SECOND_YELLOWS'])},</div>
             <div class="stat-line">• {get_rank('FOULS_CONCEDED', ascending=True)} færrest frispark begået ({int(row['FOULS_CONCEDED'])})</div>
             <div class="conclusion-text">Konklusion – {total_kort} kort i alt denne sæson.</div>
         </div>
