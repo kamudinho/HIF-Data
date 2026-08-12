@@ -28,7 +28,6 @@ METRIC_DEFS = [
     ("Boldbesiddelse", "POSS", False, 1, "%", "Opbygningsspil"),
     ("Berøringer i alt", "TOUCHES", False, 0, "", "Opbygningsspil"),
     ("Afleveringspræcision", "PASS_ACCURACY", False, 1, "%", "Opbygningsspil"),
-    ("Hjørnespark taget", "CORNERS_TAKEN", False, 0, "", "Opbygningsspil"),
     ("Berøringer i modst. felt", "BOX_TOUCHES", False, 0, "", "Opbygningsspil"),
 
     ("Tackling-succes", "TACKLE_SUCCESS", False, 1, "%", "Defensivt spil"),
@@ -42,6 +41,8 @@ METRIC_DEFS = [
     ("Clean sheets", "CLEAN_SHEETS", False, 0, "", "Målmand & dødbolde"),
     ("Mål imod (færrest bedst)", "GOALS_CONCEDED", True, 0, "", "Målmand & dødbolde"),
     ("Straffe reddet", "PENALTY_SAVES", False, 0, "", "Målmand & dødbolde"),
+    ("Hjørnespark taget", "CORNERS_TAKEN", False, 0, "", "Målmand & dødbolde"),
+    ("Hjørnespark imod (færrest bedst)", "CORNERS_CONCEDED", True, 0, "", "Målmand & dødbolde"),
 
     ("Gule kort (færrest bedst)", "YELLOW_CARDS", True, 0, "", "Disciplin"),
     ("Røde kort (færrest bedst)", "RED_CARDS", True, 0, "", "Disciplin"),
@@ -123,6 +124,14 @@ def vis_side(dp=None):
         FROM {DB}.OPTA_MATCHEXPECTEDGOALS
         WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
         GROUP BY 1
+    ),
+    CornersAgainst AS (
+        SELECT 
+            UPPER(TRIM(OPPONENT_OPTAUUID)) as TEAM_ID,
+            SUM(CASE WHEN STAT_TYPE = 'cornerTaken' THEN STAT_TOTAL ELSE 0 END) as CORNERS_CONCEDED
+        FROM {DB}.OPTA_MATCHSTATS
+        WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
+        GROUP BY 1
     )
     SELECT m.*, 
         COALESCE(e.XG, 0) as XG, 
@@ -132,14 +141,16 @@ def vis_side(dp=None):
         COALESCE(e.BIG_CHANCES_MISSED, 0) as BIG_CHANCES_MISSED,
         COALESCE(e.BOX_TOUCHES, 0) as BOX_TOUCHES,
         COALESCE(e.WOODWORK, 0) as WOODWORK,
-        COALESCE(e.TOUCHES, 0) as TOUCHES
+        COALESCE(e.TOUCHES, 0) as TOUCHES,
+        COALESCE(c.CORNERS_CONCEDED, 0) as CORNERS_CONCEDED
     FROM MatchStats m
     LEFT JOIN ExpectedStats e ON m.TEAM_ID = e.TEAM_ID
+    LEFT JOIN CornersAgainst c ON m.TEAM_ID = c.TEAM_ID
     '''
 
     NUMERIC_COLS = [
         'GOALS', 'SHOTS_TOTAL', 'SHOTS_ON_TARGET', 'SHOTS_BLOCKED', 'ASSISTS',
-        'POSS', 'PASSES_ACCURATE', 'PASSES_TOTAL', 'CORNERS_TAKEN',
+        'POSS', 'PASSES_ACCURATE', 'PASSES_TOTAL', 'CORNERS_TAKEN', 'CORNERS_CONCEDED',
         'TACKLES_WON', 'TACKLES_TOTAL', 'CLEARANCES', 'OFFSIDES_WON', 'FOULS_WON', 'FOULS_CONCEDED',
         'SAVES', 'CLEAN_SHEETS', 'GOALS_CONCEDED', 'PENALTY_SAVES', 'PENALTIES_WON', 'PENALTIES_CONCEDED', 'OWN_GOALS',
         'YELLOW_CARDS', 'SECOND_YELLOWS', 'RED_CARDS',
@@ -223,15 +234,15 @@ def vis_side(dp=None):
         table { text-align: center !important; }
         th { text-align: center !important; }
         td { text-align: center !important; }
-        /* Gør Hold-kolonnen bredere og sikrer at den ikke cutter navne af */
-        [data-testid="stDataFrame"] th:first-child, 
-        [data-testid="stDataFrame"] td:first-child {
+        /* Gør Hold-kolonnen bredere og sikrer at den gælder på tværs af tabeller */
+        [data-testid="stDataFrame"] th:nth-child(1), 
+        [data-testid="stDataFrame"] td:nth-child(1) {
             min-width: 180px !important;
             max-width: 220px !important;
             white-space: normal !important;
             text-align: left !important;
         }
-        [data-testid="stDataFrame"] th:first-child {
+        [data-testid="stDataFrame"] th:nth-child(1) {
             text-align: left !important;
         }
         </style>
@@ -497,6 +508,7 @@ def vis_side(dp=None):
             <div class="stat-line">• {get_rank('CLEAN_SHEETS')} flest clean sheets ({int(row['CLEAN_SHEETS'])})</div>
             <div class="stat-line">• {get_rank('GOALS_CONCEDED', ascending=True)} færrest mål imod ({int(row['GOALS_CONCEDED'])})</div>
             <div class="stat-line">• Straffe: {int(row['PENALTIES_WON'])} vundet / {int(row['PENALTIES_CONCEDED'])} imod ({int(row['PENALTY_SAVES'])} reddet)</div>
+            <div class="stat-line">• Hjørnespark: {int(row['CORNERS_TAKEN'])} taget / {int(row['CORNERS_CONCEDED'])} imod</div>
             <div class="stat-line">• Selvmål: {int(row['OWN_GOALS'])}</div>
             <div class="conclusion-text">Konklusion – {int(row['CLEAN_SHEETS'])} clean sheets og {int(row['GOALS_CONCEDED'])} mål imod.</div>
         </div>
