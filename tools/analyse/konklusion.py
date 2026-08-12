@@ -354,50 +354,57 @@ def vis_side(dp=None):
             cat_defs = [m for m in METRIC_DEFS if m[5] == cat]
             
             display_rows = []
-            style_dicts = []
             
             for _, r in df_raw_teams.iterrows():
                 t_name = r["Hold"]
                 row_disp = {"Hold": t_name}
-                row_styles = {"Hold": ""}
                 
                 for label, col, ascending, decimals, suffix, _ in cat_defs:
                     val = r[col]
                     row_disp[label] = safe_val(val, decimals, suffix)
-                    
-                    if pd.isna(val):
-                        row_styles[label] = ""
-                    else:
-                        temp_sorted = df_raw_teams.dropna(subset=[col]).sort_values(col, ascending=ascending).reset_index(drop=True)
-                        try:
-                            rank_idx = temp_sorted[temp_sorted['TEAM_ID'] == r['TEAM_ID']].index[0] + 1
-                            total_n = len(temp_sorted)
-                            
-                            if rank_idx == 1:
-                                row_styles[label] = 'background-color: rgba(40, 167, 69, 0.35); text-align: center;'
-                            elif rank_idx == 2:
-                                row_styles[label] = 'background-color: rgba(40, 167, 69, 0.22); text-align: center;'
-                            elif rank_idx == 3:
-                                row_styles[label] = 'background-color: rgba(40, 167, 69, 0.12); text-align: center;'
-                            elif rank_idx == total_n:
-                                row_styles[label] = 'background-color: rgba(220, 53, 69, 0.35); text-align: center;'
-                            elif rank_idx == total_n - 1:
-                                row_styles[label] = 'background-color: rgba(220, 53, 69, 0.22); text-align: center;'
-                            elif rank_idx == total_n - 2:
-                                row_styles[label] = 'background-color: rgba(220, 53, 69, 0.12); text-align: center;'
-                            else:
-                                row_styles[label] = 'text-align: center;'
-                        except Exception:
-                            row_styles[label] = 'text-align: center;'
-                
                 display_rows.append(row_disp)
-                style_dicts.append(row_styles)
             
-            df_cat = pd.DataFrame(display_rows)
-            df_styles = pd.DataFrame(style_dicts)
+            df_cat = pd.DataFrame(display_rows).set_index("Hold")
             
-            styled_df = df_cat.style.hide(axis="index").apply(lambda s: df_styles[s.name], axis=0).set_properties(**{'text-align': 'center'})
-            st.dataframe(styled_df, use_container_width=True)
+            # Anvend styling direkte baseret på dataframe værdier
+            def style_cells(data):
+                styled = pd.DataFrame('', index=data.index, columns=data.columns)
+                for col_name in data.columns:
+                    col_key = next((m[1] for m in cat_defs if m[0] == col_name), None)
+                    if not col_key:
+                        continue
+                    temp_sorted = df_raw_teams.dropna(subset=[col_key]).sort_values(col_key, ascending=next(m[2] for m in cat_defs if m[0] == col_name)).reset_index(drop=True)
+                    for idx, row in data.iterrows():
+                        orig_row = df_raw_teams[df_raw_teams['Hold'] == idx]
+                        if orig_row.empty:
+                            continue
+                        t_id = orig_row.iloc[0]['TEAM_ID']
+                        val = orig_row.iloc[0][col_key]
+                        if pd.isna(val):
+                            continue
+                        try:
+                            rank_idx = temp_sorted[temp_sorted['TEAM_ID'] == t_id].index[0] + 1
+                            total_n = len(temp_sorted)
+                            if rank_idx == 1:
+                                styled.loc[idx, col_name] = 'background-color: rgba(40, 167, 69, 0.35); text-align: center;'
+                            elif rank_idx == 2:
+                                styled.loc[idx, col_name] = 'background-color: rgba(40, 167, 69, 0.22); text-align: center;'
+                            elif rank_idx == 3:
+                                styled.loc[idx, col_name] = 'background-color: rgba(40, 167, 69, 0.12); text-align: center;'
+                            elif rank_idx == total_n:
+                                styled.loc[idx, col_name] = 'background-color: rgba(220, 53, 69, 0.35); text-align: center;'
+                            elif rank_idx == total_n - 1:
+                                styled.loc[idx, col_name] = 'background-color: rgba(220, 53, 69, 0.22); text-align: center;'
+                            elif rank_idx == total_n - 2:
+                                styled.loc[idx, col_name] = 'background-color: rgba(220, 53, 69, 0.12); text-align: center;'
+                            else:
+                                styled.loc[idx, col_name] = 'text-align: center;'
+                        except Exception:
+                            styled.loc[idx, col_name] = 'text-align: center;'
+                return styled
+
+            styled_df = df_cat.style.apply(style_cells, axis=None).set_properties(**{'text-align': 'center'})
+            st.dataframe(styled_df, use_container_width=True, height=470, hide_index=False)
         return
 
     # --- 6. ENKELT HOLD-VISNING ---
@@ -492,7 +499,7 @@ def vis_side(dp=None):
         <div class="analysis-card">
             <div class="section-title">Disciplin</div>
             <div class="stat-line">• {get_rank('YELLOW_CARDS', ascending=True)} færrest gule kort ({int(row['YELLOW_CARDS'])})</div>
-            <div class="stat-line">• Direkte røde kort: {int(row['RED_CARDS'])})</div>
+            <div class="stat-line">• Direkte røde kort: {int(row['RED_CARDS'])}</div>
             <div class="stat-line">• Udvisninger efter 2. gule: {int(row['SECOND_YELLOWS'])}</div>
             <div class="stat-line">• {get_rank('FOULS_CONCEDED', ascending=True)} færrest frispark begået ({int(row['FOULS_CONCEDED'])})</div>
             <div class="conclusion-text">Konklusion – {total_kort} kort i alt denne sæson.</div>
