@@ -131,7 +131,7 @@ def vis_side(dp=None):
             SUM(CASE WHEN s2.STAT_TYPE = 'cornerTaken' THEN s2.STAT_TOTAL ELSE 0 END) as CORNERS_CONCEDED
         FROM {DB}.OPTA_MATCHSTATS s1
         JOIN {DB}.OPTA_MATCHSTATS s2 
-            ON s1.MATCH_ID = s2.MATCH_ID 
+            ON s1.MATCH_OPTAUUID = s2.MATCH_OPTAUUID 
             AND UPPER(TRIM(s1.CONTESTANT_OPTAUUID)) <> UPPER(TRIM(s2.CONTESTANT_OPTAUUID))
         WHERE s1.TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
           AND s2.TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
@@ -392,7 +392,6 @@ def vis_side(dp=None):
             
             df_cat = pd.DataFrame(display_rows).set_index("Hold")
             
-            # Anvend styling direkte baseret på dataframe værdier
             def style_cells(data):
                 styled = pd.DataFrame('', index=data.index, columns=data.columns)
                 for col_name in data.columns:
