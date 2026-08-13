@@ -209,20 +209,30 @@ def vis_side(dp=None):
     primær_farve = get_team_color(valgt_hold, "primary", "#df003b")
  
     with st.spinner("Henter spillere..."):
-        df_all, df_expected, df_db_stats = hent_match_og_haendelsesdata(
+        df_all_raw, df_expected, df_db_stats = hent_match_og_haendelsesdata(
             conn, DB, valgt_uuid_hold, LIGA_IDS, navne_map
         )
 
-    if df_all is None:
-        df_all = pd.DataFrame()
+    if df_all_raw is None:
+        df_all_raw = pd.DataFrame()
 
-    if df_all.empty:
+    if df_all_raw.empty:
         st.warning("Ingen hændelsesdata fundet.")
         st.stop()
 
-    # --- NYT: FILTRER KUN TIL DET VALGTE HOLD ---
-    if 'hold_optauuid' in df_all.columns:
-        df_all = df_all[df_all['hold_optauuid'] == valgt_uuid_hold].copy()
+    # Behold hele ligaen til sammenligninger senere i koden
+    df_liga_total = df_all_raw.copy()
+    df_liga_total = df_liga_total.dropna(subset=['visningsnavn'])
+    df_liga_total['event_timestamp'] = pd.to_datetime(df_liga_total['event_timestamp_str'])
+    df_liga_total['qual_list'] = df_liga_total['qualifiers'].fillna('').str.split(',')
+    df_liga_total['Pasninger_Total'] = (df_liga_total['event_typeid'] == 1).astype(int)
+    df_liga_total['Pasninger_Succes'] = ((df_liga_total['event_typeid'] == 1) & (df_liga_total['outcome'] == 1)).astype(int)
+
+    # Filtrer kun til det valgte hold til dropdown og spillerdata
+    if 'hold_optauuid' in df_all_raw.columns:
+        df_all = df_all_raw[df_all_raw['hold_optauuid'] == valgt_uuid_hold].copy()
+    else:
+        df_all = df_all_raw.copy()
  
     df_all = df_all.dropna(subset=['visningsnavn'])
     df_all['event_timestamp'] = pd.to_datetime(df_all['event_timestamp_str'])
