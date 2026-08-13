@@ -657,7 +657,7 @@ def vis_side(dp=None):
                     misses = d[d['event_typeid'].isin([13, 14, 15])]
                     ax.scatter(misses.event_x, misses.event_y, color='grey', s=60, edgecolors='black', alpha=0.6)
                     ax.scatter(goals.event_x, goals.event_y, color=primær_farve, s=120, marker='s', edgecolors='black', zorder=5)
-                elif visning == "Erobringer":
+                elif visning == "Defensive aktioner":
                     d = df_plot[df_plot['event_typeid'].isin([7, 8, 12, 49])]
                     ax.scatter(d.event_x, d.event_y, color='orange', s=100, edgecolors='white')
 
