@@ -25,7 +25,6 @@ try:
     from data.players import player_mapping
     valgt_player_uuid = st.session_state.get('valgt_player_uuid', getattr(player_mapping, 'valgt_player_uuid', None))
     valgt_spiller = st.session_state.get('valgt_spiller', getattr(player_mapping, 'valgt_spiller', None))
-    truppen_stats = getattr(player_mapping, 'truppen_stats', None)
     df_spiller = getattr(player_mapping, 'df_spiller', None)
     hold_logo = getattr(player_mapping, 'hold_logo', None)
     primær_farve = getattr(player_mapping, 'primær_farve', "#df003b")
@@ -220,7 +219,7 @@ def vis_side(dp=None):
         st.warning("Ingen hændelsesdata fundet.")
         st.stop()
 
-    # Behold hele ligaen til sammenligninger senere i koden
+    # Behold hele ligaen til sammenligning senere i koden
     df_liga_total = df_all_raw.copy()
     df_liga_total = df_liga_total.dropna(subset=['visningsnavn'])
     df_liga_total['event_timestamp'] = pd.to_datetime(df_liga_total['event_timestamp_str'])
@@ -319,6 +318,48 @@ def vis_side(dp=None):
     truppen_stats_liga['Position'] = truppen_stats_liga.index.to_series().apply(
         lambda u: POSITION_MAP.get(str(u).strip(), 'Ukendt')
     )
+
+    # Beregn holdets trup-stats direkte (så truppen_stats aldrig er None)
+    event_stats_hold = df_all.groupby(['player_optauuid', 'visningsnavn']).apply(lambda x: pd.Series({
+        'Kampe': x['match_optauuid'].nunique() if 'match_optauuid' in x.columns else 1,
+        'Aktioner': len(x),
+        'Gule_kort': count_kamp_qual(x, 17, 31),
+        'Roede_kort': count_kamp_qual(x, 17, 33),
+        'Indskiftet': (x['event_typeid'] == 19).sum(),
+        'Udskiftet': (x['event_typeid'] == 18).sum(),
+        'Pasninger': x['Pasninger_Total'].sum() if 'Pasninger_Total' in x.columns else 0,
+        'Pasninger_Succes': x['Pasninger_Succes'].sum() if 'Pasninger_Succes' in x.columns else 0,
+        'Stikninger': count_kamp_qual(x, 1, 4),
+        'Indlæg': count_kamp_qual(x, 1, [2, 155]),
+        'Afslutninger': x['event_typeid'].isin([13, 14, 15, 16]).sum(),
+        'Erobringer': x['event_typeid'].isin([7, 8, 12, 49]).sum(),
+        'Driblinger': (x['event_typeid'] == 3).sum(),
+        'Driblinger_Succes': x.apply(lambda r: 1 if str(r['event_typeid']) == "3" and "211" not in _get_quals(r) else 0, axis=1).sum(),
+        'Gennembrud_Overtake': x.apply(lambda r: 1 if str(r['event_typeid']) == "3" and "465" in _get_quals(r) else 0, axis=1).sum(),
+        'Rum_Driblinger_Space': x.apply(lambda r: 1 if str(r['event_typeid']) == "3" and "464" in _get_quals(r) else 0, axis=1).sum(),
+        'Offensive_Dueller': x.apply(lambda r: 1 if "286" in _get_quals(r) else 0, axis=1).sum(),
+        'Defensive_Dueller': x.apply(lambda r: 1 if "285" in _get_quals(r) else 0, axis=1).sum(),
+        'Defensive_1v1_Stoppet': x.apply(lambda r: 1 if "467" in _get_quals(r) else 0, axis=1).sum(),
+        'Chancer_skabt': x.apply(lambda r: 1 if '210' in _get_quals(r) else 0, axis=1).sum(),
+        'Key_Passes': x.apply(lambda r: 1 if '210' in _get_quals(r) else 0, axis=1).sum(),
+        'Tacklinger': (x['event_typeid'] == 7).sum(),
+        'Clearinger': (x['event_typeid'] == 12).sum(),
+        'Blokeringer': (x['event_typeid'] == 55).sum(),
+        'Interceptioner': (x['event_typeid'] == 5).sum(),
+        'Frispark_imod': (x['event_typeid'] == 4).sum()
+    })).reset_index().drop_duplicates(subset=['player_optauuid']).set_index('player_optauuid') if not df_all.empty else pd.DataFrame()
+
+    truppen_stats = event_stats_hold.copy() if not event_stats_hold.empty else pd.DataFrame()
+    if not truppen_stats.empty:
+        truppen_stats['Minutter'] = 0  
+        truppen_stats['xG'] = 0.0
+        truppen_stats['xA'] = 0.0
+        truppen_stats['Mål'] = df_all[df_all['event_typeid'] == 16].groupby('player_optauuid').size().fillna(0).astype(int)
+        truppen_stats['Assists'] = df_all.apply(lambda r: 1 if is_assist(r.get('event_typeid'), r.get('qual_list', [])) else 0, axis=1).groupby(df_all['player_optauuid']).sum().fillna(0).astype(int)
+        truppen_stats['Pasningsprocent'] = ((truppen_stats['Pasninger_Succes'] / truppen_stats['Pasninger']) * 100).where(truppen_stats['Pasninger'] > 0, 0).round(1)
+        truppen_stats['Position'] = truppen_stats.index.to_series().apply(
+            lambda u: POSITION_MAP.get(str(u).strip(), 'Ukendt')
+        )
  
     t_team, t_matches, t_profile, t_pitch, t_phys = st.tabs(["Holdoversigt", "Kampoversigt", "Spillerprofil", "Spilleraktioner", "Fysisk data"])
  
@@ -786,80 +827,14 @@ def vis_side(dp=None):
                         ax.scatter(d.event_x, d.event_y, color='green', s=20, edgecolors='white', alpha=0.6, zorder=4)
 
             st.pyplot(fig, use_container_width=True)
-            
-    # --- 5. FYSISK DATA ---
+
     with t_phys:
-        df_phys = get_physical_data(valgt_spiller, valgt_player_uuid, valgt_hold, conn)
-
-        if df_phys is None or df_phys.empty:
-            st.warning("Data findes endnu ikke hos Second Spectrum")
+        st.markdown('<div style="font-size: 16px; font-weight: bold; margin-bottom: 10px;">Fysisk Data (Second Spectrum)</div>', unsafe_allow_html=True)
+        if valgt_player_uuid and valgt_spiller:
+            df_phys_data = get_physical_data(valgt_spiller, valgt_player_uuid, valgt_hold, conn)
+            if not df_phys_data.empty:
+                st.dataframe(df_phys_data, use_container_width=True, hide_index=True)
+            else:
+                st.info("Ingen fysisk data tilgængelig for denne spiller.")
         else:
-            df_phys.columns = df_phys.columns.str.lower()
-            df_phys['match_date'] = pd.to_datetime(df_phys['match_date'])
-            df_phys = df_phys.sort_values('match_date', ascending=False)
-
-            hsr_val = df_phys.get('hsr', df_phys.get('high speed running', pd.Series(0, index=df_phys.index)))
-            spr_val = df_phys.get('sprinting', df_phys.get('sprint', pd.Series(0, index=df_phys.index)))
-
-            df_phys['hsr_total'] = hsr_val + spr_val
-            latest = df_phys.iloc[0]
-
-            m1, m2, m3, m4 = st.columns(4)
-            m1.metric("Distance", f"{round(latest.get('distance', 0)/1000, 2)} km")
-            m2.metric("HSR", f"{int(latest.get('hsr_total', 0))} m")
-            m3.metric("Topfart", f"{round(float(latest.get('top_speed', 0)), 1)} km/t")
-            m4.metric("Højintense", int(latest.get('hi_runs', 0)))
-
-            t_sub_log, t_sub_charts = st.tabs(["Kampoversigt", "Grafer"])
-
-            with t_sub_charts:
-                cat_choice = st.segmented_control("Vælg metrik", options=["HSR (m)", "Sprint (m)", "Distance (km)", "Topfart (km/t)"], default="HSR (m)", key="phys_graph_control")
-                mapping = {"HSR (m)": ("hsr", 1, "m"), "Sprint (m)": ("sprinting", 1, "m"), "Distance (km)": ("distance", 1000, "km"), "Topfart (km/t)": ("top_speed", 1, "km/t")}
-                col_key, div, suffix = mapping[cat_choice]
-
-                df_chart = df_phys[df_phys['match_date'] >= '2025-07-01'].copy()
-                df_chart = df_chart.drop_duplicates(subset=['match_date', 'match_teams'])
-                df_chart = df_chart.sort_values('match_date', ascending=True)
-
-                if not df_chart.empty:
-                    def get_opponent(teams_str, my_team):
-                        if not teams_str: return "?"
-                        parts = [p.strip() for p in teams_str.split('-')]
-                        if len(parts) < 2: return teams_str
-                        return parts[1] if parts[0].lower() in my_team.lower() else parts[0]
-
-                    df_chart['opponent'] = df_chart['match_teams'].apply(lambda x: get_opponent(str(x), valgt_hold))
-                    df_chart['dato_str'] = df_chart['match_date'].dt.strftime('%d/%m')
-                    df_chart['hover_label'] = df_chart['dato_str'] + " vs " + df_chart['opponent']
-                    df_chart['y_val'] = df_chart[col_key] / div
-
-                    fig_phys = go.Figure(go.Bar(
-                        x=df_chart['hover_label'],
-                        y=df_chart['y_val'],
-                        marker_color=primær_farve,
-                        text=df_chart['y_val'].round(1),
-                        textposition='auto',
-                    ))
-                    fig_phys.update_layout(
-                        margin=dict(t=20, b=20, l=20, r=20),
-                        height=300,
-                        xaxis=dict(tickangle=-30),
-                        yaxis=dict(title=suffix)
-                    )
-                    st.plotly_chart(fig_phys, use_container_width=True)
-
-            with t_sub_log:
-                df_log = df_phys[['match_date', 'match_teams', 'distance', 'hsr_total', 'top_speed', 'hi_runs']].copy()
-                df_log['match_date'] = df_log['match_date'].dt.strftime('%Y-%m-%d')
-                df_log['distance'] = (df_log['distance'] / 1000).round(2)
-                df_log['top_speed'] = df_log['top_speed'].round(1)
-
-                df_log = df_log.rename(columns={
-                    'match_date': 'Dato',
-                    'match_teams': 'Kamp',
-                    'distance': 'Distance (km)',
-                    'hsr_total': 'HSR (m)',
-                    'top_speed': 'Topfart (km/t)',
-                    'hi_runs': 'Højintense løb'
-                })
-                st.dataframe(df_log, use_container_width=True, hide_index=True)
+            st.warning("Vælg venligst en spiller for at se fysisk data.")
