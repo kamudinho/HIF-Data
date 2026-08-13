@@ -1,5 +1,3 @@
-#tools/players/player_profile.py
-
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
@@ -566,7 +564,7 @@ def vis_side(dp=None):
             "Berøringer": "Alle aktioner hvor spilleren har været i kontakt med bolden.",
             "Afslutninger": "Oversigt over alle skudforsøg (Mål = firkant, skud = cirkel).",
             "Defensive aktioner": "Tacklinger, bolderobringer og opsnappede afleveringer.",
-            "Offensive pasninger": "Pasninger der sendes ind i eller inden for den sidste tredjedel af banen."
+            "Offensive pasninger": "Fremadrettede pasninger der lander i sidste tredjedel af banen (grøn = lykkedes, grå = mislykkedes)."
         }
         touch_ids = [1, 3, 7, 10, 11, 12, 13, 14, 15, 16, 42, 44, 49, 50, 51, 54, 61, 73]
         df_filtreret = df_spiller[~df_spiller['Action_Label'].isin(['Pasning', 'Indkast'])]
@@ -664,17 +662,37 @@ def vis_side(dp=None):
                     d = df_plot[df_plot['event_typeid'].isin([5, 7, 8, 12, 49, 55])]
                     ax.scatter(d.event_x, d.event_y, color='orange', s=100, edgecolors='white')
                 elif visning == "Offensive pasninger":
-                    x_end = 'end_x' if 'end_x' in df_plot.columns else ('END_X' if 'END_X' in df_plot.columns else None)
-                    y_end = 'end_y' if 'end_y' in df_plot.columns else ('END_Y' if 'END_Y' in df_plot.columns else None)
-                    
-                    if x_end and y_end:
-                        d = df_plot[(df_plot['event_typeid'] == 1) & (df_plot[x_end] > 66.7)]
-                        if not d.empty:
-                            pitch.lines(d.event_x, d.event_y, d[x_end], d[y_end], 
-                                        ax=ax, color='green', lw=1.5, comet=True, alpha=0.7)
-                            ax.scatter(d.event_x, d.event_y, color='green', s=30, edgecolors='white', zorder=2)
-                    else:
-                        st.warning("Slut-koordinater ('end_x' / 'END_X') mangler i data.")
+                    # Fremadrettede pasninger der lander i sidste tredjedel af banen.
+                    # Opta banelængde er 0-100, sidste tredjedel er x > 66.7.
+                    # Det er ligegyldigt hvor pasningen STARTER (kan sagtens starte
+                    # midt på banen eller i egen banehalvdel) - kun at den:
+                    #   1) rammer sidste tredjedel (end_x > 66.7), OG
+                    #   2) reelt går fremad (end_x > event_x), så en sidelæns/
+                    #      tilbagelæns pasning der tilfældigvis lander der ikke tælles med.
+                    d = df_plot[
+                        (df_plot['event_typeid'] == 1) &
+                        (df_plot['end_x'] > 66.7) &
+                        (df_plot['end_x'] > df_plot['event_x'])
+                    ].dropna(subset=['end_x', 'end_y'])
+
+                    succes = d[d['outcome'] == 1]
+                    fejl = d[d['outcome'] != 1]
+
+                    # Pile (med pilespids) i stedet for komet-streger, så retningen
+                    # er tydelig. Grøn = lykkedes, grå = mislykkedes.
+                    if not fejl.empty:
+                        pitch.arrows(
+                            fejl.event_x, fejl.event_y, fejl.end_x, fejl.end_y,
+                            ax=ax, color='#bdbdbd', width=1.5, headwidth=5, headlength=5, alpha=0.6, zorder=2
+                        )
+                    if not succes.empty:
+                        pitch.arrows(
+                            succes.event_x, succes.event_y, succes.end_x, succes.end_y,
+                            ax=ax, color='green', width=2, headwidth=6, headlength=6, alpha=0.85, zorder=3
+                        )
+
+                    # Markér startpunktet for hver pasning
+                    ax.scatter(d.event_x, d.event_y, color='green', s=20, edgecolors='white', alpha=0.6, zorder=4)
 
             st.pyplot(fig, use_container_width=True)
             
