@@ -31,15 +31,12 @@ try:
     primær_farve = getattr(player_mapping, 'primær_farve', "#df003b")
     valgt_hold = getattr(player_mapping, 'valgt_hold', "Hvidovre")
     conn = getattr(player_mapping, 'conn', None)
-    SEASONNAME = getattr(player_mapping, 'SEASONNAME', "2026/2027")
+    SEASONNAME = getattr(player_mapping, 'SEASONNAME', "2025/2026")
 except ImportError:
     st.error("Kunne ikke finde eller indlæse 'player_mapping.py'. Sørg for filen ligger i mappen.")
     st.stop()
 
 # --- POSITIONSDATA (fra den statiske spillerliste i data/players/player_mapping.py) ---
-# 'player_mapping' her er submodulet data.players.player_mapping, som (udover
-# PlayerMapping-klassen) også eksponerer den rå PLAYER_MAPPING-liste med
-# "position": Goalkeeper / Defender / Midfielder / Attacker pr. spiller.
 _STATIC_PLAYERS = getattr(player_mapping, 'PLAYER_MAPPING', [])
 POSITION_MAP = {
     str(p.get('player_optauuid')).strip(): p.get('position', 'Ukendt')
@@ -58,9 +55,7 @@ POSITION_DA_FLERTAL = {
     "Attacker": "angribere",
 }
 
-# Statistik-kategorier vist i "hjul"-grafikkerne på Spillerprofil-fanen,
-# tilpasset efter position - fx giver "Afslutninger"/"Mål" ikke mening for en
-# målmand, mens "Tacklinger"/"Klareringer" er mere relevant der.
+# Statistik-kategorier vist i "hjul"-grafikkerne på Spillerprofil-fanen
 KATEGORI_PER_POSITION = {
     "Goalkeeper": [
         ("PASNINGER", "Pasninger"), ("PASNING %", "Pasningsprocent"),
@@ -94,12 +89,10 @@ DEFAULT_KAT_LISTE = [
     ("KEY PASSES", "Key_Passes")
 ]
 
-# Visninger i #4 SPILLERAKTIONER, der ikke giver mening for visse positioner.
 HIDDEN_VIEWS_PER_POSITION = {
     "Goalkeeper": ["Afslutninger", "Offensive pasninger"],
 }
 
-# Farvekodning til "Alle aktioner"-visningen: (label, event_typeid-filter, farve, størrelse, markør)
 AKTIONS_FARVER = [
     ("Aflevering", lambda d: d['event_typeid'] == 1, '#1f77b4', 22, 'o'),
     ("Dribling", lambda d: d['event_typeid'] == 3, '#d62728', 45, 'o'),
@@ -109,7 +102,7 @@ AKTIONS_FARVER = [
 ]
  
 DB = "KLUB_HVIDOVREIF.AXIS"
-SEASONNAME = "2026/2027"
+SEASONNAME = "2025/2026"
 TEAM_WYID = 7490
 COMPETITION_WYID = (328,)
 COMP_MAP = { 
@@ -260,8 +253,6 @@ def vis_side(dp=None):
     valgt_spiller = valgt_label.split(" (")[0] if valgt_label else ""
     df_spiller = df_all[df_all['player_optauuid'] == valgt_player_uuid].copy() if valgt_player_uuid else pd.DataFrame()
 
-    # Position for den valgte spiller (bruges til at skjule irrelevante visninger
-    # og vælge de rigtige statistik-kategorier længere nede).
     spiller_position = POSITION_MAP.get(str(valgt_player_uuid).strip(), 'Ukendt') if valgt_player_uuid else 'Ukendt'
  
     def count_kamp_qual(df_group, eid, qids):
@@ -311,13 +302,10 @@ def vis_side(dp=None):
             'xg': 'sum',
             'xa': 'sum'
         }).rename(columns={'match_id': 'Kampe', 'minutes': 'Minutter', 'xg': 'xG', 'xa': 'xA'})
-        # 'Kampe' findes allerede fra event_stats (ud fra match_optauuid) - drop den
-        # inden join, så vi ikke ender med en ubrugt 'Kampe_exp' kolonne.
         event_stats_uden_kampe = event_stats.drop(columns=['Kampe'], errors='ignore')
         truppen_stats_raw = event_stats_uden_kampe.join(match_stats, how='left').fillna(0)
     else:
         truppen_stats_raw = event_stats.copy()
-        # 'Kampe' er allerede beregnet i event_stats (nunique match_optauuid) - behold den
         truppen_stats_raw['Minutter'] = 0
         truppen_stats_raw['xG'] = 0.0
         truppen_stats_raw['xA'] = 0.0
@@ -340,8 +328,6 @@ def vis_side(dp=None):
  
     truppen_stats['Pasningsprocent_Str'] = truppen_stats['Pasningsprocent'].astype(str) + "%"
 
-    # Positionskolonne på hele truppen, så vi kan sammenligne/gruppere spillere
-    # efter position (bruges på Spillerprofil-fanen nedenfor).
     truppen_stats['Position'] = truppen_stats.index.to_series().apply(
         lambda u: POSITION_MAP.get(str(u).strip(), 'Ukendt')
     )
@@ -571,90 +557,86 @@ def vis_side(dp=None):
             st.warning("Ingen spillede kampe fundet i denne sæson.")
  
     with t_profile:
-    if not truppen_stats.empty and valgt_player_uuid in truppen_stats.index:
-        # Sikr at alle i truppen_stats har en position, så we kan filtrere på tværs af hold
-        if 'Position' not in truppen_stats.columns:
-            truppen_stats['Position'] = truppen_stats.index.to_series().apply(
-                lambda u: POSITION_MAP.get(str(u).strip(), 'Ukendt')
-            )
+        if not truppen_stats.empty and valgt_player_uuid in truppen_stats.index:
+            if 'Position' not in truppen_stats.columns:
+                truppen_stats['Position'] = truppen_stats.index.to_series().apply(
+                    lambda u: POSITION_MAP.get(str(u).strip(), 'Ukendt')
+                )
 
-        # Sammenlign med alle spillere på samme position i HELE databasen/ligaen
-        if spiller_position != 'Ukendt':
-            sammenligningsgruppe = truppen_stats[truppen_stats['Position'] == spiller_position]
-            if sammenligningsgruppe.empty:
+            if spiller_position != 'Ukendt':
+                sammenligningsgruppe = truppen_stats[truppen_stats['Position'] == spiller_position]
+                if sammenligningsgruppe.empty:
+                    sammenligningsgruppe = truppen_stats
+            else:
                 sammenligningsgruppe = truppen_stats
+
+            numeric_cols = sammenligningsgruppe.drop(columns=['visningsnavn', 'Pasningsprocent_Str', 'Position'], errors='ignore')
+            ranks = (-numeric_cols).rank(ascending=True, method='min').astype(int)
+
+            try:
+                spiller_ranks = ranks.loc[valgt_player_uuid]
+                if isinstance(spiller_ranks, pd.DataFrame):
+                    spiller_ranks = spiller_ranks.iloc[0]
+                s_data = truppen_stats.loc[valgt_player_uuid]
+                if isinstance(s_data, pd.DataFrame):
+                    s_data = s_data.iloc[0]
+            except KeyError:
+                st.error(f"Kunne ikke finde stats for spiller: {valgt_spiller}")
+                st.stop()
+
+            main_col_left, main_col_right = st.columns([1.3, 4])
+
+            with main_col_left:
+                logo_html = ""
+                if hold_logo is not None:
+                    buffered = io.BytesIO()
+                    hold_logo.save(buffered, format="PNG")
+                    img_str = base64.b64encode(buffered.getvalue()).decode()
+                    logo_html = f'<img src="data:image/png;base64,{img_str}" style="height: 35px; margin-right: 12px;">'
+
+                position_label = POSITION_DA.get(spiller_position, spiller_position)
+                st.markdown(f'''<div style="display: flex; align-items: center; margin-bottom: 10px;">{logo_html}<div>
+                        <div style="font-size: 18px; font-weight: bold; line-height: 1.2;">{valgt_spiller}</div>
+                        <div style="font-size: 12px; color: #888;">{position_label}</div>
+                    </div></div>''', unsafe_allow_html=True)
+                st.markdown("<hr style='margin: 10px 0; opacity: 0.5;'>", unsafe_allow_html=True)
+
+                st.markdown(f"""
+                    <div style="background-color: #f8f9fa; padding: 12px; border-radius: 8px; border: 1px solid #e9ecef;">
+                        <h4 style="margin: 0 0 10px 0; font-size: 14px; text-transform: uppercase; font-weight: bold;">Kampdata</h4>
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 13px;"><span><b>Kampe:</b></span><span>{int(s_data['Kampe'])}</span></div>
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 13px;"><span><b>Minutter:</b></span><span>{int(s_data['Minutter'])}'</span></div>
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 13px;"><span><b>Mål (xG):</b></span><span>{int(s_data['Mål'])} ({round(s_data['xG'], 2)})</span></div>
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 13px;"><span><b>Assists (xA):</b></span><span>{int(s_data['Assists'])} ({round(s_data['xA'], 2)})</span></div>
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 13px;"><span><b>Gule kort:</b></span><span>{int(s_data['Gule_kort'])}</span></div>
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 13px;"><span><b>Røde kort:</b></span><span>{int(s_data['Roede_kort'])}</span></div>
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 13px;"><span><b>Indskiftet:</b></span><span>{int(s_data['Indskiftet'])}</span></div>
+                        <div style="display: flex; justify-content: space-between; font-size: 13px;"><span><b>Udskiftet:</b></span><span>{int(s_data['Udskiftet'])}</span></div>
+                    </div>
+                """, unsafe_allow_html=True)
+
+                st.markdown("<hr style='margin: 15px 0; opacity: 0.5;'>", unsafe_allow_html=True)
+                gruppe_navn = POSITION_DA_FLERTAL.get(spiller_position, "spillere")
+                st.caption(f"Sammenlignet med alle {gruppe_navn} i ligaen.")
+
+            with main_col_right:
+                kat_liste = KATEGORI_PER_POSITION.get(spiller_position, DEFAULT_KAT_LISTE)
+                kat_liste = [(label, k_id) for label, k_id in kat_liste if k_id in truppen_stats.columns]
+
+                for i in range(0, len(kat_liste), 4):
+                    cols = st.columns(4)
+                    for j, (label, k_id) in enumerate(kat_liste[i:i+4]):
+                        with cols[j]:
+                            st.markdown(f"<p style='text-align:center; font-weight:bold; font-size:12px; margin-bottom:0px;'>{label}</p>", unsafe_allow_html=True)
+                            player_val = truppen_stats.loc[valgt_player_uuid, k_id]
+                            if isinstance(player_val, pd.Series):
+                                player_val = player_val.iloc[0]
+                            max_val = sammenligningsgruppe[k_id].max() if k_id in sammenligningsgruppe.columns else 1
+                            rank_val = spiller_ranks[k_id] if k_id in spiller_ranks.index else 1
+                            fig = create_relative_donut(player_val, max_val, label, get_ordinal(rank_val), color=primær_farve)
+                            st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False}, key=f"p_{k_id}_{i}_{j}")
         else:
-            sammenligningsgruppe = truppen_stats
-
-        numeric_cols = sammenligningsgruppe.drop(columns=['visningsnavn', 'Pasningsprocent_Str', 'Position'], errors='ignore')
-        # Sæt rangering på tværs af hele gruppen i ligaen (højest værdi = rang 1)
-        ranks = (-numeric_cols).rank(ascending=True, method='min').astype(int)
-
-        try:
-            spiller_ranks = ranks.loc[valgt_player_uuid]
-            if isinstance(spiller_ranks, pd.DataFrame):
-                spiller_ranks = spiller_ranks.iloc[0]
-            s_data = truppen_stats.loc[valgt_player_uuid]
-            if isinstance(s_data, pd.DataFrame):
-                s_data = s_data.iloc[0]
-        except KeyError:
-            st.error(f"Kunne ikke finde stats for spiller: {valgt_spiller}")
-            st.stop()
-
-        main_col_left, main_col_right = st.columns([1.3, 4])
-
-        with main_col_left:
-            logo_html = ""
-            if hold_logo is not None:
-                buffered = io.BytesIO()
-                hold_logo.save(buffered, format="PNG")
-                img_str = base64.b64encode(buffered.getvalue()).decode()
-                logo_html = f'<img src="data:image/png;base64,{img_str}" style="height: 35px; margin-right: 12px;">'
-
-            position_label = POSITION_DA.get(spiller_position, spiller_position)
-            st.markdown(f'''<div style="display: flex; align-items: center; margin-bottom: 10px;">{logo_html}<div>
-                    <div style="font-size: 18px; font-weight: bold; line-height: 1.2;">{valgt_spiller}</div>
-                    <div style="font-size: 12px; color: #888;">{position_label}</div>
-                </div></div>''', unsafe_allow_html=True)
-            st.markdown("<hr style='margin: 10px 0; opacity: 0.5;'>", unsafe_allow_html=True)
-
-            st.markdown(f"""
-                <div style="background-color: #f8f9fa; padding: 12px; border-radius: 8px; border: 1px solid #e9ecef;">
-                    <h4 style="margin: 0 0 10px 0; font-size: 14px; text-transform: uppercase; font-weight: bold;">Kampdata</h4>
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 13px;"><span><b>Kampe:</b></span><span>{int(s_data['Kampe'])}</span></div>
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 13px;"><span><b>Minutter:</b></span><span>{int(s_data['Minutter'])}'</span></div>
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 13px;"><span><b>Mål (xG):</b></span><span>{int(s_data['Mål'])} ({round(s_data['xG'], 2)})</span></div>
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 13px;"><span><b>Assists (xA):</b></span><span>{int(s_data['Assists'])} ({round(s_data['xA'], 2)})</span></div>
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 13px;"><span><b>Gule kort:</b></span><span>{int(s_data['Gule_kort'])}</span></div>
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 13px;"><span><b>Røde kort:</b></span><span>{int(s_data['Roede_kort'])}</span></div>
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 13px;"><span><b>Indskiftet:</b></span><span>{int(s_data['Indskiftet'])}</span></div>
-                    <div style="display: flex; justify-content: space-between; font-size: 13px;"><span><b>Udskiftet:</b></span><span>{int(s_data['Udskiftet'])}</span></div>
-                </div>
-            """, unsafe_allow_html=True)
-
-            st.markdown("<hr style='margin: 15px 0; opacity: 0.5;'>", unsafe_allow_html=True)
-            gruppe_navn = POSITION_DA_FLERTAL.get(spiller_position, "spillere")
-            # Ændret tekst, så det afspejler, at det er på tværs af ligaen/alle hold
-            st.caption(f"Sammenlignet med alle {gruppe_navn} i ligaen.")
-
-        with main_col_right:
-            kat_liste = KATEGORI_PER_POSITION.get(spiller_position, DEFAULT_KAT_LISTE)
-            kat_liste = [(label, k_id) for label, k_id in kat_liste if k_id in truppen_stats.columns]
-
-            for i in range(0, len(kat_liste), 4):
-                cols = st.columns(4)
-                for j, (label, k_id) in enumerate(kat_liste[i:i+4]):
-                    with cols[j]:
-                        st.markdown(f"<p style='text-align:center; font-weight:bold; font-size:12px; margin-bottom:0px;'>{label}</p>", unsafe_allow_html=True)
-                        player_val = truppen_stats.loc[valgt_player_uuid, k_id]
-                        if isinstance(player_val, pd.Series):
-                            player_val = player_val.iloc[0]
-                        max_val = sammenligningsgruppe[k_id].max() if k_id in sammenligningsgruppe.columns else 1
-                        rank_val = spiller_ranks[k_id] if k_id in spiller_ranks.index else 1
-                        fig = create_relative_donut(player_val, max_val, label, get_ordinal(rank_val), color=primær_farve)
-                        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False}, key=f"p_{k_id}_{i}_{j}")
-    else:
-        st.info("Ingen spillerdata tilgængelig.")
+            st.info("Ingen spillerdata tilgængelig.")
      
     # --- 4. SPILLERAKTIONER ---
     with t_pitch:
