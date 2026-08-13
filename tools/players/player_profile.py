@@ -683,8 +683,8 @@ def vis_side(dp=None):
             "Berøringer": "Alle aktioner hvor spilleren har været i kontakt med bolden.",
             "Afslutninger": "Oversigt over alle skudforsøg (Mål = firkant, skud = cirkel).",
             "Defensive aktioner": "Tacklinger, bolderobringer og opsnappede afleveringer.",
-            "Offensive pasninger": "Fremadrettede pasninger der lander i sidste tredjedel af banen (grøn = lykkedes, grå = mislykkedes).",
-            "Alle aktioner": "Alle aktionstyper vist samtidig, farvekodet efter type (blå = aflevering, rød = dribling, orange = afslutning, grøn = mål, lilla = defensiv aktion)."
+            "Offensive pasninger": "Fremadrettede pasninger til sidste tredjedel (Grøn = succes, Grå = % succes).",
+            "Alle aktioner": "Alle aktionstyper (blå = aflevering, rød = dribling, orange = afslutning, grøn = mål, lilla = defensiv aktion)."
         }
         touch_ids = [1, 3, 7, 10, 11, 12, 13, 14, 15, 16, 42, 44, 49, 50, 51, 54, 61, 73]
         df_filtreret = df_spiller[~df_spiller['Action_Label'].isin(['Pasning', 'Indkast'])]
