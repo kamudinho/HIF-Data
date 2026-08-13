@@ -563,7 +563,7 @@ def vis_side(dp=None):
             "Heatmap": "Viser spillerens generelle bevægelsesmønster og intensitet på banen.",
             "Berøringer": "Alle aktioner hvor spilleren har været i kontakt med bolden.",
             "Afslutninger": "Oversigt over alle skudforsøg (Mål = firkant, skud = cirkel).",
-            "Erobringer": "Tacklinger, bolderobringer og opsnappede afleveringer."
+            "Defensive aktioner": "Tacklinger, bolderobringer og opsnappede afleveringer."
         }
         touch_ids = [1, 3, 7, 10, 11, 12, 13, 14, 15, 16, 42, 44, 49, 50, 51, 54, 61, 73]
         df_filtreret = df_spiller[~df_spiller['Action_Label'].isin(['Pasning', 'Indkast'])]
