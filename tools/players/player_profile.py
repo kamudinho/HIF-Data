@@ -43,8 +43,8 @@ POSITION_MAP = {
 }
 POSITION_DA = {
     "Goalkeeper": "Målmand",
-    "Defender": "Forsvarsspiller",
-    "Midfielder": "Midtbanespiller",
+    "Defender": "Forsvar",
+    "Midfielder": "Midtbane",
     "Attacker": "Angriber",
 }
 POSITION_DA_FLERTAL = {
@@ -253,10 +253,12 @@ def vis_side(dp=None):
     for _, r in df_spillere_unikke.iterrows():
         navn = r['visningsnavn']
         uuid = r['player_optauuid']
-        if list(spiller_options.keys()).count(navn) > 0:
-            visnings_label = f"{navn} ({uuid[-4:]})"
-        else:
-            visnings_label = navn
+        
+        # Hent position på engelsk og map til dansk, fanger også ukendte
+        eng_pos = POSITION_MAP.get(str(uuid).strip(), 'Ukendt')
+        da_pos = POSITION_DA.get(eng_pos, eng_pos)
+        
+        visnings_label = f"{navn} ({da_pos})"
         spiller_options[visnings_label] = uuid
  
     spiller_liste = sorted(list(spiller_options.keys()))
@@ -312,7 +314,7 @@ def vis_side(dp=None):
     truppen_stats_liga['xG'] = 0.0
     truppen_stats_liga['xA'] = 0.0
     truppen_stats_liga['Mål'] = df_liga_total[df_liga_total['event_typeid'] == 16].groupby('player_optauuid').size().reindex(truppen_stats_liga.index, fill_value=0).astype('Int64')
-    truppen_stats_liga['Assists'] = df_liga_total.apply(lambda r: 1 if is_assist(r.get('event_typeid'), r.get('qual_list', [])) else 0, axis=1).groupby(df_liga_total['player_optauuid']).sum().reindex(truppen_stats_liga.index, fill_value=0).astype('Int64')
+    truppen_stats_liga['Assists'] = df_liga_total.apply(lambda r: 1 if is_assist(r.get('event_typeid'], r.get('qual_list', [])) else 0, axis=1).groupby(df_liga_total['player_optauuid']).sum().reindex(truppen_stats_liga.index, fill_value=0).astype('Int64')
     truppen_stats_liga['Pasningsprocent'] = ((truppen_stats_liga['Pasninger_Succes'] / truppen_stats_liga['Pasninger']) * 100).where(truppen_stats_liga['Pasninger'] > 0, 0).round(1)
     
     truppen_stats_liga['Position'] = truppen_stats_liga.index.to_series().apply(
