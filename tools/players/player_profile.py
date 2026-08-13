@@ -563,7 +563,8 @@ def vis_side(dp=None):
             "Heatmap": "Viser spillerens generelle bevægelsesmønster og intensitet på banen.",
             "Berøringer": "Alle aktioner hvor spilleren har været i kontakt med bolden.",
             "Afslutninger": "Oversigt over alle skudforsøg (Mål = firkant, skud = cirkel).",
-            "Defensive aktioner": "Tacklinger, bolderobringer og opsnappede afleveringer."
+            "Defensive aktioner": "Tacklinger, bolderobringer og opsnappede afleveringer.",
+            "Offensive pasninger": "Pasninger der sendes ind i eller inden for den sidste tredjedel af banen."
         }
         touch_ids = [1, 3, 7, 10, 11, 12, 13, 14, 15, 16, 42, 44, 49, 50, 51, 54, 61, 73]
         df_filtreret = df_spiller[~df_spiller['Action_Label'].isin(['Pasning', 'Indkast'])]
@@ -660,6 +661,17 @@ def vis_side(dp=None):
                 elif visning == "Defensive aktioner":
                     d = df_plot[df_plot['event_typeid'].isin([5, 7, 8, 12, 49, 55])]
                     ax.scatter(d.event_x, d.event_y, color='orange', s=100, edgecolors='white')
+                elif visning == "Offensive pasninger":
+                    # Filtrer pasninger (event_typeid 1)
+                    # Opta banelængde er typisk 0-100. Sidste tredjedel er x > 66.7
+                    d = df_plot[(df_plot['event_typeid'] == 1) & (df_plot['end_x'] > 66.7)]
+                    
+                    # Tegn pasningslinjer
+                    pitch.lines(d.event_x, d.event_y, d.end_x, d.end_y, 
+                                ax=ax, color='green', lw=1.5, comet=True, alpha=0.7)
+                    
+                    # Tegn startpunktet for pasningen
+                    ax.scatter(d.event_x, d.event_y, color='green', s=30, edgecolors='white', zorder=2)
 
             st.pyplot(fig, use_container_width=True)
             
