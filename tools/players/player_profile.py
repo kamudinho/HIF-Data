@@ -578,11 +578,11 @@ def vis_side(dp=None):
                 )
 
             if spiller_position != 'Ukendt':
-                sammenligningsgruppe = truppen_stats[truppen_stats['Position'] == spiller_position]
+                sammenligningsgruppe = truppen_stats_liga[truppen_stats_liga['Position'] == spiller_position]
                 if sammenligningsgruppe.empty:
-                    sammenligningsgruppe = truppen_stats
+                    sammenligningsgruppe = truppen_stats_liga
             else:
-                sammenligningsgruppe = truppen_stats
+                sammenligningsgruppe = truppen_stats_liga
 
             numeric_cols = sammenligningsgruppe.drop(columns=['visningsnavn', 'Pasningsprocent_Str', 'Position'], errors='ignore')
             ranks = (-numeric_cols).rank(ascending=True, method='min').astype(int)
@@ -733,16 +733,10 @@ def vis_side(dp=None):
         with c_pitch_side:
             c_side_spacer, c_desc_col, c_menu_col = st.columns([0.2, 2.0, 1.0])
 
-            # Skjul visninger der ikke giver mening for spillerens position
-            # (fx "Afslutninger" for en målmand).
             skjulte_visninger = HIDDEN_VIEWS_PER_POSITION.get(spiller_position, [])
             descriptions_visning = {k: v for k, v in descriptions.items() if k not in skjulte_visninger}
 
             with c_menu_col:
-                # Dynamisk key inkl. spiller-uuid, så et evt. tidligere valgt
-                # visningsnavn ikke bliver "ugyldigt" hvis man skifter til en
-                # spiller hvor den visning er skjult (fx skifter fra angriber
-                # til målmand mens "Afslutninger" var valgt).
                 visning = st.selectbox(
                     "Visning",
                     list(descriptions_visning.keys()),
@@ -773,7 +767,6 @@ def vis_side(dp=None):
                     d = df_plot[df_plot['event_typeid'].isin([5, 7, 8, 12, 49, 55])]
                     ax.scatter(d.event_x, d.event_y, color='orange', s=100, edgecolors='white')
                 elif visning == "Alle aktioner":
-                    # Farvekodet oversigt over alle aktionstyper på samme banebillede.
                     noget_vist = False
                     for label, mask_fn, color, size, marker in AKTIONS_FARVER:
                         d = df_plot[mask_fn(df_plot)]
@@ -790,13 +783,6 @@ def vis_side(dp=None):
                             ncol=len(AKTIONS_FARVER), fontsize=7, frameon=False
                         )
                 elif visning == "Offensive pasninger":
-                    # Fremadrettede pasninger der lander i sidste tredjedel af banen.
-                    # Opta banelængde er 0-100, sidste tredjedel er x > 66.7.
-                    # Det er ligegyldigt hvor pasningen STARTER (kan sagtens starte
-                    # midt på banen eller i egen banehalvdel) - kun at den:
-                    #   1) rammer sidste tredjedel (end_x > 66.7), OG
-                    #   2) reelt går fremad (end_x > event_x), så en sidelæns/
-                    #      tilbagelæns pasning der tilfældigvis lander der ikke tælles med.
                     if 'end_x' not in df_plot.columns or 'end_y' not in df_plot.columns:
                         st.info(
                             "Denne visning kræver pasningens slutkoordinater (end_x/end_y), "
