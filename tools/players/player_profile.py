@@ -564,7 +564,7 @@ def vis_side(dp=None):
             "Berøringer": "Alle aktioner hvor spilleren har været i kontakt med bolden.",
             "Afslutninger": "Oversigt over alle skudforsøg (Mål = firkant, skud = cirkel).",
             "Defensive aktioner": "Tacklinger, bolderobringer og opsnappede afleveringer.",
-            "Offensive pasninger": "Fremadrettede pasninger der lander i sidste tredjedel af banen (grøn = lykkedes, grå = mislykkedes)."
+            "Offensive pasninger": "Fremadrettede pasninger (grøn = succes, grå = % succes)."
         }
         touch_ids = [1, 3, 7, 10, 11, 12, 13, 14, 15, 16, 42, 44, 49, 50, 51, 54, 61, 73]
         df_filtreret = df_spiller[~df_spiller['Action_Label'].isin(['Pasning', 'Indkast'])]
@@ -683,12 +683,12 @@ def vis_side(dp=None):
                     if not fejl.empty:
                         pitch.arrows(
                             fejl.event_x, fejl.event_y, fejl.end_x, fejl.end_y,
-                            ax=ax, color='#bdbdbd', width=1.5, headwidth=5, headlength=5, alpha=0.6, zorder=2
+                            ax=ax, color='#bdbdbd', width=0.7, headwidth=2, headlength=3, alpha=0.6, zorder=2
                         )
                     if not succes.empty:
                         pitch.arrows(
                             succes.event_x, succes.event_y, succes.end_x, succes.end_y,
-                            ax=ax, color='green', width=2, headwidth=6, headlength=6, alpha=0.85, zorder=3
+                            ax=ax, color='green', width=1.3, headwidth=3, headlength=4, alpha=0.85, zorder=3
                         )
 
                     # Markér startpunktet for hver pasning
