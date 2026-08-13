@@ -35,6 +35,78 @@ try:
 except ImportError:
     st.error("Kunne ikke finde eller indlæse 'player_mapping.py'. Sørg for filen ligger i mappen.")
     st.stop()
+
+# --- POSITIONSDATA (fra den statiske spillerliste i data/players/player_mapping.py) ---
+# 'player_mapping' her er submodulet data.players.player_mapping, som (udover
+# PlayerMapping-klassen) også eksponerer den rå PLAYER_MAPPING-liste med
+# "position": Goalkeeper / Defender / Midfielder / Attacker pr. spiller.
+_STATIC_PLAYERS = getattr(player_mapping, 'PLAYER_MAPPING', [])
+POSITION_MAP = {
+    str(p.get('player_optauuid')).strip(): p.get('position', 'Ukendt')
+    for p in _STATIC_PLAYERS if p.get('player_optauuid')
+}
+POSITION_DA = {
+    "Goalkeeper": "Målmand",
+    "Defender": "Forsvarsspiller",
+    "Midfielder": "Midtbanespiller",
+    "Attacker": "Angriber",
+}
+POSITION_DA_FLERTAL = {
+    "Goalkeeper": "målmænd",
+    "Defender": "forsvarsspillere",
+    "Midfielder": "midtbanespillere",
+    "Attacker": "angribere",
+}
+
+# Statistik-kategorier vist i "hjul"-grafikkerne på Spillerprofil-fanen,
+# tilpasset efter position - fx giver "Afslutninger"/"Mål" ikke mening for en
+# målmand, mens "Tacklinger"/"Klareringer" er mere relevant der.
+KATEGORI_PER_POSITION = {
+    "Goalkeeper": [
+        ("PASNINGER", "Pasninger"), ("PASNING %", "Pasningsprocent"),
+        ("CLEARINGER", "Clearinger"), ("EROBRINGER", "Erobringer"),
+        ("FRISPARK IMOD", "Frispark_imod"), ("GULE KORT", "Gule_kort"),
+    ],
+    "Defender": [
+        ("PASNINGER", "Pasninger"), ("TACKLINGER", "Tacklinger"),
+        ("CLEARINGER", "Clearinger"), ("INTERCEPTIONER", "Interceptioner"),
+        ("BLOKERINGER", "Blokeringer"), ("EROBRINGER", "Erobringer"),
+        ("DEF. DUELLER", "Defensive_Dueller"), ("FRISPARK IMOD", "Frispark_imod"),
+    ],
+    "Midfielder": [
+        ("PASNINGER", "Pasninger"), ("STIKNINGER", "Stikninger"),
+        ("CHANCER SKABT", "Chancer_skabt"), ("KEY PASSES", "Key_Passes"),
+        ("DRIBLINGER", "Driblinger"), ("EROBRINGER", "Erobringer"),
+        ("TACKLINGER", "Tacklinger"), ("INDLÆG", "Indlæg"),
+    ],
+    "Attacker": [
+        ("AFSLUTNINGER", "Afslutninger"), ("MÅL", "Mål"),
+        ("CHANCER SKABT", "Chancer_skabt"), ("DRIBLINGER", "Driblinger"),
+        ("INDLÆG", "Indlæg"), ("KEY PASSES", "Key_Passes"),
+        ("STIKNINGER", "Stikninger"), ("PASNINGER", "Pasninger"),
+    ],
+}
+DEFAULT_KAT_LISTE = [
+    ("PASNINGER", "Pasninger"), ("STIKNINGER", "Stikninger"),
+    ("AFSLUTNINGER", "Afslutninger"), ("MÅL", "Mål"),
+    ("EROBRINGER", "Erobringer"), ("DRIBLINGER", "Driblinger"),
+    ("INDLÆG", "Indlæg"), ("CHANCER SKABT", "Chancer_skabt"),
+    ("KEY PASSES", "Key_Passes")
+]
+
+# Visninger i #4 SPILLERAKTIONER, der ikke giver mening for visse positioner.
+HIDDEN_VIEWS_PER_POSITION = {
+    "Goalkeeper": ["Afslutninger", "Offensive pasninger"],
+}
+
+# Farvekodning til "Alle aktioner"-visningen: (label, event_typeid-filter, farve, størrelse, markør)
+AKTIONS_FARVER = [
+    ("Aflevering", lambda d: d['event_typeid'] == 1, '#1f77b4', 22, 'o'),
+    ("Dribling", lambda d: d['event_typeid'] == 3, '#d62728', 45, 'o'),
+    ("Afslutning", lambda d: d['event_typeid'].isin([13, 14, 15]), '#ff7f0e', 70, 'o'),
+    ("Mål", lambda d: d['event_typeid'] == 16, '#2ca02c', 130, 's'),
+    ("Defensiv aktion", lambda d: d['event_typeid'].isin([5, 7, 8, 12, 49, 55]), '#9467bd', 55, 'o'),
+]
  
 DB = "KLUB_HVIDOVREIF.AXIS"
 SEASONNAME = "2026/2027"
@@ -187,6 +259,10 @@ def vis_side(dp=None):
     valgt_player_uuid = spiller_options.get(valgt_label, None)
     valgt_spiller = valgt_label.split(" (")[0] if valgt_label else ""
     df_spiller = df_all[df_all['player_optauuid'] == valgt_player_uuid].copy() if valgt_player_uuid else pd.DataFrame()
+
+    # Position for den valgte spiller (bruges til at skjule irrelevante visninger
+    # og vælge de rigtige statistik-kategorier længere nede).
+    spiller_position = POSITION_MAP.get(str(valgt_player_uuid).strip(), 'Ukendt') if valgt_player_uuid else 'Ukendt'
  
     def count_kamp_qual(df_group, eid, qids):
         return df_group.apply(lambda r: har_qualifier(r['event_typeid'], r.get('qual_list', []), eid, qids), axis=1).sum()
@@ -263,6 +339,12 @@ def vis_side(dp=None):
     ).where(truppen_stats['Pasninger'] > 0, 0).round(1)
  
     truppen_stats['Pasningsprocent_Str'] = truppen_stats['Pasningsprocent'].astype(str) + "%"
+
+    # Positionskolonne på hele truppen, så vi kan sammenligne/gruppere spillere
+    # efter position (bruges på Spillerprofil-fanen nedenfor).
+    truppen_stats['Position'] = truppen_stats.index.to_series().apply(
+        lambda u: POSITION_MAP.get(str(u).strip(), 'Ukendt')
+    )
  
     t_team, t_matches, t_profile, t_pitch, t_phys = st.tabs(["Holdoversigt", "Kampoversigt", "Spillerprofil", "Spilleraktioner", "Fysisk data"])
  
@@ -490,7 +572,17 @@ def vis_side(dp=None):
  
     with t_profile:
         if not truppen_stats.empty and valgt_player_uuid in truppen_stats.index:
-            numeric_cols = truppen_stats.drop(columns=['visningsnavn', 'Pasningsprocent_Str'], errors='ignore')
+            # Sammenlign kun med holdkammerater på samme position - det giver
+            # ikke mening at rangere en midtstoppers "Afslutninger" op mod en
+            # angribers, eller omvendt en angribers "Tacklinger" mod en forsvarsspillers.
+            if spiller_position != 'Ukendt':
+                sammenligningsgruppe = truppen_stats[truppen_stats['Position'] == spiller_position]
+                if sammenligningsgruppe.empty:
+                    sammenligningsgruppe = truppen_stats
+            else:
+                sammenligningsgruppe = truppen_stats
+
+            numeric_cols = sammenligningsgruppe.drop(columns=['visningsnavn', 'Pasningsprocent_Str', 'Position'], errors='ignore')
             ranks = (-numeric_cols).rank(ascending=True, method='min').astype(int)
  
             try:
@@ -513,8 +605,12 @@ def vis_side(dp=None):
                     hold_logo.save(buffered, format="PNG")
                     img_str = base64.b64encode(buffered.getvalue()).decode()
                     logo_html = f'<img src="data:image/png;base64,{img_str}" style="height: 35px; margin-right: 12px;">'
- 
-                st.markdown(f'<div style="display: flex; align-items: center; margin-bottom: 10px;">{logo_html}<div style="font-size: 18px; font-weight: bold;">{valgt_spiller}</div></div>', unsafe_allow_html=True)
+
+                position_label = POSITION_DA.get(spiller_position, spiller_position)
+                st.markdown(f'''<div style="display: flex; align-items: center; margin-bottom: 10px;">{logo_html}<div>
+                        <div style="font-size: 18px; font-weight: bold; line-height: 1.2;">{valgt_spiller}</div>
+                        <div style="font-size: 12px; color: #888;">{position_label}</div>
+                    </div></div>''', unsafe_allow_html=True)
                 st.markdown("<hr style='margin: 10px 0; opacity: 0.5;'>", unsafe_allow_html=True)
  
                 st.markdown(f"""
@@ -532,17 +628,13 @@ def vis_side(dp=None):
                 """, unsafe_allow_html=True)
  
                 st.markdown("<hr style='margin: 15px 0; opacity: 0.5;'>", unsafe_allow_html=True)
-                st.caption("Sammenlignet med holdets bedste.")
+                gruppe_navn = POSITION_DA_FLERTAL.get(spiller_position, "spillere")
+                st.caption(f"Sammenlignet med holdets øvrige {gruppe_navn}.")
  
             with main_col_right:
-                kat_liste = [
-                    ("PASNINGER", "Pasninger"), ("STIKNINGER", "Stikninger"), 
-                    ("AFSLUTNINGER", "Afslutninger"), ("MÅL", "Mål"),
-                    ("EROBRINGER", "Erobringer"), ("DRIBLINGER", "Driblinger"),
-                    ("INDLÆG", "Indlæg"), ("CHANCER SKABT", "Chancer_skabt"),
-                    ("KEY PASSES", "Key_Passes")
-                ]
- 
+                kat_liste = KATEGORI_PER_POSITION.get(spiller_position, DEFAULT_KAT_LISTE)
+                kat_liste = [(label, k_id) for label, k_id in kat_liste if k_id in truppen_stats.columns]
+
                 for i in range(0, len(kat_liste), 4):
                     cols = st.columns(4)
                     for j, (label, k_id) in enumerate(kat_liste[i:i+4]):
@@ -551,8 +643,9 @@ def vis_side(dp=None):
                             player_val = truppen_stats.loc[valgt_player_uuid, k_id]
                             if isinstance(player_val, pd.Series):
                                 player_val = player_val.iloc[0]
-                            max_val = truppen_stats[k_id].max() if k_id in truppen_stats.columns else 1
-                            fig = create_relative_donut(player_val, max_val, label, get_ordinal(spiller_ranks[k_id]), color=primær_farve)
+                            max_val = sammenligningsgruppe[k_id].max() if k_id in sammenligningsgruppe.columns else 1
+                            rank_val = spiller_ranks[k_id] if k_id in spiller_ranks.index else 1
+                            fig = create_relative_donut(player_val, max_val, label, get_ordinal(rank_val), color=primær_farve)
                             st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False}, key=f"p_{k_id}_{i}_{j}")
         else:
             st.info("Ingen spillerdata tilgængelig.")
@@ -564,7 +657,8 @@ def vis_side(dp=None):
             "Berøringer": "Alle aktioner hvor spilleren har været i kontakt med bolden.",
             "Afslutninger": "Oversigt over alle skudforsøg (Mål = firkant, skud = cirkel).",
             "Defensive aktioner": "Tacklinger, bolderobringer og opsnappede afleveringer.",
-            "Offensive pasninger": "Fremadrettede pasninger (grøn = succes, grå = % succes)."
+            "Offensive pasninger": "Fremadrettede pasninger der lander i sidste tredjedel af banen (grøn = lykkedes, grå = mislykkedes).",
+            "Alle aktioner": "Alle aktionstyper vist samtidig, farvekodet efter type (blå = aflevering, rød = dribling, orange = afslutning, grøn = mål, lilla = defensiv aktion)."
         }
         touch_ids = [1, 3, 7, 10, 11, 12, 13, 14, 15, 16, 42, 44, 49, 50, 51, 54, 61, 73]
         df_filtreret = df_spiller[~df_spiller['Action_Label'].isin(['Pasning', 'Indkast'])]
@@ -636,10 +730,25 @@ def vis_side(dp=None):
 
         with c_pitch_side:
             c_side_spacer, c_desc_col, c_menu_col = st.columns([0.2, 2.0, 1.0])
+
+            # Skjul visninger der ikke giver mening for spillerens position
+            # (fx "Afslutninger" for en målmand).
+            skjulte_visninger = HIDDEN_VIEWS_PER_POSITION.get(spiller_position, [])
+            descriptions_visning = {k: v for k, v in descriptions.items() if k not in skjulte_visninger}
+
             with c_menu_col:
-                visning = st.selectbox("Visning", list(descriptions.keys()), key="pitch_view_sel", label_visibility="collapsed")
+                # Dynamisk key inkl. spiller-uuid, så et evt. tidligere valgt
+                # visningsnavn ikke bliver "ugyldigt" hvis man skifter til en
+                # spiller hvor den visning er skjult (fx skifter fra angriber
+                # til målmand mens "Afslutninger" var valgt).
+                visning = st.selectbox(
+                    "Visning",
+                    list(descriptions_visning.keys()),
+                    key=f"pitch_view_sel_{valgt_player_uuid}",
+                    label_visibility="collapsed"
+                )
             with c_desc_col:
-                st.markdown(f'<div style="text-align: right; margin-top: 8px; line-height: 1.2;"><span style="color: #666; font-size: 0.85rem;">{descriptions.get(visning)}</span></div>', unsafe_allow_html=True)
+                st.markdown(f'<div style="text-align: right; margin-top: 8px; line-height: 1.2;"><span style="color: #666; font-size: 0.85rem;">{descriptions_visning.get(visning)}</span></div>', unsafe_allow_html=True)
 
             pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
             fig, ax = pitch.draw(figsize=(10, 7))
@@ -661,6 +770,23 @@ def vis_side(dp=None):
                 elif visning == "Defensive aktioner":
                     d = df_plot[df_plot['event_typeid'].isin([5, 7, 8, 12, 49, 55])]
                     ax.scatter(d.event_x, d.event_y, color='orange', s=100, edgecolors='white')
+                elif visning == "Alle aktioner":
+                    # Farvekodet oversigt over alle aktionstyper på samme banebillede.
+                    noget_vist = False
+                    for label, mask_fn, color, size, marker in AKTIONS_FARVER:
+                        d = df_plot[mask_fn(df_plot)]
+                        if not d.empty:
+                            noget_vist = True
+                            ax.scatter(
+                                d.event_x, d.event_y, color=color, s=size,
+                                edgecolors='white', alpha=0.75, label=label,
+                                marker=marker, zorder=3
+                            )
+                    if noget_vist:
+                        ax.legend(
+                            loc='upper center', bbox_to_anchor=(0.5, -0.03),
+                            ncol=len(AKTIONS_FARVER), fontsize=7, frameon=False
+                        )
                 elif visning == "Offensive pasninger":
                     # Fremadrettede pasninger der lander i sidste tredjedel af banen.
                     # Opta banelængde er 0-100, sidste tredjedel er x > 66.7.
@@ -669,30 +795,33 @@ def vis_side(dp=None):
                     #   1) rammer sidste tredjedel (end_x > 66.7), OG
                     #   2) reelt går fremad (end_x > event_x), så en sidelæns/
                     #      tilbagelæns pasning der tilfældigvis lander der ikke tælles med.
-                    d = df_plot[
-                        (df_plot['event_typeid'] == 1) &
-                        (df_plot['end_x'] > 66.7) &
-                        (df_plot['end_x'] > df_plot['event_x'])
-                    ].dropna(subset=['end_x', 'end_y'])
-
-                    succes = d[d['outcome'] == 1]
-                    fejl = d[d['outcome'] != 1]
-
-                    # Pile (med pilespids) i stedet for komet-streger, så retningen
-                    # er tydelig. Grøn = lykkedes, grå = mislykkedes.
-                    if not fejl.empty:
-                        pitch.arrows(
-                            fejl.event_x, fejl.event_y, fejl.end_x, fejl.end_y,
-                            ax=ax, color='#bdbdbd', width=0.7, headwidth=2, headlength=3, alpha=0.6, zorder=2
+                    if 'end_x' not in df_plot.columns or 'end_y' not in df_plot.columns:
+                        st.info(
+                            "Denne visning kræver pasningens slutkoordinater (end_x/end_y), "
+                            "som ikke findes i de hentede data lige nu."
                         )
-                    if not succes.empty:
-                        pitch.arrows(
-                            succes.event_x, succes.event_y, succes.end_x, succes.end_y,
-                            ax=ax, color='green', width=1.3, headwidth=3, headlength=4, alpha=0.85, zorder=3
-                        )
+                    else:
+                        d = df_plot[
+                            (df_plot['event_typeid'] == 1) &
+                            (df_plot['end_x'] > 66.7) &
+                            (df_plot['end_x'] > df_plot['event_x'])
+                        ].dropna(subset=['end_x', 'end_y'])
 
-                    # Markér startpunktet for hver pasning
-                    ax.scatter(d.event_x, d.event_y, color='green', s=20, edgecolors='white', alpha=0.6, zorder=4)
+                        succes = d[d['outcome'] == 1]
+                        fejl = d[d['outcome'] != 1]
+
+                        if not fejl.empty:
+                            pitch.arrows(
+                                fejl.event_x, fejl.event_y, fejl.end_x, fejl.end_y,
+                                ax=ax, color='#bdbdbd', width=0.7, headwidth=2, headlength=3, alpha=0.6, zorder=2
+                            )
+                        if not succes.empty:
+                            pitch.arrows(
+                                succes.event_x, succes.event_y, succes.end_x, succes.end_y,
+                                ax=ax, color='green', width=1.3, headwidth=3, headlength=4, alpha=0.85, zorder=3
+                            )
+
+                        ax.scatter(d.event_x, d.event_y, color='green', s=20, edgecolors='white', alpha=0.6, zorder=4)
 
             st.pyplot(fig, use_container_width=True)
             
