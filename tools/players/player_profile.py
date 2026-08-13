@@ -212,13 +212,17 @@ def vis_side(dp=None):
         df_all, df_expected, df_db_stats = hent_match_og_haendelsesdata(
             conn, DB, valgt_uuid_hold, LIGA_IDS, navne_map
         )
- 
+
     if df_all is None:
         df_all = pd.DataFrame()
- 
+
     if df_all.empty:
         st.warning("Ingen hændelsesdata fundet.")
         st.stop()
+
+    # --- NYT: FILTRER KUN TIL DET VALGTE HOLD ---
+    if 'hold_optauuid' in df_all.columns:
+        df_all = df_all[df_all['hold_optauuid'] == valgt_uuid_hold].copy()
  
     df_all = df_all.dropna(subset=['visningsnavn'])
     df_all['event_timestamp'] = pd.to_datetime(df_all['event_timestamp_str'])
