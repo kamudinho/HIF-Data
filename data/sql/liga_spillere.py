@@ -1,14 +1,9 @@
 import pandas as pd
 
 def hent_match_og_haendelsesdata(conn, db_navn, valgt_uuid_hold, liga_ids, navne_map):
-    """Henter events, forventede mål og database-stats fra Snowflake."""
+    """Henter events, forventede mål og database-stats for hele ligaen fra Snowflake."""
     
-    # 1. Events (med MATCH_OPTAUUID inkluderet, så vi kan koble op på kampe)
-    #
-    # END_X/END_Y (pasningens slutkoordinater) findes ikke som native kolonner på
-    # OPTA_EVENTS - de ligger som qualifiers på eventet: QUALIFIER_QID 140 = slut-X,
-    # QUALIFIER_QID 141 = slut-Y (samme mønster som i setpieces.py). De hentes derfor
-    # ud med MAX(CASE WHEN ...) ligesom setpieces.py allerede gør for ENDX/ENDY.
+    # 1. Events for hele ligaen (fjernet hold-filter, tilføjet turneringsfilter via join på matchinfo)
     sql_events = f"""
         SELECT 
             e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, e.MATCH_OPTAUUID, 
@@ -19,11 +14,12 @@ def hent_match_og_haendelsesdata(conn, db_navn, valgt_uuid_hold, liga_ids, navne
             MAX(CASE WHEN q.QUALIFIER_QID = 140 THEN q.QUALIFIER_VALUE END) AS END_X,
             MAX(CASE WHEN q.QUALIFIER_QID = 141 THEN q.QUALIFIER_VALUE END) AS END_Y
         FROM {db_navn}.OPTA_EVENTS e
+        JOIN {db_navn}.OPTA_MATCHINFO m ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
         JOIN (SELECT DISTINCT PLAYER_OPTAUUID, FIRST_NAME, LAST_NAME, SHORT_LAST_NAME, MATCH_NAME FROM {db_navn}.OPTA_MATCH_LINEUPS WHERE FIRST_NAME IS NOT NULL) p 
             ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
         LEFT JOIN {db_navn}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
-        WHERE e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid_hold}' 
-        AND e.EVENT_TIMESTAMP >= '2026-07-01'
+        WHERE m.TOURNAMENTCALENDAR_OPTAUUID IN {liga_ids}
+          AND e.EVENT_TIMESTAMP >= '2026-07-01'
         GROUP BY 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
     """
     df_all = conn.query(sql_events)
@@ -31,8 +27,6 @@ def hent_match_og_haendelsesdata(conn, db_navn, valgt_uuid_hold, liga_ids, navne
     if df_all is not None and not df_all.empty:
         df_all.columns = df_all.columns.str.lower()
 
-        # QUALIFIER_VALUE kommer typisk som tekst fra Snowflake - konverter til float,
-        # ellers fejler sammenligninger som end_x > 66.7 i player_profile.py.
         for col in ['end_x', 'end_y']:
             if col in df_all.columns:
                 df_all[col] = pd.to_numeric(df_all[col], errors='coerce')
@@ -51,7 +45,7 @@ def hent_match_og_haendelsesdata(conn, db_navn, valgt_uuid_hold, liga_ids, navne
         df_all['visningsnavn'] = df_all.apply(fix_name, axis=1)
         df_all['visningsnavn'] = df_all.apply(lambda r: navne_map.get(str(r['player_optauuid']), r['visningsnavn']), axis=1)
 
-    # 2. Expected goals (xG/xA)
+    # 2. Expected goals (xG/xA) for hele ligaen
     sql_expected = f"""
         SELECT 
             MATCH_ID,
@@ -62,14 +56,13 @@ def hent_match_og_haendelsesdata(conn, db_navn, valgt_uuid_hold, liga_ids, navne
         FROM {db_navn}.OPTA_MATCHEXPECTEDGOALS
         WHERE TOURNAMENTCALENDAR_OPTAUUID IN {liga_ids}
           AND MATCH_STATUS = 'Played'
-          AND CONTESTANT_OPTAUUID = '{valgt_uuid_hold}'
         GROUP BY MATCH_ID, PLAYER_OPTAUUID
     """
     df_expected = conn.query(sql_expected)
     if df_expected is not None:
         df_expected.columns = df_expected.columns.str.lower()
 
-    # 3. DB Stats (Mål og assists via events)
+    # 3. DB Stats (Mål og assists via events) for hele ligaen
     sql_db_stats = f"""
         WITH EventQualifiers AS (
             SELECT 
@@ -77,9 +70,10 @@ def hent_match_og_haendelsesdata(conn, db_navn, valgt_uuid_hold, liga_ids, navne
                 p.MATCH_NAME, p.FIRST_NAME, p.SHORT_LAST_NAME,
                 LISTAGG(q.QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY q.QUALIFIER_QID) as QUALIFIERS
             FROM {db_navn}.OPTA_EVENTS e
+            JOIN {db_navn}.OPTA_MATCHINFO m ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
             JOIN {db_navn}.OPTA_MATCH_LINEUPS p ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
             LEFT JOIN {db_navn}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
-            WHERE e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid_hold}'
+            WHERE m.TOURNAMENTCALENDAR_OPTAUUID IN {liga_ids}
               AND e.EVENT_TIMESTAMP >= '2026-07-01'
             GROUP BY e.EVENT_OPTAUUID, e.PLAYER_OPTAUUID, e.EVENT_TYPEID, e.EVENT_TIMESTAMP, e.MATCH_OPTAUUID, p.FIRST_NAME, p.SHORT_LAST_NAME, p.MATCH_NAME
         ),
@@ -117,7 +111,6 @@ def hent_match_og_haendelsesdata(conn, db_navn, valgt_uuid_hold, liga_ids, navne
     df_db_stats = conn.query(sql_db_stats)
     if df_db_stats is not None:
         df_db_stats.columns = df_db_stats.columns.str.lower()
-        # Sikrer at vi fjerner eventuelle dubletter på spiller-id i Pandas, så der kun er 1 række pr spiller
         df_db_stats = df_db_stats.drop_duplicates(subset=['player_optauuid']).copy()
         df_db_stats['visningsnavn'] = df_db_stats.apply(fix_name, axis=1)
         df_db_stats['visningsnavn'] = df_db_stats.apply(lambda r: navne_map.get(str(r['player_optauuid']), r['visningsnavn']), axis=1)
