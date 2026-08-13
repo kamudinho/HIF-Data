@@ -278,7 +278,8 @@ def vis_side(dp=None):
             return [str(q).strip() for q in ql]
         return [str(q).strip() for q in str(ql).split(',')]
  
-    event_stats = df_all.groupby(['player_optauuid', 'visningsnavn']).apply(lambda x: pd.Series({
+    # Beregn ligatrup-stats til sammenligning i profiler (hele ligaen)
+    event_stats_liga = df_liga_total.groupby(['player_optauuid', 'visningsnavn']).apply(lambda x: pd.Series({
         'Kampe': x['match_optauuid'].nunique() if 'match_optauuid' in x.columns else 1,
         'Aktioner': len(x),
         'Gule_kort': count_kamp_qual(x, 17, 31),
@@ -305,44 +306,17 @@ def vis_side(dp=None):
         'Blokeringer': (x['event_typeid'] == 55).sum(),
         'Interceptioner': (x['event_typeid'] == 5).sum(),
         'Frispark_imod': (x['event_typeid'] == 4).sum()
-    })).reset_index()
- 
-    event_stats = event_stats.drop_duplicates(subset=['player_optauuid']).set_index('player_optauuid')
- 
-    if df_expected is not None and not df_expected.empty:
-        match_stats = df_expected.groupby('player_optauuid').agg({
-            'match_id': 'nunique',
-            'minutes': 'sum',
-            'xg': 'sum',
-            'xa': 'sum'
-        }).rename(columns={'match_id': 'Kampe', 'minutes': 'Minutter', 'xg': 'xG', 'xa': 'xA'})
-        event_stats_uden_kampe = event_stats.drop(columns=['Kampe'], errors='ignore')
-        truppen_stats_raw = event_stats_uden_kampe.join(match_stats, how='left').fillna(0)
-    else:
-        truppen_stats_raw = event_stats.copy()
-        truppen_stats_raw['Minutter'] = 0
-        truppen_stats_raw['xG'] = 0.0
-        truppen_stats_raw['xA'] = 0.0
- 
-    if df_db_stats is not None and not df_db_stats.empty:
-        db_stats_clean = df_db_stats.drop_duplicates(subset=['player_optauuid']).set_index('player_optauuid')
-        truppen_stats_raw['Mål'] = db_stats_clean['goals']
-        truppen_stats_raw['Assists'] = db_stats_clean['assists']
-    else:
-        truppen_stats_raw['Mål'] = 0
-        truppen_stats_raw['Assists'] = 0
- 
-    truppen_stats_raw['Mål'] = truppen_stats_raw['Mål'].fillna(0).astype(int)
-    truppen_stats_raw['Assists'] = truppen_stats_raw['Assists'].fillna(0).astype(int)
-    truppen_stats = truppen_stats_raw.copy()
- 
-    truppen_stats['Pasningsprocent'] = (
-        (truppen_stats['Pasninger_Succes'] / truppen_stats['Pasninger']) * 100
-    ).where(truppen_stats['Pasninger'] > 0, 0).round(1)
- 
-    truppen_stats['Pasningsprocent_Str'] = truppen_stats['Pasningsprocent'].astype(str) + "%"
+    })).reset_index().drop_duplicates(subset=['player_optauuid']).set_index('player_optauuid')
 
-    truppen_stats['Position'] = truppen_stats.index.to_series().apply(
+    truppen_stats_liga = event_stats_liga.copy()
+    truppen_stats_liga['Minutter'] = 0  
+    truppen_stats_liga['xG'] = 0.0
+    truppen_stats_liga['xA'] = 0.0
+    truppen_stats_liga['Mål'] = df_liga_total[df_liga_total['event_typeid'] == 16].groupby('player_optauuid').size().fillna(0).astype(int)
+    truppen_stats_liga['Assists'] = df_liga_total.apply(lambda r: 1 if is_assist(r.get('event_typeid'), r.get('qual_list', [])) else 0, axis=1).groupby(df_liga_total['player_optauuid']).sum().fillna(0).astype(int)
+    truppen_stats_liga['Pasningsprocent'] = ((truppen_stats_liga['Pasninger_Succes'] / truppen_stats_liga['Pasninger']) * 100).where(truppen_stats_liga['Pasninger'] > 0, 0).round(1)
+    
+    truppen_stats_liga['Position'] = truppen_stats_liga.index.to_series().apply(
         lambda u: POSITION_MAP.get(str(u).strip(), 'Ukendt')
     )
  
