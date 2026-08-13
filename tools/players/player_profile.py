@@ -177,36 +177,36 @@ def vis_side(dp=None):
     conn = _get_snowflake_conn()
     if not conn: 
         return
- 
+
     df_teams_raw = conn.query(f"SELECT DISTINCT CONTESTANTHOME_NAME, CONTESTANTHOME_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS}")
     if df_teams_raw is not None:
         df_teams_raw.columns = df_teams_raw.columns.str.lower()
     else:
         df_teams_raw = pd.DataFrame()
- 
+
     mapping_lookup = {str(info['opta_uuid']).lower().replace('t', ''): name for name, info in TEAMS.items() if 'opta_uuid' in info}
- 
+
     team_map = {}
     if not df_teams_raw.empty:
         for _, r in df_teams_raw.iterrows():
             uuid_clean = str(r['contestanthome_optauuid']).lower().replace('t','')
             if uuid_clean in mapping_lookup:
                 team_map[mapping_lookup[uuid_clean]] = r['contestanthome_optauuid']
- 
+
     col_spacer_top, col_h_hold, col_h_spiller = st.columns([2, 1.2, 1.2])
- 
+
     default_team_idx = 0
     team_names = sorted(list(team_map.keys()))
     for idx, name in enumerate(team_names):
         if "hvidovre" in name.lower():
             default_team_idx = idx
             break
- 
+
     valgt_hold = col_h_hold.selectbox("Hold", team_names if team_names else ["Hvidovre"], index=default_team_idx if team_names else 0, label_visibility="collapsed")
     valgt_uuid_hold = team_map.get(valgt_hold, "t7490")
     hold_logo = get_logo_img(valgt_uuid_hold)
     primær_farve = get_team_color(valgt_hold, "primary", "#df003b")
- 
+
     with st.spinner("Henter spillere..."):
         df_all_raw, df_expected, df_db_stats = hent_match_og_haendelsesdata(
             conn, DB, valgt_uuid_hold, LIGA_IDS, navne_map
@@ -311,15 +311,15 @@ def vis_side(dp=None):
     truppen_stats_liga['Minutter'] = 0  
     truppen_stats_liga['xG'] = 0.0
     truppen_stats_liga['xA'] = 0.0
-    truppen_stats_liga['Mål'] = df_liga_total[df_liga_total['event_typeid'] == 16].groupby('player_optauuid').size().fillna(0).astype(int)
-    truppen_stats_liga['Assists'] = df_liga_total.apply(lambda r: 1 if is_assist(r.get('event_typeid'), r.get('qual_list', [])) else 0, axis=1).groupby(df_liga_total['player_optauuid']).sum().fillna(0).astype(int)
+    truppen_stats_liga['Mål'] = df_liga_total[df_liga_total['event_typeid'] == 16].groupby('player_optauuid').size().reindex(truppen_stats_liga.index, fill_value=0).astype('Int64')
+    truppen_stats_liga['Assists'] = df_liga_total.apply(lambda r: 1 if is_assist(r.get('event_typeid'), r.get('qual_list', [])) else 0, axis=1).groupby(df_liga_total['player_optauuid']).sum().reindex(truppen_stats_liga.index, fill_value=0).astype('Int64')
     truppen_stats_liga['Pasningsprocent'] = ((truppen_stats_liga['Pasninger_Succes'] / truppen_stats_liga['Pasninger']) * 100).where(truppen_stats_liga['Pasninger'] > 0, 0).round(1)
     
     truppen_stats_liga['Position'] = truppen_stats_liga.index.to_series().apply(
         lambda u: POSITION_MAP.get(str(u).strip(), 'Ukendt')
     )
 
-    # Beregn holdets trup-stats direkte (så truppen_stats aldrig er None)
+    # Beregn holdets trup-stats direkte
     event_stats_hold = df_all.groupby(['player_optauuid', 'visningsnavn']).apply(lambda x: pd.Series({
         'Kampe': x['match_optauuid'].nunique() if 'match_optauuid' in x.columns else 1,
         'Aktioner': len(x),
@@ -354,12 +354,15 @@ def vis_side(dp=None):
         truppen_stats['Minutter'] = 0  
         truppen_stats['xG'] = 0.0
         truppen_stats['xA'] = 0.0
-        truppen_stats['Mål'] = df_all[df_all['event_typeid'] == 16].groupby('player_optauuid').size().fillna(0).astype(int)
-        truppen_stats['Assists'] = df_all.apply(lambda r: 1 if is_assist(r.get('event_typeid'), r.get('qual_list', [])) else 0, axis=1).groupby(df_all['player_optauuid']).sum().fillna(0).astype(int)
+        truppen_stats['Mål'] = df_all[df_all['event_typeid'] == 16].groupby('player_optauuid').size().reindex(truppen_stats.index, fill_value=0).astype('Int64')
+        truppen_stats['Assists'] = df_all.apply(lambda r: 1 if is_assist(r.get('event_typeid'), r.get('qual_list', [])) else 0, axis=1).groupby(df_all['player_optauuid']).sum().reindex(truppen_stats.index, fill_value=0).astype('Int64')
         truppen_stats['Pasningsprocent'] = ((truppen_stats['Pasninger_Succes'] / truppen_stats['Pasninger']) * 100).where(truppen_stats['Pasninger'] > 0, 0).round(1)
         truppen_stats['Position'] = truppen_stats.index.to_series().apply(
             lambda u: POSITION_MAP.get(str(u).strip(), 'Ukendt')
         )
+        for col in ['Kampe', 'Aktioner', 'Gule_kort', 'Roede_kort', 'Indskiftet', 'Udskiftet', 'Pasninger', 'Pasninger_Succes']:
+            if col in truppen_stats.columns:
+                truppen_stats[col] = truppen_stats[col].fillna(0).astype('Int64')
  
     t_team, t_matches, t_profile, t_pitch, t_phys = st.tabs(["Holdoversigt", "Kampoversigt", "Spillerprofil", "Spilleraktioner", "Fysisk data"])
  
