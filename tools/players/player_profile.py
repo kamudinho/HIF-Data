@@ -1,3 +1,5 @@
+#tools/players/player_profile.py
+
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
@@ -662,16 +664,17 @@ def vis_side(dp=None):
                     d = df_plot[df_plot['event_typeid'].isin([5, 7, 8, 12, 49, 55])]
                     ax.scatter(d.event_x, d.event_y, color='orange', s=100, edgecolors='white')
                 elif visning == "Offensive pasninger":
-                    # Filtrer pasninger (event_typeid 1)
-                    # Opta banelængde er typisk 0-100. Sidste tredjedel er x > 66.7
-                    d = df_plot[(df_plot['event_typeid'] == 1) & (df_plot['end_x'] > 66.7)]
+                    x_end = 'end_x' if 'end_x' in df_plot.columns else ('END_X' if 'END_X' in df_plot.columns else None)
+                    y_end = 'end_y' if 'end_y' in df_plot.columns else ('END_Y' if 'END_Y' in df_plot.columns else None)
                     
-                    # Tegn pasningslinjer
-                    pitch.lines(d.event_x, d.event_y, d.end_x, d.end_y, 
-                                ax=ax, color='green', lw=1.5, comet=True, alpha=0.7)
-                    
-                    # Tegn startpunktet for pasningen
-                    ax.scatter(d.event_x, d.event_y, color='green', s=30, edgecolors='white', zorder=2)
+                    if x_end and y_end:
+                        d = df_plot[(df_plot['event_typeid'] == 1) & (df_plot[x_end] > 66.7)]
+                        if not d.empty:
+                            pitch.lines(d.event_x, d.event_y, d[x_end], d[y_end], 
+                                        ax=ax, color='green', lw=1.5, comet=True, alpha=0.7)
+                            ax.scatter(d.event_x, d.event_y, color='green', s=30, edgecolors='white', zorder=2)
+                    else:
+                        st.warning("Slut-koordinater ('end_x' / 'END_X') mangler i data.")
 
             st.pyplot(fig, use_container_width=True)
             
