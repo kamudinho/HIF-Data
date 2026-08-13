@@ -10,6 +10,11 @@ def get_users():
             "role": "Analytiker",
             "restricted": ["TESTSIDE", "ADMIN"] # Alt undtagen admin-panelet
         },
+        "TA": {
+            "pass": "TA5270", 
+            "role": "Analytiker",
+            "restricted": ["TILPASNING", "TESTSIDE", "ADMIN"] # Alt undtagen admin-panelet
+        },
         "mr": {
             "pass": "Retov2650", 
             "role": "manager",
