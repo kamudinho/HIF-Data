@@ -4,13 +4,20 @@ def hent_match_og_haendelsesdata(conn, db_navn, valgt_uuid_hold, liga_ids, navne
     """Henter events, forventede mål og database-stats fra Snowflake."""
     
     # 1. Events (med MATCH_OPTAUUID inkluderet, så vi kan koble op på kampe)
+    #
+    # END_X/END_Y (pasningens slutkoordinater) findes ikke som native kolonner på
+    # OPTA_EVENTS - de ligger som qualifiers på eventet: QUALIFIER_QID 140 = slut-X,
+    # QUALIFIER_QID 141 = slut-Y (samme mønster som i setpieces.py). De hentes derfor
+    # ud med MAX(CASE WHEN ...) ligesom setpieces.py allerede gør for ENDX/ENDY.
     sql_events = f"""
         SELECT 
             e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, e.MATCH_OPTAUUID, 
             p.MATCH_NAME, p.FIRST_NAME, p.SHORT_LAST_NAME,
             e.PLAYER_OPTAUUID, e.EVENT_OUTCOME as OUTCOME,
             TO_CHAR(e.EVENT_TIMESTAMP, 'YYYY-MM-DD HH24:MI:SS') as EVENT_TIMESTAMP_STR,
-            LISTAGG(q.QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY q.QUALIFIER_QID) as QUALIFIERS
+            LISTAGG(q.QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY q.QUALIFIER_QID) as QUALIFIERS,
+            MAX(CASE WHEN q.QUALIFIER_QID = 140 THEN q.QUALIFIER_VALUE END) AS END_X,
+            MAX(CASE WHEN q.QUALIFIER_QID = 141 THEN q.QUALIFIER_VALUE END) AS END_Y
         FROM {db_navn}.OPTA_EVENTS e
         JOIN (SELECT DISTINCT PLAYER_OPTAUUID, FIRST_NAME, LAST_NAME, SHORT_LAST_NAME, MATCH_NAME FROM {db_navn}.OPTA_MATCH_LINEUPS WHERE FIRST_NAME IS NOT NULL) p 
             ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
@@ -23,7 +30,13 @@ def hent_match_og_haendelsesdata(conn, db_navn, valgt_uuid_hold, liga_ids, navne
     
     if df_all is not None and not df_all.empty:
         df_all.columns = df_all.columns.str.lower()
-        
+
+        # QUALIFIER_VALUE kommer typisk som tekst fra Snowflake - konverter til float,
+        # ellers fejler sammenligninger som end_x > 66.7 i player_profile.py.
+        for col in ['end_x', 'end_y']:
+            if col in df_all.columns:
+                df_all[col] = pd.to_numeric(df_all[col], errors='coerce')
+
         def fix_name(row):
             f_name = row.get('first_name')
             m_name = row.get('match_name')
