@@ -181,14 +181,33 @@ def process_display_df(df):
         lambda x: True if player_mapper.get_opta_uuid(x.replace('.0', '')) else False
     )
     
+    # PLAYER_MAPPING SKAL OVERSKRIVE ALT ANDET FOR DISSE SPILLERERE
     existing_wyids = set(df_display['PLAYER_WYID'].astype(str).str.replace(r'\.0$', '', regex=True))
     mapping_rows = []
+    
     for p_data in PLAYER_MAPPING:
         wyid = p_data.get('player_wyid')
         if not wyid: continue
         clean_wyid = str(wyid).replace('.0', '').strip()
-        if clean_wyid not in existing_wyids:
-            mapping_rows.append({
+        
+        m_updates = {
+            'NAVN': p_data.get('navn'),
+            'KLUB': p_data.get('klub', '#Hvidovre IF'),
+            'POSITION': p_data.get('position'),
+            'POS': p_data.get('pos'),
+            'POS_PRIORITET': p_data.get('pos_prioritet'),
+            'KONTRAKT': p_data.get('kontrakt'),
+            'IS_HIF': True
+        }
+        m_updates = {k: v for k, v in m_updates.items() if v is not None}
+
+        if clean_wyid in existing_wyids:
+            mask = df_display['PLAYER_WYID'].astype(str).str.replace(r'\.0$', '', regex=True) == clean_wyid
+            for col, val in m_updates.items():
+                if col in df_display.columns:
+                    df_display.loc[mask, col] = val
+        else:
+            new_row = {
                 'PLAYER_WYID': clean_wyid,
                 'NAVN': p_data.get('navn', ''),
                 'KLUB': p_data.get('klub', '#Hvidovre IF'),
@@ -200,9 +219,14 @@ def process_display_df(df):
                 'ER_EMNE': False,
                 'SKYGGEHOLD': False,
                 'ER_AKADEMI': False
-            })
+            }
+            mapping_rows.append(new_row)
+
     if mapping_rows:
         df_display = pd.concat([df_display, pd.DataFrame(mapping_rows)], ignore_index=True)
+        
+    if 'KONTRAKT' in df_display.columns:
+        df_display['KONTRAKT_DT'] = df_display['KONTRAKT'].apply(robust_date_parser)
         
     return df_display
 
