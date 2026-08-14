@@ -320,8 +320,8 @@ def vis_side():
                     ax.text(px, py-4.5, lbl, size=8, color="white", weight='bold', ha='center', 
                             bbox=dict(facecolor=HIF_ROD, edgecolor='white'))
 
-                    plist = df_f[(df_f[p_col].astype(str) == str(pid)) & (~df_f['PLAYER_WYID'].isin(drawn_players))].copy()
-                    plist = plist.sort_values(by='POS_PRIORITET', ascending=True)
+                plist = df_f[(df_f['POS'].astype(str) == str(pid)) & (~df_f['PLAYER_WYID'].isin(drawn_players))].copy()
+                plist = plist.sort_values(by='POS_PRIORITET', ascending=True)
 
                     if is_startopstilling: 
                         plist = plist.head(1)
