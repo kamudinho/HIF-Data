@@ -177,12 +177,10 @@ def process_display_df(df):
     for c in ['ER_EMNE', 'SKYGGEHOLD', 'START_11_26_27', 'ER_AKADEMI']:
         df_display[c] = df_display[c].map({True:True, False:False, 'True':True, 'False':False, 1:True, 0:False, '1':True, '0':False}).fillna(False)
 
-    # NØJAGTIG RETTELSE: IS_HIF bestemmes KUN ud fra PLAYER_MAPPING (player_mapper)
     df_display['IS_HIF'] = df_display['PLAYER_WYID'].astype(str).apply(
         lambda x: True if player_mapper.get_opta_uuid(x.replace('.0', '')) else False
     )
     
-    # Automatisk tilføjelse af manglende spillere fra PLAYER_MAPPING hvis de ikke findes i databasen endnu
     existing_wyids = set(df_display['PLAYER_WYID'].astype(str).str.replace(r'\.0$', '', regex=True))
     mapping_rows = []
     for p_data in PLAYER_MAPPING:
@@ -320,8 +318,8 @@ def vis_side():
                     ax.text(px, py-4.5, lbl, size=8, color="white", weight='bold', ha='center', 
                             bbox=dict(facecolor=HIF_ROD, edgecolor='white'))
 
-                plist = df_f[(df_f['POS'].astype(str) == str(pid)) & (~df_f['PLAYER_WYID'].isin(drawn_players))].copy()
-                plist = plist.sort_values(by='POS_PRIORITET', ascending=True)
+                    plist = df_f[(df_f['POS'].astype(str) == str(pid)) & (~df_f['PLAYER_WYID'].isin(drawn_players))].copy()
+                    plist = plist.sort_values(by='POS_PRIORITET', ascending=True)
 
                     if is_startopstilling: 
                         plist = plist.head(1)
