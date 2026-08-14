@@ -283,7 +283,7 @@ def vis_side():
 
             with c_pitch:
                 f_suffix = st.session_state.form_skygge.replace('-', '')
-                p_col = f"POS_{f_suffix}"
+                p_col = "POS"
                 is_startopstilling = (sel_v == "Startopstilling (26/27)")
 
                 if is_startopstilling:
