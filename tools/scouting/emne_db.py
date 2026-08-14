@@ -179,20 +179,43 @@ def prepare_df(content):
 def process_display_df(df):
     df_display = df.drop_duplicates(subset=['PLAYER_WYID'], keep='first').copy()
     
+    # Sørg for at spillere defineret i PLAYER_MAPPING automatisk tilføjes, hvis de mangler i CSV'en
+    existing_wyids = set(df_display['PLAYER_WYID'].astype(str).str.replace(r'\.0$', '', regex=True))
+    mapping_rows = []
+    for wyid, p_data in PLAYER_MAPPING.items():
+        clean_wyid = str(wyid).replace('.0', '').strip()
+        if clean_wyid not in existing_wyids:
+            mapping_rows.append({
+                'PLAYER_WYID': clean_wyid,
+                'NAVN': p_data.get('navn', ''),
+                'KLUB': p_data.get('klub', '#Hvidovre IF'),
+                'POSITION': p_data.get('position', ''),
+                'POS': p_data.get('pos', ''),
+                'IS_HIF': True
+            })
+    if mapping_rows:
+        df_mapping = pd.DataFrame(mapping_rows)
+        df_display = pd.concat([df_display, df_mapping], ignore_index=True)
+
     df_display['POS_PRIORITET'] = df_display['POS_PRIORITET'].astype(str).replace('nan', 'Z')
 
     for c in ['POS', 'POS_343', 'POS_433', 'POS_352']:
-        df_display[c] = df_display[c].apply(clean_pos_val)
-        if c != 'POS':
-            df_display[c] = df_display.apply(lambda r: r['POS'] if r[c] == "" else r[c], axis=1)
+        if c in df_display.columns:
+            df_display[c] = df_display[c].apply(clean_pos_val)
+            if c != 'POS':
+                df_display[c] = df_display.apply(lambda r: r['POS'] if r[c] == "" else r[c], axis=1)
             
     if 'KONTRAKT' in df_display.columns:
         df_display['KONTRAKT_DT'] = df_display['KONTRAKT'].apply(robust_date_parser)
+    else:
+        df_display['KONTRAKT_DT'] = pd.NaT
     
     for c in ['ER_EMNE', 'SKYGGEHOLD', 'START_11_26_27', 'ER_AKADEMI']:
-        df_display[c] = df_display[c].map({True:True, False:False, 'True':True, 'False':False, 1:True, 0:False, '1':True, '0':False}).fillna(False)
+        if c in df_display.columns:
+            df_display[c] = df_display[c].map({True:True, False:False, 'True':True, 'False':False, 1:True, 0:False, '1':True, '0':False}).fillna(False)
+        else:
+            df_display[c] = False
     
-    # KRITISK ÆNDRING: IS_HIF bestemmes udelukkende ud fra om spilleren findes i player_mapping.py via PLAYER_WYID
     def check_is_hif(wyid):
         if pd.isna(wyid) or str(wyid).strip() == "":
             return False
