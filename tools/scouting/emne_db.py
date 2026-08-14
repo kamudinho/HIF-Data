@@ -7,6 +7,7 @@ from mplsoccer import Pitch
 import time
 from datetime import datetime
 from data.users import get_users
+from data.players.player_mapping import PlayerMapping, PLAYER_MAPPING
 
 # --- 1. KONFIGURATION ---
 REPO = "Kamudinho/HIF-data"
@@ -19,6 +20,9 @@ GRON_NY = "#ccffcc"
 GUL_ADVARSEL = "#ffff99"
 ROD_ADVARSEL = "#ffcccc"
 AKADEMI_FARVE = "#d1d1ff" 
+
+# Initialiser PlayerMapping for Hvidovre IF
+player_mapper = PlayerMapping(PLAYER_MAPPING)
 
 VINDUE_DATOER = {
     "Nuværende trup": datetime.now(),
@@ -34,12 +38,9 @@ POS_OPTS = ["", "1", "2", "3", "3.5", "4", "5", "6", "7", "8", "9", "10", "11"]
 # --- 2. GITHUB & DATA LOGIK ---
 def get_github_file(path):
     try:
-        # Vi tilføjer tidsstempel direkte til URL'en for at snyde GitHubs cache
-        import time
         timestamp = int(time.time())
         url = f"https://api.github.com/repos/{REPO}/contents/{path}?t={timestamp}"
         
-        # Vi fortæller også GitHubs servere via headers, at vi IKKE vil have cachet data
         headers = {
             "Authorization": f"token {GITHUB_TOKEN}",
             "Cache-Control": "no-cache, no-store, must-revalidate",
@@ -58,7 +59,6 @@ def get_github_file(path):
 
 def save_to_github(df):
     try:
-        # Den NØJAGTIGE rækkefølge og stavning af kolonnerne fra din rå CSV-fil
         original_cols = [
             'PLAYER_WYID', 'DATO', 'NAVN', 'KLUB', 'POSITION', 'RATING_AVG', 'STATUS', 
             'POTENTIALE', 'STYRKER', 'UDVIKLING', 'VURDERING', 'BESLUTSOMHED', 'FART', 
@@ -72,19 +72,15 @@ def save_to_github(df):
         _, sha = get_github_file(SCOUT_DB_PATH)
         export_df = df.copy()
         
-        # Sikr, at alle kolonner findes i DataFrame inden eksport
         for col in original_cols:
-            # Vi tjekker både for STORE og små bogstaver
             col_upper = col.upper()
             if col_upper in export_df.columns and col not in export_df.columns:
                 export_df[col] = export_df[col_upper]
             elif col not in export_df.columns:
                 export_df[col] = ""
         
-        # Sørg for at fjerne decimaler (.0) fra ID-numre, så de forbliver rene heltal
         export_df['PLAYER_WYID'] = export_df['PLAYER_WYID'].astype(str).replace(r'\.0$', '', regex=True)
         
-        # Tving csv-eksporten til KUN at bruge de præcise kolonner i den HELT rigtige rækkefølge
         csv_content = export_df[original_cols].to_csv(index=False)
         
         payload = {
@@ -113,10 +109,8 @@ def handle_auto_save(key, df_display, source_df):
         
         for idx_str, updated_cols in changes.items():
             row_idx = int(idx_str)
-            # Find den korrekte spiller i den specifikke tabel, som brugeren redigerede i
             wyid = source_df.iloc[row_idx]['PLAYER_WYID']
             
-            # Find spillerens nyeste rapport-række i databasen
             matching_rows = full_db[full_db['PLAYER_WYID'] == wyid].sort_values('DATO', ascending=False)
             
             if not matching_rows.empty:
@@ -124,7 +118,6 @@ def handle_auto_save(key, df_display, source_df):
                 for col, val in updated_cols.items():
                     col_upper = col.upper()
                     
-                    # Konverter datoer rigtigt tilbage til tekst-format i KONTRAKT kolonnen
                     if col_upper == "KONTRAKT_DT":
                         col_upper = "KONTRAKT"
                         if pd.notna(val) and val != "":
@@ -134,16 +127,9 @@ def handle_auto_save(key, df_display, source_df):
                     
                     full_db.at[idx_in_full, col_upper] = val
         
-        # Opdater den lokale session state med det samme
         st.session_state['full_db'] = full_db
-        
-        # Skub ændringerne op til din GitHub CSV-fil
         save_to_github(full_db)
-        
-        # Ryd redigeringshistorikken for at undgå gemme-loops
         st.session_state[state_key]["edited_rows"] = {}
-        
-        # Tving Streamlit til at køre scriptet igennem og hente de opdaterede data lokalt
         st.rerun()
 
 def clean_pos_val(val):
@@ -154,17 +140,14 @@ def robust_date_parser(val):
     if pd.isna(val) or str(val).strip() == "":
         return pd.NaT
     val_str = str(val).strip()
-    # Prøv at erstatte punkter med bindestreger hvis europæisk format (f.eks. 11.10.1996 -> 11-10-1996)
     if "." in val_str:
         val_str = val_str.replace(".", "-")
     
-    # Prøv forskellige formater
     for fmt in ('%Y-%m-%d', '%d-%m-%Y', '%d-%m-%y'):
         try:
             return pd.to_datetime(val_str, format=fmt)
         except ValueError:
             continue
-    # Falder tilbage til generisk parsing hvis alt andet fejler
     return pd.to_datetime(val_str, errors='coerce')
 
 def get_status_color(val, ref_date=None):
@@ -189,7 +172,6 @@ def prepare_df(content):
     df['DATO_DT'] = pd.to_datetime(df['DATO'], errors='coerce')
     df = df.sort_values(by='DATO_DT', ascending=False)
     
-    # Gemmer den rå og fulde database i session state
     st.session_state['full_db'] = df.copy()
     
     return process_display_df(df)
@@ -197,7 +179,6 @@ def prepare_df(content):
 def process_display_df(df):
     df_display = df.drop_duplicates(subset=['PLAYER_WYID'], keep='first').copy()
     
-    # Sørg for at POS_PRIORITET er streng-baseret så vi kan sortere A, B, C
     df_display['POS_PRIORITET'] = df_display['POS_PRIORITET'].astype(str).replace('nan', 'Z')
 
     for c in ['POS', 'POS_343', 'POS_433', 'POS_352']:
@@ -205,15 +186,17 @@ def process_display_df(df):
         if c != 'POS':
             df_display[c] = df_display.apply(lambda r: r['POS'] if r[c] == "" else r[c], axis=1)
             
-    # Robust dato-parsing af kontraktkolonnen
     if 'KONTRAKT' in df_display.columns:
         df_display['KONTRAKT_DT'] = df_display['KONTRAKT'].apply(robust_date_parser)
     
     for c in ['ER_EMNE', 'SKYGGEHOLD', 'START_11_26_27', 'ER_AKADEMI']:
         df_display[c] = df_display[c].map({True:True, False:False, 'True':True, 'False':False, 1:True, 0:False, '1':True, '0':False}).fillna(False)
     
-    # Optimeret HIF-tjek der dækker både "Hvidovre", "Hvidovre IF" og "HIF"
-    df_display['IS_HIF'] = df_display['KLUB'].str.contains("Hvidovre|HIF", case=False, na=False)
+    # Brug player_mapper til at sikre korrekt genkendelse af Hvidovre-spillere (eksempelvis via WYID eller navn)
+    df_display['IS_HIF'] = df_display['KLUB'].str.contains("Hvidovre|HIF", case=False, na=False) | df_display['PLAYER_WYID'].apply(
+        lambda x: True if player_mapper.get_opta_uuid(x) else False
+    )
+    
     return df_display
 
 # --- 4. UI ---
@@ -225,7 +208,6 @@ def vis_side():
 
     if 'form_skygge' not in st.session_state: st.session_state.form_skygge = "3-4-3"
 
-    # --- SIKKER DATALÆSNING (Cache-beskyttelse) ---
     if 'full_db' not in st.session_state:
         content, _ = get_github_file(SCOUT_DB_PATH)
         if content is None: 
@@ -233,7 +215,6 @@ def vis_side():
             return
         df_display = prepare_df(content)
     else:
-        # Hvis vi har lokale opdateringer i hukommelsen, bruger vi dem direkte
         df_display = process_display_df(st.session_state['full_db'])
 
     tabs_to_show = []
@@ -261,19 +242,19 @@ def vis_side():
         with tabs_obj[tab_map["Emneliste"]]:
             source_t1 = df_display[~df_display['IS_HIF']].copy().reset_index(drop=True)
             st.data_editor(source_t1[['NAVN', 'KLUB', 'POS', 'KONTRAKT_DT', 'TRANSFER_VINDUE', 'ER_EMNE', 'SKYGGEHOLD', 'PLAYER_WYID']],
-                            column_config=cfg, use_container_width=True, height=600, key="editable_t1", on_change=handle_auto_save, args=("t1", df_display, source_t1))
+                           column_config=cfg, use_container_width=True, height=600, key="editable_t1", on_change=handle_auto_save, args=("t1", df_display, source_t1))
 
     if "Hvidovre IF" in tab_map:
         with tabs_obj[tab_map["Hvidovre IF"]]:
             source_t2 = df_display[df_display['IS_HIF']].copy().reset_index(drop=True)
             st.data_editor(source_t2[['NAVN', 'KLUB', 'POS', 'KONTRAKT_DT', 'ER_AKADEMI', 'ER_EMNE', 'SKYGGEHOLD', 'PLAYER_WYID']],
-                            column_config=cfg, use_container_width=True, height=600, key="editable_t2", on_change=handle_auto_save, args=("t2", df_display, source_t2))
+                           column_config=cfg, use_container_width=True, height=600, key="editable_t2", on_change=handle_auto_save, args=("t2", df_display, source_t2))
 
     if "Skyggeliste" in tab_map:
         with tabs_obj[tab_map["Skyggeliste"]]:
             source_t3 = df_display[df_display['SKYGGEHOLD'] == True].copy().reset_index(drop=True)
             st.data_editor(source_t3[['NAVN', 'KLUB', 'POS', 'POS_343', 'POS_433', 'POS_352', 'POS_PRIORITET', 'START_11_26_27', 'PLAYER_WYID']],
-                            column_config=cfg, use_container_width=True, height=600, key="editable_t3", on_change=handle_auto_save, args=("t3", df_display, source_t3))
+                           column_config=cfg, use_container_width=True, height=600, key="editable_t3", on_change=handle_auto_save, args=("t3", df_display, source_t3))
 
     if "Skyggehold" in tab_map:
         with tabs_obj[tab_map["Skyggehold"]]:
@@ -306,7 +287,6 @@ def vis_side():
                 pitch = Pitch(pitch_type='statsbomb', pitch_color='white', line_color='#333', linewidth=1.2)
                 fig, ax = pitch.draw(figsize=(10, 7))
                 
-                # --- LEGENDS ---
                 ax.text(3, 3, " < 6 mdr ", size=6, weight='bold', bbox=dict(facecolor=ROD_ADVARSEL, boxstyle='round,pad=0.5'))
                 ax.text(12, 3, " 6-12 mdr ", size=6, weight='bold', bbox=dict(facecolor=GUL_ADVARSEL, boxstyle='round,pad=0.5'))
                 ax.text(22, 3, " Transferfri ", size=6, weight='bold', bbox=dict(facecolor=GRON_NY, boxstyle='round,pad=0.5'))
@@ -326,7 +306,6 @@ def vis_side():
                     ax.text(px, py-4.5, lbl, size=8, color="white", weight='bold', ha='center', 
                             bbox=dict(facecolor=HIF_ROD, edgecolor='white'))
                     
-                    # FILTRER & SORTÉR EFTER POS_PRIORITET (A før B før C)
                     plist = df_f[(df_f[p_col].astype(str) == str(pid)) & (~df_f['PLAYER_WYID'].isin(drawn_players))].copy()
                     plist = plist.sort_values(by='POS_PRIORITET', ascending=True)
 
@@ -345,8 +324,6 @@ def vis_side():
                                 txt_c, bg = "white", HIF_BLA
                         else:
                             k_c = get_status_color(r['KONTRAKT_DT'], ref_date=ref_dt)
-                            
-                            # Tjek om kontrakten er udløbet (datoen er før referencedatoen)
                             is_expired = r['KONTRAKT_DT'] < ref_dt if pd.notna(r['KONTRAKT_DT']) else False
                         
                             if is_expired:
