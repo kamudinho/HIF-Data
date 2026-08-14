@@ -192,10 +192,14 @@ def process_display_df(df):
     for c in ['ER_EMNE', 'SKYGGEHOLD', 'START_11_26_27', 'ER_AKADEMI']:
         df_display[c] = df_display[c].map({True:True, False:False, 'True':True, 'False':False, 1:True, 0:False, '1':True, '0':False}).fillna(False)
     
-    # Brug player_mapper til at sikre korrekt genkendelse af Hvidovre-spillere (eksempelvis via WYID eller navn)
-    df_display['IS_HIF'] = df_display['KLUB'].str.contains("Hvidovre|HIF", case=False, na=False) | df_display['PLAYER_WYID'].apply(
-        lambda x: True if player_mapper.get_opta_uuid(x) else False
-    )
+    # KRITISK ÆNDRING: IS_HIF bestemmes udelukkende ud fra om spilleren findes i player_mapping.py via PLAYER_WYID
+    def check_is_hif(wyid):
+        if pd.isna(wyid) or str(wyid).strip() == "":
+            return False
+        clean_wyid = str(wyid).replace('.0', '').strip()
+        return player_mapper.get_opta_uuid(clean_wyid) is not None
+
+    df_display['IS_HIF'] = df_display['PLAYER_WYID'].apply(check_is_hif)
     
     return df_display
 
