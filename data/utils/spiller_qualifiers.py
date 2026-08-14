@@ -311,7 +311,7 @@ ACTION_CATEGORIES: Dict[str, ActionCategory] = {
         "side": "offensiv",
     },
     "corner_frispark": {
-        "navn": "Faste situationer (corner/frispark)",
+        "navn": "Standardsituationer (hjørne/frispark)",
         "beskrivelse": "Tildelte og udførte dødbolde",
         "type_ids": [1, 2, 6],
         "qualifier_ids": [5, 6, 24, 25, 26, 223, 224],
