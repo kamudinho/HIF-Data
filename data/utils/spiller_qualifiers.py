@@ -1,5 +1,5 @@
 """
-mapping.py
+#data/utils/spiller_qualifiers.py
 ==========
 
 Overskuelig mapping af Opta "Match Events" (MA3) data.
