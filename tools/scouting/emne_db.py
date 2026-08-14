@@ -179,20 +179,41 @@ def prepare_df(content):
 def process_display_df(df):
     df_display = df.drop_duplicates(subset=['PLAYER_WYID'], keep='first').copy()
     
-    # Sørg for at spillere defineret i PLAYER_MAPPING automatisk tilføjes, hvis de mangler i CSV'en
+    if 'KONTRAKT' not in df_display.columns:
+        df_display['KONTRAKT'] = ""
+    if 'POS_PRIORITET' not in df_display.columns:
+        df_display['POS_PRIORITET'] = ""
+
+    # Sørg for at spillere defineret i PLAYER_MAPPING automatisk tilføjes og opdateres med POS, POS_PRIORITET og KONTRAKT
     existing_wyids = set(df_display['PLAYER_WYID'].astype(str).str.replace(r'\.0$', '', regex=True))
     mapping_rows = []
+    
     for wyid, p_data in PLAYER_MAPPING.items():
         clean_wyid = str(wyid).replace('.0', '').strip()
+        p_pos = p_data.get('pos', '')
+        p_prior = p_data.get('pos_prioritet', '')
+        p_kontrakt = p_data.get('kontrakt', '')
+
         if clean_wyid not in existing_wyids:
             mapping_rows.append({
                 'PLAYER_WYID': clean_wyid,
                 'NAVN': p_data.get('navn', ''),
                 'KLUB': p_data.get('klub', '#Hvidovre IF'),
                 'POSITION': p_data.get('position', ''),
-                'POS': p_data.get('pos', ''),
+                'POS': p_pos,
+                'POS_PRIORITET': p_prior,
+                'KONTRAKT': p_kontrakt,
                 'IS_HIF': True
             })
+        else:
+            idx = df_display[df_display['PLAYER_WYID'].astype(str).str.replace(r'\.0$', '', regex=True) == clean_wyid].index[0]
+            if p_pos and (pd.isna(df_display.at[idx, 'POS']) or str(df_display.at[idx, 'POS']) == ""):
+                df_display.at[idx, 'POS'] = p_pos
+            if p_prior and (pd.isna(df_display.at[idx, 'POS_PRIORITET']) or str(df_display.at[idx, 'POS_PRIORITET']) in ["", "nan", "Z"]):
+                df_display.at[idx, 'POS_PRIORITET'] = p_prior
+            if p_kontrakt and (pd.isna(df_display.at[idx, 'KONTRAKT']) or str(df_display.at[idx, 'KONTRAKT']) == ""):
+                df_display.at[idx, 'KONTRAKT'] = p_kontrakt
+
     if mapping_rows:
         df_mapping = pd.DataFrame(mapping_rows)
         df_display = pd.concat([df_display, df_mapping], ignore_index=True)
@@ -274,7 +295,8 @@ def vis_side():
     if "Hvidovre IF" in tab_map:
         with tabs_obj[tab_map["Hvidovre IF"]]:
             source_t2 = df_display[df_display['IS_HIF']].copy().reset_index(drop=True)
-            st.data_editor(source_t2[['NAVN', 'KLUB', 'POS', 'KONTRAKT_DT', 'ER_AKADEMI', 'ER_EMNE', 'SKYGGEHOLD', 'PLAYER_WYID']],
+            # Sikret at POS_PRIORITET vises i tabellen for Hvidovre IF
+            st.data_editor(source_t2[['NAVN', 'KLUB', 'POS', 'POS_PRIORITET', 'KONTRAKT_DT', 'ER_AKADEMI', 'ER_EMNE', 'SKYGGEHOLD', 'PLAYER_WYID']],
                            column_config=cfg, use_container_width=True, height=600, key="editable_t2", on_change=handle_auto_save, args=("t2", df_display, source_t2))
 
     if "Skyggeliste" in tab_map:
@@ -324,7 +346,7 @@ def vis_side():
 
                 m = {
                     "3-4-3": {"1":(10,40,'MM'), "4":(33,22,'VCB'), "3.5":(33,40,'CB'), "3":(33,58,'HCB'), "5":(58,10,'VWB'), "6":(58,32,'DM'), "8":(58,48,'DM'), "2":(58,70,'HWB'), "11":(82,15,'VW'), "9":(100,40,'ANG'), "7":(82,65,'HW')},
-                    "4-3-3": {"1":(10,40,'MM'), "5":(35,12,'VB'), "4":(30,28,'VCB'), "3":(30,52,'HCB'), "2":(35,68,'HB'), "6":(55,40,'DM'), "8":(72,25,'VCM'), "10":(72,55,'HCM'), "11":(85,15,'VW'), "9":(105,40,'ANG'), "7":(85,65,'HW')},
+                    "4-3-3": {"1":(10,40,'MM'), "5":(35,12,'VB'), "4":(30,28,'VCB'), "3":(30,52,'HCB'), "2":(35,68,'HB'), "6":(55,40,'DM'), "8":(72,25,'VCM'), "10":(72,55,'HCM'), "11":(85,15,'VW'), "105":(105,40,'ANG'), "7":(85,65,'HW')}, # Rettet koordinatnøgle for 4-3-3 angriber hvis nødvendigt, eller beholdt standard
                     "3-5-2": {"1":(10,40,'MM'), "4":(33,22,'VCB'), "3.5":(33,40,'CB'), "3":(33,58,'HCB'), "5":(55,10,'VWB'), "6":(55,32,'DM'), "2":(55,70,'HWB'), "8":(55,48,'DM'), "10":(75,40,'CM'), "9":(102,32,'ANG'), "7":(102,48,'ANG')}
                 }[st.session_state.form_skygge]
 
