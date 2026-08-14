@@ -247,7 +247,7 @@ PLAYER_MAPPING = [
     {"klub": "#Hillerød Fodbold", "navn": "Nicklas Bjerre Schmidt", "position": "Midfielder", "player_optauuid": "5dlh0fa9yo6z283w9p58xmnoq", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
     {"klub": "#Hillerød Fodbold", "navn": "Berzan Kücükylidiz", "position": "Midfielder", "player_optauuid": "bpldj4qdzfdm1n739atcadbmc", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
 
-    # Hvidovre IF
+    # --- Hvidovre IF ---
     {"player_wyid": "471964", "klub": "#Hvidovre IF", "navn": "Filip Đukić", "position": "Goalkeeper", "pos": "1", "pos_prioritet": "A - Start-11", "kontrakt": "2027-06-30", "player_optauuid": "d9hh01mit4geyadol3gmzco9", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
     {"player_wyid": "483429", "klub": "#Hvidovre IF", "navn": "Ahmed Iljazovski", "position": "Defender", "pos": "5", "pos_prioritet": "A - Start-11", "kontrakt": "2027-06-30", "player_optauuid": "bfvdr7ckiersz26ya2kq9f1g4", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
     {"player_wyid": "764636", "klub": "#Hvidovre IF", "navn": "Alexander Johansen", "position": "Attacker", "pos": "11", "pos_prioritet": "A - Start-11", "kontrakt": "2027-06-30", "player_optauuid": "7ymn0ytcqi6l43nqraxt9s1zo", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
