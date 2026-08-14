@@ -132,6 +132,15 @@ ALLE_SPQ_KATEGORIER = sorted({
     for key in side_liste
 })
 
+def get_profile_metrics_for_player(position: str):
+    # Henter relevante offensive og defensive kategorier for positionen
+    offensive_cats = get_categories_for_position(position, side="offensiv")
+    defensive_cats = get_categories_for_position(position, side="defensiv")
+
+    return {
+        "offensiv": offensive_cats,
+        "defensiv": defensive_cats
+    }
 
 def byg_kategori_visning(spq_position: str):
     """
