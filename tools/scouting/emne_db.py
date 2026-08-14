@@ -28,10 +28,11 @@ VINDUE_DATOER = {
     "Nuværende trup": datetime.now(),
     "Vinter 26": datetime(2027, 1, 1),
     "Sommer 27": datetime(2027, 7, 1),
-    "Vinter 27": datetime(2028, 1, 1)
+    "Vinter 27": datetime(2028, 1, 1),
+    "Sommer 28": datetime(2028, 7, 1)
 }
 
-VINDUE_ORDEN = ["Vinter 26", "Sommer 27", "Vinter 27"]
+VINDUE_ORDEN = ["Vinter 26", "Sommer 27", "Vinter 27", "Sommer 28"]
 POS_OPTS = ["", "1", "2", "3", "3.5", "4", "5", "6", "7", "8", "9", "10", "11"]
 
 # --- 2. GITHUB & DATA LOGIK ---
