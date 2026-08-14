@@ -13,7 +13,13 @@ import base64
 from data.data_load import _get_snowflake_conn
 from data.utils.team_mapping import TEAMS, TEAM_COLORS
 from data.utils.mapping import OPTA_EVENT_TYPES, OPTA_QUALIFIERS, get_action_label, is_assist, har_qualifier
-from data.utils.match_data import classify_take_on
+
+# --- SPILLER-KATEGORIER (position -> aktionskategorier, offensiv/defensiv) ---
+from data.utils.spiller_qualifiers import (
+    ACTION_CATEGORIES,
+    POSITION_ACTIONS,
+    get_categories_for_position,
+)
  
 # --- GENERELLE UI-HJÆLPERE ---
 from utils.helpers import get_logo_img, get_team_color, get_ordinal, draw_player_info_box
@@ -54,39 +60,96 @@ POSITION_DA_FLERTAL = {
     "Attacker": "angribere",
 }
 
-# Statistik-kategorier vist i "hjul"-grafikkerne på Spillerprofil-fanen
-KATEGORI_PER_POSITION = {
-    "Goalkeeper": [
-        ("PASNINGER", "Pasninger"), ("PASNING %", "Pasningsprocent"),
-        ("CLEARINGER", "Clearinger"), ("EROBRINGER", "Erobringer"),
-        ("FRISPARK IMOD", "Frispark_imod"), ("GULE KORT", "Gule_kort"),
-    ],
-    "Defender": [
-        ("PASNINGER", "Pasninger"), ("TACKLINGER", "Tacklinger"),
-        ("CLEARINGER", "Clearinger"), ("INTERCEPTIONER", "Interceptioner"),
-        ("BLOKERINGER", "Blokeringer"), ("EROBRINGER", "Erobringer"),
-        ("DEF. DUELLER", "Defensive_Dueller"), ("FRISPARK IMOD", "Frispark_imod"),
-    ],
-    "Midfielder": [
-        ("PASNINGER", "Pasninger"), ("STIKNINGER", "Stikninger"),
-        ("CHANCER SKABT", "Chancer_skabt"), ("KEY PASSES", "Key_Passes"),
-        ("DRIBLINGER", "Driblinger"), ("EROBRINGER", "Erobringer"),
-        ("TACKLINGER", "Tacklinger"), ("INDLÆG", "Indlæg"),
-    ],
-    "Attacker": [
-        ("AFSLUTNINGER", "Afslutninger"), ("MÅL", "Mål"),
-        ("CHANCER SKABT", "Chancer_skabt"), ("DRIBLINGER", "Driblinger"),
-        ("INDLÆG", "Indlæg"), ("KEY PASSES", "Key_Passes"),
-        ("STIKNINGER", "Stikninger"), ("PASNINGER", "Pasninger"),
-    ],
+# Kobler de engelske positioner (fra POSITION_MAP) til spiller_qualifiers'
+# positions-nøgler (GK/DEF/MID/FWD)
+POSITION_TO_SPQ = {
+    "Goalkeeper": "GK",
+    "Defender": "DEF",
+    "Midfielder": "MID",
+    "Attacker": "FWD",
 }
-DEFAULT_KAT_LISTE = [
-    ("PASNINGER", "Pasninger"), ("STIKNINGER", "Stikninger"),
-    ("AFSLUTNINGER", "Afslutninger"), ("MÅL", "Mål"),
-    ("EROBRINGER", "Erobringer"), ("DRIBLINGER", "Driblinger"),
-    ("INDLÆG", "Indlæg"), ("CHANCER SKABT", "Chancer_skabt"),
-    ("KEY PASSES", "Key_Passes")
-]
+
+# Antal statistik-"hjul" der maksimalt vises pr. spillerprofil
+MAKS_KATEGORIER_PR_POSITION = 8
+
+# Aktionskategorier hvor typeId alene IKKE er nok til at identificere
+# kategorien entydigt (typeId'et deles med en bredere kategori, fx
+# "pasninger"). Her kræves derfor også match på mindst én qualifier_id.
+KATEGORIER_DER_KRAEVER_QUALIFIER = {
+    "indlaeg",
+    "afgoerende_pasninger",
+    "keeper_distribution",
+    "corner_frispark",
+    "maal",
+    "blokeringer",
+}
+
+
+def _hent_qualifiers(row) -> set:
+    """Normaliserer en rækkes qualifier-liste til et sæt af strenge (qualifierId'er)."""
+    ql = row.get('qual_list', [])
+    if isinstance(ql, list):
+        return {str(q).strip() for q in ql if str(q).strip()}
+    return {str(q).strip() for q in str(ql).split(',') if str(q).strip()}
+
+
+def _match_kategori(row, category_key: str) -> bool:
+    """Afgør om en enkelt hændelse (row) hører til en given ACTION_CATEGORIES-kategori."""
+    cat = ACTION_CATEGORIES[category_key]
+    if row['event_typeid'] not in cat['type_ids']:
+        return False
+    if category_key in KATEGORIER_DER_KRAEVER_QUALIFIER and cat['qualifier_ids']:
+        quals = _hent_qualifiers(row)
+        return any(str(q) in quals for q in cat['qualifier_ids'])
+    return True
+
+
+def tilfoej_kategori_kolonner(df_stats: pd.DataFrame, df_events: pd.DataFrame, category_keys) -> pd.DataFrame:
+    """
+    Beriger en stats-dataframe (indekseret på player_optauuid) med én kolonne
+    pr. aktionskategori fra spiller_qualifiers.ACTION_CATEGORIES.
+    Kolonnenavnet = kategori-nøglen (fx "pasninger", "tacklinger").
+    """
+    if df_events is None or df_events.empty:
+        for key in category_keys:
+            df_stats[key] = 0
+        return df_stats
+
+    for key in category_keys:
+        mask = df_events.apply(lambda r: _match_kategori(r, key), axis=1)
+        counts = df_events[mask].groupby('player_optauuid').size()
+        df_stats[key] = counts.reindex(df_stats.index, fill_value=0).astype('Int64')
+    return df_stats
+
+
+# Samlet liste af alle kategori-nøgler, der bruges på tværs af positionerne
+# (bruges til at berige stats-dataframes én gang, uafhængigt af hvilken
+# spiller der er valgt).
+ALLE_SPQ_KATEGORIER = sorted({
+    key
+    for pos_dict in POSITION_ACTIONS.values()
+    for side_liste in pos_dict.values()
+    for key in side_liste
+})
+
+
+def byg_kategori_visning(spq_position: str):
+    """
+    Returnerer en liste af (LABEL, kategori_nøgle) for en given spiller_qualifiers-
+    position (GK/DEF/MID/FWD) - klar til brug i "hjul"-visningen på Spillerprofil.
+    """
+    keys = get_categories_for_position(spq_position)[:MAKS_KATEGORIER_PR_POSITION]
+    return [(ACTION_CATEGORIES[k]["navn"].upper(), k) for k in keys]
+
+
+# Statistik-kategorier vist i "hjul"-grafikkerne på Spillerprofil-fanen.
+# Bygges dynamisk ud fra spiller_qualifiers.POSITION_ACTIONS, så kategorierne
+# altid følger den centrale mapping og ikke skal vedligeholdes to steder.
+KATEGORI_PER_POSITION = {
+    eng_pos: byg_kategori_visning(spq_pos)
+    for eng_pos, spq_pos in POSITION_TO_SPQ.items()
+}
+DEFAULT_KAT_LISTE = byg_kategori_visning("MID")
 
 HIDDEN_VIEWS_PER_POSITION = {
     "Goalkeeper": ["Afslutninger", "Offensive pasninger"],
@@ -321,6 +384,10 @@ def vis_side(dp=None):
         lambda u: POSITION_MAP.get(str(u).strip(), 'Ukendt')
     )
 
+    # Berig liga-stats med kategorierne fra spiller_qualifiers (bruges til
+    # sammenligningsgruppen/rangeringen på Spillerprofil-fanen)
+    truppen_stats_liga = tilfoej_kategori_kolonner(truppen_stats_liga, df_liga_total, ALLE_SPQ_KATEGORIER)
+
     # Beregn holdets trup-stats direkte
     event_stats_hold = df_all.groupby(['player_optauuid', 'visningsnavn']).apply(lambda x: pd.Series({
         'Kampe': x['match_optauuid'].nunique() if 'match_optauuid' in x.columns else 1,
@@ -365,6 +432,9 @@ def vis_side(dp=None):
         for col in ['Kampe', 'Aktioner', 'Gule_kort', 'Roede_kort', 'Indskiftet', 'Udskiftet', 'Pasninger', 'Pasninger_Succes']:
             if col in truppen_stats.columns:
                 truppen_stats[col] = truppen_stats[col].fillna(0).astype('Int64')
+
+        # Berig holdets stats med samme kategorier fra spiller_qualifiers
+        truppen_stats = tilfoej_kategori_kolonner(truppen_stats, df_all, ALLE_SPQ_KATEGORIER)
  
     t_team, t_matches, t_profile, t_pitch, t_phys = st.tabs(["Holdoversigt", "Kampoversigt", "Spillerprofil", "Spilleraktioner", "Fysisk data"])
  
@@ -658,6 +728,9 @@ def vis_side(dp=None):
                 st.caption(f"Sammenlignet med alle {gruppe_navn} i ligaen.")
 
             with main_col_right:
+                # Kategorierne kommer nu fra spiller_qualifiers.POSITION_ACTIONS
+                # (bygget i KATEGORI_PER_POSITION øverst i filen), i stedet for
+                # en fast, manuelt vedligeholdt liste pr. position.
                 kat_liste = KATEGORI_PER_POSITION.get(spiller_position, DEFAULT_KAT_LISTE)
                 kat_liste = [(label, k_id) for label, k_id in kat_liste if k_id in truppen_stats.columns]
 
