@@ -56,8 +56,6 @@ POSITION_DA_FLERTAL = {
     "Attacker": "angribere",
 }
 
-# Kobler de engelske positioner (fra POSITION_MAP) til spiller_qualifiers'
-# positions-nøgler (GK/DEF/MID/FWD)
 POSITION_TO_SPQ = {
     "Goalkeeper": "GK",
     "Defender": "DEF",
@@ -65,13 +63,6 @@ POSITION_TO_SPQ = {
     "Attacker": "FWD",
 }
 
-# Aktionskategorier hvor typeId alene IKKE er nok til at identificere
-# kategorien entydigt (typeId'et deles med en bredere kategori, fx
-# "pasninger"). Her kræves derfor også match på mindst én qualifier_id.
-# NB: "maal" er bevidst UDELADT - typeId 16 er i sig selv entydigt for et
-# mål, og qualifierId 210 (assist) sidder på PASNINGEN, ikke på selve
-# mål-hændelsen, så et qualifier-krav ville fejlagtigt fravælge almindelige
-# mål uden assist-markør.
 KATEGORIER_DER_KRAEVER_QUALIFIER = {
     "indlaeg",
     "afgoerende_pasninger",
@@ -80,7 +71,6 @@ KATEGORIER_DER_KRAEVER_QUALIFIER = {
     "blokeringer",
 }
 
-# Samlet liste af alle kategori-nøgler, der bruges på tværs af positionerne
 ALLE_SPQ_KATEGORIER = sorted({
     key
     for pos_dict in POSITION_ACTIONS.values()
@@ -162,17 +152,11 @@ def byg_kategori_visning(spq_position: str) -> dict:
         for side in ("offensiv", "defensiv")
     }
 
-
-# Statistik-kategorier vist i "hjul"-grafikkerne på Spillerprofil-fanen.
-# Bygges dynamisk ud fra spiller_qualifiers.POSITION_ACTIONS, opdelt i
-# offensivt/defensivt, så mapping'en kun skal vedligeholdes ét sted.
 KATEGORI_PER_POSITION = {
     eng_pos: byg_kategori_visning(spq_pos)
     for eng_pos, spq_pos in POSITION_TO_SPQ.items()
 }
-# "Fremadrettede pasninger" er koordinat-baseret (ikke type/qualifier-baseret
-# som resten af spiller_qualifiers), så den tilføjes manuelt til de
-# udspillende positioner i stedet for at ligge i ACTION_CATEGORIES.
+
 for _eng_pos in ("Defender", "Midfielder", "Attacker"):
     KATEGORI_PER_POSITION[_eng_pos]["offensiv"].append(("FREMADRETTEDE PASNINGER", "fremadrettede_pasninger"))
 
@@ -205,11 +189,6 @@ COMP_MAP = {
 }
 LIGA_IDS = "('2mb332vncy4450vu14paj8844', 'e5p78j2r7v8h3u9s5k0l2m4n6', 'f6q89k3s8w9i4v0t6l1m3n5o7', '335', '328', '329', '43319', '331')"
 
-
-# ---------------------------------------------------------------------------
-# Modul-niveau hjælpefunktioner (bruges både i den cachede databehandling
-# og i kamp-fanen, så de kun er defineret ét sted)
-# ---------------------------------------------------------------------------
 def _get_quals(r):
     ql = r.get('qual_list', [])
     if isinstance(ql, list):
@@ -287,14 +266,6 @@ def _forbered_events(df: pd.DataFrame) -> pd.DataFrame:
     df['Pasninger_Succes'] = ((df['event_typeid'] == 1) & (df['outcome'] == 1)).astype(int)
     return df
 
-
-# ---------------------------------------------------------------------------
-# CACHEDE DATAFUNKTIONER
-# Den tunge databehandling (SQL-kald, groupby'er, kategoriberigelse) laves
-# kun når holdet/data reelt ændrer sig - ikke ved hver widget-interaktion
-# (fane-skift, spillervalg, segmenteret kontrol osv.).
-# NB: parametre der starter med "_" (fx _conn) hashes ikke af Streamlit.
-# ---------------------------------------------------------------------------
 @st.cache_data(ttl=600, show_spinner="Indlæser spillerliste...")
 def hent_navne_map() -> dict:
     try:
@@ -347,18 +318,11 @@ def byg_spiller_og_holdstats(_conn, valgt_uuid_hold: str, navne_map: dict):
         tom = pd.DataFrame()
         return tom, tom, tom, tom, tom
 
-    # Minutter/xG/xA kommer fra OPTA_MATCHEXPECTEDGOALS (df_expected), som er
-    # én række pr. spiller PR. KAMP - summeres derfor til sæson-totaler.
-    # expected_liga = alle kampe/hold (bruges til liga-sammenligningsgruppen)
-    # expected_hold = kun kampe spillet for det VALGTE hold (undgår at
-    # minutter/xG blandes sammen hvis en spiller har skiftet klub i sæsonen)
     expected_liga = _agger_expected(df_expected)
     expected_hold = _agger_expected(df_expected, hold_optauuid=valgt_uuid_hold)
 
-    # --- Hele ligaen (til sammenligningsgruppen) ---
     df_liga_total = _forbered_events(df_all_raw)
 
-    # --- Kun det valgte hold ---
     if 'hold_optauuid' in df_all_raw.columns:
         df_all = df_all_raw[df_all_raw['hold_optauuid'] == valgt_uuid_hold].copy()
     else:
@@ -372,7 +336,6 @@ def byg_spiller_og_holdstats(_conn, valgt_uuid_hold: str, navne_map: dict):
     })
     df_all['Action_Label'] = df_all_temp.apply(get_action_label, axis=1)
 
-    # --- Liga-stats (sammenligningsgruppe) ---
     event_stats_liga = _byg_event_stats(df_liga_total)
     truppen_stats_liga = event_stats_liga.copy()
     truppen_stats_liga['Minutter'] = expected_liga['minutes'].reindex(truppen_stats_liga.index, fill_value=0).round(0).astype('Int64')
@@ -385,7 +348,6 @@ def byg_spiller_og_holdstats(_conn, valgt_uuid_hold: str, navne_map: dict):
     truppen_stats_liga = tilfoej_kategori_kolonner(truppen_stats_liga, df_liga_total, ALLE_SPQ_KATEGORIER)
     truppen_stats_liga = tilfoej_fremadrettede_pasninger(truppen_stats_liga, df_liga_total)
 
-    # --- Holdets stats ---
     if df_all.empty:
         truppen_stats = pd.DataFrame()
     else:
@@ -504,7 +466,6 @@ def vis_side(dp=None):
         navn = r['visningsnavn']
         uuid = r['player_optauuid']
         
-        # Hent position på engelsk og map til dansk, fanger også ukendte
         eng_pos = POSITION_MAP.get(str(uuid).strip(), 'Ukendt')
         da_pos = POSITION_DA.get(eng_pos, eng_pos)
         
@@ -660,8 +621,6 @@ def vis_side(dp=None):
      
                 truppen_stats_kamp_raw = event_stats_kamp.copy()
 
-                # xG/xA/Minutter for DENNE kamp: df_expected filtreres på
-                # match_optauuid (samme identifikator som events-tabellen).
                 expected_agg_kamp = pd.DataFrame(columns=['xg', 'xa', 'minutes'])
                 if df_expected is not None and not df_expected.empty and 'match_optauuid' in df_expected.columns:
                     df_expected_kamp = df_expected[df_expected['match_optauuid'].astype(str) == str(valgt_kamp_uuid)]
@@ -802,9 +761,7 @@ def vis_side(dp=None):
                 st.caption(f"Sammenlignet med alle {gruppe_navn} i ligaen.")
 
             with main_col_right:
-                # Kategorierne kommer fra spiller_qualifiers.POSITION_ACTIONS,
-                # vist som to adskilte grupper (offensivt/defensivt) - præcis
-                # som defineret i POSITION_ACTIONS, uden at klippe noget af.
+
                 kat_dict = KATEGORI_PER_POSITION.get(spiller_position, DEFAULT_KAT_LISTE)
 
                 for side_label, side_key in (("Offensivt", "offensiv"), ("Defensivt", "defensiv")):
