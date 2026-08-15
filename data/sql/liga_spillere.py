@@ -47,9 +47,11 @@ def hent_match_og_haendelsesdata(conn, db_navn, valgt_uuid_hold, liga_ids, navne
         df_all['visningsnavn'] = df_all.apply(lambda r: navne_map.get(str(r['player_optauuid']), r['visningsnavn']), axis=1)
 
     # 2. Expected goals (xG/xA) for hele ligaen
+    # NB: bruger MATCH_OPTAUUID (samme identifikator som events-tabellen),
+    # IKKE MATCH_ID - de to er ikke det samme format/værdi i denne tabel.
     sql_expected = f"""
         SELECT 
-            MATCH_ID,
+            MATCH_OPTAUUID,
             PLAYER_OPTAUUID,
             CONTESTANT_OPTAUUID as HOLD_OPTAUUID,
             MAX(CASE WHEN STAT_TYPE = 'expectedGoals' THEN STAT_VALUE ELSE 0 END) AS xg,
@@ -58,7 +60,7 @@ def hent_match_og_haendelsesdata(conn, db_navn, valgt_uuid_hold, liga_ids, navne
         FROM {db_navn}.OPTA_MATCHEXPECTEDGOALS
         WHERE TOURNAMENTCALENDAR_OPTAUUID IN {liga_ids}
           AND MATCH_STATUS = 'Played'
-        GROUP BY MATCH_ID, PLAYER_OPTAUUID, CONTESTANT_OPTAUUID
+        GROUP BY MATCH_OPTAUUID, PLAYER_OPTAUUID, CONTESTANT_OPTAUUID
     """
     df_expected = conn.query(sql_expected)
     if df_expected is not None:
