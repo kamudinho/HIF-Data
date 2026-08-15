@@ -345,7 +345,7 @@ def byg_spiller_og_holdstats(_conn, valgt_uuid_hold: str, navne_map: dict):
         df_all_raw = pd.DataFrame()
     if df_all_raw.empty:
         tom = pd.DataFrame()
-        return tom, tom, tom, tom
+        return tom, tom, tom, tom, tom
 
     # Minutter/xG/xA kommer fra OPTA_MATCHEXPECTEDGOALS (df_expected), som er
     # én række pr. spiller PR. KAMP - summeres derfor til sæson-totaler.
@@ -404,7 +404,15 @@ def byg_spiller_og_holdstats(_conn, valgt_uuid_hold: str, navne_map: dict):
         truppen_stats = tilfoej_kategori_kolonner(truppen_stats, df_all, ALLE_SPQ_KATEGORIER)
         truppen_stats = tilfoej_fremadrettede_pasninger(truppen_stats, df_all)
 
-    return df_all, df_liga_total, truppen_stats, truppen_stats_liga
+    if df_expected is None:
+        df_expected = pd.DataFrame()
+    elif not df_expected.empty:
+        df_expected = df_expected.copy()
+        for col in ('xg', 'xa', 'minutes'):
+            if col in df_expected.columns:
+                df_expected[col] = pd.to_numeric(df_expected[col], errors='coerce').fillna(0)
+
+    return df_all, df_liga_total, truppen_stats, truppen_stats_liga, df_expected
 
 
 def create_relative_donut(player_val, max_val, label, rank_text, color="#df003b"):
@@ -483,7 +491,7 @@ def vis_side(dp=None):
     primær_farve = get_team_color(valgt_hold, "primary", "#df003b")
 
     with st.spinner("Henter spillere..."):
-        df_all, df_liga_total, truppen_stats, truppen_stats_liga = byg_spiller_og_holdstats(conn, valgt_uuid_hold, navne_map)
+        df_all, df_liga_total, truppen_stats, truppen_stats_liga, df_expected = byg_spiller_og_holdstats(conn, valgt_uuid_hold, navne_map)
 
     if df_all.empty:
         st.warning("Ingen hændelsesdata fundet.")
@@ -651,9 +659,23 @@ def vis_side(dp=None):
                 event_stats_kamp = _byg_event_stats(df_kamp_events)
      
                 truppen_stats_kamp_raw = event_stats_kamp.copy()
-                truppen_stats_kamp_raw['Minutter'] = 0  # TODO: se note i byg_spiller_og_holdstats
-                truppen_stats_kamp_raw['xG'] = 0.0
-                truppen_stats_kamp_raw['xA'] = 0.0
+
+                # xG/xA/Minutter for DENNE kamp: df_expected filtreres på
+                # match_optauuid (samme identifikator som events-tabellen).
+                expected_agg_kamp = pd.DataFrame(columns=['xg', 'xa', 'minutes'])
+                if df_expected is not None and not df_expected.empty and 'match_optauuid' in df_expected.columns:
+                    df_expected_kamp = df_expected[df_expected['match_optauuid'].astype(str) == str(valgt_kamp_uuid)]
+                    if not df_expected_kamp.empty:
+                        expected_agg_kamp = df_expected_kamp.groupby('player_optauuid')[['xg', 'xa', 'minutes']].sum()
+
+                if not expected_agg_kamp.empty:
+                    truppen_stats_kamp_raw['Minutter'] = expected_agg_kamp['minutes'].reindex(truppen_stats_kamp_raw.index, fill_value=0).round(0).astype('Int64')
+                    truppen_stats_kamp_raw['xG'] = expected_agg_kamp['xg'].reindex(truppen_stats_kamp_raw.index, fill_value=0).round(2)
+                    truppen_stats_kamp_raw['xA'] = expected_agg_kamp['xa'].reindex(truppen_stats_kamp_raw.index, fill_value=0).round(2)
+                else:
+                    truppen_stats_kamp_raw['Minutter'] = 0
+                    truppen_stats_kamp_raw['xG'] = 0.0
+                    truppen_stats_kamp_raw['xA'] = 0.0
      
                 truppen_stats_kamp_raw['Mål'] = df_kamp_events[df_kamp_events['event_typeid'] == 16].groupby('player_optauuid').size().reindex(truppen_stats_kamp_raw.index, fill_value=0).astype('Int64')
                 truppen_stats_kamp_raw['Assists'] = df_kamp_events.apply(lambda r: 1 if is_assist(r.get('event_typeid'), r.get('qual_list', [])) else 0, axis=1).groupby(df_kamp_events['player_optauuid']).sum().reindex(truppen_stats_kamp_raw.index, fill_value=0).astype('Int64')
