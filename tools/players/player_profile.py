@@ -15,11 +15,7 @@ from data.utils.team_mapping import TEAMS, TEAM_COLORS
 from data.utils.mapping import OPTA_EVENT_TYPES, OPTA_QUALIFIERS, get_action_label, is_assist, har_qualifier
 
 # --- SPILLER-KATEGORIER (position -> aktionskategorier, offensiv/defensiv) ---
-from data.utils.spiller_qualifiers import (
-    ACTION_CATEGORIES,
-    POSITION_ACTIONS,
-    get_categories_for_position,
-)
+from data.utils.spiller_qualifiers import ACTION_CATEGORIES, POSITION_ACTIONS
  
 # --- GENERELLE UI-HJÆLPERE ---
 from utils.helpers import get_logo_img, get_team_color, get_ordinal, draw_player_info_box
@@ -69,62 +65,22 @@ POSITION_TO_SPQ = {
     "Attacker": "FWD",
 }
 
-# Antal statistik-"hjul" der maksimalt vises pr. spillerprofil
-MAKS_KATEGORIER_PR_POSITION = 8
-
 # Aktionskategorier hvor typeId alene IKKE er nok til at identificere
 # kategorien entydigt (typeId'et deles med en bredere kategori, fx
 # "pasninger"). Her kræves derfor også match på mindst én qualifier_id.
+# NB: "maal" er bevidst UDELADT - typeId 16 er i sig selv entydigt for et
+# mål, og qualifierId 210 (assist) sidder på PASNINGEN, ikke på selve
+# mål-hændelsen, så et qualifier-krav ville fejlagtigt fravælge almindelige
+# mål uden assist-markør.
 KATEGORIER_DER_KRAEVER_QUALIFIER = {
     "indlaeg",
     "afgoerende_pasninger",
     "keeper_distribution",
     "corner_frispark",
-    "maal",
     "blokeringer",
 }
 
-
-def _hent_qualifiers(row) -> set:
-    """Normaliserer en rækkes qualifier-liste til et sæt af strenge (qualifierId'er)."""
-    ql = row.get('qual_list', [])
-    if isinstance(ql, list):
-        return {str(q).strip() for q in ql if str(q).strip()}
-    return {str(q).strip() for q in str(ql).split(',') if str(q).strip()}
-
-
-def _match_kategori(row, category_key: str) -> bool:
-    """Afgør om en enkelt hændelse (row) hører til en given ACTION_CATEGORIES-kategori."""
-    cat = ACTION_CATEGORIES[category_key]
-    if row['event_typeid'] not in cat['type_ids']:
-        return False
-    if category_key in KATEGORIER_DER_KRAEVER_QUALIFIER and cat['qualifier_ids']:
-        quals = _hent_qualifiers(row)
-        return any(str(q) in quals for q in cat['qualifier_ids'])
-    return True
-
-
-def tilfoej_kategori_kolonner(df_stats: pd.DataFrame, df_events: pd.DataFrame, category_keys) -> pd.DataFrame:
-    """
-    Beriger en stats-dataframe (indekseret på player_optauuid) med én kolonne
-    pr. aktionskategori fra spiller_qualifiers.ACTION_CATEGORIES.
-    Kolonnenavnet = kategori-nøglen (fx "pasninger", "tacklinger").
-    """
-    if df_events is None or df_events.empty:
-        for key in category_keys:
-            df_stats[key] = 0
-        return df_stats
-
-    for key in category_keys:
-        mask = df_events.apply(lambda r: _match_kategori(r, key), axis=1)
-        counts = df_events[mask].groupby('player_optauuid').size()
-        df_stats[key] = counts.reindex(df_stats.index, fill_value=0).astype('Int64')
-    return df_stats
-
-
 # Samlet liste af alle kategori-nøgler, der bruges på tværs af positionerne
-# (bruges til at berige stats-dataframes én gang, uafhængigt af hvilken
-# spiller der er valgt).
 ALLE_SPQ_KATEGORIER = sorted({
     key
     for pos_dict in POSITION_ACTIONS.values()
@@ -132,33 +88,96 @@ ALLE_SPQ_KATEGORIER = sorted({
     for key in side_liste
 })
 
-def get_profile_metrics_for_player(position: str):
-    # Henter relevante offensive og defensive kategorier for positionen
-    offensive_cats = get_categories_for_position(position, side="offensiv")
-    defensive_cats = get_categories_for_position(position, side="defensiv")
 
+def tilfoej_kategori_kolonner(df_stats: pd.DataFrame, df_events: pd.DataFrame, category_keys) -> pd.DataFrame:
+    """
+    Beriger en stats-dataframe (indekseret på player_optauuid) med én kolonne
+    pr. aktionskategori fra spiller_qualifiers.ACTION_CATEGORIES.
+
+    Vektoriseret af hensyn til performance: qual_set beregnes kun ÉN gang
+    for hele df_events (ikke pr. kategori), og radvis .apply() bruges kun
+    for de få kategorier der kræver qualifier-match - og kun på den
+    allerede type_id-filtrerede delmængde, ikke på hele datasættet.
+    """
+    if df_events is None or df_events.empty:
+        for key in category_keys:
+            df_stats[key] = 0
+        return df_stats
+
+    if 'qual_set' not in df_events.columns:
+        df_events = df_events.copy()
+        df_events['qual_set'] = df_events['qual_list'].apply(
+            lambda ql: frozenset(str(q).strip() for q in ql) if isinstance(ql, list)
+            else frozenset(str(q).strip() for q in str(ql).split(','))
+        )
+
+    for key in category_keys:
+        cat = ACTION_CATEGORIES[key]
+        type_mask = df_events['event_typeid'].isin(cat['type_ids'])
+
+        if key in KATEGORIER_DER_KRAEVER_QUALIFIER and cat['qualifier_ids']:
+            qual_ids = {str(q) for q in cat['qualifier_ids']}
+            delmaengde = df_events.loc[type_mask, 'qual_set']
+            qual_match = delmaengde.apply(lambda s: not qual_ids.isdisjoint(s))
+            final_mask = pd.Series(False, index=df_events.index)
+            final_mask.loc[qual_match.index] = qual_match
+        else:
+            final_mask = type_mask
+
+        counts = df_events[final_mask].groupby('player_optauuid').size()
+        df_stats[key] = counts.reindex(df_stats.index, fill_value=0).astype('Int64')
+
+    return df_stats
+
+
+def tilfoej_fremadrettede_pasninger(df_stats: pd.DataFrame, df_events: pd.DataFrame) -> pd.DataFrame:
+    """
+    Tæller fremadrettede pasninger - en pasning der flytter bolden fremad
+    (end_x > event_x), samme definition som "Offensive pasninger"-visningen
+    i Spilleraktioner-fanen. Kræver slutkoordinater (end_x/end_y) i data;
+    findes de ikke, sættes kolonnen til 0 for alle spillere.
+    """
+    if df_events is None or df_events.empty or 'end_x' not in df_events.columns:
+        df_stats['fremadrettede_pasninger'] = 0
+        return df_stats
+
+    mask = (
+        (df_events['event_typeid'] == 1)
+        & df_events['end_x'].notna()
+        & (df_events['end_x'] > df_events['event_x'])
+    )
+    counts = df_events[mask].groupby('player_optauuid').size()
+    df_stats['fremadrettede_pasninger'] = counts.reindex(df_stats.index, fill_value=0).astype('Int64')
+    return df_stats
+
+
+def byg_kategori_visning(spq_position: str) -> dict:
+    """
+    Returnerer {"offensiv": [(LABEL, kategori_nøgle), ...], "defensiv": [...]}
+    for en given spiller_qualifiers-position (GK/DEF/MID/FWD) - direkte
+    afspejling af POSITION_ACTIONS, uden at klippe kategorier af.
+    """
     return {
-        "offensiv": offensive_cats,
-        "defensiv": defensive_cats
+        side: [(ACTION_CATEGORIES[k]["navn"].upper(), k) for k in POSITION_ACTIONS[spq_position][side]]
+        for side in ("offensiv", "defensiv")
     }
-
-def byg_kategori_visning(spq_position: str):
-    """
-    Returnerer en liste af (LABEL, kategori_nøgle) for en given spiller_qualifiers-
-    position (GK/DEF/MID/FWD) - klar til brug i "hjul"-visningen på Spillerprofil.
-    """
-    keys = get_categories_for_position(spq_position)[:MAKS_KATEGORIER_PR_POSITION]
-    return [(ACTION_CATEGORIES[k]["navn"].upper(), k) for k in keys]
 
 
 # Statistik-kategorier vist i "hjul"-grafikkerne på Spillerprofil-fanen.
-# Bygges dynamisk ud fra spiller_qualifiers.POSITION_ACTIONS, så kategorierne
-# altid følger den centrale mapping og ikke skal vedligeholdes to steder.
+# Bygges dynamisk ud fra spiller_qualifiers.POSITION_ACTIONS, opdelt i
+# offensivt/defensivt, så mapping'en kun skal vedligeholdes ét sted.
 KATEGORI_PER_POSITION = {
     eng_pos: byg_kategori_visning(spq_pos)
     for eng_pos, spq_pos in POSITION_TO_SPQ.items()
 }
+# "Fremadrettede pasninger" er koordinat-baseret (ikke type/qualifier-baseret
+# som resten af spiller_qualifiers), så den tilføjes manuelt til de
+# udspillende positioner i stedet for at ligge i ACTION_CATEGORIES.
+for _eng_pos in ("Defender", "Midfielder", "Attacker"):
+    KATEGORI_PER_POSITION[_eng_pos]["offensiv"].append(("FREMADRETTEDE PASNINGER", "fremadrettede_pasninger"))
+
 DEFAULT_KAT_LISTE = byg_kategori_visning("MID")
+DEFAULT_KAT_LISTE["offensiv"].append(("FREMADRETTEDE PASNINGER", "fremadrettede_pasninger"))
 
 HIDDEN_VIEWS_PER_POSITION = {
     "Goalkeeper": ["Afslutninger", "Offensive pasninger"],
@@ -185,7 +204,209 @@ COMP_MAP = {
     1305: "U19 Ligaen" 
 }
 LIGA_IDS = "('2mb332vncy4450vu14paj8844', 'e5p78j2r7v8h3u9s5k0l2m4n6', 'f6q89k3s8w9i4v0t6l1m3n5o7', '335', '328', '329', '43319', '331')"
- 
+
+
+# ---------------------------------------------------------------------------
+# Modul-niveau hjælpefunktioner (bruges både i den cachede databehandling
+# og i kamp-fanen, så de kun er defineret ét sted)
+# ---------------------------------------------------------------------------
+def _get_quals(r):
+    ql = r.get('qual_list', [])
+    if isinstance(ql, list):
+        return [str(q).strip() for q in ql]
+    return [str(q).strip() for q in str(ql).split(',')]
+
+
+def count_kamp_qual(df_group, eid, qids):
+    return df_group.apply(lambda r: har_qualifier(r['event_typeid'], r.get('qual_list', []), eid, qids), axis=1).sum()
+
+
+def _byg_event_stats(df_events: pd.DataFrame) -> pd.DataFrame:
+    """Fælles groupby-beregning for spiller-stats, brugt til både liga og hold."""
+    return df_events.groupby(['player_optauuid', 'visningsnavn']).apply(lambda x: pd.Series({
+        'Kampe': x['match_optauuid'].nunique() if 'match_optauuid' in x.columns else 1,
+        'Aktioner': len(x),
+        'Gule_kort': count_kamp_qual(x, 17, 31),
+        'Roede_kort': count_kamp_qual(x, 17, 33),
+        'Indskiftet': (x['event_typeid'] == 19).sum(),
+        'Udskiftet': (x['event_typeid'] == 18).sum(),
+        'Pasninger': x['Pasninger_Total'].sum() if 'Pasninger_Total' in x.columns else 0,
+        'Pasninger_Succes': x['Pasninger_Succes'].sum() if 'Pasninger_Succes' in x.columns else 0,
+        'Stikninger': count_kamp_qual(x, 1, 4),
+        'Indlæg': count_kamp_qual(x, 1, [2, 155]),
+        'Afslutninger': x['event_typeid'].isin([13, 14, 15, 16]).sum(),
+        'Erobringer': x['event_typeid'].isin([7, 8, 12, 49]).sum(),
+        'Driblinger': (x['event_typeid'] == 3).sum(),
+        'Driblinger_Succes': x.apply(lambda r: 1 if str(r['event_typeid']) == "3" and "211" not in _get_quals(r) else 0, axis=1).sum(),
+        'Gennembrud_Overtake': x.apply(lambda r: 1 if str(r['event_typeid']) == "3" and "465" in _get_quals(r) else 0, axis=1).sum(),
+        'Rum_Driblinger_Space': x.apply(lambda r: 1 if str(r['event_typeid']) == "3" and "464" in _get_quals(r) else 0, axis=1).sum(),
+        'Offensive_Dueller': x.apply(lambda r: 1 if "286" in _get_quals(r) else 0, axis=1).sum(),
+        'Defensive_Dueller': x.apply(lambda r: 1 if "285" in _get_quals(r) else 0, axis=1).sum(),
+        'Defensive_1v1_Stoppet': x.apply(lambda r: 1 if "467" in _get_quals(r) else 0, axis=1).sum(),
+        'Chancer_skabt': x.apply(lambda r: 1 if '210' in _get_quals(r) else 0, axis=1).sum(),
+        'Key_Passes': x.apply(lambda r: 1 if '210' in _get_quals(r) else 0, axis=1).sum(),
+        'Tacklinger': (x['event_typeid'] == 7).sum(),
+        'Clearinger': (x['event_typeid'] == 12).sum(),
+        'Blokeringer': (x['event_typeid'] == 55).sum(),
+        'Interceptioner': (x['event_typeid'] == 5).sum(),
+        'Frispark_imod': (x['event_typeid'] == 4).sum()
+    })).reset_index().drop_duplicates(subset=['player_optauuid']).set_index('player_optauuid')
+
+
+def _agger_expected(df_expected: pd.DataFrame, hold_optauuid: str = None) -> pd.DataFrame:
+    """
+    Aggregerer df_expected (xG/xA/minutter - én række pr. spiller PR. KAMP)
+    til sæson-totaler pr. spiller. Sæt hold_optauuid for kun at summere
+    kampe spillet for det pågældende hold (bruges til holdets egne spillere,
+    så evt. klubskifte midt i sæsonen ikke blander minutter/xG sammen).
+    """
+    if df_expected is None or df_expected.empty:
+        return pd.DataFrame(columns=['xg', 'xa', 'minutes'])
+
+    df = df_expected.copy()
+    if hold_optauuid is not None and 'hold_optauuid' in df.columns:
+        df = df[df['hold_optauuid'] == hold_optauuid]
+
+    for col in ('xg', 'xa', 'minutes'):
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+        else:
+            df[col] = 0
+
+    if 'player_optauuid' not in df.columns or df.empty:
+        return pd.DataFrame(columns=['xg', 'xa', 'minutes'])
+
+    return df.groupby('player_optauuid')[['xg', 'xa', 'minutes']].sum()
+
+
+def _forbered_events(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.dropna(subset=['visningsnavn']).copy()
+    df['event_timestamp'] = pd.to_datetime(df['event_timestamp_str'])
+    df['qual_list'] = df['qualifiers'].fillna('').str.split(',')
+    df['Pasninger_Total'] = (df['event_typeid'] == 1).astype(int)
+    df['Pasninger_Succes'] = ((df['event_typeid'] == 1) & (df['outcome'] == 1)).astype(int)
+    return df
+
+
+# ---------------------------------------------------------------------------
+# CACHEDE DATAFUNKTIONER
+# Den tunge databehandling (SQL-kald, groupby'er, kategoriberigelse) laves
+# kun når holdet/data reelt ændrer sig - ikke ved hver widget-interaktion
+# (fane-skift, spillervalg, segmenteret kontrol osv.).
+# NB: parametre der starter med "_" (fx _conn) hashes ikke af Streamlit.
+# ---------------------------------------------------------------------------
+@st.cache_data(ttl=600, show_spinner="Indlæser spillerliste...")
+def hent_navne_map() -> dict:
+    try:
+        csv_path = os.path.join(os.getcwd(), 'data', 'players', '1div_overskrivning.csv')
+        df_csv = pd.read_csv(csv_path)
+        return dict(zip(df_csv['PLAYER_OPTAUUID'].astype(str), df_csv['NAVN']))
+    except Exception:
+        return {}
+
+
+@st.cache_data(ttl=1800, show_spinner=False)
+def hent_holdliste(_conn) -> dict:
+    df_teams_raw = _conn.query(
+        f"SELECT DISTINCT CONTESTANTHOME_NAME, CONTESTANTHOME_OPTAUUID "
+        f"FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS}"
+    )
+    if df_teams_raw is not None:
+        df_teams_raw.columns = df_teams_raw.columns.str.lower()
+    else:
+        df_teams_raw = pd.DataFrame()
+
+    mapping_lookup = {
+        str(info['opta_uuid']).lower().replace('t', ''): name
+        for name, info in TEAMS.items() if 'opta_uuid' in info
+    }
+
+    team_map = {}
+    if not df_teams_raw.empty:
+        for _, r in df_teams_raw.iterrows():
+            uuid_clean = str(r['contestanthome_optauuid']).lower().replace('t', '')
+            if uuid_clean in mapping_lookup:
+                team_map[mapping_lookup[uuid_clean]] = r['contestanthome_optauuid']
+    return team_map
+
+
+@st.cache_data(ttl=300, show_spinner="Behandler spiller- og holddata...")
+def byg_spiller_og_holdstats(_conn, valgt_uuid_hold: str, navne_map: dict):
+    """
+    Henter og forbereder ALT det tunge: rå hændelsesdata, liga-hele-datasæt,
+    spiller-stats (hold og liga) samt kategori-kolonner fra spiller_qualifiers.
+    Cachet pr. (valgt_uuid_hold, navne_map) - genberegnes IKKE ved almindelig
+    UI-interaktion.
+    """
+    df_all_raw, df_expected, df_db_stats = hent_match_og_haendelsesdata(
+        _conn, DB, valgt_uuid_hold, LIGA_IDS, navne_map
+    )
+    if df_all_raw is None:
+        df_all_raw = pd.DataFrame()
+    if df_all_raw.empty:
+        tom = pd.DataFrame()
+        return tom, tom, tom, tom
+
+    # Minutter/xG/xA kommer fra OPTA_MATCHEXPECTEDGOALS (df_expected), som er
+    # én række pr. spiller PR. KAMP - summeres derfor til sæson-totaler.
+    # expected_liga = alle kampe/hold (bruges til liga-sammenligningsgruppen)
+    # expected_hold = kun kampe spillet for det VALGTE hold (undgår at
+    # minutter/xG blandes sammen hvis en spiller har skiftet klub i sæsonen)
+    expected_liga = _agger_expected(df_expected)
+    expected_hold = _agger_expected(df_expected, hold_optauuid=valgt_uuid_hold)
+
+    # --- Hele ligaen (til sammenligningsgruppen) ---
+    df_liga_total = _forbered_events(df_all_raw)
+
+    # --- Kun det valgte hold ---
+    if 'hold_optauuid' in df_all_raw.columns:
+        df_all = df_all_raw[df_all_raw['hold_optauuid'] == valgt_uuid_hold].copy()
+    else:
+        df_all = df_all_raw.copy()
+    df_all = _forbered_events(df_all)
+
+    df_all_temp = df_all.rename(columns={
+        'event_x': 'EVENT_X', 'event_y': 'EVENT_Y', 'event_typeid': 'EVENT_TYPEID',
+        'visningsnavn': 'VISNINGSNAVN', 'player_optauuid': 'PLAYER_OPTAUUID',
+        'outcome': 'OUTCOME', 'qualifiers': 'QUALIFIERS'
+    })
+    df_all['Action_Label'] = df_all_temp.apply(get_action_label, axis=1)
+
+    # --- Liga-stats (sammenligningsgruppe) ---
+    event_stats_liga = _byg_event_stats(df_liga_total)
+    truppen_stats_liga = event_stats_liga.copy()
+    truppen_stats_liga['Minutter'] = expected_liga['minutes'].reindex(truppen_stats_liga.index, fill_value=0).round(0).astype('Int64')
+    truppen_stats_liga['xG'] = expected_liga['xg'].reindex(truppen_stats_liga.index, fill_value=0).round(2)
+    truppen_stats_liga['xA'] = expected_liga['xa'].reindex(truppen_stats_liga.index, fill_value=0).round(2)
+    truppen_stats_liga['Mål'] = df_liga_total[df_liga_total['event_typeid'] == 16].groupby('player_optauuid').size().reindex(truppen_stats_liga.index, fill_value=0).astype('Int64')
+    truppen_stats_liga['Assists'] = df_liga_total.apply(lambda r: 1 if is_assist(r.get('event_typeid'), r.get('qual_list', [])) else 0, axis=1).groupby(df_liga_total['player_optauuid']).sum().reindex(truppen_stats_liga.index, fill_value=0).astype('Int64')
+    truppen_stats_liga['Pasningsprocent'] = ((truppen_stats_liga['Pasninger_Succes'] / truppen_stats_liga['Pasninger']) * 100).where(truppen_stats_liga['Pasninger'] > 0, 0).round(1)
+    truppen_stats_liga['Position'] = truppen_stats_liga.index.to_series().apply(lambda u: POSITION_MAP.get(str(u).strip(), 'Ukendt'))
+    truppen_stats_liga = tilfoej_kategori_kolonner(truppen_stats_liga, df_liga_total, ALLE_SPQ_KATEGORIER)
+    truppen_stats_liga = tilfoej_fremadrettede_pasninger(truppen_stats_liga, df_liga_total)
+
+    # --- Holdets stats ---
+    if df_all.empty:
+        truppen_stats = pd.DataFrame()
+    else:
+        event_stats_hold = _byg_event_stats(df_all)
+        truppen_stats = event_stats_hold.copy()
+        truppen_stats['Minutter'] = expected_hold['minutes'].reindex(truppen_stats.index, fill_value=0).round(0).astype('Int64')
+        truppen_stats['xG'] = expected_hold['xg'].reindex(truppen_stats.index, fill_value=0).round(2)
+        truppen_stats['xA'] = expected_hold['xa'].reindex(truppen_stats.index, fill_value=0).round(2)
+        truppen_stats['Mål'] = df_all[df_all['event_typeid'] == 16].groupby('player_optauuid').size().reindex(truppen_stats.index, fill_value=0).astype('Int64')
+        truppen_stats['Assists'] = df_all.apply(lambda r: 1 if is_assist(r.get('event_typeid'), r.get('qual_list', [])) else 0, axis=1).groupby(df_all['player_optauuid']).sum().reindex(truppen_stats.index, fill_value=0).astype('Int64')
+        truppen_stats['Pasningsprocent'] = ((truppen_stats['Pasninger_Succes'] / truppen_stats['Pasninger']) * 100).where(truppen_stats['Pasninger'] > 0, 0).round(1)
+        truppen_stats['Position'] = truppen_stats.index.to_series().apply(lambda u: POSITION_MAP.get(str(u).strip(), 'Ukendt'))
+        for col in ['Kampe', 'Aktioner', 'Gule_kort', 'Roede_kort', 'Indskiftet', 'Udskiftet', 'Pasninger', 'Pasninger_Succes']:
+            if col in truppen_stats.columns:
+                truppen_stats[col] = truppen_stats[col].fillna(0).astype('Int64')
+        truppen_stats = tilfoej_kategori_kolonner(truppen_stats, df_all, ALLE_SPQ_KATEGORIER)
+        truppen_stats = tilfoej_fremadrettede_pasninger(truppen_stats, df_all)
+
+    return df_all, df_liga_total, truppen_stats, truppen_stats_liga
+
+
 def create_relative_donut(player_val, max_val, label, rank_text, color="#df003b"):
     base_max = max(max_val, player_val, 1)
     reminder = base_max - player_val
@@ -230,12 +451,7 @@ def get_physical_data(player_name, player_opta_uuid, valgt_hold_navn, db_conn):
     return pd.DataFrame()
  
 def vis_side(dp=None):
-    try:
-        csv_path = os.path.join(os.getcwd(), 'data', 'players', '1div_overskrivning.csv')
-        df_csv = pd.read_csv(csv_path)
-        navne_map = dict(zip(df_csv['PLAYER_OPTAUUID'].astype(str), df_csv['NAVN']))
-    except Exception:
-        navne_map = {}
+    navne_map = hent_navne_map()
  
     st.markdown("""
         <style>
@@ -250,20 +466,7 @@ def vis_side(dp=None):
     if not conn: 
         return
 
-    df_teams_raw = conn.query(f"SELECT DISTINCT CONTESTANTHOME_NAME, CONTESTANTHOME_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS}")
-    if df_teams_raw is not None:
-        df_teams_raw.columns = df_teams_raw.columns.str.lower()
-    else:
-        df_teams_raw = pd.DataFrame()
-
-    mapping_lookup = {str(info['opta_uuid']).lower().replace('t', ''): name for name, info in TEAMS.items() if 'opta_uuid' in info}
-
-    team_map = {}
-    if not df_teams_raw.empty:
-        for _, r in df_teams_raw.iterrows():
-            uuid_clean = str(r['contestanthome_optauuid']).lower().replace('t','')
-            if uuid_clean in mapping_lookup:
-                team_map[mapping_lookup[uuid_clean]] = r['contestanthome_optauuid']
+    team_map = hent_holdliste(conn)
 
     col_spacer_top, col_h_hold, col_h_spiller = st.columns([2, 1.2, 1.2])
 
@@ -280,44 +483,11 @@ def vis_side(dp=None):
     primær_farve = get_team_color(valgt_hold, "primary", "#df003b")
 
     with st.spinner("Henter spillere..."):
-        df_all_raw, df_expected, df_db_stats = hent_match_og_haendelsesdata(
-            conn, DB, valgt_uuid_hold, LIGA_IDS, navne_map
-        )
+        df_all, df_liga_total, truppen_stats, truppen_stats_liga = byg_spiller_og_holdstats(conn, valgt_uuid_hold, navne_map)
 
-    if df_all_raw is None:
-        df_all_raw = pd.DataFrame()
-
-    if df_all_raw.empty:
+    if df_all.empty:
         st.warning("Ingen hændelsesdata fundet.")
         st.stop()
-
-    # Behold hele ligaen til sammenligning senere i koden
-    df_liga_total = df_all_raw.copy()
-    df_liga_total = df_liga_total.dropna(subset=['visningsnavn'])
-    df_liga_total['event_timestamp'] = pd.to_datetime(df_liga_total['event_timestamp_str'])
-    df_liga_total['qual_list'] = df_liga_total['qualifiers'].fillna('').str.split(',')
-    df_liga_total['Pasninger_Total'] = (df_liga_total['event_typeid'] == 1).astype(int)
-    df_liga_total['Pasninger_Succes'] = ((df_liga_total['event_typeid'] == 1) & (df_liga_total['outcome'] == 1)).astype(int)
-
-    # Filtrer kun til det valgte hold til dropdown og spillerdata
-    if 'hold_optauuid' in df_all_raw.columns:
-        df_all = df_all_raw[df_all_raw['hold_optauuid'] == valgt_uuid_hold].copy()
-    else:
-        df_all = df_all_raw.copy()
- 
-    df_all = df_all.dropna(subset=['visningsnavn'])
-    df_all['event_timestamp'] = pd.to_datetime(df_all['event_timestamp_str'])
-    df_all['qual_list'] = df_all['qualifiers'].fillna('').str.split(',')
- 
-    df_all['Pasninger_Total'] = (df_all['event_typeid'] == 1).astype(int)
-    df_all['Pasninger_Succes'] = ((df_all['event_typeid'] == 1) & (df_all['outcome'] == 1)).astype(int)
- 
-    df_all_temp = df_all.rename(columns={
-        'event_x': 'EVENT_X', 'event_y': 'EVENT_Y', 'event_typeid': 'EVENT_TYPEID',
-        'visningsnavn': 'VISNINGSNAVN', 'player_optauuid': 'PLAYER_OPTAUUID',
-        'outcome': 'OUTCOME', 'qualifiers': 'QUALIFIERS'
-    })
-    df_all['Action_Label'] = df_all_temp.apply(get_action_label, axis=1)
  
     df_spillere_unikke = df_all[['visningsnavn', 'player_optauuid']].drop_duplicates()
  
@@ -341,109 +511,6 @@ def vis_side(dp=None):
     df_spiller = df_all[df_all['player_optauuid'] == valgt_player_uuid].copy() if valgt_player_uuid else pd.DataFrame()
 
     spiller_position = POSITION_MAP.get(str(valgt_player_uuid).strip(), 'Ukendt') if valgt_player_uuid else 'Ukendt'
- 
-    def count_kamp_qual(df_group, eid, qids):
-        return df_group.apply(lambda r: har_qualifier(r['event_typeid'], r.get('qual_list', []), eid, qids), axis=1).sum()
- 
-    def _get_quals(r):
-        ql = r.get('qual_list', [])
-        if isinstance(ql, list):
-            return [str(q).strip() for q in ql]
-        return [str(q).strip() for q in str(ql).split(',')]
- 
-    # Beregn ligatrup-stats til sammenligning i profiler (hele ligaen)
-    event_stats_liga = df_liga_total.groupby(['player_optauuid', 'visningsnavn']).apply(lambda x: pd.Series({
-        'Kampe': x['match_optauuid'].nunique() if 'match_optauuid' in x.columns else 1,
-        'Aktioner': len(x),
-        'Gule_kort': count_kamp_qual(x, 17, 31),
-        'Roede_kort': count_kamp_qual(x, 17, 33),
-        'Indskiftet': (x['event_typeid'] == 19).sum(),
-        'Udskiftet': (x['event_typeid'] == 18).sum(),
-        'Pasninger': x['Pasninger_Total'].sum() if 'Pasninger_Total' in x.columns else 0,
-        'Pasninger_Succes': x['Pasninger_Succes'].sum() if 'Pasninger_Succes' in x.columns else 0,
-        'Stikninger': count_kamp_qual(x, 1, 4),
-        'Indlæg': count_kamp_qual(x, 1, [2, 155]),
-        'Afslutninger': x['event_typeid'].isin([13, 14, 15, 16]).sum(),
-        'Erobringer': x['event_typeid'].isin([7, 8, 12, 49]).sum(),
-        'Driblinger': (x['event_typeid'] == 3).sum(),
-        'Driblinger_Succes': x.apply(lambda r: 1 if str(r['event_typeid']) == "3" and "211" not in _get_quals(r) else 0, axis=1).sum(),
-        'Gennembrud_Overtake': x.apply(lambda r: 1 if str(r['event_typeid']) == "3" and "465" in _get_quals(r) else 0, axis=1).sum(),
-        'Rum_Driblinger_Space': x.apply(lambda r: 1 if str(r['event_typeid']) == "3" and "464" in _get_quals(r) else 0, axis=1).sum(),
-        'Offensive_Dueller': x.apply(lambda r: 1 if "286" in _get_quals(r) else 0, axis=1).sum(),
-        'Defensive_Dueller': x.apply(lambda r: 1 if "285" in _get_quals(r) else 0, axis=1).sum(),
-        'Defensive_1v1_Stoppet': x.apply(lambda r: 1 if "467" in _get_quals(r) else 0, axis=1).sum(),
-        'Chancer_skabt': x.apply(lambda r: 1 if '210' in _get_quals(r) else 0, axis=1).sum(),
-        'Key_Passes': x.apply(lambda r: 1 if '210' in _get_quals(r) else 0, axis=1).sum(),
-        'Tacklinger': (x['event_typeid'] == 7).sum(),
-        'Clearinger': (x['event_typeid'] == 12).sum(),
-        'Blokeringer': (x['event_typeid'] == 55).sum(),
-        'Interceptioner': (x['event_typeid'] == 5).sum(),
-        'Frispark_imod': (x['event_typeid'] == 4).sum()
-    })).reset_index().drop_duplicates(subset=['player_optauuid']).set_index('player_optauuid')
-
-    truppen_stats_liga = event_stats_liga.copy()
-    truppen_stats_liga['Minutter'] = 0  
-    truppen_stats_liga['xG'] = 0.0
-    truppen_stats_liga['xA'] = 0.0
-    truppen_stats_liga['Mål'] = df_liga_total[df_liga_total['event_typeid'] == 16].groupby('player_optauuid').size().reindex(truppen_stats_liga.index, fill_value=0).astype('Int64')
-    truppen_stats_liga['Assists'] = df_liga_total.apply(lambda r: 1 if is_assist(r.get('event_typeid'), r.get('qual_list', [])) else 0, axis=1).groupby(df_liga_total['player_optauuid']).sum().reindex(truppen_stats_liga.index, fill_value=0).astype('Int64')
-    truppen_stats_liga['Pasningsprocent'] = ((truppen_stats_liga['Pasninger_Succes'] / truppen_stats_liga['Pasninger']) * 100).where(truppen_stats_liga['Pasninger'] > 0, 0).round(1)
-    
-    truppen_stats_liga['Position'] = truppen_stats_liga.index.to_series().apply(
-        lambda u: POSITION_MAP.get(str(u).strip(), 'Ukendt')
-    )
-
-    # Berig liga-stats med kategorierne fra spiller_qualifiers (bruges til
-    # sammenligningsgruppen/rangeringen på Spillerprofil-fanen)
-    truppen_stats_liga = tilfoej_kategori_kolonner(truppen_stats_liga, df_liga_total, ALLE_SPQ_KATEGORIER)
-
-    # Beregn holdets trup-stats direkte
-    event_stats_hold = df_all.groupby(['player_optauuid', 'visningsnavn']).apply(lambda x: pd.Series({
-        'Kampe': x['match_optauuid'].nunique() if 'match_optauuid' in x.columns else 1,
-        'Aktioner': len(x),
-        'Gule_kort': count_kamp_qual(x, 17, 31),
-        'Roede_kort': count_kamp_qual(x, 17, 33),
-        'Indskiftet': (x['event_typeid'] == 19).sum(),
-        'Udskiftet': (x['event_typeid'] == 18).sum(),
-        'Pasninger': x['Pasninger_Total'].sum() if 'Pasninger_Total' in x.columns else 0,
-        'Pasninger_Succes': x['Pasninger_Succes'].sum() if 'Pasninger_Succes' in x.columns else 0,
-        'Stikninger': count_kamp_qual(x, 1, 4),
-        'Indlæg': count_kamp_qual(x, 1, [2, 155]),
-        'Afslutninger': x['event_typeid'].isin([13, 14, 15, 16]).sum(),
-        'Erobringer': x['event_typeid'].isin([7, 8, 12, 49]).sum(),
-        'Driblinger': (x['event_typeid'] == 3).sum(),
-        'Driblinger_Succes': x.apply(lambda r: 1 if str(r['event_typeid']) == "3" and "211" not in _get_quals(r) else 0, axis=1).sum(),
-        'Gennembrud_Overtake': x.apply(lambda r: 1 if str(r['event_typeid']) == "3" and "465" in _get_quals(r) else 0, axis=1).sum(),
-        'Rum_Driblinger_Space': x.apply(lambda r: 1 if str(r['event_typeid']) == "3" and "464" in _get_quals(r) else 0, axis=1).sum(),
-        'Offensive_Dueller': x.apply(lambda r: 1 if "286" in _get_quals(r) else 0, axis=1).sum(),
-        'Defensive_Dueller': x.apply(lambda r: 1 if "285" in _get_quals(r) else 0, axis=1).sum(),
-        'Defensive_1v1_Stoppet': x.apply(lambda r: 1 if "467" in _get_quals(r) else 0, axis=1).sum(),
-        'Chancer_skabt': x.apply(lambda r: 1 if '210' in _get_quals(r) else 0, axis=1).sum(),
-        'Key_Passes': x.apply(lambda r: 1 if '210' in _get_quals(r) else 0, axis=1).sum(),
-        'Tacklinger': (x['event_typeid'] == 7).sum(),
-        'Clearinger': (x['event_typeid'] == 12).sum(),
-        'Blokeringer': (x['event_typeid'] == 55).sum(),
-        'Interceptioner': (x['event_typeid'] == 5).sum(),
-        'Frispark_imod': (x['event_typeid'] == 4).sum()
-    })).reset_index().drop_duplicates(subset=['player_optauuid']).set_index('player_optauuid') if not df_all.empty else pd.DataFrame()
-
-    truppen_stats = event_stats_hold.copy() if not event_stats_hold.empty else pd.DataFrame()
-    if not truppen_stats.empty:
-        truppen_stats['Minutter'] = 0  
-        truppen_stats['xG'] = 0.0
-        truppen_stats['xA'] = 0.0
-        truppen_stats['Mål'] = df_all[df_all['event_typeid'] == 16].groupby('player_optauuid').size().reindex(truppen_stats.index, fill_value=0).astype('Int64')
-        truppen_stats['Assists'] = df_all.apply(lambda r: 1 if is_assist(r.get('event_typeid'), r.get('qual_list', [])) else 0, axis=1).groupby(df_all['player_optauuid']).sum().reindex(truppen_stats.index, fill_value=0).astype('Int64')
-        truppen_stats['Pasningsprocent'] = ((truppen_stats['Pasninger_Succes'] / truppen_stats['Pasninger']) * 100).where(truppen_stats['Pasninger'] > 0, 0).round(1)
-        truppen_stats['Position'] = truppen_stats.index.to_series().apply(
-            lambda u: POSITION_MAP.get(str(u).strip(), 'Ukendt')
-        )
-        for col in ['Kampe', 'Aktioner', 'Gule_kort', 'Roede_kort', 'Indskiftet', 'Udskiftet', 'Pasninger', 'Pasninger_Succes']:
-            if col in truppen_stats.columns:
-                truppen_stats[col] = truppen_stats[col].fillna(0).astype('Int64')
-
-        # Berig holdets stats med samme kategorier fra spiller_qualifiers
-        truppen_stats = tilfoej_kategori_kolonner(truppen_stats, df_all, ALLE_SPQ_KATEGORIER)
  
     t_team, t_matches, t_profile, t_pitch, t_phys = st.tabs(["Holdoversigt", "Kampoversigt", "Spillerprofil", "Spilleraktioner", "Fysisk data"])
  
@@ -472,7 +539,7 @@ def vis_side(dp=None):
         if not truppen_stats.empty:
             df_vis_truppen = truppen_stats.reset_index()
             gen_kolonner = ['visningsnavn', 'Kampe', 'Minutter', 'Aktioner', 'Pasninger', 'Pasningsprocent', 'Mål', 'Assists', 'Udskiftet', 'Indskiftet', 'Gule_kort', 'Roede_kort']
-            opb_kolonner = ['visningsnavn', 'Aktioner', 'Pasninger', 'Pasningsprocent', 'Key_Passes', 'Stikninger', 'Driblinger', 'Driblinger_Succes', 'Rum_Driblinger_Space']
+            opb_kolonner = ['visningsnavn', 'Aktioner', 'Pasninger', 'Pasningsprocent', 'Key_Passes', 'fremadrettede_pasninger', 'Stikninger', 'Driblinger', 'Driblinger_Succes', 'Rum_Driblinger_Space']
             off_kolonner = ['visningsnavn', 'Aktioner', 'Afslutninger', 'xG', 'Chancer_skabt', 'Indlæg', 'xA', 'Offensive_Dueller', 'Gennembrud_Overtake', 'Driblinger_Succes']
             def_kolonner = ['visningsnavn', 'Aktioner', 'Erobringer', 'Tacklinger', 'Clearinger', 'Blokeringer', 'Interceptioner', 'Defensive_Dueller', 'Defensive_1v1_Stoppet', 'Frispark_imod']
  
@@ -499,6 +566,7 @@ def vis_side(dp=None):
                 'Chancer_skabt': 'Chancer skabt',
                 'Key_Passes': 'Key Passes',
                 'Frispark_imod': 'Frispark',
+                'fremadrettede_pasninger': 'Fremad. pasninger',
                 'Driblinger_Ialt': 'Driblinger, ialt', 
                 'Driblinger_Succes': 'Driblinger (Succes)', 
                 'Gennembrud_Overtake': 'Gennembrud, 1v1', 
@@ -580,37 +648,10 @@ def vis_side(dp=None):
             df_kamp_events = df_all[df_all[match_col_in_all].astype(str) == valgt_kamp_uuid].copy() if match_col_in_all else pd.DataFrame()
             
             if not df_kamp_events.empty:
-                event_stats_kamp = df_kamp_events.groupby(['player_optauuid', 'visningsnavn']).apply(lambda x: pd.Series({
-                    'Kampe': 1,
-                    'Aktioner': len(x),
-                    'Gule_kort': count_kamp_qual(x, 17, 31),
-                    'Roede_kort': count_kamp_qual(x, 17, 33),
-                    'Indskiftet': (x['event_typeid'] == 19).sum(),
-                    'Udskiftet': (x['event_typeid'] == 18).sum(),
-                    'Pasninger': x['Pasninger_Total'].sum() if 'Pasninger_Total' in x.columns else 0,
-                    'Pasninger_Succes': x['Pasninger_Succes'].sum() if 'Pasninger_Succes' in x.columns else 0,
-                    'Stikninger': count_kamp_qual(x, 1, 4),
-                    'Indlæg': count_kamp_qual(x, 1, [2, 155]),
-                    'Afslutninger': x['event_typeid'].isin([13, 14, 15, 16]).sum(),
-                    'Erobringer': x['event_typeid'].isin([7, 8, 12, 49]).sum(),
-                    'Driblinger': (x['event_typeid'] == 3).sum(),
-                    'Driblinger_Succes': x.apply(lambda r: 1 if str(r['event_typeid']) == "3" and "211" not in _get_quals(r) else 0, axis=1).sum(),
-                    'Gennembrud_Overtake': x.apply(lambda r: 1 if str(r['event_typeid']) == "3" and "465" in _get_quals(r) else 0, axis=1).sum(),
-                    'Rum_Driblinger_Space': x.apply(lambda r: 1 if str(r['event_typeid']) == "3" and "464" in _get_quals(r) else 0, axis=1).sum(),
-                    'Offensive_Dueller': x.apply(lambda r: 1 if "286" in _get_quals(r) else 0, axis=1).sum(),
-                    'Defensive_Dueller': x.apply(lambda r: 1 if "285" in _get_quals(r) else 0, axis=1).sum(),
-                    'Defensive_1v1_Stoppet': x.apply(lambda r: 1 if "467" in _get_quals(r) else 0, axis=1).sum(),
-                    'Chancer_skabt': x.apply(lambda r: 1 if '210' in _get_quals(r) else 0, axis=1).sum(),
-                    'Key_Passes': x.apply(lambda r: 1 if '210' in _get_quals(r) else 0, axis=1).sum(),
-                    'Tacklinger': (x['event_typeid'] == 7).sum(),
-                    'Clearinger': (x['event_typeid'] == 12).sum(),
-                    'Blokeringer': (x['event_typeid'] == 55).sum(),
-                    'Interceptioner': (x['event_typeid'] == 5).sum(),
-                    'Frispark_imod': (x['event_typeid'] == 4).sum()
-                })).reset_index().drop_duplicates(subset=['player_optauuid']).set_index('player_optauuid')
+                event_stats_kamp = _byg_event_stats(df_kamp_events)
      
                 truppen_stats_kamp_raw = event_stats_kamp.copy()
-                truppen_stats_kamp_raw['Minutter'] = 0
+                truppen_stats_kamp_raw['Minutter'] = 0  # TODO: se note i byg_spiller_og_holdstats
                 truppen_stats_kamp_raw['xG'] = 0.0
                 truppen_stats_kamp_raw['xA'] = 0.0
      
@@ -625,6 +666,7 @@ def vis_side(dp=None):
                 truppen_stats_kamp_kamp['Position'] = truppen_stats_kamp_kamp.index.to_series().apply(
                     lambda u: POSITION_MAP.get(str(u).strip(), 'Ukendt')
                 )
+                truppen_stats_kamp_kamp = tilfoej_fremadrettede_pasninger(truppen_stats_kamp_kamp, df_kamp_events)
      
                 df_vis_kamp = truppen_stats_kamp_kamp.reset_index()
                 
@@ -651,6 +693,7 @@ def vis_side(dp=None):
                     'Chancer_skabt': 'Chancer skabt',
                     'Key_Passes': 'Key Passes',
                     'Frispark_imod': 'Frispark',
+                    'fremadrettede_pasninger': 'Fremad. pasninger',
                     'Driblinger_Ialt': 'Driblinger, ialt', 
                     'Driblinger_Succes': 'Driblinger (Succes)', 
                     'Gennembrud_Overtake': 'Gennembrud, 1v1', 
@@ -737,24 +780,34 @@ def vis_side(dp=None):
                 st.caption(f"Sammenlignet med alle {gruppe_navn} i ligaen.")
 
             with main_col_right:
-                # Kategorierne kommer nu fra spiller_qualifiers.POSITION_ACTIONS
-                # (bygget i KATEGORI_PER_POSITION øverst i filen), i stedet for
-                # en fast, manuelt vedligeholdt liste pr. position.
-                kat_liste = KATEGORI_PER_POSITION.get(spiller_position, DEFAULT_KAT_LISTE)
-                kat_liste = [(label, k_id) for label, k_id in kat_liste if k_id in truppen_stats.columns]
+                # Kategorierne kommer fra spiller_qualifiers.POSITION_ACTIONS,
+                # vist som to adskilte grupper (offensivt/defensivt) - præcis
+                # som defineret i POSITION_ACTIONS, uden at klippe noget af.
+                kat_dict = KATEGORI_PER_POSITION.get(spiller_position, DEFAULT_KAT_LISTE)
 
-                for i in range(0, len(kat_liste), 4):
-                    cols = st.columns(4)
-                    for j, (label, k_id) in enumerate(kat_liste[i:i+4]):
-                        with cols[j]:
-                            st.markdown(f"<p style='text-align:center; font-weight:bold; font-size:12px; margin-bottom:0px;'>{label}</p>", unsafe_allow_html=True)
-                            player_val = truppen_stats.loc[valgt_player_uuid, k_id]
-                            if isinstance(player_val, pd.Series):
-                                player_val = player_val.iloc[0]
-                            max_val = sammenligningsgruppe[k_id].max() if k_id in sammenligningsgruppe.columns else 1
-                            rank_val = spiller_ranks[k_id] if k_id in spiller_ranks.index else 1
-                            fig = create_relative_donut(player_val, max_val, label, get_ordinal(rank_val), color=primær_farve)
-                            st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False}, key=f"p_{k_id}_{i}_{j}")
+                for side_label, side_key in (("Offensivt", "offensiv"), ("Defensivt", "defensiv")):
+                    kat_liste = [(label, k_id) for label, k_id in kat_dict[side_key] if k_id in truppen_stats.columns]
+                    if not kat_liste:
+                        continue
+
+                    st.markdown(
+                        f"<p style='font-weight:bold; font-size:12px; color:#888; "
+                        f"text-transform:uppercase; letter-spacing:0.5px; margin:12px 0 6px 0;'>{side_label}</p>",
+                        unsafe_allow_html=True
+                    )
+
+                    for i in range(0, len(kat_liste), 4):
+                        cols = st.columns(4)
+                        for j, (label, k_id) in enumerate(kat_liste[i:i + 4]):
+                            with cols[j]:
+                                st.markdown(f"<p style='text-align:center; font-weight:bold; font-size:12px; margin-bottom:0px;'>{label}</p>", unsafe_allow_html=True)
+                                player_val = truppen_stats.loc[valgt_player_uuid, k_id]
+                                if isinstance(player_val, pd.Series):
+                                    player_val = player_val.iloc[0]
+                                max_val = sammenligningsgruppe[k_id].max() if k_id in sammenligningsgruppe.columns else 1
+                                rank_val = spiller_ranks[k_id] if k_id in spiller_ranks.index else 1
+                                fig = create_relative_donut(player_val, max_val, label, get_ordinal(rank_val), color=primær_farve)
+                                st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False}, key=f"p_{side_key}_{k_id}_{i}_{j}")
         else:
             st.info("Ingen spillerdata tilgængelig.")
      
@@ -808,6 +861,14 @@ def vis_side(dp=None):
             regains_count = len(df_spiller[df_spiller['event_typeid'].isin([7, 8, 12, 49])])
             boldtab_count = len(df_spiller[df_spiller['event_typeid'].isin([50, 51])])
             def_count = len(df_spiller[df_spiller['event_typeid'].isin([7, 8])])
+            if 'end_x' in df_spiller.columns:
+                fremad_count = len(df_spiller[
+                    (df_spiller['event_typeid'] == 1)
+                    & df_spiller['end_x'].notna()
+                    & (df_spiller['end_x'] > df_spiller['event_x'])
+                ])
+            else:
+                fremad_count = 0
 
             m_r1 = st.columns(4)
             m_r1[0].metric("Aktioner", total_akt)
@@ -826,6 +887,9 @@ def vis_side(dp=None):
             m_r3[1].metric("Regains", regains_count)
             m_r3[2].metric("Erobringer", erob_count)
             m_r3[3].metric("Boldtab", boldtab_count)
+
+            m_r4 = st.columns(4)
+            m_r4[0].metric("Fremad. pasn.", fremad_count)
 
             st.markdown("<hr style='margin: 15px 0; opacity: 0.5;'>", unsafe_allow_html=True)
             st.caption("**Top 10: Aktioner**")
