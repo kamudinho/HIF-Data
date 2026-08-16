@@ -272,7 +272,7 @@ def vis_side(dp=None):
             st.markdown(f'<div class="stat-box"><div class="stat-label">DZ Konv.</div><div class="stat-value">{(m_dz/s_dz*100 if s_dz>0 else 0):.1f}%</div></div>', unsafe_allow_html=True)
         with c1:
             pitch, fig, ax = get_pitch("halv", t_color=t_color)
-            ax.add_patch(patches.Rectangle((25.16, 89.0), 17.68, 16.5, color=t_color, alpha=0.15, zorder=1))
+            ax.add_patch(patches.Rectangle((25.16, 89.5), 17.68, 16.5, color=t_color, alpha=0.15, zorder=1))
             pitch.scatter(dz_d['X_M'], dz_d['Y_M'], s=100, c=(dz_d['EVENT_TYPEID']==16).map({True: t_color, False: 'white'}), edgecolors=t_color, ax=ax, zorder=3)
             draw_logo_on_pitch(ax, t_logo); st.pyplot(fig)
 
