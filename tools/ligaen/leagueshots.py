@@ -191,7 +191,7 @@ def vis_side(dp=None):
     df_team['Y_M'] = df_team['EVENT_Y'].apply(lambda y: to_metric(y, 68))
     df_team['Zone'] = df_team.apply(map_to_zone, axis=1)
     
-    df_team['IS_DZ'] = (df_team['X_M'] >= 94.5) & (df_team['Y_M'] >= 25.16) & (df_team['Y_M'] <= 42.84)
+    df_team['IS_DZ'] = (df_team['X_M'] >= 99.5) & (df_team['Y_M'] >= 25.16) & (df_team['Y_M'] <= 42.84)
 
     tabs = st.tabs(["SPILLEROVERSIGT", "AFSLUTNINGER", "DZ-ANALYSE", "SKUDZONER", "MÅLZONER"])
 
