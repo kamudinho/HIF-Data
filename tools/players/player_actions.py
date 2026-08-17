@@ -368,7 +368,7 @@ def vis_side(dp=None):
             "Berøringer": "Alle aktioner hvor spilleren har været i kontakt med bolden.",
             "Afslutninger": "Oversigt over alle skudforsøg (Mål = firkant, skud = cirkel).",
             "Defensive aktioner": "Tacklinger, bolderobringer og opsnappede afleveringer.",
-            "Offensive pasninger": "Alle pasninger i sidste tredjedel (både fremad- og bagudrettede, grøn = succes, rød = fejl).",
+            "Offensive pasninger": "Alle pasninger i sidste tredjedel (grøn = fremadrettede, rød = bagudrettede, grå = ikke-succes).",
             "Alle aktioner": "Alle aktionstyper (blå = aflevering, rød = dribling, orange = afslutning, grøn = mål, lilla = defensiv aktion)."
         }
         touch_ids = [1, 3, 7, 10, 11, 12, 13, 14, 15, 16, 42, 44, 49, 50, 51, 54, 61, 73]
@@ -515,11 +515,11 @@ def vis_side(dp=None):
                             (df_plot['event_x'] > 66.7)
                         ].dropna(subset=['end_x', 'end_y'])
 
-                        # Opdeling i succes vs. fejl
+                        # Opdeling i succes vs. ikke-succes (fejl)
                         succes = d[d['outcome'] == 1]
                         fejl = d[d['outcome'] != 1]
 
-                        # Heraf deles succesfulde op i fremadrettede og bagudrettede
+                        # Heraf deles succesfulde op i fremadrettede (end_x > event_x) og bagudrettede (end_x <= event_x)
                         succes_fremad = succes[succes['end_x'] > succes['event_x']]
                         succes_bagud = succes[succes['end_x'] <= succes['event_x']]
 
