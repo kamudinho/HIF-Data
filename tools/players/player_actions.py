@@ -37,7 +37,7 @@ except ImportError:
     st.error("Kunne ikke finde eller indlæse 'player_mapping.py'. Sørg for filen ligger i mappen.")
     st.stop()
 
-# --- POSITIONSDATA ---
+# --- POSITIONSDATA & KONSTANTER ---
 _STATIC_PLAYERS = getattr(player_mapping, 'PLAYER_MAPPING', [])
 POSITION_MAP = {
     str(p.get('player_optauuid')).strip(): p.get('position', 'Ukendt')
@@ -49,12 +49,16 @@ POSITION_DA = {
     "Midfielder": "Midtbane",
     "Attacker": "Angriber",
 }
-POSITION_TO_SPQ = {
-    "Goalkeeper": "GK",
-    "Defender": "DEF",
-    "Midfielder": "MID",
-    "Attacker": "FWD",
-}
+
+HIDDEN_VIEWS_PER_POSITION = {}
+
+AKTIONS_FARVER = [
+    ("Aflevering", lambda df: df['event_typeid'] == 1, '#1f77b4', 30, 'o'),
+    ("Dribling", lambda df: df['event_typeid'] == 3, '#ff7f0e', 30, 'o'),
+    ("Skud", lambda df: df['event_typeid'].isin([13, 14, 15]), '#2ca02c', 40, 'o'),
+    ("Mål", lambda df: df['event_typeid'] == 16, '#d62728', 80, 's'),
+    ("Defensiv", lambda df: df['event_typeid'].isin([5, 7, 8, 12, 49, 55]), '#9467bd', 40, 'o'),
+]
 
 KATEGORIER_DER_KRAEVER_QUALIFIER = {
     "indlaeg",
@@ -227,7 +231,8 @@ def hent_holdliste(_conn) -> dict:
     return team_map
 
 
-@st.cache_data(ttl=300, show_spinner="Behandler spiller- og holddata...")
+# Optimeret med caching, så data ikke hentes på ny ved hver eneste handling
+@st.cache_data(ttl=600, show_spinner="Henter og behandler kampdata...")
 def byg_spiller_og_holdstats(_conn, valgt_uuid_hold: str, navne_map: dict):
     df_all_raw, df_expected, df_db_stats = hent_match_og_haendelsesdata(
         _conn, DB, valgt_uuid_hold, LIGA_IDS, navne_map
@@ -329,8 +334,7 @@ def vis_side(dp=None):
     hold_logo = get_logo_img(valgt_uuid_hold)
     primær_farve = get_team_color(valgt_hold, "primary", "#df003b")
 
-    with st.spinner("Henter spillere..."):
-        df_all, df_liga_total, truppen_stats, truppen_stats_liga, df_expected = byg_spiller_og_holdstats(conn, valgt_uuid_hold, navne_map)
+    df_all, df_liga_total, truppen_stats, truppen_stats_liga, df_expected = byg_spiller_og_holdstats(conn, valgt_uuid_hold, navne_map)
 
     if df_all.empty:
         st.warning("Ingen hændelsesdata fundet.")
