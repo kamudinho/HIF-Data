@@ -147,7 +147,7 @@ with st.sidebar:
     menu_map = {
         "HVIDOVRE IF": ["Forside"],
         "HOLDANALYSE": ["Modstanderanalyse", "Ligaoversigt", "Kampoversigt", "Afslutninger", "Målsekvenser", "Grafer"],
-        "SPILLERANALYSE": ["Spiller-view", "Spiller-stats", "Spiller-profil", "Spilleroversigt", "Spillerprofil"],
+        "SPILLERANALYSE": ["Spilleraktioner", "Spiller-stats", "Spiller-profil", "Spilleroversigt", "Spillerprofil"],
         "FYSISK DATA": ["Fysisk data"],
         "SCOUTING": ["Scoutrapport", "Database", "Emnedatabase", "Transfers"],
         "TILPASNING": ["Spillerdata", "Spiller-score", "Standardsituationer", "Model"],
