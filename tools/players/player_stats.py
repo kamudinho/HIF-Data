@@ -28,8 +28,18 @@ POSITION_MAP = {
 }
 
 DB = "KLUB_HVIDOVREIF.AXIS"
-SEASONNAME = "2026/2027"
-LIGA_IDS = "('2mb332vncy4450vu14paj8844', 'e5p78j2r7v8h3u9s5k0l2m4n6', 'f6q89k3s8w9i4v0t6l1m3n5o7', '335', '328', '329', '43319', '331')"
+SEASONNAME = "2025/2026"
+TEAM_WYID = 7490
+COMP_MAP = {
+    335: "Superliga",
+    328: "NordicBet Liga",
+    329: "2. division",
+    43319: "3. division",
+    331: "Oddset Pokalen",
+    1305: "U19 Ligaen"
+}
+# Konverter turneringer til de ID'er der bruges i forespørgslen (her tages udgangspunkt i turneringerne)
+LIGA_IDS = str(tuple(COMP_MAP.keys()))
 
 KATEGORIER_DER_KRAEVER_QUALIFIER = {
     "indlaeg",
@@ -87,7 +97,8 @@ def formater_tid(row):
 def tilfoej_kategori_kolonner(df_stats: pd.DataFrame, df_events: pd.DataFrame, category_keys) -> pd.DataFrame:
     if df_events is None or df_events.empty:
         for key in category_keys:
-            df_stats[key] = 0
+            if key not in df_stats.columns:
+                df_stats[key] = 0
         return df_stats
 
     if 'qual_set' not in df_events.columns:
@@ -98,6 +109,11 @@ def tilfoej_kategori_kolonner(df_stats: pd.DataFrame, df_events: pd.DataFrame, c
         )
 
     for key in category_keys:
+        if key not in ACTION_CATEGORIES:
+            if key not in df_stats.columns:
+                df_stats[key] = 0
+            continue
+            
         cat = ACTION_CATEGORIES[key]
         type_mask = df_events['event_typeid'].isin(cat['type_ids'])
 
@@ -228,6 +244,11 @@ def hent_holdliste(_conn) -> dict:
             uuid_clean = str(r['contestanthome_optauuid']).lower().replace('t', '')
             if uuid_clean in mapping_lookup:
                 team_map[mapping_lookup[uuid_clean]] = r['contestanthome_optauuid']
+    
+    # Sikr altid at Hvidovre er med som fallback
+    if not team_map:
+        team_map["Hvidovre"] = f"t{TEAM_WYID}"
+        
     return team_map
 
 
@@ -323,7 +344,7 @@ def vis_side():
         index=default_team_idx if team_names else 0,
         label_visibility="collapsed", key="global_hold_select"
     )
-    valgt_uuid_hold = team_map.get(valgt_hold, "t7490")
+    valgt_uuid_hold = team_map.get(valgt_hold, f"t{TEAM_WYID}")
     hold_logo = get_logo_img(valgt_uuid_hold)
 
     with st.spinner("Henter hold- og kampdata..."):
@@ -364,6 +385,11 @@ def vis_side():
 
         if not truppen_stats.empty:
             df_vis_truppen = truppen_stats.reset_index()
+
+            # Sikr at alle kolonner findes, ellers opret dem med 0 for at undgå KeyError
+            for col in gen_kolonner + opb_kolonner + off_kolonner + def_kolonner:
+                if col not in df_vis_truppen.columns:
+                    df_vis_truppen[col] = 0
 
             if kategori_valg == "Generelt":
                 eksisterende_kolonner = [k for k in gen_kolonner if k in df_vis_truppen.columns]
@@ -488,6 +514,11 @@ def vis_side():
                 truppen_stats_kamp_kamp = tilfoej_fremadrettede_pasninger(truppen_stats_kamp_kamp, df_kamp_events)
 
                 df_vis_kamp = truppen_stats_kamp_kamp.reset_index()
+
+                # Sikr at alle kolonner findes for kampvisning også
+                for col in gen_kolonner + opb_kolonner + off_kolonner + def_kolonner:
+                    if col not in df_vis_kamp.columns:
+                        df_vis_kamp[col] = 0
 
                 if kategori_valg_kamp == "Generelt":
                     eksisterende_kolonner_kamp = [k for k in gen_kolonner if k in df_vis_kamp.columns]
