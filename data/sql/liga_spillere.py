@@ -1,12 +1,19 @@
 import pandas as pd
 
+def _forbered_liga_ids(liga_ids):
+    """Sikrer at liga_ids altid konverteres til et sikkert SQL IN-format, uanset datatype."""
+    if isinstance(liga_ids, (str, int, float)):
+        liga_ids = [liga_ids]
+    elif not isinstance(liga_ids, (list, tuple, set)):
+        liga_ids = [str(liga_ids)]
+    
+    liga_ids_liste = [f"'{str(x).strip()}'" for x in liga_ids if x is not None]
+    return f"({', '.join(liga_ids_liste)})"
+
 def hent_match_og_haendelsesdata(conn, db_navn, valgt_uuid_hold, liga_ids, navne_map):
     """Henter events, forventede mål og database-stats for hele ligaen fra Snowflake, inklusiv hold-tilhørsforhold."""
 
-    if not isinstance(liga_ids, (list, tuple, set)):
-        liga_ids = [liga_ids]
-    liga_ids_liste = [f"'{str(x).strip()}'" for x in liga_ids]
-    liga_ids_sql = f"({', '.join(liga_ids_liste)})"
+    liga_ids_sql = _forbered_liga_ids(liga_ids)
 
     # 1. Events for hele ligaen
     sql_events = f"""
@@ -134,10 +141,7 @@ def hent_samlet_spiller_statistik(conn, db_navn, liga_ids, navne_map=None):
     if navne_map is None:
         navne_map = {}
 
-    if not isinstance(liga_ids, (list, tuple, set)):
-        liga_ids = [liga_ids]
-    liga_ids_liste = [f"'{str(x).strip()}'" for x in liga_ids]
-    liga_ids_sql = f"({', '.join(liga_ids_liste)})"
+    liga_ids_sql = _forbered_liga_ids(liga_ids)
 
     sql_query = f"""
     WITH EventAggregates AS (
