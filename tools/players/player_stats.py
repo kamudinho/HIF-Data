@@ -163,19 +163,19 @@ AKTIONS_FARVER = [
     ("Defensiv aktion", lambda d: d['event_typeid'].isin([5, 7, 8, 12, 49, 55]), '#9467bd', 55, 'o'),
 ]
 
+# Hent den aktuelle sæson og tilhørende Opta turnering(er) automatisk
+SEASONNAME = "2026/2027"  # eller hentet fra session_state / player_mapping
 DB = "KLUB_HVIDOVREIF.AXIS"
-SEASONNAME = "2026/2027"
-TEAM_WYID = 7490
-COMPETITION_WYID = (328,)
-COMP_MAP = { 
-    335: "Superliga", 
-    328: "NordicBet Liga", 
-    329: "2. division", 
-    43319: "3. division", 
-    331: "Oddset Pokalen", 
-    1305: "U19 Ligaen" 
-}
-LIGA_IDS = "('2mb332vncy4450vu14paj8844', 'e5p78j2r7v8h3u9s5k0l2m4n6', 'f6q89k3s8w9i4v0t6l1m3n5o7', '335', '328', '329', '43319', '331')"
+
+# Hent Opta UUID for 1. Division (eller de turneringer der hører til sæsonen)
+active_leagues = SEASONS.get(SEASONNAME, {})
+optauuid_liste = list(active_leagues.values())
+
+# Byg LIGA_IDS-strengen dynamisk i det format Snowflake forventer: ('uuid1', 'uuid2')
+if optauuid_liste:
+    LIGA_IDS = "('" + "', '".join(optauuid_liste) + "')"
+else:
+    LIGA_IDS = "('2mb332vncy4450vu14paj8844')"  # Fallback
 
 @st.cache_data(ttl=600, show_spinner="Indlæser spillerliste...")
 def hent_navne_map() -> dict:
