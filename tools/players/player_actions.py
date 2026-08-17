@@ -20,9 +20,9 @@ from data.sql.liga_spillere import hent_samlet_spiller_statistik, hent_match_og_
 
 try:
     from data.players import player_mapping
-    SEASONNAME = getattr(player_mapping, 'SEASONNAME', "2025/2026")
+    SEASONNAME = getattr(player_mapping, 'SEASONNAME', "2027/2027")
 except ImportError:
-    SEASONNAME = "2025/2026"
+    SEASONNAME = "2026/2027"
 
 DB = "KLUB_HVIDOVREIF.AXIS"
 
@@ -50,6 +50,24 @@ AKTIONS_FARVER = [
 HIDDEN_VIEWS_PER_POSITION = {
     "GK": ["Offensive pasninger", "Afslutninger"],
     "Målmand": ["Offensive pasninger", "Afslutninger"]
+}
+
+FALLBACK_LABELS = {
+    1: "Pasning",
+    3: "Dribling",
+    7: "Tackling",
+    8: "Interception",
+    13: "Skud forbi",
+    14: "Skud blokeret",
+    15: "Skud på stolpe",
+    16: "Mål",
+    42: "Clearing",
+    44: "Frispark vundet",
+    49: "Erobring",
+    50: "Boldtab",
+    51: "Fejl / Boldtab",
+    55: "Fejl",
+    73: "Duel"
 }
 
 @st.cache_data(ttl=600, show_spinner=False)
@@ -178,6 +196,13 @@ def vis_side():
     else:
         df_spiller['Action_Label'] = df_spiller['action_label']
 
+    # Robust rettelse af 'Ukendt aktion' ved at tjekke event_typeid mod fallback-mapping
+    if 'event_typeid' in df_spiller.columns:
+        df_spiller['event_typeid'] = pd.to_numeric(df_spiller['event_typeid'], errors='coerce')
+        mask_ukendt = df_spiller['Action_Label'].isin(['Ukendt', 'Ukendt aktion', 'nan', 'None', '']) | df_spiller['Action_Label'].isna()
+        if mask_ukendt.any():
+            df_spiller.loc[mask_ukendt, 'Action_Label'] = df_spiller.loc[mask_ukendt, 'event_typeid'].map(FALLBACK_LABELS).fillna('Ukendt aktion')
+
     if 'qual_list' not in df_spiller.columns:
         if 'qualifiers' in df_spiller.columns:
             df_spiller['qual_list'] = df_spiller['qualifiers'].astype(str).str.split(',')
@@ -256,32 +281,37 @@ def vis_side():
         else:
             fremad_count = 0
 
-        m_r1 = st.columns(4)
+        # Sat op i 3 kolonner pr. række for at undgå tomme bokse
+        m_r1 = st.columns(3)
         m_r1[0].metric("Aktioner", total_akt)
         m_r1[1].metric("Berøringer", touch_count)
         m_r1[2].metric("Pasninger", pas_count)
-        m_r1[3].metric("Pasning %", f"{int(pas_acc)}%")
 
-        st.markdown("<div style='margin-bottom: 5px;'></div>", unsafe_allow_html=True)
+        st.markdown("<div style='margin-bottom: 2px;'></div>", unsafe_allow_html=True)
 
-        m_r2 = st.columns(4)
-        m_r2[0].metric("Driblinger", drib_count)
-        m_r2[1].metric("Skud", shots_count)
-        m_r2[2].metric("Chancer", int(chancer_skabt))
-        m_r2[3].metric("Indlæg", cross_count)
+        m_r2 = st.columns(3)
+        m_r2[0].metric("Pasning %", f"{int(pas_acc)}%")
+        m_r2[1].metric("Driblinger", drib_count)
+        m_r2[2].metric("Skud", shots_count)
 
-        st.markdown("<div style='margin-bottom: 5px;'></div>", unsafe_allow_html=True)
+        st.markdown("<div style='margin-bottom: 2px;'></div>", unsafe_allow_html=True)
 
-        m_r3 = st.columns(4)
-        m_r3[0].metric("Def. 1v1", def_count)
-        m_r3[1].metric("Regains", regains_count)
-        m_r3[2].metric("Erobringer", erob_count)
-        m_r3[3].metric("Boldtab", boldtab_count)
+        m_r3 = st.columns(3)
+        m_r3[0].metric("Chancer", int(chancer_skabt))
+        m_r3[1].metric("Indlæg", cross_count)
+        m_r3[2].metric("Def. 1v1", def_count)
 
-        st.markdown("<div style='margin-bottom: 5px;'></div>", unsafe_allow_html=True)
+        st.markdown("<div style='margin-bottom: 2px;'></div>", unsafe_allow_html=True)
 
-        m_r4 = st.columns(4)
-        m_r4[0].metric("Fremad. pasn.", fremad_count)
+        m_r4 = st.columns(3)
+        m_r4[0].metric("Regains", regains_count)
+        m_r4[1].metric("Erobringer", erob_count)
+        m_r4[2].metric("Boldtab", boldtab_count)
+
+        st.markdown("<div style='margin-bottom: 2px;'></div>", unsafe_allow_html=True)
+
+        m_r5 = st.columns(3)
+        m_r5[0].metric("Fremad. pasn.", fremad_count)
 
         st.markdown("<hr style='margin: 15px 0; opacity: 0.5;'>", unsafe_allow_html=True)
         st.caption("**Top 10: Aktioner**")
