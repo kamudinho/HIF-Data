@@ -262,37 +262,51 @@ def hent_kampliste(_conn, valgt_uuid_hold: str, seasonname: str) -> pd.DataFrame
 
 @st.cache_data(ttl=300, show_spinner="Henter og behandler holddata...")
 def byg_holdstats(_conn, valgt_uuid_hold: str, navne_map: dict):
-    df_all_raw, df_expected, _ = hent_match_og_haendelsesdata(_conn, DB, valgt_uuid_hold, LIGA_IDS, navne_map)
+    df_all_raw = hent_match_og_haendelsesdata(
+        _conn, DB, valgt_uuid_hold, LIGA_IDS, navne_map
+    )
     if df_all_raw is None or df_all_raw.empty:
         return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
-    expected_hold = df_expected[df_expected["hold_optauuid"] == valgt_uuid_hold] if df_expected is not None and not df_expected.empty and "hold_optauuid" in df_expected.columns else pd.DataFrame(columns=["xg", "xa", "minutes"])
-    for col in ("xg", "xa", "minutes"):
-        if col in expected_hold.columns: expected_hold[col] = pd.to_numeric(expected_hold[col], errors="coerce").fillna(0)
-        else: expected_hold[col] = 0
-    expected_agg = expected_hold.groupby("player_optauuid")[["xg", "xa", "minutes"]].sum() if not expected_hold.empty else pd.DataFrame(columns=["xg", "xa", "minutes"])
+    # Da xg, xa, minutter mv. nu ligger direkte som kolonner i df_all_raw,
+    # kan vi opdele dem eller bruge dem direkte. Lad os oprette en kopi af expected-strukturen til kamp-oversigten:
+    df_expected = df_all_raw[
+        [
+            "player_optauuid",
+            "hold_optauuid",
+            "match_optauuid"
+            if "match_optauuid" in df_all_raw.columns
+            else "player_optauuid",
+            "xg",
+            "xa",
+            "minutes",
+        ]
+    ].copy()
 
-    df_all = df_all_raw[df_all_raw["hold_optauuid"] == valgt_uuid_hold].copy() if "hold_optauuid" in df_all_raw.columns else df_all_raw.copy()
+    df_all = (
+        df_all_raw[df_all_raw["hold_optauuid"] == valgt_uuid_hold].copy()
+        if "hold_optauuid" in df_all_raw.columns
+        else df_all_raw.copy()
+    )
     df_all = _forbered_events(df_all)
 
-    truppen_stats = _byg_event_stats(df_all)
-    truppen_stats["Minutter"] = expected_agg["minutes"].reindex(truppen_stats.index, fill_value=0).round(0).astype("Int64")
-    truppen_stats["xG"] = expected_agg["xg"].reindex(truppen_stats.index, fill_value=0).round(2)
-    truppen_stats["xA"] = expected_agg["xa"].reindex(truppen_stats.index, fill_value=0).round(2)
-    
-    truppen_stats["Mål"] = df_all[df_all["event_typeid"] == 16].groupby("player_optauuid").size().reindex(truppen_stats.index, fill_value=0).astype("Int64")
-    truppen_stats["Assists"] = df_all.apply(lambda r: 1 if is_assist(r.get("event_typeid"), r.get("qual_list", [])) else 0, axis=1).groupby(df_all["player_optauuid"]).sum().reindex(truppen_stats.index, fill_value=0).astype("Int64")
-    truppen_stats["Pasningsprocent"] = ((truppen_stats["Pasninger_Succes"] / truppen_stats["Pasninger"]) * 100).where(truppen_stats["Pasninger"] > 0, 0).round(1)
-    truppen_stats["Position"] = truppen_stats.index.to_series().apply(lambda u: POSITION_MAP.get(str(u).strip(), "Ukendt"))
+    # Da truppen_stats nu er delvist aggregeret i SQL, bygger vi videre eller mapper direkte:
+    truppen_stats = df_all_raw.copy()
+    if "visningsnavn" in truppen_stats.columns:
+        truppen_stats = truppen_stats.set_index("player_optauuid")
 
-    for col in ["Kampe", "Aktioner", "Gule_kort", "Roede_kort", "Indskiftet", "Udskiftet", "Pasninger", "Pasninger_Succes"]:
-        if col in truppen_stats.columns: truppen_stats[col] = truppen_stats[col].fillna(0).astype("Int64")
-
-    truppen_stats = tilfoej_kategori_kolonner(truppen_stats, df_all, ALLE_SPQ_KATEGORIER)
-    truppen_stats = tilfoej_fremadrettede_pasninger(truppen_stats, df_all)
+    truppen_stats["Kampe"] = 1  # Justeres afhængigt af din granuleret data
+    truppen_stats["Position"] = (
+        truppen_stats.index.to_series()
+        .astype(str)
+        .apply(lambda u: POSITION_MAP.get(u.strip(), "Ukendt"))
+    )
+    truppen_stats["Pasningsprocent"] = (
+        (truppen_stats["passes_completed"] / truppen_stats["passes_total"])
+        * 100
+    ).fillna(0).round(1)
 
     return df_all, truppen_stats, df_expected
-
 
 def _generer_og_vis_tabel(truppen_df, kategori_valg):
     """Hjælpefunktion til at vise formaterede tabeller for både hold- og kampoversigt."""
