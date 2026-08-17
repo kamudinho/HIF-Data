@@ -4,13 +4,12 @@ import pandas as pd
 def hent_match_og_haendelsesdata(
     conn, db_navn, valgt_uuid_hold, liga_ids, navne_map
 ):
-    """Henter events, forventede mål og database-stats for hele ligaen fra Snowflake, baseret på Opta-data."""
+    """Henter events, forventede mål og database-stats for hele ligaen fra Snowflake, inklusiv hold-tilhørsforhold."""
 
-    # 1. Events for hele ligaen
+    # 1. Events for hele ligaen - inklusiv m.MATCHLENGTHMIN
     sql_events = f"""
         SELECT 
             e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, e.MATCH_OPTAUUID, 
-            e.MINUTE, e.SECOND, e.PERIOD,
             p.MATCH_NAME, p.FIRST_NAME, p.SHORT_LAST_NAME, m.MATCHLENGTHMIN,
             e.PLAYER_OPTAUUID, e.EVENT_OUTCOME as OUTCOME,
             e.EVENT_CONTESTANT_OPTAUUID as HOLD_OPTAUUID,
@@ -20,59 +19,37 @@ def hent_match_og_haendelsesdata(
             MAX(CASE WHEN q.QUALIFIER_QID = 141 THEN q.QUALIFIER_VALUE END) AS END_Y
         FROM {db_navn}.OPTA_EVENTS e
         JOIN {db_navn}.OPTA_MATCHINFO m ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
-        JOIN (
-            SELECT DISTINCT PLAYER_OPTAUUID, FIRST_NAME, LAST_NAME, SHORT_LAST_NAME, MATCH_NAME 
-            FROM {db_navn}.OPTA_MATCH_LINEUPS 
-            WHERE FIRST_NAME IS NOT NULL
-        ) p ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
+        JOIN (SELECT DISTINCT PLAYER_OPTAUUID, FIRST_NAME, LAST_NAME, SHORT_LAST_NAME, MATCH_NAME FROM {db_navn}.OPTA_MATCH_LINEUPS WHERE FIRST_NAME IS NOT NULL) p 
+            ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
         LEFT JOIN {db_navn}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
         WHERE m.TOURNAMENTCALENDAR_OPTAUUID IN {liga_ids}
           AND e.EVENT_TIMESTAMP >= '2026-07-01'
-        GROUP BY 
-            e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, e.MATCH_OPTAUUID, 
-            e.MINUTE, e.SECOND, e.PERIOD,
-            p.MATCH_NAME, p.FIRST_NAME, p.SHORT_LAST_NAME, m.MATCHLENGTHMIN,
-            e.PLAYER_OPTAUUID, e.EVENT_OUTCOME,
-            e.EVENT_CONTESTANT_OPTAUUID,
-            e.EVENT_TIMESTAMP
+        GROUP BY 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13
     """
     df_all = conn.query(sql_events)
 
     if df_all is not None and not df_all.empty:
         df_all.columns = df_all.columns.str.lower()
 
-        for col in ["end_x", "end_y", "minute", "second", "period"]:
+        for col in ["end_x", "end_y", "matchlengthmin"]:
             if col in df_all.columns:
                 df_all[col] = pd.to_numeric(df_all[col], errors="coerce")
-
-        def format_match_minute(row):
-            period = row.get("period", 1)
-            minute = row.get("minute", 0)
-
-            try:
-                period = int(period) if pd.notna(period) else 1
-                minute = int(minute) if pd.notna(minute) else 0
-            except (ValueError, TypeError):
-                return str(minute)
-
-            if period == 1 and minute > 45:
-                return f"45+{minute - 45}"
-            elif period == 2 and minute > 90:
-                return f"90+{minute - 90}"
-            elif period == 5 and minute > 105:
-                return f"105+{minute - 105}"
-            elif period == 6 and minute > 120:
-                return f"120+{minute - 120}"
-
-            return str(minute)
-
-        df_all["formatted_minute"] = df_all.apply(format_match_minute, axis=1)
 
         def fix_name(row):
             f_name = row.get("first_name")
             m_name = row.get("match_name")
-            f_str = str(f_name).strip() if f_name is not None and str(f_name).lower() not in ["nan", "none"] else ""
-            m_str = str(m_name).strip() if m_name is not None and str(m_name).lower() not in ["nan", "none"] else ""
+            f_str = (
+                str(f_name).strip()
+                if f_name is not None
+                and str(f_name).lower() not in ["nan", "none"]
+                else ""
+            )
+            m_str = (
+                str(m_name).strip()
+                if m_name is not None
+                and str(m_name).lower() not in ["nan", "none"]
+                else ""
+            )
             if m_str and "." in m_str:
                 parts = m_str.split(".", 1)
                 if len(parts) > 1 and f_str:
@@ -81,7 +58,9 @@ def hent_match_og_haendelsesdata(
 
         df_all["visningsnavn"] = df_all.apply(fix_name, axis=1)
         df_all["visningsnavn"] = df_all.apply(
-            lambda r: navne_map.get(str(r["player_optauuid"]), r["visningsnavn"]),
+            lambda r: navne_map.get(
+                str(r["player_optauuid"]), r["visningsnavn"]
+            ),
             axis=1,
         )
 
@@ -103,7 +82,7 @@ def hent_match_og_haendelsesdata(
     if df_expected is not None:
         df_expected.columns = df_expected.columns.str.lower()
 
-    # 3. DB Stats (Mål og assists via events)
+    # 3. DB Stats (Mål og assists via events) for hele ligaen
     sql_db_stats = f"""
         WITH EventQualifiers AS (
             SELECT 
@@ -157,8 +136,11 @@ def hent_match_og_haendelsesdata(
         df_db_stats = df_db_stats.drop_duplicates(
             subset=["player_optauuid"]
         ).copy()
+        df_db_stats["visningsnavn"] = df_db_stats.apply(fix_name, axis=1)
         df_db_stats["visningsnavn"] = df_db_stats.apply(
-            lambda r: navne_map.get(str(r["player_optauuid"]), r.get("match_name", "Ukendt")),
+            lambda r: navne_map.get(
+                str(r["player_optauuid"]), r["visningsnavn"]
+            ),
             axis=1,
         )
 
