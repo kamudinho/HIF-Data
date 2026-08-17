@@ -129,7 +129,7 @@ def hent_match_og_haendelsesdata(conn, db_navn, valgt_uuid_hold, liga_ids, navne
 
     return df_all, df_expected, df_db_stats
 
-def hent_samlet_spiller_statistisk(conn, db_navn, liga_ids, navne_map=None):
+def hent_samlet_spiller_statistik(conn, db_navn, liga_ids, navne_map=None):
     """Henter fuldt aggregerede spillerstatistikker direkte via optimeret SQL-forespørgsel."""
     if navne_map is None:
         navne_map = {}
