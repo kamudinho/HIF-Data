@@ -1,13 +1,11 @@
+import io
+import base64
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
-from io import BytesIO
-import requests
-from PIL import Image
 import os
+from PIL import Image
 from mplsoccer import Pitch
-import io
-import base64
 
 # --- DATA OG MAPPING ---
 from data.data_load import _get_snowflake_conn
@@ -32,7 +30,7 @@ try:
     primær_farve = getattr(player_mapping, 'primær_farve', "#df003b")
     valgt_hold = getattr(player_mapping, 'valgt_hold', "Hvidovre")
     conn = getattr(player_mapping, 'conn', None)
-    SEASONNAME = getattr(player_mapping, 'SEASONNAME', "2026/2027")
+    SEASONNAME = getattr(player_mapping, 'SEASONNAME', "2025/2026")
 except ImportError:
     st.error("Kunne ikke finde eller indlæse 'player_mapping.py'. Sørg for filen ligger i mappen.")
     st.stop()
@@ -297,7 +295,7 @@ def byg_spiller_og_holdstats(_conn, valgt_uuid_hold: str, navne_map: dict):
     return df_all, df_liga_total, truppen_stats, truppen_stats_liga, df_expected
 
 
-def vis_spiller_aktioner(df_spiller, valgt_spiller, valgt_player_uuid, spiller_position, hold_logo, SEASONNAME, HIDDEN_VIEWS_PER_POSITION, AKTIONS_FARVER):
+def vis_side(df_spiller, valgt_spiller, valgt_player_uuid, spiller_position, hold_logo, SEASONNAME, HIDDEN_VIEWS_PER_POSITION, AKTIONS_FARVER):
     """
     Viser fanen for spilleraktioner (t_pitch) med statistik, metrikker og fodboldbane-visualiseringer.
     """
@@ -417,7 +415,6 @@ def vis_spiller_aktioner(df_spiller, valgt_spiller, valgt_player_uuid, spiller_p
         pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
         fig, ax = pitch.draw(figsize=(10, 7))
         
-        # Antager at draw_player_info_box er defineret andetsteds i appen
         if 'draw_player_info_box' in globals():
             draw_player_info_box(ax, hold_logo, valgt_spiller, SEASONNAME, visning)
 
@@ -483,3 +480,6 @@ def vis_spiller_aktioner(df_spiller, valgt_spiller, valgt_player_uuid, spiller_p
                     ax.scatter(d.event_x, d.event_y, color='green', s=20, edgecolors='white', alpha=0.6, zorder=4)
 
         st.pyplot(fig, use_container_width=True)
+
+# Alias hvis modulet kaldes under det gamle navn
+vis_spiller_aktioner = vis_side
