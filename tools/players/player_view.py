@@ -37,9 +37,7 @@ def render_spilleraktioner(df_spiller: pd.DataFrame, valgt_spiller: str, hold_lo
                             spiller_position: str, valgt_player_uuid: str, season_name: str = ""):
     """
     Renderer Spilleraktioner-fanen (statistikpanel + banetegning) for den
-    valgte spiller. df_spiller skal indeholde 'Action_Label' (beregnet i
-    player_stats.py's databehandling) samt event_x/event_y/event_typeid/
-    qual_list/outcome og evt. end_x/end_y.
+    valgte spiller.
     """
     df_filtreret = df_spiller[~df_spiller['Action_Label'].isin(['Pasning', 'Indkast'])]
 
@@ -66,6 +64,7 @@ def render_spilleraktioner(df_spiller: pd.DataFrame, valgt_spiller: str, hold_lo
             </div>
         """, unsafe_allow_html=True)
         st.markdown("<hr style='margin: 15px 0; opacity: 0.5;'>", unsafe_allow_html=True)
+        
         total_akt = len(df_spiller)
         pas_df = df_spiller[df_spiller['event_typeid'] == 1]
         pas_count = len(pas_df)
@@ -80,6 +79,7 @@ def render_spilleraktioner(df_spiller: pd.DataFrame, valgt_spiller: str, hold_lo
         regains_count = len(df_spiller[df_spiller['event_typeid'].isin([7, 8, 12, 49])])
         boldtab_count = len(df_spiller[df_spiller['event_typeid'].isin([50, 51])])
         def_count = len(df_spiller[df_spiller['event_typeid'].isin([7, 8])])
+        
         if 'end_x' in df_spiller.columns:
             fremad_count = len(df_spiller[
                 (df_spiller['event_typeid'] == 1)
@@ -173,10 +173,7 @@ def render_spilleraktioner(df_spiller: pd.DataFrame, valgt_spiller: str, hold_lo
                     )
             elif visning == "Offensive pasninger":
                 if 'end_x' not in df_plot.columns or 'end_y' not in df_plot.columns:
-                    st.info(
-                        "Denne visning kræver pasningens slutkoordinater (end_x/end_y), "
-                        "som ikke findes i de hentede data lige nu."
-                    )
+                    st.info("Denne visning kræver pasningens slutkoordinater.")
                 else:
                     d = df_plot[
                         (df_plot['event_typeid'] == 1) &
@@ -188,16 +185,22 @@ def render_spilleraktioner(df_spiller: pd.DataFrame, valgt_spiller: str, hold_lo
                     fejl = d[d['outcome'] != 1]
 
                     if not fejl.empty:
-                        pitch.arrows(
-                            fejl.event_x, fejl.event_y, fejl.end_x, fejl.end_y,
-                            ax=ax, color='#bdbdbd', width=0.7, headwidth=2, headlength=3, alpha=0.6, zorder=2
-                        )
+                        pitch.arrows(fejl.event_x, fejl.event_y, fejl.end_x, fejl.end_y, ax=ax, color='#bdbdbd', width=0.7, headwidth=2, headlength=3, alpha=0.6, zorder=2)
                     if not succes.empty:
-                        pitch.arrows(
-                            succes.event_x, succes.event_y, succes.end_x, succes.end_y,
-                            ax=ax, color='green', width=1.3, headwidth=3, headlength=4, alpha=0.85, zorder=3
-                        )
+                        pitch.arrows(succes.event_x, succes.event_y, succes.end_x, succes.end_y, ax=ax, color='green', width=1.3, headwidth=3, headlength=4, alpha=0.85, zorder=3)
 
                     ax.scatter(d.event_x, d.event_y, color='green', s=20, edgecolors='white', alpha=0.6, zorder=4)
 
         st.pyplot(fig, use_container_width=True)
+
+def vis_side(df_spiller, valgt_spiller, hold_logo, primær_farve, spiller_position, valgt_player_uuid, season_name="2025/2026"):
+    """Wrapper-funktion for bagudkompatibilitet."""
+    render_spilleraktioner(
+        df_spiller=df_spiller,
+        valgt_spiller=valgt_spiller,
+        hold_logo=hold_logo,
+        primær_farve=primær_farve,
+        spiller_position=spiller_position,
+        valgt_player_uuid=valgt_player_uuid,
+        season_name=season_name
+    )
