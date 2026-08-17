@@ -62,7 +62,7 @@ def _anvend_player_mapping(df, navne_map):
         for col in ["visningsnavn", "match_name", "first_name"]:
             if col in row and pd.notna(row[col]) and str(row[col]).strip().lower() not in ["nan", "none", ""]:
                 return str(row[col]).strip()
-        return "Ukendt spiller"
+        return "Fejlspiller"
 
     df["visningsnavn"] = df.apply(get_mapped_name, axis=1)
     return df
