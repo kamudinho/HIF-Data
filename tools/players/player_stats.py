@@ -10,7 +10,7 @@ import io
 import base64
 
 # --- DATA OG MAPPING ---
-from data.data_load import _get_snowflake_conn, hent_samlet_spiller_statistik
+from data.data_load import _get_snowflake_conn
 from data.utils.team_mapping import TEAMS, TEAM_COLORS
 from data.utils.mapping import OPTA_EVENT_TYPES, OPTA_QUALIFIERS, get_action_label, is_assist, har_qualifier
 
