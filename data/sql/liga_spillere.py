@@ -43,7 +43,7 @@ def hent_match_og_haendelsesdata(conn, db_navn, valgt_uuid_hold, liga_ids, navne
     liga_ids_sql = _forbered_liga_ids(liga_ids)
 
     # 1. Events for hele ligaen
-    sql_events = f"""
+    sql_events = """
         SELECT 
             e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, e.MATCH_OPTAUUID, 
             p.MATCH_NAME, p.FIRST_NAME, p.SHORT_LAST_NAME, m.MATCHLENGTHMIN,
@@ -65,7 +65,8 @@ def hent_match_og_haendelsesdata(conn, db_navn, valgt_uuid_hold, liga_ids, navne
             p.MATCH_NAME, p.FIRST_NAME, p.SHORT_LAST_NAME, m.MATCHLENGTHMIN,
             e.PLAYER_OPTAUUID, e.EVENT_OUTCOME, e.EVENT_CONTESTANT_OPTAUUID, 
             e.EVENT_TIMESTAMP
-    """
+    """.format(db_navn=db_navn, liga_ids_sql=liga_ids_sql)
+    
     df_all = conn.query(sql_events)
 
     if df_all is not None and not df_all.empty:
@@ -89,7 +90,7 @@ def hent_match_og_haendelsesdata(conn, db_navn, valgt_uuid_hold, liga_ids, navne
     df_all['visningsnavn'] = df_all.apply(lambda r: navne_map.get(str(r['player_optauuid']), r['visningsnavn']), axis=1)
 
     # 2. Expected goals (xG/xA) for hele ligaen
-    sql_expected = f"""
+    sql_expected = """
         SELECT 
             MATCH_OPTAUUID,
             PLAYER_OPTAUUID,
@@ -101,13 +102,14 @@ def hent_match_og_haendelsesdata(conn, db_navn, valgt_uuid_hold, liga_ids, navne
         WHERE TOURNAMENTCALENDAR_OPTAUUID IN {liga_ids_sql}
           AND MATCH_STATUS = 'Played'
         GROUP BY MATCH_OPTAUUID, PLAYER_OPTAUUID, CONTESTANT_OPTAUUID
-    """
+    """.format(db_navn=db_navn, liga_ids_sql=liga_ids_sql)
+    
     df_expected = conn.query(sql_expected)
     if df_expected is not None and not df_expected.empty:
         df_expected.columns = df_expected.columns.str.lower()
 
     # 3. DB Stats for hele ligaen
-    sql_db_stats = f"""
+    sql_db_stats = """
         WITH EventQualifiers AS (
             SELECT 
                 e.EVENT_OPTAUUID, e.PLAYER_OPTAUUID, e.EVENT_TYPEID, e.EVENT_TIMESTAMP, e.MATCH_OPTAUUID,
@@ -154,7 +156,8 @@ def hent_match_og_haendelsesdata(conn, db_navn, valgt_uuid_hold, liga_ids, navne
             g.GOALS as goals, COALESCE(a.ASSISTS, 0) as assists
         FROM PlayerGoals g
         LEFT JOIN PlayerAssists a ON g.PLAYER_OPTAUUID = a.PLAYER_OPTAUUID
-    """
+    """.format(db_navn=db_navn, liga_ids_sql=liga_ids_sql)
+    
     df_db_stats = conn.query(sql_db_stats)
     if df_db_stats is not None and not df_db_stats.empty:
         df_db_stats.columns = df_db_stats.columns.str.lower()
@@ -162,7 +165,6 @@ def hent_match_og_haendelsesdata(conn, db_navn, valgt_uuid_hold, liga_ids, navne
         df_db_stats['visningsnavn'] = df_db_stats.apply(fix_name, axis=1)
         df_db_stats['visningsnavn'] = df_db_stats.apply(lambda r: navne_map.get(str(r['player_optauuid']), r['visningsnavn']), axis=1)
 
-    # Returnerer præcis 3 værdier
     return df_all, df_expected, df_db_stats
 
 
@@ -173,7 +175,7 @@ def hent_samlet_spiller_statistik(conn, db_navn, liga_ids, navne_map=None):
 
     liga_ids_sql = _forbered_liga_ids(liga_ids)
 
-    sql_query = f"""
+    sql_query = """
     WITH EventAggregates AS (
         SELECT 
             e.PLAYER_OPTAUUID,
@@ -206,7 +208,7 @@ def hent_samlet_spiller_statistik(conn, db_navn, liga_ids, navne_map=None):
         WHERE TOURNAMENTCALENDAR_OPTAUUID IN {liga_ids_sql}
           AND MATCH_STATUS = 'Played'
         GROUP BY PLAYER_OPTAUUID, CONTESTANT_OPTAUUID
-    },
+    ),
     PlayerNames AS (
         SELECT DISTINCT PLAYER_OPTAUUID, FIRST_NAME, SHORT_LAST_NAME, MATCH_NAME
         FROM {db_navn}.OPTA_MATCH_LINEUPS
@@ -236,7 +238,7 @@ def hent_samlet_spiller_statistik(conn, db_navn, liga_ids, navne_map=None):
     LEFT JOIN ExpectedAggregates xa ON ea.PLAYER_OPTAUUID = xa.PLAYER_OPTAUUID AND ea.HOLD_OPTAUUID = xa.HOLD_OPTAUUID
     LEFT JOIN PlayerNames pn ON ea.PLAYER_OPTAUUID = pn.PLAYER_OPTAUUID
     ORDER BY ea.Aktioner DESC;
-    """
+    """.format(db_navn=db_navn, liga_ids_sql=liga_ids_sql)
 
     df = conn.query(sql_query)
     if df is not None and not df.empty:
