@@ -28,7 +28,7 @@ def hent_match_og_haendelsesdata(conn, db_navn, valgt_uuid_hold, liga_ids, navne
           AND e.EVENT_TIMESTAMP >= '2026-07-01'
         GROUP BY 
             e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, e.MATCH_OPTAUUID, 
-            p.MATCH_NAME, p.FIRST_NAME, p.SHORT_LAST_NAME, m.MATCHLENGHTMIN,
+            p.MATCH_NAME, p.FIRST_NAME, p.SHORT_LAST_NAME, m.MATCHLENGTHMIN,
             e.PLAYER_OPTAUUID, e.EVENT_OUTCOME, e.EVENT_CONTESTANT_OPTAUUID, 
             e.EVENT_TIMESTAMP
     """
