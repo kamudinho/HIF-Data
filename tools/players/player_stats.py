@@ -1,27 +1,151 @@
 import base64
+from io import BytesIO
 import io
+import os
+import requests
+from PIL import Image
+import numpy as np
 import pandas as pd
+import plotly.graph_objects as go
+from mplsoccer import Pitch
 import streamlit as st
 
+# --- DATA OG MAPPING ---
 from data.data_load import _get_snowflake_conn
-from data.utils.team_mapping import TEAMS, SEASONS
-from utils.helpers import get_logo_img, get_team_color
+from data.utils.team_mapping import TEAMS, TEAM_COLORS, SEASONS
+from data.utils.mapping import (
+    OPTA_EVENT_TYPES,
+    OPTA_QUALIFIERS,
+    get_action_label,
+    is_assist,
+    har_qualifier,
+)
+
+# --- SPILLER-KATEGORIER (position -> aktionskategorier, offensiv/defensiv) ---
+from data.utils.spiller_qualifiers import ACTION_CATEGORIES, POSITION_ACTIONS
+
+# --- GENERELLE UI-HJÆLPERE ---
+from utils.helpers import (
+    get_logo_img,
+    get_team_color,
+    get_ordinal,
+    draw_player_info_box,
+)
+
+# --- IMPORT AF SPILLERE OG SQL ---
 from data.sql.liga_spillere import (
     hent_samlet_spiller_statistik,
     hent_match_og_haendelsesdata,
 )
 
+try:
+    from data.players import player_mapping
+
+    df_spiller = getattr(player_mapping, "df_spiller", None)
+    hold_logo = getattr(player_mapping, "hold_logo", None)
+    primær_farve = getattr(player_mapping, "primær_farve", "#df003b")
+    valgt_hold = getattr(player_mapping, "valgt_hold", "Hvidovre")
+    conn = getattr(player_mapping, "conn", None)
+    SEASONNAME = getattr(player_mapping, "SEASONNAME", "2025/2026")
+except ImportError:
+    st.error(
+        "Kunne ikke finde eller indlæse 'player_mapping.py'. Sørg for filen ligger i mappen."
+    )
+    st.stop()
+
+# --- POSITIONSDATA ---
+_STATIC_PLAYERS = getattr(player_mapping, "PLAYER_MAPPING", [])
+POSITION_MAP = {
+    str(p.get("player_optauuid")).strip(): p.get("position", "Ukendt")
+    for p in _STATIC_PLAYERS
+    if p.get("player_optauuid")
+}
+POSITION_DA = {
+    "Goalkeeper": "Målmand",
+    "Defender": "Forsvar",
+    "Midfielder": "Midtbane",
+    "Attacker": "Angriber",
+}
+
+POSITION_TO_SPQ = {
+    "Goalkeeper": "GK",
+    "Defender": "DEF",
+    "Midfielder": "MID",
+    "Attacker": "FWD",
+}
+
+DB = "KLUB_HVIDOVREIF.AXIS"
+
+# --- DYNAMISK LIGA_IDS BYGGES SIKKERT ---
+active_leagues = SEASONS.get(SEASONNAME, {})
+optauuid_liste = list(active_leagues.values())
+
+if optauuid_liste:
+    rensede_uuids = [str(uuid).strip() for uuid in optauuid_liste if uuid]
+    LIGA_IDS = "('" + "', '".join(rensede_uuids) + "')"
+else:
+    LIGA_IDS = "('2mb332vncy4450vu14paj8844')"
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def hent_navne_map() -> dict:
+    try:
+        if hasattr(player_mapping, "PLAYER_MAPPING"):
+            mapping_data = player_mapping.PLAYER_MAPPING
+
+            if isinstance(mapping_data, list):
+                return {
+                    str(r.get("player_optauuid") or r.get("PLAYER_OPTAUUID"))
+                    .strip()
+                    .lower()
+                    .replace("t", ""): str(r.get("navn") or r.get("NAVN"))
+                    for r in mapping_data
+                    if (r.get("player_optauuid") or r.get("PLAYER_OPTAUUID"))
+                    and (r.get("navn") or r.get("NAVN"))
+                }
+            elif isinstance(mapping_data, dict):
+                return {
+                    str(k).strip().lower().replace("t", ""): str(v)
+                    for k, v in mapping_data.items()
+                }
+
+        return {}
+    except Exception:
+        return {}
+
+
+@st.cache_data(ttl=1800, show_spinner=False)
+def hent_holdliste(_conn) -> dict:
+    sql_query = (
+        "SELECT DISTINCT CONTESTANTHOME_NAME, CONTESTANTHOME_OPTAUUID "
+        "FROM {db}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID IN {liga_ids}"
+    ).format(db=DB, liga_ids=LIGA_IDS)
+
+    df_teams_raw = _conn.query(sql_query)
+    if df_teams_raw is not None:
+        df_teams_raw.columns = df_teams_raw.columns.str.lower()
+    else:
+        df_teams_raw = pd.DataFrame()
+
+    mapping_lookup = {
+        str(info["opta_uuid"]).lower().replace("t", ""): name
+        for name, info in TEAMS.items()
+        if "opta_uuid" in info
+    }
+
+    team_map = {}
+    if not df_teams_raw.empty:
+        for _, r in df_teams_raw.iterrows():
+            uuid_clean = str(r["contestanthome_optauuid"]).lower().replace("t", "")
+            if uuid_clean in mapping_lookup:
+                team_map[mapping_lookup[uuid_clean]] = r[
+                    "contestanthome_optauuid"
+                ]
+    return team_map
+
 
 def vis_side(dp=None):
-    try:
-        from data.players import player_mapping
-    except ImportError:
-        st.error(
-            "Kunne ikke finde eller indlæse 'player_mapping.py'. Sørg for filen ligger i mappen."
-        )
-        st.stop()
-
-    navne_map = hent_navne_map(player_mapping)
+    navne_map = hent_navne_map()
 
     st.markdown(
         """
@@ -39,18 +163,7 @@ def vis_side(dp=None):
     if not conn:
         return
 
-    DB = "KLUB_HVIDOVREIF.AXIS"
-    SEASONNAME = getattr(player_mapping, "SEASONNAME", "2025/2026")
-    active_leagues = SEASONS.get(SEASONNAME, {})
-    optauuid_liste = list(active_leagues.values())
-
-    if optauuid_liste:
-        rensede_uuids = [str(uuid).strip() for uuid in optauuid_liste if uuid]
-        LIGA_IDS = "('" + "', '".join(rensede_uuids) + "')"
-    else:
-        LIGA_IDS = "('2mb332vncy4450vu14paj8844')"
-
-    team_map = hent_holdliste(conn, DB, LIGA_IDS, TEAMS)
+    team_map = hent_holdliste(conn)
 
     col_spacer_top, col_h_hold = st.columns([3.5, 1.3])
 
@@ -69,6 +182,7 @@ def vis_side(dp=None):
     )
     valgt_uuid_hold = team_map.get(valgt_hold, "t7490")
     hold_logo = get_logo_img(valgt_uuid_hold)
+    primær_farve = get_team_color(valgt_hold, "primary", "#df003b")
 
     with st.spinner("Henter spillerstatistik..."):
         df_all_stats = hent_samlet_spiller_statistik(
@@ -79,13 +193,13 @@ def vis_side(dp=None):
         st.warning("Ingen spillerstatistik fundet.")
         st.stop()
 
-    valgt_uuid_clean = str(valgt_uuid_hold).lower().lstrip("t")
+    valgt_uuid_clean = str(valgt_uuid_hold).lower().replace("t", "")
     if "hold_optauuid" in df_all_stats.columns:
         df_hold_stats = df_all_stats[
             df_all_stats["hold_optauuid"]
             .astype(str)
             .str.lower()
-            .str.lstrip("t")
+            .str.replace("t", "")
             == valgt_uuid_clean
         ].copy()
     else:
@@ -123,9 +237,7 @@ def vis_side(dp=None):
             )
             st.markdown("</div>", unsafe_allow_html=True)
 
-        st.markdown(
-            "<div style='margin-bottom: 10px;'></div>", unsafe_allow_html=True
-        )
+        st.markdown("<div style='margin-bottom: 10px;'></div>", unsafe_allow_html=True)
 
         if not df_hold_stats.empty:
             df_vis_saeson = df_hold_stats.copy()
@@ -203,9 +315,7 @@ def vis_side(dp=None):
                 }
             )
 
-            beregnet_hoejde_saeson = min(
-                int(len(df_visning_saeson) * 38 + 45), 600
-            )
+            beregnet_hoejde_saeson = int(len(df_visning_saeson) * 38 + 45)
             st.dataframe(
                 df_visning_saeson,
                 use_container_width=True,
@@ -262,8 +372,8 @@ def vis_side(dp=None):
 
             kamp_options = {}
             for _, r in df_matches.iterrows():
-                er_hjemme = str(r["contestanthome_optauuid"]) == str(
-                    valgt_uuid_hold
+                er_hjemme = (
+                    str(r["contestanthome_optauuid"]) == str(valgt_uuid_hold)
                 )
                 modstander = (
                     r["contestantaway_name"]
@@ -310,12 +420,10 @@ def vis_side(dp=None):
             )
             st.markdown("</div>", unsafe_allow_html=True)
 
-        st.markdown(
-            "<div style='margin-bottom: 10px;'></div>", unsafe_allow_html=True
-        )
+        st.markdown("<div style='margin-bottom: 10px;'></div>", unsafe_allow_html=True)
 
         if not df_matches.empty and valgt_kamp_uuid:
-            df_events_kamp, _, _ = hent_match_og_haendelsesdata(
+            df_events_kamp, df_expected_kamp, _ = hent_match_og_haendelsesdata(
                 conn, DB, valgt_uuid_hold, LIGA_IDS, navne_map
             )
 
@@ -342,7 +450,7 @@ def vis_side(dp=None):
                         df_kamp_events["hold_optauuid"]
                         .astype(str)
                         .str.lower()
-                        .str.lstrip("t")
+                        .str.replace("t", "")
                         == valgt_uuid_clean
                     ]
             else:
@@ -368,22 +476,15 @@ def vis_side(dp=None):
                                 "Afslutninger": x["event_typeid"]
                                 .isin([13, 14, 15, 16])
                                 .sum(),
-                                "Tacklinger": (
-                                    x["event_typeid"] == 7
-                                ).sum(),
+                                "Tacklinger": (x["event_typeid"] == 7).sum(),
                                 "Erobringer": x["event_typeid"]
                                 .isin([7, 8, 12, 49])
                                 .sum(),
-                                "Clearinger": (
-                                    x["event_typeid"] == 12
-                                ).sum(),
-                                "Blokeringer": (
-                                    x["event_typeid"] == 55
-                                ).sum(),
+                                "Clearinger": (x["event_typeid"] == 12).sum(),
+                                "Blokeringer": (x["event_typeid"] == 55).sum(),
                                 "Chancer_skabt": x.apply(
                                     lambda r: 1
-                                    if "210"
-                                    in str(r.get("qualifiers", ""))
+                                    if "210" in str(r.get("qualifiers", ""))
                                     else 0,
                                     axis=1,
                                 ).sum(),
@@ -395,7 +496,8 @@ def vis_side(dp=None):
                     .set_index("player_optauuid")
                 )
 
-                truppen_stats_kamp_kamp = event_stats_kamp.copy()
+                truppen_stats_kamp_raw = event_stats_kamp.copy()
+                truppen_stats_kamp_kamp = truppen_stats_kamp_raw.copy()
                 truppen_stats_kamp_kamp["Pasningsprocent"] = (
                     (
                         truppen_stats_kamp_kamp["Pasninger_Succes"]
@@ -417,16 +519,8 @@ def vis_side(dp=None):
                     "Mål",
                     "Assists",
                 ]
-                opb_kolonner = [
-                    "visningsnavn",
-                    "Pasninger",
-                    "Pasningsprocent",
-                ]
-                off_kolonner = [
-                    "visningsnavn",
-                    "Afslutninger",
-                    "Chancer_skabt",
-                ]
+                opb_kolonner = ["visningsnavn", "Pasninger", "Pasningsprocent"]
+                off_kolonner = ["visningsnavn", "Afslutninger", "Chancer_skabt"]
                 def_kolonner = [
                     "visningsnavn",
                     "Tacklinger",
@@ -472,9 +566,7 @@ def vis_side(dp=None):
                     }
                 )
 
-                beregnet_hoejde_kamp = min(
-                    int(len(df_visning_kamp) * 38 + 45), 600
-                )
+                beregnet_hoejde_kamp = int(len(df_visning_kamp) * 38 + 45)
                 st.dataframe(
                     df_visning_kamp,
                     use_container_width=True,
