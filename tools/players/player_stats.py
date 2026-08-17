@@ -165,7 +165,7 @@ def vis_side(dp=None):
                 hold_logo.save(buffered, format="PNG")
                 img_str = base64.b64encode(buffered.getvalue()).decode()
                 logo_html = f'<img src="data:image/png;base64,{img_str}" style="height: 26px; margin-right: 10px; object-fit: contain;">'
-            st.markdown(f'<div style="display: flex; align-items: center;">{logo_html}<span style="font-size: 16px; font-weight: bold; line-height: 1;">TRUPPOVERSIGT SÆSON - {valgt_hold.upper()}</span></div>', unsafe_allow_html=True)
+            st.markdown(f'<div style="display: flex; align-items: center;">{logo_html}<span style="font-size: 16px; font-weight: bold; line-height: 1;">HOLDOVERSIGT - {valgt_hold.upper()}</span></div>', unsafe_allow_html=True)
             
         with col_t1_btn:
             st.markdown('<div style="display: flex; justify-content: flex-end;">', unsafe_allow_html=True)
