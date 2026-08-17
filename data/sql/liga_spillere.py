@@ -4,9 +4,9 @@ import pandas as pd
 def hent_match_og_haendelsesdata(
     conn, db_navn, valgt_uuid_hold, liga_ids, navne_map
 ):
-    """Henter events, forventede mål og database-stats for hele ligaen fra Snowflake, inklusiv hold-tilhørsforhold og korrekte minutter inkl. tillægstid."""
+    """Henter events, forventede mål og database-stats for hele ligaen fra Snowflake, baseret på Opta-data."""
 
-    # 1. Events for hele ligaen (med MINUTE, SECOND og PERIOD inkluderet)
+    # 1. Events for hele ligaen
     sql_events = f"""
         SELECT 
             e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, e.MATCH_OPTAUUID, 
@@ -19,11 +19,14 @@ def hent_match_og_haendelsesdata(
             MAX(CASE WHEN q.QUALIFIER_QID = 140 THEN q.QUALIFIER_VALUE END) AS END_X,
             MAX(CASE WHEN q.QUALIFIER_QID = 141 THEN q.QUALIFIER_VALUE END) AS END_Y
         FROM {db_navn}.OPTA_EVENTS e
-        JOIN {db_navn}.OPTA_MATCHINFO m ON TO_VARCHAR(e.MATCH_OPTAUUID) = TO_VARCHAR(m.MATCH_OPTAUUID)
-        JOIN (SELECT DISTINCT PLAYER_OPTAUUID, FIRST_NAME, LAST_NAME, SHORT_LAST_NAME, MATCH_NAME FROM {db_navn}.OPTA_MATCH_LINEUPS WHERE FIRST_NAME IS NOT NULL) p 
-            ON TO_VARCHAR(e.PLAYER_OPTAUUID) = TO_VARCHAR(p.PLAYER_OPTAUUID)
-        LEFT JOIN {db_navn}.OPTA_QUALIFIERS q ON TO_VARCHAR(e.EVENT_OPTAUUID) = TO_VARCHAR(q.EVENT_OPTAUUID)
-        WHERE TO_VARCHAR(m.TOURNAMENTCALENDAR_OPTAUUID) IN {liga_ids}
+        JOIN {db_navn}.OPTA_MATCHINFO m ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
+        JOIN (
+            SELECT DISTINCT PLAYER_OPTAUUID, FIRST_NAME, LAST_NAME, SHORT_LAST_NAME, MATCH_NAME 
+            FROM {db_navn}.OPTA_MATCH_LINEUPS 
+            WHERE FIRST_NAME IS NOT NULL
+        ) p ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
+        LEFT JOIN {db_navn}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
+        WHERE m.TOURNAMENTCALENDAR_OPTAUUID IN {liga_ids}
           AND e.EVENT_TIMESTAMP >= '2026-07-01'
         GROUP BY 
             e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, e.MATCH_OPTAUUID, 
@@ -42,7 +45,6 @@ def hent_match_og_haendelsesdata(
             if col in df_all.columns:
                 df_all[col] = pd.to_numeric(df_all[col], errors="coerce")
 
-        # --- Håndtering af minut inkl. tillægstid ---
         def format_match_minute(row):
             period = row.get("period", 1)
             minute = row.get("minute", 0)
@@ -69,16 +71,8 @@ def hent_match_og_haendelsesdata(
         def fix_name(row):
             f_name = row.get("first_name")
             m_name = row.get("match_name")
-            f_str = (
-                str(f_name).strip()
-                if f_name is not None and str(f_name).lower() not in ["nan", "none"]
-                else ""
-            )
-            m_str = (
-                str(m_name).strip()
-                if m_name is not None and str(m_name).lower() not in ["nan", "none"]
-                else ""
-            )
+            f_str = str(f_name).strip() if f_name is not None and str(f_name).lower() not in ["nan", "none"] else ""
+            m_str = str(m_name).strip() if m_name is not None and str(m_name).lower() not in ["nan", "none"] else ""
             if m_str and "." in m_str:
                 parts = m_str.split(".", 1)
                 if len(parts) > 1 and f_str:
@@ -87,9 +81,7 @@ def hent_match_og_haendelsesdata(
 
         df_all["visningsnavn"] = df_all.apply(fix_name, axis=1)
         df_all["visningsnavn"] = df_all.apply(
-            lambda r: navne_map.get(
-                str(r["player_optauuid"]), r["visningsnavn"]
-            ),
+            lambda r: navne_map.get(str(r["player_optauuid"]), r["visningsnavn"]),
             axis=1,
         )
 
@@ -120,10 +112,10 @@ def hent_match_og_haendelsesdata(
                 p.MATCH_NAME, p.FIRST_NAME, p.SHORT_LAST_NAME,
                 LISTAGG(q.QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY q.QUALIFIER_QID) as QUALIFIERS
             FROM {db_navn}.OPTA_EVENTS e
-            JOIN {db_navn}.OPTA_MATCHINFO m ON TO_VARCHAR(e.MATCH_OPTAUUID) = TO_VARCHAR(m.MATCH_OPTAUUID)
-            JOIN {db_navn}.OPTA_MATCH_LINEUPS p ON TO_VARCHAR(e.PLAYER_OPTAUUID) = TO_VARCHAR(p.PLAYER_OPTAUUID)
-            LEFT JOIN {db_navn}.OPTA_QUALIFIERS q ON TO_VARCHAR(e.EVENT_OPTAUUID) = TO_VARCHAR(q.EVENT_OPTAUUID)
-            WHERE TO_VARCHAR(m.TOURNAMENTCALENDAR_OPTAUUID) IN {liga_ids}
+            JOIN {db_navn}.OPTA_MATCHINFO m ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
+            JOIN {db_navn}.OPTA_MATCH_LINEUPS p ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
+            LEFT JOIN {db_navn}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
+            WHERE m.TOURNAMENTCALENDAR_OPTAUUID IN {liga_ids}
               AND e.EVENT_TIMESTAMP >= '2026-07-01'
             GROUP BY e.EVENT_OPTAUUID, e.PLAYER_OPTAUUID, e.EVENT_TYPEID, e.EVENT_TIMESTAMP, e.MATCH_OPTAUUID, e.EVENT_CONTESTANT_OPTAUUID, p.FIRST_NAME, p.SHORT_LAST_NAME, p.MATCH_NAME
         ),
@@ -157,7 +149,7 @@ def hent_match_og_haendelsesdata(
             g.FIRST_NAME as first_name, g.SHORT_LAST_NAME as short_last_name,
             g.GOALS as goals, COALESCE(a.ASSISTS, 0) as assists
         FROM PlayerGoals g
-        LEFT JOIN PlayerAssists a ON TO_VARCHAR(g.PLAYER_OPTAUUID) = TO_VARCHAR(a.PLAYER_OPTAUUID)
+        LEFT JOIN PlayerAssists a ON g.PLAYER_OPTAUUID = a.PLAYER_OPTAUUID
     """
     df_db_stats = conn.query(sql_db_stats)
     if df_db_stats is not None:
@@ -166,9 +158,7 @@ def hent_match_og_haendelsesdata(
             subset=["player_optauuid"]
         ).copy()
         df_db_stats["visningsnavn"] = df_db_stats.apply(
-            lambda r: navne_map.get(
-                str(r["player_optauuid"]), r.get("match_name", "Ukendt")
-            ),
+            lambda r: navne_map.get(str(r["player_optauuid"]), r.get("match_name", "Ukendt")),
             axis=1,
         )
 
