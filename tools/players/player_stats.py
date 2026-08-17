@@ -70,26 +70,22 @@ else:
 @st.cache_data(ttl=600, show_spinner=False)
 def hent_navne_map() -> dict:
     try:
-        # Henter direkte fra player_mapping som den eneste sandhed
         if hasattr(player_mapping, 'PLAYER_MAPPING'):
             mapping_data = player_mapping.PLAYER_MAPPING
             
-            # Hvis PLAYER_MAPPING er en liste af dictionaries
             if isinstance(mapping_data, list):
+                # Normaliser nøglen ved at fjerne 't' og gøre den til små bogstaver
                 return {
-                    str(r.get('player_optauuid') or r.get('PLAYER_OPTAUUID')): str(r.get('navn') or r.get('NAVN')) 
+                    str(r.get('player_optauuid') or r.get('PLAYER_OPTAUUID')).strip().lower().replace('t', ''): str(r.get('navn') or r.get('NAVN')) 
                     for r in mapping_data 
                     if (r.get('player_optauuid') or r.get('PLAYER_OPTAUUID')) and (r.get('navn') or r.get('NAVN'))
                 }
-            
-            # Hvis PLAYER_MAPPING allerede er et dictionary
             elif isinstance(mapping_data, dict):
-                return {str(k): str(v) for k, v in mapping_data.items()}
+                return {str(k).strip().lower().replace('t', ''): str(v) for k, v in mapping_data.items()}
                 
         return {}
     except Exception:
         return {}
-
 
 @st.cache_data(ttl=1800, show_spinner=False)
 def hent_holdliste(_conn) -> dict:
