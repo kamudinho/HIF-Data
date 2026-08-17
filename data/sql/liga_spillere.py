@@ -2,6 +2,16 @@ import numpy as np
 import pandas as pd
 
 
+def _rens_uuid(val):
+    """Sikker rensning af Opta UUID, der fjerner evt. foranstillet 't' uden at røre 't' inde i strengen."""
+    if val is None:
+        return ""
+    s = str(val).strip().lower()
+    if s.startswith("t"):
+        s = s[1:]
+    return s
+
+
 def _forbered_liga_ids(liga_ids):
     """Sikrer at liga_ids altid konverteres til et sikkert SQL IN-format, uanset datatype."""
     if liga_ids is None:
@@ -53,14 +63,16 @@ def _anvend_player_mapping(df, navne_map):
         return df
 
     def get_mapped_name(row):
-        uuid_val = str(row.get(uuid_col, "")).strip().lower().replace("t", "")
-        # Søg direkte i player_mapping map
+        uuid_val = _rens_uuid(row.get(uuid_col, ""))
         if uuid_val in navne_map:
             return navne_map[uuid_val]
-        
-        # Fallback til eksisterende visningsnavn hvis det findes
+
         for col in ["visningsnavn", "match_name", "first_name"]:
-            if col in row and pd.notna(row[col]) and str(row[col]).strip().lower() not in ["nan", "none", ""]:
+            if (
+                col in row
+                and pd.notna(row[col])
+                and str(row[col]).strip().lower() not in ["nan", "none", ""]
+            ):
                 return str(row[col]).strip()
         return "Fejlspiller"
 
