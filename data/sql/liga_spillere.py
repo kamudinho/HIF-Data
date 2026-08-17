@@ -1,14 +1,40 @@
 import pandas as pd
+import numpy as np
 
 def _forbered_liga_ids(liga_ids):
     """Sikrer at liga_ids altid konverteres til et sikkert SQL IN-format, uanset datatype."""
-    if isinstance(liga_ids, (str, int, float)):
-        liga_ids = [liga_ids]
-    elif not isinstance(liga_ids, (list, tuple, set)):
-        liga_ids = [str(liga_ids)]
+    if liga_ids is None:
+        return "('__DUMMY__')"
     
-    liga_ids_liste = [f"'{str(x).strip()}'" for x in liga_ids if x is not None]
-    return f"({', '.join(liga_ids_liste)})"
+    if isinstance(liga_ids, pd.Series):
+        liga_ids = liga_ids.dropna().tolist()
+    elif isinstance(liga_ids, np.ndarray):
+        liga_ids = liga_ids.tolist()
+    elif isinstance(liga_ids, (str, int, float)):
+        s = str(liga_ids).strip()
+        if ',' in s and not (s.startswith("'") or s.startswith('"') or s.startswith('(')):
+            liga_ids = [item.strip() for item in s.split(',')]
+        else:
+            liga_ids = [s]
+    elif isinstance(liga_ids, (list, tuple, set)):
+        liga_ids = list(liga_ids)
+    else:
+        try:
+            liga_ids = list(liga_ids)
+        except Exception:
+            liga_ids = [str(liga_ids)]
+    
+    clean_ids = []
+    for x in liga_ids:
+        if x is not None:
+            val = str(x).strip().strip("'\"()[]")
+            if val:
+                clean_ids.append(f"'{val}'")
+                
+    if not clean_ids:
+        return "('__DUMMY__')"
+        
+    return f"({', '.join(clean_ids)})"
 
 def hent_match_og_haendelsesdata(conn, db_navn, valgt_uuid_hold, liga_ids, navne_map):
     """Henter events, forventede mål og database-stats for hele ligaen fra Snowflake, inklusiv hold-tilhørsforhold."""
