@@ -3,7 +3,13 @@ import pandas as pd
 def hent_match_og_haendelsesdata(conn, db_navn, valgt_uuid_hold, liga_ids, navne_map):
     """Henter events, forventede mål og database-stats for hele ligaen fra Snowflake, inklusiv hold-tilhørsforhold."""
 
-    # 1. Events for hele ligaen - inklusiv m.MATCHLENGHTMIN
+    # Sikr at liga_ids er formateret korrekt som en SQL tuple med tekst-strenge (f.eks. ('uuid1', 'uuid2'))
+    if isinstance(liga_ids, (list, tuple, set)):
+        liga_ids_sql = str(tuple(str(x) for x in liga_ids)) if len(liga_ids) > 1 else f"('{list(liga_ids)[0]}')"
+    else:
+        liga_ids_sql = liga_ids
+
+    # 1. Events for hele ligaen
     sql_events = f"""
         SELECT 
             e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, e.MATCH_OPTAUUID, 
@@ -19,7 +25,7 @@ def hent_match_og_haendelsesdata(conn, db_navn, valgt_uuid_hold, liga_ids, navne
         JOIN (SELECT DISTINCT PLAYER_OPTAUUID, FIRST_NAME, LAST_NAME, SHORT_LAST_NAME, MATCH_NAME FROM {db_navn}.OPTA_MATCH_LINEUPS WHERE FIRST_NAME IS NOT NULL) p 
             ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
         LEFT JOIN {db_navn}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
-        WHERE m.TOURNAMENTCALENDAR_OPTAUUID IN {liga_ids}
+        WHERE m.TOURNAMENTCALENDAR_OPTAUUID IN {liga_ids_sql}
           AND e.EVENT_TIMESTAMP >= '2026-07-01'
         GROUP BY 
             e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, e.MATCH_OPTAUUID, 
@@ -60,7 +66,7 @@ def hent_match_og_haendelsesdata(conn, db_navn, valgt_uuid_hold, liga_ids, navne
             MAX(CASE WHEN STAT_TYPE = 'expectedAssists' THEN STAT_VALUE ELSE 0 END) AS xa,
             MAX(CASE WHEN STAT_TYPE = 'minsPlayed' THEN STAT_VALUE ELSE 0 END) AS minutes
         FROM {db_navn}.OPTA_MATCHEXPECTEDGOALS
-        WHERE TOURNAMENTCALENDAR_OPTAUUID IN {liga_ids}
+        WHERE TOURNAMENTCALENDAR_OPTAUUID IN {liga_ids_sql}
           AND MATCH_STATUS = 'Played'
         GROUP BY MATCH_OPTAUUID, PLAYER_OPTAUUID, CONTESTANT_OPTAUUID
     """
@@ -80,7 +86,7 @@ def hent_match_og_haendelsesdata(conn, db_navn, valgt_uuid_hold, liga_ids, navne
             JOIN {db_navn}.OPTA_MATCHINFO m ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
             JOIN {db_navn}.OPTA_MATCH_LINEUPS p ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
             LEFT JOIN {db_navn}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
-            WHERE m.TOURNAMENTCALENDAR_OPTAUUID IN {liga_ids}
+            WHERE m.TOURNAMENTCALENDAR_OPTAUUID IN {liga_ids_sql}
               AND e.EVENT_TIMESTAMP >= '2026-07-01'
             GROUP BY e.EVENT_OPTAUUID, e.PLAYER_OPTAUUID, e.EVENT_TYPEID, e.EVENT_TIMESTAMP, e.MATCH_OPTAUUID, e.EVENT_CONTESTANT_OPTAUUID, p.FIRST_NAME, p.SHORT_LAST_NAME, p.MATCH_NAME
         ),
