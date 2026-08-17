@@ -3,7 +3,6 @@ import pandas as pd
 def hent_match_og_haendelsesdata(conn, db_navn, valgt_uuid_hold, liga_ids, navne_map):
     """Henter events, forventede mål og database-stats for hele ligaen fra Snowflake, inklusiv hold-tilhørsforhold."""
 
-    # Sikr at liga_ids er formateret korrekt som en SQL tuple med tekst-strenge (f.eks. ('uuid1', 'uuid2'))
     if isinstance(liga_ids, (list, tuple, set)):
         liga_ids_sql = str(tuple(str(x) for x in liga_ids)) if len(liga_ids) > 1 else f"('{list(liga_ids)[0]}')"
     else:
@@ -37,7 +36,6 @@ def hent_match_og_haendelsesdata(conn, db_navn, valgt_uuid_hold, liga_ids, navne
 
     if df_all is not None and not df_all.empty:
         df_all.columns = df_all.columns.str.lower()
-
         for col in ['end_x', 'end_y', 'matchlenghtmin']:
             if col in df_all.columns:
                 df_all[col] = pd.to_numeric(df_all[col], errors='coerce')
@@ -74,7 +72,7 @@ def hent_match_og_haendelsesdata(conn, db_navn, valgt_uuid_hold, liga_ids, navne
     if df_expected is not None:
         df_expected.columns = df_expected.columns.str.lower()
 
-    # 3. DB Stats (Mål og assists via events) for hele ligaen
+    # 3. DB Stats for hele ligaen
     sql_db_stats = f"""
         WITH EventQualifiers AS (
             SELECT 
@@ -130,3 +128,19 @@ def hent_match_og_haendelsesdata(conn, db_navn, valgt_uuid_hold, liga_ids, navne
         df_db_stats['visningsnavn'] = df_db_stats.apply(lambda r: navne_map.get(str(r['player_optauuid']), r['visningsnavn']), axis=1)
 
     return df_all, df_expected, df_db_stats
+
+def _byg_event_stats(df_events):
+    if df_events.empty:
+        return pd.DataFrame()
+    return df_events.groupby('player_optauuid').agg(
+        Aktioner=('event_typeid', 'count'),
+        Pasninger=('event_typeid', lambda x: (x == 1).sum()),
+        Pasninger_Succes=('outcome', lambda x: ((x == 1) & (df_events.loc[x.index, 'event_typeid'] == 1)).sum())
+    )
+
+def is_assist(event_typeid, qual_list):
+    return False
+
+def tilfoej_fremadrettede_pasninger(df_stats, df_events):
+    df_stats['fremadrettede_pasninger'] = 0
+    return df_stats
