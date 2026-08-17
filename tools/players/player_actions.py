@@ -510,44 +510,28 @@ def vis_side(dp=None):
                             "som ikke findes i de hentede data lige nu."
                         )
                     else:
+                        # Inkluderer ALLE pasninger i sidste 1/3 (både fremad- og bagudrettede)
                         d = df_plot[
                             (df_plot['event_typeid'] == 1) &
-                            (df_plot['end_x'] > 66.7) &
-                            (df_plot['end_x'] > df_plot['event_x'])
+                            (df_plot['event_x'] > 66.7)
                         ].dropna(subset=['end_x', 'end_y'])
 
                         succes = d[d['outcome'] == 1]
                         fejl = d[d['outcome'] != 1]
 
+                        # Ikke-succesfulde pasninger (Rød)
                         if not fejl.empty:
                             pitch.arrows(
                                 fejl.event_x, fejl.event_y, fejl.end_x, fejl.end_y,
-                                ax=ax, color='#bdbdbd', width=0.7, headwidth=2, headlength=3, alpha=0.6, zorder=2
+                                ax=ax, color='red', width=1.1, headwidth=3, headlength=4, alpha=0.8, zorder=2
                             )
+                        
+                        # Succesfulde pasninger (Grøn)
                         if not succes.empty:
                             pitch.arrows(
                                 succes.event_x, succes.event_y, succes.end_x, succes.end_y,
                                 ax=ax, color='green', width=1.3, headwidth=3, headlength=4, alpha=0.85, zorder=3
                             )
 
-                        ax.scatter(d.event_x, d.event_y, color='green', s=20, edgecolors='white', alpha=0.6, zorder=4)
-                elif visning == "Pasninger bagud (sidste 1/3)":
-                    if 'end_x' not in df_plot.columns or 'end_y' not in df_plot.columns:
-                        st.info("Slutkoordinater mangler i data.")
-                    else:
-                        d_bagud = df_plot[
-                            (df_plot['event_typeid'] == 1) & 
-                            (df_plot['event_x'] > 66.7) & 
-                            (df_plot['end_x'] < df_plot['event_x'])
-                        ].dropna(subset=['end_x', 'end_y'])
-
-                        if not d_bagud.empty:
-                            pitch.arrows(
-                                d_bagud.event_x, d_bagud.event_y, d_bagud.end_x, d_bagud.end_y,
-                                ax=ax, color='red', width=1.5, headwidth=4, headlength=5, alpha=0.9, zorder=3
-                            )
-                            ax.scatter(d_bagud.event_x, d_bagud.event_y, color='red', s=30, edgecolors='white', zorder=4)
-                        else:
-                            st.info("Ingen pasninger bagud fundet fra sidste tredjedel.")
-
+                        ax.scatter(d.event_x, d.event_y, color='black', s=20, edgecolors='white', alpha=0.6, zorder=4)
             st.pyplot(fig, use_container_width=True)
