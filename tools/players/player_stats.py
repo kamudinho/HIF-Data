@@ -290,7 +290,7 @@ def vis_side(dp=None):
     primær_farve = get_team_color(valgt_hold, "primary", "#df003b")
 
     with st.spinner("Henter spillerstatistik..."):
-        df_all, df_liga_total, truppen_stats, truppen_stats_liga, df_expected = hent_samlet_spiller_statistik(conn, valgt_uuid_hold, navne_map)
+        df_all, df_liga_total, truppen_stats, truppen_stats_liga, df_expected = hent_samlet_spiller_statistik(conn, DB, LIGA_IDS, navne_map)
 
     if df_all.empty:
         st.warning("Ingen hændelsesdata fundet.")
@@ -318,7 +318,7 @@ def vis_side(dp=None):
 
     spiller_position = POSITION_MAP.get(str(valgt_player_uuid).strip(), 'Ukendt') if valgt_player_uuid else 'Ukendt'
 
-    t_team, t_matches, t_profile, t_pitch, t_phys = st.tabs(["Holdoversigt", "Kampoversigt", "Spillerprofil", "Spilleraktioner", "Fysisk data"])
+    t_team, t_matches = st.tabs(["Holdoversigt", "Kampoversigt"])
 
     with t_matches:
         col_t_title, col_t_matches, col_t_btn = st.columns([1.3, 2.0, 1.7], vertical_alignment="center")
