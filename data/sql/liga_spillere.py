@@ -1,8 +1,10 @@
 import pandas as pd
 
 
-def hent_spiller_aggregerede_stats(conn, db_navn, liga_ids, navne_map):
-    """Henter fuldt aggregerede spiller-stats direkte fra Snowflake, hvor hver kategori udgør sin egen kolonne."""
+def hent_match_og_haendelsesdata(
+    conn, db_navn, valgt_uuid_hold, liga_ids, navne_map
+):
+    """Henter fuldt aggregerede spiller-stats direkte fra Snowflake med alle kategorier på én række."""
 
     sql_query = f"""
         WITH EventQualifiers AS (
