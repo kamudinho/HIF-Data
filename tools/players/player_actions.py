@@ -368,8 +368,7 @@ def vis_side(dp=None):
             "Berøringer": "Alle aktioner hvor spilleren har været i kontakt med bolden.",
             "Afslutninger": "Oversigt over alle skudforsøg (Mål = firkant, skud = cirkel).",
             "Defensive aktioner": "Tacklinger, bolderobringer og opsnappede afleveringer.",
-            "Offensive pasninger": "Fremadrettede pasninger til sidste tredjedel (grøn = succes, grå = % succes).",
-            "Pasninger bagud (sidste 1/3)": "Alle pasninger der spilles bagud, når spilleren befinder sig i den sidste tredjedel af banen.",
+            "Offensive pasninger": "Alle pasninger i sidste tredjedel (både fremad- og bagudrettede, grøn = succes, rød = fejl).",
             "Alle aktioner": "Alle aktionstyper (blå = aflevering, rød = dribling, orange = afslutning, grøn = mål, lilla = defensiv aktion)."
         }
         touch_ids = [1, 3, 7, 10, 11, 12, 13, 14, 15, 16, 42, 44, 49, 50, 51, 54, 61, 73]
@@ -510,28 +509,41 @@ def vis_side(dp=None):
                             "som ikke findes i de hentede data lige nu."
                         )
                     else:
-                        # Inkluderer ALLE pasninger i sidste 1/3 (både fremad- og bagudrettede)
+                        # Inkluderer alle pasninger i sidste 1/3
                         d = df_plot[
                             (df_plot['event_typeid'] == 1) &
                             (df_plot['event_x'] > 66.7)
                         ].dropna(subset=['end_x', 'end_y'])
 
+                        # Opdeling i succes vs. fejl
                         succes = d[d['outcome'] == 1]
                         fejl = d[d['outcome'] != 1]
 
-                        # Ikke-succesfulde pasninger (Rød)
+                        # Heraf deles succesfulde op i fremadrettede og bagudrettede
+                        succes_fremad = succes[succes['end_x'] > succes['event_x']]
+                        succes_bagud = succes[succes['end_x'] <= succes['event_x']]
+
+                        # 1. Tegn ikke-succesfulde (Grå) først
                         if not fejl.empty:
                             pitch.arrows(
                                 fejl.event_x, fejl.event_y, fejl.end_x, fejl.end_y,
-                                ax=ax, color='red', width=1.1, headwidth=3, headlength=4, alpha=0.8, zorder=2
-                            )
-                        
-                        # Succesfulde pasninger (Grøn)
-                        if not succes.empty:
-                            pitch.arrows(
-                                succes.event_x, succes.event_y, succes.end_x, succes.end_y,
-                                ax=ax, color='green', width=1.3, headwidth=3, headlength=4, alpha=0.85, zorder=3
+                                ax=ax, color='gray', width=1.1, headwidth=3, headlength=4, alpha=0.7, zorder=2
                             )
 
-                        ax.scatter(d.event_x, d.event_y, color='black', s=20, edgecolors='white', alpha=0.6, zorder=4)
+                        # 2. Tegn bagudrettede succesfulde (Røde)
+                        if not succes_bagud.empty:
+                            pitch.arrows(
+                                succes_bagud.event_x, succes_bagud.event_y, succes_bagud.end_x, succes_bagud.end_y,
+                                ax=ax, color='red', width=1.3, headwidth=3, headlength=4, alpha=0.85, zorder=3
+                            )
+
+                        # 3. Tegn fremadrettede succesfulde (Grønne) øverst
+                        if not succes_fremad.empty:
+                            pitch.arrows(
+                                succes_fremad.event_x, succes_fremad.event_y, succes_fremad.end_x, succes_fremad.end_y,
+                                ax=ax, color='green', width=1.4, headwidth=3.5, headlength=4.5, alpha=0.9, zorder=4
+                            )
+
+                        ax.scatter(d.event_x, d.event_y, color='black', s=20, edgecolors='white', alpha=0.6, zorder=5)
+                        
             st.pyplot(fig, use_container_width=True)
