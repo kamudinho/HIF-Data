@@ -41,7 +41,6 @@ def hent_match_og_haendelsesdata(conn, db_navn, valgt_uuid_hold, liga_ids, navne
     """Henter events, forventede mål og database-stats for hele ligaen fra Snowflake."""
     liga_ids_sql = _forbered_liga_ids(liga_ids)
 
-    # 1. Events for hele ligaen (Bruger .replace() i stedet for .format())
     sql_events = """
         SELECT 
             e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, e.MATCH_OPTAUUID, 
@@ -91,7 +90,6 @@ def hent_match_og_haendelsesdata(conn, db_navn, valgt_uuid_hold, liga_ids, navne
     else:
         df_all = pd.DataFrame()
 
-    # 2. Expected goals (xG/xA)
     sql_expected = """
         SELECT 
             MATCH_OPTAUUID,
@@ -112,7 +110,6 @@ def hent_match_og_haendelsesdata(conn, db_navn, valgt_uuid_hold, liga_ids, navne
     else:
         df_expected = pd.DataFrame()
 
-    # 3. DB Stats
     sql_db_stats = """
         WITH EventQualifiers AS (
             SELECT 
@@ -202,7 +199,7 @@ def hent_samlet_spiller_statistik(conn, db_navn, liga_ids, navne_map=None):
         LEFT JOIN {db_navn}.OPTA_QUALIFIERS q_endx ON e.EVENT_OPTAUUID = q_endx.EVENT_OPTAUUID AND q_endx.QUALIFIER_QID = 140
         WHERE m.TOURNAMENTCALENDAR_OPTAUUID IN {liga_ids_sql}
         GROUP BY e.PLAYER_OPTAUUID, e.EVENT_CONTESTANT_OPTAUUID
-    },
+    ),
     ExpectedAggregates AS (
         SELECT 
             PLAYER_OPTAUUID,
