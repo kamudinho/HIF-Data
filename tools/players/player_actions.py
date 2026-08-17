@@ -88,7 +88,7 @@ def hent_holdliste(_conn) -> dict:
     return team_map
 
 
-def vis_spilleraktioner():
+def vis_side():
     navne_map = hent_navne_map()
 
     st.markdown("""
