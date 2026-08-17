@@ -129,6 +129,102 @@ def hent_match_og_haendelsesdata(conn, db_navn, valgt_uuid_hold, liga_ids, navne
 
     return df_all, df_expected, df_db_stats
 
+def hent_samlet_spiller_statistisk(conn, db_navn, liga_ids, navne_map=None):
+    """Henter fuldt aggregerede spillerstatistikker direkte via optimeret SQL-forespørgsel."""
+    if navne_map is None:
+        navne_map = {}
+
+    if isinstance(liga_ids, (list, tuple, set)):
+        liga_ids_sql = str(tuple(str(x) for x in liga_ids)) if len(liga_ids) > 1 else f"('{list(liga_ids)[0]}')"
+    else:
+        liga_ids_sql = f"('{liga_ids}')"
+
+    sql_query = f"""
+    WITH EventAggregates AS (
+        SELECT 
+            e.PLAYER_OPTAUUID,
+            e.EVENT_CONTESTANT_OPTAUUID AS HOLD_OPTAUUID,
+            COUNT(DISTINCT e.MATCH_OPTAUUID) AS Kampe,
+            COUNT(e.EVENT_OPTAUUID) AS Aktioner,
+            SUM(CASE WHEN e.EVENT_TYPEID = 1 THEN 1 ELSE 0 END) AS Pasninger,
+            SUM(CASE WHEN e.EVENT_TYPEID = 1 AND e.EVENT_OUTCOME = 1 THEN 1 ELSE 0 END) AS Pasninger_Succes,
+            SUM(CASE WHEN e.EVENT_TYPEID = 1 AND TRY_CAST(q_endx.QUALIFIER_VALUE AS FLOAT) > e.EVENT_X THEN 1 ELSE 0 END) AS Fremadrettede_Pasninger,
+            SUM(CASE WHEN e.EVENT_TYPEID IN (13, 14, 15, 16) THEN 1 ELSE 0 END) AS Afslutninger,
+            SUM(CASE WHEN e.EVENT_TYPEID = 16 THEN 1 ELSE 0 END) AS Maal,
+            SUM(CASE WHEN e.EVENT_TYPEID = 7 THEN 1 ELSE 0 END) AS Tacklinger,
+            SUM(CASE WHEN e.EVENT_TYPEID IN (7, 8, 12, 49) THEN 1 ELSE 0 END) AS Erobringer,
+            SUM(CASE WHEN e.EVENT_TYPEID = 12 THEN 1 ELSE 0 END) AS Clearinger,
+            SUM(CASE WHEN e.EVENT_TYPEID = 55 THEN 1 ELSE 0 END) AS Blokeringer
+        FROM {db_navn}.OPTA_EVENTS e
+        JOIN {db_navn}.OPTA_MATCHINFO m ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
+        LEFT JOIN {db_navn}.OPTA_QUALIFIERS q_endx ON e.EVENT_OPTAUUID = q_endx.EVENT_OPTAUUID AND q_endx.QUALIFIER_QID = 140
+        WHERE m.TOURNAMENTCALENDAR_OPTAUUID IN {liga_ids_sql}
+        GROUP BY e.PLAYER_OPTAUUID, e.EVENT_CONTESTANT_OPTAUUID
+    ),
+    ExpectedAggregates AS (
+        SELECT 
+            PLAYER_OPTAUUID,
+            CONTESTANT_OPTAUUID AS HOLD_OPTAUUID,
+            SUM(CASE WHEN STAT_TYPE = 'expectedGoals' THEN TRY_CAST(STAT_VALUE AS FLOAT) ELSE 0 END) AS xG,
+            SUM(CASE WHEN STAT_TYPE = 'expectedAssists' THEN TRY_CAST(STAT_VALUE AS FLOAT) ELSE 0 END) AS xA,
+            SUM(CASE WHEN STAT_TYPE = 'minsPlayed' THEN TRY_CAST(STAT_VALUE AS FLOAT) ELSE 0 END) AS Minutter
+        FROM {db_navn}.OPTA_MATCHEXPECTEDGOALS
+        WHERE TOURNAMENTCALENDAR_OPTAUUID IN {liga_ids_sql}
+          AND MATCH_STATUS = 'Played'
+        GROUP BY PLAYER_OPTAUUID, CONTESTANT_OPTAUUID
+    ),
+    PlayerNames AS (
+        SELECT DISTINCT PLAYER_OPTAUUID, FIRST_NAME, SHORT_LAST_NAME, MATCH_NAME
+        FROM {db_navn}.OPTA_MATCH_LINEUPS
+        WHERE FIRST_NAME IS NOT NULL
+    )
+    SELECT 
+        pn.FIRST_NAME,
+        pn.SHORT_LAST_NAME,
+        pn.MATCH_NAME,
+        ea.PLAYER_OPTAUUID AS player_optauuid,
+        ea.HOLD_OPTAUUID,
+        ea.Kampe,
+        COALESCE(xa.Minutter, 0) AS Minutter,
+        ea.Aktioner,
+        ea.Pasninger,
+        ROUND((ea.Pasninger_Succes / NULLIF(ea.Pasninger, 0)) * 100, 1) AS Pasningsprocent,
+        ea.Fremadrettede_Pasninger,
+        ea.Afslutninger,
+        ea.Maal,
+        COALESCE(xa.xG, 0) AS xG,
+        COALESCE(xa.xA, 0) AS xA,
+        ea.Tacklinger,
+        ea.Erobringer,
+        ea.Clearinger,
+        ea.Blokeringer
+    FROM EventAggregates ea
+    LEFT JOIN ExpectedAggregates xa ON ea.PLAYER_OPTAUUID = xa.PLAYER_OPTAUUID AND ea.HOLD_OPTAUUID = xa.HOLD_OPTAUUID
+    LEFT JOIN PlayerNames pn ON ea.PLAYER_OPTAUUID = pn.PLAYER_OPTAUUID
+    ORDER BY ea.Aktioner DESC;
+    """
+
+    df = conn.query(sql_query)
+    if df is not None and not df.empty:
+        df.columns = df.columns.str.lower()
+        
+        def fix_name(row):
+            f_name = row.get('first_name')
+            m_name = row.get('match_name')
+            f_str = str(f_name).strip() if f_name is not None and str(f_name).lower() not in ['nan', 'none'] else ""
+            m_str = str(m_name).strip() if m_name is not None and str(m_name).lower() not in ['nan', 'none'] else ""
+            if m_str and '.' in m_str:
+                parts = m_str.split('.', 1)
+                if len(parts) > 1 and f_str:
+                    return f"{f_str} {parts[1].strip()}"
+            return m_str if m_str else (f_str if f_str else "Ukendt spiller")
+
+        df['visningsnavn'] = df.apply(fix_name, axis=1)
+        if navne_map:
+            df['visningsnavn'] = df.apply(lambda r: navne_map.get(str(r['player_optauuid']), r['visningsnavn']), axis=1)
+
+    return df
+
 def _byg_event_stats(df_events):
     if df_events.empty:
         return pd.DataFrame()
