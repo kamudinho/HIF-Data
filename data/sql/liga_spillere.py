@@ -38,7 +38,7 @@ def hent_match_og_haendelsesdata(
   if df_all is not None and not df_all.empty:
     df_all.columns = df_all.columns.str.lower()
 
-    for col in ["end_x", "end_y"]:
+    for col in ["end_x", "end_y", "minute", "second", "period"]:
       if col in df_all.columns:
         df_all[col] = pd.to_numeric(df_all[col], errors="coerce")
 
@@ -48,12 +48,11 @@ def hent_match_og_haendelsesdata(
       minute = row.get("minute", 0)
 
       try:
-        period = int(period)
-        minute = int(minute)
+        period = int(period) if pd.notna(period) else 1
+        minute = int(minute) if pd.notna(minute) else 0
       except (ValueError, TypeError):
         return str(minute)
 
-      # Opta gemmer tillægstid ved at lade minuttallet fortsætte over den ordinære spilletid
       if period == 1 and minute > 45:
         return f"45+{minute - 45}"
       elif period == 2 and minute > 90:
@@ -114,7 +113,7 @@ def hent_match_og_haendelsesdata(
 
   # 3. DB Stats (Mål og assists via events)
   sql_db_stats = f"""
-        With EventQualifiers AS (
+        WITH EventQualifiers AS (
             SELECT 
                 e.EVENT_OPTAUUID, e.PLAYER_OPTAUUID, e.EVENT_TYPEID, e.EVENT_TIMESTAMP, e.MATCH_OPTAUUID,
                 e.EVENT_CONTESTANT_OPTAUUID as HOLD_OPTAUUID,
