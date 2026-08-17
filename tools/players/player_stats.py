@@ -11,7 +11,7 @@ import base64
 
 # --- DATA OG MAPPING ---
 from data.data_load import _get_snowflake_conn
-from data.utils.team_mapping import TEAMS, TEAM_COLORS
+from data.utils.team_mapping import TEAMS, TEAM_COLORS, SEASONS
 from data.utils.mapping import OPTA_EVENT_TYPES, OPTA_QUALIFIERS, get_action_label, is_assist, har_qualifier
 
 # --- SPILLER-KATEGORIER (position -> aktionskategorier, offensiv/defensiv) ---
@@ -32,7 +32,7 @@ try:
     primær_farve = getattr(player_mapping, 'primær_farve', "#df003b")
     valgt_hold = getattr(player_mapping, 'valgt_hold', "Hvidovre")
     conn = getattr(player_mapping, 'conn', None)
-    SEASONNAME = getattr(player_mapping, 'SEASONNAME', "2025/2026")
+    SEASONNAME = getattr(player_mapping, 'SEASONNAME', "2026/2027")
 except ImportError:
     st.error("Kunne ikke finde eller indlæse 'player_mapping.py'. Sørg for filen ligger i mappen.")
     st.stop()
@@ -163,19 +163,16 @@ AKTIONS_FARVER = [
     ("Defensiv aktion", lambda d: d['event_typeid'].isin([5, 7, 8, 12, 49, 55]), '#9467bd', 55, 'o'),
 ]
 
-# Hent den aktuelle sæson og tilhørende Opta turnering(er) automatisk
-SEASONNAME = "2026/2027"  # eller hentet fra session_state / player_mapping
 DB = "KLUB_HVIDOVREIF.AXIS"
 
-# Hent Opta UUID for 1. Division (eller de turneringer der hører til sæsonen)
+# Hent Opta UUID for den aktive sæson dynamisk fra SEASONS (importeret ovenfor)
 active_leagues = SEASONS.get(SEASONNAME, {})
 optauuid_liste = list(active_leagues.values())
 
-# Byg LIGA_IDS-strengen dynamisk i det format Snowflake forventer: ('uuid1', 'uuid2')
 if optauuid_liste:
     LIGA_IDS = "('" + "', '".join(optauuid_liste) + "')"
 else:
-    LIGA_IDS = "('2mb332vncy4450vu14paj8844')"  # Fallback
+    LIGA_IDS = "('2mb332vncy4450vu14paj8844')"
 
 @st.cache_data(ttl=600, show_spinner="Indlæser spillerliste...")
 def hent_navne_map() -> dict:
