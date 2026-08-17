@@ -91,11 +91,12 @@ def hent_holdliste(_conn) -> dict:
 def vis_side():
     navne_map = hent_navne_map()
 
+    # Fjernet grå baggrundsfarve fra metrics via CSS
     st.markdown("""
         <style>
         [data-testid="stMetricValue"] { font-size: 15px !important; text-align: center; font-weight: bold !important; width: 100%; }
         [data-testid="stMetricLabel"] { font-size: 10px !important; text-align: center; width: 100%; }
-        [data-testid="stMetric"] { display: flex; flex-direction: column; align-items: center; background-color: #f9f9f9; padding: 4px; border-radius: 4px; }
+        [data-testid="stMetric"] { display: flex; flex-direction: column; align-items: center; background-color: transparent !important; padding: 2px !important; }
         .player-header { font-size: 18px; font-weight: bold; margin-bottom: 10px; color: #1E1E1E; }
         </style>
         """, unsafe_allow_html=True)
@@ -152,6 +153,9 @@ def vis_side():
     valgt_spiller_navn = col_spiller.selectbox("Vælg spiller", sorted(list(spiller_options.keys())), label_visibility="collapsed")
     valgt_player_uuid = spiller_options.get(valgt_spiller_navn)
 
+    # Vandret linje mellem top-filtrering og indholdet
+    st.markdown("<hr style='margin: 10px 0 20px 0; opacity: 0.3;'>", unsafe_allow_html=True)
+
     # Hent kamp/hændelsesdata for holdet
     with st.spinner("Henter spillerens aktioner..."):
         df_events, _, _ = hent_match_og_haendelsesdata(conn, DB, valgt_uuid_hold, LIGA_IDS, navne_map)
@@ -193,7 +197,13 @@ def vis_side():
         "Alle aktioner": "Alle aktionstyper (blå = aflevering, rød = dribling, orange = afslutning, grøn = mål, lilla = defensiv aktion)."
     }
 
-    df_filtreret = df_spiller[~df_spiller['Action_Label'].isin(['Pasning', 'Indkast'])]
+    # Sikr at outcome kolonnen findes og er numerisk for aggregering
+    if 'outcome' not in df_spiller.columns:
+        df_spiller['outcome'] = 0
+    else:
+        df_spiller['outcome'] = pd.to_numeric(df_spiller['outcome'], errors='fillna').fillna(0)
+
+    df_filtreret = df_spiller[~df_spiller['Action_Label'].isin(['Pasning', 'Indkast'])].copy()
 
     akt_stats = pd.DataFrame()
     if not df_filtreret.empty:
@@ -287,6 +297,8 @@ def vis_side():
                     f'<span>{akt}</span><span style="font-family:monospace;">{stats_html}</span></div>', 
                     unsafe_allow_html=True
                 )
+        else:
+            st.caption("Ingen aktionsdata tilgængelig.")
 
     # --- HØJRE KOLONNE: BANE & DROPDOWN ---
     with c_pitch_side:
@@ -376,4 +388,4 @@ def vis_side():
         st.pyplot(fig, use_container_width=True)
 
 if __name__ == "__main__":
-    vis_spilleraktioner()
+    vis_side()
