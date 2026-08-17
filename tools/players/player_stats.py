@@ -25,14 +25,12 @@ from data.sql.liga_spillere import hent_samlet_spiller_statistik, hent_match_og_
 
 try:
     from data.players import player_mapping
-    valgt_player_uuid = st.session_state.get('valgt_player_uuid', getattr(player_mapping, 'valgt_player_uuid', None))
-    valgt_spiller = st.session_state.get('valgt_spiller', getattr(player_mapping, 'valgt_spiller', None))
     df_spiller = getattr(player_mapping, 'df_spiller', None)
     hold_logo = getattr(player_mapping, 'hold_logo', None)
     primær_farve = getattr(player_mapping, 'primær_farve', "#df003b")
     valgt_hold = getattr(player_mapping, 'valgt_hold', "Hvidovre")
     conn = getattr(player_mapping, 'conn', None)
-    SEASONNAME = getattr(player_mapping, 'SEASONNAME', "2026/2027")
+    SEASONNAME = getattr(player_mapping, 'SEASONNAME', "2025/2026")
 except ImportError:
     st.error("Kunne ikke finde eller indlæse 'player_mapping.py'. Sørg for filen ligger i mappen.")
     st.stop()
@@ -81,7 +79,6 @@ def hent_navne_map() -> dict:
 
 @st.cache_data(ttl=1800, show_spinner=False)
 def hent_holdliste(_conn) -> dict:
-    # Brug .format() i stedet for f-string for at undgå klammefejl
     sql_query = (
         "SELECT DISTINCT CONTESTANTHOME_NAME, CONTESTANTHOME_OPTAUUID "
         "FROM {db}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID IN {liga_ids}"
@@ -125,7 +122,8 @@ def vis_side(dp=None):
 
     team_map = hent_holdliste(conn)
 
-    col_spacer_top, col_h_hold, col_h_spiller = st.columns([2, 1.2, 1.2])
+    # KUN HOLDSPEKTRE / HOLD-DROPDOWN ØVERST
+    col_spacer_top, col_h_hold = st.columns([3.5, 1.3])
 
     default_team_idx = 0
     team_names = sorted(list(team_map.keys()))
@@ -140,34 +138,105 @@ def vis_side(dp=None):
     primær_farve = get_team_color(valgt_hold, "primary", "#df003b")
 
     with st.spinner("Henter spillerstatistik..."):
-        # Henter den samlede optimerede DataFrame korrekt
         df_all_stats = hent_samlet_spiller_statistik(conn, DB, LIGA_IDS, navne_map)
 
     if df_all_stats is None or df_all_stats.empty:
         st.warning("Ingen spillerstatistik fundet.")
         st.stop()
 
-    df_spillere_unikke = df_all_stats[['visningsnavn', 'player_optauuid']].drop_duplicates()
-
-    spiller_options = {}
-    for _, r in df_spillere_unikke.iterrows():
-        navn = r['visningsnavn']
-        uuid = r['player_optauuid']
-        
-        eng_pos = POSITION_MAP.get(str(uuid).strip(), 'Ukendt')
-        da_pos = POSITION_DA.get(eng_pos, eng_pos)
-        
-        visnings_label = f"{navn} ({da_pos})"
-        spiller_options[visnings_label] = uuid
-
-    spiller_liste = sorted(list(spiller_options.keys()))
-    valgt_label = col_h_spiller.selectbox("Spiller", spiller_liste if spiller_liste else [""], label_visibility="collapsed")
-
-    valgt_player_uuid = spiller_options.get(valgt_label, None)
-    valgt_spiller = valgt_label.split(" (")[0] if valgt_label else ""
+    # FILTRÉR SÅ DET KUN ER DET VALGTE HOLDS SPILLERE DER VISES
+    valgt_uuid_clean = str(valgt_uuid_hold).lower().replace('t', '')
+    if 'hold_optauuid' in df_all_stats.columns:
+        df_hold_stats = df_all_stats[
+            df_all_stats['hold_optauuid'].astype(str).str.lower().str.replace('t', '') == valgt_uuid_clean
+        ].copy()
+    else:
+        df_hold_stats = df_all_stats.copy()
 
     t_team, t_matches = st.tabs(["Holdoversigt", "Kampoversigt"])
 
+    # --- TAB 1: HOLDOVERSIGT (SÆSONSTATISTIK FOR TRUPPEN) ---
+    with t_team:
+        col_t1_title, col_t1_btn = st.columns([2.0, 2.0], vertical_alignment="center")
+        with col_t1_title:
+            logo_html = ""
+            if hold_logo is not None:
+                buffered = io.BytesIO()
+                hold_logo.save(buffered, format="PNG")
+                img_str = base64.b64encode(buffered.getvalue()).decode()
+                logo_html = f'<img src="data:image/png;base64,{img_str}" style="height: 26px; margin-right: 10px; object-fit: contain;">'
+            st.markdown(f'<div style="display: flex; align-items: center;">{logo_html}<span style="font-size: 16px; font-weight: bold; line-height: 1;">TRUPPOVERSIGT SÆSON - {valgt_hold.upper()}</span></div>', unsafe_allow_html=True)
+            
+        with col_t1_btn:
+            st.markdown('<div style="display: flex; justify-content: flex-end;">', unsafe_allow_html=True)
+            kategori_valg_saeson = st.segmented_control(
+                "Visningskategori Sæson", 
+                options=["Generelt", "Opbygning", "Offensiv", "Defensiv"], 
+                default="Generelt",
+                key="saeson_kategori_control",
+                label_visibility="collapsed"
+            )
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        st.markdown("<div style='margin-bottom: 10px;'></div>", unsafe_allow_html=True)
+
+        if not df_hold_stats.empty:
+            df_vis_saeson = df_hold_stats.copy()
+            
+            gen_kolonner = ['visningsnavn', 'kampe', 'minutter', 'aktioner', 'maal', 'xg', 'xa']
+            opb_kolonner = ['visningsnavn', 'pasninger', 'pasningsprocent', 'fremadrettede_pasninger']
+            off_kolonner = ['visningsnavn', 'afslutninger', 'maal', 'xg', 'xa']
+            def_kolonner = ['visningsnavn', 'tacklinger', 'erobringer', 'clearinger', 'blokeringer']
+
+            if kategori_valg_saeson == "Generelt":
+                eksisterende_kolonner = [k for k in gen_kolonner if k in df_vis_saeson.columns]
+            elif kategori_valg_saeson == "Opbygning":
+                eksisterende_kolonner = [k for k in opb_kolonner if k in df_vis_saeson.columns]
+            elif kategori_valg_saeson == "Offensiv":
+                eksisterende_kolonner = [k for k in off_kolonner if k in df_vis_saeson.columns]
+            elif kategori_valg_saeson == "Defensiv":
+                eksisterende_kolonner = [k for k in def_kolonner if k in df_vis_saeson.columns]
+            else:  
+                eksisterende_kolonner = [k for k in df_vis_saeson.columns if k not in ['player_optauuid', 'hold_optauuid']]
+
+            df_visning_saeson = df_vis_saeson[eksisterende_kolonner].copy()
+            if 'aktioner' in df_visning_saeson.columns:
+                df_visning_saeson = df_visning_saeson.sort_values(by='aktioner', ascending=False)
+
+            df_visning_saeson = df_visning_saeson.rename(columns={
+                'visningsnavn': 'Spiller',
+                'kampe': 'Kampe',
+                'minutter': 'Minutter',
+                'aktioner': 'Aktioner',
+                'pasninger': 'Pasninger',
+                'pasningsprocent': 'Pasning (%)',
+                'fremadrettede_pasninger': 'Fremadrettede pasninger',
+                'afslutninger': 'Afslutninger',
+                'maal': 'Mål',
+                'xg': 'xG',
+                'xa': 'xA',
+                'tacklinger': 'Tacklinger',
+                'erobringer': 'Erobringer',
+                'clearinger': 'Clearinger',
+                'blokeringer': 'Blokeringer'
+            })
+
+            beregnet_hoejde_saeson = int(len(df_visning_saeson) * 38 + 45)
+            st.dataframe(
+                df_visning_saeson, 
+                use_container_width=True, 
+                hide_index=True,
+                height=beregnet_hoejde_saeson,
+                column_config={
+                    "Pasning (%)": st.column_config.NumberColumn("Pasning (%)", format="%.1f%%"),
+                    "xG": st.column_config.NumberColumn("xG", format="%.2f"),
+                    "xA": st.column_config.NumberColumn("xA", format="%.2f")
+                }
+            )
+        else:
+            st.info("Ingen spillerstatistik fundet for det valgte hold.")
+
+    # --- TAB 2: KAMPOVERSIGT ---
     with t_matches:
         col_t_title, col_t_matches, col_t_btn = st.columns([1.3, 2.0, 1.7], vertical_alignment="center")
         with col_t_title:
@@ -228,12 +297,17 @@ def vis_side(dp=None):
         st.markdown("<div style='margin-bottom: 10px;'></div>", unsafe_allow_html=True)
         
         if not df_matches.empty and valgt_kamp_uuid:
-            # Hent eventdata for den valgte kamp ved behov via match-funktionen
             df_events_kamp, df_expected_kamp, _ = hent_match_og_haendelsesdata(conn, DB, valgt_uuid_hold, LIGA_IDS, navne_map)
             
             if df_events_kamp is not None and not df_events_kamp.empty:
                 match_col_in_all = next((col for col in ['match_optauuid', 'match_id'] if col in df_events_kamp.columns), None)
                 df_kamp_events = df_events_kamp[df_events_kamp[match_col_in_all].astype(str) == valgt_kamp_uuid].copy() if match_col_in_all else pd.DataFrame()
+                
+                # SIKR AT KAMP-EVENTS KUN VISER DET VALGTE HOLDS SPILLERE
+                if 'hold_optauuid' in df_kamp_events.columns:
+                    df_kamp_events = df_kamp_events[
+                        df_kamp_events['hold_optauuid'].astype(str).str.lower().str.replace('t', '') == valgt_uuid_clean
+                    ]
             else:
                 df_kamp_events = pd.DataFrame()
             
