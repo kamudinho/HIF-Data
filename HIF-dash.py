@@ -228,9 +228,9 @@ try:
         elif s == "Målsekvenser":
             import tools.hifanalyse.sequences as ms
             ms.vis_side()
-        elif s == "Spiller-view":
-            import tools.players.player_view as pv
-            pv.vis_side()
+        elif s == "Spilleraktioner":
+            import tools.players.player_actions as pa
+            pa.vis_side()
         elif s == "Spiller-stats":
             import tools.players.player_stats as ps
             ps.vis_side()
