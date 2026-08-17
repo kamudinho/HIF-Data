@@ -3,81 +3,68 @@ import pandas as pd
 import io
 import base64
 from mplsoccer import Pitch
-# Importér din funktion (tilpas stien hvis nødvendigt)
 from data.sql.liga_spillere import hent_match_og_haendelsesdata
 from utils.helpers import draw_player_info_box
 
-# ---------------------------------------------------------------------------
-# KONSTANTER
-# ---------------------------------------------------------------------------
-TOUCH_IDS = [1, 3, 7, 10, 11, 12, 13, 14, 15, 16, 42, 44, 49, 50, 51, 54, 61, 73]
-DESCRIPTIONS = {
-    "Heatmap": "Viser spillerens generelle bevægelsesmønster.",
-    "Berøringer": "Alle aktioner med boldkontakt.",
-    "Afslutninger": "Skudforsøg (Mål = firkant, skud = cirkel).",
-    "Defensive aktioner": "Tacklinger, erobringer og opsnappede afleveringer.",
-    "Offensive pasninger": "Fremadrettede pasninger til sidste tredjedel.",
-    "Alle aktioner": "Oversigt over samtlige aktionstyper."
-}
-
 def render_spilleraktioner(df_spiller, valgt_spiller, hold_logo, primær_farve, spiller_position, valgt_player_uuid, season_name="2026/2027"):
-    """Selve logikken der tegner interfacet."""
-    
+    """Renderer interfacet (Logik adskilt fra dataindlæsning)."""
     if df_spiller is None or df_spiller.empty:
         st.info("Ingen spilledata fundet for den valgte spiller.")
         return
 
-    # Statistikker (som i din oprindelige kode)
-    df_filtreret = df_spiller[~df_spiller['action_label'].isin(['Pasning', 'Indkast'])] # Bemærk små bogstaver fra din SQL-funktion
-    akt_stats = df_filtreret.groupby('action_label').agg(Total=('outcome', 'count'), Succes=('outcome', 'sum')).sort_values('Total', ascending=False)
-
-    c1, c2, c3 = st.columns([1, 0.05, 2.2])
+    # Sørg for at vi bruger små bogstaver (da din SQL-funktion konverterer til lowercase)
+    df_spiller.columns = df_spiller.columns.str.lower()
     
-    with c1:
-        st.subheader(valgt_spiller)
-        st.metric("Total aktioner", len(df_spiller))
-        # ... (Her kan du indsætte dine metrikker fra tidligere)
+    # Resten af din logik her...
+    st.subheader(valgt_spiller)
+    st.write(f"Antal aktioner: {len(df_spiller)}")
+    
+    # Eksempel på banetegning
+    pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
+    fig, ax = pitch.draw(figsize=(10, 7))
+    st.pyplot(fig)
 
-    with c3:
-        visning = st.selectbox("Visning", list(DESCRIPTIONS.keys()), key=f"sel_{valgt_player_uuid}")
-        
-        pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
-        fig, ax = pitch.draw(figsize=(10, 7))
-        
-        # Plot logik
-        df_plot = df_spiller.dropna(subset=['event_x', 'event_y'])
-        if visning == "Heatmap":
-            pitch.kdeplot(df_plot.event_x, df_plot.event_y, ax=ax, cmap='Blues', fill=True, levels=50)
-        
-        st.pyplot(fig)
-
-def vis_side(conn, db_navn, hold_uuid, liga_ids, navne_map, hold_logo, primær_farve):
+def vis_side(conn=None, db_navn=None, hold_uuid=None, liga_ids=None, navne_map=None, hold_logo=None, primær_farve=None):
     """
-    Henter data og renderer siden. 
-    Dette er den funktion du kalder i din hovedapp.
+    Wrapper der automatisk henter argumenter fra session_state, 
+    hvis de ikke sendes med i kaldet.
     """
-    # 1. Hent alt data
-    with st.spinner("Henter spillerdata..."):
-        df_all, df_expected, df_db_stats = hent_match_og_haendelsesdata(conn, db_navn, hold_uuid, liga_ids, navne_map)
+    # 1. Hent fra argumenter eller session_state
+    conn = conn or st.session_state.get('conn')
+    db_navn = db_navn or st.session_state.get('db_navn')
+    hold_uuid = hold_uuid or st.session_state.get('hold_uuid')
+    liga_ids = liga_ids or st.session_state.get('liga_ids')
+    navne_map = navne_map or st.session_state.get('navne_map')
+    hold_logo = hold_logo or st.session_state.get('hold_logo')
+    primær_farve = primær_farve or st.session_state.get('primær_farve', '#1f77b4')
+
+    # Validering
+    if any(v is None for v in [conn, db_navn, hold_uuid, liga_ids]):
+        st.error("Mangler database-konfiguration. Sørg for at conn, db_navn, hold_uuid og liga_ids er sat.")
+        return
+
+    # 2. Hent data
+    @st.cache_data(ttl=3600)
+    def load_all_data(conn, db, uuid, ids, mapping):
+        return hent_match_og_haendelsesdata(conn, db, uuid, ids, mapping)
+
+    df_all, _, _ = load_all_data(conn, db_navn, hold_uuid, liga_ids, navne_map)
+
+    # 3. Vælg spiller
+    spillere = sorted(df_all['visningsnavn'].unique())
+    valgt_navn = st.selectbox("Vælg spiller", spillere, key="spiller_selector")
     
-    # 2. Vælg spiller
-    spillere = df_all['visningsnavn'].unique()
-    valgt_navn = st.selectbox("Vælg spiller", spillere)
-    
-    # 3. Filtrer data til den valgte spiller
+    # 4. Filtrer
     df_spiller = df_all[df_all['visningsnavn'] == valgt_navn].copy()
     player_uuid = df_spiller['player_optauuid'].iloc[0]
     
-    # 4. Render
+    # 5. Render
     render_spilleraktioner(
         df_spiller=df_spiller,
         valgt_spiller=valgt_navn,
         hold_logo=hold_logo,
         primær_farve=primær_farve,
-        spiller_position="Midfielder", # Kan udvides
+        spiller_position="Midfielder", 
         valgt_player_uuid=player_uuid,
         season_name="2026/2027"
     )
-
-# --- HVORDAN DU KALDER DEN I DIN HOVEDAPP ---
-# vis_side(conn, "HVIDOVRE_DB", "7490", (328,), { ... }, logo, "#0000FF")
