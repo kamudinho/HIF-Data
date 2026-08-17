@@ -11,6 +11,7 @@ from mplsoccer import Pitch
 from data.data_load import _get_snowflake_conn
 from data.utils.team_mapping import TEAMS, SEASONS
 from data.utils.mapping import get_action_label
+from data.utils.spiller_qualifiers import EVENT_TYPES, ACTION_CATEGORIES
 
 # --- GENERELLE UI-HJÆLPERE ---
 from utils.helpers import get_logo_img, get_team_color, draw_player_info_box
@@ -52,24 +53,6 @@ HIDDEN_VIEWS_PER_POSITION = {
     "Målmand": ["Offensive pasninger", "Afslutninger"]
 }
 
-FALLBACK_LABELS = {
-    1: "Pasning",
-    3: "Dribling",
-    7: "Tackling",
-    8: "Interception",
-    13: "Skud forbi",
-    14: "Skud blokeret",
-    15: "Skud på stolpe",
-    16: "Mål",
-    42: "Clearing",
-    44: "Frispark vundet",
-    49: "Erobring",
-    50: "Boldtab",
-    51: "Fejl / Boldtab",
-    55: "Fejl",
-    73: "Duel"
-}
-
 @st.cache_data(ttl=600, show_spinner=False)
 def hent_navne_map() -> dict:
     try:
@@ -104,6 +87,25 @@ def hent_holdliste(_conn) -> dict:
             if uuid_clean in mapping_lookup:
                 team_map[mapping_lookup[uuid_clean]] = r['contestanthome_optauuid']
     return team_map
+
+
+def map_event_to_category(row) -> str:
+    """Mapper en hændelse ved hjælp af spiller_qualifiers og fallback til EVENT_TYPES."""
+    try:
+        type_id = int(row.get('event_typeid', 0))
+    except (ValueError, TypeError):
+        type_id = 0
+
+    # 1. Tjek mod overordnede ACTION_CATEGORIES fra spiller_qualifiers.py
+    for cat_key, cat_data in ACTION_CATEGORIES.items():
+        if type_id in cat_data.get("type_ids", []):
+            return cat_data.get("navn", "Ukendt aktion")
+            
+    # 2. Fallback til specifikke EVENT_TYPES
+    if type_id in EVENT_TYPES:
+        return EVENT_TYPES[type_id]
+        
+    return "Ukendt aktion"
 
 
 def vis_side():
@@ -190,18 +192,11 @@ def vis_side():
         st.info(f"Ingen registrerede aktioner for {valgt_spiller_navn} i de hentede kampe.")
         return
 
-    # Sikr nødvendige kolonner og felter
-    if 'action_label' not in df_spiller.columns:
-        df_spiller['Action_Label'] = df_spiller.apply(lambda r: get_action_label(r), axis=1)
-    else:
-        df_spiller['Action_Label'] = df_spiller['action_label']
-
-    # Robust rettelse af 'Ukendt aktion' ved at tjekke event_typeid mod fallback-mapping
+    # Sikr nødvendige kolonner og felter ved hjælp af vores nye mapping-funktion
     if 'event_typeid' in df_spiller.columns:
         df_spiller['event_typeid'] = pd.to_numeric(df_spiller['event_typeid'], errors='coerce')
-        mask_ukendt = df_spiller['Action_Label'].isin(['Ukendt', 'Ukendt aktion', 'nan', 'None', '']) | df_spiller['Action_Label'].isna()
-        if mask_ukendt.any():
-            df_spiller.loc[mask_ukendt, 'Action_Label'] = df_spiller.loc[mask_ukendt, 'event_typeid'].map(FALLBACK_LABELS).fillna('Ukendt aktion')
+
+    df_spiller['Action_Label'] = df_spiller.apply(lambda r: map_event_to_category(r), axis=1)
 
     if 'qual_list' not in df_spiller.columns:
         if 'qualifiers' in df_spiller.columns:
