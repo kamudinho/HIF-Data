@@ -38,11 +38,10 @@ def _forbered_liga_ids(liga_ids):
 
 
 def hent_match_og_haendelsesdata(conn, db_navn, valgt_uuid_hold, liga_ids, navne_map):
-    """Henter events, forventede mål og database-stats for hele ligaen fra Snowflake, inklusiv hold-tilhørsforhold."""
-
+    """Henter events, forventede mål og database-stats for hele ligaen fra Snowflake."""
     liga_ids_sql = _forbered_liga_ids(liga_ids)
 
-    # 1. Events for hele ligaen
+    # 1. Events for hele ligaen (Bruger .replace() i stedet for .format())
     sql_events = """
         SELECT 
             e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, e.MATCH_OPTAUUID, 
@@ -65,7 +64,7 @@ def hent_match_og_haendelsesdata(conn, db_navn, valgt_uuid_hold, liga_ids, navne
             p.MATCH_NAME, p.FIRST_NAME, p.SHORT_LAST_NAME, m.MATCHLENGTHMIN,
             e.PLAYER_OPTAUUID, e.EVENT_OUTCOME, e.EVENT_CONTESTANT_OPTAUUID, 
             e.EVENT_TIMESTAMP
-    """.format(db_navn=db_navn, liga_ids_sql=liga_ids_sql)
+    """.replace("{db_navn}", str(db_navn)).replace("{liga_ids_sql}", str(liga_ids_sql))
     
     df_all = conn.query(sql_events)
 
@@ -86,10 +85,13 @@ def hent_match_og_haendelsesdata(conn, db_navn, valgt_uuid_hold, liga_ids, navne
                 return f"{f_str} {parts[1].strip()}"
         return m_str if m_str else (f_str if f_str else "Ukendt spiller")
 
-    df_all['visningsnavn'] = df_all.apply(fix_name, axis=1)
-    df_all['visningsnavn'] = df_all.apply(lambda r: navne_map.get(str(r['player_optauuid']), r['visningsnavn']), axis=1)
+    if df_all is not None and not df_all.empty:
+        df_all['visningsnavn'] = df_all.apply(fix_name, axis=1)
+        df_all['visningsnavn'] = df_all.apply(lambda r: navne_map.get(str(r['player_optauuid']), r['visningsnavn']), axis=1)
+    else:
+        df_all = pd.DataFrame()
 
-    # 2. Expected goals (xG/xA) for hele ligaen
+    # 2. Expected goals (xG/xA)
     sql_expected = """
         SELECT 
             MATCH_OPTAUUID,
@@ -102,13 +104,15 @@ def hent_match_og_haendelsesdata(conn, db_navn, valgt_uuid_hold, liga_ids, navne
         WHERE TOURNAMENTCALENDAR_OPTAUUID IN {liga_ids_sql}
           AND MATCH_STATUS = 'Played'
         GROUP BY MATCH_OPTAUUID, PLAYER_OPTAUUID, CONTESTANT_OPTAUUID
-    """.format(db_navn=db_navn, liga_ids_sql=liga_ids_sql)
+    """.replace("{db_navn}", str(db_navn)).replace("{liga_ids_sql}", str(liga_ids_sql))
     
     df_expected = conn.query(sql_expected)
     if df_expected is not None and not df_expected.empty:
         df_expected.columns = df_expected.columns.str.lower()
+    else:
+        df_expected = pd.DataFrame()
 
-    # 3. DB Stats for hele ligaen
+    # 3. DB Stats
     sql_db_stats = """
         WITH EventQualifiers AS (
             SELECT 
@@ -156,7 +160,7 @@ def hent_match_og_haendelsesdata(conn, db_navn, valgt_uuid_hold, liga_ids, navne
             g.GOALS as goals, COALESCE(a.ASSISTS, 0) as assists
         FROM PlayerGoals g
         LEFT JOIN PlayerAssists a ON g.PLAYER_OPTAUUID = a.PLAYER_OPTAUUID
-    """.format(db_navn=db_navn, liga_ids_sql=liga_ids_sql)
+    """.replace("{db_navn}", str(db_navn)).replace("{liga_ids_sql}", str(liga_ids_sql))
     
     df_db_stats = conn.query(sql_db_stats)
     if df_db_stats is not None and not df_db_stats.empty:
@@ -164,6 +168,8 @@ def hent_match_og_haendelsesdata(conn, db_navn, valgt_uuid_hold, liga_ids, navne
         df_db_stats = df_db_stats.drop_duplicates(subset=['player_optauuid']).copy()
         df_db_stats['visningsnavn'] = df_db_stats.apply(fix_name, axis=1)
         df_db_stats['visningsnavn'] = df_db_stats.apply(lambda r: navne_map.get(str(r['player_optauuid']), r['visningsnavn']), axis=1)
+    else:
+        df_db_stats = pd.DataFrame()
 
     return df_all, df_expected, df_db_stats
 
@@ -238,7 +244,7 @@ def hent_samlet_spiller_statistik(conn, db_navn, liga_ids, navne_map=None):
     LEFT JOIN ExpectedAggregates xa ON ea.PLAYER_OPTAUUID = xa.PLAYER_OPTAUUID AND ea.HOLD_OPTAUUID = xa.HOLD_OPTAUUID
     LEFT JOIN PlayerNames pn ON ea.PLAYER_OPTAUUID = pn.PLAYER_OPTAUUID
     ORDER BY ea.Aktioner DESC;
-    """.format(db_navn=db_navn, liga_ids_sql=liga_ids_sql)
+    """.replace("{db_navn}", str(db_navn)).replace("{liga_ids_sql}", str(liga_ids_sql))
 
     df = conn.query(sql_query)
     if df is not None and not df.empty:
@@ -258,6 +264,8 @@ def hent_samlet_spiller_statistik(conn, db_navn, liga_ids, navne_map=None):
         df['visningsnavn'] = df.apply(fix_name, axis=1)
         if navne_map:
             df['visningsnavn'] = df.apply(lambda r: navne_map.get(str(r['player_optauuid']), r['visningsnavn']), axis=1)
+    else:
+        df = pd.DataFrame()
 
     return df
 
