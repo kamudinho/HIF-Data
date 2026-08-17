@@ -165,12 +165,12 @@ AKTIONS_FARVER = [
 
 DB = "KLUB_HVIDOVREIF.AXIS"
 
-# Hent Opta UUID for den aktive sæson dynamisk fra SEASONS (importeret ovenfor)
+# --- DYNAMISK LIGA_IDS BYGGES KORREKT MED ANFØRSELSTEGN OG PARENTESER ---
 active_leagues = SEASONS.get(SEASONNAME, {})
 optauuid_liste = list(active_leagues.values())
 
 if optauuid_liste:
-    LIGA_IDS = "('" + "', '".join(optauuid_liste) + "')"
+    LIGA_IDS = "('" + "', '".join(str(uuid) for uuid in optauuid_liste) + "')"
 else:
     LIGA_IDS = "('2mb332vncy4450vu14paj8844')"
 
@@ -378,7 +378,6 @@ def vis_side(dp=None):
             df_kamp_events = df_all[df_all[match_col_in_all].astype(str) == valgt_kamp_uuid].copy() if match_col_in_all else pd.DataFrame()
             
             if not df_kamp_events.empty:
-                # Event stats beregning lokalt for den valgte kamp
                 event_stats_kamp = df_kamp_events.groupby(['player_optauuid', 'visningsnavn']).apply(lambda x: pd.Series({
                     'Kampe': 1,
                     'Aktioner': len(x),
