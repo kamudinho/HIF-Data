@@ -184,13 +184,14 @@ def hent_navne_map() -> dict:
     except Exception:
         return {}
 
-
 @st.cache_data(ttl=1800, show_spinner=False)
 def hent_holdliste(_conn) -> dict:
-    df_teams_raw = _conn.query(
-        f"SELECT DISTINCT CONTESTANTHOME_NAME, CONTESTANTHOME_OPTAUUID "
-        f"FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS}"
-    )
+    sql_query = (
+        "SELECT DISTINCT CONTESTANTHOME_NAME, CONTESTANTHOME_OPTAUUID "
+        "FROM {db}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID IN {liga_ids}"
+    ).format(db=DB, liga_ids=LIGA_IDS)
+    
+    df_teams_raw = _conn.query(sql_query)
     if df_teams_raw is not None:
         df_teams_raw.columns = df_teams_raw.columns.str.lower()
     else:
@@ -208,7 +209,6 @@ def hent_holdliste(_conn) -> dict:
             if uuid_clean in mapping_lookup:
                 team_map[mapping_lookup[uuid_clean]] = r['contestanthome_optauuid']
     return team_map
-
 
 def create_relative_donut(player_val, max_val, label, rank_text, color="#df003b"):
     base_max = max(max_val, player_val, 1)
