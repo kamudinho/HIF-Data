@@ -111,41 +111,6 @@ def formater_tid(row):
     return str(minute)
 
 
-def tilfoej_kategori_kolonner(df_stats: pd.DataFrame, df_events: pd.DataFrame, category_keys) -> pd.DataFrame:
-    if df_events is None or df_events.empty:
-        for key in category_keys:
-            if key not in df_stats.columns: df_stats[key] = 0
-        return df_stats
-
-    if "qual_set" not in df_events.columns:
-        df_events = df_events.copy()
-        df_events["qual_set"] = df_events["qual_list"].apply(
-            lambda ql: frozenset(str(q).strip() for q in ql) if isinstance(ql, list) else frozenset(str(q).strip() for q in str(ql).split(","))
-        )
-
-    for key in category_keys:
-        if key not in ACTION_CATEGORIES:
-            if key not in df_stats.columns: df_stats[key] = 0
-            continue
-
-        cat = ACTION_CATEGORIES[key]
-        type_mask = df_events["event_typeid"].isin(cat["type_ids"])
-
-        if key in KATEGORIER_DER_KRAEVER_QUALIFIER and cat["qualifier_ids"]:
-            qual_ids = {str(q) for q in cat["qualifier_ids"]}
-            delmaengde = df_events.loc[type_mask, "qual_set"]
-            qual_match = delmaengde.apply(lambda s: not qual_ids.isdisjoint(s))
-            final_mask = pd.Series(False, index=df_events.index)
-            final_mask.loc[qual_match.index] = qual_match
-        else:
-            final_mask = type_mask
-
-        counts = df_events[final_mask].groupby("player_optauuid").size()
-        df_stats[key] = counts.reindex(df_stats.index, fill_value=0).astype("Int64")
-
-    return df_stats
-
-
 def tilfoej_fremadrettede_pasninger(df_stats: pd.DataFrame, df_events: pd.DataFrame) -> pd.DataFrame:
     if df_events is None or df_events.empty or "end_x" not in df_events.columns:
         df_stats["fremadrettede_pasninger"] = 0
@@ -223,7 +188,8 @@ def hent_holdliste(_conn) -> dict:
         f"SELECT DISTINCT CONTESTANTHOME_NAME, CONTESTANTHOME_OPTAUUID "
         f"FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS}"
     )
-    df_teams_raw.columns = df_teams_raw.columns.str.lower() if df_teams_raw is not None else pd.DataFrame()
+    if df_teams_raw is not None:
+        df_teams_raw.columns = df_teams_raw.columns.str.lower()
 
     mapping_lookup = {
         str(info["opta_uuid"]).lower().replace("t", ""): name
@@ -262,54 +228,58 @@ def hent_kampliste(_conn, valgt_uuid_hold: str, seasonname: str) -> pd.DataFrame
 
 @st.cache_data(ttl=300, show_spinner="Henter og behandler holddata...")
 def byg_holdstats(_conn, valgt_uuid_hold: str, navne_map: dict):
-    df_all_raw = hent_match_og_haendelsesdata(
+    df_all_raw, df_expected_raw, df_db_stats_raw = hent_match_og_haendelsesdata(
         _conn, DB, valgt_uuid_hold, LIGA_IDS, navne_map
     )
     if df_all_raw is None or df_all_raw.empty:
         return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
-    # Da xg, xa, minutter mv. nu ligger direkte som kolonner i df_all_raw,
-    # kan vi opdele dem eller bruge dem direkte. Lad os oprette en kopi af expected-strukturen til kamp-oversigten:
-    df_expected = df_all_raw[
-        [
-            "player_optauuid",
-            "hold_optauuid",
-            "match_optauuid"
-            if "match_optauuid" in df_all_raw.columns
-            else "player_optauuid",
-            "xg",
-            "xa",
-            "minutes",
-        ]
-    ].copy()
+    # 1. Forbered events og filtrér på det valgte hold
+    df_all = _forbered_events(df_all_raw)
+    df_hold_events = df_all[df_all["hold_optauuid"] == valgt_uuid_hold].copy() if "hold_optauuid" in df_all.columns else df_all.copy()
 
-    df_all = (
-        df_all_raw[df_all_raw["hold_optauuid"] == valgt_uuid_hold].copy()
-        if "hold_optauuid" in df_all_raw.columns
-        else df_all_raw.copy()
-    )
-    df_all = _forbered_events(df_all)
+    # 2. Byg basis event-statistikker for holdet
+    truppen_stats = _byg_event_stats(df_hold_events)
 
-    # Da truppen_stats nu er delvist aggregeret i SQL, bygger vi videre eller mapper direkte:
-    truppen_stats = df_all_raw.copy()
-    if "visningsnavn" in truppen_stats.columns:
-        truppen_stats = truppen_stats.set_index("player_optauuid")
+    # 3. Aggregér forventede mål (xG, xA, minutter) for det valgte hold
+    if df_expected_raw is not None and not df_expected_raw.empty:
+        df_expected_hold = df_expected_raw[df_expected_raw["hold_optauuid"] == valgt_uuid_hold]
+        expected_agg = df_expected_hold.groupby("player_optauuid")[["xg", "xa", "minutes"]].sum()
+        
+        truppen_stats["Minutter"] = expected_agg["minutes"].reindex(truppen_stats.index, fill_value=0).round(0).astype("Int64")
+        truppen_stats["xG"] = expected_agg["xg"].reindex(truppen_stats.index, fill_value=0).round(2)
+        truppen_stats["xA"] = expected_agg["xa"].reindex(truppen_stats.index, fill_value=0).round(2)
+    else:
+        truppen_stats["Minutter"] = 0
+        truppen_stats["xG"] = 0.0
+        truppen_stats["xA"] = 0.0
 
-    truppen_stats["Kampe"] = 1  # Justeres afhængigt af din granuleret data
+    # 4. Flet mål og assists fra db_stats ind i holdoversigten
+    if df_db_stats_raw is not None and not df_db_stats_raw.empty:
+        df_db_hold = df_db_stats_raw[df_db_stats_raw["hold_optauuid"] == valgt_uuid_hold].set_index("player_optauuid")
+        truppen_stats["Mål"] = df_db_hold["goals"].reindex(truppen_stats.index, fill_value=0).astype("Int64")
+        truppen_stats["Assists"] = df_db_hold["assists"].reindex(truppen_stats.index, fill_value=0).astype("Int64")
+    else:
+        truppen_stats["Mål"] = 0
+        truppen_stats["Assists"] = 0
+
+    # 5. Beregn pasningsprocent og positioner
+    truppen_stats["Pasningsprocent"] = (
+        (truppen_stats["Pasninger_Succes"] / truppen_stats["Pasninger"]) * 100
+    ).where(truppen_stats["Pasninger"] > 0, 0).round(1)
+
     truppen_stats["Position"] = (
         truppen_stats.index.to_series()
         .astype(str)
         .apply(lambda u: POSITION_MAP.get(u.strip(), "Ukendt"))
     )
-    truppen_stats["Pasningsprocent"] = (
-        (truppen_stats["passes_completed"] / truppen_stats["passes_total"])
-        * 100
-    ).fillna(0).round(1)
 
-    return df_all, truppen_stats, df_expected
+    truppen_stats = tilfoej_fremadrettede_pasninger(truppen_stats, df_hold_events)
+
+    return df_all, truppen_stats, df_expected_raw
+
 
 def _generer_og_vis_tabel(truppen_df, kategori_valg):
-    """Hjælpefunktion til at vise formaterede tabeller for både hold- og kampoversigt."""
     if truppen_df.empty:
         st.info("Ingen statistik tilgængelig endnu.")
         return
@@ -407,7 +377,7 @@ def vis_side():
     with t_team:
         col_t_title, col_t_btn = st.columns([2.7, 1.3])
         with col_t_title:
-            logo_html = f'<img src="data:image/png;base64,{base64.b64encode(io.BytesIO().getvalue()).decode()}" style="height: 26px; margin-right: 10px; object-fit: contain;">' if hold_logo else ""
+            logo_html = ""
             if hold_logo:
                 buffered = io.BytesIO()
                 hold_logo.save(buffered, format="PNG")
