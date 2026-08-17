@@ -3,11 +3,11 @@ import pandas as pd
 def hent_match_og_haendelsesdata(conn, db_navn, valgt_uuid_hold, liga_ids, navne_map):
     """Henter events, forventede mål og database-stats for hele ligaen fra Snowflake, inklusiv hold-tilhørsforhold."""
     
-    # 1. Events for hele ligaen (med korrekt GROUP BY rækkefølge)
+    # 1. Events for hele ligaen (med MATCHLENGTHMIN inkluderet)
     sql_events = f"""
         SELECT 
             e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, e.MATCH_OPTAUUID, 
-            p.MATCH_NAME, p.FIRST_NAME, p.SHORT_LAST_NAME,
+            p.MATCH_NAME, p.FIRST_NAME, p.SHORT_LAST_NAME, m.MATCHLENGTHMIN,
             e.PLAYER_OPTAUUID, e.EVENT_OUTCOME as OUTCOME,
             e.EVENT_CONTESTANT_OPTAUUID as HOLD_OPTAUUID,
             TO_CHAR(e.EVENT_TIMESTAMP, 'YYYY-MM-DD HH24:MI:SS') as EVENT_TIMESTAMP_STR,
@@ -23,7 +23,7 @@ def hent_match_og_haendelsesdata(conn, db_navn, valgt_uuid_hold, liga_ids, navne
           AND e.EVENT_TIMESTAMP >= '2026-07-01'
         GROUP BY 
             e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, e.MATCH_OPTAUUID, 
-            p.MATCH_NAME, p.FIRST_NAME, p.SHORT_LAST_NAME,
+            p.MATCH_NAME, p.FIRST_NAME, p.SHORT_LAST_NAME, m.MATCHLENGTHMIN,
             e.PLAYER_OPTAUUID, e.EVENT_OUTCOME,
             e.EVENT_CONTESTANT_OPTAUUID,
             e.EVENT_TIMESTAMP
@@ -69,7 +69,7 @@ def hent_match_og_haendelsesdata(conn, db_navn, valgt_uuid_hold, liga_ids, navne
     if df_expected is not None:
         df_expected.columns = df_expected.columns.str.lower()
 
-    # 3. DB Stats (Mål og assists via events) for hele ligaen
+    # 3. DB Stats (Mål og assists via events)
     sql_db_stats = f"""
         WITH EventQualifiers AS (
             SELECT 
@@ -121,7 +121,6 @@ def hent_match_og_haendelsesdata(conn, db_navn, valgt_uuid_hold, liga_ids, navne
     if df_db_stats is not None:
         df_db_stats.columns = df_db_stats.columns.str.lower()
         df_db_stats = df_db_stats.drop_duplicates(subset=['player_optauuid']).copy()
-        df_db_stats['visningsnavn'] = df_db_stats.apply(fix_name, axis=1)
-        df_db_stats['visningsnavn'] = df_db_stats.apply(lambda r: navne_map.get(str(r['player_optauuid']), r['visningsnavn']), axis=1)
+        df_db_stats['visningsnavn'] = df_db_stats.apply(lambda r: navne_map.get(str(r['player_optauuid']), r.get('match_name', 'Ukendt')), axis=1)
 
     return df_all, df_expected, df_db_stats
