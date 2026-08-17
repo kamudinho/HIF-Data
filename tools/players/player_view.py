@@ -34,7 +34,7 @@ AKTIONS_FARVER = [
 
 
 def render_spilleraktioner(df_spiller: pd.DataFrame, valgt_spiller: str, hold_logo, primær_farve: str,
-                            spiller_position: str, valgt_player_uuid: str, season_name: str = ""):
+                            spiller_position: str, valgt_player_uuid: str, season_name: str = "2026/2027"):
     """
     Renderer Spilleraktioner-fanen (statistikpanel + banetegning) for den
     valgte spiller.
@@ -204,9 +204,9 @@ def vis_side(
     primær_farve=None,
     spiller_position=None,
     valgt_player_uuid=None,
-    season_name="2025/2026"
+    season_name="2026/2027"
 ):
-    """Robust wrapper-funktion der understøtter kald uden argumenter ved at hente fra session_state."""
+    """Wrapper-funktion for bagudkompatibilitet og session_state håndtering."""
     if df_spiller is None:
         df_spiller = st.session_state.get('df_spiller', pd.DataFrame())
     if valgt_spiller is None:
