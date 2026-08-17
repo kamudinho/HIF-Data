@@ -36,6 +36,7 @@ def _forbered_liga_ids(liga_ids):
         
     return f"({', '.join(clean_ids)})"
 
+
 def hent_match_og_haendelsesdata(conn, db_navn, valgt_uuid_hold, liga_ids, navne_map):
     """Henter events, forventede mål og database-stats for hele ligaen fra Snowflake, inklusiv hold-tilhørsforhold."""
 
@@ -102,7 +103,7 @@ def hent_match_og_haendelsesdata(conn, db_navn, valgt_uuid_hold, liga_ids, navne
         GROUP BY MATCH_OPTAUUID, PLAYER_OPTAUUID, CONTESTANT_OPTAUUID
     """
     df_expected = conn.query(sql_expected)
-    if df_expected is not None:
+    if df_expected is not None and not df_expected.empty:
         df_expected.columns = df_expected.columns.str.lower()
 
     # 3. DB Stats for hele ligaen
@@ -115,7 +116,8 @@ def hent_match_og_haendelsesdata(conn, db_navn, valgt_uuid_hold, liga_ids, navne
                 LISTAGG(q.QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY q.QUALIFIER_QID) as QUALIFIERS
             FROM {db_navn}.OPTA_EVENTS e
             JOIN {db_navn}.OPTA_MATCHINFO m ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
-            JOIN {db_navn}.OPTA_MATCH_LINEUPS p ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
+            JOIN (SELECT DISTINCT PLAYER_OPTAUUID, FIRST_NAME, LAST_NAME, SHORT_LAST_NAME, MATCH_NAME FROM {db_navn}.OPTA_MATCH_LINEUPS WHERE FIRST_NAME IS NOT NULL) p 
+                ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
             LEFT JOIN {db_navn}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
             WHERE m.TOURNAMENTCALENDAR_OPTAUUID IN {liga_ids_sql}
               AND e.EVENT_TIMESTAMP >= '2026-07-01'
@@ -154,13 +156,15 @@ def hent_match_og_haendelsesdata(conn, db_navn, valgt_uuid_hold, liga_ids, navne
         LEFT JOIN PlayerAssists a ON g.PLAYER_OPTAUUID = a.PLAYER_OPTAUUID
     """
     df_db_stats = conn.query(sql_db_stats)
-    if df_db_stats is not None:
+    if df_db_stats is not None and not df_db_stats.empty:
         df_db_stats.columns = df_db_stats.columns.str.lower()
         df_db_stats = df_db_stats.drop_duplicates(subset=['player_optauuid']).copy()
         df_db_stats['visningsnavn'] = df_db_stats.apply(fix_name, axis=1)
         df_db_stats['visningsnavn'] = df_db_stats.apply(lambda r: navne_map.get(str(r['player_optauuid']), r['visningsnavn']), axis=1)
 
+    # Returnerer præcis 3 værdier
     return df_all, df_expected, df_db_stats
+
 
 def hent_samlet_spiller_statistik(conn, db_navn, liga_ids, navne_map=None):
     """Henter fuldt aggregerede spillerstatistikker direkte via optimeret SQL-forespørgsel."""
@@ -190,7 +194,7 @@ def hent_samlet_spiller_statistik(conn, db_navn, liga_ids, navne_map=None):
         LEFT JOIN {db_navn}.OPTA_QUALIFIERS q_endx ON e.EVENT_OPTAUUID = q_endx.EVENT_OPTAUUID AND q_endx.QUALIFIER_QID = 140
         WHERE m.TOURNAMENTCALENDAR_OPTAUUID IN {liga_ids_sql}
         GROUP BY e.PLAYER_OPTAUUID, e.EVENT_CONTESTANT_OPTAUUID
-    ),
+    },
     ExpectedAggregates AS (
         SELECT 
             PLAYER_OPTAUUID,
@@ -202,7 +206,7 @@ def hent_samlet_spiller_statistik(conn, db_navn, liga_ids, navne_map=None):
         WHERE TOURNAMENTCALENDAR_OPTAUUID IN {liga_ids_sql}
           AND MATCH_STATUS = 'Played'
         GROUP BY PLAYER_OPTAUUID, CONTESTANT_OPTAUUID
-    ),
+    },
     PlayerNames AS (
         SELECT DISTINCT PLAYER_OPTAUUID, FIRST_NAME, SHORT_LAST_NAME, MATCH_NAME
         FROM {db_navn}.OPTA_MATCH_LINEUPS
@@ -254,6 +258,7 @@ def hent_samlet_spiller_statistik(conn, db_navn, liga_ids, navne_map=None):
             df['visningsnavn'] = df.apply(lambda r: navne_map.get(str(r['player_optauuid']), r['visningsnavn']), axis=1)
 
     return df
+
 
 def _byg_event_stats(df_events):
     if df_events.empty:
