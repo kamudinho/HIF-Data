@@ -67,12 +67,26 @@ if optauuid_liste:
 else:
     LIGA_IDS = "('2mb332vncy4450vu14paj8844')"
 
-@st.cache_data(ttl=600, show_spinner="Indlæser spillerliste...")
+@st.cache_data(ttl=600, show_spinner=False)
 def hent_navne_map() -> dict:
     try:
-        csv_path = os.path.join(os.getcwd(), 'data', 'players', '1div_overskrivning.csv')
-        df_csv = pd.read_csv(csv_path)
-        return dict(zip(df_csv['PLAYER_OPTAUUID'].astype(str), df_csv['NAVN']))
+        # Henter direkte fra player_mapping som den eneste sandhed
+        if hasattr(player_mapping, 'PLAYER_MAPPING'):
+            mapping_data = player_mapping.PLAYER_MAPPING
+            
+            # Hvis PLAYER_MAPPING er en liste af dictionaries
+            if isinstance(mapping_data, list):
+                return {
+                    str(r.get('player_optauuid') or r.get('PLAYER_OPTAUUID')): str(r.get('navn') or r.get('NAVN')) 
+                    for r in mapping_data 
+                    if (r.get('player_optauuid') or r.get('PLAYER_OPTAUUID')) and (r.get('navn') or r.get('NAVN'))
+                }
+            
+            # Hvis PLAYER_MAPPING allerede er et dictionary
+            elif isinstance(mapping_data, dict):
+                return {str(k): str(v) for k, v in mapping_data.items()}
+                
+        return {}
     except Exception:
         return {}
 
