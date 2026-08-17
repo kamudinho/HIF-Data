@@ -25,9 +25,6 @@ from data.sql.liga_spillere import hent_match_og_haendelsesdata
 
 try:
     from data.players import player_mapping
-    valgt_player_uuid = st.session_state.get('valgt_player_uuid', getattr(player_mapping, 'valgt_player_uuid', None))
-    valgt_spiller = st.session_state.get('valgt_spiller', getattr(player_mapping, 'valgt_spiller', None))
-    df_spiller = getattr(player_mapping, 'df_spiller', None)
     hold_logo = getattr(player_mapping, 'hold_logo', None)
     primær_farve = getattr(player_mapping, 'primær_farve', "#df003b")
     valgt_hold = getattr(player_mapping, 'valgt_hold', "Hvidovre")
@@ -61,12 +58,6 @@ POSITION_DA = {
     "Defender": "Forsvar",
     "Midfielder": "Midtbane",
     "Attacker": "Angriber",
-}
-POSITION_TO_SPQ = {
-    "Goalkeeper": "GK",
-    "Defender": "DEF",
-    "Midfielder": "MID",
-    "Attacker": "FWD",
 }
 
 KATEGORIER_DER_KRAEVER_QUALIFIER = {
@@ -326,7 +317,7 @@ def vis_side(dp=None):
 
     team_map = hent_holdliste(conn)
 
-    col_spacer_top, col_h_hold, col_h_spiller = st.columns([2, 1.2, 1.2])
+    col_spacer_top, col_h_hold, _ = st.columns([3.2, 1.2, 0.4])
 
     default_team_idx = 0
     team_names = sorted(list(team_map.keys()))
@@ -347,27 +338,8 @@ def vis_side(dp=None):
         st.warning("Ingen hændelsesdata fundet.")
         st.stop()
 
-    df_spillere_unikke = df_all[['visningsnavn', 'player_optauuid']].drop_duplicates()
-
-    spiller_options = {}
-    for _, r in df_spillere_unikke.iterrows():
-        navn = r['visningsnavn']
-        uuid = r['player_optauuid']
-        
-        eng_pos = POSITION_MAP.get(str(uuid).strip(), 'Ukendt')
-        da_pos = POSITION_DA.get(eng_pos, eng_pos)
-        
-        visnings_label = f"{navn} ({da_pos})"
-        spiller_options[visnings_label] = uuid
-
-    spiller_liste = sorted(list(spiller_options.keys()))
-    valgt_label = col_h_spiller.selectbox("Spiller", spiller_liste if spiller_liste else [""], label_visibility="collapsed")
-
-    valgt_player_uuid = spiller_options.get(valgt_label, None)
-    valgt_spiller = valgt_label.split(" (")[0] if valgt_label else ""
-    df_spiller = df_all[df_all['player_optauuid'] == valgt_player_uuid].copy() if valgt_player_uuid else pd.DataFrame()
-
-    t_team, t_matches, t_profile, t_pitch, t_phys = st.tabs(["Holdoversigt", "Kampoversigt", "Spillerprofil", "Spilleraktioner", "Fysisk data"])
+    # Kun fanerne Holdoversigt og Kampoversigt (tab0 og tab1)
+    t_team, t_matches = st.tabs(["Holdoversigt", "Kampoversigt"])
 
     with t_team:
         col_t_title, col_t_btn = st.columns([2.7, 1.3])
@@ -441,3 +413,7 @@ def vis_side(dp=None):
             )
         else:
             st.info("Ingen trup-data tilgængelig endnu.")
+
+    with t_matches:
+        st.subheader("Kampoversigt")
+        st.info("Kampoversigt indhold kan tilføjes her.")
