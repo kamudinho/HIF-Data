@@ -3,7 +3,7 @@ import pandas as pd
 def hent_match_og_haendelsesdata(conn, db_navn, valgt_uuid_hold, liga_ids, navne_map):
     """Henter events, forventede mål og database-stats for hele ligaen fra Snowflake, inklusiv hold-tilhørsforhold."""
     
-    # 1. Events for hele ligaen
+    # 1. Events for hele ligaen (med korrekt GROUP BY rækkefølge)
     sql_events = f"""
         SELECT 
             e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, e.MATCH_OPTAUUID, 
@@ -21,7 +21,12 @@ def hent_match_og_haendelsesdata(conn, db_navn, valgt_uuid_hold, liga_ids, navne
         LEFT JOIN {db_navn}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
         WHERE m.TOURNAMENTCALENDAR_OPTAUUID IN {liga_ids}
           AND e.EVENT_TIMESTAMP >= '2026-07-01'
-        GROUP BY 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12
+        GROUP BY 
+            e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, e.MATCH_OPTAUUID, 
+            p.MATCH_NAME, p.FIRST_NAME, p.SHORT_LAST_NAME,
+            e.PLAYER_OPTAUUID, e.EVENT_OUTCOME,
+            e.EVENT_CONTESTANT_OPTAUUID,
+            e.EVENT_TIMESTAMP
     """
     df_all = conn.query(sql_events)
     
