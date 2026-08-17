@@ -14,19 +14,10 @@ from data.sql.liga_spillere import hent_match_og_haendelsesdata
 
 # --- KONSTANTER ---
 DB = "KLUB_HVIDOVREIF.AXIS"
-SEASONNAME = "2026/2027"
+SEASONNAME = "2025/2026"
 LIGA_IDS = "('2mb332vncy4450vu14paj8844', 'e5p78j2r7v8h3u9s5k0l2m4n6', 'f6q89k3s8w9i4v0t6l1m3n5o7', '335', '328', '329', '43319', '331')"
 
-# --- HJÆLPEFUNKTIONER (Effektiviseret) ---
-def count_kamp_qual(df_group, eid, qids):
-    # Hurtigere filtrering uden tung apply på alt
-    mask = (df_group['event_typeid'] == eid)
-    if isinstance(qids, list):
-        mask &= df_group['qualifiers'].str.contains('|'.join(map(str, qids)), na=False)
-    else:
-        mask &= df_group['qualifiers'].str.contains(str(qids), na=False)
-    return mask.sum()
-
+# --- HJÆLPEFUNKTIONER ---
 def _forbered_events(df: pd.DataFrame) -> pd.DataFrame:
     df = df.dropna(subset=['visningsnavn']).copy()
     df['Pasninger_Total'] = (df['event_typeid'] == 1).astype(int)
@@ -36,20 +27,22 @@ def _forbered_events(df: pd.DataFrame) -> pd.DataFrame:
 @st.cache_data(ttl=600)
 def hent_holdliste(_conn):
     df = _conn.query(f"SELECT DISTINCT CONTESTANTHOME_NAME, CONTESTANTHOME_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID IN {LIGA_IDS}")
-    if df is None: return {}
+    if df is None or df.empty: 
+        return {}
+    df.columns = df.columns.str.lower()  # Sikrer mod store/små bogstaver fra Snowflake
     mapping = {str(info['opta_uuid']).lower().replace('t', ''): name for name, info in TEAMS.items() if 'opta_uuid' in info}
     return {name: r['contestanthome_optauuid'] for _, r in df.iterrows() if str(r['contestanthome_optauuid']).lower().replace('t', '') in mapping}
 
 @st.cache_data(ttl=300)
 def hent_data(_conn, valgt_uuid_hold):
-    # Henter kun hvad der er nødvendigt for holdoversigt
     df_all_raw, df_expected, _ = hent_match_og_haendelsesdata(_conn, DB, valgt_uuid_hold, LIGA_IDS, {})
     return df_all_raw, df_expected
 
 # --- HOVEDSIDE ---
 def vis_side():
     conn = _get_snowflake_conn()
-    if not conn: return
+    if not conn: 
+        return
     
     team_map = hent_holdliste(conn)
     team_names = sorted(list(team_map.keys()))
@@ -63,8 +56,11 @@ def vis_side():
         st.warning("Ingen data.")
         return
 
-    # Forenklet statistik-aggregering
-    df_all = _forbered_events(df_all[df_all['hold_optauuid'] == valgt_uuid_hold])
+    # Filtrer og aggreger
+    if 'hold_optauuid' in df_all.columns:
+        df_all = df_all[df_all['hold_optauuid'] == valgt_uuid_hold]
+    
+    df_all = _forbered_events(df_all)
     
     stats = df_all.groupby('visningsnavn').agg({
         'match_optauuid': 'nunique',
@@ -73,7 +69,7 @@ def vis_side():
         'Pasninger_Succes': 'sum'
     }).rename(columns={'match_optauuid': 'Kampe', 'event_typeid': 'Aktioner'})
     
-    stats['Pasningsprocent'] = (stats['Pasninger_Succes'] / stats['Pasninger_Total'] * 100).fillna(0)
+    stats['Pasningsprocent'] = (stats['Pasninger_Succes'] / stats['Pasninger_Total'] * 100).fillna(0).round(1)
     
     # UI visning
     st.subheader(f"Statistik for {valgt_hold}")
