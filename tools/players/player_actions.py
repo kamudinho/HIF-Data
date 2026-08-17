@@ -98,6 +98,17 @@ HIDDEN_VIEWS_PER_POSITION = {
 }
 
 
+def clean_player_name(raw_name) -> str:
+    """Renser og formaterer spillernavne (fx konverterer 'Efternavn, Fornavn' til 'Fornavn Efternavn')."""
+    if not raw_name:
+        return ""
+    name_str = str(raw_name).strip()
+    if "," in name_str:
+        parts = name_str.split(",", 1)
+        return f"{parts[1].strip()} {parts[0].strip()}"
+    return name_str
+
+
 @st.cache_data(ttl=600, show_spinner=False)
 def hent_navne_map() -> dict:
     """Henter og opbygger et sikkert opslagsspecifikt kort over spillernavne udelukkende fra player_mapping."""
@@ -110,14 +121,14 @@ def hent_navne_map() -> dict:
                     str(r.get("player_optauuid") or r.get("PLAYER_OPTAUUID"))
                     .strip()
                     .lower()
-                    .replace("t", ""): str(r.get("navn") or r.get("NAVN"))
+                    .replace("t", ""): clean_player_name(r.get("navn") or r.get("NAVN"))
                     for r in mapping_data
                     if (r.get("player_optauuid") or r.get("PLAYER_OPTAUUID"))
                     and (r.get("navn") or r.get("NAVN"))
                 }
             elif isinstance(mapping_data, dict):
                 return {
-                    str(k).strip().lower().replace("t", ""): str(v)
+                    str(k).strip().lower().replace("t", ""): clean_player_name(v)
                     for k, v in mapping_data.items()
                 }
 
@@ -137,7 +148,7 @@ def hent_navne_map() -> dict:
                 )
                 if uuid_col and navn_col:
                     return {
-                        str(r[uuid_col]).strip().lower().replace("t", ""): str(
+                        str(r[uuid_col]).strip().lower().replace("t", ""): clean_player_name(
                             r[navn_col]
                         )
                         for _, r in df.iterrows()
