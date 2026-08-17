@@ -165,12 +165,13 @@ AKTIONS_FARVER = [
 
 DB = "KLUB_HVIDOVREIF.AXIS"
 
-# --- DYNAMISK LIGA_IDS BYGGES KORREKT MED ANFØRSELSTEGN OG PARENTESER ---
+# --- DYNAMISK LIGA_IDS BYGGES SIKKERT ---
 active_leagues = SEASONS.get(SEASONNAME, {})
 optauuid_liste = list(active_leagues.values())
 
 if optauuid_liste:
-    LIGA_IDS = "('" + "', '".join(str(uuid) for uuid in optauuid_liste) + "')"
+    rensede_uuids = [str(uuid).strip() for uuid in optauuid_liste if uuid]
+    LIGA_IDS = "('" + "', '".join(rensede_uuids) + "')"
 else:
     LIGA_IDS = "('2mb332vncy4450vu14paj8844')"
 
