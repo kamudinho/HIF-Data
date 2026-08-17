@@ -39,6 +39,10 @@ def render_spilleraktioner(df_spiller: pd.DataFrame, valgt_spiller: str, hold_lo
     Renderer Spilleraktioner-fanen (statistikpanel + banetegning) for den
     valgte spiller.
     """
+    if df_spiller is None or df_spiller.empty:
+        st.info("Ingen spilledata tilgængelig.")
+        return
+
     df_filtreret = df_spiller[~df_spiller['Action_Label'].isin(['Pasning', 'Indkast'])]
 
     akt_stats = pd.DataFrame()
@@ -193,8 +197,29 @@ def render_spilleraktioner(df_spiller: pd.DataFrame, valgt_spiller: str, hold_lo
 
         st.pyplot(fig, use_container_width=True)
 
-def vis_side(df_spiller, valgt_spiller, hold_logo, primær_farve, spiller_position, valgt_player_uuid, season_name="2025/2026"):
-    """Wrapper-funktion for bagudkompatibilitet."""
+def vis_side(
+    df_spiller=None,
+    valgt_spiller=None,
+    hold_logo=None,
+    primær_farve=None,
+    spiller_position=None,
+    valgt_player_uuid=None,
+    season_name="2025/2026"
+):
+    """Robust wrapper-funktion der understøtter kald uden argumenter ved at hente fra session_state."""
+    if df_spiller is None:
+        df_spiller = st.session_state.get('df_spiller', pd.DataFrame())
+    if valgt_spiller is None:
+        valgt_spiller = st.session_state.get('valgt_spiller', "Spiller")
+    if hold_logo is None:
+        hold_logo = st.session_state.get('hold_logo', None)
+    if primær_farve is None:
+        primær_farve = st.session_state.get('primær_farve', '#1f77b4')
+    if spiller_position is None:
+        spiller_position = st.session_state.get('spiller_position', 'Midfielder')
+    if valgt_player_uuid is None:
+        valgt_player_uuid = st.session_state.get('valgt_player_uuid', 'uuid_default')
+
     render_spilleraktioner(
         df_spiller=df_spiller,
         valgt_spiller=valgt_spiller,
