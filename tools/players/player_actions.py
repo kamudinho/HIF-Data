@@ -297,67 +297,189 @@ def byg_spiller_og_holdstats(_conn, valgt_uuid_hold: str, navne_map: dict):
     return df_all, df_liga_total, truppen_stats, truppen_stats_liga, df_expected
 
 
-def vis_side(dp=None):
-    navne_map = hent_navne_map()
+def vis_spiller_aktioner(df_spiller, valgt_spiller, valgt_player_uuid, spiller_position, hold_logo, SEASONNAME, HIDDEN_VIEWS_PER_POSITION, AKTIONS_FARVER):
+    """
+    Viser fanen for spilleraktioner (t_pitch) med statistik, metrikker og fodboldbane-visualiseringer.
+    """
+    
+    # --- 4. SPILLERAKTIONER ---
+    descriptions = {
+        "Heatmap": "Viser spillerens generelle bevægelsesmønster og intensitet på banen.",
+        "Berøringer": "Alle aktioner hvor spilleren har været i kontakt med bolden.",
+        "Afslutninger": "Oversigt over alle skudforsøg (Mål = firkant, skud = cirkel).",
+        "Defensive aktioner": "Tacklinger, bolderobringer og opsnappede afleveringer.",
+        "Offensive pasninger": "Fremadrettede pasninger til sidste tredjedel (grøn = succes, grå = % succes).",
+        "Alle aktioner": "Alle aktionstyper (blå = aflevering, rød = dribling, orange = afslutning, grøn = mål, lilla = defensiv aktion)."
+    }
+    
+    touch_ids = [1, 3, 7, 10, 11, 12, 13, 14, 15, 16, 42, 44, 49, 50, 51, 54, 61, 73]
+    df_filtreret = df_spiller[~df_spiller['Action_Label'].isin(['Pasning', 'Indkast'])]
 
-    st.markdown("""
-        <style>
-        [data-testid="stMetricValue"] { font-size: 16px !important; text-align: center; font-weight: bold !important; width: 100%; }
-        [data-testid="stMetricLabel"] { font-size: 10px !important; text-align: center; width: 100%; }
-        [data-testid="stMetric"] { display: flex; flex-direction: column; align-items: center; }
-        .player-header { font-size: 18px; font-weight: bold; margin-bottom: 10px; color: #1E1E1E; }
-        </style>
+    akt_stats = pd.DataFrame()
+    if not df_filtreret.empty:
+        akt_stats = df_filtreret.groupby('Action_Label').agg(
+            Total=('outcome', 'count'), 
+            Succes=('outcome', 'sum')
+        ).sort_values('Total', ascending=False)
+
+    c_stats_side, c_buffer, c_pitch_side = st.columns([1, 0.05, 2.2])
+
+    with c_stats_side:
+        logo_html = ""
+        if hold_logo is not None:
+            buffered = io.BytesIO()
+            hold_logo.save(buffered, format="PNG")
+            img_str = base64.b64encode(buffered.getvalue()).decode()
+            logo_html = f'<img src="data:image/png;base64,{img_str}" style="height: 35px; margin-right: 12px; object-fit: contain;">'
+
+        st.markdown(f"""
+            <div style="display: flex; align-items: center; margin-bottom: 10px;">
+                {logo_html}
+                <div class="player-header" style="margin: 0; line-height: 1.2; font-size: 18px; font-weight: bold;">
+                    {valgt_spiller}
+                </div>
+            </div>
         """, unsafe_allow_html=True)
+        
+        st.markdown("<hr style='margin: 15px 0; opacity: 0.5;'>", unsafe_allow_html=True)
+        
+        total_akt = len(df_spiller)
+        pas_df = df_spiller[df_spiller['event_typeid'] == 1]
+        pas_count = len(pas_df)
+        pas_acc = (pas_df['outcome'].sum() / pas_count * 100) if pas_count > 0 else 0
 
-    conn = _get_snowflake_conn()
-    if not conn: 
-        return
+        chancer_skabt = akt_stats[akt_stats.index.str.contains("Key Pass|assist|Stor chance", case=False, na=False)]['Total'].sum() if not akt_stats.empty else 0
+        shots_count = len(df_spiller[df_spiller['event_typeid'].isin([13, 14, 15, 16])])
+        cross_count = len(df_spiller[df_spiller['qual_list'].apply(lambda x: "2" in x if isinstance(x, list) else False)])
+        erob_count = len(df_spiller[df_spiller['event_typeid'].isin([49])])
+        touch_count = len(df_spiller[df_spiller['event_typeid'].isin(touch_ids)])
+        drib_count = len(df_spiller[df_spiller['event_typeid'].isin([3])])
+        regains_count = len(df_spiller[df_spiller['event_typeid'].isin([7, 8, 12, 49])])
+        boldtab_count = len(df_spiller[df_spiller['event_typeid'].isin([50, 51])])
+        def_count = len(df_spiller[df_spiller['event_typeid'].isin([7, 8])])
+        
+        if 'end_x' in df_spiller.columns:
+            fremad_count = len(df_spiller[
+                (df_spiller['event_typeid'] == 1)
+                & df_spiller['end_x'].notna()
+                & (df_spiller['end_x'] > df_spiller['event_x'])
+            ])
+        else:
+            fremad_count = 0
 
-    team_map = hent_holdliste(conn)
+        m_r1 = st.columns(4)
+        m_r1[0].metric("Aktioner", total_akt)
+        m_r1[1].metric("Berøringer", touch_count)
+        m_r1[2].metric("Pasninger", pas_count)
+        m_r1[3].metric("Pasning %", f"{int(pas_acc)}%")
 
-    col_spacer_top, col_h_hold, col_h_spiller = st.columns([2, 1.2, 1.2])
+        m_r2 = st.columns(4)
+        m_r2[0].metric("Driblinger", drib_count)
+        m_r2[1].metric("Skud", shots_count)
+        m_r2[2].metric("Chancer", int(chancer_skabt))
+        m_r2[3].metric("Indlæg", cross_count)
 
-    default_team_idx = 0
-    team_names = sorted(list(team_map.keys()))
-    for idx, name in enumerate(team_names):
-        if "hvidovre" in name.lower():
-            default_team_idx = idx
-            break
+        m_r3 = st.columns(4)
+        m_r3[0].metric("Def. 1v1", def_count)
+        m_r3[1].metric("Regains", regains_count)
+        m_r3[2].metric("Erobringer", erob_count)
+        m_r3[3].metric("Boldtab", boldtab_count)
 
-    valgt_hold = col_h_hold.selectbox("Hold", team_names if team_names else ["Hvidovre"], index=default_team_idx if team_names else 0, label_visibility="collapsed")
-    valgt_uuid_hold = team_map.get(valgt_hold, "t7490")
-    hold_logo = get_logo_img(valgt_uuid_hold)
-    primær_farve = get_team_color(valgt_hold, "primary", "#df003b")
+        m_r4 = st.columns(4)
+        m_r4[0].metric("Fremad. pasn.", fremad_count)
 
-    with st.spinner("Henter spillere..."):
-        df_all, df_liga_total, truppen_stats, truppen_stats_liga, df_expected = byg_spiller_og_holdstats(conn, valgt_uuid_hold, navne_map)
+        st.markdown("<hr style='margin: 15px 0; opacity: 0.5;'>", unsafe_allow_html=True)
+        st.caption("**Top 10: Aktioner**")
+        
+        if not akt_stats.empty:
+            bare_antal = ['Erobring', 'Clearing', 'Boldtab', 'Frispark vundet', 'Blokeret skud', 'Interception']
+            for akt, row in akt_stats.head(10).iterrows():
+                total, succes = int(row['Total']), int(row['Succes'])
+                stats_html = f"<b>{total}</b>" if akt in bare_antal else f"{succes}/{total} <b>({int(succes/total*100)}%)</b>"
+                st.markdown(f'<div style="display:flex; justify-content:space-between; font-size:11px; border-bottom:0.5px solid #eee; padding:5px 0;"><span>{akt}</span><span style="font-family:monospace;">{stats_html}</span></div>', unsafe_allow_html=True)
 
-    if df_all.empty:
-        st.warning("Ingen hændelsesdata fundet.")
-        st.stop()
+    with c_pitch_side:
+        c_side_spacer, c_desc_col, c_menu_col = st.columns([0.2, 2.0, 1.0])
 
-    df_spillere_unikke = df_all[['visningsnavn', 'player_optauuid']].drop_duplicates()
+        skjulte_visninger = HIDDEN_VIEWS_PER_POSITION.get(spiller_position, [])
+        descriptions_visning = {k: v for k, v in descriptions.items() if k not in skjulte_visninger}
 
-    spiller_options = {}
-    for _, r in df_spillere_unikke.iterrows():
-        navn = r['visningsnavn']
-        uuid = r['player_optauuid']
-        eng_pos = POSITION_MAP.get(str(uuid).strip(), 'Ukendt')
-        da_pos = POSITION_DA.get(eng_pos, eng_pos)
-        visnings_label = f"{navn} ({da_pos})"
-        spiller_options[visnings_label] = uuid
+        with c_menu_col:
+            visning = st.selectbox(
+                "Visning",
+                list(descriptions_visning.keys()),
+                key=f"pitch_view_sel_{valgt_player_uuid}",
+                label_visibility="collapsed"
+            )
+        with c_desc_col:
+            st.markdown(f'<div style="text-align: right; margin-top: 8px; line-height: 1.2;"><span style="color: #666; font-size: 0.85rem;">{descriptions_visning.get(visning)}</span></div>', unsafe_allow_html=True)
 
-    spiller_liste = sorted(list(spiller_options.keys()))
-    valgt_label = col_h_spiller.selectbox("Spiller", spiller_liste if spiller_liste else [""], label_visibility="collapsed")
+        pitch = Pitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
+        fig, ax = pitch.draw(figsize=(10, 7))
+        
+        # Antager at draw_player_info_box er defineret andetsteds i appen
+        if 'draw_player_info_box' in globals():
+            draw_player_info_box(ax, hold_logo, valgt_spiller, SEASONNAME, visning)
 
-    valgt_player_uuid = spiller_options.get(valgt_label, None)
-    valgt_spiller = valgt_label.split(" (")[0] if valgt_label else ""
-    df_spiller = df_all[df_all['player_optauuid'] == valgt_player_uuid].copy() if valgt_player_uuid else pd.DataFrame()
+        df_plot = df_spiller.dropna(subset=['event_x', 'event_y'])
+        if not df_plot.empty:
+            if visning == "Heatmap":
+                pitch.kdeplot(df_plot.event_x, df_plot.event_y, ax=ax, cmap='Blues', fill=True, alpha=0.6, levels=50)
+            elif visning == "Berøringer":
+                d = df_plot[df_plot['event_typeid'].isin(touch_ids)]
+                ax.scatter(d.event_x, d.event_y, color='#1f77b4', s=40, edgecolors='white', alpha=0.5)
+            elif visning == "Afslutninger":
+                d = df_plot[df_plot['event_typeid'].isin([13, 14, 15, 16])]
+                goals = d[d['event_typeid'] == 16]
+                misses = d[d['event_typeid'].isin([13, 14, 15])]
+                ax.scatter(misses.event_x, misses.event_y, color='grey', s=60, edgecolors='black', alpha=0.6)
+                ax.scatter(goals.event_x, goals.event_y, color='#1f77b4', s=120, marker='s', edgecolors='black', zorder=5)
+            elif visning == "Defensive aktioner":
+                d = df_plot[df_plot['event_typeid'].isin([5, 7, 8, 12, 49, 55])]
+                ax.scatter(d.event_x, d.event_y, color='orange', s=100, edgecolors='white')
+            elif visning == "Alle aktioner":
+                noget_vist = False
+                for label, mask_fn, color, size, marker in AKTIONS_FARVER:
+                    d = df_plot[mask_fn(df_plot)]
+                    if not d.empty:
+                        noget_vist = True
+                        ax.scatter(
+                            d.event_x, d.event_y, color=color, s=size,
+                            edgecolors='white', alpha=0.75, label=label,
+                            marker=marker, zorder=3
+                        )
+                if noget_vist:
+                    ax.legend(
+                        loc='upper center', bbox_to_anchor=(0.5, -0.03),
+                        ncol=len(AKTIONS_FARVER), fontsize=7, frameon=False
+                    )
+            elif visning == "Offensive pasninger":
+                if 'end_x' not in df_plot.columns or 'end_y' not in df_plot.columns:
+                    st.info(
+                        "Denne visning kræver pasningens slutkoordinater (end_x/end_y), "
+                        "som ikke findes i de hentede data lige nu."
+                    )
+                else:
+                    d = df_plot[
+                        (df_plot['event_typeid'] == 1) &
+                        (df_plot['end_x'] > 66.7) &
+                        (df_plot['end_x'] > df_plot['event_x'])
+                    ].dropna(subset=['end_x', 'end_y'])
 
-    # --- ACTION OVERVIEW ---
-    st.markdown(f'<div class="player-header">Handlingsanalyse for {valgt_spiller or "Spiller"}</div>', unsafe_allow_html=True)
+                    succes = d[d['outcome'] == 1]
+                    fejl = d[d['outcome'] != 1]
 
-    if not df_spiller.empty:
-        st.dataframe(df_spiller[['event_timestamp', 'Action_Label', 'event_x', 'event_y', 'outcome']].head(50), use_container_width=True, hide_index=True)
-    else:
-        st.info("Ingen aktionsdata tilgængelig for valgte spiller.")
+                    if not fejl.empty:
+                        pitch.arrows(
+                            fejl.event_x, fejl.event_y, fejl.end_x, fejl.end_y,
+                            ax=ax, color='#bdbdbd', width=0.7, headwidth=2, headlength=3, alpha=0.6, zorder=2
+                        )
+                    if not succes.empty:
+                        pitch.arrows(
+                            succes.event_x, succes.event_y, succes.end_x, succes.end_y,
+                            ax=ax, color='green', width=1.3, headwidth=3, headlength=4, alpha=0.85, zorder=3
+                        )
+
+                    ax.scatter(d.event_x, d.event_y, color='green', s=20, edgecolors='white', alpha=0.6, zorder=4)
+
+        st.pyplot(fig, use_container_width=True)
