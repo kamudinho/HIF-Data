@@ -21,7 +21,7 @@ from data.utils.spiller_qualifiers import ACTION_CATEGORIES, POSITION_ACTIONS
 from utils.helpers import get_logo_img, get_team_color, get_ordinal, draw_player_info_box
 
 # --- IMPORT AF SPILLERE OG SQL ---
-from data.sql.liga_spillere import hent_match_og_haendelsesdata
+from data.sql.liga_spillere import hent_samlet_spiller_statistik
 
 try:
     from data.players import player_mapping
