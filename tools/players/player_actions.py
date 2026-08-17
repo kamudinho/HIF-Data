@@ -91,7 +91,6 @@ def hent_holdliste(_conn) -> dict:
 def vis_side():
     navne_map = hent_navne_map()
 
-    # Fjernet grå baggrundsfarve fra metrics via CSS
     st.markdown("""
         <style>
         [data-testid="stMetricValue"] { font-size: 15px !important; text-align: center; font-weight: bold !important; width: 100%; }
