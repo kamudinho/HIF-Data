@@ -50,7 +50,7 @@ try:
     primær_farve = getattr(player_mapping, "primær_farve", "#df003b")
     valgt_hold = getattr(player_mapping, "valgt_hold", "Hvidovre")
     conn = getattr(player_mapping, "conn", None)
-    SEASONNAME = getattr(player_mapping, "SEASONNAME", "2025/2026")
+    SEASONNAME = getattr(player_mapping, "SEASONNAME", "2026/2027")
 except ImportError:
     st.error(
         "Kunne ikke finde eller indlæse 'player_mapping.py'. Sørg for filen ligger i mappen."
