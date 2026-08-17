@@ -1,19 +1,22 @@
-import pandas as pd
 import numpy as np
+import pandas as pd
+
 
 def _forbered_liga_ids(liga_ids):
     """Sikrer at liga_ids altid konverteres til et sikkert SQL IN-format, uanset datatype."""
     if liga_ids is None:
         return "('__DUMMY__')"
-    
+
     if isinstance(liga_ids, pd.Series):
         liga_ids = liga_ids.dropna().tolist()
     elif isinstance(liga_ids, np.ndarray):
         liga_ids = liga_ids.tolist()
     elif isinstance(liga_ids, (str, int, float)):
         s = str(liga_ids).strip()
-        if ',' in s and not (s.startswith("'") or s.startswith('"') or s.startswith('(')):
-            liga_ids = [item.strip() for item in s.split(',')]
+        if "," in s and not (
+            s.startswith("'") or s.startswith('"') or s.startswith("(")
+        ):
+            liga_ids = [item.strip() for item in s.split(",")]
         else:
             liga_ids = [s]
     elif isinstance(liga_ids, (list, tuple, set)):
@@ -23,25 +26,56 @@ def _forbered_liga_ids(liga_ids):
             liga_ids = list(liga_ids)
         except Exception:
             liga_ids = [str(liga_ids)]
-    
+
     clean_ids = []
     for x in liga_ids:
         if x is not None:
             val = str(x).strip().strip("'\"()[]")
             if val:
                 clean_ids.append(f"'{val}'")
-                
+
     if not clean_ids:
         return "('__DUMMY__')"
-        
+
     return f"({', '.join(clean_ids)})"
 
 
-def hent_match_og_haendelsesdata(conn, db_navn, valgt_uuid_hold, liga_ids, navne_map):
-    """Henter events, forventede mål og database-stats for hele ligaen fra Snowflake."""
+def _anvend_player_mapping(df, navne_map):
+    """Overstyrer eller sætter visningsnavn udelukkende baseret på player_mapping (navne_map)."""
+    if df is None or df.empty or not navne_map:
+        return df
+
+    if "player_optauuid" in df.columns:
+        uuid_col = "player_optauuid"
+    elif "PLAYER_OPTAUUID" in df.columns:
+        uuid_col = "PLAYER_OPTAUUID"
+    else:
+        return df
+
+    def get_mapped_name(row):
+        uuid_val = str(row.get(uuid_col, "")).strip().lower().replace("t", "")
+        # Søg direkte i player_mapping map
+        if uuid_val in navne_map:
+            return navne_map[uuid_val]
+        
+        # Fallback til eksisterende visningsnavn hvis det findes
+        for col in ["visningsnavn", "match_name", "first_name"]:
+            if col in row and pd.notna(row[col]) and str(row[col]).strip().lower() not in ["nan", "none", ""]:
+                return str(row[col]).strip()
+        return "Ukendt spiller"
+
+    df["visningsnavn"] = df.apply(get_mapped_name, axis=1)
+    return df
+
+
+def hent_match_og_haendelsesdata(
+    conn, db_navn, valgt_uuid_hold, liga_ids, navne_map
+):
+    """Henter events, forventede mål og database-stats med navne fra player_mapping."""
     liga_ids_sql = _forbered_liga_ids(liga_ids)
 
-    sql_events = """
+    sql_events = (
+        """
         SELECT 
             e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, e.MATCH_OPTAUUID, 
             p.MATCH_NAME, p.FIRST_NAME, p.SHORT_LAST_NAME, m.MATCHLENGTHMIN,
@@ -63,34 +97,24 @@ def hent_match_og_haendelsesdata(conn, db_navn, valgt_uuid_hold, liga_ids, navne
             p.MATCH_NAME, p.FIRST_NAME, p.SHORT_LAST_NAME, m.MATCHLENGTHMIN,
             e.PLAYER_OPTAUUID, e.EVENT_OUTCOME, e.EVENT_CONTESTANT_OPTAUUID, 
             e.EVENT_TIMESTAMP
-    """.replace("{db_navn}", str(db_navn)).replace("{liga_ids_sql}", str(liga_ids_sql))
-    
+    """
+        .replace("{db_navn}", str(db_navn))
+        .replace("{liga_ids_sql}", str(liga_ids_sql))
+    )
+
     df_all = conn.query(sql_events)
 
     if df_all is not None and not df_all.empty:
         df_all.columns = df_all.columns.str.lower()
-        for col in ['end_x', 'end_y', 'matchlenghtmin']:
+        for col in ["end_x", "end_y", "matchlenghtmin"]:
             if col in df_all.columns:
-                df_all[col] = pd.to_numeric(df_all[col], errors='coerce')
-
-    def fix_name(row):
-        f_name = row.get('first_name')
-        m_name = row.get('match_name')
-        f_str = str(f_name).strip() if f_name is not None and str(f_name).lower() not in ['nan', 'none'] else ""
-        m_str = str(m_name).strip() if m_name is not None and str(m_name).lower() not in ['nan', 'none'] else ""
-        if m_str and '.' in m_str:
-            parts = m_str.split('.', 1)
-            if len(parts) > 1 and f_str:
-                return f"{f_str} {parts[1].strip()}"
-        return m_str if m_str else (f_str if f_str else "Ukendt spiller")
-
-    if df_all is not None and not df_all.empty:
-        df_all['visningsnavn'] = df_all.apply(fix_name, axis=1)
-        df_all['visningsnavn'] = df_all.apply(lambda r: navne_map.get(str(r['player_optauuid']), r['visningsnavn']), axis=1)
+                df_all[col] = pd.to_numeric(df_all[col], errors="coerce")
+        df_all = _anvend_player_mapping(df_all, navne_map)
     else:
         df_all = pd.DataFrame()
 
-    sql_expected = """
+    sql_expected = (
+        """
         SELECT 
             MATCH_OPTAUUID,
             PLAYER_OPTAUUID,
@@ -102,15 +126,19 @@ def hent_match_og_haendelsesdata(conn, db_navn, valgt_uuid_hold, liga_ids, navne
         WHERE TOURNAMENTCALENDAR_OPTAUUID IN {liga_ids_sql}
           AND MATCH_STATUS = 'Played'
         GROUP BY MATCH_OPTAUUID, PLAYER_OPTAUUID, CONTESTANT_OPTAUUID
-    """.replace("{db_navn}", str(db_navn)).replace("{liga_ids_sql}", str(liga_ids_sql))
-    
+    """
+        .replace("{db_navn}", str(db_navn))
+        .replace("{liga_ids_sql}", str(liga_ids_sql))
+    )
+
     df_expected = conn.query(sql_expected)
     if df_expected is not None and not df_expected.empty:
         df_expected.columns = df_expected.columns.str.lower()
     else:
         df_expected = pd.DataFrame()
 
-    sql_db_stats = """
+    sql_db_stats = (
+        """
         WITH EventQualifiers AS (
             SELECT 
                 e.EVENT_OPTAUUID, e.PLAYER_OPTAUUID, e.EVENT_TYPEID, e.EVENT_TIMESTAMP, e.MATCH_OPTAUUID,
@@ -157,14 +185,18 @@ def hent_match_og_haendelsesdata(conn, db_navn, valgt_uuid_hold, liga_ids, navne
             g.GOALS as goals, COALESCE(a.ASSISTS, 0) as assists
         FROM PlayerGoals g
         LEFT JOIN PlayerAssists a ON g.PLAYER_OPTAUUID = a.PLAYER_OPTAUUID
-    """.replace("{db_navn}", str(db_navn)).replace("{liga_ids_sql}", str(liga_ids_sql))
-    
+    """
+        .replace("{db_navn}", str(db_navn))
+        .replace("{liga_ids_sql}", str(liga_ids_sql))
+    )
+
     df_db_stats = conn.query(sql_db_stats)
     if df_db_stats is not None and not df_db_stats.empty:
         df_db_stats.columns = df_db_stats.columns.str.lower()
-        df_db_stats = df_db_stats.drop_duplicates(subset=['player_optauuid']).copy()
-        df_db_stats['visningsnavn'] = df_db_stats.apply(fix_name, axis=1)
-        df_db_stats['visningsnavn'] = df_db_stats.apply(lambda r: navne_map.get(str(r['player_optauuid']), r['visningsnavn']), axis=1)
+        df_db_stats = df_db_stats.drop_duplicates(
+            subset=["player_optauuid"]
+        ).copy()
+        df_db_stats = _anvend_player_mapping(df_db_stats, navne_map)
     else:
         df_db_stats = pd.DataFrame()
 
@@ -172,13 +204,14 @@ def hent_match_og_haendelsesdata(conn, db_navn, valgt_uuid_hold, liga_ids, navne
 
 
 def hent_samlet_spiller_statistik(conn, db_navn, liga_ids, navne_map=None):
-    """Henter fuldt aggregerede spillerstatistikker direkte via optimeret SQL-forespørgsel."""
+    """Henter fuldt aggregerede spillerstatistikker med navne direkte fra player_mapping."""
     if navne_map is None:
         navne_map = {}
 
     liga_ids_sql = _forbered_liga_ids(liga_ids)
 
-    sql_query = """
+    sql_query = (
+        """
     WITH EventAggregates AS (
         SELECT 
             e.PLAYER_OPTAUUID,
@@ -241,44 +274,16 @@ def hent_samlet_spiller_statistik(conn, db_navn, liga_ids, navne_map=None):
     LEFT JOIN ExpectedAggregates xa ON ea.PLAYER_OPTAUUID = xa.PLAYER_OPTAUUID AND ea.HOLD_OPTAUUID = xa.HOLD_OPTAUUID
     LEFT JOIN PlayerNames pn ON ea.PLAYER_OPTAUUID = pn.PLAYER_OPTAUUID
     ORDER BY ea.Aktioner DESC;
-    """.replace("{db_navn}", str(db_navn)).replace("{liga_ids_sql}", str(liga_ids_sql))
+    """
+        .replace("{db_navn}", str(db_navn))
+        .replace("{liga_ids_sql}", str(liga_ids_sql))
+    )
 
     df = conn.query(sql_query)
     if df is not None and not df.empty:
         df.columns = df.columns.str.lower()
-        
-        def fix_name(row):
-            f_name = row.get('first_name')
-            m_name = row.get('match_name')
-            f_str = str(f_name).strip() if f_name is not None and str(f_name).lower() not in ['nan', 'none'] else ""
-            m_str = str(m_name).strip() if m_name is not None and str(m_name).lower() not in ['nan', 'none'] else ""
-            if m_str and '.' in m_str:
-                parts = m_str.split('.', 1)
-                if len(parts) > 1 and f_str:
-                    return f"{f_str} {parts[1].strip()}"
-            return m_str if m_str else (f_str if f_str else "Ukendt spiller")
-
-        df['visningsnavn'] = df.apply(fix_name, axis=1)
-        if navne_map:
-            df['visningsnavn'] = df.apply(lambda r: navne_map.get(str(r['player_optauuid']), r['visningsnavn']), axis=1)
+        df = _anvend_player_mapping(df, navne_map)
     else:
         df = pd.DataFrame()
 
     return df
-
-
-def _byg_event_stats(df_events):
-    if df_events.empty:
-        return pd.DataFrame()
-    return df_events.groupby('player_optauuid').agg(
-        Aktioner=('event_typeid', 'count'),
-        Pasninger=('event_typeid', lambda x: (x == 1).sum()),
-        Pasninger_Succes=('outcome', lambda x: ((x == 1) & (df_events.loc[x.index, 'event_typeid'] == 1)).sum())
-    )
-
-def is_assist(event_typeid, qual_list):
-    return False
-
-def tilfoej_fremadrettede_pasninger(df_stats, df_events):
-    df_stats['fremadrettede_pasninger'] = 0
-    return df_stats
