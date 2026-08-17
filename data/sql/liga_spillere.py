@@ -3,11 +3,11 @@ import pandas as pd
 def hent_match_og_haendelsesdata(conn, db_navn, valgt_uuid_hold, liga_ids, navne_map):
     """Henter events, forventede mål og database-stats for hele ligaen fra Snowflake, inklusiv hold-tilhørsforhold."""
     
-    # 1. Events for hele ligaen - vi henter nu også e.EVENT_CONTESTANT_OPTAUUID som hold_optauuid
+    # 1. Events for hele ligaen - inklusiv m.MATCHLENGHTMIN
     sql_events = f"""
         SELECT 
             e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID, e.MATCH_OPTAUUID, 
-            p.MATCH_NAME, p.FIRST_NAME, p.SHORT_LAST_NAME,
+            p.MATCH_NAME, p.FIRST_NAME, p.SHORT_LAST_NAME, m.MATCHLENGHTMIN,
             e.PLAYER_OPTAUUID, e.EVENT_OUTCOME as OUTCOME,
             e.EVENT_CONTESTANT_OPTAUUID as HOLD_OPTAUUID,
             TO_CHAR(e.EVENT_TIMESTAMP, 'YYYY-MM-DD HH24:MI:SS') as EVENT_TIMESTAMP_STR,
@@ -21,14 +21,14 @@ def hent_match_og_haendelsesdata(conn, db_navn, valgt_uuid_hold, liga_ids, navne
         LEFT JOIN {db_navn}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
         WHERE m.TOURNAMENTCALENDAR_OPTAUUID IN {liga_ids}
           AND e.EVENT_TIMESTAMP >= '2026-07-01'
-        GROUP BY 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11
+        GROUP BY 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13
     """
     df_all = conn.query(sql_events)
     
     if df_all is not None and not df_all.empty:
         df_all.columns = df_all.columns.str.lower()
 
-        for col in ['end_x', 'end_y']:
+        for col in ['end_x', 'end_y', 'matchlenghtmin']:
             if col in df_all.columns:
                 df_all[col] = pd.to_numeric(df_all[col], errors='coerce')
 
@@ -47,8 +47,6 @@ def hent_match_og_haendelsesdata(conn, db_navn, valgt_uuid_hold, liga_ids, navne
         df_all['visningsnavn'] = df_all.apply(lambda r: navne_map.get(str(r['player_optauuid']), r['visningsnavn']), axis=1)
 
     # 2. Expected goals (xG/xA) for hele ligaen
-    # NB: bruger MATCH_OPTAUUID (samme identifikator som events-tabellen),
-    # IKKE MATCH_ID - de to er ikke det samme format/værdi i denne tabel.
     sql_expected = f"""
         SELECT 
             MATCH_OPTAUUID,
