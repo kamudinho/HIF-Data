@@ -54,6 +54,38 @@ def _get_quals(r):
     return [str(q).strip() for q in str(ql).split(',')]
 
 
+def formater_tid(row):
+    """Formaterer minut og tillægstid (f.eks. 45+2 eller 90+4)"""
+    minute = row.get('minute')
+    period = row.get('period_id')
+    
+    if pd.isna(minute):
+        return ""
+    
+    try:
+        minute = int(minute)
+    except (ValueError, TypeError):
+        return str(minute)
+        
+    if pd.notna(period):
+        try:
+            period = int(period)
+            if period == 1 and minute > 45:
+                return f"45+{minute - 45}"
+            elif period == 2 and minute > 90:
+                return f"90+{minute - 90}"
+        except (ValueError, TypeError):
+            pass
+            
+    # Fallback hvis period_id mangler, men minuttet er over standard spilletid
+    if minute > 90:
+        return f"90+{minute - 90}"
+    elif minute > 45 and minute <= 50: # Tilfælde hvor 1. halvlegs tillægstid starter over 45
+        return f"45+{minute - 45}"
+        
+    return str(minute)
+
+
 def tilfoej_kategori_kolonner(df_stats: pd.DataFrame, df_events: pd.DataFrame, category_keys) -> pd.DataFrame:
     if df_events is None or df_events.empty:
         for key in category_keys:
@@ -135,6 +167,11 @@ def _forbered_events(df: pd.DataFrame) -> pd.DataFrame:
     df['qual_list'] = df['qualifiers'].fillna('').str.split(',')
     df['Pasninger_Total'] = (df['event_typeid'] == 1).astype(int)
     df['Pasninger_Succes'] = ((df['event_typeid'] == 1) & (df['outcome'] == 1)).astype(int)
+    
+    # Opret visnings_minut kolonne hvis minut og period_id findes
+    if 'minute' in df.columns:
+        df['visnings_minut'] = df.apply(formater_tid, axis=1)
+    
     return df
 
 
