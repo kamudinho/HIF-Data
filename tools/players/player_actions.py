@@ -231,7 +231,6 @@ def hent_holdliste(_conn) -> dict:
     return team_map
 
 
-# Optimeret med caching, så data ikke hentes på ny ved hver eneste handling
 @st.cache_data(ttl=600, show_spinner="Henter og behandler kampdata...")
 def byg_spiller_og_holdstats(_conn, valgt_uuid_hold: str, navne_map: dict):
     df_all_raw, df_expected, df_db_stats = hent_match_og_haendelsesdata(
@@ -370,6 +369,7 @@ def vis_side(dp=None):
             "Afslutninger": "Oversigt over alle skudforsøg (Mål = firkant, skud = cirkel).",
             "Defensive aktioner": "Tacklinger, bolderobringer og opsnappede afleveringer.",
             "Offensive pasninger": "Fremadrettede pasninger til sidste tredjedel (grøn = succes, grå = % succes).",
+            "Pasninger bagud (sidste 1/3)": "Alle pasninger der spilles bagud, når spilleren befinder sig i den sidste tredjedel af banen.",
             "Alle aktioner": "Alle aktionstyper (blå = aflevering, rød = dribling, orange = afslutning, grøn = mål, lilla = defensiv aktion)."
         }
         touch_ids = [1, 3, 7, 10, 11, 12, 13, 14, 15, 16, 42, 44, 49, 50, 51, 54, 61, 73]
@@ -531,5 +531,23 @@ def vis_side(dp=None):
                             )
 
                         ax.scatter(d.event_x, d.event_y, color='green', s=20, edgecolors='white', alpha=0.6, zorder=4)
+                elif visning == "Pasninger bagud (sidste 1/3)":
+                    if 'end_x' not in df_plot.columns or 'end_y' not in df_plot.columns:
+                        st.info("Slutkoordinater mangler i data.")
+                    else:
+                        d_bagud = df_plot[
+                            (df_plot['event_typeid'] == 1) & 
+                            (df_plot['event_x'] > 66.7) & 
+                            (df_plot['end_x'] < df_plot['event_x'])
+                        ].dropna(subset=['end_x', 'end_y'])
+
+                        if not d_bagud.empty:
+                            pitch.arrows(
+                                d_bagud.event_x, d_bagud.event_y, d_bagud.end_x, d_bagud.end_y,
+                                ax=ax, color='red', width=1.5, headwidth=4, headlength=5, alpha=0.9, zorder=3
+                            )
+                            ax.scatter(d_bagud.event_x, d_bagud.event_y, color='red', s=30, edgecolors='white', zorder=4)
+                        else:
+                            st.info("Ingen pasninger bagud fundet fra sidste tredjedel.")
 
             st.pyplot(fig, use_container_width=True)
