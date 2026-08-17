@@ -354,63 +354,6 @@ def vis_side(dp=None):
     valgt_spiller = valgt_label.split(" (")[0] if valgt_label else ""
     df_spiller = df_all[df_all['player_optauuid'] == valgt_player_uuid].copy() if valgt_player_uuid else pd.DataFrame()
 
-    def vis_side(dp=None):
-    navne_map = hent_navne_map()
-
-    st.markdown("""
-        <style>
-        [data-testid="stMetricValue"] { font-size: 16px !important; text-align: center; font-weight: bold !important; width: 100%; }
-        [data-testid="stMetricLabel"] { font-size: 10px !important; text-align: center; width: 100%; }
-        [data-testid="stMetric"] { display: flex; flex-direction: column; align-items: center; }
-        .player-header { font-size: 18px; font-weight: bold; margin-bottom: 10px; color: #1E1E1E; }
-        </style>
-        """, unsafe_allow_html=True)
-
-    conn = _get_snowflake_conn()
-    if not conn: 
-        return
-
-    team_map = hent_holdliste(conn)
-
-    col_spacer_top, col_h_hold, col_h_spiller = st.columns([2, 1.2, 1.2])
-
-    default_team_idx = 0
-    team_names = sorted(list(team_map.keys()))
-    for idx, name in enumerate(team_names):
-        if "hvidovre" in name.lower():
-            default_team_idx = idx
-            break
-
-    valgt_hold = col_h_hold.selectbox("Hold", team_names if team_names else ["Hvidovre"], index=default_team_idx if team_names else 0, label_visibility="collapsed")
-    valgt_uuid_hold = team_map.get(valgt_hold, "t7490")
-    hold_logo = get_logo_img(valgt_uuid_hold)
-    primær_farve = get_team_color(valgt_hold, "primary", "#df003b")
-
-    with st.spinner("Henter spillere..."):
-        df_all, df_liga_total, truppen_stats, truppen_stats_liga, df_expected = byg_spiller_og_holdstats(conn, valgt_uuid_hold, navne_map)
-
-    if df_all.empty:
-        st.warning("Ingen hændelsesdata fundet.")
-        st.stop()
-
-    df_spillere_unikke = df_all[['visningsnavn', 'player_optauuid']].drop_duplicates()
-
-    spiller_options = {}
-    for _, r in df_spillere_unikke.iterrows():
-        navn = r['visningsnavn']
-        uuid = r['player_optauuid']
-        eng_pos = POSITION_MAP.get(str(uuid).strip(), 'Ukendt')
-        da_pos = POSITION_DA.get(eng_pos, eng_pos)
-        visnings_label = f"{navn} ({da_pos})"
-        spiller_options[visnings_label] = uuid
-
-    spiller_liste = sorted(list(spiller_options.keys()))
-    valgt_label = col_h_spiller.selectbox("Spiller", spiller_liste if spiller_liste else [""], label_visibility="collapsed")
-
-    valgt_player_uuid = spiller_options.get(valgt_label, None)
-    valgt_spiller = valgt_label.split(" (")[0] if valgt_label else ""
-    df_spiller = df_all[df_all['player_optauuid'] == valgt_player_uuid].copy() if valgt_player_uuid else pd.DataFrame()
-
     spiller_position = POSITION_MAP.get(str(valgt_player_uuid).strip(), 'Ukendt')
 
     # KUN t_pitch (Baneoversigt)
