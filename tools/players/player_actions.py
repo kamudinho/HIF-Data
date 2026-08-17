@@ -20,7 +20,7 @@ from data.sql.liga_spillere import hent_samlet_spiller_statistik, hent_match_og_
 
 try:
     from data.players import player_mapping
-    SEASONNAME = getattr(player_mapping, 'SEASONNAME', "2027/2027")
+    SEASONNAME = getattr(player_mapping, 'SEASONNAME', "2026/2027")
 except ImportError:
     SEASONNAME = "2026/2027"
 
@@ -281,36 +281,32 @@ def vis_side():
         else:
             fremad_count = 0
 
-        # Sat op i 3 kolonner pr. række for at undgå tomme bokse
+        # Sat op i 4 kolonner pr. række
         m_r1 = st.columns(4)
         m_r1[0].metric("Aktioner", total_akt)
         m_r1[1].metric("Berøringer", touch_count)
         m_r1[2].metric("Pasninger", pas_count)
+        m_r1[3].metric("Pasning %", f"{int(pas_acc)}%")
 
         st.markdown("<div style='margin-bottom: 2px;'></div>", unsafe_allow_html=True)
 
         m_r2 = st.columns(4)
-        m_r1[0].metric("Pasning %", f"{int(pas_acc)}%")
-        m_r2[1].metric("Driblinger", drib_count)
-        m_r2[2].metric("Skud", shots_count)
+        m_r2[0].metric("Driblinger", drib_count)
+        m_r2[1].metric("Skud", shots_count)
+        m_r2[2].metric("Chancer", int(chancer_skabt))
+        m_r2[3].metric("Indlæg", cross_count)
 
         st.markdown("<div style='margin-bottom: 2px;'></div>", unsafe_allow_html=True)
 
         m_r3 = st.columns(4)
-        m_r2[0].metric("Chancer", int(chancer_skabt))
-        m_r2[1].metric("Indlæg", cross_count)
-        m_r3[2].metric("Def. 1v1", def_count)
+        m_r3[0].metric("Def. 1v1", def_count)
+        m_r3[1].metric("Regains", regains_count)
+        m_r3[2].metric("Erobringer", erob_count)
+        m_r3[3].metric("Boldtab", boldtab_count)
 
         st.markdown("<div style='margin-bottom: 2px;'></div>", unsafe_allow_html=True)
 
         m_r4 = st.columns(4)
-        m_r3[0].metric("Regains", regains_count)
-        m_r3[1].metric("Erobringer", erob_count)
-        m_r3[2].metric("Boldtab", boldtab_count)
-
-        st.markdown("<div style='margin-bottom: 2px;'></div>", unsafe_allow_html=True)
-
-        m_r5 = st.columns(3)
         m_r4[0].metric("Fremad. pasn.", fremad_count)
 
         st.markdown("<hr style='margin: 15px 0; opacity: 0.5;'>", unsafe_allow_html=True)
