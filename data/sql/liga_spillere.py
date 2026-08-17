@@ -4,28 +4,31 @@ import pandas as pd
 def hent_match_og_haendelsesdata(
     conn, db_navn, valgt_uuid_hold, liga_ids, navne_map
 ):
-    """Henter aggregerede spiller-stats direkte fra OPTA_EVENTS og OPTA_MATCHEXPECTEDGOALS med alle kategorier på én række."""
+    """Henter aggregerede spiller-stats med eksplisit TO_VARCHAR på alle UUID-kolonner og joins."""
 
     sql_query = f"""
         WITH EventQualifiers AS (
             SELECT 
-                e.EVENT_OPTAUUID, e.PLAYER_OPTAUUID, e.PLAYER_NAME, e.EVENT_TYPEID, e.EVENT_TIMESTAMP, e.MATCH_OPTAUUID,
-                e.EVENT_CONTESTANT_OPTAUUID as HOLD_OPTAUUID,
+                TO_VARCHAR(e.EVENT_OPTAUUID) AS EVENT_OPTAUUID, 
+                TO_VARCHAR(e.PLAYER_OPTAUUID) AS PLAYER_OPTAUUID, 
+                e.PLAYER_NAME, 
+                e.EVENT_TYPEID, 
+                e.EVENT_TIMESTAMP, 
+                TO_VARCHAR(e.MATCH_OPTAUUID) AS MATCH_OPTAUUID,
+                TO_VARCHAR(e.EVENT_CONTESTANT_OPTAUUID) as HOLD_OPTAUUID,
                 LISTAGG(q.QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY q.QUALIFIER_QID) as QUALIFIERS
             FROM {db_navn}.OPTA_EVENTS e
-            LEFT JOIN {db_navn}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
+            LEFT JOIN {db_navn}.OPTA_QUALIFIERS q ON TO_VARCHAR(e.EVENT_OPTAUUID) = TO_VARCHAR(q.EVENT_OPTAUUID)
             WHERE TO_VARCHAR(e.TOURNAMENTCALENDAR_OPTAUUID) IN {liga_ids}
               AND e.EVENT_TIMESTAMP >= '2026-07-01'
             GROUP BY 1, 2, 3, 4, 5, 6, 7
         ),
         PlayerEventsSummary AS (
             SELECT 
-                e.PLAYER_OPTAUUID,
+                TO_VARCHAR(e.PLAYER_OPTAUUID) AS PLAYER_OPTAUUID,
                 MAX(e.PLAYER_NAME) AS PLAYER_NAME,
-                MAX(e.EVENT_CONTESTANT_OPTAUUID) AS HOLD_OPTAUUID,
-                -- Mål (event type 16)
+                MAX(TO_VARCHAR(e.EVENT_CONTESTANT_OPTAUUID)) AS HOLD_OPTAUUID,
                 SUM(CASE WHEN e.EVENT_TYPEID = 16 THEN 1 ELSE 0 END) AS goals,
-                -- Afleveringer (event type 1 = aflevering)
                 SUM(CASE WHEN e.EVENT_TYPEID = 1 THEN 1 ELSE 0 END) AS passes_total,
                 SUM(CASE WHEN e.EVENT_TYPEID = 1 AND e.EVENT_OUTCOME = 1 THEN 1 ELSE 0 END) AS passes_completed
             FROM {db_navn}.OPTA_EVENTS e
@@ -51,7 +54,7 @@ def hent_match_og_haendelsesdata(
         ),
         PlayerExpected AS (
             SELECT 
-                PLAYER_OPTAUUID,
+                TO_VARCHAR(PLAYER_OPTAUUID) AS PLAYER_OPTAUUID,
                 SUM(CASE WHEN STAT_TYPE = 'expectedGoals' THEN STAT_VALUE ELSE 0 END) AS xg,
                 SUM(CASE WHEN STAT_TYPE = 'expectedAssists' THEN STAT_VALUE ELSE 0 END) AS xa,
                 SUM(CASE WHEN STAT_TYPE = 'minsPlayed' THEN STAT_VALUE ELSE 0 END) AS minutes
@@ -72,8 +75,8 @@ def hent_match_og_haendelsesdata(
             COALESCE(ex.xa, 0) AS xa,
             COALESCE(ex.minutes, 0) AS minutes
         FROM PlayerEventsSummary ev
-        FULL OUTER JOIN PlayerExpected ex ON ev.PLAYER_OPTAUUID = ex.PLAYER_OPTAUUID
-        LEFT JOIN PlayerAssists ast ON COALESCE(ev.PLAYER_OPTAUUID, ex.PLAYER_OPTAUUID) = ast.PLAYER_OPTAUUID
+        FULL OUTER JOIN PlayerExpected ex ON TO_VARCHAR(ev.PLAYER_OPTAUUID) = TO_VARCHAR(ex.PLAYER_OPTAUUID)
+        LEFT JOIN PlayerAssists ast ON TO_VARCHAR(COALESCE(ev.PLAYER_OPTAUUID, ex.PLAYER_OPTAUUID)) = TO_VARCHAR(ast.PLAYER_OPTAUUID)
     """
 
     df = conn.query(sql_query)
