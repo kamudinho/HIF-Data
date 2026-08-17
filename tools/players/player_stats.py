@@ -55,7 +55,6 @@ def _get_quals(r):
 
 
 def formater_tid(row):
-    """Formaterer minut og tillægstid (f.eks. 45+2 eller 90+4)"""
     minute = row.get('minute')
     period = row.get('period_id')
     
@@ -135,6 +134,7 @@ def tilfoej_fremadrettede_pasninger(df_stats: pd.DataFrame, df_events: pd.DataFr
 def _byg_event_stats(df_events: pd.DataFrame) -> pd.DataFrame:
     return df_events.groupby(['player_optauuid', 'visningsnavn']).apply(lambda x: pd.Series({
         'Kampe': x['match_optauuid'].nunique() if 'match_optauuid' in x.columns else 1,
+        'Kamp_Laengde': x['matchlenghtmin'].max() if 'matchlenghtmin' in x.columns else 90,
         'Aktioner': len(x),
         'Gule_kort': df_events[df_events['event_typeid'] == 17].apply(lambda r: 1 if "31" in _get_quals(r) else 0, axis=1).sum(),
         'Roede_kort': df_events[df_events['event_typeid'] == 17].apply(lambda r: 1 if "33" in _get_quals(r) else 0, axis=1).sum(),
@@ -166,6 +166,9 @@ def _forbered_events(df: pd.DataFrame) -> pd.DataFrame:
     df['qual_list'] = df['qualifiers'].fillna('').str.split(',')
     df['Pasninger_Total'] = (df['event_typeid'] == 1).astype(int)
     df['Pasninger_Succes'] = ((df['event_typeid'] == 1) & (df['outcome'] == 1)).astype(int)
+    
+    if 'matchlenghtmin' in df.columns:
+        df['matchlenghtmin'] = pd.to_numeric(df['matchlenghtmin'], errors='coerce')
     
     if 'minute' in df.columns:
         df['visnings_minut'] = df.apply(formater_tid, axis=1)
