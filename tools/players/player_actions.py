@@ -201,7 +201,7 @@ def vis_side():
     if 'outcome' not in df_spiller.columns:
         df_spiller['outcome'] = 0
     else:
-        df_spiller['outcome'] = pd.to_numeric(df_spiller['outcome'], errors='fillna').fillna(0)
+        df_spiller['outcome'] = pd.to_numeric(df_spiller['outcome'], errors='coerce').fillna(0)
 
     df_filtreret = df_spiller[~df_spiller['Action_Label'].isin(['Pasning', 'Indkast'])].copy()
 
