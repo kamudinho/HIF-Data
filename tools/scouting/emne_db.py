@@ -19,10 +19,19 @@ HIF_BLA = "#0057b7"
 GRON_NY = "#ccffcc"
 GUL_ADVARSEL = "#ffff99"
 ROD_ADVARSEL = "#ffcccc"
-AKADEMI_FARVE = "#d1d1ff" 
+AKADEMI_FARVE = "#d1d1ff"
 
 # Initialiser PlayerMapping for Hvidovre IF
 player_mapper = PlayerMapping(PLAYER_MAPPING)
+
+# --- NYT: Autoritativt sæt af Hvidovre IF-spillere ---
+# "Hvidovre IF" skal ALTID og KUN bestå af spillere der har et player_wyid i PLAYER_MAPPING.
+# Dette er den eneste kilde til sandhed for hvem der regnes som HIF-spiller i appen.
+HIF_WYIDS = {
+    str(p['player_wyid']).replace('.0', '').strip()
+    for p in PLAYER_MAPPING
+    if p.get('player_wyid')
+}
 
 VINDUE_DATOER = {
     "Nuværende trup": datetime.now(),
@@ -58,35 +67,35 @@ def get_github_file(path):
 def save_to_github(df):
     try:
         original_cols = [
-            'PLAYER_WYID', 'DATO', 'NAVN', 'KLUB', 'POSITION', 'RATING_AVG', 'STATUS', 
-            'POTENTIALE', 'STYRKER', 'UDVIKLING', 'VURDERING', 'BESLUTSOMHED', 'FART', 
-            'AGGRESIVITET', 'ATTITUDE', 'UDHOLDENHED', 'LEDEREGENSKABER', 'TEKNIK', 
-            'SPILINTELLIGENS', 'SCOUT', 'KONTRAKT', 'PRIORITET', 'FORVENTNING', 
-            'POS_PRIORITET', 'POS', 'LON', 'SKYGGEHOLD', 'KOMMENTAR', 'ER_EMNE', 
-            'ER_AKADEMI', 'TRANSFER_VINDUE', 'POS_343', 'POS_433', 'POS_352', 
+            'PLAYER_WYID', 'DATO', 'NAVN', 'KLUB', 'POSITION', 'RATING_AVG', 'STATUS',
+            'POTENTIALE', 'STYRKER', 'UDVIKLING', 'VURDERING', 'BESLUTSOMHED', 'FART',
+            'AGGRESIVITET', 'ATTITUDE', 'UDHOLDENHED', 'LEDEREGENSKABER', 'TEKNIK',
+            'SPILINTELLIGENS', 'SCOUT', 'KONTRAKT', 'PRIORITET', 'FORVENTNING',
+            'POS_PRIORITET', 'POS', 'LON', 'SKYGGEHOLD', 'KOMMENTAR', 'ER_EMNE',
+            'ER_AKADEMI', 'TRANSFER_VINDUE', 'POS_343', 'POS_433', 'POS_352',
             'BIRTHDATE', 'START_11_26_27'
         ]
         _, sha = get_github_file(SCOUT_DB_PATH)
         export_df = df.copy()
-        
+
         for col in original_cols:
             col_upper = col.upper()
             if col_upper in export_df.columns and col not in export_df.columns:
                 export_df[col] = export_df[col_upper]
             elif col not in export_df.columns:
                 export_df[col] = ""
-                
+
         export_df['PLAYER_WYID'] = export_df['PLAYER_WYID'].astype(str).str.replace(r'\.0$', '', regex=True)
         csv_content = export_df[original_cols].to_csv(index=False)
         payload = {
-            "message": "Auto-update scouting data (Fixed column ordering)", 
-            "content": base64.b64encode(csv_content.encode('utf-8')).decode('utf-8'), 
+            "message": "Auto-update scouting data (Fixed column ordering)",
+            "content": base64.b64encode(csv_content.encode('utf-8')).decode('utf-8'),
             "sha": sha
         }
-        
+
         headers = {"Authorization": f"token {GITHUB_TOKEN}"}
         r = requests.put(f"https://api.github.com/repos/{REPO}/contents/{SCOUT_DB_PATH}", headers=headers, json=payload)
-        
+
         if r.status_code in [200, 201]:
             st.toast("Databasen er gemt i den korrekte rækkefølge på GitHub!", icon="✅")
         else:
@@ -99,12 +108,12 @@ def handle_auto_save(key, df_display, source_df):
     if st.session_state.get(state_key) and st.session_state[state_key].get("edited_rows"):
         changes = st.session_state[state_key]["edited_rows"]
         full_db = st.session_state['full_db'].copy()
-        
+
         for idx_str, updated_cols in changes.items():
             row_idx = int(idx_str)
             wyid = source_df.iloc[row_idx]['PLAYER_WYID']
             matching_rows = full_db[full_db['PLAYER_WYID'].astype(str) == str(wyid)].sort_values('DATO', ascending=False)
-            
+
             if not matching_rows.empty:
                 idx_in_full = matching_rows.index[0]
                 for col, val in updated_cols.items():
@@ -116,7 +125,7 @@ def handle_auto_save(key, df_display, source_df):
                         else:
                             val = ""
                     full_db.at[idx_in_full, col_upper] = val
-                    
+
         st.session_state['full_db'] = full_db
         save_to_github(full_db)
         st.session_state[state_key]["edited_rows"] = {}
@@ -145,7 +154,7 @@ def get_status_color(val, ref_date=None):
         dt = robust_date_parser(val)
         if pd.isna(dt): return None
         days = (dt - ref_date).days
-        if days < 0: return "#444444" 
+        if days < 0: return "#444444"
         if days < 183: return ROD_ADVARSEL
         if days <= 365: return GUL_ADVARSEL
         return None
@@ -166,31 +175,32 @@ def prepare_df(content):
 def process_display_df(df):
     df_display = df.drop_duplicates(subset=['PLAYER_WYID'], keep='first').copy()
     df_display['POS_PRIORITET'] = df_display['POS_PRIORITET'].astype(str).replace('nan', 'Z')
-    
+
     for c in ['POS', 'POS_343', 'POS_433', 'POS_352']:
         df_display[c] = df_display[c].apply(clean_pos_val)
         if c != 'POS':
             df_display[c] = df_display.apply(lambda r: r['POS'] if r[c] == "" else r[c], axis=1)
-            
+
     if 'KONTRAKT' in df_display.columns:
         df_display['KONTRAKT_DT'] = df_display['KONTRAKT'].apply(robust_date_parser)
-        
+
     for c in ['ER_EMNE', 'SKYGGEHOLD', 'START_11_26_27', 'ER_AKADEMI']:
         df_display[c] = df_display[c].map({True:True, False:False, 'True':True, 'False':False, 1:True, 0:False, '1':True, '0':False}).fillna(False)
 
-    df_display['IS_HIF'] = df_display['PLAYER_WYID'].astype(str).apply(
-        lambda x: True if player_mapper.get_opta_uuid(x.replace('.0', '')) else False
-    )
-    
+    # --- RETTET: IS_HIF beregnes nu udelukkende ud fra HIF_WYIDS (PLAYER_MAPPING) ---
+    # Dette er den eneste sandhedskilde for "Hvidovre IF"-fanen: en spiller er kun HIF,
+    # hvis hans PLAYER_WYID rent faktisk står i player_mapping.py.
+    df_display['IS_HIF'] = df_display['PLAYER_WYID'].astype(str).str.replace(r'\.0$', '', regex=True).isin(HIF_WYIDS)
+
     # PLAYER_MAPPING SKAL OVERSKRIVE ALT ANDET FOR DISSE SPILLERERE
     existing_wyids = set(df_display['PLAYER_WYID'].astype(str).str.replace(r'\.0$', '', regex=True))
     mapping_rows = []
-    
+
     for p_data in PLAYER_MAPPING:
         wyid = p_data.get('player_wyid')
         if not wyid: continue
         clean_wyid = str(wyid).replace('.0', '').strip()
-        
+
         m_updates = {
             'NAVN': p_data.get('navn'),
             'KLUB': p_data.get('klub', '#Hvidovre IF'),
@@ -225,10 +235,10 @@ def process_display_df(df):
 
     if mapping_rows:
         df_display = pd.concat([df_display, pd.DataFrame(mapping_rows)], ignore_index=True)
-        
+
     if 'KONTRAKT' in df_display.columns:
         df_display['KONTRAKT_DT'] = df_display['KONTRAKT'].apply(robust_date_parser)
-        
+
     return df_display
 
 # --- 4. UI ---
@@ -242,7 +252,7 @@ def vis_side():
 
     if 'full_db' not in st.session_state:
         content, _ = get_github_file(SCOUT_DB_PATH)
-        if content is None: 
+        if content is None:
             st.error("Kunne ikke hente data fra databasen.")
             return
         df_display = prepare_df(content)
@@ -272,7 +282,13 @@ def vis_side():
 
     if "Emneliste" in tab_map:
         with tabs_obj[tab_map["Emneliste"]]:
-            source_t1 = df_display[~df_display['IS_HIF']].copy().reset_index(drop=True)
+            # --- RETTET: Emnelisten udelukker nu ALTID Hvidovre IF-spillere ---
+            # Både via IS_HIF (den autoritative kilde) og som ekstra sikkerhed via KLUB-teksten,
+            # så gamle/fejlindtastede rækker med "Hvidovre" i KLUB heller ikke kan snige sig med.
+            source_t1 = df_display[
+                (~df_display['IS_HIF']) &
+                (~df_display['KLUB'].astype(str).str.contains('hvidovre', case=False, na=False))
+            ].copy().reset_index(drop=True)
             st.data_editor(
                 source_t1[['NAVN', 'KLUB', 'POS', 'KONTRAKT_DT', 'TRANSFER_VINDUE', 'ER_EMNE', 'SKYGGEHOLD', 'PLAYER_WYID']],
                 column_config=cfg, use_container_width=True, height=600, key="editable_t1", on_change=handle_auto_save, args=("t1", df_display, source_t1)
@@ -280,6 +296,8 @@ def vis_side():
 
     if "Hvidovre IF" in tab_map:
         with tabs_obj[tab_map["Hvidovre IF"]]:
+            # IS_HIF er nu strengt bundet til player_mapping.py, så denne fane
+            # viser kun og udelukkende spillere derfra.
             source_t2 = df_display[df_display['IS_HIF']].copy().reset_index(drop=True)
             st.data_editor(
                 source_t2[['NAVN', 'KLUB', 'POS', 'KONTRAKT_DT', 'ER_AKADEMI', 'ER_EMNE', 'SKYGGEHOLD', 'PLAYER_WYID']],
@@ -330,6 +348,9 @@ def vis_side():
                 ax.text(22, 3, " Transferfri ", size=6, weight='bold', bbox=dict(facecolor=GRON_NY, boxstyle='round,pad=0.5'))
                 ax.text(33, 3, " Transferkøb ", size=6, weight='bold', color='white', bbox=dict(facecolor=HIF_BLA, boxstyle='round,pad=0.5'))
                 ax.text(45, 3, " Akademi ", size=6, weight='bold', color='black', bbox=dict(facecolor=AKADEMI_FARVE, boxstyle='round,pad=0.5'))
+                if is_startopstilling:
+                    ax.text(60, 3, " ↳ Skyggespiller (ved salg) ", size=6, weight='bold', style='italic', color='black',
+                            bbox=dict(facecolor='white', edgecolor='#666666', linestyle='dashed', boxstyle='round,pad=0.5'))
                 ax.text(118, 3, f"Vindue: {sel_v}", size=8, weight='bold', ha='right', bbox=dict(facecolor='white', edgecolor=HIF_ROD, boxstyle='round,pad=0.5'))
 
                 m = {
@@ -340,22 +361,42 @@ def vis_side():
 
                 drawn_players = []
                 for pid, (px, py, lbl) in m.items():
-                    ax.text(px, py-4.5, lbl, size=8, color="white", weight='bold', ha='center', 
+                    ax.text(px, py-4.5, lbl, size=8, color="white", weight='bold', ha='center',
                             bbox=dict(facecolor=HIF_ROD, edgecolor='white'))
 
                     plist = df_f[(df_f['POS'].astype(str) == str(pid)) & (~df_f['PLAYER_WYID'].isin(drawn_players))].copy()
                     plist = plist.sort_values(by='POS_PRIORITET', ascending=True)
 
-                    if is_startopstilling: 
-                        plist = plist.head(1)
+                    if is_startopstilling:
+                        # --- NYT: Skyggespiller-logik ---
+                        # Hovedspiller = den nuværende Hvidovre-spiller på positionen (hvis der er en).
+                        # Er der derudover en ekstern kandidat (ikke IS_HIF) også markeret til Start-11
+                        # på samme position, vises han som "skyggespiller" under hovedspilleren -
+                        # klar til at overtage pladsen, hvis hovedspilleren bliver solgt.
+                        # Findes der ingen nuværende HIF-spiller på positionen, bliver den første
+                        # eksterne kandidat i stedet hovedspiller (ingen skygge-styling).
+                        hif_candidates = plist[plist['IS_HIF'] == True]
+                        other_candidates = plist[plist['IS_HIF'] == False]
+
+                        if not hif_candidates.empty:
+                            main_player = hif_candidates.head(1).copy()
+                            shadow_player = other_candidates.head(1).copy()
+                        else:
+                            main_player = other_candidates.head(1).copy()
+                            shadow_player = other_candidates.iloc[1:2].copy()
+
+                        main_player['IS_SHADOW_DRAW'] = False
+                        shadow_player['IS_SHADOW_DRAW'] = True
+                        plist = pd.concat([main_player, shadow_player])
 
                     for i, (_, r) in enumerate(plist.iterrows()):
                         drawn_players.append(r['PLAYER_WYID'])
+                        is_shadow = is_startopstilling and bool(r.get('IS_SHADOW_DRAW', False))
 
                         if r['ER_AKADEMI']:
                             txt_c, bg = "black", AKADEMI_FARVE
                         elif not r['IS_HIF']:
-                            if r['KONTRAKT_DT'] <= ref_dt:
+                            if pd.notna(r['KONTRAKT_DT']) and r['KONTRAKT_DT'] <= ref_dt:
                                 txt_c, bg = "black", GRON_NY
                             else:
                                 txt_c, bg = "white", HIF_BLA
@@ -370,9 +411,14 @@ def vis_side():
                                 bg = k_c if k_c else "white"
                                 txt_c = "black"
 
-                        y_offset = (i * 3.2) if not is_startopstilling else 0
-                        ax.text(px, py + y_offset, r['NAVN'], size=7.5, ha='center', weight='bold', 
-                                color=txt_c, bbox=dict(facecolor=bg, edgecolor="black", alpha=0.9))
+                        if is_shadow:
+                            # Skyggespiller vises mindre, kursiveret og med stiplet kant lige under hovedspilleren
+                            ax.text(px, py + 4.5, f"↳ {r['NAVN']} (skygge)", size=6, ha='center', style='italic',
+                                    color=txt_c, bbox=dict(facecolor=bg, edgecolor="#333333", linestyle='dashed', alpha=0.85))
+                        else:
+                            y_offset = (i * 3.2) if not is_startopstilling else 0
+                            ax.text(px, py + y_offset, r['NAVN'], size=7.5, ha='center', weight='bold',
+                                    color=txt_c, bbox=dict(facecolor=bg, edgecolor="black", alpha=0.9))
                 st.pyplot(fig, use_container_width=True)
 
 if __name__ == "__main__":
