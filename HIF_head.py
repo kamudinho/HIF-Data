@@ -41,7 +41,7 @@ def apply_custom_style():
             .stats-table th { text-align: center; padding: 4px; color: #888; font-weight: 600; white-space: nowrap; }
             .stats-label { text-align: left !important; color: #666; font-weight: 700; width: 30%; padding: 4px 4px 4px 0; }
             .stats-value { text-align: center !important; font-weight: 700; color: #111; padding: 4px 2px; min-width: 20px; }
-            .card-title { color: #1a1a1a; font-size: 11px; font-weight: 700; margin-bottom: 8px; text-transform: uppercase; border-bottom: 1px solid #f0f0f0; padding-bottom: 6px; display: flex; justify-content: space-between; }
+            .card-title { color: #1a1a1a; font-size: 11px; font-weight: 700; margin-bottom: 8px; text-transform: uppercase; border-bottom: 1px solid #f0f0f0; padding-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
             
             /* Stilling-tabel styling */
             .table-standings { width: 100%; font-size: 11px; border-collapse: collapse; }
@@ -128,7 +128,6 @@ def beregn_kategori_indices(row, hif_uuid):
     xg, shots, touches = get_val('HOME_XG', 'AWAY_XG'), get_val('HOME_SHOTS', 'AWAY_SHOTS'), get_val('HOME_TOUCHES', 'AWAY_TOUCHES')
     tackles, goals_con = get_val('HOME_TACKLES', 'AWAY_TACKLES'), get_val('TOTAL_AWAY_SCORE', 'TOTAL_HOME_SCORE')
     
-    # Standarder og dueller (med udgangspunkt i de nye felter fra STAT_TYPE_MAP)
     corners_for = get_val('HOME_CORNERS_WON', 'AWAY_CORNERS_WON')
     corners_against = get_val('AWAY_CORNERS_WON', 'HOME_CORNERS_WON')
     fouls_won = get_val('HOME_FOULS_WON', 'AWAY_FOULS_WON')
@@ -138,11 +137,7 @@ def beregn_kategori_indices(row, hif_uuid):
     
     off_idx = (xg * 1.5) + (shots * 0.3) + (touches * 0.05)
     def_idx = -(goals_con * 2.0) + (tackles * 0.2)
-    
-    # Nuanceret Off. Std: Hjørner for + Vundne frispark + Offensive luftdueller
     off_std = (corners_for * 0.4) + (fouls_won * 0.3) + (aerial_off * 0.3)
-    
-    # Nuanceret Def. Std: Modstanderens hjørner + Begåede frispark + Modstanderens luftduel-overtag (trækker ned)
     def_std = -(corners_against * 0.4) - (fouls_lost * 0.3) - (aerial_def * 0.3)
     
     return pd.Series({'Offensiv': off_idx, 'Defensiv': def_idx, 'Off_Std': off_std, 'Def_Std': def_std})
@@ -347,9 +342,19 @@ def vis_side():
             else:
                 st.caption(f"Afventer næste kamp for sæson {active_season}")
                 
-        # KOLONNE 2: HVIDOVRE IF vs. LIGA
+        # KOLONNE 2: HVIDOVRE IF vs. LIGA (Med Info-ikon)
         with col2:
-            st.markdown("<div class='card-title'><span>HVIDOVRE IF vs. LIGA</span></div>", unsafe_allow_html=True)
+            c_title, c_icon = st.columns([10, 1])
+            with c_title:
+                st.markdown("<div class='card-title' style='border:none; margin-bottom:0;'><span>HVIDOVRE IF vs. LIGA</span></div>", unsafe_allow_html=True)
+            with c_icon:
+                with st.popover("ℹ️", use_container_width=True):
+                    st.markdown("**Om denne oversigt**")
+                    st.write("Sammenligner Hvidovres per-90-minutters nøgletal mod ligaens gennemsnit samt den seneste modstander.")
+                    st.write("- **Diff vs Liga:** Afvigelse mellem HIF-snit og liga-snit.")
+                    st.write("- **Diff vs HIF:** Sidste kamps afvigelse fra HIFs eget snit.")
+            
+            st.markdown("<div style='border-bottom: 1px solid #f0f0f0; margin-bottom: 8px;'></div>", unsafe_allow_html=True)
             
             df_stats_comp = beregn_per_90(df_stats, HIF_UUID)
             if df_stats_comp is not None:
@@ -415,16 +420,25 @@ def vis_side():
             
             r1_c1, r1_c2, r2_c1, r2_c2 = st.columns(4)
             categories = [
-                ("OFFENSIV", "Offensiv", "xG, Skud, Touches", r1_c1), 
-                ("DEFENSIV", "Defensiv", "Mål imod, tacklinger", r1_c2), 
-                ("OFF. STD", "Off_Std", "Hjørner, frispark & dueller", r2_c1), 
-                ("DEF. STD", "Def_Std", "Modst. hjørner & luftdueller", r2_c2)
+                ("OFFENSIV", "Offensiv", "xG, Skud, Touches i modstanderens felt", r1_c1), 
+                ("DEFENSIV", "Defensiv", "Mål imod, defensive tacklinger", r1_c2), 
+                ("OFF. STD", "Off_Std", "Hjørner for, vundne frispark & luftdueller", r2_c1), 
+                ("DEF. STD", "Def_Std", "Modstanderens hjørner & luftdueller", r2_c2)
             ]
             
             for title, col, desc, target in categories:
                 with target:
-                    st.markdown(f"<div style='font-weight:700; font-size:12px; margin-bottom:0px;'>{title}</div>", unsafe_allow_html=True)
-                    st.caption(f"<div style='margin-top:-5px; font-size:10px;'>{desc}</div>", unsafe_allow_html=True)
+                    # Lav en minikolonne til overskrift og info-ikon for hver graf
+                    g_title, g_icon = st.columns([10, 1])
+                    with g_title:
+                        st.markdown(f"<div style='font-weight:700; font-size:12px;'>{title}</div>", unsafe_allow_html=True)
+                    with g_icon:
+                        with st.popover("ℹ️", use_container_width=True):
+                            st.markdown(f"**{title}**")
+                            st.write(desc)
+                    
+                    st.caption(f"<div style='margin-top:-8px; font-size:10px; margin-bottom:4px;'>{desc}</div>", unsafe_allow_html=True)
+                    
                     hif_avg = hif_recent[col].mean()
                     hif_recent['tooltip_header'] = hif_recent.apply(lambda r: f"vs. {r['OPPONENT_NAME']} {int(r['TOTAL_HOME_SCORE'])}-{int(r['TOTAL_AWAY_SCORE'])} ({r['HOME_OR_AWAY']})", axis=1)
                     hif_recent['diff_label'] = hif_recent[col].apply(lambda x: f"{x - hif_avg:+.1f}")
