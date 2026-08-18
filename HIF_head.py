@@ -230,7 +230,6 @@ def beregn_stilling(df_matches, valgt_saeson, valgt_turnering):
 
     df_standings = pd.DataFrame.from_dict(stats, orient='index').reset_index()
     df_standings.columns = ['Hold', 'K', 'V', 'U', 'T', 'MF', 'GF', 'P']
-    # Sortering: Point -> Målforskel -> Flest scorede mål (GF) -> Holdnavn
     df_standings = df_standings.sort_values(by=['P', 'MF', 'GF', 'Hold'], ascending=[False, False, False, True]).reset_index(drop=True)
     df_standings.index = df_standings.index + 1
     return df_standings
@@ -320,7 +319,7 @@ def vis_side():
             else:
                 st.caption(f"Afventer næste kamp for sæson {active_season}")
                 
-        # KOLONNE 2: HVIDOVRE IF vs. LIGA (Med diff-beregning)
+        # KOLONNE 2: HVIDOVRE IF vs. LIGA (Med diff vs HIF-snit)
         with col2:
             st.markdown("<div class='card-title'><span>HVIDOVRE IF vs. LIGA</span></div>", unsafe_allow_html=True)
             
@@ -330,8 +329,8 @@ def vis_side():
                 opp_header = f"vs. {opp_navn}"
                 html = f"<table class='stats-table'><thead><tr><th></th><th>{opp_header}</th><th>HIF</th><th>Liga</th><th>Diff</th></tr></thead><tbody>"
                 for _, r in df_stats_comp.iterrows():
-                    diff_color = "#28a745" if r['Diff'] > 0 else "#dc3545"
-                    html += f"<tr><td class='stats-label'>{r['Stat']}</td><td class='stats-value'>{r['Seneste']:.0f}</td><td class='stats-value'>{r['HIF']:.2f}</td><td class='stats-value'>{r['Liga']:.2f}</td><td class='stats-value' style='color:{diff_color}; font-weight:800;'>{r['Diff']:+.2f}</td></tr>"
+                    diff_color = "#28a745" if r['Diff_vs_Hif'] > 0 else "#dc3545"
+                    html += f"<tr><td class='stats-label'>{r['Stat']}</td><td class='stats-value'>{r['Seneste']:.0f}</td><td class='stats-value'>{r['HIF']:.2f}</td><td class='stats-value'>{r['Liga']:.2f}</td><td class='stats-value' style='color:{diff_color}; font-weight:800;'>{r['Diff_vs_Hif']:+.2f}</td></tr>"
                 html += "</tbody></table>"
                 st.markdown(html, unsafe_allow_html=True)
 
