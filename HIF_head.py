@@ -94,19 +94,26 @@ def get_opta_queries(calendar_uuid, hif_uuid):
             SUM(CASE WHEN STAT_TYPE = 'touchesInOppBox' THEN STAT_VALUE ELSE 0 END) AS TOUCHES_IN_BOX,
             MAX(CASE WHEN STAT_TYPE = 'possessionPercentage' THEN STAT_VALUE END) AS POSSESSION,
             SUM(CASE WHEN STAT_TYPE = 'totalPass' THEN STAT_VALUE ELSE 0 END) AS PASSES,
-            SUM(CASE WHEN STAT_TYPE = 'wonCorners' THEN STAT_VALUE ELSE 0 END) AS CORNERS,
+            SUM(CASE WHEN STAT_TYPE = 'cornerTaken' THEN STAT_VALUE ELSE 0 END) AS CORNERS_TAKEN,
+            SUM(CASE WHEN STAT_TYPE = 'wonCorners' THEN STAT_VALUE ELSE 0 END) AS CORNERS_WON,
+            SUM(CASE WHEN STAT_TYPE = 'lostCorners' THEN STAT_VALUE ELSE 0 END) AS CORNERS_LOST,
             SUM(CASE WHEN STAT_TYPE = 'shotOffTarget' THEN STAT_VALUE ELSE 0 END) AS OFF_TARGET,
             SUM(CASE WHEN STAT_TYPE = 'totalThrows' THEN STAT_VALUE ELSE 0 END) AS THROWS,
             SUM(CASE WHEN STAT_TYPE = 'fkFoulWon' THEN STAT_VALUE ELSE 0 END) AS FOULS_WON,
+            SUM(CASE WHEN STAT_TYPE = 'fkFoulLost' THEN STAT_VALUE ELSE 0 END) AS FOULS_LOST,
             SUM(CASE WHEN STAT_TYPE = 'duelAerialWon' THEN STAT_VALUE ELSE 0 END) AS AERIAL_WON,
             SUM(CASE WHEN STAT_TYPE = 'totalTackle' THEN STAT_VALUE ELSE 0 END) AS TACKLES,
-            SUM(CASE WHEN STAT_TYPE = 'totalClearance' THEN STAT_VALUE ELSE 0 END) AS CLEARANCES
+            SUM(CASE WHEN STAT_TYPE = 'wonTackle' THEN STAT_VALUE ELSE 0 END) AS WON_TACKLES,
+            SUM(CASE WHEN STAT_TYPE = 'totalClearance' THEN STAT_VALUE ELSE 0 END) AS CLEARANCES,
+            SUM(CASE WHEN STAT_TYPE = 'outfielderBlock' THEN STAT_VALUE ELSE 0 END) AS BLOCKS,
+            SUM(CASE WHEN STAT_TYPE = 'totalYellowCard' THEN STAT_VALUE ELSE 0 END) AS YELLOW_CARDS,
+            SUM(CASE WHEN STAT_TYPE = 'totalRedCard' THEN STAT_VALUE ELSE 0 END) AS RED_CARDS
             FROM CombinedStats
             GROUP BY 1, 2
         )
         SELECT b.*, 
-        s1.XG AS HOME_XG, s1.SHOTS AS HOME_SHOTS, s1.TOUCHES_IN_BOX AS HOME_TOUCHES, s1.POSSESSION AS HOME_POSSESSION, s1.PASSES AS HOME_PASSES, s1.CORNERS AS HOME_CORNERS, s1.OFF_TARGET AS HOME_OFF_TARGET, s1.THROWS AS HOME_THROWS, s1.FOULS_WON AS HOME_FOULS_WON, s1.AERIAL_WON AS HOME_AERIAL_WON, s1.TACKLES AS HOME_TACKLES, s1.CLEARANCES AS HOME_CLEARANCES,
-        s2.XG AS AWAY_XG, s2.SHOTS AS AWAY_SHOTS, s2.TOUCHES_IN_BOX AS AWAY_TOUCHES, s2.POSSESSION AS AWAY_POSSESSION, s2.PASSES AS AWAY_PASSES, s2.CORNERS AS AWAY_CORNERS, s2.OFF_TARGET AS AWAY_OFF_TARGET, s2.THROWS AS AWAY_THROWS, s2.FOULS_WON AS AWAY_FOULS_WON, s2.AERIAL_WON AS AWAY_AERIAL_WON, s2.TACKLES AS AWAY_TACKLES, s2.CLEARANCES AS AWAY_CLEARANCES
+        s1.XG AS HOME_XG, s1.SHOTS AS HOME_SHOTS, s1.TOUCHES_IN_BOX AS HOME_TOUCHES, s1.POSSESSION AS HOME_POSSESSION, s1.PASSES AS HOME_PASSES, s1.CORNERS_TAKEN AS HOME_CORNERS_TAKEN, s1.CORNERS_WON AS HOME_CORNERS_WON, s1.CORNERS_LOST AS HOME_CORNERS_LOST, s1.OFF_TARGET AS HOME_OFF_TARGET, s1.THROWS AS HOME_THROWS, s1.FOULS_WON AS HOME_FOULS_WON, s1.FOULS_LOST AS HOME_FOULS_LOST, s1.AERIAL_WON AS HOME_AERIAL_WON, s1.TACKLES AS HOME_TACKLES, s1.WON_TACKLES AS HOME_WON_TACKLES, s1.CLEARANCES AS HOME_CLEARANCES, s1.BLOCKS AS HOME_BLOCKS, s1.YELLOW_CARDS AS HOME_YELLOW_CARDS, s1.RED_CARDS AS HOME_RED_CARDS,
+        s2.XG AS AWAY_XG, s2.SHOTS AS AWAY_SHOTS, s2.TOUCHES_IN_BOX AS AWAY_TOUCHES, s2.POSSESSION AS AWAY_POSSESSION, s2.PASSES AS AWAY_PASSES, s2.CORNERS_TAKEN AS AWAY_CORNERS_TAKEN, s2.CORNERS_WON AS AWAY_CORNERS_WON, s2.CORNERS_LOST AS AWAY_CORNERS_LOST, s2.OFF_TARGET AS AWAY_OFF_TARGET, s2.THROWS AS AWAY_THROWS, s2.FOULS_WON AS AWAY_FOULS_WON, s2.FOULS_LOST AS AWAY_FOULS_LOST, s2.AERIAL_WON AS AWAY_AERIAL_WON, s2.TACKLES AS AWAY_TACKLES, s2.WON_TACKLES AS AWAY_WON_TACKLES, s2.CLEARANCES AS AWAY_CLEARANCES, s2.BLOCKS AS AWAY_BLOCKS, s2.YELLOW_CARDS AS AWAY_YELLOW_CARDS, s2.RED_CARDS AS AWAY_RED_CARDS
         FROM MatchBase b
         LEFT JOIN PivotStats s1 ON b.MATCH_OPTAUUID = s1.MATCH_OPTAUUID AND b.CONTESTANTHOME_OPTAUUID = s1.CONTESTANT_OPTAUUID
         LEFT JOIN PivotStats s2 ON b.MATCH_OPTAUUID = s2.MATCH_OPTAUUID AND b.CONTESTANTAWAY_OPTAUUID = s2.CONTESTANT_OPTAUUID
@@ -121,20 +128,22 @@ def beregn_kategori_indices(row, hif_uuid):
     xg, shots, touches = get_val('HOME_XG', 'AWAY_XG'), get_val('HOME_SHOTS', 'AWAY_SHOTS'), get_val('HOME_TOUCHES', 'AWAY_TOUCHES')
     tackles, goals_con = get_val('HOME_TACKLES', 'AWAY_TACKLES'), get_val('TOTAL_AWAY_SCORE', 'TOTAL_HOME_SCORE')
     
-    # Standarder og dueller
-    corners, opp_corners = get_val('HOME_CORNERS', 'AWAY_CORNERS'), get_val('AWAY_CORNERS', 'HOME_CORNERS')
+    # Standarder og dueller (med udgangspunkt i de nye felter fra STAT_TYPE_MAP)
+    corners_for = get_val('HOME_CORNERS_WON', 'AWAY_CORNERS_WON')
+    corners_against = get_val('AWAY_CORNERS_WON', 'HOME_CORNERS_WON')
     fouls_won = get_val('HOME_FOULS_WON', 'AWAY_FOULS_WON')
+    fouls_lost = get_val('HOME_FOULS_LOST', 'AWAY_FOULS_LOST')
     aerial_off = get_val('HOME_AERIAL_WON', 'AWAY_AERIAL_WON')
-    aerial_def = get_val('AWAY_AERIAL_WON', 'HOME_AERIAL_WON') # Modstanderens vundne luftdueller i voresende (eller omvendt)
+    aerial_def = get_val('AWAY_AERIAL_WON', 'HOME_AERIAL_WON')
     
     off_idx = (xg * 1.5) + (shots * 0.3) + (touches * 0.05)
     def_idx = -(goals_con * 2.0) + (tackles * 0.2)
     
-    # Ny nuanceret Off. Std: Hjørnespark + Frispark vundet + Offensive luftdueller
-    off_std = (corners * 0.4) + (fouls_won * 0.3) + (aerial_off * 0.3)
+    # Nuanceret Off. Std: Hjørner for + Vundne frispark + Offensive luftdueller
+    off_std = (corners_for * 0.4) + (fouls_won * 0.3) + (aerial_off * 0.3)
     
-    # Ny nuanceret Def. Std: Modstanderens hjørnespark + Modstanderens luftduel-overtag (trækker ned)
-    def_std = -(opp_corners * 0.5) - (aerial_def * 0.3)
+    # Nuanceret Def. Std: Modstanderens hjørner + Begåede frispark + Modstanderens luftduel-overtag (trækker ned)
+    def_std = -(corners_against * 0.4) - (fouls_lost * 0.3) - (aerial_def * 0.3)
     
     return pd.Series({'Offensiv': off_idx, 'Defensiv': def_idx, 'Off_Std': off_std, 'Def_Std': def_std})
 
@@ -142,7 +151,7 @@ def beregn_per_90(df_stats, team_uuid):
     played = df_stats[df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].copy()
     if played.empty: return None
 
-    numeric_cols = ['TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE', 'HOME_XG', 'AWAY_XG', 'HOME_POSSESSION', 'AWAY_POSSESSION', 'HOME_OFF_TARGET', 'AWAY_OFF_TARGET', 'HOME_THROWS', 'AWAY_THROWS', 'HOME_FOULS_WON', 'AWAY_FOULS_WON', 'HOME_CORNERS', 'AWAY_CORNERS', 'HOME_TACKLES', 'AWAY_TACKLES', 'HOME_CLEARANCES', 'AWAY_CLEARANCES', 'HOME_PASSES', 'AWAY_PASSES']
+    numeric_cols = ['TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE', 'HOME_XG', 'AWAY_XG', 'HOME_POSSESSION', 'AWAY_POSSESSION', 'HOME_OFF_TARGET', 'AWAY_OFF_TARGET', 'HOME_THROWS', 'AWAY_THROWS', 'HOME_FOULS_WON', 'AWAY_FOULS_WON', 'HOME_CORNERS_WON', 'AWAY_CORNERS_WON', 'HOME_TACKLES', 'AWAY_TACKLES', 'HOME_CLEARANCES', 'AWAY_CLEARANCES', 'HOME_PASSES', 'AWAY_PASSES']
     for col in numeric_cols:
         if col in played.columns:
             played[col] = pd.to_numeric(played[col], errors='coerce').fillna(0)
@@ -164,7 +173,7 @@ def beregn_per_90(df_stats, team_uuid):
         STAT_TYPE_MAP["expectedGoals"]: ('HOME_XG', 'AWAY_XG'),
         STAT_TYPE_MAP["totalTackle"]: ('HOME_TACKLES', 'AWAY_TACKLES'),
         STAT_TYPE_MAP["totalClearance"]: ('HOME_CLEARANCES', 'AWAY_CLEARANCES'),
-        STAT_TYPE_MAP["wonCorners"]: ('HOME_CORNERS', 'AWAY_CORNERS'),
+        STAT_TYPE_MAP["wonCorners"]: ('HOME_CORNERS_WON', 'AWAY_CORNERS_WON'),
         STAT_TYPE_MAP["totalThrows"]: ('HOME_THROWS', 'AWAY_THROWS'),
         STAT_TYPE_MAP["fkFoulWon"]: ('HOME_FOULS_WON', 'AWAY_FOULS_WON')
     }
@@ -386,7 +395,7 @@ def vis_side():
         hif_recent = df_stats[((df_stats['CONTESTANTHOME_OPTAUUID'].str.upper() == HIF_UUID) | (df_stats['CONTESTANTAWAY_OPTAUUID'].str.upper() == HIF_UUID)) & (df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False))].sort_values('MATCH_DATE_FULL', ascending=True).tail(10).copy()
         
         if not hif_recent.empty:
-            num_cols = ['HOME_XG', 'AWAY_XG', 'HOME_SHOTS', 'AWAY_SHOTS', 'HOME_TOUCHES', 'AWAY_TOUCHES', 'TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE', 'HOME_CORNERS', 'AWAY_CORNERS', 'HOME_FOULS_WON', 'AWAY_FOULS_WON', 'HOME_AERIAL_WON', 'AWAY_AERIAL_WON', 'HOME_TACKLES', 'AWAY_TACKLES']
+            num_cols = ['HOME_XG', 'AWAY_XG', 'HOME_SHOTS', 'AWAY_SHOTS', 'HOME_TOUCHES', 'AWAY_TOUCHES', 'TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE', 'HOME_CORNERS_WON', 'AWAY_CORNERS_WON', 'HOME_FOULS_WON', 'AWAY_FOULS_WON', 'HOME_AERIAL_WON', 'AWAY_AERIAL_WON', 'HOME_TACKLES', 'AWAY_TACKLES']
             for col in num_cols: 
                 hif_recent[col] = pd.to_numeric(hif_recent[col], errors='coerce').fillna(0)
             
