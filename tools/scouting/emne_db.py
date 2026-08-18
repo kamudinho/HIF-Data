@@ -347,12 +347,12 @@ def vis_side():
                 fig, ax = pitch.draw(figsize=(10, 7))
 
                 ax.text(3, 3, " < 6 mdr ", size=6, weight='bold', bbox=dict(facecolor=ROD_ADVARSEL, boxstyle='round,pad=0.5'))
-                ax.text(12, 3, " 6-12 mdr ", size=6, weight='bold', bbox=dict(facecolor=GUL_ADVARSEL, boxstyle='round,pad=0.5'))
-                ax.text(22, 3, " Transferfri ", size=6, weight='bold', bbox=dict(facecolor=GRON_NY, boxstyle='round,pad=0.5'))
-                ax.text(33, 3, " Transferkøb ", size=6, weight='bold', color='white', bbox=dict(facecolor=HIF_BLA, boxstyle='round,pad=0.5'))
-                ax.text(45, 3, " Akademi ", size=6, weight='bold', color='black', bbox=dict(facecolor=AKADEMI_FARVE, boxstyle='round,pad=0.5'))
+                ax.text(9, 3, " 6-12 mdr ", size=6, weight='bold', bbox=dict(facecolor=GUL_ADVARSEL, boxstyle='round,pad=0.5'))
+                ax.text(19, 3, " Transferfri ", size=6, weight='bold', bbox=dict(facecolor=GRON_NY, boxstyle='round,pad=0.5'))
+                ax.text(29, 3, " Transferkøb ", size=6, weight='bold', color='white', bbox=dict(facecolor=HIF_BLA, boxstyle='round,pad=0.5'))
+                ax.text(39, 3, " Akademi ", size=6, weight='bold', color='black', bbox=dict(facecolor=AKADEMI_FARVE, boxstyle='round,pad=0.5'))
                 if is_startopstilling:
-                    ax.text(60, 3, " Skyggespiller ", size=6, weight='bold', style='italic', color='black',
+                    ax.text(49, 3, " Skyggespiller ", size=6, weight='bold', style='italic', color='black',
                             bbox=dict(facecolor='white', edgecolor='#666666', linestyle='dashed', boxstyle='round,pad=0.5'))
                 ax.text(118, 3, f"Vindue: {sel_v}", size=8, weight='bold', ha='right', bbox=dict(facecolor='white', edgecolor=HIF_ROD, boxstyle='round,pad=0.5'))
 
@@ -424,7 +424,7 @@ def vis_side():
 
                         if is_shadow:
                             # Skyggespiller vises mindre, kursiveret og med stiplet kant lige under hovedspilleren
-                            ax.text(px, py + 4.5, f"↳ {r['NAVN']} (skygge)", size=6, ha='center', style='italic',
+                            ax.text(px, py + 4.5, f"{r['NAVN']} (skygge)", size=7.5, ha='center', style='italic',
                                     color=txt_c, bbox=dict(facecolor=bg, edgecolor="#333333", linestyle='dashed', alpha=0.85))
                         else:
                             y_offset = (i * 3.2) if not is_startopstilling else 0
