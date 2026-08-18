@@ -342,13 +342,17 @@ def vis_side():
             else:
                 st.caption(f"Afventer næste kamp for sæson {active_season}")
                 
-        # KOLONNE 2: HVIDOVRE IF vs. LIGA (Med ekspanderbar info)
+        # KOLONNE 2: HVIDOVRE IF vs. LIGA (Med lille info-ikon via popover)
         with col2:
-            st.markdown("<div class='card-title' style='border:none; margin-bottom:0;'><span>HVIDOVRE IF vs. LIGA</span></div>", unsafe_allow_html=True)
-            with st.expander("ℹ️ Om denne oversigt", expanded=False):
-                st.write("Sammenligner Hvidovres per-90-minutters nøgletal mod ligaens gennemsnit samt den seneste modstander.")
-                st.write("- **Diff vs Liga:** Afvigelse mellem HIF-snit og liga-snit.")
-                st.write("- **Diff vs HIF:** Sidste kamps afvigelse fra HIFs eget snit.")
+            c_title, c_icon = st.columns([12, 1])
+            with c_title:
+                st.markdown("<div class='card-title' style='border:none; margin-bottom:0;'><span>HVIDOVRE IF vs. LIGA</span></div>", unsafe_allow_html=True)
+            with c_icon:
+                with st.popover("ℹ️", use_container_width=False):
+                    st.markdown("**Om denne oversigt**")
+                    st.write("Sammenligner Hvidovres per-90-minutters nøgletal mod ligaens gennemsnit samt den seneste modstander.")
+                    st.write("- **Diff vs Liga:** Afvigelse mellem HIF-snit og liga-snit.")
+                    st.write("- **Diff vs HIF:** Sidste kamps afvigelse fra HIFs eget snit.")
             
             st.markdown("<div style='border-bottom: 1px solid #f0f0f0; margin-bottom: 8px;'></div>", unsafe_allow_html=True)
             
@@ -424,9 +428,15 @@ def vis_side():
             
             for title, col, desc, target in categories:
                 with target:
-                    st.markdown(f"<div style='font-weight:700; font-size:12px;'>{title}</div>", unsafe_allow_html=True)
-                    with st.expander(f"ℹ️ Om {title}", expanded=False):
-                        st.write(desc)
+                    g_title, g_icon = st.columns([12, 1])
+                    with g_title:
+                        st.markdown(f"<div style='font-weight:700; font-size:12px;'>{title}</div>", unsafe_allow_html=True)
+                    with g_icon:
+                        with st.popover("ℹ️", use_container_width=False):
+                            st.markdown(f"**{title}**")
+                            st.write(desc)
+                    
+                    st.caption(f"<div style='margin-top:-8px; font-size:10px; margin-bottom:4px;'>{desc}</div>", unsafe_allow_html=True)
                     
                     hif_avg = hif_recent[col].mean()
                     hif_recent['tooltip_header'] = hif_recent.apply(lambda r: f"vs. {r['OPPONENT_NAME']} {int(r['TOTAL_HOME_SCORE'])}-{int(r['TOTAL_AWAY_SCORE'])} ({r['HOME_OR_AWAY']})", axis=1)
