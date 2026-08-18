@@ -266,7 +266,7 @@ def vis_side():
 
     # --- TOPSEKTION: ÉN STOR BOKS OMKRING ALLE 3 KOLONNER ---
     with st.container(border=True):
-        col1, col2, col3 = st.columns([0.8, 1.4, 1.0])
+        col1, col2, col3 = st.columns([0.6, 2.4, 1.0])
 
         # KOLONNE 1: NÆSTE MODSTANDER
         with col1:
@@ -336,10 +336,10 @@ def vis_side():
                     html += f"""<tr>
                         <td class='stats-label'>{r['Stat']}</td>
                         <td class='stats-value'>{r['Seneste']:.0f}</td>
+                        <td class='stats-value' style='color:{diff_hif_color}; font-weight:800;'>{r['Diff_vs_Hif']:+.2f}</td>
                         <td class='stats-value'>{r['HIF']:.2f}</td>
                         <td class='stats-value'>{r['Liga']:.2f}</td>
                         <td class='stats-value' style='color:{diff_liga_color}; font-weight:800;'>{r['Diff_Liga']:+.2f}</td>
-                        <td class='stats-value' style='color:{diff_hif_color}; font-weight:800;'>{r['Diff_vs_Hif']:+.2f}</td>
                     </tr>"""
                 html += "</tbody></table>"
                 st.markdown(html, unsafe_allow_html=True)
