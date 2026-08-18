@@ -35,7 +35,6 @@ except ImportError:
 # --- GITHUB FUNKTIONER ---
 def get_github_file(path):
     try:
-        # Tilføj tidsstempel for at undgå GitHub cache-problemer
         url = f"https://api.github.com/repos/{REPO}/contents/{path}?t={int(time.time())}"
         headers = {"Authorization": f"token {GITHUB_TOKEN}"}
         r = requests.get(url, headers=headers)
@@ -61,7 +60,6 @@ def push_to_github(path, message, content, sha=None):
 
 def rens_id(val):
     if pd.isna(val) or str(val).strip() == "": return ""
-    # Fjerner .0 hvis ID'et er indlæst som float
     return str(val).split('.')[0].strip()
 
 # --- MODAL: SPILLERPROFIL ---
@@ -69,7 +67,6 @@ def rens_id(val):
 def vis_spiller_modal(valgt_navn, billed_map, career_df, alle_rapporter):
     df_modal = alle_rapporter.copy()
     
-    # Standardisering af navne for filtrering
     spiller_historik = df_modal[df_modal['NAVN'] == valgt_navn].sort_values('DATO', ascending=True)
     
     if spiller_historik.empty:
@@ -186,13 +183,39 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
             {'true': True, 'false': False, '1': True, '0': False, 'nan': False}
         ).fillna(False)
 
-    # 4. Integrer Hvidovre-spillere fra player_mapping hvis det ønskes, eller filtrer/flet her
+    # 4. Sørg for at spillere fra player_mapping (Hvidovre) er repræsenteret i databasen
     if df_spiller_mapping is not None and not df_spiller_mapping.empty:
-        # Eksempel: Sikr at spillere fra Hvidovre-mappingen indgå eller markeres, 
-        # alt efter hvordan din scouting-database hænger sammen med truppen.
-        pass
+        df_spiller_mapping.columns = [c.upper().strip() for c in df_spiller_mapping.columns]
+        
+        # Tjek om vi har nødvendige kolonner i mappingen (f.eks. PLAYER_WYID og NAVN)
+        id_col = 'PLAYER_WYID' if 'PLAYER_WYID' in df_spiller_mapping.columns else ('ID' if 'ID' in df_spiller_mapping.columns else None)
+        navn_col = 'NAVN' if 'NAVN' in df_spiller_mapping.columns else ('PLAYERNAME' if 'PLAYERNAME' in df_spiller_mapping.columns else None)
+        
+        if id_col and navn_col:
+            eksisterende_ids = set(df_raw['PLAYER_WYID'].apply(rens_id))
+            
+            nye_rækker = []
+            for _, sp in df_spiller_mapping.iterrows():
+                sp_id = rens_id(sp[id_col])
+                sp_navn = sp[navn_col]
+                
+                if sp_id and sp_id not in eksisterende_ids:
+                    nye_rækker.append({
+                        'PLAYER_WYID': sp_id,
+                        'NAVN': sp_navn,
+                        'KLUB': valgt_hold,
+                        'RATING_AVG': 0.0,
+                        'KONTRAKT': "",
+                        'ER_EMNE': False,
+                        'SKYGGEHOLD': False,
+                        'DATO': datetime.today().strftime('%Y-%m-%d')
+                    })
+            
+            if nye_rækker:
+                df_ny_tilfoejelse = pd.DataFrame(nye_rækker)
+                df_raw = pd.concat([df_raw, df_ny_tilfoejelse], ignore_index=True)
 
-    # 5. UNIK LISTE (Vigtigt: Vi bruger PLAYER_WYID for at undgå at slette spillere med samme navn)
+    # 5. UNIK LISTE (Vi bruger PLAYER_WYID)
     df_raw = df_raw.sort_values('DATO', ascending=False)
     df_unique = df_raw.drop_duplicates(subset=['PLAYER_WYID']).copy()
     
@@ -200,7 +223,7 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
     df_unique = df_unique.sort_values('KONTRAKT', ascending=True, na_position='last')
 
     # --- FORBERED VISNING I EDITOR ---
-    display_cols = ['NAVN', 'KLUB', 'RATING_AVG', 'KONTRAKT', 'ER_EMNE', 'SKYGGEHOLD']
+    display_cols = ['PLAYER_WYID', 'NAVN', 'KLUB', 'RATING_AVG', 'KONTRAKT', 'ER_EMNE', 'SKYGGEHOLD']
     df_display = df_unique[display_cols].copy()
     df_display.insert(0, "SE", False)
         
@@ -208,6 +231,7 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
         df_display,
         column_config={
             "SE": st.column_config.CheckboxColumn("Profil", width="small"), 
+            "PLAYER_WYID": None,  # Skjuler ID-kolonnen fra editoren, men bevarer den til opdatering
             "ER_EMNE": st.column_config.CheckboxColumn("Emne", width="small"),
             "SKYGGEHOLD": st.column_config.CheckboxColumn("Skygge", width="small"),
             "RATING_AVG": st.column_config.NumberColumn("Rating", format="%.1f"),
@@ -223,11 +247,12 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
     )
 
     # --- GEM ÆNDRINGER ---
+    # Sammenlign pålideligt ved hjælp af ID'er frem for navne
     if not ed_result[['ER_EMNE', 'SKYGGEHOLD']].equals(df_display[['ER_EMNE', 'SKYGGEHOLD']]):
         with st.spinner("Gemmer ændringer..."):
-            for i, row in ed_result.iterrows():
-                p_name = row['NAVN']
-                df_raw.loc[df_raw['NAVN'] == p_name, ['ER_EMNE', 'SKYGGEHOLD']] = [row['ER_EMNE'], row['SKYGGEHOLD']]
+            for _, row in ed_result.iterrows():
+                p_id = row['PLAYER_WYID']
+                df_raw.loc[df_raw['PLAYER_WYID'].apply(rens_id) == rens_id(p_id), ['ER_EMNE', 'SKYGGEHOLD']] = [row['ER_EMNE'], row['SKYGGEHOLD']]
             
             status_code = push_to_github(FILE_PATH, "Update Emne/Skygge status", df_raw.to_csv(index=False), sha)
             if status_code in [200, 201]:
