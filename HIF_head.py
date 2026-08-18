@@ -32,8 +32,8 @@ def apply_custom_style():
 
             .stats-table { width: 100%; font-size: 11px; border-collapse: collapse; table-layout: auto; }
             .stats-table th { text-align: center; padding: 4px; color: #888; font-weight: 600; white-space: nowrap; }
-            .stats-label { text-align: left !important; color: #666; font-weight: 700; width: 40%; padding: 4px 8px 4px 0; }
-            .stats-value { text-align: center !important; font-weight: 700; color: #111; padding: 4px 4px; min-width: 30px; }
+            .stats-label { text-align: left !important; color: #666; font-weight: 700; width: 35%; padding: 4px 6px 4px 0; }
+            .stats-value { text-align: center !important; font-weight: 700; color: #111; padding: 4px 2px; min-width: 25px; }
             .card-title { color: #1a1a1a; font-size: 11px; font-weight: 700; margin-bottom: 8px; text-transform: uppercase; border-bottom: 1px solid #f0f0f0; padding-bottom: 6px; display: flex; justify-content: space-between; }
             
             /* Stilling-tabel styling */
@@ -155,7 +155,19 @@ def beregn_per_90(df_stats, team_uuid):
         hif_val = hif_matches.apply(lambda r: r[h_col] if str(r['CONTESTANTHOME_OPTAUUID']).strip().upper() == team_uuid.strip().upper() else r[a_col], axis=1).mean()
         liga_val = pd.concat([played[h_col], played[a_col]]).mean()
         last_val = last_match[h_col] if is_home else last_match[a_col]
-        results.append({"Stat": display_name, "HIF": hif_val, "Liga": liga_val, "Diff": hif_val - liga_val, "Seneste": last_val, "Opponent": opp_name})
+        
+        # Beregn differencen mellem seneste modstander (eller modstanderens stat i kampen) og HIF
+        diff_vs_hif = last_val - hif_val
+        
+        results.append({
+            "Stat": display_name, 
+            "HIF": hif_val, 
+            "Liga": liga_val, 
+            "Diff": hif_val - liga_val, 
+            "Seneste": last_val, 
+            "Diff_vs_Hif": diff_vs_hif,
+            "Opponent": opp_name
+        })
     return pd.DataFrame(results)
 
 def beregn_hold_stats(df_stats, team_uuid):
@@ -181,7 +193,7 @@ def beregn_stilling(df_matches, valgt_saeson, valgt_turnering):
         saesons_hold = sorted(TEAMS.keys())
 
     for name in saesons_hold:
-        stats[name] = {'K': 0, 'V': 0, 'U': 0, 'T': 0, 'MF': 0, 'P': 0}
+        stats[name] = {'K': 0, 'V': 0, 'U': 0, 'T': 0, 'MF': 0, 'GF': 0, 'P': 0}
 
     if df_matches is not None and not df_matches.empty and 'MATCH_STATUS' in df_matches.columns:
         played = df_matches[df_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].copy()
@@ -192,8 +204,8 @@ def beregn_stilling(df_matches, valgt_saeson, valgt_turnering):
             h_name = resolve_team_name(h_uuid, row.get('CONTESTANTHOME_NAME', ''))
             a_name = resolve_team_name(a_uuid, row.get('CONTESTANTAWAY_NAME', ''))
             
-            if h_name not in stats: stats[h_name] = {'K': 0, 'V': 0, 'U': 0, 'T': 0, 'MF': 0, 'P': 0}
-            if a_name not in stats: stats[a_name] = {'K': 0, 'V': 0, 'U': 0, 'T': 0, 'MF': 0, 'P': 0}
+            if h_name not in stats: stats[h_name] = {'K': 0, 'V': 0, 'U': 0, 'T': 0, 'MF': 0, 'GF': 0, 'P': 0}
+            if a_name not in stats: stats[a_name] = {'K': 0, 'V': 0, 'U': 0, 'T': 0, 'MF': 0, 'GF': 0, 'P': 0}
 
             try:
                 h_g = int(row['TOTAL_HOME_SCORE'])
@@ -205,6 +217,8 @@ def beregn_stilling(df_matches, valgt_saeson, valgt_turnering):
             stats[a_name]['K'] += 1
             stats[h_name]['MF'] += (h_g - a_g)
             stats[a_name]['MF'] += (a_g - h_g)
+            stats[h_name]['GF'] += h_g
+            stats[a_name]['GF'] += a_g
 
             if h_g > a_g:
                 stats[h_name]['V'] += 1; stats[h_name]['P'] += 3; stats[a_name]['T'] += 1
@@ -215,8 +229,9 @@ def beregn_stilling(df_matches, valgt_saeson, valgt_turnering):
                 stats[h_name]['P'] += 1; stats[a_name]['P'] += 1
 
     df_standings = pd.DataFrame.from_dict(stats, orient='index').reset_index()
-    df_standings.columns = ['Hold', 'K', 'V', 'U', 'T', 'MF', 'P']
-    df_standings = df_standings.sort_values(by=['P', 'MF', 'Hold'], ascending=[False, False, True]).reset_index(drop=True)
+    df_standings.columns = ['Hold', 'K', 'V', 'U', 'T', 'MF', 'GF', 'P']
+    # Sortering: Point -> Målforskel -> Flest scorede mål (GF) -> Holdnavn
+    df_standings = df_standings.sort_values(by=['P', 'MF', 'GF', 'Hold'], ascending=[False, False, False, True]).reset_index(drop=True)
     df_standings.index = df_standings.index + 1
     return df_standings
 
@@ -250,11 +265,10 @@ def vis_side():
         df_stats = conn.query(fallback_queries["opta_team_stats"])
         df_stats.columns = [str(c).upper() for c in df_stats.columns]
 
-    # --- TOPSEKTION: ÉN STOR BOKS OMKRING ALLE 3 KOLONNER ---
+    # --- TOPSEKTION: ÉN STOR BOKS OMKRING ALLE 3 KOLONNER (Justeret bredde) ---
     with st.container(border=True):
-        col1, col2, col3 = st.columns([1, 1, 1])
+        col1, col2, col3 = st.columns([0.8, 1.4, 1.0])
 
-        # KOLONNE 1: NÆSTE MODSTANDER
         # KOLONNE 1: NÆSTE MODSTANDER
         with col1:
             st.markdown("<div class='card-title'><span>NÆSTE MODSTANDER</span></div>", unsafe_allow_html=True)
@@ -272,7 +286,6 @@ def vis_side():
                 opp_raw = nk['CONTESTANTAWAY_NAME'] if str(nk['CONTESTANTHOME_OPTAUUID']).upper() == HIF_UUID else nk['CONTESTANTHOME_NAME']
                 opp_name = resolve_team_name(opp_id, opp_raw)
                 
-                # Udtræk ekstra detaljer fra rækken (nk)
                 match_date = nk['MATCH_DATE_FULL'].strftime('%d/%m/%Y') if pd.notnull(nk['MATCH_DATE_FULL']) else ""
                 match_time = nk.get('MATCH_LOCALTIME', '') or nk.get('MATCH_TIME', '')
                 venue = nk.get('VENUE_LONGNAME', 'Ukendt stadion')
@@ -280,7 +293,6 @@ def vis_side():
                 
                 st.markdown(f"<div class='card-title' style='border:none; margin-top:0px; padding-bottom:0; font-size: 13px;'><span>vs. {opp_name.upper()}</span><span>{match_date} kl. {match_time}</span></div>", unsafe_allow_html=True)
                 
-                # Vis ekstra metadata (Stadion, Dommer, Runde)
                 meta_html = f"""
                 <div style='font-size: 11px; color: #555; margin-bottom: 8px; line-height: 1.4;'>
                     <b>Stadion:</b> {venue}<br>
@@ -308,7 +320,7 @@ def vis_side():
             else:
                 st.caption(f"Afventer næste kamp for sæson {active_season}")
                 
-        # KOLONNE 2: HVIDOVRE IF vs. LIGA
+        # KOLONNE 2: HVIDOVRE IF vs. LIGA (Med diff-beregning)
         with col2:
             st.markdown("<div class='card-title'><span>HVIDOVRE IF vs. LIGA</span></div>", unsafe_allow_html=True)
             
