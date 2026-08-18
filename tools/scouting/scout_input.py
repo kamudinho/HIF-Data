@@ -140,12 +140,12 @@ def show_report_popup(valgt_navn, alle_rapporter, billed_map):
 def show_create_player_dialog():
     st.write("Indtast oplysninger på spilleren, der ikke findes i systemet i forvejen.")
     with st.form("create_player_form"):
-        ny_navn = st.text_input("Spillerens Navn")
+        ny_navn = st.text_input("Spillernavn")
         ny_klub = st.text_input("Klub")
         ny_pos = st.selectbox("Position", ["CB", "LB", "RB", "DMF", "CM", "AMF", "LW", "RW", "CF", "GK"])
         ny_birth = st.text_input("Fødselsdato (f.eks. YYYY-MM-DD eller ÅÅÅÅ)")
         
-        submitted = st.form_submit_button("Opret Spiller & Gem i Database", use_container_width=True)
+        submitted = st.form_submit_button("Send spiller til databasen", use_container_width=True)
         if submitted:
             if not ny_navn or not ny_klub:
                 st.error("Navn og klub skal udfyldes!")
