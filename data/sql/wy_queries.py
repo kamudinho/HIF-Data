@@ -13,7 +13,7 @@ def get_wy_queries(comp_filter, season_filter):
     if isinstance(season_filter, str) and not season_filter.startswith('='):
         s_f = f" = '{season_filter}'"
     else:
-        s_f = season_filter if season_filter else " = '2025/2026'"
+        s_f = season_filter if season_filter else " = '2026/2027'"
 
     return {
         # 1. PLAYERS (Behold filter her, så din hovedliste ikke eksploderer)
