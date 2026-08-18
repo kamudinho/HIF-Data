@@ -19,15 +19,25 @@ def apply_custom_style():
             [data-testid="stHeaderBlockContainer"] h1 { display: none; }
             .stApp { background-color: #FFFFFF; }
             
-            /* Sørg for at kolonnerne strækker sig ens */
+            /* Tving rigtig fordeling og bredde på de 3 kolonner i topsektionen */
             [data-testid="stHorizontalBlock"] {
                 display: flex;
                 align-items: stretch;
+                gap: 12px;
             }
-            [data-testid="stHorizontalBlock"] > div {
-                display: flex;
-                flex-direction: column;
-                flex: 1;
+            
+            /* Stil og fastsæt bredder pr. kolonne i topsektionen */
+            [data-testid="stHorizontalBlock"] > div:nth-child(1) {
+                flex: 0 0 28% !important;
+                max-width: 28% !important;
+            }
+            [data-testid="stHorizontalBlock"] > div:nth-child(2) {
+                flex: 0 0 46% !important;
+                max-width: 46% !important;
+            }
+            [data-testid="stHorizontalBlock"] > div:nth-child(3) {
+                flex: 0 0 26% !important;
+                max-width: 26% !important;
             }
 
             .stats-table { width: 100%; font-size: 11px; border-collapse: collapse; table-layout: auto; }
@@ -266,7 +276,7 @@ def vis_side():
 
     # --- TOPSEKTION: ÉN STOR BOKS OMKRING ALLE 3 KOLONNER ---
     with st.container(border=True):
-        col1, col2, col3 = st.columns([1.0, 2.2, 1.0])
+        col1, col2, col3 = st.columns(3)
 
         # KOLONNE 1: NÆSTE MODSTANDER
         with col1:
@@ -328,7 +338,6 @@ def vis_side():
                 opp_navn = df_stats_comp.iloc[0]['Opponent']
                 opp_header = f"vs. {opp_navn}"
                 
-                # Ændret rækkefølge på kolonnerne her: Stat -> Seneste -> Diff vs HIF -> HIF -> Liga -> Diff (Liga)
                 html = f"<table class='stats-table'><thead><tr><th></th><th>{opp_header}</th><th>Diff vs HIF</th><th>HIF</th><th>Liga</th><th>Diff</th></tr></thead><tbody>"
                 for _, r in df_stats_comp.iterrows():
                     diff_liga_color = "#28a745" if r['Diff_Liga'] > 0 else "#dc3545"
