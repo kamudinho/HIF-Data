@@ -266,7 +266,7 @@ def vis_side():
 
     # --- TOPSEKTION: ÉN STOR BOKS OMKRING ALLE 3 KOLONNER ---
     with st.container(border=True):
-        col1, col2, col3 = st.columns([0.6, 2.4, 1.0])
+        col1, col2, col3 = st.columns([1.0, 2.2, 1.0])
 
         # KOLONNE 1: NÆSTE MODSTANDER
         with col1:
@@ -319,7 +319,7 @@ def vis_side():
             else:
                 st.caption(f"Afventer næste kamp for sæson {active_season}")
                 
-        # KOLONNE 2: HVIDOVRE IF vs. LIGA (Med både Liga-diff og Seneste-diff)
+        # KOLONNE 2: HVIDOVRE IF vs. LIGA
         with col2:
             st.markdown("<div class='card-title'><span>HVIDOVRE IF vs. LIGA</span></div>", unsafe_allow_html=True)
             
@@ -328,7 +328,8 @@ def vis_side():
                 opp_navn = df_stats_comp.iloc[0]['Opponent']
                 opp_header = f"vs. {opp_navn}"
                 
-                html = f"<table class='stats-table'><thead><tr><th></th><th>{opp_header}</th><th>HIF</th><th>Liga</th><th>Diff</th><th>Diff vs HIF</th></tr></thead><tbody>"
+                # Ændret rækkefølge på kolonnerne her: Stat -> Seneste -> Diff vs HIF -> HIF -> Liga -> Diff (Liga)
+                html = f"<table class='stats-table'><thead><tr><th></th><th>{opp_header}</th><th>Diff vs HIF</th><th>HIF</th><th>Liga</th><th>Diff</th></tr></thead><tbody>"
                 for _, r in df_stats_comp.iterrows():
                     diff_liga_color = "#28a745" if r['Diff_Liga'] > 0 else "#dc3545"
                     diff_hif_color = "#28a745" if r['Diff_vs_Hif'] > 0 else "#dc3545"
@@ -362,7 +363,7 @@ def vis_side():
 
     # --- BUNDSEKTION: TRENDGRAFER ---
     with st.container(border=True):
-        st.markdown('<div class="card-title"><span>PRÆSTATIONS-TRENDS (Seneste 10 kampe)</span></div>', unsafe_allow_html=True)
+        st.markdown('<div class="card-title"><span>PRÆSTATION-TRENDS (Seneste 10 kampe)</span></div>', unsafe_allow_html=True)
         hif_recent = df_stats[((df_stats['CONTESTANTHOME_OPTAUUID'].str.upper() == HIF_UUID) | (df_stats['CONTESTANTAWAY_OPTAUUID'].str.upper() == HIF_UUID)) & (df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False))].sort_values('MATCH_DATE_FULL', ascending=True).tail(10).copy()
         
         if not hif_recent.empty:
