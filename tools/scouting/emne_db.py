@@ -129,7 +129,10 @@ def handle_auto_save(key, df_display, source_df):
         st.session_state['full_db'] = full_db
         save_to_github(full_db)
         st.session_state[state_key]["edited_rows"] = {}
-        st.rerun()
+        # BEMÆRK: st.rerun() er bevidst fjernet her - Streamlit reruner automatisk
+        # siden efter en on_change-callback er færdig. At kalde st.rerun() inde i
+        # selve callbacken er et no-op (og gav advarslen "Calling st.rerun() within
+        # a callback is a no-op"), som forhindrede UI'et i at opdatere sig korrekt.
 
 def clean_pos_val(val):
     if pd.isna(val) or val == "" or str(val).lower() == "nan": return ""
