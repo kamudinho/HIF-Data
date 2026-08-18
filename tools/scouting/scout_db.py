@@ -21,7 +21,7 @@ try:
     hold_logo = getattr(player_mapping, 'hold_logo', None)
     primær_farve = getattr(player_mapping, 'primær_farve', "#df003b")
     valgt_hold = getattr(player_mapping, 'valgt_hold', "Hvidovre")
-    SEASONNAME = getattr(player_mapping, 'SEASONNAME', "2025/2026")
+    SEASONNAME = getattr(player_mapping, 'SEASONNAME', "2026/2027")
     TEAM_WYID = getattr(player_mapping, 'TEAM_WYID', 7490)
     COMPETITION_WYID = getattr(player_mapping, 'COMPETITION_WYID', (328,))
     COMP_MAP = getattr(player_mapping, 'COMP_MAP', { 
