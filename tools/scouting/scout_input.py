@@ -140,30 +140,35 @@ def show_report_popup(valgt_navn, alle_rapporter, billed_map):
 def show_create_player_dialog():
     st.write("Indtast oplysninger på spilleren, der ikke findes i systemet i forvejen.")
     with st.form("create_player_form"):
-        ny_navn = st.text_input("Spillernavn")
-        ny_klub = st.text_input("Klub")
+        ny_navn = st.text_input("Spillernavn *")
+        ny_klub = st.text_input("Klub *")
         ny_pos = st.selectbox("Position", ["CB", "LB", "RB", "DMF", "CM", "AMF", "LW", "RW", "CF", "GK"])
-        ny_birth = st.text_input("Fødselsdato (f.eks. YYYY-MM-DD eller ÅÅÅÅ)")
         
-        submitted = st.form_submit_button("Send spiller til databasen", use_container_width=True)
+        # Ændret til datovelger (kalender) med standarddato f.eks. år 2000
+        ny_birth_date = st.date_input("Fødselsdato", value=datetime(2000, 1, 1).date(), min_value=datetime(1970, 1, 1).date(), max_value=datetime.today().date())
+        
+        submitted = st.form_submit_button("Send spilleren ind i databasen", use_container_width=True)
         if submitted:
             if not ny_navn or not ny_klub:
-                st.error("Navn og klub skal udfyldes!")
+                st.error("* Navn og klub skal udfyldes!")
             else:
-                # Generer et unikt lokalt ID baseret på timestamp (f.eks. M99123456)
+                # Generer et unikt lokalt ID baseret på timestamp
                 lokal_id = f"M{int(time.time())}"
+                
+                # Konverter datoen til strengformat (YYYY-MM-DD)
+                ny_birth_str = ny_birth_date.strftime("%Y-%m-%d")
                 
                 # Opret en 'tom' start-rapport så spilleren eksisterer i scouting_db.csv
                 init_rapport = {
                     "PLAYER_WYID": lokal_id, "DATO": datetime.now().strftime("%Y-%m-%d"),
-                    "NAVN": ny_navn, "KLUB": ny_klub, "POSITION": ny_pos, "BIRTHDATE": ny_birth,
+                    "NAVN": ny_navn, "KLUB": ny_klub, "POSITION": ny_pos, "BIRTHDATE": ny_birth_str,
                     "RATING_AVG": 0.0, "STATUS": "Interessant", "POTENTIALE": "Middel", 
                     "STYRKER": "Oprettet manuelt", "UDVIKLING": "-", "VURDERING": "-",
                     "BESLUTSOMHED": 3.0, "FART": 3.0, "AGGRESIVITET": 3.0, "ATTITUDE": 3.0,
                     "UDHOLDENHED": 3.0, "LEDEREGENSKABER": 3.0, "TEKNIK": 3.0, "SPILINTELLIGENS": 3.0,
                     "SCOUT": st.session_state.get("user", "HIF Scout"), "KONTRAKT": "", "FORVENTNING": "Realistisk", "POS_PRIORITET": "B - Trupspiller",
                     "POS": "1", "LON": "0", "SKYGGEHOLD": False, "KOMMENTAR": "Manuelt oprettet spiller",
-                    "ER_EMNE": False, "TRANSFER_VINDUE": "Sommer 26", "POS_343": 0.0, "POS_433": 0.0, "POS_352": 0.0
+                    "ER_EMNE": False, "TRANSFER_VINDUE": "Sommer 27", "POS_343": 0.0, "POS_433": 0.0, "POS_352": 0.0
                 }
                 
                 content, sha = get_github_file(FILE_PATH)
@@ -171,10 +176,9 @@ def show_create_player_dialog():
                 df_final = pd.concat([df_old, pd.DataFrame([init_rapport])], ignore_index=True)[COL_ORDER]
                 
                 if push_to_github(FILE_PATH, f"Oprettet manuel spiller: {ny_navn}", df_final.to_csv(index=False), sha) in [200, 201]:
-                    st.success(f"'{ny_navn}' er oprettet i systemet!")
+                    st.success(f"'{ny_navn}' er oprettet!")
                     time.sleep(1)
                     st.rerun()
-
 # --- HOVEDSIDE ---
 def vis_side(dp):    
     df_local = dp.get("scout_reports", pd.DataFrame()).copy()
