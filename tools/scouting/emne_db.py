@@ -368,26 +368,34 @@ def vis_side():
                     plist = plist.sort_values(by='POS_PRIORITET', ascending=True)
 
                     if is_startopstilling:
-                        # --- NYT: Skyggespiller-logik ---
+                        # --- Skyggespiller-logik ---
                         # Hovedspiller = den nuværende Hvidovre-spiller på positionen (hvis der er en).
                         # Er der derudover en ekstern kandidat (ikke IS_HIF) også markeret til Start-11
                         # på samme position, vises han som "skyggespiller" under hovedspilleren -
                         # klar til at overtage pladsen, hvis hovedspilleren bliver solgt.
                         # Findes der ingen nuværende HIF-spiller på positionen, bliver den første
                         # eksterne kandidat i stedet hovedspiller (ingen skygge-styling).
-                        hif_candidates = plist[plist['IS_HIF'] == True]
-                        other_candidates = plist[plist['IS_HIF'] == False]
+                        # Pakket i try/except: fejler beregningen for én position, falder den
+                        # tilbage til den simple "kun første spiller"-visning i stedet for at
+                        # vælte hele siden.
+                        try:
+                            hif_candidates = plist[plist['IS_HIF'] == True]
+                            other_candidates = plist[plist['IS_HIF'] == False]
 
-                        if not hif_candidates.empty:
-                            main_player = hif_candidates.head(1).copy()
-                            shadow_player = other_candidates.head(1).copy()
-                        else:
-                            main_player = other_candidates.head(1).copy()
-                            shadow_player = other_candidates.iloc[1:2].copy()
+                            if not hif_candidates.empty:
+                                main_player = hif_candidates.head(1).copy()
+                                shadow_player = other_candidates.head(1).copy()
+                            else:
+                                main_player = other_candidates.head(1).copy()
+                                shadow_player = other_candidates.iloc[1:2].copy()
 
-                        main_player['IS_SHADOW_DRAW'] = False
-                        shadow_player['IS_SHADOW_DRAW'] = True
-                        plist = pd.concat([main_player, shadow_player])
+                            main_player['IS_SHADOW_DRAW'] = False
+                            shadow_player['IS_SHADOW_DRAW'] = True
+                            plist = pd.concat([main_player, shadow_player])
+                        except Exception as e:
+                            st.warning(f"Skyggespiller-visning fejlede for position {pid}: {e}")
+                            plist = plist.head(1).copy()
+                            plist['IS_SHADOW_DRAW'] = False
 
                     for i, (_, r) in enumerate(plist.iterrows()):
                         drawn_players.append(r['PLAYER_WYID'])
