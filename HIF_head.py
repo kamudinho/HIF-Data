@@ -32,8 +32,8 @@ def apply_custom_style():
 
             .stats-table { width: 100%; font-size: 11px; border-collapse: collapse; table-layout: auto; }
             .stats-table th { text-align: center; padding: 4px; color: #888; font-weight: 600; white-space: nowrap; }
-            .stats-label { text-align: left !important; color: #666; font-weight: 700; width: 35%; padding: 4px 6px 4px 0; }
-            .stats-value { text-align: center !important; font-weight: 700; color: #111; padding: 4px 2px; min-width: 25px; }
+            .stats-label { text-align: left !important; color: #666; font-weight: 700; width: 30%; padding: 4px 4px 4px 0; }
+            .stats-value { text-align: center !important; font-weight: 700; color: #111; padding: 4px 2px; min-width: 20px; }
             .card-title { color: #1a1a1a; font-size: 11px; font-weight: 700; margin-bottom: 8px; text-transform: uppercase; border-bottom: 1px solid #f0f0f0; padding-bottom: 6px; display: flex; justify-content: space-between; }
             
             /* Stilling-tabel styling */
@@ -156,14 +156,14 @@ def beregn_per_90(df_stats, team_uuid):
         liga_val = pd.concat([played[h_col], played[a_col]]).mean()
         last_val = last_match[h_col] if is_home else last_match[a_col]
         
-        # Beregn differencen mellem seneste modstander (eller modstanderens stat i kampen) og HIF
+        diff_vs_liga = hif_val - liga_val
         diff_vs_hif = last_val - hif_val
         
         results.append({
             "Stat": display_name, 
             "HIF": hif_val, 
             "Liga": liga_val, 
-            "Diff": hif_val - liga_val, 
+            "Diff_Liga": diff_vs_liga, 
             "Seneste": last_val, 
             "Diff_vs_Hif": diff_vs_hif,
             "Opponent": opp_name
@@ -264,7 +264,7 @@ def vis_side():
         df_stats = conn.query(fallback_queries["opta_team_stats"])
         df_stats.columns = [str(c).upper() for c in df_stats.columns]
 
-    # --- TOPSEKTION: ÉN STOR BOKS OMKRING ALLE 3 KOLONNER (Justeret bredde) ---
+    # --- TOPSEKTION: ÉN STOR BOKS OMKRING ALLE 3 KOLONNER ---
     with st.container(border=True):
         col1, col2, col3 = st.columns([0.8, 1.4, 1.0])
 
@@ -319,7 +319,7 @@ def vis_side():
             else:
                 st.caption(f"Afventer næste kamp for sæson {active_season}")
                 
-        # KOLONNE 2: HVIDOVRE IF vs. LIGA (Med diff vs HIF-snit)
+        # KOLONNE 2: HVIDOVRE IF vs. LIGA (Med både Liga-diff og Seneste-diff)
         with col2:
             st.markdown("<div class='card-title'><span>HVIDOVRE IF vs. LIGA</span></div>", unsafe_allow_html=True)
             
@@ -327,10 +327,20 @@ def vis_side():
             if df_stats_comp is not None:
                 opp_navn = df_stats_comp.iloc[0]['Opponent']
                 opp_header = f"vs. {opp_navn}"
-                html = f"<table class='stats-table'><thead><tr><th></th><th>{opp_header}</th><th>HIF</th><th>Liga</th><th>Diff</th></tr></thead><tbody>"
+                
+                html = f"<table class='stats-table'><thead><tr><th></th><th>{opp_header}</th><th>HIF</th><th>Liga</th><th>Diff</th><th>Diff vs HIF</th></tr></thead><tbody>"
                 for _, r in df_stats_comp.iterrows():
-                    diff_color = "#28a745" if r['Diff_vs_Hif'] > 0 else "#dc3545"
-                    html += f"<tr><td class='stats-label'>{r['Stat']}</td><td class='stats-value'>{r['Seneste']:.0f}</td><td class='stats-value'>{r['HIF']:.2f}</td><td class='stats-value'>{r['Liga']:.2f}</td><td class='stats-value' style='color:{diff_color}; font-weight:800;'>{r['Diff_vs_Hif']:+.2f}</td></tr>"
+                    diff_liga_color = "#28a745" if r['Diff_Liga'] > 0 else "#dc3545"
+                    diff_hif_color = "#28a745" if r['Diff_vs_Hif'] > 0 else "#dc3545"
+                    
+                    html += f"""<tr>
+                        <td class='stats-label'>{r['Stat']}</td>
+                        <td class='stats-value'>{r['Seneste']:.0f}</td>
+                        <td class='stats-value'>{r['HIF']:.2f}</td>
+                        <td class='stats-value'>{r['Liga']:.2f}</td>
+                        <td class='stats-value' style='color:{diff_liga_color}; font-weight:800;'>{r['Diff_Liga']:+.2f}</td>
+                        <td class='stats-value' style='color:{diff_hif_color}; font-weight:800;'>{r['Diff_vs_Hif']:+.2f}</td>
+                    </tr>"""
                 html += "</tbody></table>"
                 st.markdown(html, unsafe_allow_html=True)
 
