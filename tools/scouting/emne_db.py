@@ -449,7 +449,7 @@ def vis_side():
 
                         if is_shadow:
                             # Skyggespiller vises mindre, kursiveret og med stiplet kant lige under hovedspilleren
-                            ax.text(px, py + 4.5, f"{r['NAVN']}", size=7.5, ha='center', style='bold',
+                            ax.text(px, py + 4.5, f"{r['NAVN']}", size=7.5, ha='center', weight='bold',
                                     color=txt_c, bbox=dict(facecolor=bg, edgecolor="#333333", linestyle='dashed', alpha=0.9))
                         else:
                             y_offset = (i * 3.2) if not is_startopstilling else 0
