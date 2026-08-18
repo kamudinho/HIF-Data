@@ -77,7 +77,6 @@ def render_rapport_indhold(report, keys, unique_suffix=""):
             showlegend=False, height=350,
             margin=dict(l=40, r=40, t=40, b=40)
         )
-        # UNIQUE KEY tilføjet her for at løse fejlen:
         st.plotly_chart(fig, use_container_width=True, key=f"radar_{report.get('DATO')}_{unique_suffix}")
         
     with col_text:
@@ -91,10 +90,9 @@ def render_rapport_indhold(report, keys, unique_suffix=""):
             st.write("**Uddybende Kommentar**")
             st.write(report.get('KOMMENTAR'))
 
-# --- POPUP DIALOG ---
+# --- POPUP DIALOG FOR RAPPORT ---
 @st.dialog("Spillerrapport", width="large")
 def show_report_popup(valgt_navn, alle_rapporter, billed_map):
-    # Sorter historik (nyeste først)
     spiller_historik = alle_rapporter[alle_rapporter['NAVN'] == valgt_navn].sort_values('DATO', ascending=False)
     if spiller_historik.empty:
         st.error("Ingen data fundet")
@@ -118,39 +116,64 @@ def show_report_popup(valgt_navn, alle_rapporter, billed_map):
         render_rapport_indhold(nyeste, keys, unique_suffix="latest")
 
     with t2:
-        # CSS til mindre expander-tekst og mindre metrics-afstand
         st.markdown("""
             <style>
-            /* Mindre expander-overskrift */
-            div[data-testid="stExpander"] details summary p {
-                font-size: 13px !important;
-            }
-            /* Reducer afstand i metrics-sektionen */
-            [data-testid="stMetricValue"] {
-                font-size: 1.2rem !important;
-            }
-            [data-testid="stMetricLabel"] {
-                font-size: 0.8rem !important;
-            }
+            div[data-testid="stExpander"] details summary p { font-size: 13px !important; }
+            [data-testid="stMetricValue"] { font-size: 1.2rem !important; }
+            [data-testid="stMetricLabel"] { font-size: 0.8rem !important; }
             </style>
             """, unsafe_allow_html=True)
 
         for idx, row in spiller_historik.iterrows():
             header = f"{row['DATO']} | {row.get('RATING_AVG', '-')} | {row.get('STATUS', '-')} ({row.get('SCOUT', 'Scout')})"
-            
             with st.expander(header):
-                # De fire metrics i en mere kompakt række
                 m1, m2, m3, m4 = st.columns(4)
                 m1.metric("Rating", row.get('RATING_AVG', '-'))
                 m2.metric("Potentiale", row.get('POTENTIALE', '-'))
                 m3.metric("Status", row.get('STATUS', '-'))
                 m4.metric("Scout", row.get('SCOUT', '-'))
-                
-                # En tynd skillelinje for at adskille metrics fra detaljerne
                 st.markdown("<hr style='margin: 10px 0; opacity: 0.2;'>", unsafe_allow_html=True)
-                
-                # Den fulde rapport-visning (Egenskaber, Radar, Styrker osv.)
                 render_rapport_indhold(row, keys, unique_suffix=f"hist_{idx}")
+
+# --- POPUP DIALOG FOR OPRETTELSE AF NY SPILLER ---
+@st.dialog("Opret ny spiller manuelt", width="medium")
+def show_create_player_dialog():
+    st.write("Indtast oplysninger på spilleren, der ikke findes i systemet i forvejen.")
+    with st.form("create_player_form"):
+        ny_navn = st.text_input("Spillerens Navn")
+        ny_klub = st.text_input("Klub")
+        ny_pos = st.selectbox("Position", ["CB", "LB", "RB", "DMF", "CM", "AMF", "LW", "RW", "CF", "GK"])
+        ny_birth = st.text_input("Fødselsdato (f.eks. YYYY-MM-DD eller ÅÅÅÅ)")
+        
+        submitted = st.form_submit_button("Opret Spiller & Gem i Database", use_container_width=True)
+        if submitted:
+            if not ny_navn or not ny_klub:
+                st.error("Navn og klub skal udfyldes!")
+            else:
+                # Generer et unikt lokalt ID baseret på timestamp (f.eks. M99123456)
+                lokal_id = f"M{int(time.time())}"
+                
+                # Opret en 'tom' start-rapport så spilleren eksisterer i scouting_db.csv
+                init_rapport = {
+                    "PLAYER_WYID": lokal_id, "DATO": datetime.now().strftime("%Y-%m-%d"),
+                    "NAVN": ny_navn, "KLUB": ny_klub, "POSITION": ny_pos, "BIRTHDATE": ny_birth,
+                    "RATING_AVG": 0.0, "STATUS": "Interessant", "POTENTIALE": "Middel", 
+                    "STYRKER": "Oprettet manuelt", "UDVIKLING": "-", "VURDERING": "-",
+                    "BESLUTSOMHED": 3.0, "FART": 3.0, "AGGRESIVITET": 3.0, "ATTITUDE": 3.0,
+                    "UDHOLDENHED": 3.0, "LEDEREGENSKABER": 3.0, "TEKNIK": 3.0, "SPILINTELLIGENS": 3.0,
+                    "SCOUT": st.session_state.get("user", "HIF Scout"), "KONTRAKT": "", "FORVENTNING": "Realistisk", "POS_PRIORITET": "B - Trupspiller",
+                    "POS": "1", "LON": "0", "SKYGGEHOLD": False, "KOMMENTAR": "Manuelt oprettet spiller",
+                    "ER_EMNE": False, "TRANSFER_VINDUE": "Sommer 26", "POS_343": 0.0, "POS_433": 0.0, "POS_352": 0.0
+                }
+                
+                content, sha = get_github_file(FILE_PATH)
+                df_old = pd.read_csv(StringIO(content), low_memory=False) if content else pd.DataFrame(columns=COL_ORDER)
+                df_final = pd.concat([df_old, pd.DataFrame([init_rapport])], ignore_index=True)[COL_ORDER]
+                
+                if push_to_github(FILE_PATH, f"Oprettet manuel spiller: {ny_navn}", df_final.to_csv(index=False), sha) in [200, 201]:
+                    st.success(f"Spilleren '{ny_navn}' er oprettet!")
+                    time.sleep(1)
+                    st.rerun()
 
 # --- HOVEDSIDE ---
 def vis_side(dp):    
@@ -180,9 +203,9 @@ def vis_side(dp):
     add_to_options(df_local); add_to_options(df_wyscout)
     options_list = sorted(list(unique_players.keys()), key=lambda x: unique_players[x]["label"])
 
-    # HEADER & VALG
+    # HEADER & VALG + KNAP TIL AT OPRETTE NY SPILLER
     data = {"n": "", "id": "", "pos": "", "klub": "", "birth": ""}
-    r1c1, r1c2, r1c3 = st.columns([3, 1.5, 1])
+    r1c1, r1c2, r1c3, r1c4 = st.columns([2.5, 1.5, 1, 1])
     with r1c1:
         sel_id = st.selectbox("Vælg spiller", [""] + options_list, format_func=lambda x: unique_players[x]["label"] if x else "Vælg spiller...")
         if sel_id: data = unique_players[sel_id]["data"]
@@ -197,6 +220,10 @@ def vis_side(dp):
         st.markdown("<p style='margin-bottom: 28px;'></p>", unsafe_allow_html=True)
         if existing_report is not None:
             if st.button("Åbn rapport", use_container_width=True): show_report_popup(data["n"], df_local, billed_map)
+    with r1c4:
+        st.markdown("<p style='margin-bottom: 28px;'></p>", unsafe_allow_html=True)
+        if st.button("➕ Opret ny", use_container_width=True):
+            show_create_player_dialog()
 
     # STAMDATA RÆKKE
     r2c1, r2c2, r2c3, r2c4 = st.columns([1, 2, 1.5, 1.5])
