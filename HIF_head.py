@@ -19,25 +19,22 @@ def apply_custom_style():
             [data-testid="stHeaderBlockContainer"] h1 { display: none; }
             .stApp { background-color: #FFFFFF; }
             
-            /* Tving rigtig fordeling og bredde på de 3 kolonner i topsektionen */
-            [data-testid="stHorizontalBlock"] {
+            /* CSS specifikt til topsektionens kolonne-layout via en unik klasse */
+            div.top-section-container [data-testid="stHorizontalBlock"] {
                 display: flex;
                 align-items: stretch;
-                gap: 12px;
             }
-            
-            /* Stil og fastsæt bredder pr. kolonne i topsektionen */
-            [data-testid="stHorizontalBlock"] > div:nth-child(1) {
-                flex: 0 0 28% !important;
-                max-width: 28% !important;
+            div.top-section-container [data-testid="stHorizontalBlock"] > div:nth-child(1) {
+                flex: 1 1 24% !important;
+                max-width: 24% !important;
             }
-            [data-testid="stHorizontalBlock"] > div:nth-child(2) {
-                flex: 0 0 46% !important;
-                max-width: 46% !important;
+            div.top-section-container [data-testid="stHorizontalBlock"] > div:nth-child(2) {
+                flex: 1 1 52% !important;
+                max-width: 52% !important;
             }
-            [data-testid="stHorizontalBlock"] > div:nth-child(3) {
-                flex: 0 0 26% !important;
-                max-width: 26% !important;
+            div.top-section-container [data-testid="stHorizontalBlock"] > div:nth-child(3) {
+                flex: 1 1 24% !important;
+                max-width: 24% !important;
             }
 
             .stats-table { width: 100%; font-size: 11px; border-collapse: collapse; table-layout: auto; }
@@ -274,9 +271,10 @@ def vis_side():
         df_stats = conn.query(fallback_queries["opta_team_stats"])
         df_stats.columns = [str(c).upper() for c in df_stats.columns]
 
-    # --- TOPSEKTION: ÉN STOR BOKS OMKRING ALLE 3 KOLONNER ---
+    # --- TOPSEKTION: ÉN STOR BOKS OMKRING ALLE 3 KOLONNER MED UNIK KLASSE ---
+    st.markdown('<div class="top-section-container">', unsafe_allow_html=True)
     with st.container(border=True):
-        col1, col2, col3 = st.columns(3)
+        col1, col2, col3 = st.columns([1, 2.2, 1])
 
         # KOLONNE 1: NÆSTE MODSTANDER
         with col1:
@@ -338,6 +336,7 @@ def vis_side():
                 opp_navn = df_stats_comp.iloc[0]['Opponent']
                 opp_header = f"vs. {opp_navn}"
                 
+                # Kolonner: Stat -> Seneste -> Diff vs HIF -> HIF -> Liga -> Diff (Liga)
                 html = f"<table class='stats-table'><thead><tr><th></th><th>{opp_header}</th><th>Diff vs HIF</th><th>HIF</th><th>Liga</th><th>Diff</th></tr></thead><tbody>"
                 for _, r in df_stats_comp.iterrows():
                     diff_liga_color = "#28a745" if r['Diff_Liga'] > 0 else "#dc3545"
@@ -369,6 +368,7 @@ def vis_side():
                 st.markdown(table_html, unsafe_allow_html=True)
             else:
                 st.caption("Ingen stillingsdata fundet.")
+    st.markdown('</div>', unsafe_allow_html=True)
 
     # --- BUNDSEKTION: TRENDGRAFER ---
     with st.container(border=True):
