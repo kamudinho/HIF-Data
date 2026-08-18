@@ -171,7 +171,7 @@ def show_create_player_dialog():
                 df_final = pd.concat([df_old, pd.DataFrame([init_rapport])], ignore_index=True)[COL_ORDER]
                 
                 if push_to_github(FILE_PATH, f"Oprettet manuel spiller: {ny_navn}", df_final.to_csv(index=False), sha) in [200, 201]:
-                    st.success(f"Spilleren '{ny_navn}' er oprettet!")
+                    st.success(f"'{ny_navn}' er oprettet i systemet!")
                     time.sleep(1)
                     st.rerun()
 
@@ -222,7 +222,7 @@ def vis_side(dp):
             if st.button("Åbn rapport", use_container_width=True): show_report_popup(data["n"], df_local, billed_map)
     with r1c4:
         st.markdown("<p style='margin-bottom: 28px;'></p>", unsafe_allow_html=True)
-        if st.button("➕ Opret ny", use_container_width=True):
+        if st.button("➕ Opret ny spiller", use_container_width=True):
             show_create_player_dialog()
 
     # STAMDATA RÆKKE
