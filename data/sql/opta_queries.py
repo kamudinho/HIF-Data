@@ -6,7 +6,7 @@ def get_opta_queries(liga_f, saeson_f, hif_only=False):
     HIF_UUID = '8gxd9ry2580pu1b1dd5ny9ymy'
 
     tournament_map = {
-        "NordicBet Liga": "dyjr458hcmrcy87fsabfsy87o",
+        "NordicBet Liga": "2mb332vncy4450vu14paj8844",
         "Superliga": "29actv1ohj8r10kd9hu0jnb0n"
     }
 
