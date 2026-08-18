@@ -12,6 +12,26 @@ REPO = "Kamudinho/HIF-data"
 FILE_PATH = "data/scouting_db.csv"
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 
+# --- IMPORT AF PLAYER MAPPING ---
+try:
+    from data.players import player_mapping
+    valgt_player_uuid = st.session_state.get('valgt_player_uuid', getattr(player_mapping, 'valgt_player_uuid', None))
+    valgt_spiller = st.session_state.get('valgt_spiller', getattr(player_mapping, 'valgt_spiller', None))
+    df_spiller_mapping = getattr(player_mapping, 'df_spiller', None)
+    hold_logo = getattr(player_mapping, 'hold_logo', None)
+    primær_farve = getattr(player_mapping, 'primær_farve', "#df003b")
+    valgt_hold = getattr(player_mapping, 'valgt_hold', "Hvidovre")
+    SEASONNAME = getattr(player_mapping, 'SEASONNAME', "2025/2026")
+    TEAM_WYID = getattr(player_mapping, 'TEAM_WYID', 7490)
+    COMPETITION_WYID = getattr(player_mapping, 'COMPETITION_WYID', (328,))
+    COMP_MAP = getattr(player_mapping, 'COMP_MAP', { 
+        335: "Superliga", 328: "NordicBet Liga", 329: "2. division", 
+        43319: "3. division", 331: "Oddset Pokalen", 1305: "U19 Ligaen" 
+    })
+except ImportError:
+    st.error("Kunne ikke finde eller indlæse 'player_mapping.py'. Sørg for filen ligger i mappen.")
+    st.stop()
+
 # --- GITHUB FUNKTIONER ---
 def get_github_file(path):
     try:
@@ -92,7 +112,7 @@ def vis_spiller_modal(valgt_navn, billed_map, career_df, alle_rapporter):
                 r=r_vals + [r_vals[0]], 
                 theta=[k.capitalize() for k in keys] + [keys[0].capitalize()], 
                 fill='toself', 
-                line_color='#df003b'
+                line_color=primær_farve
             ))
             fig.update_layout(
                 polar=dict(radialaxis=dict(visible=True, range=[1, 6])), 
@@ -117,7 +137,7 @@ def vis_spiller_modal(valgt_navn, billed_map, career_df, alle_rapporter):
             x=spiller_historik['DATO'], 
             y=spiller_historik['RATING_AVG'], 
             mode='lines+markers', 
-            line_color='#df003b'
+            line_color=primær_farve
         ))
         fig_evol.update_layout(yaxis=dict(range=[1, 6]))
         st.plotly_chart(fig_evol, use_container_width=True)
@@ -125,21 +145,15 @@ def vis_spiller_modal(valgt_navn, billed_map, career_df, alle_rapporter):
     with t4:
         st.markdown("### Karriereoversigt")
         if career_df is not None:
-            # 1. Filtrér på spillerens ID
             stats = career_df[career_df['PLAYER_WYID'].apply(rens_id) == pid].copy()
             
             if not stats.empty:
-                # 2. FJERN DUPLIKATER: Vi viser kun én række per sæson, klub og turnering
-                # Vi sorterer først (f.eks. efter flest minutter), så vi beholder den mest relevante række
                 if 'MINUTES' in stats.columns:
                     stats = stats.sort_values('MINUTES', ascending=False)
                 
                 stats_clean = stats.drop_duplicates(subset=['SEASONNAME', 'TEAMNAME', 'COMPETITIONNAME'])
-                
-                # Sorter kronologisk efter sæson (nyeste øverst)
                 stats_clean = stats_clean.sort_values('SEASONNAME', ascending=False)
                 
-                # 3. Vis den rensede dataframe
                 st.dataframe(stats_clean, use_container_width=True, hide_index=True)
             else:
                 st.warning("Ingen karrieredata fundet i Wyscout-filen.")
@@ -172,17 +186,20 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
             {'true': True, 'false': False, '1': True, '0': False, 'nan': False}
         ).fillna(False)
 
-    # 4. UNIK LISTE (Vigtigt: Vi bruger PLAYER_WYID for at undgå at slette spillere med samme navn)
+    # 4. Integrer Hvidovre-spillere fra player_mapping hvis det ønskes, eller filtrer/flet her
+    if df_spiller_mapping is not None and not df_spiller_mapping.empty:
+        # Eksempel: Sikr at spillere fra Hvidovre-mappingen indgå eller markeres, 
+        # alt efter hvordan din scouting-database hænger sammen med truppen.
+        pass
+
+    # 5. UNIK LISTE (Vigtigt: Vi bruger PLAYER_WYID for at undgå at slette spillere med samme navn)
     df_raw = df_raw.sort_values('DATO', ascending=False)
-    
-    # Vi dropper dubletter, men gemmer de nyeste rapporter
     df_unique = df_raw.drop_duplicates(subset=['PLAYER_WYID']).copy()
     
     # Sorter efter kontraktudløb
     df_unique = df_unique.sort_values('KONTRAKT', ascending=True, na_position='last')
 
     # --- FORBERED VISNING I EDITOR ---
-    # Vi vælger de kolonner vi vil vise (brug de STORE navne her)
     display_cols = ['NAVN', 'KLUB', 'RATING_AVG', 'KONTRAKT', 'ER_EMNE', 'SKYGGEHOLD']
     df_display = df_unique[display_cols].copy()
     df_display.insert(0, "SE", False)
@@ -206,15 +223,12 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
     )
 
     # --- GEM ÆNDRINGER ---
-    # Hvis brugeren har klikket på Emne eller Skygge
     if not ed_result[['ER_EMNE', 'SKYGGEHOLD']].equals(df_display[['ER_EMNE', 'SKYGGEHOLD']]):
         with st.spinner("Gemmer ændringer..."):
-            # Opdater hoved-dataframe baseret på ændringer i editoren
             for i, row in ed_result.iterrows():
                 p_name = row['NAVN']
                 df_raw.loc[df_raw['NAVN'] == p_name, ['ER_EMNE', 'SKYGGEHOLD']] = [row['ER_EMNE'], row['SKYGGEHOLD']]
             
-            # Gem tilbage til GitHub
             status_code = push_to_github(FILE_PATH, "Update Emne/Skygge status", df_raw.to_csv(index=False), sha)
             if status_code in [200, 201]:
                 st.success("Status opdateret!")
@@ -225,7 +239,7 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
     valgte = ed_result[ed_result["SE"] == True]
     if not valgte.empty:
         st.session_state.active_player = valgte.iloc[-1]['NAVN']
-        st.session_state.editor_key += 1 # Reset editor så "SE" tjekboksen nulstilles
+        st.session_state.editor_key += 1 
         st.rerun()
 
     if st.session_state.active_player:
