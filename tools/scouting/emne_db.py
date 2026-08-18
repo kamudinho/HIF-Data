@@ -111,7 +111,8 @@ def handle_auto_save(key, df_display, source_df):
 
         for idx_str, updated_cols in changes.items():
             row_idx = int(idx_str)
-            wyid = source_df.iloc[row_idx]['PLAYER_WYID']
+            source_row = source_df.iloc[row_idx]
+            wyid = source_row['PLAYER_WYID']
             matching_rows = full_db[full_db['PLAYER_WYID'].astype(str) == str(wyid)].sort_values('DATO', ascending=False)
 
             if not matching_rows.empty:
@@ -125,6 +126,30 @@ def handle_auto_save(key, df_display, source_df):
                         else:
                             val = ""
                     full_db.at[idx_in_full, col_upper] = val
+            else:
+                # NYT: Spilleren findes endnu ikke i scouting_db.csv - typisk en spiller
+                # der kun stammer fra player_mapping.py og aldrig er blevet gemt før.
+                # Opret en ny række i stedet for at droppe ændringen stille.
+                new_row = {col: "" for col in full_db.columns}
+                for col in source_row.index:
+                    if col in full_db.columns and col != 'KONTRAKT_DT':
+                        new_row[col] = source_row[col]
+                if 'KONTRAKT_DT' in source_row.index and pd.notna(source_row['KONTRAKT_DT']):
+                    new_row['KONTRAKT'] = pd.to_datetime(source_row['KONTRAKT_DT']).strftime('%Y-%m-%d')
+                new_row['PLAYER_WYID'] = str(wyid).replace('.0', '')
+                new_row['DATO'] = datetime.now().strftime('%Y-%m-%d')
+
+                for col, val in updated_cols.items():
+                    col_upper = col.upper()
+                    if col_upper == "KONTRAKT_DT":
+                        col_upper = "KONTRAKT"
+                        if pd.notna(val) and val != "":
+                            val = pd.to_datetime(val).strftime('%Y-%m-%d')
+                        else:
+                            val = ""
+                    new_row[col_upper] = val
+
+                full_db = pd.concat([full_db, pd.DataFrame([new_row])], ignore_index=True)
 
         st.session_state['full_db'] = full_db
         save_to_github(full_db)
@@ -347,12 +372,12 @@ def vis_side():
                 fig, ax = pitch.draw(figsize=(10, 7))
 
                 ax.text(3, 3, " < 6 mdr ", size=6, weight='bold', bbox=dict(facecolor=ROD_ADVARSEL, boxstyle='round,pad=0.5'))
-                ax.text(10.7, 3, " 6-12 mdr ", size=6, weight='bold', bbox=dict(facecolor=GUL_ADVARSEL, boxstyle='round,pad=0.5'))
-                ax.text(19, 3, " Transferfri ", size=6, weight='bold', bbox=dict(facecolor=GRON_NY, boxstyle='round,pad=0.5'))
-                ax.text(28, 3, " Transferkøb ", size=6, weight='bold', color='white', bbox=dict(facecolor=HIF_BLA, boxstyle='round,pad=0.5'))
-                ax.text(38, 3, " Akademi ", size=6, weight='bold', color='black', bbox=dict(facecolor=AKADEMI_FARVE, boxstyle='round,pad=0.5'))
+                ax.text(12, 3, " 6-12 mdr ", size=6, weight='bold', bbox=dict(facecolor=GUL_ADVARSEL, boxstyle='round,pad=0.5'))
+                ax.text(22, 3, " Transferfri ", size=6, weight='bold', bbox=dict(facecolor=GRON_NY, boxstyle='round,pad=0.5'))
+                ax.text(33, 3, " Transferkøb ", size=6, weight='bold', color='white', bbox=dict(facecolor=HIF_BLA, boxstyle='round,pad=0.5'))
+                ax.text(45, 3, " Akademi ", size=6, weight='bold', color='black', bbox=dict(facecolor=AKADEMI_FARVE, boxstyle='round,pad=0.5'))
                 if is_startopstilling:
-                    ax.text(46, 3, " Erstatning ", size=6, weight='bold', style='italic', color='black',
+                    ax.text(60, 3, " ↳ Skyggespiller (ved salg) ", size=6, weight='bold', style='italic', color='black',
                             bbox=dict(facecolor='white', edgecolor='#666666', linestyle='dashed', boxstyle='round,pad=0.5'))
                 ax.text(118, 3, f"Vindue: {sel_v}", size=8, weight='bold', ha='right', bbox=dict(facecolor='white', edgecolor=HIF_ROD, boxstyle='round,pad=0.5'))
 
@@ -424,7 +449,7 @@ def vis_side():
 
                         if is_shadow:
                             # Skyggespiller vises mindre, kursiveret og med stiplet kant lige under hovedspilleren
-                            ax.text(px, py + 4.5, f"{r['NAVN']} (skygge)", size=7.5, ha='center', style='italic',
+                            ax.text(px, py + 4.5, f"↳ {r['NAVN']} (skygge)", size=6, ha='center', style='italic',
                                     color=txt_c, bbox=dict(facecolor=bg, edgecolor="#333333", linestyle='dashed', alpha=0.85))
                         else:
                             y_offset = (i * 3.2) if not is_startopstilling else 0
