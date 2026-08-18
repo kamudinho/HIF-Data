@@ -347,10 +347,10 @@ def vis_side():
                 fig, ax = pitch.draw(figsize=(10, 7))
 
                 ax.text(3, 3, " < 6 mdr ", size=6, weight='bold', bbox=dict(facecolor=ROD_ADVARSEL, boxstyle='round,pad=0.5'))
-                ax.text(12, 3, " 6-12 mdr ", size=6, weight='bold', bbox=dict(facecolor=GUL_ADVARSEL, boxstyle='round,pad=0.5'))
-                ax.text(22, 3, " Transferfri ", size=6, weight='bold', bbox=dict(facecolor=GRON_NY, boxstyle='round,pad=0.5'))
-                ax.text(32, 3, " Transferkøb ", size=6, weight='bold', color='white', bbox=dict(facecolor=HIF_BLA, boxstyle='round,pad=0.5'))
-                ax.text(42, 3, " Akademi ", size=6, weight='bold', color='black', bbox=dict(facecolor=AKADEMI_FARVE, boxstyle='round,pad=0.5'))
+                ax.text(10, 3, " 6-12 mdr ", size=6, weight='bold', bbox=dict(facecolor=GUL_ADVARSEL, boxstyle='round,pad=0.5'))
+                ax.text(20, 3, " Transferfri ", size=6, weight='bold', bbox=dict(facecolor=GRON_NY, boxstyle='round,pad=0.5'))
+                ax.text(30, 3, " Transferkøb ", size=6, weight='bold', color='white', bbox=dict(facecolor=HIF_BLA, boxstyle='round,pad=0.5'))
+                ax.text(40, 3, " Akademi ", size=6, weight='bold', color='black', bbox=dict(facecolor=AKADEMI_FARVE, boxstyle='round,pad=0.5'))
                 if is_startopstilling:
                     ax.text(49, 3, " Skyggespiller ", size=6, weight='bold', style='italic', color='black',
                             bbox=dict(facecolor='white', edgecolor='#666666', linestyle='dashed', boxstyle='round,pad=0.5'))
