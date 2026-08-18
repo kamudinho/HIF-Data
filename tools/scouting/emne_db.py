@@ -352,7 +352,7 @@ def vis_side():
                 ax.text(28, 3, " Transferkøb ", size=6, weight='bold', color='white', bbox=dict(facecolor=HIF_BLA, boxstyle='round,pad=0.5'))
                 ax.text(38, 3, " Akademi ", size=6, weight='bold', color='black', bbox=dict(facecolor=AKADEMI_FARVE, boxstyle='round,pad=0.5'))
                 if is_startopstilling:
-                    ax.text(47, 3, " Skyggespiller ", size=6, weight='bold', style='italic', color='black',
+                    ax.text(46, 3, " Erstatning ", size=6, weight='bold', style='italic', color='black',
                             bbox=dict(facecolor='white', edgecolor='#666666', linestyle='dashed', boxstyle='round,pad=0.5'))
                 ax.text(118, 3, f"Vindue: {sel_v}", size=8, weight='bold', ha='right', bbox=dict(facecolor='white', edgecolor=HIF_ROD, boxstyle='round,pad=0.5'))
 
