@@ -162,7 +162,7 @@ def load_match_level_data(tournament_opta_uuid, team_opta_uuid, team_wyid, comp_
     
     return df
 
-def draw_match_trend_chart(df_matches, metric, label, team_name):
+def draw_match_trend_chart(df_matches, metric, label, team_name, valgt_saeson):
     if df_matches is None or df_matches.empty:
         st.warning("Ingen kampdata tilgængelig for dette hold i den valgte sæson/turnering.")
         return
@@ -180,10 +180,33 @@ def draw_match_trend_chart(df_matches, metric, label, team_name):
         y_max = y_vals.max()
         y_span = y_max - y_min if y_max != y_min else 1.0
         snit_vaerdi = y_vals.mean()
+        total_val = y_vals.sum()
     else:
         y_min, y_max = 0.0, 1.0
         y_span = 1.0
         snit_vaerdi = 0.0
+        total_val = 0.0
+
+    # Formatering af total og pr. 90
+    total_str = f"{int(total_val)}" if total_val == int(total_val) else f"{total_val:.2f}"
+    mean_str = f"{snit_vaerdi:.2f}" if has_data else "0.00"
+
+    # Tilføj boks i øverste højre hjørne af grafen
+    fig.add_annotation(
+        text=f"<b>Antal {label} i {valgt_saeson}:</b> {total_str}<br><b>Antal {label} pr. 90 i {valgt_saeson}:</b> {mean_str}",
+        xref="paper",
+        yref="paper",
+        x=0.99,
+        y=0.98,
+        xanchor="right",
+        yanchor="top",
+        showarrow=False,
+        bgcolor="rgba(255, 255, 255, 0.9)",
+        bordercolor="#d3d3d3",
+        borderwidth=1,
+        borderpad=6,
+        font=dict(size=11, color="black")
+    )
 
     # Hent det dynamiske ligasnit fra SQL-kolonnen (LIGA_AVG_{metric})
     liga_avg_col = f"LIGA_AVG_{metric}"
@@ -235,7 +258,6 @@ def draw_match_trend_chart(df_matches, metric, label, team_name):
     logo_size_y = y_span * 0.20 if y_span > 0.5 else 0.25  
 
     for _, row in df_matches.iterrows():
-        # pd.notnull() tillader også værdier på 0.0
         if pd.notnull(row[metric]) and row.get('OPP_LOGO'):
             b64_logo = get_base64_image(row['OPP_LOGO'])
             fig.add_layout_image(dict(
@@ -321,7 +343,6 @@ def draw_match_trend_chart(df_matches, metric, label, team_name):
         annotation_position=liga_pos
     )
 
-    # Padding på y-aksen sikrer, at logoer ved 0 ikke bliver klippet af kanten
     padding = y_span * 0.15 if y_span > 0 else 1.0
     if is_reversed:
         y_range = [y_max + padding, y_min - padding]
@@ -408,7 +429,7 @@ def vis_side():
         comp_wyid=comp_wyid,
         season_start_year=season_start_year
     )
-    draw_match_trend_chart(df_matches, metric_map[sel_metric], sel_metric, valgt_hold)
+    draw_match_trend_chart(df_matches, metric_map[sel_metric], sel_metric, valgt_hold, valgt_saeson)
 
 if __name__ == "__main__":
     vis_side()
