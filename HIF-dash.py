@@ -146,7 +146,7 @@ with st.sidebar:
     # UNDERMENU LOGIK
     menu_map = {
         "HVIDOVRE IF": ["Forside"],
-        "HOLDANALYSE": ["Modstanderanalyse", "Ligaoversigt", "Kampoversigt", "Afslutninger", "Målsekvenser", "Grafer"],
+        "HOLDANALYSE": ["Modstanderanalyse", "Ligaoversigt", "Kampoversigt", "Kampudvikling", "Afslutninger", "Målsekvenser", "Grafer"],
         "SPILLERANALYSE": ["Spilleraktioner", "Spiller-stats", "Spiller-profil", "Spilleroversigt", "Spillerprofil"],
         "FYSISK DATA": ["Fysisk data"],
         "SCOUTING": ["Scoutrapport", "Database", "Emnedatabase", "Transfers"],
@@ -266,6 +266,9 @@ try:
         elif s == "Målsekvenser":
             import tools.ligaen.sequences as ms
             ms.vis_side()
+        elif s == "Kampudvikling":
+            import tools.ligaen.kampudvikling as ku
+            ku.vis_side()
 
     elif m == "TILPASNING":
         if s == "Spillerdata":
