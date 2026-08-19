@@ -187,30 +187,34 @@ def draw_match_trend_chart(df_matches, metric, label, team_name, valgt_saeson):
         snit_vaerdi = 0.0
         total_val = 0.0
 
-    total_str = f"{int(total_val)}" if total_val == int(total_val) else f"{total_val:.2f}"
     mean_str = f"{snit_vaerdi:.2f}" if has_data else "0.00"
 
-    # Formatering af kategori (små bogstaver undtagen xG og PPDA)
-    if label == "xG":
-        formatted_label = "xG"
-        formatted_label2 = "xG"
-    elif label == "PPDA":
-        formatted_label = "PPDA"
-        formatted_label2 = "PPDA"
+    # Særlig håndtering af PPDA og øvrige kategorier
+    if label == "PPDA":
+        label_line1 = f"PPDA i {valgt_saeson}:"
+        label_line2 = f"PPDA pr. 90 i {valgt_saeson}:"
+        val1_str = mean_str
+        val2_str = mean_str
     else:
-        formatted_label = label.lower()
-        # capitalize() gør det første bogstav stort, og resten småt
-        formatted_label2 = label.capitalize()
+        if label == "xG":
+            formatted_label = "xG"
+            formatted_label2 = "xG"
+        else:
+            formatted_label = label.lower()
+            formatted_label2 = label.capitalize()
 
-    label_line1 = f"Antal {formatted_label} i {valgt_saeson}:"
-    label_line2 = f"{formatted_label2} pr. 90 i {valgt_saeson}:"
+        total_str = f"{int(total_val)}" if total_val == int(total_val) else f"{total_val:.2f}"
+        label_line1 = f"Antal {formatted_label} i {valgt_saeson}:"
+        label_line2 = f"{formatted_label2} pr. 90 i {valgt_saeson}:"
+        val1_str = total_str
+        val2_str = mean_str
 
     # 1. Venstrestillet tekst-kolonne
     fig.add_annotation(
         text=f"{label_line1}<br>{label_line2}",
         xref="paper",
         yref="paper",
-        x=0.75,
+        x=0.67,
         y=1.08,
         xanchor="left",
         yanchor="top",
@@ -221,10 +225,10 @@ def draw_match_trend_chart(df_matches, metric, label, team_name, valgt_saeson):
 
     # 2. Værdi-kolonne (starter præcis det samme sted i højre side)
     fig.add_annotation(
-        text=f"<b>{total_str}</b><br><b>{mean_str}</b>",
+        text=f"<b>{val1_str}</b><br><b>{val2_str}</b>",
         xref="paper",
         yref="paper",
-        x=0.90,
+        x=0.94,
         y=1.08,
         xanchor="left",
         yanchor="top",
@@ -293,7 +297,8 @@ def draw_match_trend_chart(df_matches, metric, label, team_name, valgt_saeson):
                 sizex=logo_size_x, 
                 sizey=logo_size_y,
                 xanchor="center", 
-                yanchor="middle"
+                yanchor="middle",
+                layer="above"  # Sørger for at logoet ligger over linjer og punkter
             ))
 
     is_reversed = "PPDA" in label.upper() or "IMOD" in label.upper()
@@ -421,8 +426,9 @@ def vis_side():
 
     col_title, col_t, col_m = st.columns([1.8, 1.2, 1.0])
     
+    col_t_val = tilgængelige_hold.index(default_team_name) if default_team_name in tilgængelige_hold else 0
     with col_t:
-        valgt_hold = st.selectbox("Vælg hold:", tilgængelige_hold, index=tilgængelige_hold.index(default_team_name) if default_team_name in tilgængelige_hold else 0)
+        valgt_hold = st.selectbox("Vælg hold:", tilgængelige_hold, index=col_t_val)
         valgt_team_info = TEAMS.get(valgt_hold, {})
         valgt_team_wyid = valgt_team_info.get("team_wyid", default_team_wyid)
         valgt_team_opta_uuid = valgt_team_info.get("opta_uuid", default_team_opta_uuid)
