@@ -193,13 +193,17 @@ def draw_match_trend_chart(df_matches, metric, label, team_name, valgt_saeson):
     # Formatering af kategori (små bogstaver undtagen xG og PPDA)
     if label == "xG":
         formatted_label = "xG"
+        formatted_label2 = "xG"
     elif label == "PPDA":
         formatted_label = "PPDA"
+        formatted_label2 = "PPDA"
     else:
         formatted_label = label.lower()
+        # capitalize() gør det første bogstav stort, og resten småt
+        formatted_label2 = label.capitalize()
 
     label_line1 = f"Antal {formatted_label} i {valgt_saeson}:"
-    label_line2 = f"pr. 90 {formatted_label} i {valgt_saeson}:"
+    label_line2 = f"{formatted_label2} pr. 90 i {valgt_saeson}:"
 
     # 1. Venstrestillet tekst-kolonne
     fig.add_annotation(
