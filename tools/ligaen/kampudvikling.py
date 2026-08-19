@@ -88,7 +88,6 @@ def load_match_level_data(wyid, team_wyid, season_start_year=2026):
     if df.empty or 'TEAM_WYID' not in df.columns:
         return pd.DataFrame()
         
-    # Filtrer kun det valgte hold fra det samlede ligasæt
     df_team = df[df['TEAM_WYID'] == team_wyid].copy()
     return df_team
 
@@ -147,9 +146,9 @@ def draw_match_trend_chart(df_matches, metric, label, team_name):
     df_matches['OPP_LOGO'] = opp_logos
     df_matches['HOVER_TEXT'] = hover_texts
 
-    # Logo størrelse (forbliver konsistent relativt til datapunkterne)
+    # Fast og ensartet logo-størrelse på tværs af metrikker
     logo_size_x = 0.55  
-    logo_size_y = y_span * 0.32 if has_data else 0.3  
+    logo_size_y = y_span * 0.15 if has_data else 0.2  
 
     # 1. Tilføj modstander-logoer som layout-billeder på plottet
     for _, row in df_matches.iterrows():
@@ -214,7 +213,6 @@ def draw_match_trend_chart(df_matches, metric, label, team_name):
             title="<b>Kampnummer</b>", 
             tickmode='linear', 
             dtick=1,
-            # Ingen fast range her, så Plotly automatisk zoomer ind på det faktiske antal kampe
             gridcolor="#f0f0f0", 
             linecolor='black'
         ),
