@@ -146,7 +146,7 @@ def draw_match_trend_chart(df_matches, metric, label, team_name):
     df_matches['OPP_LOGO'] = opp_logos
     df_matches['HOVER_TEXT'] = hover_texts
 
-    # Fast og ensartet logo-størrelse på tværs af metrikker
+    # Fast og ensartet logo-størrelse
     logo_size_x = 0.55  
     logo_size_y = y_span * 0.15 if has_data else 0.2  
 
@@ -166,38 +166,64 @@ def draw_match_trend_chart(df_matches, metric, label, team_name):
                 yanchor="middle"
             ))
 
-    # 2. Tilføj linje og usynlige punkter for præcis hover
+    is_reversed = "PPDA" in label.upper() or "IMOD" in label.upper()
+
+    # 2. Tilføj linjesegmenter med grøn/rød farve (hvis kurven går op/ned)
+    if len(df_matches) > 1:
+        for i in range(len(df_matches) - 1):
+            y0 = df_matches[metric].iloc[i]
+            y1 = df_matches[metric].iloc[i+1]
+            x0 = df_matches['MATCH_NUM'].iloc[i]
+            x1 = df_matches['MATCH_NUM'].iloc[i+1]
+            
+            if pd.notnull(y0) and pd.notnull(y1):
+                if is_reversed:
+                    is_up = y1 < y0
+                else:
+                    is_up = y1 > y0
+                
+                seg_color = '#2ECC71' if is_up else '#E74C3C' if y1 != y0 else '#95A5A6'
+                
+                fig.add_trace(go.Scatter(
+                    x=[x0, x1],
+                    y=[y0, y1],
+                    mode='lines',
+                    line=dict(color=seg_color, width=2, dash='dot'),
+                    showlegend=False,
+                    hoverinfo='skip'
+                ))
+
+    # Tilføj usynlige punkter for præcis hover over alle datapunkter
     fig.add_trace(go.Scatter(
         x=df_matches['MATCH_NUM'], 
         y=df_matches[metric], 
-        mode='lines+markers',
-        line=dict(color='#C41E3A', width=2, dash='dot'),
+        mode='markers',
         marker=dict(size=40, opacity=0), 
         hovertext=df_matches['HOVER_TEXT'],
-        hoverinfo='text'
+        hoverinfo='text',
+        showlegend=False
     ))
 
-    # 3. Holdets gennemsnitslinie (stiplet grå)
+    # 3. Holdets gennemsnitslinie (solid sort)
     if has_data:
         fig.add_hline(
             y=snit_vaerdi, 
-            line_dash="dash", 
-            line_color="gray", 
-            annotation_text=f"Hold-snit: {snit_vaerdi:.2f}", 
-            annotation_position="bottom right"
+            line_dash="solid", 
+            line_color="black", 
+            line_width=1.5,
+            annotation_text=f"(Gennemsnit: {team_name})", 
+            annotation_position="top right"
         )
 
-    # 4. Ligagennemsnitslinie (fuld blå linje)
+    # 4. Ligagennemsnitslinie (stiplet grå)
     fig.add_hline(
         y=ligasnit, 
-        line_dash="solid", 
-        line_color="blue", 
-        line_width=2,
-        annotation_text=f"Liga-snit: {ligasnit:.2f}", 
-        annotation_position="top right"
+        line_dash="dash", 
+        line_color="gray", 
+        line_width=1.5,
+        annotation_text=f"(Gennemsnit: {DEFAULT_COMP})", 
+        annotation_position="bottom right"
     )
-
-    is_reversed = "PPDA" in label.upper() or "IMOD" in label.upper()
 
     yaxis_config = dict(
         title=f"<b>{label} pr. kamp</b>", 
