@@ -367,8 +367,8 @@ def vis_side():
             "Skud": "TOTALSCORINGATT", 
             "Afleveringer": "TOTALPASS", 
             "PPDA": "PPDA",
-            "Hjørnespark": "WON_CORNERS",
-            "Hjørnespark, mod": "LOST_CORNERS",
+            "Hjørnespark": "WONCORNERS",
+            "Hjørnespark, mod": "LOSTCORNERS",
         }
         sel_metric = st.selectbox("Parameter:", list(metric_map.keys()))
 
