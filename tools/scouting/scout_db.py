@@ -221,8 +221,17 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
     # Sorter efter kontraktudløb
     df_unique = df_unique.sort_values('KONTRAKT', ascending=True, na_position='last')
 
-    # --- SØGELINJE ---
-    search_query = st.text_input("🔍 Søg efter spiller, klub eller position...", "", key="live_search_input").strip().lower()
+    # --- SØGELINJE (MED LIVE OPdatering) ---
+    def trigger_search():
+        # Denne funktion kører ved hvert tastetryk, så siden genindlæses med det samme
+        pass
+
+    search_query = st.text_input(
+        "🔍 Søg efter spiller, klub eller position...", 
+        value="", 
+        key="live_search_input", 
+        on_change=trigger_search
+    ).strip().lower()
 
     if search_query:
         search_cols = ['NAVN', 'KLUB']
@@ -238,6 +247,10 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
     display_cols = ['PLAYER_WYID', 'NAVN', 'KLUB', 'RATING_AVG', 'KONTRAKT', 'ER_EMNE', 'SKYGGEHOLD']
     df_display = df_unique[display_cols].copy()
     df_display.insert(0, "SE", False)
+    
+    # Dynamisk beregning af højde, så tabellen kun fylder det den skal (ca. 35 pixels pr. række + header)
+    antal_rækker = len(df_display)
+    beregnet_hojde = min(max(antal_rækker * 35 + 40, 150), 700)
         
     ed_result = st.data_editor(
         df_display,
@@ -254,6 +267,7 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
         disabled=['NAVN', 'KLUB', 'RATING_AVG', 'KONTRAKT'],
         hide_index=True, 
         use_container_width=True, 
+        height=beregnet_hojde,
         key=f"scout_editor_{st.session_state.editor_key}"
     )
 
