@@ -1,16 +1,23 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import re
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
 import requests
 from PIL import Image
 from io import BytesIO
 from mplsoccer import Pitch, VerticalPitch
+from reportlab.lib.pagesizes import A4
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image as RLImage, Table, TableStyle
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.units import mm
+from reportlab.lib import colors
 from data.utils.team_mapping import TEAMS, TEAM_COLORS
 from data.data_load import _get_snowflake_conn
 
 HIF_RED = '#cc0000'
+HIF_NAVN = "Hvidovre"  # Nøglen i TEAMS-dictet - Hvidovre IF skal altid kunne slås op herfra
 DB = "KLUB_HVIDOVREIF.AXIS"
 LIGA_UUID = "2mb332vncy4450vu14paj8844"
 PLAYER_FILE = 'data/players/1div_overskrivning.csv'
@@ -154,8 +161,7 @@ def get_summary_stats(df_subset, group_col):
     return agg
 
 # =========================================================================
-# NYT: Hjælpefunktioner til narrativ, modstanderrapport, sammenligning og
-# defensiv analyse.
+# Hjælpefunktioner: opsummering, logoer, modtagerzoner og PDF-eksport
 # =========================================================================
 
 def get_zone(y):
@@ -168,12 +174,11 @@ def get_zone(y):
     if y > 66: return "Højre"
     return "Center"
 
-def build_narrativ(df_subset, navn):
+def opsummering_linjer(df_subset, navn):
     """
     Genererer en liste af letlæselige, coach-venlige sætninger ud fra et
     datasæt af standardsituationer - én sætning pr. dødboldtype der har data.
-    Rent regelbaseret (ingen AI-kald) - bruger blot value_counts på de
-    tal, der allerede findes i datasættet.
+    Rent regelbaseret - bruger value_counts på tallene i datasættet.
     """
     if df_subset is None or df_subset.empty:
         return [f"Der er ingen registrerede standardsituationer for {navn} i det valgte data."]
@@ -222,6 +227,14 @@ def build_narrativ(df_subset, navn):
         return [f"Der er ingen registrerede standardsituationer for {navn} i det valgte data."]
     return linjer
 
+def get_top3_dict(df_subset):
+    """Returnerer {sp_type: [(spiller, antal), ...]} - top 3 tagere pr. dødboldtype."""
+    resultat = {}
+    for sp_type in ["Hjørnespark", "Frispark", "Indkast"]:
+        sub = df_subset[df_subset['TYPE_NAVN'] == sp_type]
+        resultat[sp_type] = list(sub['TAGER_NAVN'].value_counts().head(3).items()) if not sub.empty else []
+    return resultat
+
 def get_defensive_events(df_all, team_navn, uuid_to_name):
     """
     Finder modstanderes dødbolde imod et givent hold.
@@ -242,6 +255,144 @@ def get_defensive_events(df_all, team_navn, uuid_to_name):
     df_kampe = df_all[df_all['MATCH_OPTAUUID'].isin(kampe_med_hold)]
     df_defensiv = df_kampe[df_kampe['TEAM_UUID'].str.upper() != team_uuid.upper()].copy()
     return df_defensiv
+
+def render_header_logos(team_a_navn, team_b_navn=None):
+    """Viser logo-header i Streamlit. Hvis to hold gives, vises de side om side med et 'VS' imellem."""
+    info_a = TEAMS.get(team_a_navn, {})
+    logo_a = get_logo_img(info_a.get('opta_uuid'))
+
+    if team_b_navn and team_b_navn != team_a_navn:
+        c1, c2, c3 = st.columns([1, 0.4, 1])
+        with c1:
+            if logo_a: st.image(logo_a, width=70)
+            st.caption(team_a_navn)
+        with c2:
+            st.markdown("<div style='text-align:center; padding-top:22px; font-weight:bold; color:#999;'>VS</div>", unsafe_allow_html=True)
+        with c3:
+            info_b = TEAMS.get(team_b_navn, {})
+            logo_b = get_logo_img(info_b.get('opta_uuid'))
+            if logo_b: st.image(logo_b, width=70)
+            st.caption(team_b_navn)
+    else:
+        if logo_a: st.image(logo_a, width=70)
+        st.caption(team_a_navn)
+
+def build_corner_zone_figs(df_subset, titel_prefix=""):
+    """
+    Bygger to matplotlib-figurer med modtagerzoner for hjørnespark - én for
+    spark taget fra venstre side, én for spark taget fra højre side.
+    Returnerer {"Venstre side": (fig_eller_None, antal), "Højre side": (fig_eller_None, antal)}.
+    Figurerne st.pyplot'es IKKE her, så de kan genbruges både i Streamlit-visningen og i PDF-eksporten.
+    """
+    df_corners = df_subset[df_subset['TYPE_NAVN'] == 'Hjørnespark'].copy()
+    for c in ['EVENT_X', 'EVENT_Y', 'ENDX', 'ENDY']:
+        df_corners[c] = pd.to_numeric(df_corners[c], errors='coerce')
+    df_corners = df_corners.dropna(subset=['ENDX', 'ENDY'])
+
+    resultat = {}
+    for side_navn, side_df in [
+        ("Venstre side", df_corners[df_corners['EVENT_Y'] > 50]),
+        ("Højre side", df_corners[df_corners['EVENT_Y'] <= 50]),
+    ]:
+        if side_df.empty:
+            resultat[side_navn] = (None, 0)
+            continue
+        pitch = VerticalPitch(pitch_type='opta', half=True, pitch_color='white', line_color='#333333', linewidth=1.2)
+        fig, ax = pitch.draw(figsize=(5, 5))
+        pitch.hexbin(side_df['ENDX'], side_df['ENDY'], ax=ax, edgecolors='#ffffff', gridsize=(7, 7), cmap='Reds', alpha=0.8)
+        titel = f"{titel_prefix}{side_navn} ({len(side_df)} hjørnespark)".strip()
+        ax.text(50, 102, titel, fontsize=7, fontweight='bold', color='#333333', ha='center')
+        resultat[side_navn] = (fig, len(side_df))
+    return resultat
+
+# --- PDF-eksport ---
+
+def md_to_html(text):
+    """Konverterer simpel markdown (**fed**, *kursiv*) til ReportLab's markup, så opsummeringen kan genbruges i PDF'en."""
+    text = re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', text)
+    text = re.sub(r'\*(.+?)\*', r'<i>\1</i>', text)
+    return text
+
+def pil_to_rlimage(pil_img, width_mm=22):
+    buf = BytesIO()
+    pil_img.convert("RGB").save(buf, format='PNG')
+    buf.seek(0)
+    ratio = (pil_img.height / pil_img.width) if pil_img.width else 1
+    return RLImage(buf, width=width_mm * mm, height=width_mm * ratio * mm)
+
+def fig_to_rlimage(fig, width_mm=80):
+    buf = BytesIO()
+    fig.savefig(buf, format='png', dpi=150, bbox_inches='tight')
+    buf.seek(0)
+    return RLImage(buf, width=width_mm * mm, height=width_mm * mm)
+
+def generate_modstanderrapport_pdf(hif_navn, modstander_navn, opsummering, top3_data, corner_figs):
+    """Bygger en komplet PDF-rapport: logoer, opsummering, top 3-tagere og modtagerzoner (venstre/højre)."""
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=15 * mm, bottomMargin=15 * mm, leftMargin=18 * mm, rightMargin=18 * mm)
+    styles = getSampleStyleSheet()
+    story = []
+
+    hif_logo = get_logo_img(TEAMS.get(hif_navn, {}).get('opta_uuid'))
+    mod_logo = get_logo_img(TEAMS.get(modstander_navn, {}).get('opta_uuid'))
+
+    logo_row = [
+        pil_to_rlimage(hif_logo, 22) if hif_logo else Paragraph(hif_navn, styles['Normal']),
+        Paragraph("<para align='center'><b>VS</b></para>", styles['Normal']),
+        pil_to_rlimage(mod_logo, 22) if mod_logo else Paragraph(modstander_navn, styles['Normal']),
+    ]
+    logo_table = Table([logo_row], colWidths=[45 * mm, 25 * mm, 45 * mm])
+    logo_table.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('ALIGN', (0, 0), (-1, -1), 'CENTER')]))
+    story.append(logo_table)
+    story.append(Spacer(1, 8 * mm))
+
+    story.append(Paragraph(f"Modstanderrapport: {modstander_navn}", styles['Title']))
+    story.append(Paragraph(f"{hif_navn} forbereder sig mod {modstander_navn}", styles['Normal']))
+    story.append(Spacer(1, 6 * mm))
+
+    story.append(Paragraph("Opsummering", styles['Heading2']))
+    for linje in opsummering:
+        story.append(Paragraph("• " + md_to_html(linje), styles['Normal']))
+        story.append(Spacer(1, 2 * mm))
+    story.append(Spacer(1, 4 * mm))
+
+    story.append(Paragraph("Top 3-tagere pr. type", styles['Heading2']))
+    table_data = [["Type", "Spiller", "Antal"]]
+    for sp_type, rows in top3_data.items():
+        if not rows:
+            table_data.append([sp_type, "-", "-"])
+        else:
+            for i, (navn, antal) in enumerate(rows):
+                table_data.append([sp_type if i == 0 else "", navn, str(antal)])
+    t = Table(table_data, colWidths=[32 * mm, 90 * mm, 20 * mm])
+    t.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor(HIF_RED)),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('GRID', (0, 0), (-1, -1), 0.4, colors.grey),
+        ('FONTSIZE', (0, 0), (-1, -1), 9),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+    ]))
+    story.append(t)
+    story.append(Spacer(1, 6 * mm))
+
+    story.append(Paragraph("Modtagerzoner ved hjørnespark", styles['Heading2']))
+    fig_v, _ = corner_figs.get("Venstre side", (None, 0))
+    fig_h, _ = corner_figs.get("Højre side", (None, 0))
+    if fig_v is not None or fig_h is not None:
+        img_row = [
+            fig_to_rlimage(fig_v, 78) if fig_v is not None else Paragraph("Ingen data", styles['Normal']),
+            fig_to_rlimage(fig_h, 78) if fig_h is not None else Paragraph("Ingen data", styles['Normal']),
+        ]
+        img_table = Table([img_row], colWidths=[85 * mm, 85 * mm])
+        img_table.setStyle(TableStyle([('ALIGN', (0, 0), (-1, -1), 'CENTER')]))
+        story.append(img_table)
+    else:
+        story.append(Paragraph("Ingen hjørnespark-data tilgængelig.", styles['Normal']))
+
+    doc.build(story)
+    buffer.seek(0)
+    return buffer
 
 def render_setpiece_analysis(df_team, sp_type, t_sel):
     t_info = next((info for name, info in TEAMS.items() if name == t_sel), None)
@@ -398,9 +549,8 @@ def vis_side():
     with tabs[0]:
         st.caption(f"### Analyse af standardsituationer: {t_sel}")
 
-        # --- NYT: Automatisk tendens-narrativ, til hurtig oplæsning på holdmøde ---
-        st.markdown("##### Automatisk tendens-opsummering")
-        for linje in build_narrativ(df_team_selected, t_sel):
+        st.markdown("##### Opsummering")
+        for linje in opsummering_linjer(df_team_selected, t_sel):
             st.markdown(f"- {linje}")
         st.markdown("---")
 
@@ -408,7 +558,13 @@ def vis_side():
 
         with col_text:
             st.markdown("##### Overordnet udførelse og fordeling")
-            st.write(f"Her ses en samlet oversigt over **{t_sel}s** standardsituationer. Analysen viser fordelingen mellem hjørnespark, frispark og indkast, hvordan sparkene/leveringerne udføres, samt de mest benyttede modtager-zoner.")
+            total_sp = len(df_team_selected)
+            top_type = df_team_selected['TYPE_NAVN'].value_counts().idxmax() if total_sp else None
+            intro = f"{t_sel} har {total_sp} registrerede standardsituationer i det valgte data"
+            if top_type:
+                intro += f", hvoraf **{top_type.lower()}** er den hyppigste type"
+            intro += ". Herunder ses fordelingen mellem hjørnespark, frispark og indkast, hvordan de udføres, samt hvilke zoner der oftest rammes."
+            st.markdown(intro)
 
             df_team_selected['ZONE'] = df_team_selected['ENDY'].apply(lambda y: "Venstre" if float(y or 0) < 33 else ("Højre" if float(y or 0) > 66 else "Center"))
 
@@ -467,48 +623,81 @@ def vis_side():
             render_setpiece_analysis(df_team_selected, name, t_sel)
 
     # =====================================================================
-    # NYT: Modstanderrapport - kamp-forberedelse
+    # Modstanderrapport - kamp-forberedelse med logoer, opsummering,
+    # modtagerzoner og PDF-eksport
     # =====================================================================
     with tabs[6]:
         st.caption("### Modstander-scoutingrapport")
-        andre_hold = [t for t in teams if t != t_sel]
+        andre_hold = [t for t in teams if t != HIF_NAVN] if HIF_NAVN in teams else [t for t in teams if t != t_sel]
         if not andre_hold:
             st.info("Der er ikke flere hold i datasættet at vælge som modstander.")
         else:
             modstander = st.selectbox("Vælg modstander", andre_hold, key="modstander_sel")
             df_mod_team = df_all[df_all['KLUB_NAVN'] == modstander].copy()
 
+            render_header_logos(HIF_NAVN, modstander)
+            st.markdown("---")
+
             st.markdown(f"#### Sådan spiller **{modstander}** deres standardsituationer")
-            narrativ_linjer = build_narrativ(df_mod_team, modstander)
-            for linje in narrativ_linjer:
+            opsummering = opsummering_linjer(df_mod_team, modstander)
+            for linje in opsummering:
                 st.markdown(f"- {linje}")
 
             st.markdown("---")
             st.markdown("##### Top 3-tagere pr. type")
+            top3_data = get_top3_dict(df_mod_team)
             r1, r2, r3 = st.columns(3)
             for col, sp_type in zip([r1, r2, r3], ["Hjørnespark", "Frispark", "Indkast"]):
                 with col:
                     st.markdown(f"**{sp_type}**")
-                    sub = df_mod_team[df_mod_team['TYPE_NAVN'] == sp_type]
-                    if not sub.empty:
-                        top3 = sub['TAGER_NAVN'].value_counts().head(3)
-                        for navn, antal in top3.items():
+                    rows = top3_data.get(sp_type, [])
+                    if rows:
+                        for navn, antal in rows:
                             st.write(f"- {navn}: {antal} stk.")
                     else:
                         st.caption("Ingen data")
 
             st.markdown("---")
-            rapport_tekst = f"# Modstanderrapport: {modstander}\n\n" + "\n".join([f"- {l}" for l in narrativ_linjer])
-            st.download_button(
-                "Download rapport (til holdmøde)",
-                data=rapport_tekst,
-                file_name=f"modstanderrapport_{modstander}.md",
-                mime="text/markdown",
-                key="download_modstanderrapport"
-            )
+            st.markdown("##### Modtagerzoner ved hjørnespark")
+            corner_figs = build_corner_zone_figs(df_mod_team)
+            cz1, cz2 = st.columns(2)
+            for col, side_navn in zip([cz1, cz2], ["Venstre side", "Højre side"]):
+                with col:
+                    fig, antal = corner_figs.get(side_navn, (None, 0))
+                    st.markdown(f"**{side_navn}** ({antal} hjørnespark)")
+                    if fig is not None:
+                        st.pyplot(fig, clear_figure=False)
+                    else:
+                        st.caption("Ingen data")
+
+            st.markdown("---")
+            col_dl1, col_dl2 = st.columns(2)
+            with col_dl1:
+                rapport_tekst = f"# Modstanderrapport: {modstander}\n\n" + "\n".join([f"- {l}" for l in opsummering])
+                st.download_button(
+                    "Download som tekst",
+                    data=rapport_tekst,
+                    file_name=f"modstanderrapport_{modstander}.md",
+                    mime="text/markdown",
+                    key="download_modstanderrapport_md"
+                )
+            with col_dl2:
+                pdf_buffer = generate_modstanderrapport_pdf(HIF_NAVN, modstander, opsummering, top3_data, corner_figs)
+                st.download_button(
+                    "Download PDF-rapport",
+                    data=pdf_buffer,
+                    file_name=f"modstanderrapport_{modstander}.pdf",
+                    mime="application/pdf",
+                    key="download_modstanderrapport_pdf"
+                )
+
+            # Ryd op i figurerne, nu hvor de er brugt både i Streamlit og PDF'en
+            for fig, _ in corner_figs.values():
+                if fig is not None:
+                    plt.close(fig)
 
     # =====================================================================
-    # NYT: Sammenligning
+    # Sammenligning
     # =====================================================================
     with tabs[7]:
         st.caption("### Sammenligning mellem to hold")
@@ -520,6 +709,9 @@ def vis_side():
             team_b = st.selectbox("Hold B", andre_b, key="cmp_b") if andre_b else None
 
         if team_b:
+            render_header_logos(team_a, team_b)
+            st.markdown("---")
+
             df_a = df_all[df_all['KLUB_NAVN'] == team_a].copy()
             df_b = df_all[df_all['KLUB_NAVN'] == team_b].copy()
 
@@ -547,32 +739,34 @@ def vis_side():
             st.info("Der er ikke flere hold i datasættet at sammenligne med.")
 
     # =====================================================================
-    # NYT: Defensiv analyse
+    # Defensiv analyse
     # =====================================================================
     with tabs[8]:
         st.caption("### Defensiv analyse - modstanderes dødbolde mod jer")
         def_team = st.selectbox("Analyser forsvar for", teams, index=teams.index(t_sel) if t_sel in teams else 0, key="def_team_sel")
+
+        render_header_logos(HIF_NAVN, def_team if def_team != HIF_NAVN else None)
+        st.markdown("---")
+
         df_defensiv = get_defensive_events(df_all, def_team, uuid_to_name)
 
         if df_defensiv.empty:
             st.info("Ingen modstander-data fundet for de kampe, holdet indgår i.")
         else:
             st.markdown(f"#### Sådan har modstandere angrebet **{def_team}** fra dødbolde")
-            for linje in build_narrativ(df_defensiv, f"modstandere af {def_team}"):
+            for linje in opsummering_linjer(df_defensiv, f"modstandere af {def_team}"):
                 st.markdown(f"- {linje}")
 
             st.markdown("---")
-            st.markdown("##### Farligste zoner imod jer pr. type")
-            c1, c2, c3 = st.columns(3)
-            for col, sp_type in zip([c1, c2, c3], ["Hjørnespark", "Frispark", "Indkast"]):
+            st.markdown("##### Modtagerzoner ved hjørnespark imod jer")
+            def_corner_figs = build_corner_zone_figs(df_defensiv)
+            dz1, dz2 = st.columns(2)
+            for col, side_navn in zip([dz1, dz2], ["Venstre side", "Højre side"]):
                 with col:
-                    st.markdown(f"**{sp_type}**")
-                    sub = df_defensiv[df_defensiv['TYPE_NAVN'] == sp_type].copy()
-                    if not sub.empty:
-                        sub['ZONE'] = sub['ENDY'].apply(get_zone)
-                        zone_stats = sub.groupby('ZONE').size().sort_values(ascending=False)
-                        for zone, antal in zone_stats.items():
-                            st.write(f"- {zone}: {antal} stk.")
+                    fig, antal = def_corner_figs.get(side_navn, (None, 0))
+                    st.markdown(f"**{side_navn}** ({antal} hjørnespark)")
+                    if fig is not None:
+                        st.pyplot(fig, clear_figure=True)
                     else:
                         st.caption("Ingen data")
 
