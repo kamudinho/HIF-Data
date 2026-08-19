@@ -366,8 +366,8 @@ def generate_modstanderrapport_pdf(hif_navn, modstander_navn, opsummering, top3_
                 table_data.append([sp_type if i == 0 else "", navn, str(antal)])
     t = Table(table_data, colWidths=[32 * mm, 90 * mm, 20 * mm])
     t.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor(HIF_RED)),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+        ('BACKGROUND', (0, 0), (-1, 0), colors.white),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
         ('GRID', (0, 0), (-1, -1), 0.4, colors.grey),
         ('FONTSIZE', (0, 0), (-1, -1), 9),
@@ -742,7 +742,7 @@ def vis_side():
     # Defensiv analyse
     # =====================================================================
     with tabs[8]:
-        st.caption("### Defensiv analyse - modstanderes dødbolde mod jer")
+        st.caption("### Defensiv analyse - modstanderes dødbolde")
         def_team = st.selectbox("Analyser forsvar for", teams, index=teams.index(t_sel) if t_sel in teams else 0, key="def_team_sel")
 
         render_header_logos(HIF_NAVN, def_team if def_team != HIF_NAVN else None)
