@@ -93,7 +93,7 @@ def vis_side(dp=None):
         AdvancedEvents AS (
             SELECT 
                 MATCH_OPTAUUID, 
-                CONTESTANT_OPTAUUID,
+                EVENT_CONTESTANT_OPTAUUID,
                 
                 -- Antal berøringer i feltet
                 COUNT_IF(EVENT_X >= 81.0 AND EVENT_Y BETWEEN 20.0 AND 80.0 AND EVENT_TYPEID IN (1, 3, 4, 7, 13, 14, 15, 16, 17, 19, 24, 30)) AS TOUCHES_IN_BOX,
@@ -110,7 +110,7 @@ def vis_side(dp=None):
             FROM (
                 SELECT 
                     MATCH_OPTAUUID, 
-                    CONTESTANT_OPTAUUID, 
+                    EVENT_CONTESTANT_OPTAUUID, 
                     EVENT_TYPEID, 
                     EVENT_OUTCOME, 
                     EVENT_X, 
