@@ -199,7 +199,7 @@ def draw_match_trend_chart(df_matches, metric, label, team_name, valgt_saeson):
         formatted_label = label.lower()
 
     label_line1 = f"Antal {formatted_label} i {valgt_saeson}:"
-    label_line2 = f"Antal {formatted_label} pr. 90 i {valgt_saeson}:"
+    label_line2 = f"pr. 90 {formatted_label} i {valgt_saeson}:"
 
     # 1. Venstrestillet tekst-kolonne
     fig.add_annotation(
