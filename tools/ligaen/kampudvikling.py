@@ -61,45 +61,105 @@ def load_match_level_data(tournament_opta_uuid, team_opta_uuid, team_wyid, comp_
                 MATCH_OPTAUUID, CONTESTANT_OPTAUUID,
                 MAX(CASE WHEN STAT_TYPE = 'totalScoringAtt' THEN CAST(STAT_TOTAL AS FLOAT) END) AS TOTALSCORINGATT,
                 MAX(CASE WHEN STAT_TYPE = 'ontargetScoringAtt' THEN CAST(STAT_TOTAL AS FLOAT) END) AS ONTARGETSCORINGATT,
+                MAX(CASE WHEN STAT_TYPE = 'shotOffTarget' THEN CAST(STAT_TOTAL AS FLOAT) END) AS SHOTOFFTARGET,
+                MAX(CASE WHEN STAT_TYPE = 'blockedScoringAtt' THEN CAST(STAT_TOTAL AS FLOAT) END) AS BLOCKEDSCORINGATT,
+                MAX(CASE WHEN STAT_TYPE = 'subsGoals' THEN CAST(STAT_TOTAL AS FLOAT) END) AS SUBSGOALS,
                 MAX(CASE WHEN STAT_TYPE = 'totalPass' THEN CAST(STAT_TOTAL AS FLOAT) END) AS TOTALPASS,
+                MAX(CASE WHEN STAT_TYPE = 'accuratePass' THEN CAST(STAT_TOTAL AS FLOAT) END) AS ACCURATEPASS,
                 MAX(CASE WHEN STAT_TYPE = 'possessionPercentage' THEN CAST(STAT_TOTAL AS FLOAT) END) AS POSSESSIONPERCENTAGE,
                 MAX(CASE WHEN STAT_TYPE = 'wonCorners' THEN CAST(STAT_TOTAL AS FLOAT) END) AS WONCORNERS,
                 MAX(CASE WHEN STAT_TYPE = 'lostCorners' THEN CAST(STAT_TOTAL AS FLOAT) END) AS LOSTCORNERS,
-                MAX(CASE WHEN STAT_TYPE = 'totalTackle' THEN CAST(STAT_TOTAL AS FLOAT) END) AS TOTALTACKLE
+                MAX(CASE WHEN STAT_TYPE = 'totalTackle' THEN CAST(STAT_TOTAL AS FLOAT) END) AS TOTALTACKLE,
+                MAX(CASE WHEN STAT_TYPE = 'wonTackle' THEN CAST(STAT_TOTAL AS FLOAT) END) AS WONTACKLE,
+                MAX(CASE WHEN STAT_TYPE = 'totalClearance' THEN CAST(STAT_TOTAL AS FLOAT) END) AS TOTALCLEARANCE,
+                MAX(CASE WHEN STAT_TYPE = 'outfielderBlock' THEN CAST(STAT_TOTAL AS FLOAT) END) AS OUTFIELDERBLOCK,
+                MAX(CASE WHEN STAT_TYPE = 'fkFoulWon' THEN CAST(STAT_TOTAL AS FLOAT) END) AS FKFOULWON,
+                MAX(CASE WHEN STAT_TYPE = 'fkFoulLost' THEN CAST(STAT_TOTAL AS FLOAT) END) AS FKFOULLOST,
+                MAX(CASE WHEN STAT_TYPE = 'saves' THEN CAST(STAT_TOTAL AS FLOAT) END) AS SAVES,
+                MAX(CASE WHEN STAT_TYPE = 'goalsConceded' THEN CAST(STAT_TOTAL AS FLOAT) END) AS GOALSCONCEDED,
+                MAX(CASE WHEN STAT_TYPE = 'cleanSheet' THEN CAST(STAT_TOTAL AS FLOAT) END) AS CLEANSHEET
             FROM {db}.OPTA_MATCHSTATS
             WHERE MATCH_OPTAUUID IN (SELECT MATCH_OPTAUUID FROM MatchBase)
             GROUP BY 1, 2
         ),
-        -- Her beregnes det sande ligagennemsnit for hele turneringen
-        LeagueAverages AS (
+        ExpectedGoalsPivot AS (
             SELECT 
-                AVG(TOTALSCORINGATT) AS LIGA_AVG_TOTALSCORINGATT,
-                AVG(TOTALPASS) AS LIGA_AVG_TOTALPASS,
-                AVG(POSSESSIONPERCENTAGE) AS LIGA_AVG_POSSESSIONPERCENTAGE,
-                AVG(WONCORNERS) AS LIGA_AVG_WONCORNERS,
-                AVG(TOTALTACKLE) AS LIGA_AVG_TOTALTACKLE
-            FROM MatchStatsPivot
+                MATCH_ID AS MATCH_OPTAUUID, CONTESTANT_OPTAUUID,
+                SUM(CASE WHEN STAT_TYPE = 'expectedGoals' THEN CAST(STAT_VALUE AS FLOAT) ELSE 0 END) AS EXPECTEDGOALS
+            FROM {db}.OPTA_MATCHEXPECTEDGOALS
+            WHERE MATCH_ID IN (SELECT MATCH_OPTAUUID FROM MatchBase)
+            GROUP BY 1, 2
+        ),
+        WyscoutDefense AS (
+            SELECT 
+                TO_CHAR(tm.DATE, 'YYYY-MM-DD') AS MATCH_DATE,
+                md.PPDA
+            FROM {db}.WYSCOUT_TEAMMATCHES tm
+            LEFT JOIN {db}.WYSCOUT_MATCHADVANCEDSTATS_DEFENCE md 
+                ON tm.MATCH_WYID = md.MATCH_WYID AND tm.TEAM_WYID = md.TEAM_WYID
+            WHERE tm.COMPETITION_WYID = {comp_wyid} AND tm.TEAM_WYID = {team_wyid}
+        ),
+        FullTournamentData AS (
+            SELECT 
+                mb.MATCH_OPTAUUID,
+                mb.MATCH_DATE,
+                sp.CONTESTANT_OPTAUUID AS TEAM_OPTAUUID,
+                
+                CASE WHEN sp.CONTESTANT_OPTAUUID = mb.CONTESTANTHOME_OPTAUUID THEN mb.TOTAL_HOME_SCORE ELSE mb.TOTAL_AWAY_SCORE END AS GOALS,
+                CASE WHEN sp.CONTESTANT_OPTAUUID = mb.CONTESTANTHOME_OPTAUUID THEN mb.TOTAL_AWAY_SCORE ELSE mb.TOTAL_HOME_SCORE END AS GOALS_AGAINST,
+                
+                mb.CONTESTANTHOME_OPTAUUID,
+                mb.CONTESTANTAWAY_OPTAUUID,
+
+                sp.TOTALSCORINGATT,
+                sp.ONTARGETSCORINGATT,
+                sp.SHOTOFFTARGET,
+                sp.BLOCKEDSCORINGATT,
+                sp.SUBSGOALS,
+                sp.TOTALPASS,
+                sp.ACCURATEPASS,
+                sp.POSSESSIONPERCENTAGE,
+                sp.WONCORNERS,
+                sp.LOSTCORNERS,
+                sp.TOTALTACKLE,
+                sp.WONTACKLE,
+                sp.TOTALCLEARANCE,
+                sp.OUTFIELDERBLOCK,
+                sp.FKFOULWON,
+                sp.FKFOULLOST,
+                sp.SAVES,
+                sp.GOALSCONCEDED,
+                sp.CLEANSHEET,
+                xg.EXPECTEDGOALS,
+                wd.PPDA,
+                
+                -- Dynamiske ligagennemsnit beregnet på tværs af hele datasættet
+                AVG(xg.EXPECTEDGOALS) OVER() AS LIGA_AVG_EXPECTEDGOALS,
+                AVG(sp.TOTALSCORINGATT) OVER() AS LIGA_AVG_TOTALSCORINGATT,
+                AVG(sp.ONTARGETSCORINGATT) OVER() AS LIGA_AVG_ONTARGETSCORINGATT,
+                AVG(sp.TOTALPASS) OVER() AS LIGA_AVG_TOTALPASS,
+                AVG(sp.ACCURATEPASS) OVER() AS LIGA_AVG_ACCURATEPASS,
+                AVG(sp.POSSESSIONPERCENTAGE) OVER() AS LIGA_AVG_POSSESSIONPERCENTAGE,
+                AVG(sp.WONCORNERS) OVER() AS LIGA_AVG_WONCORNERS,
+                AVG(sp.LOSTCORNERS) OVER() AS LIGA_AVG_LOSTCORNERS,
+                AVG(sp.TOTALTACKLE) OVER() AS LIGA_AVG_TOTALTACKLE,
+                AVG(wd.PPDA) OVER() AS LIGA_AVG_PPDA
+
+            FROM MatchBase mb
+            JOIN MatchStatsPivot sp ON mb.MATCH_OPTAUUID = sp.MATCH_OPTAUUID
+            LEFT JOIN ExpectedGoalsPivot xg ON sp.MATCH_OPTAUUID = xg.MATCH_OPTAUUID AND sp.CONTESTANT_OPTAUUID = xg.CONTESTANT_OPTAUUID
+            LEFT JOIN WyscoutDefense wd ON mb.MATCH_DATE = wd.MATCH_DATE 
         )
-        SELECT 
-            mb.MATCH_OPTAUUID,
-            mb.MATCH_DATE,
-            sp.CONTESTANT_OPTAUUID AS TEAM_OPTAUUID,
-            sp.TOTALSCORINGATT,
-            sp.TOTALPASS,
-            sp.POSSESSIONPERCENTAGE,
-            sp.WONCORNERS,
-            sp.LOSTCORNERS,
-            sp.TOTALTACKLE,
-            la.* -- Inkluderer alle ligagennemsnit i hver række
-        FROM MatchBase mb
-        JOIN MatchStatsPivot sp ON mb.MATCH_OPTAUUID = sp.MATCH_OPTAUUID
-        CROSS JOIN LeagueAverages la
-        WHERE sp.CONTESTANT_OPTAUUID = '{team_opta_uuid}'
-        ORDER BY mb.MATCH_DATE ASC
+        SELECT * 
+        FROM FullTournamentData
+        WHERE TEAM_OPTAUUID = '{team_opta_uuid}'
+        ORDER BY MATCH_DATE ASC
     """
     df = conn.query(query)
+    
     if not df.empty:
         df.columns = [c.upper() for c in df.columns]
+    
     return df
 
 def draw_match_trend_chart(df_matches, metric, label, team_name):
@@ -124,9 +184,10 @@ def draw_match_trend_chart(df_matches, metric, label, team_name):
         y_span = 1.0
         snit_vaerdi = 0.0
 
-    avg_col = f"AVG_{metric}"
-    if avg_col in df_matches.columns and not df_matches[avg_col].dropna().empty:
-        ligasnit = df_matches[avg_col].dropna().iloc[0]
+    # Hent det dynamiske ligasnit fra SQL-kolonnen (LIGA_AVG_{metric})
+    liga_avg_col = f"LIGA_AVG_{metric}"
+    if liga_avg_col in df_matches.columns and not df_matches[liga_avg_col].dropna().empty:
+        ligasnit = df_matches[liga_avg_col].dropna().iloc[0]
     else:
         ligasnit = y_vals.mean() if has_data else 0.0
 
@@ -311,6 +372,7 @@ def vis_side():
             "Mål": "GOALS", 
             "Mål imod": "GOALS_AGAINST", 
             "Skud": "TOTALSCORINGATT", 
+            "Skud på mål": "ONTARGETSCORINGATT",
             "Afleveringer": "TOTALPASS", 
             "PPDA": "PPDA",
             "Hjørnespark": "WONCORNERS",
