@@ -146,7 +146,7 @@ def draw_match_trend_chart(df_matches, metric, label, team_name):
     df_matches['OPP_LOGO'] = opp_logos
     df_matches['HOVER_TEXT'] = hover_texts
 
-    # FAST LOGO-STØRRELSE (Uafhængig af y_span, så logoerne altid er ens i størrelse)
+    # FAST LOGO-STØRRELSE
     logo_size_x = 0.40  
     logo_size_y = y_span * 0.12 if y_span > 0.5 else 0.15  
 
@@ -204,6 +204,20 @@ def draw_match_trend_chart(df_matches, metric, label, team_name):
         showlegend=False
     ))
 
+    # Dynamisk styring af tekstplacering, hvis linjerne ligger meget tæt
+    # Hvis afstanden mellem linjerne er mindre end 10% af det samlede spænd, split dem op
+    overlap_threshold = y_span * 0.10
+    if abs(snit_vaerdi - ligasnit) < overlap_threshold:
+        if snit_vaerdi >= ligasnit:
+            team_pos = "top right"
+            liga_pos = "bottom right"
+        else:
+            team_pos = "bottom right"
+            liga_pos = "top right"
+    else:
+        team_pos = "top right"
+        liga_pos = "bottom right"
+
     # 3. Holdets gennemsnitslinie (solid sort)
     if has_data:
         fig.add_hline(
@@ -212,7 +226,7 @@ def draw_match_trend_chart(df_matches, metric, label, team_name):
             line_color="black", 
             line_width=1.5,
             annotation_text=f"(Gennemsnit: {team_name})", 
-            annotation_position="top right"
+            annotation_position=team_pos
         )
 
     # 4. Ligagennemsnitslinie (stiplet grå)
@@ -222,7 +236,7 @@ def draw_match_trend_chart(df_matches, metric, label, team_name):
         line_color="gray", 
         line_width=1.5,
         annotation_text=f"(Gennemsnit: {DEFAULT_COMP})", 
-        annotation_position="bottom right"
+        annotation_position=liga_pos
     )
 
     yaxis_config = dict(
@@ -245,14 +259,12 @@ def draw_match_trend_chart(df_matches, metric, label, team_name):
         yaxis=yaxis_config,
         plot_bgcolor='white',
         showlegend=False
-        # Fjernet overskrifts-annotation herfra for at undgå duplikering, da den vises i Streamlit-kolonnen ovenfor
     )
     st.plotly_chart(fig, use_container_width=True)
 
 # --- 3. HOVEDFUNKTION ---
 
 def vis_side():
-    # Hent kun hold fra 2026/2027 for den valgte turnering (DEFAULT_COMP)
     tilgængelige_hold = SEASON_LEAGUE_MAPPER.get("2026/2027", {}).get(DEFAULT_COMP, list(TEAMS.keys()))
     
     default_team_name = "Hvidovre" if "Hvidovre" in tilgængelige_hold else tilgængelige_hold[0]
