@@ -10,6 +10,7 @@ from data.utils.team_mapping import (
     SEASONS,
     COMPETITIONS,
     SEASON_LEAGUE_MAPPER,
+    SEASON_LEAGUE_MAPPER, # Bruges til at hente hold pr. sæson/liga
     TEAMS,
     COMPETITION_NAME as DEFAULT_COMP,
     TOURNAMENTCALENDAR_NAME as DEFAULT_SEASON
@@ -257,7 +258,10 @@ def draw_match_trend_chart(df_matches, metric, label, team_name):
 # --- 3. HOVEDFUNKTION ---
 
 def vis_side():
-    default_team_name = "Hvidovre"
+    # Hent kun hold fra 2026/2027 for den valgte turnering (DEFAULT_COMP)
+    tilgængelige_hold = SEASON_LEAGUE_MAPPER.get("2026/2027", {}).get(DEFAULT_COMP, list(TEAMS.keys()))
+    
+    default_team_name = "Hvidovre" if "Hvidovre" in tilgængelige_hold else tilgængelige_hold[0]
     default_team_wyid = TEAMS.get(default_team_name, {}).get("team_wyid", 7490)
     wyid = COMPETITIONS.get(DEFAULT_COMP, {}).get("wyid", 328)
 
@@ -269,7 +273,7 @@ def vis_side():
     col_title, col_t, col_m = st.columns([1.8, 1.2, 1.0])
     
     with col_t:
-        valgt_hold = st.selectbox("Vælg hold:", list(TEAMS.keys()), index=list(TEAMS.keys()).index(default_team_name) if default_team_name in TEAMS else 0)
+        valgt_hold = st.selectbox("Vælg hold:", tilgængelige_hold, index=tilgængelige_hold.index(default_team_name) if default_team_name in tilgængelige_hold else 0)
         valgt_team_wyid = TEAMS.get(valgt_hold, {}).get("team_wyid", default_team_wyid)
 
     with col_m:
