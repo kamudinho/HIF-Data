@@ -53,9 +53,11 @@ def load_match_level_data(wyid, team_wyid, season_start_year=2026):
     start_date = f"{season_start_year}-07-01"
     end_date = f"{season_start_year + 1}-06-30"
     
+    # Vi henter kampdata samt beregner ligagennemsnit via vinduesfunktioner (OVER)
     query = f"""
         SELECT 
             tm.MATCH_WYID,
+            tm.TEAM_WYID,
             TO_CHAR(tm.DATE, 'YYYY-MM-DD') as MATCH_DATE,
             adv.XG,
             adv.SHOTS,
@@ -63,7 +65,13 @@ def load_match_level_data(wyid, team_wyid, season_start_year=2026):
             opp_adv.GOALS as GOALS_AGAINST,
             md.PPDA,
             mp.PASSES,
-            opp.TEAM_WYID as OPP_WYID
+            opp.TEAM_WYID as OPP_WYID,
+            AVG(adv.XG) OVER() as AVG_XG,
+            AVG(adv.GOALS) OVER() as AVG_GOALS,
+            AVG(opp_adv.GOALS) OVER() as AVG_GOALS_AGAINST,
+            AVG(adv.SHOTS) OVER() as AVG_SHOTS,
+            AVG(mp.PASSES) OVER() as AVG_PASSES,
+            AVG(md.PPDA) OVER() as AVG_PPDA
         FROM {db}.WYSCOUT_TEAMMATCHES tm 
         LEFT JOIN {db}.WYSCOUT_MATCHADVANCEDSTATS_GENERAL adv ON tm.MATCH_WYID = adv.MATCH_WYID AND tm.TEAM_WYID = adv.TEAM_WYID 
         LEFT JOIN {db}.WYSCOUT_TEAMMATCHES opp ON tm.MATCH_WYID = opp.MATCH_WYID AND tm.TEAM_WYID <> opp.TEAM_WYID
@@ -71,16 +79,19 @@ def load_match_level_data(wyid, team_wyid, season_start_year=2026):
         LEFT JOIN {db}.WYSCOUT_MATCHADVANCEDSTATS_DEFENCE md ON tm.MATCH_WYID = md.MATCH_WYID AND tm.TEAM_WYID = md.TEAM_WYID 
         LEFT JOIN {db}.WYSCOUT_MATCHADVANCEDSTATS_PASSES mp ON tm.MATCH_WYID = mp.MATCH_WYID AND tm.TEAM_WYID = mp.TEAM_WYID
         WHERE tm.COMPETITION_WYID = {wyid} 
-        AND tm.TEAM_WYID = {team_wyid}
         AND tm.DATE >= '{start_date}' AND tm.DATE <= '{end_date}'
-        ORDER BY tm.DATE ASC
     """
     df = conn.query(query)
     if not df.empty:
         df.columns = [c.upper() for c in df.columns]
-    return df
+    
+    if df.empty or 'TEAM_WYID' not in df.columns:
+        return pd.DataFrame()
+        
+    # Filtrer kun det valgte hold fra det samlede ligasæt
+    df_team = df[df['TEAM_WYID'] == team_wyid].copy()
+    return df_team
 
-# --- 2. CHART FUNKTION ( KAMP FOR KAMP ) ---
 
 def draw_match_trend_chart(df_matches, metric, label, team_name):
     if df_matches is None or df_matches.empty:
@@ -90,7 +101,7 @@ def draw_match_trend_chart(df_matches, metric, label, team_name):
     fig = go.Figure()
     df_matches[metric] = pd.to_numeric(df_matches[metric], errors='coerce')
     
-    # Korrekt tilføjelse af kampnummer (1, 2, 3...) uden df_matches + 1 fejl
+    # Tilføj kampnummer (1, 2, 3...)
     df_matches['MATCH_NUM'] = range(1, len(df_matches) + 1)
     
     y_vals = df_matches[metric].dropna()
@@ -104,6 +115,13 @@ def draw_match_trend_chart(df_matches, metric, label, team_name):
     else:
         y_span = 1.0
         snit_vaerdi = 0.0
+
+    # Hent det beregnede ligagennemsnit fra kolonnen
+    avg_col = f"AVG_{metric}"
+    if avg_col in df_matches.columns and not df_matches[avg_col].dropna().empty:
+        ligasnit = df_matches[avg_col].dropna().iloc[0]
+    else:
+        ligasnit = y_vals.mean() if has_data else 0.0
 
     opp_names = []
     opp_logos = []
@@ -130,9 +148,11 @@ def draw_match_trend_chart(df_matches, metric, label, team_name):
     df_matches['OPP_LOGO'] = opp_logos
     df_matches['HOVER_TEXT'] = hover_texts
 
+    # Logo størrelse (forbliver konsistent relativt til datapunkterne)
     logo_size_x = 0.55  
     logo_size_y = y_span * 0.32 if has_data else 0.3  
 
+    # 1. Tilføj modstander-logoer som layout-billeder på plottet
     for _, row in df_matches.iterrows():
         if pd.notnull(row[metric]) and row.get('OPP_LOGO'):
             b64_logo = get_base64_image(row['OPP_LOGO'])
@@ -148,6 +168,7 @@ def draw_match_trend_chart(df_matches, metric, label, team_name):
                 yanchor="middle"
             ))
 
+    # 2. Tilføj linje og usynlige punkter for præcis hover
     fig.add_trace(go.Scatter(
         x=df_matches['MATCH_NUM'], 
         y=df_matches[metric], 
@@ -158,14 +179,25 @@ def draw_match_trend_chart(df_matches, metric, label, team_name):
         hoverinfo='text'
     ))
 
+    # 3. Holdets gennemsnitslinie (stiplet grå)
     if has_data:
         fig.add_hline(
             y=snit_vaerdi, 
             line_dash="dash", 
             line_color="gray", 
-            annotation_text=f"Snit: {snit_vaerdi:.2f}", 
+            annotation_text=f"Hold-snit: {snit_vaerdi:.2f}", 
             annotation_position="bottom right"
         )
+
+    # 4. Ligagennemsnitslinie (fuld blå linje)
+    fig.add_hline(
+        y=ligasnit, 
+        line_dash="solid", 
+        line_color="blue", 
+        line_width=2,
+        annotation_text=f"Liga-snit: {ligasnit:.2f}", 
+        annotation_position="top right"
+    )
 
     is_reversed = "PPDA" in label.upper() or "IMOD" in label.upper()
 
@@ -182,8 +214,8 @@ def draw_match_trend_chart(df_matches, metric, label, team_name):
         xaxis=dict(
             title="<b>Kampnummer</b>", 
             tickmode='linear', 
-            dtick=2,
-            range=[0.5, 32.5],  # Låst fast til 32 kampe i alt
+            dtick=1,
+            # Ingen fast range her, så Plotly automatisk zoomer ind på det faktiske antal kampe
             gridcolor="#f0f0f0", 
             linecolor='black'
         ),
