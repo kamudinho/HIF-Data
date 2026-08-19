@@ -164,7 +164,7 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
 
     content, sha = get_github_file(FILE_PATH)
     if not content:
-        st.error("Kunne ikke hente database fra GitHub.")
+        st.error("Kunne ikke hente databasen")
         return
     
     df_raw = pd.read_csv(StringIO(content), low_memory=False)
@@ -227,7 +227,7 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
         pass
 
     search_query = st.text_input(
-        "🔍 Søg efter spiller, klub eller position...", 
+        "Søg efter spiller - søg på nav, klub eller position:", 
         value="", 
         key="live_search_input", 
         on_change=trigger_search
