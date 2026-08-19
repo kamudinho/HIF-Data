@@ -133,7 +133,7 @@ def load_match_level_data(tournament_opta_uuid, team_opta_uuid, team_wyid, comp_
                 xg.EXPECTEDGOALS,
                 wd.PPDA,
                 
-                # Dynamiske ligagennemsnit beregnet på tværs af hele datasættet
+                -- Dynamiske ligagennemsnit beregnet på tværs af hele datasættet
                 AVG(xg.EXPECTEDGOALS) OVER() AS LIGA_AVG_EXPECTEDGOALS,
                 AVG(sp.TOTALSCORINGATT) OVER() AS LIGA_AVG_TOTALSCORINGATT,
                 AVG(sp.ONTARGETSCORINGATT) OVER() AS LIGA_AVG_ONTARGETSCORINGATT,
@@ -184,6 +184,7 @@ def draw_match_trend_chart(df_matches, metric, label, team_name):
         y_span = 1.0
         snit_vaerdi = 0.0
 
+    # Hent det dynamiske ligasnit fra SQL-kolonnen (LIGA_AVG_{metric})
     liga_avg_col = f"LIGA_AVG_{metric}"
     if liga_avg_col in df_matches.columns and not df_matches[liga_avg_col].dropna().empty:
         ligasnit = df_matches[liga_avg_col].dropna().iloc[0]
@@ -280,22 +281,17 @@ def draw_match_trend_chart(df_matches, metric, label, team_name):
         showlegend=False
     ))
 
-    # --- KORREGERET PLACERING AF GENNEMSNITSLINJER (TAGER HØJDE FOR REVERSED AXIS) ---
     overlap_threshold = y_span * 0.10
     if abs(snit_vaerdi - ligasnit) < overlap_threshold:
-        if is_reversed:
-            team_pos = "bottom right" if snit_vaerdi >= ligasnit else "top right"
-            liga_pos = "top right" if snit_vaerdi >= ligasnit else "bottom right"
+        if snit_vaerdi >= ligasnit:
+            team_pos = "top right"
+            liga_pos = "bottom right"
         else:
-            team_pos = "top right" if snit_vaerdi >= ligasnit else "bottom right"
-            liga_pos = "bottom right" if snit_vaerdi >= ligasnit else "top right"
+            team_pos = "bottom right"
+            liga_pos = "top right"
     else:
-        if is_reversed:
-            team_pos = "bottom right" if snit_vaerdi >= ligasnit else "top right"
-            liga_pos = "top right" if snit_vaerdi >= ligasnit else "bottom right"
-        else:
-            team_pos = "top right" if snit_vaerdi >= ligasnit else "bottom right"
-            liga_pos = "bottom right" if snit_vaerdi >= ligasnit else "top right"
+        team_pos = "top right"
+        liga_pos = "bottom right"
 
     if has_data:
         fig.add_hline(
