@@ -222,15 +222,16 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
     df_unique = df_unique.sort_values('KONTRAKT', ascending=True, na_position='last')
 
     # --- SØGELINJE ---
-    search_query = st.text_input("🔍 Søg efter spiller, klub eller position...", "").strip().lower()
+    search_query = st.text_input("🔍 Søg efter spiller, klub eller position...", "", key="live_search_input").strip().lower()
 
     if search_query:
-        # Tjek om 'POSITION' findes i datasættet for at undgå KeyError, ellers søg i NAVN og KLUB
         search_cols = ['NAVN', 'KLUB']
         if 'POSITION' in df_unique.columns:
             search_cols.append('POSITION')
         
-        mask = df_unique[search_cols].astype(str).apply(lambda col: col.str.lower().str.contains(search_query)).any(axis=1)
+        mask = df_unique[search_cols].astype(str).apply(
+            lambda col: col.str.lower().str.contains(search_query, na=False)
+        ).any(axis=1)
         df_unique = df_unique[mask]
 
     # --- FORBERED VISNING I EDITOR ---
@@ -253,7 +254,6 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
         disabled=['NAVN', 'KLUB', 'RATING_AVG', 'KONTRAKT'],
         hide_index=True, 
         use_container_width=True, 
-        height=700,
         key=f"scout_editor_{st.session_state.editor_key}"
     )
 
