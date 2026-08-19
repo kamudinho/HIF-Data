@@ -220,8 +220,9 @@ def draw_match_trend_chart(df_matches, metric, label, team_name):
     df_matches['OPP_LOGO'] = opp_logos
     df_matches['HOVER_TEXT'] = hover_texts
 
-    logo_size_x = 0.40  
-    logo_size_y = y_span * 0.12 if y_span > 0.5 else 0.15  
+    # --- FORSTØRREDE LOGO-DIMENSIONER ---
+    logo_size_x = 0.65  # Tidligere 0.40 (gør dem bredere)
+    logo_size_y = y_span * 0.20 if y_span > 0.5 else 0.25  # Gjort markant højere
 
     for _, row in df_matches.iterrows():
         if pd.notnull(row[metric]) and row.get('OPP_LOGO'):
