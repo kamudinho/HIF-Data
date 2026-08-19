@@ -50,7 +50,6 @@ def load_match_level_data(wyid, team_wyid, season_start_year=2026):
     conn = _get_snowflake_conn()
     db = "KLUB_HVIDOVREIF.AXIS"
     
-    # Definer sæson-interval
     start_date = f"{season_start_year}-07-01"
     end_date = f"{season_start_year + 1}-06-30"
     
@@ -85,13 +84,14 @@ def load_match_level_data(wyid, team_wyid, season_start_year=2026):
 
 def draw_match_trend_chart(df_matches, metric, label, team_name):
     if df_matches is None or df_matches.empty:
-        st.warning("Ingen kampdata tilgængelig for dette hold i den valgte turnering.")
+        st.warning("Ingen kampdata tilgængelig for dette hold i den valgte sæson/turnering.")
         return
 
     fig = go.Figure()
     df_matches[metric] = pd.to_numeric(df_matches[metric], errors='coerce')
     
     # Tilføj kampnummer (1, 2, 3...)
+    df_matches['MATCH_NUM'] = range(1, len(df_matches + 1) + 1) if not df_matches.empty else []
     df_matches['MATCH_NUM'] = range(1, len(df_matches) + 1)
     
     y_vals = df_matches[metric].dropna()
@@ -117,7 +117,6 @@ def draw_match_trend_chart(df_matches, metric, label, team_name):
         opp_names.append(o_name)
         opp_logos.append(o_logo)
         
-        # Sikker konvertering af mål ved brug af safe_int
         g_for = safe_int(row.get('GOALS'))
         g_imod = safe_int(row.get('GOALS_AGAINST'))
         dato = str(row.get('MATCH_DATE', ''))[:10]
@@ -133,6 +132,10 @@ def draw_match_trend_chart(df_matches, metric, label, team_name):
     df_matches['OPP_LOGO'] = opp_logos
     df_matches['HOVER_TEXT'] = hover_texts
 
+    # --- JUSTER LOGO STØRRELSE HER ---
+    logo_size_x = 0.55  # Bredde (hvor 1 er afstanden mellem to kampe)
+    logo_size_y = y_span * 0.32 if has_data else 0.3  # Højde (skaleret efter y-aksen)
+
     # 1. Tilføj modstander-logoer som layout-billeder på plottet
     for _, row in df_matches.iterrows():
         if pd.notnull(row[metric]) and row.get('OPP_LOGO'):
@@ -143,8 +146,8 @@ def draw_match_trend_chart(df_matches, metric, label, team_name):
                 yref="y",
                 x=row['MATCH_NUM'], 
                 y=row[metric],
-                sizex=0.6, 
-                sizey=y_span * 0.35 if has_data else 0.3,
+                sizex=logo_size_x, 
+                sizey=logo_size_y,
                 xanchor="center", 
                 yanchor="middle"
             ))
@@ -194,7 +197,7 @@ def draw_match_trend_chart(df_matches, metric, label, team_name):
         showlegend=False,
         annotations=[dict(
             x=1, y=1.04, xref='paper', yref='paper',
-            text=f"<b>{team_name} – Kamp-til-kamp udvikling</b>",
+            text=f"<b>{team_name} – Kamp-til-kamp udvikling ({DEFAULT_SEASON})</b>",
             showarrow=False, font=dict(size=13, color="#666666"),
             xanchor='right'
         )]
@@ -207,6 +210,12 @@ def vis_side():
     default_team_name = "Hvidovre"
     default_team_wyid = TEAMS.get(default_team_name, {}).get("team_wyid", 7490)
     wyid = COMPETITIONS.get(DEFAULT_COMP, {}).get("wyid", 328)
+
+    # Uddrag startår automatisk fra DEFAULT_SEASON (f.eks. "2026/2027" -> 2026)
+    try:
+        season_start_year = int(DEFAULT_SEASON.split('/')[0])
+    except:
+        season_start_year = 2026
 
     col_title, col_t, col_m = st.columns([1.8, 1.2, 1.0])
     
@@ -229,7 +238,8 @@ def vis_side():
         st.subheader(f"{valgt_hold} – Kampoversigt")
         st.caption(f"Udvikling i {DEFAULT_COMP} ({DEFAULT_SEASON})")
 
-    df_matches = load_match_level_data(wyid, valgt_team_wyid)
+    # Hent data for den aktive sæson
+    df_matches = load_match_level_data(wyid, valgt_team_wyid, season_start_year=season_start_year)
     draw_match_trend_chart(df_matches, metric_map[sel_metric], sel_metric, valgt_hold)
 
 if __name__ == "__main__":
