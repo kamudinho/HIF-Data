@@ -366,7 +366,9 @@ def vis_side():
             "Mål imod": "GOALS_AGAINST", 
             "Skud": "TOTALSCORINGATT", 
             "Afleveringer": "TOTALPASS", 
-            "PPDA": "PPDA"
+            "PPDA": "PPDA",
+            "Hjørnespark": "WON_CORNERS",
+            "Hjørnespark, mod": "LOST_CORNERS",
         }
         sel_metric = st.selectbox("Parameter:", list(metric_map.keys()))
 
