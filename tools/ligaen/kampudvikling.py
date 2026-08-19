@@ -190,7 +190,7 @@ def draw_match_trend_chart(df_matches, metric, label, team_name, valgt_saeson):
     total_str = f"{int(total_val)}" if total_val == int(total_val) else f"{total_val:.2f}"
     mean_str = f"{snit_vaerdi:.2f}" if has_data else "0.00"
 
-    # Korrekt småbogsformatering af kategorien (med undtagelse af xG og PPDA)
+    # Formatering af kategori (små bogstaver undtagen xG og PPDA)
     if label == "xG":
         formatted_label = "xG"
     elif label == "PPDA":
@@ -198,19 +198,31 @@ def draw_match_trend_chart(df_matches, metric, label, team_name, valgt_saeson):
     else:
         formatted_label = label.lower()
 
-    # Tilføj info-tekst uden boks, venstrestillet ved hjælp af HTML &nbsp; for fast indrykning af værdier
-    annotation_text = (
-        f"Antal {formatted_label} i {valgt_saeson}:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<b>{total_str}</b><br>"
-        f"Antal {formatted_label} pr. 90 i {valgt_saeson}:&nbsp;&nbsp;<b>{mean_str}</b>"
-    )
+    label_line1 = f"Antal {formatted_label} i {valgt_saeson}:"
+    label_line2 = f"Antal {formatted_label} pr. 90 i {valgt_saeson}:"
 
+    # 1. Venstrestillet tekst-kolonne
     fig.add_annotation(
-        text=annotation_text,
+        text=f"{label_line1}<br>{label_line2}",
         xref="paper",
         yref="paper",
-        x=0.99,
+        x=0.67,
         y=1.08,
-        xanchor="right",
+        xanchor="left",
+        yanchor="top",
+        showarrow=False,
+        align="left",
+        font=dict(size=11, color="black")
+    )
+
+    # 2. Værdi-kolonne (starter præcis det samme sted i højre side)
+    fig.add_annotation(
+        text=f"<b>{total_str}</b><br><b>{mean_str}</b>",
+        xref="paper",
+        yref="paper",
+        x=0.94,
+        y=1.08,
+        xanchor="left",
         yanchor="top",
         showarrow=False,
         align="left",
@@ -366,7 +378,7 @@ def draw_match_trend_chart(df_matches, metric, label, team_name, valgt_saeson):
 
     fig.update_layout(
         height=550, 
-        margin=dict(t=70, b=60, l=60, r=40),  # Lidt ekstra top-margin (t=70) til teksten
+        margin=dict(t=70, b=60, l=60, r=40),
         xaxis=dict(
             title="<b>Kampnummer</b>", 
             tickmode='linear', 
