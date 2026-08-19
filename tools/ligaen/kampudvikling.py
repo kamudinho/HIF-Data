@@ -46,9 +46,13 @@ def get_team_details_by_wyid(wyid_val):
     return f"Hold {wyid_val}", ''
 
 @st.cache_data(ttl=3600)
-def load_match_level_data(wyid, team_wyid):
+def load_match_level_data(wyid, team_wyid, season_start_year=2026):
     conn = _get_snowflake_conn()
     db = "KLUB_HVIDOVREIF.AXIS"
+    
+    # Definer sæson-interval
+    start_date = f"{season_start_year}-07-01"
+    end_date = f"{season_start_year + 1}-06-30"
     
     query = f"""
         SELECT 
@@ -69,7 +73,7 @@ def load_match_level_data(wyid, team_wyid):
         LEFT JOIN {db}.WYSCOUT_MATCHADVANCEDSTATS_PASSES mp ON tm.MATCH_WYID = mp.MATCH_WYID AND tm.TEAM_WYID = mp.TEAM_WYID
         WHERE tm.COMPETITION_WYID = {wyid} 
         AND tm.TEAM_WYID = {team_wyid}
-        AND tm.DATE < CURRENT_DATE()
+        AND tm.DATE BETWEEN '{start_date}' AND '{end_date}'
         ORDER BY tm.DATE ASC
     """
     df = conn.query(query)
