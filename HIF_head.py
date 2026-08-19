@@ -49,6 +49,32 @@ def apply_custom_style():
             .table-standings td { padding: 4px 2px; text-align: center; color: #333; font-weight: 600; }
             .table-standings .team-cell { text-align: left; font-weight: 700; color: #111; }
             .table-standings .hif-row { background-color: #ffebe8; }
+
+            /* Hover-container logik til info-ikoner */
+            .hover-parent { position: relative; display: inline-block; cursor: help; }
+            .hover-child {
+                visibility: hidden;
+                width: 220px;
+                background-color: #333;
+                color: #fff;
+                text-align: left;
+                padding: 8px 10px;
+                border-radius: 4px;
+                position: absolute;
+                z-index: 1000;
+                bottom: 125%;
+                left: 50%;
+                margin-left: -110px;
+                opacity: 0;
+                transition: opacity 0.2s ease-in-out;
+                font-size: 11px;
+                font-weight: normal;
+                box-shadow: 0px 4px 6px rgba(0,0,0,0.1);
+            }
+            .hover-parent:hover .hover-child {
+                visibility: visible;
+                opacity: 1;
+            }
         </style>
     """, unsafe_allow_html=True)
 
@@ -342,17 +368,23 @@ def vis_side():
             else:
                 st.caption(f"Afventer næste kamp for sæson {active_season}")
                 
-        # KOLONNE 2: HVIDOVRE IF vs. LIGA (Med lille info-ikon via popover)
+        # KOLONNE 2: HVIDOVRE IF vs. LIGA (Med lille info-ikon med ren hover-effekt)
         with col2:
             c_title, c_icon = st.columns([12, 1])
             with c_title:
                 st.markdown("<div class='card-title' style='border:none; margin-bottom:0;'><span>HVIDOVRE IF vs. LIGA</span></div>", unsafe_allow_html=True)
             with c_icon:
-                with st.popover("ℹ️", use_container_width=False):
-                    st.markdown("**Om denne oversigt**")
-                    st.write("Sammenligner Hvidovres per-90-minutters nøgletal mod ligaens gennemsnit samt den seneste modstander.")
-                    st.write("- **Diff vs Liga:** Afvigelse mellem HIF-snit og liga-snit.")
-                    st.write("- **Diff vs HIF:** Sidste kamps afvigelse fra HIFs eget snit.")
+                st.markdown("""
+                    <div class="hover-parent" style="float: right;">
+                        ℹ️
+                        <div class="hover-child">
+                            <b>Om denne oversigt</b><br>
+                            Sammenligner Hvidovres per-90-minutters nøgletal mod ligaens gennemsnit samt den seneste modstander.<br>
+                            - <b>Diff vs Liga:</b> Afvigelse mellem HIF-snit og liga-snit.<br>
+                            - <b>Diff vs HIF:</b> Sidste kamps afvigelse fra HIFs eget snit.
+                        </div>
+                    </div>
+                """, unsafe_allow_html=True)
             
             st.markdown("<div style='border-bottom: 1px solid #f0f0f0; margin-bottom: 8px;'></div>", unsafe_allow_html=True)
             
@@ -432,9 +464,15 @@ def vis_side():
                     with g_title:
                         st.markdown(f"<div style='font-weight:700; font-size:12px;'>{title}</div>", unsafe_allow_html=True)
                     with g_icon:
-                        with st.popover("ℹ️", use_container_width=False):
-                            st.markdown(f"**{title}**")
-                            st.write(desc)
+                        st.markdown(f"""
+                            <div class="hover-parent" style="float: right;">
+                                ℹ️
+                                <div class="hover-child">
+                                    <b>{title}</b><br>
+                                    {desc}
+                                </div>
+                            </div>
+                        """, unsafe_allow_html=True)
                     
                     st.caption(f"<div style='margin-top:-8px; font-size:10px; margin-bottom:4px;'>{desc}</div>", unsafe_allow_html=True)
                     
