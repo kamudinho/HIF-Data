@@ -181,6 +181,7 @@ def draw_match_trend_chart(df_matches, metric, label, team_name):
         y_span = y_max - y_min if y_max != y_min else 1.0
         snit_vaerdi = y_vals.mean()
     else:
+        y_min, y_max = 0.0, 1.0
         y_span = 1.0
         snit_vaerdi = 0.0
 
@@ -215,11 +216,14 @@ def draw_match_trend_chart(df_matches, metric, label, team_name):
         g_imod = safe_int(row.get('GOALS_AGAINST'))
         dato = str(row.get('MATCH_DATE', ''))[:10]
         
+        val_metric = row.get(metric, 0)
+        val_display = val_metric if pd.notnull(val_metric) else 0.0
+
         hover_texts.append(
             f"<b>Kamp {int(row['MATCH_NUM'])} vs. {o_name}</b><br>"
             f"Dato: {dato}<br>"
             f"Resultat: {g_for} - {g_imod}<br>"
-            f"{label}: {row.get(metric, 0):.2f}"
+            f"{label}: {val_display:.2f}"
         )
 
     df_matches['OPP_NAME'] = opp_names
@@ -231,6 +235,7 @@ def draw_match_trend_chart(df_matches, metric, label, team_name):
     logo_size_y = y_span * 0.20 if y_span > 0.5 else 0.25  
 
     for _, row in df_matches.iterrows():
+        # pd.notnull() tillader også værdier på 0.0
         if pd.notnull(row[metric]) and row.get('OPP_LOGO'):
             b64_logo = get_base64_image(row['OPP_LOGO'])
             fig.add_layout_image(dict(
@@ -281,17 +286,21 @@ def draw_match_trend_chart(df_matches, metric, label, team_name):
         showlegend=False
     ))
 
-    overlap_threshold = y_span * 0.10
-    if abs(snit_vaerdi - ligasnit) < overlap_threshold:
-        if snit_vaerdi >= ligasnit:
+    # --- KORREKT LOGIK FOR PLACERING AF GENNEMSNITSLINJER ---
+    if is_reversed:
+        if snit_vaerdi < ligasnit:
             team_pos = "top right"
             liga_pos = "bottom right"
         else:
             team_pos = "bottom right"
             liga_pos = "top right"
     else:
-        team_pos = "top right"
-        liga_pos = "bottom right"
+        if snit_vaerdi >= ligasnit:
+            team_pos = "top right"
+            liga_pos = "bottom right"
+        else:
+            team_pos = "bottom right"
+            liga_pos = "top right"
 
     if has_data:
         fig.add_hline(
@@ -312,11 +321,19 @@ def draw_match_trend_chart(df_matches, metric, label, team_name):
         annotation_position=liga_pos
     )
 
+    # Padding på y-aksen sikrer, at logoer ved 0 ikke bliver klippet af kanten
+    padding = y_span * 0.15 if y_span > 0 else 1.0
+    if is_reversed:
+        y_range = [y_max + padding, y_min - padding]
+    else:
+        y_range = [y_min - padding, y_max + padding]
+
     yaxis_config = dict(
         title=f"<b>{label} pr. kamp</b>", 
         gridcolor="#f0f0f0", 
         linecolor='black',
-        autorange="reversed" if is_reversed else True
+        autorange="reversed" if is_reversed else True,
+        range=y_range
     )
 
     fig.update_layout(
