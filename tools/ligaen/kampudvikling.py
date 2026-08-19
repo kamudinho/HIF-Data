@@ -61,100 +61,45 @@ def load_match_level_data(tournament_opta_uuid, team_opta_uuid, team_wyid, comp_
                 MATCH_OPTAUUID, CONTESTANT_OPTAUUID,
                 MAX(CASE WHEN STAT_TYPE = 'totalScoringAtt' THEN CAST(STAT_TOTAL AS FLOAT) END) AS TOTALSCORINGATT,
                 MAX(CASE WHEN STAT_TYPE = 'ontargetScoringAtt' THEN CAST(STAT_TOTAL AS FLOAT) END) AS ONTARGETSCORINGATT,
-                MAX(CASE WHEN STAT_TYPE = 'shotOffTarget' THEN CAST(STAT_TOTAL AS FLOAT) END) AS SHOTOFFTARGET,
-                MAX(CASE WHEN STAT_TYPE = 'blockedScoringAtt' THEN CAST(STAT_TOTAL AS FLOAT) END) AS BLOCKEDSCORINGATT,
-                MAX(CASE WHEN STAT_TYPE = 'subsGoals' THEN CAST(STAT_TOTAL AS FLOAT) END) AS SUBSGOALS,
                 MAX(CASE WHEN STAT_TYPE = 'totalPass' THEN CAST(STAT_TOTAL AS FLOAT) END) AS TOTALPASS,
-                MAX(CASE WHEN STAT_TYPE = 'accuratePass' THEN CAST(STAT_TOTAL AS FLOAT) END) AS ACCURATEPASS,
                 MAX(CASE WHEN STAT_TYPE = 'possessionPercentage' THEN CAST(STAT_TOTAL AS FLOAT) END) AS POSSESSIONPERCENTAGE,
                 MAX(CASE WHEN STAT_TYPE = 'wonCorners' THEN CAST(STAT_TOTAL AS FLOAT) END) AS WONCORNERS,
                 MAX(CASE WHEN STAT_TYPE = 'lostCorners' THEN CAST(STAT_TOTAL AS FLOAT) END) AS LOSTCORNERS,
-                MAX(CASE WHEN STAT_TYPE = 'totalTackle' THEN CAST(STAT_TOTAL AS FLOAT) END) AS TOTALTACKLE,
-                MAX(CASE WHEN STAT_TYPE = 'wonTackle' THEN CAST(STAT_TOTAL AS FLOAT) END) AS WONTACKLE,
-                MAX(CASE WHEN STAT_TYPE = 'totalClearance' THEN CAST(STAT_TOTAL AS FLOAT) END) AS TOTALCLEARANCE,
-                MAX(CASE WHEN STAT_TYPE = 'outfielderBlock' THEN CAST(STAT_TOTAL AS FLOAT) END) AS OUTFIELDERBLOCK,
-                MAX(CASE WHEN STAT_TYPE = 'fkFoulWon' THEN CAST(STAT_TOTAL AS FLOAT) END) AS FKFOULWON,
-                MAX(CASE WHEN STAT_TYPE = 'fkFoulLost' THEN CAST(STAT_TOTAL AS FLOAT) END) AS FKFOULLOST,
-                MAX(CASE WHEN STAT_TYPE = 'saves' THEN CAST(STAT_TOTAL AS FLOAT) END) AS SAVES,
-                MAX(CASE WHEN STAT_TYPE = 'goalsConceded' THEN CAST(STAT_TOTAL AS FLOAT) END) AS GOALSCONCEDED,
-                MAX(CASE WHEN STAT_TYPE = 'cleanSheet' THEN CAST(STAT_TOTAL AS FLOAT) END) AS CLEANSHEET
+                MAX(CASE WHEN STAT_TYPE = 'totalTackle' THEN CAST(STAT_TOTAL AS FLOAT) END) AS TOTALTACKLE
             FROM {db}.OPTA_MATCHSTATS
             WHERE MATCH_OPTAUUID IN (SELECT MATCH_OPTAUUID FROM MatchBase)
             GROUP BY 1, 2
         ),
-        ExpectedGoalsPivot AS (
+        -- Her beregnes det sande ligagennemsnit for hele turneringen
+        LeagueAverages AS (
             SELECT 
-                MATCH_ID AS MATCH_OPTAUUID, CONTESTANT_OPTAUUID,
-                SUM(CASE WHEN STAT_TYPE = 'expectedGoals' THEN CAST(STAT_VALUE AS FLOAT) ELSE 0 END) AS EXPECTEDGOALS
-            FROM {db}.OPTA_MATCHEXPECTEDGOALS
-            WHERE MATCH_ID IN (SELECT MATCH_OPTAUUID FROM MatchBase)
-            GROUP BY 1, 2
-        ),
-        WyscoutDefense AS (
-            SELECT 
-                TO_CHAR(tm.DATE, 'YYYY-MM-DD') AS MATCH_DATE,
-                md.PPDA
-            FROM {db}.WYSCOUT_TEAMMATCHES tm
-            LEFT JOIN {db}.WYSCOUT_MATCHADVANCEDSTATS_DEFENCE md 
-                ON tm.MATCH_WYID = md.MATCH_WYID AND tm.TEAM_WYID = md.TEAM_WYID
-            WHERE tm.COMPETITION_WYID = {comp_wyid} AND tm.TEAM_WYID = {team_wyid}
+                AVG(TOTALSCORINGATT) AS LIGA_AVG_TOTALSCORINGATT,
+                AVG(TOTALPASS) AS LIGA_AVG_TOTALPASS,
+                AVG(POSSESSIONPERCENTAGE) AS LIGA_AVG_POSSESSIONPERCENTAGE,
+                AVG(WONCORNERS) AS LIGA_AVG_WONCORNERS,
+                AVG(TOTALTACKLE) AS LIGA_AVG_TOTALTACKLE
+            FROM MatchStatsPivot
         )
         SELECT 
             mb.MATCH_OPTAUUID,
             mb.MATCH_DATE,
             sp.CONTESTANT_OPTAUUID AS TEAM_OPTAUUID,
-            
-            CASE WHEN sp.CONTESTANT_OPTAUUID = mb.CONTESTANTHOME_OPTAUUID THEN mb.TOTAL_HOME_SCORE ELSE mb.TOTAL_AWAY_SCORE END AS GOALS,
-            CASE WHEN sp.CONTESTANT_OPTAUUID = mb.CONTESTANTHOME_OPTAUUID THEN mb.TOTAL_AWAY_SCORE ELSE mb.TOTAL_HOME_SCORE END AS GOALS_AGAINST,
-            
-            mb.CONTESTANTHOME_OPTAUUID,
-            mb.CONTESTANTAWAY_OPTAUUID,
-
             sp.TOTALSCORINGATT,
-            sp.ONTARGETSCORINGATT,
-            sp.SHOTOFFTARGET,
-            sp.BLOCKEDSCORINGATT,
-            sp.SUBSGOALS,
             sp.TOTALPASS,
-            sp.ACCURATEPASS,
             sp.POSSESSIONPERCENTAGE,
             sp.WONCORNERS,
             sp.LOSTCORNERS,
             sp.TOTALTACKLE,
-            sp.WONTACKLE,
-            sp.TOTALCLEARANCE,
-            sp.OUTFIELDERBLOCK,
-            sp.FKFOULWON,
-            sp.FKFOULLOST,
-            sp.SAVES,
-            sp.GOALSCONCEDED,
-            sp.CLEANSHEET,
-            xg.EXPECTEDGOALS,
-            wd.PPDA,
-            
-            AVG(xg.EXPECTEDGOALS) OVER() AS AVG_EXPECTEDGOALS,
-            AVG(sp.TOTALSCORINGATT) OVER() AS AVG_TOTALSCORINGATT,
-            AVG(sp.TOTALPASS) OVER() AS AVG_TOTALPASS,
-            AVG(sp.ACCURATEPASS) OVER() AS AVG_ACCURATEPASS,
-            AVG(sp.POSSESSIONPERCENTAGE) OVER() AS AVG_POSSESSIONPERCENTAGE,
-            AVG(sp.WONCORNERS) OVER() AS AVG_WONCORNERS,
-            AVG(sp.TOTALTACKLE) OVER() AS AVG_TOTALTACKLE,
-            AVG(sp.TOTALCLEARANCE) OVER() AS AVG_TOTALCLEARANCE,
-            AVG(wd.PPDA) OVER() AS AVG_PPDA
-
+            la.* -- Inkluderer alle ligagennemsnit i hver række
         FROM MatchBase mb
         JOIN MatchStatsPivot sp ON mb.MATCH_OPTAUUID = sp.MATCH_OPTAUUID
-        LEFT JOIN ExpectedGoalsPivot xg ON sp.MATCH_OPTAUUID = xg.MATCH_OPTAUUID AND sp.CONTESTANT_OPTAUUID = xg.CONTESTANT_OPTAUUID
-        LEFT JOIN WyscoutDefense wd ON mb.MATCH_DATE = wd.MATCH_DATE 
-        
+        CROSS JOIN LeagueAverages la
         WHERE sp.CONTESTANT_OPTAUUID = '{team_opta_uuid}'
         ORDER BY mb.MATCH_DATE ASC
     """
     df = conn.query(query)
-    
     if not df.empty:
         df.columns = [c.upper() for c in df.columns]
-    
     return df
 
 def draw_match_trend_chart(df_matches, metric, label, team_name):
