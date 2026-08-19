@@ -187,7 +187,6 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
     if df_spiller_mapping is not None and not df_spiller_mapping.empty:
         df_spiller_mapping.columns = [c.upper().strip() for c in df_spiller_mapping.columns]
         
-        # Tjek om vi har nødvendige kolonner i mappingen (f.eks. PLAYER_WYID og NAVN)
         id_col = 'PLAYER_WYID' if 'PLAYER_WYID' in df_spiller_mapping.columns else ('ID' if 'ID' in df_spiller_mapping.columns else None)
         navn_col = 'NAVN' if 'NAVN' in df_spiller_mapping.columns else ('PLAYERNAME' if 'PLAYERNAME' in df_spiller_mapping.columns else None)
         
@@ -222,6 +221,18 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
     # Sorter efter kontraktudløb
     df_unique = df_unique.sort_values('KONTRAKT', ascending=True, na_position='last')
 
+    # --- SØGELINJE ---
+    search_query = st.text_input("🔍 Søg efter spiller, klub eller position...", "").strip().lower()
+
+    if search_query:
+        # Tjek om 'POSITION' findes i datasættet for at undgå KeyError, ellers søg i NAVN og KLUB
+        search_cols = ['NAVN', 'KLUB']
+        if 'POSITION' in df_unique.columns:
+            search_cols.append('POSITION')
+        
+        mask = df_unique[search_cols].astype(str).apply(lambda col: col.str.lower().str.contains(search_query)).any(axis=1)
+        df_unique = df_unique[mask]
+
     # --- FORBERED VISNING I EDITOR ---
     display_cols = ['PLAYER_WYID', 'NAVN', 'KLUB', 'RATING_AVG', 'KONTRAKT', 'ER_EMNE', 'SKYGGEHOLD']
     df_display = df_unique[display_cols].copy()
@@ -231,7 +242,7 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
         df_display,
         column_config={
             "SE": st.column_config.CheckboxColumn("Profil", width="small"), 
-            "PLAYER_WYID": None,  # Skjuler ID-kolonnen fra editoren, men bevarer den til opdatering
+            "PLAYER_WYID": None, 
             "ER_EMNE": st.column_config.CheckboxColumn("Emne", width="small"),
             "SKYGGEHOLD": st.column_config.CheckboxColumn("Skygge", width="small"),
             "RATING_AVG": st.column_config.NumberColumn("Rating", format="%.1f"),
@@ -247,7 +258,6 @@ def vis_side(scout_reports_df, df_spillere, sql_players, career_df):
     )
 
     # --- GEM ÆNDRINGER ---
-    # Sammenlign pålideligt ved hjælp af ID'er frem for navne
     if not ed_result[['ER_EMNE', 'SKYGGEHOLD']].equals(df_display[['ER_EMNE', 'SKYGGEHOLD']]):
         with st.spinner("Gemmer ændringer..."):
             for _, row in ed_result.iterrows():
