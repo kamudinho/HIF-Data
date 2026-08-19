@@ -1,4 +1,4 @@
-import streamlit as st
+import streamlit as str
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
@@ -187,24 +187,33 @@ def draw_match_trend_chart(df_matches, metric, label, team_name, valgt_saeson):
         snit_vaerdi = 0.0
         total_val = 0.0
 
-    # Formatering af total og pr. 90
     total_str = f"{int(total_val)}" if total_val == int(total_val) else f"{total_val:.2f}"
     mean_str = f"{snit_vaerdi:.2f}" if has_data else "0.00"
 
-    # Tilføj boks i øverste højre hjørne af grafen
+    # Korrekt småbogsformatering af kategorien (med undtagelse af xG og PPDA)
+    if label == "xG":
+        formatted_label = "xG"
+    elif label == "PPDA":
+        formatted_label = "PPDA"
+    else:
+        formatted_label = label.lower()
+
+    # Tilføj info-tekst uden boks, venstrestillet ved hjælp af HTML &nbsp; for fast indrykning af værdier
+    annotation_text = (
+        f"Antal {formatted_label} i {valgt_saeson}:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<b>{total_str}</b><br>"
+        f"Antal {formatted_label} pr. 90 i {valgt_saeson}:&nbsp;&nbsp;<b>{mean_str}</b>"
+    )
+
     fig.add_annotation(
-        text=f"<b>Antal {label} i {valgt_saeson}:</b> {total_str}<br><b>Antal {label} pr. 90 i {valgt_saeson}:</b> {mean_str}",
+        text=annotation_text,
         xref="paper",
         yref="paper",
         x=0.99,
-        y=0.98,
+        y=1.08,
         xanchor="right",
         yanchor="top",
         showarrow=False,
-        bgcolor="rgba(255, 255, 255, 0.9)",
-        bordercolor="#d3d3d3",
-        borderwidth=1,
-        borderpad=6,
+        align="left",
         font=dict(size=11, color="black")
     )
 
@@ -253,7 +262,6 @@ def draw_match_trend_chart(df_matches, metric, label, team_name, valgt_saeson):
     df_matches['OPP_LOGO'] = opp_logos
     df_matches['HOVER_TEXT'] = hover_texts
 
-    # --- FORSTØRREDE LOGO-DIMENSIONER ---
     logo_size_x = 0.65  
     logo_size_y = y_span * 0.20 if y_span > 0.5 else 0.25  
 
@@ -308,7 +316,6 @@ def draw_match_trend_chart(df_matches, metric, label, team_name, valgt_saeson):
         showlegend=False
     ))
 
-    # --- KORREKT LOGIK FOR PLACERING AF GENNEMSNITSLINJER ---
     if is_reversed:
         if snit_vaerdi < ligasnit:
             team_pos = "top right"
@@ -359,7 +366,7 @@ def draw_match_trend_chart(df_matches, metric, label, team_name, valgt_saeson):
 
     fig.update_layout(
         height=550, 
-        margin=dict(t=50, b=60, l=60, r=40),
+        margin=dict(t=70, b=60, l=60, r=40),  # Lidt ekstra top-margin (t=70) til teksten
         xaxis=dict(
             title="<b>Kampnummer</b>", 
             tickmode='linear', 
