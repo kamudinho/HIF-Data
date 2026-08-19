@@ -53,7 +53,6 @@ def load_match_level_data(wyid, team_wyid, season_start_year=2026):
     start_date = f"{season_start_year}-07-01"
     end_date = f"{season_start_year + 1}-06-30"
     
-    # Vi henter kampdata samt beregner ligagennemsnit via vinduesfunktioner (OVER)
     query = f"""
         SELECT 
             tm.MATCH_WYID,
@@ -80,6 +79,7 @@ def load_match_level_data(wyid, team_wyid, season_start_year=2026):
         LEFT JOIN {db}.WYSCOUT_MATCHADVANCEDSTATS_PASSES mp ON tm.MATCH_WYID = mp.MATCH_WYID AND tm.TEAM_WYID = mp.TEAM_WYID
         WHERE tm.COMPETITION_WYID = {wyid} 
         AND tm.DATE >= '{start_date}' AND tm.DATE <= '{end_date}'
+        ORDER BY tm.DATE ASC
     """
     df = conn.query(query)
     if not df.empty:
@@ -91,7 +91,6 @@ def load_match_level_data(wyid, team_wyid, season_start_year=2026):
     # Filtrer kun det valgte hold fra det samlede ligasæt
     df_team = df[df['TEAM_WYID'] == team_wyid].copy()
     return df_team
-
 
 def draw_match_trend_chart(df_matches, metric, label, team_name):
     if df_matches is None or df_matches.empty:
