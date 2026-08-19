@@ -50,13 +50,14 @@ def load_match_level_data(wyid, team_wyid, season_start_year=2026):
     conn = _get_snowflake_conn()
     db = "KLUB_HVIDOVREIF.AXIS"
     
+    # Brug simple strenge i SQL for at undgå lokale Python-tidszone-fejl
     start_date = f"{season_start_year}-07-01"
     end_date = f"{season_start_year + 1}-06-30"
     
     query = f"""
         SELECT 
             tm.MATCH_WYID,
-            tm.DATE as MATCH_DATE,
+            TO_CHAR(tm.DATE, 'YYYY-MM-DD') as MATCH_DATE, -- Konverter til streng i SQL
             adv.XG,
             adv.SHOTS,
             adv.GOALS,
@@ -72,10 +73,11 @@ def load_match_level_data(wyid, team_wyid, season_start_year=2026):
         LEFT JOIN {db}.WYSCOUT_MATCHADVANCEDSTATS_PASSES mp ON tm.MATCH_WYID = mp.MATCH_WYID AND tm.TEAM_WYID = mp.TEAM_WYID
         WHERE tm.COMPETITION_WYID = {wyid} 
         AND tm.TEAM_WYID = {team_wyid}
-        AND tm.DATE BETWEEN '{start_date}' AND '{end_date}'
+        AND tm.DATE >= '{start_date}' AND tm.DATE <= '{end_date}'
         ORDER BY tm.DATE ASC
     """
     df = conn.query(query)
+    # Sørg for at dataframe er ren
     if not df.empty:
         df.columns = [c.upper() for c in df.columns]
     return df
