@@ -221,8 +221,8 @@ def draw_match_trend_chart(df_matches, metric, label, team_name):
     df_matches['HOVER_TEXT'] = hover_texts
 
     # --- FORSTØRREDE LOGO-DIMENSIONER ---
-    logo_size_x = 0.65  # Tidligere 0.40 (gør dem bredere)
-    logo_size_y = y_span * 0.20 if y_span > 0.5 else 0.25  # Gjort markant højere
+    logo_size_x = 0.65  
+    logo_size_y = y_span * 0.20 if y_span > 0.5 else 0.25  
 
     for _, row in df_matches.iterrows():
         if pd.notnull(row[metric]) and row.get('OPP_LOGO'):
@@ -332,7 +332,8 @@ def draw_match_trend_chart(df_matches, metric, label, team_name):
 # --- 3. HOVEDFUNKTION ---
 
 def vis_side():
-    tilgængelige_hold = SEASON_LEAGUE_MAPPER.get("2026/2027", {}).get(DEFAULT_COMP, list(TEAMS.keys()))
+    valgt_saeson = "2026/2027"
+    tilgængelige_hold = SEASON_LEAGUE_MAPPER.get(valgt_saeson, {}).get(DEFAULT_COMP, list(TEAMS.keys()))
     
     default_team_name = "Hvidovre" if "Hvidovre" in tilgængelige_hold else tilgængelige_hold[0]
     default_team_info = TEAMS.get(default_team_name, {})
@@ -347,7 +348,7 @@ def vis_side():
     comp_wyid = COMPETITIONS.get(DEFAULT_COMP, {}).get("wyid", 328)
 
     try:
-        season_start_year = int(DEFAULT_SEASON.split('/')[0])
+        season_start_year = int(valgt_saeson.split('/')[0])
     except:
         season_start_year = 2026
 
@@ -367,14 +368,14 @@ def vis_side():
             "Skud": "TOTALSCORINGATT", 
             "Afleveringer": "TOTALPASS", 
             "PPDA": "PPDA",
-            "Hjørnespark": "wonCorners",
-            "Hjørnespark, mod": "lostCorners",
+            "Hjørnespark": "WONCORNERS",
+            "Hjørnespark, mod": "LOSTCORNERS",
         }
         sel_metric = st.selectbox("Parameter:", list(metric_map.keys()))
 
     with col_title:
         st.subheader(f"{valgt_hold} – Kampoversigt")
-        st.caption(f"Udvikling i {DEFAULT_COMP} ({DEFAULT_SEASON})")
+        st.caption(f"Udvikling i {DEFAULT_COMP} ({valgt_saeson})")
 
     df_matches = load_match_level_data(
         tournament_opta_uuid=current_opta_uuid,
