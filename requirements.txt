@@ -23,3 +23,4 @@ bcrypt
 requests
 gspread
 google-auth
+reportlab
