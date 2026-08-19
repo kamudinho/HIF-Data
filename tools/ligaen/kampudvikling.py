@@ -30,6 +30,15 @@ def get_base64_image(url):
         return url
     return url
 
+def safe_int(val):
+    """Sikker konvertering af værdier til int, der håndterer NaN og None."""
+    try:
+        if pd.isnull(val):
+            return 0
+        return int(float(val))
+    except:
+        return 0
+
 def get_team_details_by_wyid(wyid_val):
     for name, info in TEAMS.items():
         if info.get('team_wyid') == wyid_val:
@@ -103,9 +112,9 @@ def draw_match_trend_chart(df_matches, metric, label, team_name):
         opp_names.append(o_name)
         opp_logos.append(o_logo)
         
-        # Resultat / Info
-        g_for = int(row.get('GOALS', 0) or 0)
-        g_imod = int(row.get('GOALS_AGAINST', 0) or 0)
+        # Sikker konvertering af mål ved brug af safe_int
+        g_for = safe_int(row.get('GOALS'))
+        g_imod = safe_int(row.get('GOALS_AGAINST'))
         dato = str(row.get('MATCH_DATE', ''))[:10]
         
         hover_texts.append(
@@ -141,7 +150,7 @@ def draw_match_trend_chart(df_matches, metric, label, team_name):
         y=df_matches[metric], 
         mode='lines+markers',
         line=dict(color='#C41E3A', width=2, dash='dot'),
-        marker=dict(size=40, opacity=0), # Usynlige markører oven på logoerne
+        marker=dict(size=40, opacity=0), 
         hovertext=df_matches['HOVER_TEXT'],
         hoverinfo='text'
     ))
@@ -190,7 +199,6 @@ def draw_match_trend_chart(df_matches, metric, label, team_name):
 # --- 3. HOVEDFUNKTION ---
 
 def vis_side():
-    # Standard værdier baseret på kontext (f.eks. Hvidovre IF som standardhold)
     default_team_name = "Hvidovre"
     default_team_wyid = TEAMS.get(default_team_name, {}).get("team_wyid", 7490)
     wyid = COMPETITIONS.get(DEFAULT_COMP, {}).get("wyid", 328)
@@ -198,7 +206,6 @@ def vis_side():
     col_title, col_t, col_m = st.columns([1.8, 1.2, 1.0])
     
     with col_t:
-        # Mulighed for at vælge hold (med Hvidovre som standard)
         valgt_hold = st.selectbox("Vælg hold:", list(TEAMS.keys()), index=list(TEAMS.keys()).index(default_team_name) if default_team_name in TEAMS else 0)
         valgt_team_wyid = TEAMS.get(valgt_hold, {}).get("team_wyid", default_team_wyid)
 
@@ -217,10 +224,7 @@ def vis_side():
         st.subheader(f"{valgt_hold} – Kampoversigt")
         st.caption(f"Udvikling i {DEFAULT_COMP} ({DEFAULT_SEASON})")
 
-    # Hent data kamp for kamp for det valgte hold
     df_matches = load_match_level_data(wyid, valgt_team_wyid)
-    
-    # Tegn grafen
     draw_match_trend_chart(df_matches, metric_map[sel_metric], sel_metric, valgt_hold)
 
 if __name__ == "__main__":
