@@ -46,51 +46,127 @@ def get_team_details_by_wyid(wyid_val):
     return f"Hold {wyid_val}", ''
 
 @st.cache_data(ttl=3600)
-def load_match_level_data(wyid, team_wyid, season_start_year=2026):
+def load_match_level_data(tournament_opta_uuid, team_opta_uuid, team_wyid, comp_wyid, season_start_year=2026):
     conn = _get_snowflake_conn()
     db = "KLUB_HVIDOVREIF.AXIS"
     
-    start_date = f"{season_start_year}-07-01"
-    end_date = f"{season_start_year + 1}-06-30"
-    
+    # 1. Bygger basen fra dine Opta-snippets med PIVOT-logik
     query = f"""
+        WITH MatchBase AS (
+            SELECT 
+                MATCH_OPTAUUID, 
+                TO_CHAR(MATCH_DATE_FULL, 'YYYY-MM-DD') AS MATCH_DATE,
+                CONTESTANTHOME_OPTAUUID, 
+                CONTESTANTAWAY_OPTAUUID,
+                TOTAL_HOME_SCORE, 
+                TOTAL_AWAY_SCORE
+            FROM {db}.OPTA_MATCHINFO
+            WHERE TOURNAMENTCALENDAR_OPTAUUID = '{tournament_opta_uuid}'
+        ),
+        MatchStatsPivot AS (
+            -- Din pivot-logik udvidet til at fange alle dine STAT_TYPE_MAP værdier
+            SELECT 
+                MATCH_OPTAUUID, CONTESTANT_OPTAUUID,
+                MAX(CASE WHEN STAT_TYPE = 'totalScoringAtt' THEN CAST(STAT_TOTAL AS FLOAT) END) AS TOTALSCORINGATT,
+                MAX(CASE WHEN STAT_TYPE = 'ontargetScoringAtt' THEN CAST(STAT_TOTAL AS FLOAT) END) AS ONTARGETSCORINGATT,
+                MAX(CASE WHEN STAT_TYPE = 'shotOffTarget' THEN CAST(STAT_TOTAL AS FLOAT) END) AS SHOTOFFTARGET,
+                MAX(CASE WHEN STAT_TYPE = 'blockedScoringAtt' THEN CAST(STAT_TOTAL AS FLOAT) END) AS BLOCKEDSCORINGATT,
+                MAX(CASE WHEN STAT_TYPE = 'subsGoals' THEN CAST(STAT_TOTAL AS FLOAT) END) AS SUBSGOALS,
+                MAX(CASE WHEN STAT_TYPE = 'totalPass' THEN CAST(STAT_TOTAL AS FLOAT) END) AS TOTALPASS,
+                MAX(CASE WHEN STAT_TYPE = 'accuratePass' THEN CAST(STAT_TOTAL AS FLOAT) END) AS ACCURATEPASS,
+                MAX(CASE WHEN STAT_TYPE = 'possessionPercentage' THEN CAST(STAT_TOTAL AS FLOAT) END) AS POSSESSIONPERCENTAGE,
+                MAX(CASE WHEN STAT_TYPE = 'wonCorners' THEN CAST(STAT_TOTAL AS FLOAT) END) AS WONCORNERS,
+                MAX(CASE WHEN STAT_TYPE = 'lostCorners' THEN CAST(STAT_TOTAL AS FLOAT) END) AS LOSTCORNERS,
+                MAX(CASE WHEN STAT_TYPE = 'totalTackle' THEN CAST(STAT_TOTAL AS FLOAT) END) AS TOTALTACKLE,
+                MAX(CASE WHEN STAT_TYPE = 'wonTackle' THEN CAST(STAT_TOTAL AS FLOAT) END) AS WONTACKLE,
+                MAX(CASE WHEN STAT_TYPE = 'totalClearance' THEN CAST(STAT_TOTAL AS FLOAT) END) AS TOTALCLEARANCE,
+                MAX(CASE WHEN STAT_TYPE = 'outfielderBlock' THEN CAST(STAT_TOTAL AS FLOAT) END) AS OUTFIELDERBLOCK,
+                MAX(CASE WHEN STAT_TYPE = 'fkFoulWon' THEN CAST(STAT_TOTAL AS FLOAT) END) AS FKFOULWON,
+                MAX(CASE WHEN STAT_TYPE = 'fkFoulLost' THEN CAST(STAT_TOTAL AS FLOAT) END) AS FKFOULLOST,
+                MAX(CASE WHEN STAT_TYPE = 'saves' THEN CAST(STAT_TOTAL AS FLOAT) END) AS SAVES,
+                MAX(CASE WHEN STAT_TYPE = 'goalsConceded' THEN CAST(STAT_TOTAL AS FLOAT) END) AS GOALSCONCEDED,
+                MAX(CASE WHEN STAT_TYPE = 'cleanSheet' THEN CAST(STAT_TOTAL AS FLOAT) END) AS CLEANSHEET
+            FROM {db}.OPTA_MATCHSTATS
+            WHERE MATCH_OPTAUUID IN (SELECT MATCH_OPTAUUID FROM MatchBase)
+            GROUP BY 1, 2
+        ),
+        ExpectedGoalsPivot AS (
+            -- Speciel tabel for xG
+            SELECT 
+                MATCH_ID AS MATCH_OPTAUUID, CONTESTANT_OPTAUUID,
+                SUM(CASE WHEN STAT_TYPE = 'expectedGoals' THEN CAST(STAT_VALUE AS FLOAT) ELSE 0 END) AS EXPECTEDGOALS
+            FROM {db}.OPTA_MATCHEXPECTEDGOALS
+            WHERE MATCH_ID IN (SELECT MATCH_OPTAUUID FROM MatchBase)
+            GROUP BY 1, 2
+        ),
+        WyscoutDefense AS (
+            -- Henter PPDA fra Wyscout for at bygge bro over til Opta
+            SELECT 
+                TO_CHAR(tm.DATE, 'YYYY-MM-DD') AS MATCH_DATE,
+                md.PPDA
+            FROM {db}.WYSCOUT_TEAMMATCHES tm
+            LEFT JOIN {db}.WYSCOUT_MATCHADVANCEDSTATS_DEFENCE md 
+                ON tm.MATCH_WYID = md.MATCH_WYID AND tm.TEAM_WYID = md.TEAM_WYID
+            WHERE tm.COMPETITION_WYID = {comp_wyid} AND tm.TEAM_WYID = {team_wyid}
+        )
+        
+        -- 2. Samler det hele til ét datasæt pr. kamp for det valgte hold
         SELECT 
-            tm.MATCH_WYID,
-            tm.TEAM_WYID,
-            TO_CHAR(tm.DATE, 'YYYY-MM-DD') as MATCH_DATE,
-            adv.XG,
-            adv.SHOTS,
-            adv.GOALS,
-            opp_adv.GOALS as GOALS_AGAINST,
-            md.PPDA,
-            mp.PASSES,
-            opp.TEAM_WYID as OPP_WYID,
-            AVG(adv.XG) OVER() as AVG_XG,
-            AVG(adv.GOALS) OVER() as AVG_GOALS,
-            AVG(opp_adv.GOALS) OVER() as AVG_GOALS_AGAINST,
-            AVG(adv.SHOTS) OVER() as AVG_SHOTS,
-            AVG(mp.PASSES) OVER() as AVG_PASSES,
-            AVG(md.PPDA) OVER() as AVG_PPDA
-        FROM {db}.WYSCOUT_TEAMMATCHES tm 
-        LEFT JOIN {db}.WYSCOUT_MATCHADVANCEDSTATS_GENERAL adv ON tm.MATCH_WYID = adv.MATCH_WYID AND tm.TEAM_WYID = adv.TEAM_WYID 
-        LEFT JOIN {db}.WYSCOUT_TEAMMATCHES opp ON tm.MATCH_WYID = opp.MATCH_WYID AND tm.TEAM_WYID <> opp.TEAM_WYID
-        LEFT JOIN {db}.WYSCOUT_MATCHADVANCEDSTATS_GENERAL opp_adv ON opp.MATCH_WYID = opp_adv.MATCH_WYID AND opp.TEAM_WYID = opp_adv.TEAM_WYID
-        LEFT JOIN {db}.WYSCOUT_MATCHADVANCEDSTATS_DEFENCE md ON tm.MATCH_WYID = md.MATCH_WYID AND tm.TEAM_WYID = md.TEAM_WYID 
-        LEFT JOIN {db}.WYSCOUT_MATCHADVANCEDSTATS_PASSES mp ON tm.MATCH_WYID = mp.MATCH_WYID AND tm.TEAM_WYID = mp.TEAM_WYID
-        WHERE tm.COMPETITION_WYID = {wyid} 
-        AND tm.DATE >= '{start_date}' AND tm.DATE <= '{end_date}'
-        ORDER BY tm.DATE ASC
+            mb.MATCH_OPTAUUID,
+            mb.MATCH_DATE,
+            sp.CONTESTANT_OPTAUUID AS TEAM_WYID, -- Aliaser som TEAM_WYID for at passe med din nuværende Plotly-graf
+            
+            CASE WHEN sp.CONTESTANT_OPTAUUID = mb.CONTESTANTHOME_OPTAUUID THEN mb.TOTAL_HOME_SCORE ELSE mb.TOTAL_AWAY_SCORE END AS GOALS,
+            CASE WHEN sp.CONTESTANT_OPTAUUID = mb.CONTESTANTHOME_OPTAUUID THEN mb.TOTAL_AWAY_SCORE ELSE mb.TOTAL_HOME_SCORE END AS GOALS_AGAINST,
+            CASE WHEN sp.CONTESTANT_OPTAUUID = mb.CONTESTANTHOME_OPTAUUID THEN mb.CONTESTANTAWAY_OPTAUUID ELSE mb.CONTESTANTHOME_OPTAUUID END AS OPP_WYID,
+
+            sp.TOTALSCORINGATT,
+            sp.ONTARGETSCORINGATT,
+            sp.SHOTOFFTARGET,
+            sp.BLOCKEDSCORINGATT,
+            sp.SUBSGOALS,
+            sp.TOTALPASS,
+            sp.ACCURATEPASS,
+            sp.POSSESSIONPERCENTAGE,
+            sp.WONCORNERS,
+            sp.LOSTCORNERS,
+            sp.TOTALTACKLE,
+            sp.WONTACKLE,
+            sp.TOTALCLEARANCE,
+            sp.OUTFIELDERBLOCK,
+            sp.FKFOULWON,
+            sp.FKFOULLOST,
+            sp.SAVES,
+            sp.GOALSCONCEDED,
+            sp.CLEANSHEET,
+            xg.EXPECTEDGOALS,
+            wd.PPDA,
+            
+            -- Beregn glidende snit automatisk
+            AVG(xg.EXPECTEDGOALS) OVER() AS AVG_EXPECTEDGOALS,
+            AVG(sp.TOTALSCORINGATT) OVER() AS AVG_TOTALSCORINGATT,
+            AVG(sp.TOTALPASS) OVER() AS AVG_TOTALPASS,
+            AVG(sp.ACCURATEPASS) OVER() AS AVG_ACCURATEPASS,
+            AVG(sp.POSSESSIONPERCENTAGE) OVER() AS AVG_POSSESSIONPERCENTAGE,
+            AVG(sp.WONCORNERS) OVER() AS AVG_WONCORNERS,
+            AVG(sp.TOTALTACKLE) OVER() AS AVG_TOTALTACKLE,
+            AVG(sp.TOTALCLEARANCE) OVER() AS AVG_TOTALCLEARANCE,
+            AVG(wd.PPDA) OVER() AS AVG_PPDA
+
+        FROM MatchBase mb
+        JOIN MatchStatsPivot sp ON mb.MATCH_OPTAUUID = sp.MATCH_OPTAUUID
+        LEFT JOIN ExpectedGoalsPivot xg ON sp.MATCH_OPTAUUID = xg.MATCH_OPTAUUID AND sp.CONTESTANT_OPTAUUID = xg.CONTESTANT_OPTAUUID
+        LEFT JOIN WyscoutDefense wd ON mb.MATCH_DATE = wd.MATCH_DATE 
+        
+        WHERE sp.CONTESTANT_OPTAUUID = '{team_opta_uuid}'
+        ORDER BY mb.MATCH_DATE ASC
     """
     df = conn.query(query)
+    
     if not df.empty:
         df.columns = [c.upper() for c in df.columns]
     
-    if df.empty or 'TEAM_WYID' not in df.columns:
-        return pd.DataFrame()
-        
-    df_team = df[df['TEAM_WYID'] == team_wyid].copy()
-    return df_team
-
+    return df
 def draw_match_trend_chart(df_matches, metric, label, team_name):
     if df_matches is None or df_matches.empty:
         st.warning("Ingen kampdata tilgængelig for dette hold i den valgte sæson/turnering.")
