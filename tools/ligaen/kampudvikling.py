@@ -343,7 +343,7 @@ def vis_side():
         "NordicBet Liga": "2mb332vncy4450vu14paj8844",
         "Superliga": "29actv1ohj8r10kd9hu0jnb0n"
     }
-    current_opta_uuid = tournament_opta_map.get(DEFAULT_COMP, "dyjr458hcmrcy87fsabfsy87o")
+    current_opta_uuid = tournament_opta_map.get(DEFAULT_COMP, "2mb332vncy4450vu14paj8844")
     comp_wyid = COMPETITIONS.get(DEFAULT_COMP, {}).get("wyid", 328)
 
     try:
