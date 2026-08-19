@@ -206,7 +206,7 @@ def draw_match_trend_chart(df_matches, metric, label, team_name, valgt_saeson):
         text=f"{label_line1}<br>{label_line2}",
         xref="paper",
         yref="paper",
-        x=0.67,
+        x=0.75,
         y=1.08,
         xanchor="left",
         yanchor="top",
