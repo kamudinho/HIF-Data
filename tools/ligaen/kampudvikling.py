@@ -39,18 +39,11 @@ def safe_int(val):
     except:
         return 0
 
-def get_team_details_by_wyid(wyid_val):
-    for name, info in TEAMS.items():
-        if info.get('team_wyid') == wyid_val:
-            return name, info.get('logo', '')
-    return f"Hold {wyid_val}", ''
-
 @st.cache_data(ttl=3600)
 def load_match_level_data(tournament_opta_uuid, team_opta_uuid, team_wyid, comp_wyid, season_start_year=2026):
     conn = _get_snowflake_conn()
     db = "KLUB_HVIDOVREIF.AXIS"
     
-    # 1. Bygger basen fra dine Opta-snippets med PIVOT-logik
     query = f"""
         WITH MatchBase AS (
             SELECT 
@@ -64,7 +57,6 @@ def load_match_level_data(tournament_opta_uuid, team_opta_uuid, team_wyid, comp_
             WHERE TOURNAMENTCALENDAR_OPTAUUID = '{tournament_opta_uuid}'
         ),
         MatchStatsPivot AS (
-            -- Din pivot-logik udvidet til at fange alle dine STAT_TYPE_MAP værdier
             SELECT 
                 MATCH_OPTAUUID, CONTESTANT_OPTAUUID,
                 MAX(CASE WHEN STAT_TYPE = 'totalScoringAtt' THEN CAST(STAT_TOTAL AS FLOAT) END) AS TOTALSCORINGATT,
@@ -91,7 +83,6 @@ def load_match_level_data(tournament_opta_uuid, team_opta_uuid, team_wyid, comp_
             GROUP BY 1, 2
         ),
         ExpectedGoalsPivot AS (
-            -- Speciel tabel for xG
             SELECT 
                 MATCH_ID AS MATCH_OPTAUUID, CONTESTANT_OPTAUUID,
                 SUM(CASE WHEN STAT_TYPE = 'expectedGoals' THEN CAST(STAT_VALUE AS FLOAT) ELSE 0 END) AS EXPECTEDGOALS
@@ -100,7 +91,6 @@ def load_match_level_data(tournament_opta_uuid, team_opta_uuid, team_wyid, comp_
             GROUP BY 1, 2
         ),
         WyscoutDefense AS (
-            -- Henter PPDA fra Wyscout for at bygge bro over til Opta
             SELECT 
                 TO_CHAR(tm.DATE, 'YYYY-MM-DD') AS MATCH_DATE,
                 md.PPDA
@@ -109,16 +99,16 @@ def load_match_level_data(tournament_opta_uuid, team_opta_uuid, team_wyid, comp_
                 ON tm.MATCH_WYID = md.MATCH_WYID AND tm.TEAM_WYID = md.TEAM_WYID
             WHERE tm.COMPETITION_WYID = {comp_wyid} AND tm.TEAM_WYID = {team_wyid}
         )
-        
-        -- 2. Samler det hele til ét datasæt pr. kamp for det valgte hold
         SELECT 
             mb.MATCH_OPTAUUID,
             mb.MATCH_DATE,
-            sp.CONTESTANT_OPTAUUID AS TEAM_WYID, -- Aliaser som TEAM_WYID for at passe med din nuværende Plotly-graf
+            sp.CONTESTANT_OPTAUUID AS TEAM_OPTAUUID,
             
             CASE WHEN sp.CONTESTANT_OPTAUUID = mb.CONTESTANTHOME_OPTAUUID THEN mb.TOTAL_HOME_SCORE ELSE mb.TOTAL_AWAY_SCORE END AS GOALS,
             CASE WHEN sp.CONTESTANT_OPTAUUID = mb.CONTESTANTHOME_OPTAUUID THEN mb.TOTAL_AWAY_SCORE ELSE mb.TOTAL_HOME_SCORE END AS GOALS_AGAINST,
-            CASE WHEN sp.CONTESTANT_OPTAUUID = mb.CONTESTANTHOME_OPTAUUID THEN mb.CONTESTANTAWAY_OPTAUUID ELSE mb.CONTESTANTHOME_OPTAUUID END AS OPP_WYID,
+            
+            mb.CONTESTANTHOME_OPTAUUID,
+            mb.CONTESTANTAWAY_OPTAUUID,
 
             sp.TOTALSCORINGATT,
             sp.ONTARGETSCORINGATT,
@@ -142,7 +132,6 @@ def load_match_level_data(tournament_opta_uuid, team_opta_uuid, team_wyid, comp_
             xg.EXPECTEDGOALS,
             wd.PPDA,
             
-            -- Beregn glidende snit automatisk
             AVG(xg.EXPECTEDGOALS) OVER() AS AVG_EXPECTEDGOALS,
             AVG(sp.TOTALSCORINGATT) OVER() AS AVG_TOTALSCORINGATT,
             AVG(sp.TOTALPASS) OVER() AS AVG_TOTALPASS,
@@ -167,6 +156,7 @@ def load_match_level_data(tournament_opta_uuid, team_opta_uuid, team_wyid, comp_
         df.columns = [c.upper() for c in df.columns]
     
     return df
+
 def draw_match_trend_chart(df_matches, metric, label, team_name):
     if df_matches is None or df_matches.empty:
         st.warning("Ingen kampdata tilgængelig for dette hold i den valgte sæson/turnering.")
@@ -175,7 +165,6 @@ def draw_match_trend_chart(df_matches, metric, label, team_name):
     fig = go.Figure()
     df_matches[metric] = pd.to_numeric(df_matches[metric], errors='coerce')
     
-    # Tilføj kampnummer (1, 2, 3...)
     df_matches['MATCH_NUM'] = range(1, len(df_matches) + 1)
     
     y_vals = df_matches[metric].dropna()
@@ -190,7 +179,6 @@ def draw_match_trend_chart(df_matches, metric, label, team_name):
         y_span = 1.0
         snit_vaerdi = 0.0
 
-    # Hent det beregnede ligagennemsnit fra kolonnen
     avg_col = f"AVG_{metric}"
     if avg_col in df_matches.columns and not df_matches[avg_col].dropna().empty:
         ligasnit = df_matches[avg_col].dropna().iloc[0]
@@ -202,8 +190,18 @@ def draw_match_trend_chart(df_matches, metric, label, team_name):
     hover_texts = []
 
     for _, row in df_matches.iterrows():
-        opp_wyid = row.get('OPP_WYID')
-        o_name, o_logo = get_team_details_by_wyid(opp_wyid)
+        home_uuid = row.get('CONTESTANTHOME_OPTAUUID')
+        away_uuid = row.get('CONTESTANTAWAY_OPTAUUID')
+        current_team_uuid = row.get('TEAM_OPTAUUID')
+        
+        opp_uuid = away_uuid if current_team_uuid == home_uuid else home_uuid
+        
+        o_name, o_logo = "Modstander", ""
+        for name, info in TEAMS.items():
+            if info.get('opta_uuid') == opp_uuid:
+                o_name, o_logo = name, info.get('logo', '')
+                break
+
         opp_names.append(o_name)
         opp_logos.append(o_logo)
         
@@ -222,11 +220,9 @@ def draw_match_trend_chart(df_matches, metric, label, team_name):
     df_matches['OPP_LOGO'] = opp_logos
     df_matches['HOVER_TEXT'] = hover_texts
 
-    # FAST LOGO-STØRRELSE
     logo_size_x = 0.40  
     logo_size_y = y_span * 0.12 if y_span > 0.5 else 0.15  
 
-    # 1. Tilføj modstander-logoer som layout-billeder på plottet
     for _, row in df_matches.iterrows():
         if pd.notnull(row[metric]) and row.get('OPP_LOGO'):
             b64_logo = get_base64_image(row['OPP_LOGO'])
@@ -244,7 +240,6 @@ def draw_match_trend_chart(df_matches, metric, label, team_name):
 
     is_reversed = "PPDA" in label.upper() or "IMOD" in label.upper()
 
-    # 2. Tilføj linjesegmenter med grøn/rød farve (hvis kurven går op/ned)
     if len(df_matches) > 1:
         for i in range(len(df_matches) - 1):
             y0 = df_matches[metric].iloc[i]
@@ -269,7 +264,6 @@ def draw_match_trend_chart(df_matches, metric, label, team_name):
                     hoverinfo='skip'
                 ))
 
-    # Tilføj usynlige punkter for præcis hover over alle datapunkter
     fig.add_trace(go.Scatter(
         x=df_matches['MATCH_NUM'], 
         y=df_matches[metric], 
@@ -280,8 +274,6 @@ def draw_match_trend_chart(df_matches, metric, label, team_name):
         showlegend=False
     ))
 
-    # Dynamisk styring af tekstplacering, hvis linjerne ligger meget tæt
-    # Hvis afstanden mellem linjerne er mindre end 10% af det samlede spænd, split dem op
     overlap_threshold = y_span * 0.10
     if abs(snit_vaerdi - ligasnit) < overlap_threshold:
         if snit_vaerdi >= ligasnit:
@@ -294,7 +286,6 @@ def draw_match_trend_chart(df_matches, metric, label, team_name):
         team_pos = "top right"
         liga_pos = "bottom right"
 
-    # 3. Holdets gennemsnitslinie (solid sort)
     if has_data:
         fig.add_hline(
             y=snit_vaerdi, 
@@ -305,7 +296,6 @@ def draw_match_trend_chart(df_matches, metric, label, team_name):
             annotation_position=team_pos
         )
 
-    # 4. Ligagennemsnitslinie (stiplet grå)
     fig.add_hline(
         y=ligasnit, 
         line_dash="dash", 
@@ -344,8 +334,16 @@ def vis_side():
     tilgængelige_hold = SEASON_LEAGUE_MAPPER.get("2026/2027", {}).get(DEFAULT_COMP, list(TEAMS.keys()))
     
     default_team_name = "Hvidovre" if "Hvidovre" in tilgængelige_hold else tilgængelige_hold[0]
-    default_team_wyid = TEAMS.get(default_team_name, {}).get("team_wyid", 7490)
-    wyid = COMPETITIONS.get(DEFAULT_COMP, {}).get("wyid", 328)
+    default_team_info = TEAMS.get(default_team_name, {})
+    default_team_wyid = default_team_info.get("team_wyid", 7490)
+    default_team_opta_uuid = default_team_info.get("opta_uuid", '8gxd9ry2580pu1b1dd5ny9ymy')
+
+    tournament_opta_map = {
+        "NordicBet Liga": "2mb332vncy4450vu14paj8844",
+        "Superliga": "29actv1ohj8r10kd9hu0jnb0n"
+    }
+    current_opta_uuid = tournament_opta_map.get(DEFAULT_COMP, "dyjr458hcmrcy87fsabfsy87o")
+    comp_wyid = COMPETITIONS.get(DEFAULT_COMP, {}).get("wyid", 328)
 
     try:
         season_start_year = int(DEFAULT_SEASON.split('/')[0])
@@ -356,15 +354,17 @@ def vis_side():
     
     with col_t:
         valgt_hold = st.selectbox("Vælg hold:", tilgængelige_hold, index=tilgængelige_hold.index(default_team_name) if default_team_name in tilgængelige_hold else 0)
-        valgt_team_wyid = TEAMS.get(valgt_hold, {}).get("team_wyid", default_team_wyid)
+        valgt_team_info = TEAMS.get(valgt_hold, {})
+        valgt_team_wyid = valgt_team_info.get("team_wyid", default_team_wyid)
+        valgt_team_opta_uuid = valgt_team_info.get("opta_uuid", default_team_opta_uuid)
 
     with col_m:
         metric_map = {
-            "xG": "XG", 
+            "xG": "EXPECTEDGOALS", 
             "Mål": "GOALS", 
             "Mål imod": "GOALS_AGAINST", 
-            "Skud": "SHOTS", 
-            "Afleveringer": "PASSES", 
+            "Skud": "TOTALSCORINGATT", 
+            "Afleveringer": "TOTALPASS", 
             "PPDA": "PPDA"
         }
         sel_metric = st.selectbox("Parameter:", list(metric_map.keys()))
@@ -373,7 +373,13 @@ def vis_side():
         st.subheader(f"{valgt_hold} – Kampoversigt")
         st.caption(f"Udvikling i {DEFAULT_COMP} ({DEFAULT_SEASON})")
 
-    df_matches = load_match_level_data(wyid, valgt_team_wyid, season_start_year=season_start_year)
+    df_matches = load_match_level_data(
+        tournament_opta_uuid=current_opta_uuid,
+        team_opta_uuid=valgt_team_opta_uuid,
+        team_wyid=valgt_team_wyid,
+        comp_wyid=comp_wyid,
+        season_start_year=season_start_year
+    )
     draw_match_trend_chart(df_matches, metric_map[sel_metric], sel_metric, valgt_hold)
 
 if __name__ == "__main__":
