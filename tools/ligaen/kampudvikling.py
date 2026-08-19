@@ -69,6 +69,7 @@ def load_match_level_data(wyid, team_wyid):
         LEFT JOIN {db}.WYSCOUT_MATCHADVANCEDSTATS_PASSES mp ON tm.MATCH_WYID = mp.MATCH_WYID AND tm.TEAM_WYID = mp.TEAM_WYID
         WHERE tm.COMPETITION_WYID = {wyid} 
         AND tm.TEAM_WYID = {team_wyid}
+        AND tm.DATE < CURRENT_DATE()
         ORDER BY tm.DATE ASC
     """
     df = conn.query(query)
