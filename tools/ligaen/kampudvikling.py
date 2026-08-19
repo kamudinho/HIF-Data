@@ -10,7 +10,6 @@ from data.utils.team_mapping import (
     SEASONS,
     COMPETITIONS,
     SEASON_LEAGUE_MAPPER,
-    SEASON_LEAGUE_MAPPER, # Bruges til at hente hold pr. sæson/liga
     TEAMS,
     COMPETITION_NAME as DEFAULT_COMP,
     TOURNAMENTCALENDAR_NAME as DEFAULT_SEASON
@@ -147,9 +146,9 @@ def draw_match_trend_chart(df_matches, metric, label, team_name):
     df_matches['OPP_LOGO'] = opp_logos
     df_matches['HOVER_TEXT'] = hover_texts
 
-    # Fast og ensartet logo-størrelse
-    logo_size_x = 0.55  
-    logo_size_y = y_span * 0.15 if has_data else 0.2  
+    # FAST LOGO-STØRRELSE (Uafhængig af y_span, så logoerne altid er ens i størrelse)
+    logo_size_x = 0.40  
+    logo_size_y = y_span * 0.12 if y_span > 0.5 else 0.15  
 
     # 1. Tilføj modstander-logoer som layout-billeder på plottet
     for _, row in df_matches.iterrows():
@@ -245,13 +244,8 @@ def draw_match_trend_chart(df_matches, metric, label, team_name):
         ),
         yaxis=yaxis_config,
         plot_bgcolor='white',
-        showlegend=False,
-        annotations=[dict(
-            x=1, y=1.04, xref='paper', yref='paper',
-            text=f"<b>{team_name} – Kamp-til-kamp udvikling ({DEFAULT_SEASON})</b>",
-            showarrow=False, font=dict(size=13, color="#666666"),
-            xanchor='right'
-        )]
+        showlegend=False
+        # Fjernet overskrifts-annotation herfra for at undgå duplikering, da den vises i Streamlit-kolonnen ovenfor
     )
     st.plotly_chart(fig, use_container_width=True)
 
