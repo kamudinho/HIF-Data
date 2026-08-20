@@ -525,6 +525,19 @@ def vis_side():
     }
     sel_metric = st.selectbox("Parameter:", list(metric_map.keys()))
 
+    # Vis en boks med beskrivelse ovenover scoren/værdierne, hvis et indeks er valgt
+    if sel_metric == "Offensiv Index":
+      st.info(
+          "**Om Offensivt Index:** Vurderer holdets samlede dominans og"
+          " chasskabelse baseret på xG, mål, skud på mål og total skud."
+      )
+    elif sel_metric == "Defensiv Index":
+      st.info(
+          "**Om Defensivt Index:** Vurderer holdets evne til at afværge"
+          " trusler via vundne taklinger, blokeringer, clearinger og clean"
+          " sheets, modregnet indkasserede mål."
+      )
+
   with col_title:
     st.subheader(f"{valgt_hold} – Kampoversigt")
     st.caption(f"Udvikling i {DEFAULT_COMP} ({valgt_saeson})")
