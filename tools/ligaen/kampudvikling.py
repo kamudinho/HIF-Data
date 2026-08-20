@@ -143,7 +143,7 @@ def load_match_level_data(
                 xg.EXPECTEDGOALS,
                 wd.PPDA,
                 
-                -- Dynamiske ligagennemsnit beregnet på tværs af hele datasættet
+                -- Dynamiske ligagennemsnit
                 AVG(xg.EXPECTEDGOALS) OVER() AS LIGA_AVG_EXPECTEDGOALS,
                 AVG(CASE WHEN sp.CONTESTANT_OPTAUUID = mb.CONTESTANTHOME_OPTAUUID THEN mb.TOTAL_HOME_SCORE ELSE mb.TOTAL_AWAY_SCORE END) OVER() AS LIGA_AVG_GOALS,
                 AVG(CASE WHEN sp.CONTESTANT_OPTAUUID = mb.CONTESTANTHOME_OPTAUUID THEN mb.TOTAL_AWAY_SCORE ELSE mb.TOTAL_HOME_SCORE END) OVER() AS LIGA_AVG_GOALS_AGAINST,
@@ -182,24 +182,46 @@ def load_match_level_data(
 
   if not df.empty:
     df.columns = [c.upper() for c in df.columns]
+    # Udfyld NaN med 0 for at sikre, at hold med 0 i en stat vises korrekt
+    numeric_cols = df.select_dtypes(include=[np.number]).columns
+    df[numeric_cols] = df[numeric_cols].fillna(0)
+
+    # Beregn sammensatte indekser hvis kolonnen findes
+    # Offensiv Index: Kombinerer xG, Mål, Skud på mål og Total skud (vægtet)
+    df["OFFENSIV_INDEX"] = (
+        df.get("EXPECTEDGOALS", 0) * 2.0
+        + df.get("GOALS", 0) * 3.0
+        + df.get("ONTARGETSCORINGATT", 0) * 1.0
+        + df.get("TOTALSCORINGATT", 0) * 0.2
+    )
+
+    # Defensiv Index: Kombinerer Vundne taklinger, Clearinger, Blokeringer og Clean sheet (samt lavere mål imod / PPDA)
+    df["DEFENSIV_INDEX"] = (
+        df.get("WONTACKLE", 0) * 1.0
+        + df.get("TOTALCLEARANCE", 0) * 0.5
+        + df.get("OUTFIELDERBLOCK", 0) * 1.0
+        + df.get("CLEANSHEET", 0) * 3.0
+        - df.get("GOALS_AGAINST", 0) * 2.0
+    )
+
+    df["LIGA_AVG_OFFENSIV_INDEX"] = df["OFFENSIV_INDEX"].mean()
+    df["LIGA_AVG_DEFENSIV_INDEX"] = df["DEFENSIV_INDEX"].mean()
 
   return df
 
 
 def draw_match_trend_chart(df_matches, metric, label, team_name, valgt_saeson):
   if df_matches is None or df_matches.empty:
-    st.warning(
-        "Ingen kampdata tilgængelig for dette hold i den valgte"
-        " sæson/turnering."
-    )
+    st.warning("Ingen kampdata tilgængelig for dette hold i den valgte sæson.")
     return
 
   fig = go.Figure()
-  df_matches[metric] = pd.to_numeric(df_matches[metric], errors="coerce")
-
+  df_matches[metric] = pd.to_numeric(df_matches[metric], errors="coerce").fillna(
+      0
+  )
   df_matches["MATCH_NUM"] = range(1, len(df_matches) + 1)
 
-  y_vals = df_matches[metric].dropna()
+  y_vals = df_matches[metric]
   has_data = not y_vals.empty
 
   if has_data:
@@ -214,22 +236,23 @@ def draw_match_trend_chart(df_matches, metric, label, team_name, valgt_saeson):
     snit_vaerdi = 0.0
     total_val = 0.0
 
-  mean_str = f"{snit_vaerdi:.2f}" if has_data else "0.00"
+  mean_str = f"{snit_vaerdi:.2f}"
 
-  # Særlig håndtering af PPDA og øvrige kategorier
   if label == "PPDA":
     label_line1 = f"PPDA i {valgt_saeson}:"
     label_line2 = f"PPDA pr. 90 i {valgt_saeson}:"
     val1_str = mean_str
     val2_str = mean_str
+  elif "Index" in label:
+    label_line1 = f"Samlet {label} i {valgt_saeson}:"
+    label_line2 = f"Gennemsnit pr. kamp:"
+    val1_str = (
+        f"{int(total_val)}" if total_val == int(total_val) else f"{total_val:.2f}"
+    )
+    val2_str = mean_str
   else:
-    if label == "xG":
-      formatted_label = "xG"
-      formatted_label2 = "xG"
-    else:
-      formatted_label = label.lower()
-      formatted_label2 = label.capitalize()
-
+    formatted_label = "xG" if label == "xG" else label.lower()
+    formatted_label2 = "xG" if label == "xG" else label.capitalize()
     total_str = (
         f"{int(total_val)}" if total_val == int(total_val) else f"{total_val:.2f}"
     )
@@ -238,7 +261,6 @@ def draw_match_trend_chart(df_matches, metric, label, team_name, valgt_saeson):
     val1_str = total_str
     val2_str = mean_str
 
-  # 1. Venstrestillet tekst-kolonne
   fig.add_annotation(
       text=f"{label_line1}<br>{label_line2}",
       xref="paper",
@@ -251,8 +273,6 @@ def draw_match_trend_chart(df_matches, metric, label, team_name, valgt_saeson):
       align="left",
       font=dict(size=11, color="black"),
   )
-
-  # 2. Værdi-kolonne (starter præcis det samme sted i højre side)
   fig.add_annotation(
       text=f"<b>{val1_str}</b><br><b>{val2_str}</b>",
       xref="paper",
@@ -266,7 +286,6 @@ def draw_match_trend_chart(df_matches, metric, label, team_name, valgt_saeson):
       font=dict(size=11, color="black"),
   )
 
-  # Hent det dynamiske ligasnit fra SQL-kolonnen (LIGA_AVG_{metric})
   liga_avg_col = f"LIGA_AVG_{metric}"
   if (
       liga_avg_col in df_matches.columns
@@ -274,7 +293,7 @@ def draw_match_trend_chart(df_matches, metric, label, team_name, valgt_saeson):
   ):
     ligasnit = df_matches[liga_avg_col].dropna().iloc[0]
   else:
-    ligasnit = y_vals.mean() if has_data else 0.0
+    ligasnit = y_vals.mean()
 
   opp_names = []
   opp_logos = []
@@ -284,7 +303,6 @@ def draw_match_trend_chart(df_matches, metric, label, team_name, valgt_saeson):
     home_uuid = row.get("CONTESTANTHOME_OPTAUUID")
     away_uuid = row.get("CONTESTANTAWAY_OPTAUUID")
     current_team_uuid = row.get("TEAM_OPTAUUID")
-
     opp_uuid = away_uuid if current_team_uuid == home_uuid else home_uuid
 
     o_name, o_logo = "Modstander", ""
@@ -299,41 +317,18 @@ def draw_match_trend_chart(df_matches, metric, label, team_name, valgt_saeson):
     g_for = safe_int(row.get("GOALS"))
     g_imod = safe_int(row.get("GOALS_AGAINST"))
     dato = str(row.get("MATCH_DATE", ""))[:10]
-
     val_metric = row.get(metric, 0)
-    val_display = val_metric if pd.notnull(val_metric) else 0.0
 
     hover_texts.append(
         f"<b>Kamp {int(row['MATCH_NUM'])} vs. {o_name}</b><br>"
         f"Dato: {dato}<br>"
         f"Resultat: {g_for} - {g_imod}<br>"
-        f"{label}: {val_display:.2f}"
+        f"{label}: {val_metric:.2f}"
     )
 
   df_matches["OPP_NAME"] = opp_names
   df_matches["OPP_LOGO"] = opp_logos
   df_matches["HOVER_TEXT"] = hover_texts
-
-  logo_size_x = 0.65
-  logo_size_y = y_span * 0.20 if y_span > 0.5 else 0.25
-
-  for _, row in df_matches.iterrows():
-    if pd.notnull(row[metric]) and row.get("OPP_LOGO"):
-      b64_logo = get_base64_image(row["OPP_LOGO"])
-      fig.add_layout_image(
-          dict(
-              source=b64_logo,
-              xref="x",
-              yref="y",
-              x=row["MATCH_NUM"],
-              y=row[metric],
-              sizex=logo_size_x,
-              sizey=logo_size_y,
-              xanchor="center",
-              yanchor="middle",
-              layer="above",  # Sørger for at logoet ligger over linjer og punkter
-          )
-      )
 
   is_reversed = "PPDA" in label.upper() or "IMOD" in label.upper()
 
@@ -344,26 +339,23 @@ def draw_match_trend_chart(df_matches, metric, label, team_name, valgt_saeson):
       x0 = df_matches["MATCH_NUM"].iloc[i]
       x1 = df_matches["MATCH_NUM"].iloc[i + 1]
 
-      if pd.notnull(y0) and pd.notnull(y1):
-        if is_reversed:
-          is_up = y1 < y0
-        else:
-          is_up = y1 > y0
+      if is_reversed:
+        is_up = y1 < y0
+      else:
+        is_up = y1 > y0
 
-        seg_color = (
-            "#2ECC71" if is_up else "#E74C3C" if y1 != y0 else "#95A5A6"
-        )
+      seg_color = "#2ECC71" if is_up else "#E74C3C" if y1 != y0 else "#95A5A6"
 
-        fig.add_trace(
-            go.Scatter(
-                x=[x0, x1],
-                y=[y0, y1],
-                mode="lines",
-                line=dict(color=seg_color, width=2, dash="dot"),
-                showlegend=False,
-                hoverinfo="skip",
-            )
-        )
+      fig.add_trace(
+          go.Scatter(
+              x=[x0, x1],
+              y=[y0, y1],
+              mode="lines",
+              line=dict(color=seg_color, width=2, dash="dot"),
+              showlegend=False,
+              hoverinfo="skip",
+          )
+      )
 
   fig.add_trace(
       go.Scatter(
@@ -377,31 +369,43 @@ def draw_match_trend_chart(df_matches, metric, label, team_name, valgt_saeson):
       )
   )
 
+  logo_size_x = 0.65
+  logo_size_y = y_span * 0.20 if y_span > 0.5 else 0.25
+
+  # Sikrer at logoer tilføjes SIDST, så de ligger øverst over alt andet
+  for _, row in df_matches.iterrows():
+    if row.get("OPP_LOGO"):
+      b64_logo = get_base64_image(row["OPP_LOGO"])
+      fig.add_layout_image(
+          dict(
+              source=b64_logo,
+              xref="x",
+              yref="y",
+              x=row["MATCH_NUM"],
+              y=row[metric],
+              sizex=logo_size_x,
+              sizey=logo_size_y,
+              xanchor="center",
+              yanchor="middle",
+              layer="top",  # "top" sikrer maksimal prioritet øverst
+          )
+      )
+
   if is_reversed:
-    if snit_vaerdi < ligasnit:
-      team_pos = "top right"
-      liga_pos = "bottom right"
-    else:
-      team_pos = "bottom right"
-      liga_pos = "top right"
+    team_pos = "top right" if snit_vaerdi < ligasnit else "bottom right"
+    liga_pos = "bottom right" if snit_vaerdi < ligasnit else "top right"
   else:
-    if snit_vaerdi >= ligasnit:
-      team_pos = "top right"
-      liga_pos = "bottom right"
-    else:
-      team_pos = "bottom right"
-      liga_pos = "top right"
+    team_pos = "top right" if snit_vaerdi >= ligasnit else "bottom right"
+    liga_pos = "bottom right" if snit_vaerdi >= ligasnit else "top right"
 
-  if has_data:
-    fig.add_hline(
-        y=snit_vaerdi,
-        line_dash="solid",
-        line_color="black",
-        line_width=1.5,
-        annotation_text=f"(Gennemsnit: {team_name})",
-        annotation_position=team_pos,
-    )
-
+  fig.add_hline(
+      y=snit_vaerdi,
+      line_dash="solid",
+      line_color="black",
+      line_width=1.5,
+      annotation_text=f"(Gennemsnit: {team_name})",
+      annotation_position=team_pos,
+  )
   fig.add_hline(
       y=ligasnit,
       line_dash="dash",
@@ -412,17 +416,10 @@ def draw_match_trend_chart(df_matches, metric, label, team_name, valgt_saeson):
   )
 
   padding = y_span * 0.15 if y_span > 0 else 1.0
-  if is_reversed:
-    y_range = [y_max + padding, y_min - padding]
-  else:
-    y_range = [y_min - padding, y_max + padding]
-
-  yaxis_config = dict(
-      title=f"<b>{label} pr. kamp</b>",
-      gridcolor="#f0f0f0",
-      linecolor="black",
-      autorange="reversed" if is_reversed else True,
-      range=y_range,
+  y_range = (
+      [y_max + padding, y_min - padding]
+      if is_reversed
+      else [y_min - padding, y_max + padding]
   )
 
   fig.update_layout(
@@ -435,7 +432,13 @@ def draw_match_trend_chart(df_matches, metric, label, team_name, valgt_saeson):
           gridcolor="#f0f0f0",
           linecolor="black",
       ),
-      yaxis=yaxis_config,
+      yaxis=dict(
+          title=f"<b>{label} pr. kamp</b>",
+          gridcolor="#f0f0f0",
+          linecolor="black",
+          autorange="reversed" if is_reversed else True,
+          range=y_range,
+      ),
       plot_bgcolor="white",
       showlegend=False,
   )
@@ -490,6 +493,9 @@ def vis_side():
 
   with col_m:
     metric_map = {
+        # Nye sammensatte indekser
+        "Offensiv Index": "OFFENSIV_INDEX",
+        "Defensiv Index": "DEFENSIV_INDEX",
         # Offensiv / Generelt
         "xG": "EXPECTEDGOALS",
         "Mål": "GOALS",
