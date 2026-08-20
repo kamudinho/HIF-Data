@@ -9,7 +9,7 @@ from PIL import Image
 from io import BytesIO
 from mplsoccer import Pitch, VerticalPitch
 from reportlab.lib.pagesizes import A4
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image as RLImage, Table, TableStyle
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image as RLImage, Table, TableStyle, PageBreak
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.lib import colors
@@ -21,6 +21,10 @@ HIF_NAVN = "Hvidovre"  # Nøglen i TEAMS-dictet - Hvidovre IF skal altid kunne s
 DB = "KLUB_HVIDOVREIF.AXIS"
 LIGA_UUID = "2mb332vncy4450vu14paj8844"
 PLAYER_FILE = 'data/players/1div_overskrivning.csv'
+
+# Neutrale PDF-farver (ingen klubfarver i tabeller/headers)
+PDF_NEUTRAL_BG = colors.HexColor('#e8e8e8')
+PDF_NEUTRAL_LINE = colors.HexColor('#999999')
 
 @st.cache_data(ttl=3600)
 def get_logo_img(opta_uuid):
@@ -277,33 +281,53 @@ def render_header_logos(team_a_navn, team_b_navn=None):
         if logo_a: st.image(logo_a, width=70)
         st.caption(team_a_navn)
 
-def build_corner_zone_figs(df_subset, titel_prefix=""):
+def build_zone_figs(df_subset, sp_type, titel_prefix=""):
     """
-    Bygger to matplotlib-figurer med modtagerzoner for hjørnespark - én for
-    spark taget fra venstre side, én for spark taget fra højre side.
-    Returnerer {"Venstre side": (fig_eller_None, antal), "Højre side": (fig_eller_None, antal)}.
-    Figurerne st.pyplot'es IKKE her, så de kan genbruges både i Streamlit-visningen og i PDF-eksporten.
+    Bygger to matplotlib-figurer med modtagerzoner for en given dødboldtype
+    (Hjørnespark, Frispark eller Indkast) - én for aktioner fra venstre side,
+    én for aktioner fra højre side. Bruges både til Hjørnespark-fanens
+    kviklook og til den fulde PDF-rapport.
+    Figurerne st.pyplot'es IKKE her, så de kan genbruges flere steder.
     """
-    df_corners = df_subset[df_subset['TYPE_NAVN'] == 'Hjørnespark'].copy()
+    df_t = df_subset[df_subset['TYPE_NAVN'] == sp_type].copy()
     for c in ['EVENT_X', 'EVENT_Y', 'ENDX', 'ENDY']:
-        df_corners[c] = pd.to_numeric(df_corners[c], errors='coerce')
-    df_corners = df_corners.dropna(subset=['ENDX', 'ENDY'])
+        df_t[c] = pd.to_numeric(df_t[c], errors='coerce')
+    df_t = df_t.dropna(subset=['ENDX', 'ENDY'])
 
     resultat = {}
     for side_navn, side_df in [
-        ("Venstre side", df_corners[df_corners['EVENT_Y'] > 50]),
-        ("Højre side", df_corners[df_corners['EVENT_Y'] <= 50]),
+        ("Venstre side", df_t[df_t['EVENT_Y'] > 50]),
+        ("Højre side", df_t[df_t['EVENT_Y'] <= 50]),
     ]:
         if side_df.empty:
             resultat[side_navn] = (None, 0)
             continue
-        pitch = VerticalPitch(pitch_type='opta', half=True, pitch_color='white', line_color='#333333', linewidth=1.2)
-        fig, ax = pitch.draw(figsize=(5, 5))
-        pitch.hexbin(side_df['ENDX'], side_df['ENDY'], ax=ax, edgecolors='#ffffff', gridsize=(7, 7), cmap='Reds', alpha=0.8)
-        titel = f"{titel_prefix}{side_navn} ({len(side_df)} hjørnespark)".strip()
-        ax.text(50, 102, titel, fontsize=7, fontweight='bold', color='#333333', ha='center')
+
+        if sp_type == "Hjørnespark":
+            pitch = VerticalPitch(pitch_type='opta', half=True, pitch_color='white', line_color='#333333', linewidth=1.2)
+            fig, ax = pitch.draw(figsize=(6, 6))
+            titel_y = 102
+        else:
+            pitch = Pitch(pitch_type='opta', pitch_color='white', line_color='#333333', linewidth=1.2)
+            fig, ax = pitch.draw(figsize=(8, 5.3))
+            titel_y = 103
+
+        pitch.hexbin(side_df['ENDX'], side_df['ENDY'], ax=ax, edgecolors='#ffffff', gridsize=(8, 8), cmap='Reds', alpha=0.8)
+        titel = f"{titel_prefix}{sp_type} - {side_navn} ({len(side_df)} stk.)".strip()
+        ax.text(50, titel_y, titel, fontsize=8, fontweight='bold', color='#333333', ha='center')
         resultat[side_navn] = (fig, len(side_df))
     return resultat
+
+def build_all_zone_figs(df_subset, titel_prefix=""):
+    """Bygger venstre/højre-zonefigurer for alle tre dødboldtyper på én gang."""
+    return {sp_type: build_zone_figs(df_subset, sp_type, titel_prefix=titel_prefix) for sp_type in ["Hjørnespark", "Frispark", "Indkast"]}
+
+def close_all_figs(zone_figs_dict):
+    """Lukker alle matplotlib-figurer i et build_all_zone_figs-resultat, for at undgå memory-leaks."""
+    for figs in zone_figs_dict.values():
+        for fig, _ in figs.values():
+            if fig is not None:
+                plt.close(fig)
 
 # --- PDF-eksport ---
 
@@ -320,14 +344,42 @@ def pil_to_rlimage(pil_img, width_mm=22):
     ratio = (pil_img.height / pil_img.width) if pil_img.width else 1
     return RLImage(buf, width=width_mm * mm, height=width_mm * ratio * mm)
 
-def fig_to_rlimage(fig, width_mm=80):
+def fig_to_rlimage(fig, width_mm=150):
+    """Konverterer en matplotlib-figur til et ReportLab-billede, med bevaret højde/bredde-forhold."""
     buf = BytesIO()
     fig.savefig(buf, format='png', dpi=150, bbox_inches='tight')
     buf.seek(0)
-    return RLImage(buf, width=width_mm * mm, height=width_mm * mm)
+    w_in, h_in = fig.get_size_inches()
+    ratio = (h_in / w_in) if w_in else 1
+    return RLImage(buf, width=width_mm * mm, height=width_mm * ratio * mm)
 
-def generate_modstanderrapport_pdf(hif_navn, modstander_navn, opsummering, top3_data, corner_figs):
-    """Bygger en komplet PDF-rapport: logoer, opsummering, top 3-tagere og modtagerzoner (venstre/højre)."""
+def _tilfoej_zone_sider(story, styles, zone_figs, sektion_titel):
+    """
+    Tilføjer én PDF-side pr. dødboldtype (Hjørnespark, Frispark, Indkast) med
+    to billeder pr. side - venstre side øverst, højre side nedenunder (1 pr. række).
+    """
+    for sp_type in ["Hjørnespark", "Frispark", "Indkast"]:
+        story.append(PageBreak())
+        story.append(Paragraph(f"{sektion_titel}: {sp_type}", styles['Heading1']))
+        story.append(Spacer(1, 4 * mm))
+        figs = zone_figs.get(sp_type, {})
+        for side_navn in ["Venstre side", "Højre side"]:
+            fig, antal = figs.get(side_navn, (None, 0))
+            story.append(Paragraph(f"{side_navn} ({antal} stk.)", styles['Heading3']))
+            if fig is not None:
+                story.append(fig_to_rlimage(fig, 150))
+            else:
+                story.append(Paragraph("Ingen data.", styles['Normal']))
+            story.append(Spacer(1, 6 * mm))
+
+def generate_modstanderrapport_pdf(hif_navn, modstander_navn, off_opsummering, top3_data, off_zone_figs, def_opsummering, def_zone_figs):
+    """
+    Bygger en komplet PDF-rapport (typisk 6-8 sider):
+    1. Forside med logoer + opsummering (offensivt) + top 3-tagere-tabel
+    2-4. Én side pr. type (Hjørnespark, Frispark, Indkast) med offensive modtagerzoner - 2 billeder pr. side
+    5. Opsummering af defensive standardsituationer
+    6-8. Én side pr. type med defensive modtagerzoner - 2 billeder pr. side
+    """
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=15 * mm, bottomMargin=15 * mm, leftMargin=18 * mm, rightMargin=18 * mm)
     styles = getSampleStyleSheet()
@@ -336,10 +388,11 @@ def generate_modstanderrapport_pdf(hif_navn, modstander_navn, opsummering, top3_
     hif_logo = get_logo_img(TEAMS.get(hif_navn, {}).get('opta_uuid'))
     mod_logo = get_logo_img(TEAMS.get(modstander_navn, {}).get('opta_uuid'))
 
+    # --- Forside ---
     logo_row = [
-        pil_to_rlimage(hif_logo, 22) if hif_logo else Paragraph(hif_navn, styles['Normal']),
+        pil_to_rlimage(hif_logo, 24) if hif_logo else Paragraph(hif_navn, styles['Normal']),
         Paragraph("<para align='center'><b>VS</b></para>", styles['Normal']),
-        pil_to_rlimage(mod_logo, 22) if mod_logo else Paragraph(modstander_navn, styles['Normal']),
+        pil_to_rlimage(mod_logo, 24) if mod_logo else Paragraph(modstander_navn, styles['Normal']),
     ]
     logo_table = Table([logo_row], colWidths=[45 * mm, 25 * mm, 45 * mm])
     logo_table.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('ALIGN', (0, 0), (-1, -1), 'CENTER')]))
@@ -350,8 +403,8 @@ def generate_modstanderrapport_pdf(hif_navn, modstander_navn, opsummering, top3_
     story.append(Paragraph(f"{hif_navn} forbereder sig mod {modstander_navn}", styles['Normal']))
     story.append(Spacer(1, 6 * mm))
 
-    story.append(Paragraph("Opsummering", styles['Heading2']))
-    for linje in opsummering:
+    story.append(Paragraph("Opsummering - offensive standardsituationer", styles['Heading2']))
+    for linje in off_opsummering:
         story.append(Paragraph("• " + md_to_html(linje), styles['Normal']))
         story.append(Spacer(1, 2 * mm))
     story.append(Spacer(1, 4 * mm))
@@ -366,29 +419,28 @@ def generate_modstanderrapport_pdf(hif_navn, modstander_navn, opsummering, top3_
                 table_data.append([sp_type if i == 0 else "", navn, str(antal)])
     t = Table(table_data, colWidths=[32 * mm, 90 * mm, 20 * mm])
     t.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.white),
+        ('BACKGROUND', (0, 0), (-1, 0), PDF_NEUTRAL_BG),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('GRID', (0, 0), (-1, -1), 0.4, colors.grey),
+        ('GRID', (0, 0), (-1, -1), 0.4, PDF_NEUTRAL_LINE),
         ('FONTSIZE', (0, 0), (-1, -1), 9),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
     ]))
     story.append(t)
-    story.append(Spacer(1, 6 * mm))
 
-    story.append(Paragraph("Modtagerzoner ved hjørnespark", styles['Heading2']))
-    fig_v, _ = corner_figs.get("Venstre side", (None, 0))
-    fig_h, _ = corner_figs.get("Højre side", (None, 0))
-    if fig_v is not None or fig_h is not None:
-        img_row = [
-            fig_to_rlimage(fig_v, 78) if fig_v is not None else Paragraph("Ingen data", styles['Normal']),
-            fig_to_rlimage(fig_h, 78) if fig_h is not None else Paragraph("Ingen data", styles['Normal']),
-        ]
-        img_table = Table([img_row], colWidths=[85 * mm, 85 * mm])
-        img_table.setStyle(TableStyle([('ALIGN', (0, 0), (-1, -1), 'CENTER')]))
-        story.append(img_table)
-    else:
-        story.append(Paragraph("Ingen hjørnespark-data tilgængelig.", styles['Normal']))
+    # --- Offensive zone-sider: Hjørnespark, Frispark, Indkast (i nævnte rækkefølge) ---
+    _tilfoej_zone_sider(story, styles, off_zone_figs, "Offensivt")
+
+    # --- Defensiv sektion ---
+    story.append(PageBreak())
+    story.append(Paragraph("Defensive standardsituationer", styles['Heading1']))
+    story.append(Paragraph(f"Sådan har modstandere angrebet {modstander_navn} fra dødbolde", styles['Normal']))
+    story.append(Spacer(1, 4 * mm))
+    for linje in def_opsummering:
+        story.append(Paragraph("• " + md_to_html(linje), styles['Normal']))
+        story.append(Spacer(1, 2 * mm))
+
+    _tilfoej_zone_sider(story, styles, def_zone_figs, "Defensivt")
 
     doc.build(story)
     buffer.seek(0)
@@ -624,7 +676,7 @@ def vis_side():
 
     # =====================================================================
     # Modstanderrapport - kamp-forberedelse med logoer, opsummering,
-    # modtagerzoner og PDF-eksport
+    # offensive OG defensive modtagerzoner, og fuld PDF-eksport
     # =====================================================================
     with tabs[6]:
         st.caption("### Modstander-scoutingrapport")
@@ -638,7 +690,7 @@ def vis_side():
             render_header_logos(HIF_NAVN, modstander)
             st.markdown("---")
 
-            st.markdown(f"#### Sådan spiller **{modstander}** deres standardsituationer")
+            st.markdown(f"#### Sådan spiller **{modstander}** deres standardsituationer (offensivt)")
             opsummering = opsummering_linjer(df_mod_team, modstander)
             for linje in opsummering:
                 st.markdown(f"- {linje}")
@@ -658,8 +710,9 @@ def vis_side():
                         st.caption("Ingen data")
 
             st.markdown("---")
-            st.markdown("##### Modtagerzoner ved hjørnespark")
-            corner_figs = build_corner_zone_figs(df_mod_team)
+            st.markdown("##### Modtagerzoner ved hjørnespark (kviklook)")
+            off_zone_figs = build_all_zone_figs(df_mod_team)
+            corner_figs = off_zone_figs["Hjørnespark"]
             cz1, cz2 = st.columns(2)
             for col, side_navn in zip([cz1, cz2], ["Venstre side", "Højre side"]):
                 with col:
@@ -670,10 +723,22 @@ def vis_side():
                     else:
                         st.caption("Ingen data")
 
+            # Defensiv data - hvordan andre hold har angrebet MODSTANDEREN (relevant for HIFs eget angreb)
+            df_mod_defensiv = get_defensive_events(df_all, modstander, uuid_to_name)
+            def_opsummering = opsummering_linjer(df_mod_defensiv, f"modstandere af {modstander}")
+            def_zone_figs = build_all_zone_figs(df_mod_defensiv, titel_prefix="Imod dem: ")
+
+            with st.expander(f"Defensive tendenser hos {modstander} (indgår også i PDF-rapporten)"):
+                st.markdown(f"Sådan har andre hold angrebet **{modstander}** fra dødbolde - relevant når {HIF_NAVN} selv skal angribe:")
+                for linje in def_opsummering:
+                    st.markdown(f"- {linje}")
+
             st.markdown("---")
+            st.caption(f"PDF-rapporten samler opsummering, top-tagere og modtagerzoner for hjørnespark, frispark og indkast - både offensivt og defensivt (typisk 6-8 sider).")
             col_dl1, col_dl2 = st.columns(2)
             with col_dl1:
-                rapport_tekst = f"# Modstanderrapport: {modstander}\n\n" + "\n".join([f"- {l}" for l in opsummering])
+                rapport_tekst = f"# Modstanderrapport: {modstander}\n\n## Offensivt\n\n" + "\n".join([f"- {l}" for l in opsummering])
+                rapport_tekst += "\n\n## Defensivt\n\n" + "\n".join([f"- {l}" for l in def_opsummering])
                 st.download_button(
                     "Download som tekst",
                     data=rapport_tekst,
@@ -682,7 +747,9 @@ def vis_side():
                     key="download_modstanderrapport_md"
                 )
             with col_dl2:
-                pdf_buffer = generate_modstanderrapport_pdf(HIF_NAVN, modstander, opsummering, top3_data, corner_figs)
+                pdf_buffer = generate_modstanderrapport_pdf(
+                    HIF_NAVN, modstander, opsummering, top3_data, off_zone_figs, def_opsummering, def_zone_figs
+                )
                 st.download_button(
                     "Download PDF-rapport",
                     data=pdf_buffer,
@@ -692,9 +759,8 @@ def vis_side():
                 )
 
             # Ryd op i figurerne, nu hvor de er brugt både i Streamlit og PDF'en
-            for fig, _ in corner_figs.values():
-                if fig is not None:
-                    plt.close(fig)
+            close_all_figs(off_zone_figs)
+            close_all_figs(def_zone_figs)
 
     # =====================================================================
     # Sammenligning
@@ -742,7 +808,7 @@ def vis_side():
     # Defensiv analyse
     # =====================================================================
     with tabs[8]:
-        st.caption("### Defensiv analyse - modstanderes dødbolde")
+        st.caption("### Defensiv analyse - modstanderes dødbolde mod jer")
         def_team = st.selectbox("Analyser forsvar for", teams, index=teams.index(t_sel) if t_sel in teams else 0, key="def_team_sel")
 
         render_header_logos(HIF_NAVN, def_team if def_team != HIF_NAVN else None)
@@ -759,7 +825,7 @@ def vis_side():
 
             st.markdown("---")
             st.markdown("##### Modtagerzoner ved hjørnespark imod jer")
-            def_corner_figs = build_corner_zone_figs(df_defensiv)
+            def_corner_figs = build_zone_figs(df_defensiv, "Hjørnespark")
             dz1, dz2 = st.columns(2)
             for col, side_navn in zip([dz1, dz2], ["Venstre side", "Højre side"]):
                 with col:
