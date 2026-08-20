@@ -530,16 +530,17 @@ def vis_side():
     st.markdown(
         """
         <div style="border: 1px solid black; padding: 10px 15px; border-radius: 5px; background-color: #f9f9f9; margin-bottom: 15px;">
-            <b>Om Offensivt Index:</b> Vurderer holdets samlede dominans og chasskabelse baseret på xG (vgt 2), mål (vgt 3), skud på mål (vgt 1) og total skud (vgt 0.2).
+            <b>Offensivt Index:</b> Vurderer holdets samlede chanceskabelse; baseret på vægtning xG (vgt 2), mål (vgt 3), skud på mål (vgt 1) og total skud (vgt 0.2).
         </div>
         """,
         unsafe_allow_html=True,
     )
+      #xG (vgt 2), mål (vgt 3), skud på mål (vgt 1) og total skud (vgt 0.2)
   elif sel_metric == "Defensiv Index":
     st.markdown(
         """
         <div style="border: 1px solid black; padding: 10px 15px; border-radius: 5px; background-color: #f9f9f9; margin-bottom: 15px;">
-            <b>Om Defensivt Index:</b> Vurderer holdets evne til at afværge trusler via vundne taklinger, blokeringer, clearinger og clean sheets, modregnet indkasserede mål.
+            <b>Defensivt Index:</b> Vurderer holdets evne til at forsvare; vundne taklinger, blokeringer, clearinger og clean sheets, modregnet indkasserede mål.
         </div>
         """,
         unsafe_allow_html=True,
