@@ -530,7 +530,7 @@ def vis_side():
     st.markdown(
         """
         <div style="border: 1px solid black; padding: 10px 15px; border-radius: 5px; background-color: #f9f9f9; margin-bottom: 15px;">
-            <b>Offensivt Index:</b> Vurderer holdets samlede chanceskabelse; baseret på vægtning xG (vgt 2), mål (vgt 3), skud på mål (vgt 1) og total skud (vgt 0.2).
+            <b>Offensivt Index:</b> Vurderer holdets samlede chanceskabelse; baseret på vægtning xG, mål, skud på mål og total skud.
         </div>
         """,
         unsafe_allow_html=True,
