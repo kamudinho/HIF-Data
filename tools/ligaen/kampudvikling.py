@@ -525,18 +525,25 @@ def vis_side():
     }
     sel_metric = st.selectbox("Parameter:", list(metric_map.keys()))
 
-    # Vis en boks med beskrivelse ovenover scoren/værdierne, hvis et indeks er valgt
-    if sel_metric == "Offensiv Index":
-      st.info(
-          "**Om Offensivt Index:** Vurderer holdets samlede dominans og"
-          " chasskabelse baseret på xG, mål, skud på mål og total skud."
-      )
-    elif sel_metric == "Defensiv Index":
-      st.info(
-          "**Om Defensivt Index:** Vurderer holdets evne til at afværge"
-          " trusler via vundne taklinger, blokeringer, clearinger og clean"
-          " sheets, modregnet indkasserede mål."
-      )
+    # Beskrivelsesboks på tværs af hele skærmen med sort ramme
+  if sel_metric == "Offensiv Index":
+    st.markdown(
+        """
+        <div style="border: 1px solid black; padding: 10px 15px; border-radius: 5px; background-color: #f9f9f9; margin-bottom: 15px;">
+            <b>Om Offensivt Index:</b> Vurderer holdets samlede dominans og chasskabelse baseret på xG (vgt 2), mål (vgt 3), skud på mål (vgt 1) og total skud (vgt 0.2).
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+  elif sel_metric == "Defensiv Index":
+    st.markdown(
+        """
+        <div style="border: 1px solid black; padding: 10px 15px; border-radius: 5px; background-color: #f9f9f9; margin-bottom: 15px;">
+            <b>Om Defensivt Index:</b> Vurderer holdets evne til at afværge trusler via vundne taklinger, blokeringer, clearinger og clean sheets, modregnet indkasserede mål.
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
   with col_title:
     st.subheader(f"{valgt_hold} – Kampoversigt")
