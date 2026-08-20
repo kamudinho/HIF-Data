@@ -387,7 +387,7 @@ def draw_match_trend_chart(df_matches, metric, label, team_name, valgt_saeson):
               sizey=logo_size_y,
               xanchor="center",
               yanchor="middle",
-              layer="top",  # "top" sikrer maksimal prioritet øverst
+              layer="above",  # Ændret fra 'top' til 'above', som er gyldigt i Plotly
           )
       )
 
