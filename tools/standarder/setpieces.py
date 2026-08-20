@@ -231,12 +231,20 @@ def opsummering_linjer(df_subset, navn):
         return [f"Der er ingen registrerede standardsituationer for {navn} i det valgte data."]
     return linjer
 
-def get_top3_dict(df_subset):
-    """Returnerer {sp_type: [(spiller, antal), ...]} - top 3 tagere pr. dødboldtype."""
+def get_top3_tagere_dict(df_subset):
+    """Returnerer {sp_type: [(spiller, antal), ...]} - top 3 TAGERE (dem der sparker/kaster) pr. dødboldtype."""
     resultat = {}
     for sp_type in ["Hjørnespark", "Frispark", "Indkast"]:
         sub = df_subset[df_subset['TYPE_NAVN'] == sp_type]
         resultat[sp_type] = list(sub['TAGER_NAVN'].value_counts().head(3).items()) if not sub.empty else []
+    return resultat
+
+def get_top3_modtagere_dict(df_subset):
+    """Returnerer {sp_type: [(spiller, antal), ...]} - top 3 MODTAGERE (dem der får bolden) pr. dødboldtype."""
+    resultat = {}
+    for sp_type in ["Hjørnespark", "Frispark", "Indkast"]:
+        sub = df_subset[(df_subset['TYPE_NAVN'] == sp_type) & (df_subset['MODTAGER'].notna())]
+        resultat[sp_type] = list(sub['MODTAGER'].value_counts().head(3).items()) if not sub.empty else []
     return resultat
 
 def get_defensive_events(df_all, team_navn, uuid_to_name):
@@ -247,8 +255,10 @@ def get_defensive_events(df_all, team_navn, uuid_to_name):
     mindst én dødbold), og tager derefter alt i de kampe, som IKKE er
     udført af holdet selv - det er modstanderens angreb.
 
-    OBS: hvis en kamp findes, hvor holdet slet ingen dødbolde selv tog,
-    vil den kamp ikke fanges her (sjældent, men muligt).
+    OBS: dette dækker ALLE modstandere holdet har mødt i det valgte data,
+    ikke kun ét specifikt hold - fx dækker "defensivt for AB" alle hold,
+    der har spillet mod AB, ikke kun Hvidovre. Det gør datagrundlaget
+    større, men betyder også at det ikke er en 1-mod-1 kamp-analyse.
     """
     name_to_uuid = {v: k for k, v in uuid_to_name.items()}
     team_uuid = name_to_uuid.get(team_navn)
@@ -261,7 +271,7 @@ def get_defensive_events(df_all, team_navn, uuid_to_name):
     return df_defensiv
 
 def render_header_logos(team_a_navn, team_b_navn=None):
-    """Viser logo-header i Streamlit. Hvis to hold gives, vises de side om side med et 'VS' imellem."""
+    """Viser logo-header i Streamlit. Hvis to hold gives, vises de side om side med et 'VS' imellem - hold A altid til venstre, hold B (modstanderen) altid til højre."""
     info_a = TEAMS.get(team_a_navn, {})
     logo_a = get_logo_img(info_a.get('opta_uuid'))
 
@@ -269,24 +279,36 @@ def render_header_logos(team_a_navn, team_b_navn=None):
         c1, c2, c3 = st.columns([1, 0.4, 1])
         with c1:
             if logo_a: st.image(logo_a, width=70)
-            st.caption(team_a_navn)
+            st.caption(f"**{team_a_navn}**")
         with c2:
             st.markdown("<div style='text-align:center; padding-top:22px; font-weight:bold; color:#999;'>VS</div>", unsafe_allow_html=True)
         with c3:
             info_b = TEAMS.get(team_b_navn, {})
             logo_b = get_logo_img(info_b.get('opta_uuid'))
             if logo_b: st.image(logo_b, width=70)
-            st.caption(team_b_navn)
+            st.caption(f"**{team_b_navn}**")
     else:
         if logo_a: st.image(logo_a, width=70)
-        st.caption(team_a_navn)
+        st.caption(f"**{team_a_navn}**")
 
-def build_zone_figs(df_subset, sp_type, titel_prefix=""):
+def render_team_label(team_navn, logo_width=26):
+    """Lille inline logo + navn-label, sat foran et afsnit, så det er tydeligt hvilket hold tallene handler om."""
+    info = TEAMS.get(team_navn, {})
+    logo = get_logo_img(info.get('opta_uuid'))
+    c_logo, c_text = st.columns([0.08, 0.92])
+    with c_logo:
+        if logo:
+            st.image(logo, width=logo_width)
+    with c_text:
+        st.markdown(f"**{team_navn}**")
+
+def build_zone_figs(df_subset, sp_type, titel_prefix="", team_logo=None):
     """
     Bygger to matplotlib-figurer med modtagerzoner for en given dødboldtype
     (Hjørnespark, Frispark eller Indkast) - én for aktioner fra venstre side,
-    én for aktioner fra højre side. Bruges både til Hjørnespark-fanens
-    kviklook og til den fulde PDF-rapport.
+    én for aktioner fra højre side. Hvis team_logo (PIL-billede) gives,
+    tegnes det i øverste højre hjørne af hver figur, så det altid er
+    tydeligt hvilket hold billedet viser.
     Figurerne st.pyplot'es IKKE her, så de kan genbruges flere steder.
     """
     df_t = df_subset[df_subset['TYPE_NAVN'] == sp_type].copy()
@@ -315,12 +337,22 @@ def build_zone_figs(df_subset, sp_type, titel_prefix=""):
         pitch.hexbin(side_df['ENDX'], side_df['ENDY'], ax=ax, edgecolors='#ffffff', gridsize=(8, 8), cmap='Reds', alpha=0.8)
         titel = f"{titel_prefix}{sp_type} - {side_navn} ({len(side_df)} stk.)".strip()
         ax.text(50, titel_y, titel, fontsize=8, fontweight='bold', color='#333333', ha='center')
+
+        # Logo i højre side af billedet - gør det entydigt hvilket hold billedet tilhører
+        if team_logo is not None:
+            try:
+                logo_ax = ax.inset_axes([0.84, 0.84, 0.14, 0.14], transform=ax.transAxes)
+                logo_ax.imshow(team_logo)
+                logo_ax.axis('off')
+            except Exception:
+                pass
+
         resultat[side_navn] = (fig, len(side_df))
     return resultat
 
-def build_all_zone_figs(df_subset, titel_prefix=""):
+def build_all_zone_figs(df_subset, titel_prefix="", team_logo=None):
     """Bygger venstre/højre-zonefigurer for alle tre dødboldtyper på én gang."""
-    return {sp_type: build_zone_figs(df_subset, sp_type, titel_prefix=titel_prefix) for sp_type in ["Hjørnespark", "Frispark", "Indkast"]}
+    return {sp_type: build_zone_figs(df_subset, sp_type, titel_prefix=titel_prefix, team_logo=team_logo) for sp_type in ["Hjørnespark", "Frispark", "Indkast"]}
 
 def close_all_figs(zone_figs_dict):
     """Lukker alle matplotlib-figurer i et build_all_zone_figs-resultat, for at undgå memory-leaks."""
@@ -353,65 +385,11 @@ def fig_to_rlimage(fig, width_mm=150):
     ratio = (h_in / w_in) if w_in else 1
     return RLImage(buf, width=width_mm * mm, height=width_mm * ratio * mm)
 
-def _tilfoej_zone_sider(story, styles, zone_figs, sektion_titel):
-    """
-    Tilføjer én PDF-side pr. dødboldtype (Hjørnespark, Frispark, Indkast) med
-    to billeder pr. side - venstre side øverst, højre side nedenunder (1 pr. række).
-    """
-    for sp_type in ["Hjørnespark", "Frispark", "Indkast"]:
-        story.append(PageBreak())
-        story.append(Paragraph(f"{sektion_titel}: {sp_type}", styles['Heading1']))
-        story.append(Spacer(1, 4 * mm))
-        figs = zone_figs.get(sp_type, {})
-        for side_navn in ["Venstre side", "Højre side"]:
-            fig, antal = figs.get(side_navn, (None, 0))
-            story.append(Paragraph(f"{side_navn} ({antal} stk.)", styles['Heading3']))
-            if fig is not None:
-                story.append(fig_to_rlimage(fig, 150))
-            else:
-                story.append(Paragraph("Ingen data.", styles['Normal']))
-            story.append(Spacer(1, 6 * mm))
-
-def generate_modstanderrapport_pdf(hif_navn, modstander_navn, off_opsummering, top3_data, off_zone_figs, def_opsummering, def_zone_figs):
-    """
-    Bygger en komplet PDF-rapport (typisk 6-8 sider):
-    1. Forside med logoer + opsummering (offensivt) + top 3-tagere-tabel
-    2-4. Én side pr. type (Hjørnespark, Frispark, Indkast) med offensive modtagerzoner - 2 billeder pr. side
-    5. Opsummering af defensive standardsituationer
-    6-8. Én side pr. type med defensive modtagerzoner - 2 billeder pr. side
-    """
-    buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=15 * mm, bottomMargin=15 * mm, leftMargin=18 * mm, rightMargin=18 * mm)
-    styles = getSampleStyleSheet()
-    story = []
-
-    hif_logo = get_logo_img(TEAMS.get(hif_navn, {}).get('opta_uuid'))
-    mod_logo = get_logo_img(TEAMS.get(modstander_navn, {}).get('opta_uuid'))
-
-    # --- Forside ---
-    logo_row = [
-        pil_to_rlimage(hif_logo, 24) if hif_logo else Paragraph(hif_navn, styles['Normal']),
-        Paragraph("<para align='center'><b>VS</b></para>", styles['Normal']),
-        pil_to_rlimage(mod_logo, 24) if mod_logo else Paragraph(modstander_navn, styles['Normal']),
-    ]
-    logo_table = Table([logo_row], colWidths=[45 * mm, 25 * mm, 45 * mm])
-    logo_table.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('ALIGN', (0, 0), (-1, -1), 'CENTER')]))
-    story.append(logo_table)
-    story.append(Spacer(1, 8 * mm))
-
-    story.append(Paragraph(f"Modstanderrapport: {modstander_navn}", styles['Title']))
-    story.append(Paragraph(f"{hif_navn} forbereder sig mod {modstander_navn}", styles['Normal']))
-    story.append(Spacer(1, 6 * mm))
-
-    story.append(Paragraph("Opsummering - offensive standardsituationer", styles['Heading2']))
-    for linje in off_opsummering:
-        story.append(Paragraph("• " + md_to_html(linje), styles['Normal']))
-        story.append(Spacer(1, 2 * mm))
-    story.append(Spacer(1, 4 * mm))
-
-    story.append(Paragraph("Top 3-tagere pr. type", styles['Heading2']))
-    table_data = [["Type", "Spiller", "Antal"]]
-    for sp_type, rows in top3_data.items():
+def _top_tabel(styles, titel, data_dict, kolonne_navn):
+    """Bygger en enkelt ReportLab-tabel (neutrale farver) til top 3-tagere eller top 3-modtagere."""
+    elementer = [Paragraph(titel, styles['Heading2'])]
+    table_data = [["Type", kolonne_navn, "Antal"]]
+    for sp_type, rows in data_dict.items():
         if not rows:
             table_data.append([sp_type, "-", "-"])
         else:
@@ -426,21 +404,100 @@ def generate_modstanderrapport_pdf(hif_navn, modstander_navn, off_opsummering, t
         ('FONTSIZE', (0, 0), (-1, -1), 9),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
     ]))
-    story.append(t)
+    elementer.append(t)
+    return elementer
+
+def _tilfoej_zone_sider(story, styles, zone_figs, sektion_titel, team_navn, offensivt=True):
+    """
+    Tilføjer én PDF-side pr. dødboldtype (Hjørnespark, Frispark, Indkast) med
+    to billeder pr. side - venstre side øverst, højre side nedenunder (1 pr. række).
+    Hver side har en tydelig titel med holdnavn samt en forklarende linje om,
+    hvad billederne viser (offensivt = holdets egne dødbolde, defensivt =
+    andre holds dødbolde imod dem).
+    """
+    for sp_type in ["Hjørnespark", "Frispark", "Indkast"]:
+        story.append(PageBreak())
+        story.append(Paragraph(f"{sektion_titel}: {sp_type} - {team_navn}", styles['Heading1']))
+        if offensivt:
+            besk = f"{team_navn}s egne {sp_type.lower()} - hvor leveringerne oftest ender."
+        else:
+            besk = f"Andre holds {sp_type.lower()} imod {team_navn} - hvor {team_navn} oftest bliver ramt."
+        story.append(Paragraph(besk, styles['Normal']))
+        story.append(Spacer(1, 4 * mm))
+        figs = zone_figs.get(sp_type, {})
+        for side_navn in ["Venstre side", "Højre side"]:
+            fig, antal = figs.get(side_navn, (None, 0))
+            story.append(Paragraph(f"{side_navn} ({antal} stk.)", styles['Heading3']))
+            if fig is not None:
+                story.append(fig_to_rlimage(fig, 150))
+            else:
+                story.append(Paragraph("Ingen data.", styles['Normal']))
+            story.append(Spacer(1, 6 * mm))
+
+def generate_modstanderrapport_pdf(hif_navn, modstander_navn, off_opsummering, top3_tagere, top3_modtagere, off_zone_figs, def_opsummering, def_zone_figs):
+    """
+    Bygger en komplet PDF-rapport (typisk 6-8 sider):
+    1. Forside med logoer (Hvidovre altid venstre, modstander altid højre) +
+       opsummering (offensivt) + top 3-tagere- og top 3-modtagere-tabel
+    2-4. Én side pr. type (Hjørnespark, Frispark, Indkast) med offensive modtagerzoner - 2 billeder pr. side
+    5. Opsummering af defensive standardsituationer
+    6-8. Én side pr. type med defensive modtagerzoner - 2 billeder pr. side
+    """
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=15 * mm, bottomMargin=15 * mm, leftMargin=18 * mm, rightMargin=18 * mm)
+    styles = getSampleStyleSheet()
+    story = []
+
+    hif_logo = get_logo_img(TEAMS.get(hif_navn, {}).get('opta_uuid'))
+    mod_logo = get_logo_img(TEAMS.get(modstander_navn, {}).get('opta_uuid'))
+
+    # --- Forside: Hvidovre altid til venstre, modstanderen altid til højre ---
+    logo_row = [
+        pil_to_rlimage(hif_logo, 24) if hif_logo else Paragraph(hif_navn, styles['Normal']),
+        Paragraph("<para align='center'><b>VS</b></para>", styles['Normal']),
+        pil_to_rlimage(mod_logo, 24) if mod_logo else Paragraph(modstander_navn, styles['Normal']),
+    ]
+    logo_table = Table([logo_row], colWidths=[45 * mm, 25 * mm, 45 * mm])
+    logo_table.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('ALIGN', (0, 0), (-1, -1), 'CENTER')]))
+    story.append(logo_table)
+
+    label_row = [
+        Paragraph(f"<para align='center'><b>{hif_navn}</b><br/>(eget hold)</para>", styles['Normal']),
+        Paragraph("", styles['Normal']),
+        Paragraph(f"<para align='center'><b>{modstander_navn}</b><br/>(modstander)</para>", styles['Normal']),
+    ]
+    label_table = Table([label_row], colWidths=[45 * mm, 25 * mm, 45 * mm])
+    label_table.setStyle(TableStyle([('ALIGN', (0, 0), (-1, -1), 'CENTER')]))
+    story.append(label_table)
+    story.append(Spacer(1, 8 * mm))
+
+    story.append(Paragraph(f"Modstanderrapport: {modstander_navn}", styles['Title']))
+    story.append(Paragraph(f"{hif_navn} forbereder sig mod {modstander_navn}. Rapporten er delt i to: hvordan {modstander_navn} selv spiller dødbolde (offensivt), og hvordan andre hold har angrebet {modstander_navn} (defensivt) - relevant når {hif_navn} selv skal angribe.", styles['Normal']))
+    story.append(Spacer(1, 6 * mm))
+
+    story.append(Paragraph(f"Opsummering - {modstander_navn}s offensive standardsituationer", styles['Heading2']))
+    for linje in off_opsummering:
+        story.append(Paragraph("• " + md_to_html(linje), styles['Normal']))
+        story.append(Spacer(1, 2 * mm))
+    story.append(Spacer(1, 4 * mm))
+
+    story.extend(_top_tabel(styles, f"Top 3-tagere pr. type - {modstander_navn}", top3_tagere, "Tager"))
+    story.append(Spacer(1, 6 * mm))
+    story.extend(_top_tabel(styles, f"Top 3-modtagere pr. type - {modstander_navn}", top3_modtagere, "Modtager"))
 
     # --- Offensive zone-sider: Hjørnespark, Frispark, Indkast (i nævnte rækkefølge) ---
-    _tilfoej_zone_sider(story, styles, off_zone_figs, "Offensivt")
+    _tilfoej_zone_sider(story, styles, off_zone_figs, "Offensivt", modstander_navn, offensivt=True)
 
     # --- Defensiv sektion ---
     story.append(PageBreak())
-    story.append(Paragraph("Defensive standardsituationer", styles['Heading1']))
-    story.append(Paragraph(f"Sådan har modstandere angrebet {modstander_navn} fra dødbolde", styles['Normal']))
+    story.append(Paragraph(f"Defensive standardsituationer - {modstander_navn}", styles['Heading1']))
+    story.append(Paragraph(f"Sådan har andre hold angrebet {modstander_navn} fra dødbolde (dækker alle hold i datagrundlaget, ikke kun {hif_navn})", styles['Normal']))
     story.append(Spacer(1, 4 * mm))
     for linje in def_opsummering:
         story.append(Paragraph("• " + md_to_html(linje), styles['Normal']))
         story.append(Spacer(1, 2 * mm))
 
-    _tilfoej_zone_sider(story, styles, def_zone_figs, "Defensivt")
+    _tilfoej_zone_sider(story, styles, def_zone_figs, "Defensivt", modstander_navn, offensivt=False)
 
     doc.build(story)
     buffer.seek(0)
@@ -675,8 +732,10 @@ def vis_side():
             render_setpiece_analysis(df_team_selected, name, t_sel)
 
     # =====================================================================
-    # Modstanderrapport - kamp-forberedelse med logoer, opsummering,
-    # offensive OG defensive modtagerzoner, og fuld PDF-eksport
+    # Modstanderrapport - kamp-forberedelse med tydelig hold-struktur
+    # (Hvidovre altid til venstre / eget hold, modstander altid til højre),
+    # opsummering, top-tagere OG top-modtagere, offensive OG defensive
+    # modtagerzoner (med hold-logo på billedet), og fuld PDF-eksport.
     # =====================================================================
     with tabs[6]:
         st.caption("### Modstander-scoutingrapport")
@@ -686,23 +745,40 @@ def vis_side():
         else:
             modstander = st.selectbox("Vælg modstander", andre_hold, key="modstander_sel")
             df_mod_team = df_all[df_all['KLUB_NAVN'] == modstander].copy()
+            modstander_logo = get_logo_img(TEAMS.get(modstander, {}).get('opta_uuid'))
 
             render_header_logos(HIF_NAVN, modstander)
+            st.caption(f"{HIF_NAVN} (eget hold) til venstre — {modstander} (modstander) til højre. Bemærk: dette er ikke et konkret hjemme/ude-opgør, men en samlet profil af {modstander} på tværs af det data, der er tilgængeligt.")
             st.markdown("---")
 
-            st.markdown(f"#### Sådan spiller **{modstander}** deres standardsituationer (offensivt)")
+            render_team_label(modstander)
+            st.markdown("##### Offensivt: sådan spiller de deres standardsituationer")
             opsummering = opsummering_linjer(df_mod_team, modstander)
             for linje in opsummering:
                 st.markdown(f"- {linje}")
 
             st.markdown("---")
-            st.markdown("##### Top 3-tagere pr. type")
-            top3_data = get_top3_dict(df_mod_team)
+            top3_tagere = get_top3_tagere_dict(df_mod_team)
+            top3_modtagere = get_top3_modtagere_dict(df_mod_team)
+
+            st.markdown(f"##### Top 3-tagere pr. type — {modstander}")
             r1, r2, r3 = st.columns(3)
             for col, sp_type in zip([r1, r2, r3], ["Hjørnespark", "Frispark", "Indkast"]):
                 with col:
                     st.markdown(f"**{sp_type}**")
-                    rows = top3_data.get(sp_type, [])
+                    rows = top3_tagere.get(sp_type, [])
+                    if rows:
+                        for navn, antal in rows:
+                            st.write(f"- {navn}: {antal} stk.")
+                    else:
+                        st.caption("Ingen data")
+
+            st.markdown(f"##### Top 3-modtagere pr. type — {modstander}")
+            r1b, r2b, r3b = st.columns(3)
+            for col, sp_type in zip([r1b, r2b, r3b], ["Hjørnespark", "Frispark", "Indkast"]):
+                with col:
+                    st.markdown(f"**{sp_type}**")
+                    rows = top3_modtagere.get(sp_type, [])
                     if rows:
                         for navn, antal in rows:
                             st.write(f"- {navn}: {antal} stk.")
@@ -710,8 +786,8 @@ def vis_side():
                         st.caption("Ingen data")
 
             st.markdown("---")
-            st.markdown("##### Modtagerzoner ved hjørnespark (kviklook)")
-            off_zone_figs = build_all_zone_figs(df_mod_team)
+            st.markdown(f"##### Modtagerzoner ved hjørnespark (kviklook) — {modstander}")
+            off_zone_figs = build_all_zone_figs(df_mod_team, team_logo=modstander_logo)
             corner_figs = off_zone_figs["Hjørnespark"]
             cz1, cz2 = st.columns(2)
             for col, side_navn in zip([cz1, cz2], ["Venstre side", "Højre side"]):
@@ -726,15 +802,17 @@ def vis_side():
             # Defensiv data - hvordan andre hold har angrebet MODSTANDEREN (relevant for HIFs eget angreb)
             df_mod_defensiv = get_defensive_events(df_all, modstander, uuid_to_name)
             def_opsummering = opsummering_linjer(df_mod_defensiv, f"modstandere af {modstander}")
-            def_zone_figs = build_all_zone_figs(df_mod_defensiv, titel_prefix="Imod dem: ")
+            def_zone_figs = build_all_zone_figs(df_mod_defensiv, titel_prefix="Imod dem: ", team_logo=modstander_logo)
 
             with st.expander(f"Defensive tendenser hos {modstander} (indgår også i PDF-rapporten)"):
-                st.markdown(f"Sådan har andre hold angrebet **{modstander}** fra dødbolde - relevant når {HIF_NAVN} selv skal angribe:")
+                render_team_label(modstander)
+                st.markdown(f"##### Defensivt: sådan har andre hold angrebet {modstander}")
+                st.caption(f"Dækker alle hold i datagrundlaget der har mødt {modstander} - ikke kun {HIF_NAVN}s egne kampe mod dem.")
                 for linje in def_opsummering:
                     st.markdown(f"- {linje}")
 
             st.markdown("---")
-            st.caption(f"PDF-rapporten samler opsummering, top-tagere og modtagerzoner for hjørnespark, frispark og indkast - både offensivt og defensivt (typisk 6-8 sider).")
+            st.caption(f"PDF-rapporten samler opsummering, top-tagere, top-modtagere og modtagerzoner for hjørnespark, frispark og indkast - både offensivt og defensivt for {modstander} (typisk 6-8 sider).")
             col_dl1, col_dl2 = st.columns(2)
             with col_dl1:
                 rapport_tekst = f"# Modstanderrapport: {modstander}\n\n## Offensivt\n\n" + "\n".join([f"- {l}" for l in opsummering])
@@ -748,7 +826,7 @@ def vis_side():
                 )
             with col_dl2:
                 pdf_buffer = generate_modstanderrapport_pdf(
-                    HIF_NAVN, modstander, opsummering, top3_data, off_zone_figs, def_opsummering, def_zone_figs
+                    HIF_NAVN, modstander, opsummering, top3_tagere, top3_modtagere, off_zone_figs, def_opsummering, def_zone_figs
                 )
                 st.download_button(
                     "Download PDF-rapport",
@@ -819,13 +897,14 @@ def vis_side():
         if df_defensiv.empty:
             st.info("Ingen modstander-data fundet for de kampe, holdet indgår i.")
         else:
+            def_team_logo = get_logo_img(TEAMS.get(def_team, {}).get('opta_uuid'))
             st.markdown(f"#### Sådan har modstandere angrebet **{def_team}** fra dødbolde")
             for linje in opsummering_linjer(df_defensiv, f"modstandere af {def_team}"):
                 st.markdown(f"- {linje}")
 
             st.markdown("---")
             st.markdown("##### Modtagerzoner ved hjørnespark imod jer")
-            def_corner_figs = build_zone_figs(df_defensiv, "Hjørnespark")
+            def_corner_figs = build_zone_figs(df_defensiv, "Hjørnespark", team_logo=def_team_logo)
             dz1, dz2 = st.columns(2)
             for col, side_navn in zip([dz1, dz2], ["Venstre side", "Højre side"]):
                 with col:
