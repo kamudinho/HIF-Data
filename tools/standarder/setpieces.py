@@ -291,7 +291,7 @@ def render_header_logos(team_a_navn, team_b_navn=None):
         if logo_a: st.image(logo_a, width=70)
         st.caption(f"**{team_a_navn}**")
 
-def render_team_label(team_navn, logo_width=26):
+def render_team_label(team_navn, logo_width=16):
     """Lille inline logo + navn-label, sat foran et afsnit, så det er tydeligt hvilket hold tallene handler om."""
     info = TEAMS.get(team_navn, {})
     logo = get_logo_img(info.get('opta_uuid'))
