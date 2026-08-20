@@ -404,61 +404,94 @@ def draw_match_trend_chart(df_matches, metric, label, team_name, valgt_saeson):
 # --- 3. HOVEDFUNKTION ---
 
 def vis_side():
-    valgt_saeson = "2026/2027"
-    tilgængelige_hold = SEASON_LEAGUE_MAPPER.get(valgt_saeson, {}).get(DEFAULT_COMP, list(TEAMS.keys()))
-    
-    default_team_name = "Hvidovre" if "Hvidovre" in tilgængelige_hold else tilgængelige_hold[0]
-    default_team_info = TEAMS.get(default_team_name, {})
-    default_team_wyid = default_team_info.get("team_wyid", 7490)
-    default_team_opta_uuid = default_team_info.get("opta_uuid", '8gxd9ry2580pu1b1dd5ny9ymy')
+  valgt_saeson = "2026/2027"
+  tilgængelige_hold = SEASON_LEAGUE_MAPPER.get(valgt_saeson, {}).get(
+      DEFAULT_COMP, list(TEAMS.keys())
+  )
 
-    tournament_opta_map = {
-        "NordicBet Liga": "2mb332vncy4450vu14paj8844",
-        "Superliga": "29actv1ohj8r10kd9hu0jnb0n"
-    }
-    current_opta_uuid = tournament_opta_map.get(DEFAULT_COMP, "2mb332vncy4450vu14paj8844")
-    comp_wyid = COMPETITIONS.get(DEFAULT_COMP, {}).get("wyid", 328)
+  default_team_name = (
+      "Hvidovre" if "Hvidovre" in tilgængelige_hold else tilgængelige_hold[0]
+  )
+  default_team_info = TEAMS.get(default_team_name, {})
+  default_team_wyid = default_team_info.get("team_wyid", 7490)
+  default_team_opta_uuid = default_team_info.get(
+      "opta_uuid", "8gxd9ry2580pu1b1dd5ny9ymy"
+  )
 
-    try:
-        season_start_year = int(valgt_saeson.split('/')[0])
-    except:
-        season_start_year = 2026
+  tournament_opta_map = {
+      "NordicBet Liga": "2mb332vncy4450vu14paj8844",
+      "Superliga": "29actv1ohj8r10kd9hu0jnb0n",
+  }
+  current_opta_uuid = tournament_opta_map.get(
+      DEFAULT_COMP, "2mb332vncy4450vu14paj8844"
+  )
+  comp_wyid = COMPETITIONS.get(DEFAULT_COMP, {}).get("wyid", 328)
 
-    col_title, col_t, col_m = st.columns([1.8, 1.2, 1.0])
-    
-    col_t_val = tilgængelige_hold.index(default_team_name) if default_team_name in tilgængelige_hold else 0
-    with col_t:
-        valgt_hold = st.selectbox("Vælg hold:", tilgængelige_hold, index=col_t_val)
-        valgt_team_info = TEAMS.get(valgt_hold, {})
-        valgt_team_wyid = valgt_team_info.get("team_wyid", default_team_wyid)
-        valgt_team_opta_uuid = valgt_team_info.get("opta_uuid", default_team_opta_uuid)
+  try:
+    season_start_year = int(valgt_saeson.split("/")[0])
+  except:
+    season_start_year = 2026
 
-    with col_m:
-        metric_map = {
-            "xG": "EXPECTEDGOALS", 
-            "Mål": "GOALS", 
-            "Mål imod": "GOALS_AGAINST", 
-            "Skud": "TOTALSCORINGATT", 
-            "Skud på mål": "ONTARGETSCORINGATT",
-            "Afleveringer": "TOTALPASS", 
-            "PPDA": "PPDA",
-            "Hjørnespark": "WONCORNERS",
-            "Hjørnespark, mod": "LOSTCORNERS",
-        }
-        sel_metric = st.selectbox("Parameter:", list(metric_map.keys()))
+  col_title, col_t, col_m = st.columns([1.8, 1.2, 1.0])
 
-    with col_title:
-        st.subheader(f"{valgt_hold} – Kampoversigt")
-        st.caption(f"Udvikling i {DEFAULT_COMP} ({valgt_saeson})")
-
-    df_matches = load_match_level_data(
-        tournament_opta_uuid=current_opta_uuid,
-        team_opta_uuid=valgt_team_opta_uuid,
-        team_wyid=valgt_team_wyid,
-        comp_wyid=comp_wyid,
-        season_start_year=season_start_year
+  col_t_val = (
+      tilgængelige_hold.index(default_team_name)
+      if default_team_name in tilgængelige_hold
+      else 0
+  )
+  with col_t:
+    valgt_hold = st.selectbox("Vælg hold:", tilgængelige_hold, index=col_t_val)
+    valgt_team_info = TEAMS.get(valgt_hold, {})
+    valgt_team_wyid = valgt_team_info.get("team_wyid", default_team_wyid)
+    valgt_team_opta_uuid = valgt_team_info.get(
+        "opta_uuid", default_team_opta_uuid
     )
-    draw_match_trend_chart(df_matches, metric_map[sel_metric], sel_metric, valgt_hold, valgt_saeson)
+
+  with col_m:
+    metric_map = {
+        # Offensiv / Generelt
+        "xG": "EXPECTEDGOALS",
+        "Mål": "GOALS",
+        "Mål imod": "GOALS_AGAINST",
+        "Skud total": "TOTALSCORINGATT",
+        "Skud på mål": "ONTARGETSCORINGATT",
+        "Skud forbi": "SHOTOFFTARGET",
+        "Blokerede skud": "BLOCKEDSCORINGATT",
+        "Mål fra indskiftere": "SUBSGOALS",
+        # Afleveringer & Besiddelse
+        "Afleveringer total": "TOTALPASS",
+        "Præcise afleveringer": "ACCURATEPASS",
+        "Boldbesiddelse (%)": "POSSESSIONPERCENTAGE",
+        # Defensive / Duel / Andet
+        "PPDA": "PPDA",
+        "Hjørnespark (for)": "WONCORNERS",
+        "Hjørnespark (mod)": "LOSTCORNERS",
+        "Taklinger total": "TOTALTACKLE",
+        "Vundne taklinger": "WONTACKLE",
+        "Clearinger": "TOTALCLEARANCE",
+        "Blokeringer (outfield)": "OUTFIELDERBLOCK",
+        "Frispark vundet": "FKFOULWON",
+        "Frispark tabt": "FKFOULLOST",
+        "Redninger": "SAVES",
+        "Mål imod (stat)": "GOALSCONCEDED",
+        "Clean sheets": "CLEANSHEET",
+    }
+    sel_metric = st.selectbox("Parameter:", list(metric_map.keys()))
+
+  with col_title:
+    st.subheader(f"{valgt_hold} – Kampoversigt")
+    st.caption(f"Udvikling i {DEFAULT_COMP} ({valgt_saeson})")
+
+  df_matches = load_match_level_data(
+      tournament_opta_uuid=current_opta_uuid,
+      team_opta_uuid=valgt_team_opta_uuid,
+      team_wyid=valgt_team_wyid,
+      comp_wyid=comp_wyid,
+      season_start_year=season_start_year,
+  )
+  draw_match_trend_chart(
+      df_matches, metric_map[sel_metric], sel_metric, valgt_hold, valgt_saeson
+  )
 
 if __name__ == "__main__":
     vis_side()
