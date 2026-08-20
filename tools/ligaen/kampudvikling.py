@@ -1,50 +1,60 @@
-import streamlit as st
-import pandas as pd
+import base64
 import numpy as np
+import pandas as pd
 import plotly.graph_objects as go
 import requests
-import base64
+import streamlit as st
 
 # --- IMPORT DYNAMISKE KONSTANTER OG MAPPINGS ---
+from data.data_load import _get_snowflake_conn
 from data.utils.team_mapping import (
-    SEASONS,
+    COMPETITION_NAME as DEFAULT_COMP,
+    TOURNAMENTCALENDAR_NAME as DEFAULT_SEASON,
     COMPETITIONS,
     SEASON_LEAGUE_MAPPER,
+    SEASONS,
     TEAMS,
-    COMPETITION_NAME as DEFAULT_COMP,
-    TOURNAMENTCALENDAR_NAME as DEFAULT_SEASON
 )
-from data.data_load import _get_snowflake_conn
 
 # --- 1. HJÆLPEFUNKTIONER ---
 
+
 @st.cache_data(ttl=86400)
 def get_base64_image(url):
-    try:
-        if not url: return ""
-        response = requests.get(url, timeout=5)
-        if response.status_code == 200:
-            encoded_str = base64.b64encode(response.content).decode("utf-8")
-            return f"data:image/png;base64,{encoded_str}"
-    except: 
-        return url
+  try:
+    if not url:
+      return ""
+    response = requests.get(url, timeout=5)
+    if response.status_code == 200:
+      encoded_str = base64.b64encode(response.content).decode("utf-8")
+      return f"data:image/png;base64,{encoded_str}"
+  except:
     return url
+  return url
+
 
 def safe_int(val):
-    """Sikker konvertering af værdier til int, der håndterer NaN og None."""
-    try:
-        if pd.isnull(val):
-            return 0
-        return int(float(val))
-    except:
-        return 0
+  """Sikker konvertering af værdier til int, der håndterer NaN og None."""
+  try:
+    if pd.isnull(val):
+      return 0
+    return int(float(val))
+  except:
+    return 0
+
 
 @st.cache_data(ttl=3600)
-def load_match_level_data(tournament_opta_uuid, team_opta_uuid, team_wyid, comp_wyid, season_start_year=2026):
-    conn = _get_snowflake_conn()
-    db = "KLUB_HVIDOVREIF.AXIS"
-    
-    query = f"""
+def load_match_level_data(
+    tournament_opta_uuid,
+    team_opta_uuid,
+    team_wyid,
+    comp_wyid,
+    season_start_year=2026,
+):
+  conn = _get_snowflake_conn()
+  db = "KLUB_HVIDOVREIF.AXIS"
+
+  query = f"""
         WITH MatchBase AS (
             SELECT 
                 MATCH_OPTAUUID, 
@@ -135,14 +145,27 @@ def load_match_level_data(tournament_opta_uuid, team_opta_uuid, team_wyid, comp_
                 
                 -- Dynamiske ligagennemsnit beregnet på tværs af hele datasættet
                 AVG(xg.EXPECTEDGOALS) OVER() AS LIGA_AVG_EXPECTEDGOALS,
+                AVG(CASE WHEN sp.CONTESTANT_OPTAUUID = mb.CONTESTANTHOME_OPTAUUID THEN mb.TOTAL_HOME_SCORE ELSE mb.TOTAL_AWAY_SCORE END) OVER() AS LIGA_AVG_GOALS,
+                AVG(CASE WHEN sp.CONTESTANT_OPTAUUID = mb.CONTESTANTHOME_OPTAUUID THEN mb.TOTAL_AWAY_SCORE ELSE mb.TOTAL_HOME_SCORE END) OVER() AS LIGA_AVG_GOALS_AGAINST,
                 AVG(sp.TOTALSCORINGATT) OVER() AS LIGA_AVG_TOTALSCORINGATT,
                 AVG(sp.ONTARGETSCORINGATT) OVER() AS LIGA_AVG_ONTARGETSCORINGATT,
+                AVG(sp.SHOTOFFTARGET) OVER() AS LIGA_AVG_SHOTOFFTARGET,
+                AVG(sp.BLOCKEDSCORINGATT) OVER() AS LIGA_AVG_BLOCKEDSCORINGATT,
+                AVG(sp.SUBSGOALS) OVER() AS LIGA_AVG_SUBSGOALS,
                 AVG(sp.TOTALPASS) OVER() AS LIGA_AVG_TOTALPASS,
                 AVG(sp.ACCURATEPASS) OVER() AS LIGA_AVG_ACCURATEPASS,
                 AVG(sp.POSSESSIONPERCENTAGE) OVER() AS LIGA_AVG_POSSESSIONPERCENTAGE,
                 AVG(sp.WONCORNERS) OVER() AS LIGA_AVG_WONCORNERS,
                 AVG(sp.LOSTCORNERS) OVER() AS LIGA_AVG_LOSTCORNERS,
                 AVG(sp.TOTALTACKLE) OVER() AS LIGA_AVG_TOTALTACKLE,
+                AVG(sp.WONTACKLE) OVER() AS LIGA_AVG_WONTACKLE,
+                AVG(sp.TOTALCLEARANCE) OVER() AS LIGA_AVG_TOTALCLEARANCE,
+                AVG(sp.OUTFIELDERBLOCK) OVER() AS LIGA_AVG_OUTFIELDERBLOCK,
+                AVG(sp.FKFOULWON) OVER() AS LIGA_AVG_FKFOULWON,
+                AVG(sp.FKFOULLOST) OVER() AS LIGA_AVG_FKFOULLOST,
+                AVG(sp.SAVES) OVER() AS LIGA_AVG_SAVES,
+                AVG(sp.GOALSCONCEDED) OVER() AS LIGA_AVG_GOALSCONCEDED,
+                AVG(sp.CLEANSHEET) OVER() AS LIGA_AVG_CLEANSHEET,
                 AVG(wd.PPDA) OVER() AS LIGA_AVG_PPDA
 
             FROM MatchBase mb
@@ -155,253 +178,271 @@ def load_match_level_data(tournament_opta_uuid, team_opta_uuid, team_wyid, comp_
         WHERE TEAM_OPTAUUID = '{team_opta_uuid}'
         ORDER BY MATCH_DATE ASC
     """
-    df = conn.query(query)
-    
-    if not df.empty:
-        df.columns = [c.upper() for c in df.columns]
-    
-    return df
+  df = conn.query(query)
+
+  if not df.empty:
+    df.columns = [c.upper() for c in df.columns]
+
+  return df
+
 
 def draw_match_trend_chart(df_matches, metric, label, team_name, valgt_saeson):
-    if df_matches is None or df_matches.empty:
-        st.warning("Ingen kampdata tilgængelig for dette hold i den valgte sæson/turnering.")
-        return
+  if df_matches is None or df_matches.empty:
+    st.warning(
+        "Ingen kampdata tilgængelig for dette hold i den valgte"
+        " sæson/turnering."
+    )
+    return
 
-    fig = go.Figure()
-    df_matches[metric] = pd.to_numeric(df_matches[metric], errors='coerce')
-    
-    df_matches['MATCH_NUM'] = range(1, len(df_matches) + 1)
-    
-    y_vals = df_matches[metric].dropna()
-    has_data = not y_vals.empty
+  fig = go.Figure()
+  df_matches[metric] = pd.to_numeric(df_matches[metric], errors="coerce")
 
-    if has_data:
-        y_min = y_vals.min()
-        y_max = y_vals.max()
-        y_span = y_max - y_min if y_max != y_min else 1.0
-        snit_vaerdi = y_vals.mean()
-        total_val = y_vals.sum()
+  df_matches["MATCH_NUM"] = range(1, len(df_matches) + 1)
+
+  y_vals = df_matches[metric].dropna()
+  has_data = not y_vals.empty
+
+  if has_data:
+    y_min = y_vals.min()
+    y_max = y_vals.max()
+    y_span = y_max - y_min if y_max != y_min else 1.0
+    snit_vaerdi = y_vals.mean()
+    total_val = y_vals.sum()
+  else:
+    y_min, y_max = 0.0, 1.0
+    y_span = 1.0
+    snit_vaerdi = 0.0
+    total_val = 0.0
+
+  mean_str = f"{snit_vaerdi:.2f}" if has_data else "0.00"
+
+  # Særlig håndtering af PPDA og øvrige kategorier
+  if label == "PPDA":
+    label_line1 = f"PPDA i {valgt_saeson}:"
+    label_line2 = f"PPDA pr. 90 i {valgt_saeson}:"
+    val1_str = mean_str
+    val2_str = mean_str
+  else:
+    if label == "xG":
+      formatted_label = "xG"
+      formatted_label2 = "xG"
     else:
-        y_min, y_max = 0.0, 1.0
-        y_span = 1.0
-        snit_vaerdi = 0.0
-        total_val = 0.0
+      formatted_label = label.lower()
+      formatted_label2 = label.capitalize()
 
-    mean_str = f"{snit_vaerdi:.2f}" if has_data else "0.00"
+    total_str = (
+        f"{int(total_val)}" if total_val == int(total_val) else f"{total_val:.2f}"
+    )
+    label_line1 = f"Antal {formatted_label} i {valgt_saeson}:"
+    label_line2 = f"{formatted_label2} pr. 90 i {valgt_saeson}:"
+    val1_str = total_str
+    val2_str = mean_str
 
-    # Særlig håndtering af PPDA og øvrige kategorier
-    if label == "PPDA":
-        label_line1 = f"PPDA i {valgt_saeson}:"
-        label_line2 = f"PPDA pr. 90 i {valgt_saeson}:"
-        val1_str = mean_str
-        val2_str = mean_str
-    else:
-        if label == "xG":
-            formatted_label = "xG"
-            formatted_label2 = "xG"
-        else:
-            formatted_label = label.lower()
-            formatted_label2 = label.capitalize()
+  # 1. Venstrestillet tekst-kolonne
+  fig.add_annotation(
+      text=f"{label_line1}<br>{label_line2}",
+      xref="paper",
+      yref="paper",
+      x=0.67,
+      y=1.08,
+      xanchor="left",
+      yanchor="top",
+      showarrow=False,
+      align="left",
+      font=dict(size=11, color="black"),
+  )
 
-        total_str = f"{int(total_val)}" if total_val == int(total_val) else f"{total_val:.2f}"
-        label_line1 = f"Antal {formatted_label} i {valgt_saeson}:"
-        label_line2 = f"{formatted_label2} pr. 90 i {valgt_saeson}:"
-        val1_str = total_str
-        val2_str = mean_str
+  # 2. Værdi-kolonne (starter præcis det samme sted i højre side)
+  fig.add_annotation(
+      text=f"<b>{val1_str}</b><br><b>{val2_str}</b>",
+      xref="paper",
+      yref="paper",
+      x=0.94,
+      y=1.08,
+      xanchor="left",
+      yanchor="top",
+      showarrow=False,
+      align="left",
+      font=dict(size=11, color="black"),
+  )
 
-    # 1. Venstrestillet tekst-kolonne
-    fig.add_annotation(
-        text=f"{label_line1}<br>{label_line2}",
-        xref="paper",
-        yref="paper",
-        x=0.67,
-        y=1.08,
-        xanchor="left",
-        yanchor="top",
-        showarrow=False,
-        align="left",
-        font=dict(size=11, color="black")
+  # Hent det dynamiske ligasnit fra SQL-kolonnen (LIGA_AVG_{metric})
+  liga_avg_col = f"LIGA_AVG_{metric}"
+  if (
+      liga_avg_col in df_matches.columns
+      and not df_matches[liga_avg_col].dropna().empty
+  ):
+    ligasnit = df_matches[liga_avg_col].dropna().iloc[0]
+  else:
+    ligasnit = y_vals.mean() if has_data else 0.0
+
+  opp_names = []
+  opp_logos = []
+  hover_texts = []
+
+  for _, row in df_matches.iterrows():
+    home_uuid = row.get("CONTESTANTHOME_OPTAUUID")
+    away_uuid = row.get("CONTESTANTAWAY_OPTAUUID")
+    current_team_uuid = row.get("TEAM_OPTAUUID")
+
+    opp_uuid = away_uuid if current_team_uuid == home_uuid else home_uuid
+
+    o_name, o_logo = "Modstander", ""
+    for name, info in TEAMS.items():
+      if info.get("opta_uuid") == opp_uuid:
+        o_name, o_logo = name, info.get("logo", "")
+        break
+
+    opp_names.append(o_name)
+    opp_logos.append(o_logo)
+
+    g_for = safe_int(row.get("GOALS"))
+    g_imod = safe_int(row.get("GOALS_AGAINST"))
+    dato = str(row.get("MATCH_DATE", ""))[:10]
+
+    val_metric = row.get(metric, 0)
+    val_display = val_metric if pd.notnull(val_metric) else 0.0
+
+    hover_texts.append(
+        f"<b>Kamp {int(row['MATCH_NUM'])} vs. {o_name}</b><br>"
+        f"Dato: {dato}<br>"
+        f"Resultat: {g_for} - {g_imod}<br>"
+        f"{label}: {val_display:.2f}"
     )
 
-    # 2. Værdi-kolonne (starter præcis det samme sted i højre side)
-    fig.add_annotation(
-        text=f"<b>{val1_str}</b><br><b>{val2_str}</b>",
-        xref="paper",
-        yref="paper",
-        x=0.94,
-        y=1.08,
-        xanchor="left",
-        yanchor="top",
-        showarrow=False,
-        align="left",
-        font=dict(size=11, color="black")
-    )
+  df_matches["OPP_NAME"] = opp_names
+  df_matches["OPP_LOGO"] = opp_logos
+  df_matches["HOVER_TEXT"] = hover_texts
 
-    # Hent det dynamiske ligasnit fra SQL-kolonnen (LIGA_AVG_{metric})
-    liga_avg_col = f"LIGA_AVG_{metric}"
-    if liga_avg_col in df_matches.columns and not df_matches[liga_avg_col].dropna().empty:
-        ligasnit = df_matches[liga_avg_col].dropna().iloc[0]
-    else:
-        ligasnit = y_vals.mean() if has_data else 0.0
+  logo_size_x = 0.65
+  logo_size_y = y_span * 0.20 if y_span > 0.5 else 0.25
 
-    opp_names = []
-    opp_logos = []
-    hover_texts = []
+  for _, row in df_matches.iterrows():
+    if pd.notnull(row[metric]) and row.get("OPP_LOGO"):
+      b64_logo = get_base64_image(row["OPP_LOGO"])
+      fig.add_layout_image(
+          dict(
+              source=b64_logo,
+              xref="x",
+              yref="y",
+              x=row["MATCH_NUM"],
+              y=row[metric],
+              sizex=logo_size_x,
+              sizey=logo_size_y,
+              xanchor="center",
+              yanchor="middle",
+              layer="above",  # Sørger for at logoet ligger over linjer og punkter
+          )
+      )
 
-    for _, row in df_matches.iterrows():
-        home_uuid = row.get('CONTESTANTHOME_OPTAUUID')
-        away_uuid = row.get('CONTESTANTAWAY_OPTAUUID')
-        current_team_uuid = row.get('TEAM_OPTAUUID')
-        
-        opp_uuid = away_uuid if current_team_uuid == home_uuid else home_uuid
-        
-        o_name, o_logo = "Modstander", ""
-        for name, info in TEAMS.items():
-            if info.get('opta_uuid') == opp_uuid:
-                o_name, o_logo = name, info.get('logo', '')
-                break
+  is_reversed = "PPDA" in label.upper() or "IMOD" in label.upper()
 
-        opp_names.append(o_name)
-        opp_logos.append(o_logo)
-        
-        g_for = safe_int(row.get('GOALS'))
-        g_imod = safe_int(row.get('GOALS_AGAINST'))
-        dato = str(row.get('MATCH_DATE', ''))[:10]
-        
-        val_metric = row.get(metric, 0)
-        val_display = val_metric if pd.notnull(val_metric) else 0.0
+  if len(df_matches) > 1:
+    for i in range(len(df_matches) - 1):
+      y0 = df_matches[metric].iloc[i]
+      y1 = df_matches[metric].iloc[i + 1]
+      x0 = df_matches["MATCH_NUM"].iloc[i]
+      x1 = df_matches["MATCH_NUM"].iloc[i + 1]
 
-        hover_texts.append(
-            f"<b>Kamp {int(row['MATCH_NUM'])} vs. {o_name}</b><br>"
-            f"Dato: {dato}<br>"
-            f"Resultat: {g_for} - {g_imod}<br>"
-            f"{label}: {val_display:.2f}"
+      if pd.notnull(y0) and pd.notnull(y1):
+        if is_reversed:
+          is_up = y1 < y0
+        else:
+          is_up = y1 > y0
+
+        seg_color = (
+            "#2ECC71" if is_up else "#E74C3C" if y1 != y0 else "#95A5A6"
         )
 
-    df_matches['OPP_NAME'] = opp_names
-    df_matches['OPP_LOGO'] = opp_logos
-    df_matches['HOVER_TEXT'] = hover_texts
-
-    logo_size_x = 0.65  
-    logo_size_y = y_span * 0.20 if y_span > 0.5 else 0.25  
-
-    for _, row in df_matches.iterrows():
-        if pd.notnull(row[metric]) and row.get('OPP_LOGO'):
-            b64_logo = get_base64_image(row['OPP_LOGO'])
-            fig.add_layout_image(dict(
-                source=b64_logo, 
-                xref="x", 
-                yref="y",
-                x=row['MATCH_NUM'], 
-                y=row[metric],
-                sizex=logo_size_x, 
-                sizey=logo_size_y,
-                xanchor="center", 
-                yanchor="middle",
-                layer="above"  # Sørger for at logoet ligger over linjer og punkter
-            ))
-
-    is_reversed = "PPDA" in label.upper() or "IMOD" in label.upper()
-
-    if len(df_matches) > 1:
-        for i in range(len(df_matches) - 1):
-            y0 = df_matches[metric].iloc[i]
-            y1 = df_matches[metric].iloc[i+1]
-            x0 = df_matches['MATCH_NUM'].iloc[i]
-            x1 = df_matches['MATCH_NUM'].iloc[i+1]
-            
-            if pd.notnull(y0) and pd.notnull(y1):
-                if is_reversed:
-                    is_up = y1 < y0
-                else:
-                    is_up = y1 > y0
-                
-                seg_color = '#2ECC71' if is_up else '#E74C3C' if y1 != y0 else '#95A5A6'
-                
-                fig.add_trace(go.Scatter(
-                    x=[x0, x1],
-                    y=[y0, y1],
-                    mode='lines',
-                    line=dict(color=seg_color, width=2, dash='dot'),
-                    showlegend=False,
-                    hoverinfo='skip'
-                ))
-
-    fig.add_trace(go.Scatter(
-        x=df_matches['MATCH_NUM'], 
-        y=df_matches[metric], 
-        mode='markers',
-        marker=dict(size=40, opacity=0), 
-        hovertext=df_matches['HOVER_TEXT'],
-        hoverinfo='text',
-        showlegend=False
-    ))
-
-    if is_reversed:
-        if snit_vaerdi < ligasnit:
-            team_pos = "top right"
-            liga_pos = "bottom right"
-        else:
-            team_pos = "bottom right"
-            liga_pos = "top right"
-    else:
-        if snit_vaerdi >= ligasnit:
-            team_pos = "top right"
-            liga_pos = "bottom right"
-        else:
-            team_pos = "bottom right"
-            liga_pos = "top right"
-
-    if has_data:
-        fig.add_hline(
-            y=snit_vaerdi, 
-            line_dash="solid", 
-            line_color="black", 
-            line_width=1.5,
-            annotation_text=f"(Gennemsnit: {team_name})", 
-            annotation_position=team_pos
+        fig.add_trace(
+            go.Scatter(
+                x=[x0, x1],
+                y=[y0, y1],
+                mode="lines",
+                line=dict(color=seg_color, width=2, dash="dot"),
+                showlegend=False,
+                hoverinfo="skip",
+            )
         )
 
+  fig.add_trace(
+      go.Scatter(
+          x=df_matches["MATCH_NUM"],
+          y=df_matches[metric],
+          mode="markers",
+          marker=dict(size=40, opacity=0),
+          hovertext=df_matches["HOVER_TEXT"],
+          hoverinfo="text",
+          showlegend=False,
+      )
+  )
+
+  if is_reversed:
+    if snit_vaerdi < ligasnit:
+      team_pos = "top right"
+      liga_pos = "bottom right"
+    else:
+      team_pos = "bottom right"
+      liga_pos = "top right"
+  else:
+    if snit_vaerdi >= ligasnit:
+      team_pos = "top right"
+      liga_pos = "bottom right"
+    else:
+      team_pos = "bottom right"
+      liga_pos = "top right"
+
+  if has_data:
     fig.add_hline(
-        y=ligasnit, 
-        line_dash="dash", 
-        line_color="gray", 
+        y=snit_vaerdi,
+        line_dash="solid",
+        line_color="black",
         line_width=1.5,
-        annotation_text=f"(Gennemsnit: {DEFAULT_COMP})", 
-        annotation_position=liga_pos
+        annotation_text=f"(Gennemsnit: {team_name})",
+        annotation_position=team_pos,
     )
 
-    padding = y_span * 0.15 if y_span > 0 else 1.0
-    if is_reversed:
-        y_range = [y_max + padding, y_min - padding]
-    else:
-        y_range = [y_min - padding, y_max + padding]
+  fig.add_hline(
+      y=ligasnit,
+      line_dash="dash",
+      line_color="gray",
+      line_width=1.5,
+      annotation_text=f"(Gennemsnit: {DEFAULT_COMP})",
+      annotation_position=liga_pos,
+  )
 
-    yaxis_config = dict(
-        title=f"<b>{label} pr. kamp</b>", 
-        gridcolor="#f0f0f0", 
-        linecolor='black',
-        autorange="reversed" if is_reversed else True,
-        range=y_range
-    )
+  padding = y_span * 0.15 if y_span > 0 else 1.0
+  if is_reversed:
+    y_range = [y_max + padding, y_min - padding]
+  else:
+    y_range = [y_min - padding, y_max + padding]
 
-    fig.update_layout(
-        height=550, 
-        margin=dict(t=70, b=60, l=60, r=40),
-        xaxis=dict(
-            title="<b>Kampnummer</b>", 
-            tickmode='linear', 
-            dtick=1,
-            gridcolor="#f0f0f0", 
-            linecolor='black'
-        ),
-        yaxis=yaxis_config,
-        plot_bgcolor='white',
-        showlegend=False
-    )
-    st.plotly_chart(fig, use_container_width=True)
+  yaxis_config = dict(
+      title=f"<b>{label} pr. kamp</b>",
+      gridcolor="#f0f0f0",
+      linecolor="black",
+      autorange="reversed" if is_reversed else True,
+      range=y_range,
+  )
+
+  fig.update_layout(
+      height=550,
+      margin=dict(t=70, b=60, l=60, r=40),
+      xaxis=dict(
+          title="<b>Kampnummer</b>",
+          tickmode="linear",
+          dtick=1,
+          gridcolor="#f0f0f0",
+          linecolor="black",
+      ),
+      yaxis=yaxis_config,
+      plot_bgcolor="white",
+      showlegend=False,
+  )
+  st.plotly_chart(fig, use_container_width=True)
 
 # --- 3. HOVEDFUNKTION ---
+
 
 def vis_side():
   valgt_saeson = "2026/2027"
@@ -493,5 +534,6 @@ def vis_side():
       df_matches, metric_map[sel_metric], sel_metric, valgt_hold, valgt_saeson
   )
 
+
 if __name__ == "__main__":
-    vis_side()
+  vis_side()
