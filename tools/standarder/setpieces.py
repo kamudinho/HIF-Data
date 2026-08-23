@@ -886,7 +886,7 @@ def vis_side():
     # Defensiv analyse
     # =====================================================================
     with tabs[8]:
-        st.caption("### Defensiv analyse - modstanderes dødbolde mod jer")
+        st.caption("### Defensiv analyse - modstanderes dødbolde mod {modstander}")
         def_team = st.selectbox("Analyser forsvar for", teams, index=teams.index(t_sel) if t_sel in teams else 0, key="def_team_sel")
 
         render_header_logos(HIF_NAVN, def_team if def_team != HIF_NAVN else None)
