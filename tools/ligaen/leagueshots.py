@@ -1,11 +1,15 @@
-import io
-from io import BytesIO
-import matplotlib.patches as patches
-import matplotlib.pyplot as plt
-import numpy as np
+import streamlit as st
 import pandas as pd
-import requests
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+from data.utils.team_mapping import TEAMS, TEAM_COLORS, SEASONS, COMPETITIONS
+from data.data_load import _get_snowflake_conn
+from data.players.player_mapping import player_mapping
+from utils.pitches import get_pitch, get_boundaries
 from PIL import Image
+import requests
+from io import BytesIO
 
 # Importér eksisterende moduler og funktioner
 from data.data_load import _get_snowflake_conn
