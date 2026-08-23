@@ -634,7 +634,9 @@ def render_setpiece_analysis(df_team, sp_type, t_sel):
 
 def vis_side():
     df_all = load_setpiece_data()
-    if df_all.empty: st.warning("Ingen data fundet."); return
+    if df_all.empty: 
+        st.warning("Ingen data fundet.")
+        return
 
     uuid_to_name = {v['opta_uuid'].upper(): k for k, v in TEAMS.items() if v.get('opta_uuid')}
     df_all['KLUB_NAVN'] = df_all['TEAM_UUID'].str.upper().map(uuid_to_name)
@@ -727,15 +729,18 @@ def vis_side():
         if c2:
             st.dataframe(get_summary_stats(df_team_selected[df_team_selected['TYPE_NAVN'] == c2], 'TAGER_NAVN'), use_container_width=True, hide_index=True, column_config=col_cfg)
 
-    for i, name in enumerate(["Hjørnespark", "Frispark", "Indkast"], 3):
-        with tabs[i]:
-            render_setpiece_analysis(df_team_selected, name, t_sel)
+    # Tabs 3, 4 og 5: Specifik analyse for Hjørnespark, Frispark og Indkast
+    with tabs[3]:
+        render_setpiece_analysis(df_team_selected, "Hjørnespark", t_sel)
+
+    with tabs[4]:
+        render_setpiece_analysis(df_team_selected, "Frispark", t_sel)
+
+    with tabs[5]:
+        render_setpiece_analysis(df_team_selected, "Indkast", t_sel)
 
     # =====================================================================
-    # Modstanderrapport - kamp-forberedelse med tydelig hold-struktur
-    # (Hvidovre altid til venstre / eget hold, modstander altid til højre),
-    # opsummering, top-tagere OG top-modtagere, offensive OG defensive
-    # modtagerzoner (med hold-logo på billedet), og fuld PDF-eksport.
+    # Modstanderrapport (Tab 6)
     # =====================================================================
     with tabs[6]:
         st.caption("### Modstander-scoutingrapport")
@@ -799,7 +804,6 @@ def vis_side():
                     else:
                         st.caption("Ingen data")
 
-            # Defensiv data - hvordan andre hold har angrebet MODSTANDEREN (relevant for HIFs eget angreb)
             df_mod_defensiv = get_defensive_events(df_all, modstander, uuid_to_name)
             def_opsummering = opsummering_linjer(df_mod_defensiv, f"modstandere af {modstander}")
             def_zone_figs = build_all_zone_figs(df_mod_defensiv, titel_prefix="Imod dem: ", team_logo=modstander_logo)
@@ -836,12 +840,11 @@ def vis_side():
                     key="download_modstanderrapport_pdf"
                 )
 
-            # Ryd op i figurerne, nu hvor de er brugt både i Streamlit og PDF'en
             close_all_figs(off_zone_figs)
             close_all_figs(def_zone_figs)
 
     # =====================================================================
-    # Sammenligning
+    # Sammenligning (Tab 7)
     # =====================================================================
     with tabs[7]:
         st.caption("### Sammenligning mellem to hold")
@@ -885,7 +888,7 @@ def vis_side():
     # =====================================================================
     # Defensiv analyse (Tab 8)
     # =====================================================================
-      with tabs[8]:
+    with tabs[8]:
         def_team = st.selectbox(
             "Analyser forsvar for",
             teams,
@@ -893,41 +896,37 @@ def vis_side():
             key="def_team_sel",
         )
         st.markdown(f"### Defensiv analyse - modstanderes dødbolde mod {def_team}")
-    
+
         render_header_logos("Hvidovre", def_team if def_team != "Hvidovre" else None)
         st.markdown("---")
-    
+
         df_defensiv = get_defensive_events(df_all, def_team, uuid_to_name)
-    
+
         if df_defensiv.empty:
-          st.info("Ingen modstander-data fundet for de kampe, holdet indgår i.")
+            st.info("Ingen modstander-data fundet for de kampe, holdet indgår i.")
         else:
-          def_team_logo = get_logo_img(TEAMS.get(def_team, {}).get("opta_uuid"))
-          st.markdown(
-              f"#### Sådan har modstandere angrebet **{def_team}** fra dødbolde"
-          )
-          for linje in opsummering_linjer(df_defensiv, f"modstandere af {def_team}"):
-            st.markdown(f"- {linje}")
-    
-          st.markdown("---")
-          st.markdown(f"##### Modtagerzoner ved hjørnespark imod {def_team}")
-          def_corner_figs = build_zone_figs(
-              df_defensiv, "Hjørnespark", team_logo=def_team_logo
-          )
-          dz1, dz2 = st.columns(2)
-          for col, side_navn in zip([dz1, dz2], ["Venstre side", "Højre side"]):
-            with col:
-              fig, antal = def_corner_figs.get(side_navn, (None, 0))
-              st.markdown(f"**{side_navn}** ({antal} hjørnespark)")
-              if fig is not None:
-                st.pyplot(fig, clear_figure=True)
-              else:
-                st.caption("Ingen data")
-    
-    
-    if __name__ == "__main__":
-      st.set_page_config(layout="wide", page_title="Standardsituationer")
-      st.markdown(
-          "<style>header {visibility: hidden;}</style>", unsafe_allow_html=True
-      )
-  vis_side()
+            def_team_logo = get_logo_img(TEAMS.get(def_team, {}).get("opta_uuid"))
+            st.markdown(f"#### Sådan har modstandere angrebet **{def_team}** fra dødbolde")
+            for linje in opsummering_linjer(df_defensiv, f"modstandere af {def_team}"):
+                st.markdown(f"- {linje}")
+
+            st.markdown("---")
+            st.markdown(f"##### Modtagerzoner ved hjørnespark imod {def_team}")
+            def_corner_figs = build_zone_figs(
+                df_defensiv, "Hjørnespark", team_logo=def_team_logo
+            )
+            dz1, dz2 = st.columns(2)
+            for col, side_navn in zip([dz1, dz2], ["Venstre side", "Højre side"]):
+                with col:
+                    fig, antal = def_corner_figs.get(side_navn, (None, 0))
+                    st.markdown(f"**{side_navn}** ({antal} hjørnespark)")
+                    if fig is not None:
+                        st.pyplot(fig, clear_figure=True)
+                    else:
+                        st.caption("Ingen data")
+
+
+if __name__ == "__main__":
+    st.set_page_config(layout="wide", page_title="Standardsituationer")
+    st.markdown("<style>header {visibility: hidden;}</style>", unsafe_allow_html=True)
+    vis_side()
