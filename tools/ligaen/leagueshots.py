@@ -491,7 +491,7 @@ def vis_side(dp=None):
         st.markdown("---")
         st.markdown("**Farveforklaring (xG):**")
         st.markdown(
-            "Grån = **0 < 0,15** (Lav kvalitet)"
+            "Grå = **0 < 0,15** (Lav kvalitet)"
             "<br>Grøn = **0,15 < 0,35** (Medium kvalitet)"
             "<br>Rød = **0,35 <=** (Høj kvalitet)",
             unsafe_allow_html=True,
