@@ -886,15 +886,13 @@ def vis_side():
   # Defensiv analyse (Tab 8)
   # =====================================================================
   with tabs[8]:
-    st.markdown(
-        f"### Defensiv analyse - modstanderes dødbolde mod {def_team if 'def_team' in locals() else t_sel}"
-    )
     def_team = st.selectbox(
         "Analyser forsvar for",
         teams,
         index=teams.index(t_sel) if t_sel in teams else 0,
         key="def_team_sel",
     )
+    st.markdown(f"### Defensiv analyse - modstanderes dødbolde mod {def_team}")
 
     render_header_logos("Hvidovre", def_team if def_team != "Hvidovre" else None)
     st.markdown("---")
