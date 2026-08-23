@@ -883,39 +883,51 @@ def vis_side():
             st.info("Der er ikke flere hold i datasættet at sammenligne med.")
 
     # =====================================================================
-    # Defensiv analyse
-    # =====================================================================
-    with tabs[8]:
-        st.caption("### Defensiv analyse - modstanderes dødbolde mod {modstander}")
-        def_team = st.selectbox("Analyser forsvar for", teams, index=teams.index(t_sel) if t_sel in teams else 0, key="def_team_sel")
+# Defensiv analyse
+# =====================================================================
+with tabs[8]:
+  st.markdown(
+      f"### Defensiv analyse - modstanderes dødbolde mod {def_team}"
+  )
+  def_team = st.selectbox(
+      "Analyser forsvar for",
+      teams,
+      index=teams.index(t_sel) if t_sel in teams else 0,
+      key="def_team_sel",
+  )
 
-        render_header_logos(HIF_NAVN, def_team if def_team != HIF_NAVN else None)
-        st.markdown("---")
+  render_header_logos(HIF_NAVN, def_team if def_team != HIF_NAVN else None)
+  st.markdown("---")
 
-        df_defensiv = get_defensive_events(df_all, def_team, uuid_to_name)
+  df_defensiv = get_defensive_events(df_all, def_team, uuid_to_name)
 
-        if df_defensiv.empty:
-            st.info("Ingen modstander-data fundet for de kampe, holdet indgår i.")
+  if df_defensiv.empty:
+    st.info("Ingen modstander-data fundet for de kampe, holdet indgår i.")
+  else:
+    def_team_logo = get_logo_img(TEAMS.get(def_team, {}).get("opta_uuid"))
+    st.markdown(f"#### Sådan har modstandere angrebet **{def_team}** fra dødbolde")
+    for linje in opsummering_linjer(df_defensiv, f"modstandere af {def_team}"):
+      st.markdown(f"- {linje}")
+
+    st.markdown("---")
+    # Her er "jer" ændret til navnet på holdet (def_team)
+    st.markdown(f"##### Modtagerzoner ved hjørnespark imod {def_team}")
+    def_corner_figs = build_zone_figs(
+        df_defensiv, "Hjørnespark", team_logo=def_team_logo
+    )
+    dz1, dz2 = st.columns(2)
+    for col, side_navn in zip([dz1, dz2], ["Venstre side", "Højre side"]):
+      with col:
+        fig, antal = def_corner_figs.get(side_navn, (None, 0))
+        st.markdown(f"**{side_navn}** ({antal} hjørnespark)")
+        if fig is not None:
+          st.pyplot(fig, clear_figure=True)
         else:
-            def_team_logo = get_logo_img(TEAMS.get(def_team, {}).get('opta_uuid'))
-            st.markdown(f"#### Sådan har modstandere angrebet **{def_team}** fra dødbolde")
-            for linje in opsummering_linjer(df_defensiv, f"modstandere af {def_team}"):
-                st.markdown(f"- {linje}")
-
-            st.markdown("---")
-            st.markdown("##### Modtagerzoner ved hjørnespark imod jer")
-            def_corner_figs = build_zone_figs(df_defensiv, "Hjørnespark", team_logo=def_team_logo)
-            dz1, dz2 = st.columns(2)
-            for col, side_navn in zip([dz1, dz2], ["Venstre side", "Højre side"]):
-                with col:
-                    fig, antal = def_corner_figs.get(side_navn, (None, 0))
-                    st.markdown(f"**{side_navn}** ({antal} hjørnespark)")
-                    if fig is not None:
-                        st.pyplot(fig, clear_figure=True)
-                    else:
-                        st.caption("Ingen data")
+          st.caption("Ingen data")
 
 if __name__ == "__main__":
-    st.set_page_config(layout="wide", page_title="Standardsituationer")
-    st.markdown("<style>header {visibility: hidden;}</style>", unsafe_allow_html=True)
-    vis_side()
+  st.set_page_config(layout="wide", page_title="Standardsituationer")
+  st.markdown(
+      "<style>header {visibility: hidden;}</style>", unsafe_allow_html=True
+  )
+  vis_side()
