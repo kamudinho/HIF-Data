@@ -157,7 +157,7 @@ def beregn_kategori_indices(row, hif_uuid):
     corners_for = get_val('HOME_CORNERS_WON', 'AWAY_CORNERS_WON')
     corners_against = get_val('AWAY_CORNERS_WON', 'HOME_CORNERS_WON')
     fouls_won = get_val('HOME_FOULS_WON', 'AWAY_FOULS_WON')
-    fouls_lost = get_val('HOME_FOULS_LOST', 'AWAY_FOULS_LOST')
+    fouls_lost = get_val('AWAY_FOULS_LOST', 'HOME_FOULS_LOST')
     aerial_off = get_val('HOME_AERIAL_WON', 'AWAY_AERIAL_WON')
     aerial_def = get_val('AWAY_AERIAL_WON', 'HOME_AERIAL_WON')
     
@@ -222,15 +222,20 @@ def beregn_hold_stats(df_stats, team_uuid):
     played = df_stats[df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].copy()
     cols_to_numeric = ['TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE', 'HOME_XG', 'AWAY_XG', 'HOME_POSSESSION', 'AWAY_POSSESSION']
     for col in cols_to_numeric:
-        if col in played.columns: played[col] = pd.to_numeric(played[col], errors='coerce')
+        if col in played.columns: played[col] = pd.to_numeric(played[col], errors='coerce').fillna(0)
+    
     home = played[played['CONTESTANTHOME_OPTAUUID'].str.upper() == team_uuid.upper()]
     away = played[played['CONTESTANTAWAY_OPTAUUID'].str.upper() == team_uuid.upper()]
     total_matches = len(home) + len(away)
     if total_matches == 0: return {"gf": "0.0", "ga": "0.0", "xgf": "0.00", "xga": "0.00", "poss": "0.00%"}
+    
     gf = home['TOTAL_HOME_SCORE'].sum() + away['TOTAL_AWAY_SCORE'].sum()
     ga = home['TOTAL_AWAY_SCORE'].sum() + away['TOTAL_HOME_SCORE'].sum()
-    xgf = home['HOME_XG'].fillna(0).sum() + away['AWAY_XG'].fillna(0).sum()
-    xga = home['AWAY_XG'].fillna(0).sum() + away['HOME_XG'].fillna(0).sum()
+    
+    # Rettet xG summering, så den tager højde for hjenme/ude og dividerer korrekt med antal kampe
+    xgf = home['HOME_XG'].sum() + away['AWAY_XG'].sum()
+    xga = home['AWAY_XG'].sum() + away['HOME_XG'].sum()
+    
     poss_all = pd.concat([home['HOME_POSSESSION'], away['AWAY_POSSESSION']]).dropna().mean()
     return {
         "gf": f"{gf / total_matches:.1f}", 
@@ -404,13 +409,17 @@ def vis_side():
                     diff_liga_color = "#28a745" if r['Diff_Liga'] > 0 else "#dc3545"
                     diff_hif_color = "#28a745" if r['Diff_vs_Hif'] > 0 else "#dc3545"
                     
-                    # Hvis statten er Boldbesiddelse (finder den via navnet), vises den med 2 decimaler
+                    # Sikrer korrekt decimalformatering for henholdsvis besiddelse, xG og mål/andre stats
                     if "besiddelse" in r['Stat'].lower():
                         hif_str = f"{r['HIF']:.2f}%"
                         liga_str = f"{r['Liga']:.2f}%"
                         last_str = f"{r['Seneste']:.2f}%"
+                    elif "goals" in r['Stat'].lower() or "xg" in r['Stat'].lower():
+                        hif_str = f"{r['HIF']:.2f}"
+                        liga_str = f"{r['Liga']:.2f}"
+                        last_str = f"{r['Seneste']:.2f}"
                     else:
-                        hif_str = f"{r['HIF']:.2f}" if "Goals" in r['Stat'] or "xG" in r['Stat'] or r['HIF'] % 1 != 0 else f"{r['HIF']:.2f}"
+                        hif_str = f"{r['HIF']:.2f}"
                         liga_str = f"{r['Liga']:.2f}"
                         last_str = f"{r['Seneste']:.0f}"
 
@@ -418,8 +427,8 @@ def vis_side():
                         <td class='stats-label'>{r['Stat']}</td>
                         <td class='stats-value'>{last_str}</td>
                         <td class='stats-value' style='color:{diff_hif_color}; font-weight:800;'>{r['Diff_vs_Hif']:+.2f}</td>
-                        <td class='stats-value'>{r['HIF']:.2f}</td>
-                        <td class='stats-value'>{r['Liga']:.2f}</td>
+                        <td class='stats-value'>{hif_str}</td>
+                        <td class='stats-value'>{liga_str}</td>
                         <td class='stats-value' style='color:{diff_liga_color}; font-weight:800;'>{r['Diff_Liga']:+.2f}</td>
                     </tr>"""
                 html += "</tbody></table>"
