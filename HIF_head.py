@@ -226,13 +226,19 @@ def beregn_hold_stats(df_stats, team_uuid):
     home = played[played['CONTESTANTHOME_OPTAUUID'].str.upper() == team_uuid.upper()]
     away = played[played['CONTESTANTAWAY_OPTAUUID'].str.upper() == team_uuid.upper()]
     total_matches = len(home) + len(away)
-    if total_matches == 0: return {"gf": "0.0", "ga": "0.0", "xgf": "0.0", "xga": "0.0", "poss": "0%"}
+    if total_matches == 0: return {"gf": "0.0", "ga": "0.0", "xgf": "0.00", "xga": "0.00", "poss": "0.00%"}
     gf = home['TOTAL_HOME_SCORE'].sum() + away['TOTAL_AWAY_SCORE'].sum()
     ga = home['TOTAL_AWAY_SCORE'].sum() + away['TOTAL_HOME_SCORE'].sum()
     xgf = home['HOME_XG'].fillna(0).sum() + away['AWAY_XG'].fillna(0).sum()
     xga = home['AWAY_XG'].fillna(0).sum() + away['HOME_XG'].fillna(0).sum()
     poss_all = pd.concat([home['HOME_POSSESSION'], away['AWAY_POSSESSION']]).dropna().mean()
-    return {"gf": f"{gf / total_matches:.1f}", "ga": f"{ga / total_matches:.1f}", "xgf": f"{xgf / total_matches:.2f}", "xga": f"{xga / total_matches:.2f}", "poss": f"{int(round(poss_all))}%" if pd.notnull(poss_all) else "0%"}
+    return {
+        "gf": f"{gf / total_matches:.1f}", 
+        "ga": f"{ga / total_matches:.1f}", 
+        "xgf": f"{xgf / total_matches:.2f}", 
+        "xga": f"{xga / total_matches:.2f}", 
+        "poss": f"{poss_all:.2f}%" if pd.notnull(poss_all) else "0.00%"
+    }
 
 def beregn_stilling(df_matches, valgt_saeson, valgt_turnering):
     stats = {}
@@ -398,9 +404,19 @@ def vis_side():
                     diff_liga_color = "#28a745" if r['Diff_Liga'] > 0 else "#dc3545"
                     diff_hif_color = "#28a745" if r['Diff_vs_Hif'] > 0 else "#dc3545"
                     
+                    # Hvis statten er Boldbesiddelse (finder den via navnet), vises den med 2 decimaler
+                    if "besiddelse" in r['Stat'].lower():
+                        hif_str = f"{r['HIF']:.2f}%"
+                        liga_str = f"{r['Liga']:.2f}%"
+                        last_str = f"{r['Seneste']:.2f}%"
+                    else:
+                        hif_str = f"{r['HIF']:.2f}" if "Goals" in r['Stat'] or "xG" in r['Stat'] or r['HIF'] % 1 != 0 else f"{r['HIF']:.2f}"
+                        liga_str = f"{r['Liga']:.2f}"
+                        last_str = f"{r['Seneste']:.0f}"
+
                     html += f"""<tr>
                         <td class='stats-label'>{r['Stat']}</td>
-                        <td class='stats-value'>{r['Seneste']:.0f}</td>
+                        <td class='stats-value'>{last_str}</td>
                         <td class='stats-value' style='color:{diff_hif_color}; font-weight:800;'>{r['Diff_vs_Hif']:+.2f}</td>
                         <td class='stats-value'>{r['HIF']:.2f}</td>
                         <td class='stats-value'>{r['Liga']:.2f}</td>
@@ -483,7 +499,7 @@ def vis_side():
                     line = alt.Chart(hif_recent).mark_line(color='#AAAAAA', point=alt.MarkConfig(color='#C41E3A', filled=True)).encode(
                         x=alt.X('index:O', axis=None), 
                         y=alt.Y(f'{col}:Q', axis=None, scale=alt.Scale(zero=False)), 
-                        tooltip=[alt.Tooltip('tooltip_header', title='Kamp'), alt.Tooltip(f'{col}', title='Score', format='.1f'), alt.Tooltip('diff_label', title='Diff vs Snit')]
+                        tooltip=[alt.Tooltip('tooltip_header', title='Kamp'), alt.Tooltip(f'{col}', title='Score', format='.2f'), alt.Tooltip('diff_label', title='Diff vs Snit')]
                     ).properties(height=120)
                     
                     st.altair_chart(line + alt.Chart(pd.DataFrame({'y': [hif_avg]})).mark_rule(color='#C41E3A', strokeDash=[3,3]).encode(y='y:Q') + alt.Chart(pd.DataFrame({'y': [liga_means[col]]})).mark_rule(color='#000000', strokeDash=[2,2], opacity=0.4).encode(y='y:Q'), use_container_width=True)
