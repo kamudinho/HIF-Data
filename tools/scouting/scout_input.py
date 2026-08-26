@@ -442,7 +442,7 @@ def vis_side(dp):
       l4c1, l4c2, l4c3 = st.columns(3)
       lon = l4c1.number_input("Lønniveau", value=0)
       vindue = l4c2.selectbox(
-          "Transfervindue", ["Sommer 26", "Vinter 26/27", "Sommer 27"]
+          "Transfervindue", ["Sommer 26", "Vinter 26/27", "Sommer 27", "Vinter 27", "Sommer 28", "Vinter 28", "Sommer 29", "Vinter 29"]
       )
       er_emne = l4c3.checkbox("Transferemne?")
 
