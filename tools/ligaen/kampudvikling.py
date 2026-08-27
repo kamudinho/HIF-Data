@@ -55,7 +55,7 @@ def load_match_level_data(
   db = "KLUB_HVIDOVREIF.AXIS"
 
   query = f"""
-        WITH MatchBase AS (
+        With MatchBase AS (
             SELECT 
                 MATCH_OPTAUUID, 
                 TO_CHAR(MATCH_DATE_FULL, 'YYYY-MM-DD') AS MATCH_DATE,
@@ -114,10 +114,10 @@ def load_match_level_data(
                 mb.MATCH_OPTAUUID,
                 mb.MATCH_DATE,
                 sp.CONTESTANT_OPTAUUID AS TEAM_OPTAUUID,
-                
+
                 CASE WHEN sp.CONTESTANT_OPTAUUID = mb.CONTESTANTHOME_OPTAUUID THEN mb.TOTAL_HOME_SCORE ELSE mb.TOTAL_AWAY_SCORE END AS GOALS,
                 CASE WHEN sp.CONTESTANT_OPTAUUID = mb.CONTESTANTHOME_OPTAUUID THEN mb.TOTAL_AWAY_SCORE ELSE mb.TOTAL_HOME_SCORE END AS GOALS_AGAINST,
-                
+
                 mb.CONTESTANTHOME_OPTAUUID,
                 mb.CONTESTANTAWAY_OPTAUUID,
 
@@ -142,7 +142,7 @@ def load_match_level_data(
                 sp.CLEANSHEET,
                 xg.EXPECTEDGOALS,
                 wd.PPDA,
-                
+
                 -- Dynamiske ligagennemsnit
                 AVG(xg.EXPECTEDGOALS) OVER() AS LIGA_AVG_EXPECTEDGOALS,
                 AVG(CASE WHEN sp.CONTESTANT_OPTAUUID = mb.CONTESTANTHOME_OPTAUUID THEN mb.TOTAL_HOME_SCORE ELSE mb.TOTAL_AWAY_SCORE END) OVER() AS LIGA_AVG_GOALS,
@@ -182,12 +182,9 @@ def load_match_level_data(
 
   if not df.empty:
     df.columns = [c.upper() for c in df.columns]
-    # Udfyld NaN med 0 for at sikre, at hold med 0 i en stat vises korrekt
     numeric_cols = df.select_dtypes(include=[np.number]).columns
     df[numeric_cols] = df[numeric_cols].fillna(0)
 
-    # Beregn sammensatte indekser hvis kolonnen findes
-    # Offensiv Index: Kombinerer xG, Mål, Skud på mål og Total skud (vægtet)
     df["OFFENSIV_INDEX"] = (
         df.get("EXPECTEDGOALS", 0) * 2.0
         + df.get("GOALS", 0) * 3.0
@@ -195,7 +192,6 @@ def load_match_level_data(
         + df.get("TOTALSCORINGATT", 0) * 0.2
     )
 
-    # Defensiv Index: Kombinerer Vundne taklinger, Clearinger, Blokeringer og Clean sheet (samt lavere mål imod / PPDA)
     df["DEFENSIV_INDEX"] = (
         df.get("WONTACKLE", 0) * 1.0
         + df.get("TOTALCLEARANCE", 0) * 0.5
@@ -319,12 +315,36 @@ def draw_match_trend_chart(df_matches, metric, label, team_name, valgt_saeson):
     dato = str(row.get("MATCH_DATE", ""))[:10]
     val_metric = row.get(metric, 0)
 
-    hover_texts.append(
-        f"<b>Kamp {int(row['MATCH_NUM'])} vs. {o_name}</b><br>"
-        f"Dato: {dato}<br>"
-        f"Resultat: {g_for} - {g_imod}<br>"
-        f"{label}: {val_metric:.2f}"
-    )
+    # Tjek om den valgte parameter relaterer sig til skud
+    is_shot_metric = label in [
+        "Skud total",
+        "Skud på mål",
+        "Skud forbi",
+        "Blokerede skud",
+    ]
+
+    if is_shot_metric:
+      tot_shots = safe_int(row.get("TOTALSCORINGATT", 0))
+      on_target = safe_int(row.get("ONTARGETSCORINGATT", 0))
+      off_target = safe_int(row.get("SHOTOFFTARGET", 0))
+      blocked = safe_int(row.get("BLOCKEDSCORINGATT", 0))
+
+      hover_texts.append(
+          f"<b>Kamp {int(row['MATCH_NUM'])} vs. {o_name}</b><br>"
+          f"Dato: {dato}<br>"
+          f"Resultat: {g_for} - {g_imod}<br>"
+          f"Skud total: {tot_shots}<br>"
+          f"Skud på mål: {on_target}<br>"
+          f"Skud forbi: {off_target}<br>"
+          f"Skud blokeret: {blocked}"
+      )
+    else:
+      hover_texts.append(
+          f"<b>Kamp {int(row['MATCH_NUM'])} vs. {o_name}</b><br>"
+          f"Dato: {dato}<br>"
+          f"Resultat: {g_for} - {g_imod}<br>"
+          f"{label}: {val_metric:.2f}"
+      )
 
   df_matches["OPP_NAME"] = opp_names
   df_matches["OPP_LOGO"] = opp_logos
@@ -372,7 +392,6 @@ def draw_match_trend_chart(df_matches, metric, label, team_name, valgt_saeson):
   logo_size_x = 0.65
   logo_size_y = y_span * 0.20 if y_span > 0.5 else 0.25
 
-  # Sikrer at logoer tilføjes SIDST, så de ligger øverst over alt andet
   for _, row in df_matches.iterrows():
     if row.get("OPP_LOGO"):
       b64_logo = get_base64_image(row["OPP_LOGO"])
@@ -387,7 +406,7 @@ def draw_match_trend_chart(df_matches, metric, label, team_name, valgt_saeson):
               sizey=logo_size_y,
               xanchor="center",
               yanchor="middle",
-              layer="above",  # Ændret fra 'top' til 'above', som er gyldigt i Plotly
+              layer="above",
           )
       )
 
@@ -493,10 +512,8 @@ def vis_side():
 
   with col_m:
     metric_map = {
-        # Nye sammensatte indekser
         "Offensiv Index": "OFFENSIV_INDEX",
         "Defensiv Index": "DEFENSIV_INDEX",
-        # Offensiv / Generelt
         "xG": "EXPECTEDGOALS",
         "Mål": "GOALS",
         "Mål imod": "GOALS_AGAINST",
@@ -505,11 +522,9 @@ def vis_side():
         "Skud forbi": "SHOTOFFTARGET",
         "Blokerede skud": "BLOCKEDSCORINGATT",
         "Mål fra indskiftere": "SUBSGOALS",
-        # Afleveringer & Besiddelse
         "Afleveringer total": "TOTALPASS",
         "Præcise afleveringer": "ACCURATEPASS",
         "Boldbesiddelse (%)": "POSSESSIONPERCENTAGE",
-        # Defensive / Duel / Andet
         "PPDA": "PPDA",
         "Hjørnespark (for)": "WONCORNERS",
         "Hjørnespark (mod)": "LOSTCORNERS",
@@ -525,7 +540,6 @@ def vis_side():
     }
     sel_metric = st.selectbox("Parameter:", list(metric_map.keys()))
 
-    # Beskrivelsesboks på tværs af hele skærmen med sort ramme
   if sel_metric == "Offensiv Index":
     st.markdown(
         """
@@ -535,7 +549,6 @@ def vis_side():
         """,
         unsafe_allow_html=True,
     )
-      #xG (vgt 2), mål (vgt 3), skud på mål (vgt 1) og total skud (vgt 0.2)
   elif sel_metric == "Defensiv Index":
     st.markdown(
         """
