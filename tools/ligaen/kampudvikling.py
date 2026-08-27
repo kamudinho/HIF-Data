@@ -329,21 +329,43 @@ def draw_match_trend_chart(df_matches, metric, label, team_name, valgt_saeson):
       off_target = safe_int(row.get("SHOTOFFTARGET", 0))
       blocked = safe_int(row.get("BLOCKEDSCORINGATT", 0))
 
+      # Marker den valgte metric med fed
+      tot_str = (
+          f"<b>Skud total: {tot_shots}</b>"
+          if label == "Skud total"
+          else f"Skud total: {tot_shots}"
+      )
+      on_str = (
+          f"<b>Skud på mål: {on_target}</b>"
+          if label == "Skud på mål"
+          else f"Skud på mål: {on_target}"
+      )
+      off_str = (
+          f"<b>Skud forbi: {off_target}</b>"
+          if label == "Skud forbi"
+          else f"Skud forbi: {off_target}"
+      )
+      blk_str = (
+          f"<b>Skud blokeret: {blocked}</b>"
+          if label == "Blokerede skud"
+          else f"Skud blokeret: {blocked}"
+      )
+
       hover_texts.append(
           f"<b>Kamp {int(row['MATCH_NUM'])} vs. {o_name}</b><br>"
           f"Dato: {dato}<br>"
           f"Resultat: {g_for} - {g_imod}<br>"
-          f"Skud total: {tot_shots}<br>"
-          f"Skud på mål: {on_target}<br>"
-          f"Skud forbi: {off_target}<br>"
-          f"Skud blokeret: {blocked}"
+          f"{tot_str}<br>"
+          f"{on_str}<br>"
+          f"{off_str}<br>"
+          f"{blk_str}"
       )
     else:
       hover_texts.append(
           f"<b>Kamp {int(row['MATCH_NUM'])} vs. {o_name}</b><br>"
           f"Dato: {dato}<br>"
           f"Resultat: {g_for} - {g_imod}<br>"
-          f"{label}: {val_metric:.2f}"
+          f"<b>{label}: {val_metric:.2f}</b>"
       )
 
   df_matches["OPP_NAME"] = opp_names
