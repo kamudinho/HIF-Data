@@ -133,6 +133,18 @@ def map_to_zone(r):
     return "Zone 8"
 
 
+def safe_get_pitch(*args, **kwargs):
+    """Hjælpefunktion til sikkert at hente fig og ax uanset utils implementation"""
+    res = get_pitch(*args, **kwargs)
+    if isinstance(res, tuple) and len(res) == 2:
+        return res
+    elif isinstance(res, plt.Figure):
+        return res, res.gca()
+    elif isinstance(res, plt.Axes):
+        return res.get_figure(), res
+    return plt.subplots()
+
+
 def draw_logo_on_pitch(ax, logo_img):
     if logo_img:
         ax_logo = ax.inset_axes([0.02, 0.88, 0.10, 0.10], transform=ax.transAxes)
@@ -166,7 +178,6 @@ def plot_shots_on_pitch(ax, d_subset, vis_mode, default_color):
                 color = default_color if not is_goal else HIF_RED
             edge = "black"
         else:  # xG visning
-            # Mål skal altid være tydelige, men vi bevarer xG farven eller giver dem rød kant/farve
             color = HIF_RED if is_goal else get_xg_color(row["XG"])
             edge = "black"
 
@@ -457,7 +468,7 @@ def vis_side(dp=None):
                 )
 
         with c1:
-            fig, ax = get_pitch("halv", t_color=t_color)
+            fig, ax = safe_get_pitch("halv", t_color=t_color)
             plot_shots_on_pitch(ax, d_v, vis_mode_afsl, t_color)
             draw_logo_on_pitch(ax, t_logo)
             st.pyplot(fig)
@@ -475,7 +486,7 @@ def vis_side(dp=None):
             st.markdown(f'<div class="stat-box"><div class="stat-label">DZ Mål</div><div class="stat-value">{m_dz}</div></div>', unsafe_allow_html=True)
             st.markdown(f'<div class="stat-box"><div class="stat-label">DZ Konv.</div><div class="stat-value">{(m_dz/s_dz*100 if s_dz>0 else 0):.1f}%</div></div>', unsafe_allow_html=True)
         with c1:
-            fig, ax = get_pitch("halv", t_color=t_color)
+            fig, ax = safe_get_pitch("halv", t_color=t_color)
             ax.add_patch(
                 patches.Rectangle(
                     (25.16, 88.7),
@@ -529,7 +540,7 @@ def vis_side(dp=None):
                     z: len(plot_df[plot_df["Zone"] == z])
                     for z in ZONE_BOUNDARIES.keys()
                 }
-                fig, ax = get_pitch(
+                fig, ax = safe_get_pitch(
                     "halv",
                     zone_boundaries=ZONE_BOUNDARIES,
                     zone_data=zone_counts,
@@ -579,7 +590,7 @@ def vis_side(dp=None):
                 )
 
         with c1:
-            fig, ax = get_pitch("halv", t_color="#333333")
+            fig, ax = safe_get_pitch("halv", t_color="#333333")
             plot_shots_on_pitch(ax, d_mod_filtered, vis_mode_mod, "#333333")
 
             display_logo = None
