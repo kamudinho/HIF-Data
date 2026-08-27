@@ -56,6 +56,26 @@ def load_league_data(liga_uuid):
         return pd.DataFrame()
 
 
+@st.cache_data(ttl=3600)
+def load_match_dates(liga_uuid):
+    """Henter kamp-datoer og modstandere for kronologisk/omvendt kronologisk sortering"""
+    conn = _get_snowflake_conn()
+    if not conn or not liga_uuid:
+        return {}
+
+    sql = f"""
+        SELECT MATCH_OPTAUUID, MATCH_DATE, HOME_TEAM_NAME, AWAY_TEAM_NAME 
+        FROM {DB}.OPTA_MATCHINFO 
+        WHERE TOURNAMENTCALENDAR_OPTAUUID = '{liga_uuid}'
+    """
+    try:
+        df = conn.query(sql) if hasattr(conn, "query") else pd.read_sql(sql, conn)
+        df.columns = [c.upper() for c in df.columns]
+        return df
+    except Exception:
+        return pd.DataFrame()
+
+
 def resolve_player_names(df, conn=None):
     if df.empty or "PLAYER_OPTAUUID" not in df.columns:
         if "PLAYER_NAME" not in df.columns:
@@ -131,64 +151,32 @@ def get_xg_color(xg_val):
 
 
 def plot_shots_on_pitch(ax, d_subset, vis_mode, default_color):
-    """Hjælpefunktion til at tegne skud og mål med cirkler/firkant-formater uden scrolling"""
+    """Tegner skud (cirkler) og mål (firkanter) korrekt ved at iterere over punkterne"""
     if d_subset.empty:
         return
 
-    # Opdel i mål (EVENT_TYPEID == 16) og ikke-mål
-    goals = d_subset[d_subset["EVENT_TYPEID"] == 16]
-    non_goals = d_subset[d_subset["EVENT_TYPEID"] != 16]
+    for _, row in d_subset.iterrows():
+        is_goal = int(row["EVENT_TYPEID"]) == 16
+        marker = 's' if is_goal else 'o'
+        size = 130 if is_goal else 100
+        
+        if vis_mode == "Antal":
+            color = default_color if not is_goal else (HIF_RED if default_color != "#333333" else HIF_RED)
+            edge = "black" if is_goal else (default_color if default_color != "white" else "black")
+        else:  # xG visning
+            color = get_xg_color(row["XG"])
+            edge = "black"
 
-    if vis_mode == "Antal":
-        # Ikke-mål: Cirkler, Mål: Firkanter
-        if not non_goals.empty:
-            ax.scatter(
-                non_goals["X_M"],
-                non_goals["Y_M"],
-                s=100,
-                marker='o',
-                c=default_color if default_color != "white" else "white",
-                edgecolors=default_color if default_color == "white" else "black",
-                zorder=3,
-                alpha=0.85
-            )
-        if not goals.empty:
-            ax.scatter(
-                goals["X_M"],
-                goals["Y_M"],
-                s=120,
-                marker='s',
-                c=default_color if default_color != "white" else HIF_RED,
-                edgecolors="black",
-                zorder=3,
-                alpha=0.9
-            )
-    else:  # xG visning
-        # Brug xG farver for begge, men behold formen (cirkel for skud, firkant for mål)
-        if not non_goals.empty:
-            ng_colors = non_goals["XG"].apply(get_xg_color)
-            ax.scatter(
-                non_goals["X_M"],
-                non_goals["Y_M"],
-                s=110,
-                marker='o',
-                c=ng_colors,
-                edgecolors="black",
-                zorder=3,
-                alpha=0.85
-            )
-        if not goals.empty:
-            g_colors = goals["XG"].apply(get_xg_color)
-            ax.scatter(
-                goals["X_M"],
-                goals["Y_M"],
-                s=130,
-                marker='s',
-                c=g_colors,
-                edgecolors="black",
-                zorder=3,
-                alpha=0.9
-            )
+        ax.scatter(
+            row["X_M"],
+            row["Y_M"],
+            s=size,
+            marker=marker,
+            c=color,
+            edgecolors=edge,
+            zorder=3,
+            alpha=0.9
+        )
 
 
 # --- MAIN APP ---
@@ -202,7 +190,6 @@ def vis_side(dp=None):
             padding-bottom: 2rem !important; 
             max-width: 1400px !important; 
         }
-        /* Gør st.radio inline for at spare lodret plads */
         div[row-widget-id] { display: flex; flex-direction: row; }
         .row-widget.stRadio > div { flex-direction: row; align-items: center; }
         .row-widget.stRadio > div > label { margin-right: 15px; }
@@ -252,6 +239,7 @@ def vis_side(dp=None):
 
     aktuel_liga_uuid = SEASONS[sæson_sel][turnering_sel]
     df_all = load_league_data(aktuel_liga_uuid)
+    df_matches = load_match_dates(aktuel_liga_uuid)
 
     if not df_all.empty and "EVENT_CONTESTANT_OPTAUUID" in df_all.columns:
         uuid_to_name = {
@@ -318,6 +306,39 @@ def vis_side(dp=None):
         "AFSLUTNINGER MOD",
     ])
 
+    # Byg en smart sorteret liste af kampe med dato og modstander til dropdowns
+    match_options = {"Alle kampe": None}
+    match_logos = {} # Gemmer modstander-logo URL til afsnittet
+    if not df_matches.empty and "MATCH_OPTAUUID" in df_matches.columns:
+        # Konverter dato til datetime for sortering
+        df_matches["PARSED_DATE"] = pd.to_datetime(df_matches["MATCH_DATE"], errors="coerce")
+        df_matches = df_matches.sort_values(by="PARSED_DATE", ascending=False)
+        
+        for _, m_row in df_matches.iterrows():
+            m_id = m_row["MATCH_OPTAUUID"]
+            if m_id not in match_uuids_team:
+                continue
+            
+            home = str(m_row["HOME_TEAM_NAME"])
+            away = str(m_row["AWAY_TEAM_NAME"])
+            
+            # Find hvem der er modstander ift. t_sel
+            opp = away if t_sel.lower() in home.lower() else home
+            
+            # Formatér dato pænt (f.eks. 25.08.2026)
+            date_str = ""
+            if pd.notna(m_row["PARSED_DATE"]):
+                date_str = m_row["PARSED_DATE"].strftime("%d.%m.%Y")
+            
+            label = f"vs. {opp} ({date_str})" if date_str else f"vs. {opp}"
+            match_options[label] = m_id
+            
+            # Find logo til modstanderen hvis den findes i TEAMS mapping
+            for t_key, t_val in TEAMS.items():
+                if t_key.lower() in opp.lower() or opp.lower() in t_key.lower():
+                    match_logos[m_id] = t_val.get("logo")
+                    break
+
     # TAB 0: SPILLEROVERSIGT
     with tabs[0]:
         st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
@@ -373,19 +394,12 @@ def vis_side(dp=None):
         t_logo = get_logo_img(TEAMS.get(t_sel, {}).get("logo"))
 
         with c2:
-            match_options = {"Alle kampe": None}
-            if "MATCH_OPTAUUID" in df_team.columns:
-                for m_id in df_team["MATCH_OPTAUUID"].unique():
-                    sub_df = df_all[(df_all["MATCH_OPTAUUID"] == m_id) & (df_all["KLUB_NAVN"] != t_sel)]
-                    opp_name = sub_df["KLUB_NAVN"].iloc[0] if not sub_df.empty and "KLUB_NAVN" in sub_df.columns and sub_df["KLUB_NAVN"].notna().any() else "Modstander"
-                    match_options[f"Mod {opp_name}"] = m_id
-
-            kamp_sel_label = st.selectbox("Kamp", list(match_options.keys()), label_visibility="collapsed")
+            kamp_sel_label = st.selectbox("Kamp", list(match_options.keys()), label_visibility="collapsed", key="afsl_kamp")
             valgt_kamp_uuid = match_options[kamp_sel_label]
 
             d_filtered = df_team if valgt_kamp_uuid is None else df_team[df_team["MATCH_OPTAUUID"] == valgt_kamp_uuid]
             spiller_liste = ["Alle spillere"] + sorted(d_filtered["PLAYER_NAME"].unique()) if not d_filtered.empty else ["Alle spillere"]
-            p_sel = st.selectbox("Spiller", spiller_liste, label_visibility="collapsed")
+            p_sel = st.selectbox("Spiller", spiller_liste, label_visibility="collapsed", key="afsl_spiller")
             
             d_v = d_filtered if p_sel == "Alle spillere" else d_filtered[d_filtered["PLAYER_NAME"] == p_sel]
             vis_mode_afsl = st.radio("Visning", ["Antal", "xG"], index=0, key="afsl_mode", horizontal=True, label_visibility="collapsed")
@@ -492,16 +506,19 @@ def vis_side(dp=None):
     with tabs[5]:
         st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
         c1, c2 = st.columns([2.2, 1.3])
-        
-        # Hent modstanderens logo baseret på kampen eller vælg en standard
-        t_logo = get_logo_img(TEAMS.get(t_sel, {}).get("logo"))
 
         with c2:
+            # Dropdown til kampfiltrering under "Afslutninger mod" så man også kan vælge specifik modstander og få det rette logo
+            kamp_sel_mod = st.selectbox("Kamp Mod", list(match_options.keys()), label_visibility="collapsed", key="mod_kamp_sel")
+            valgt_mod_uuid = match_options[kamp_sel_mod]
+
+            d_mod_filtered = df_modstander if valgt_mod_uuid is None else df_modstander[df_modstander["MATCH_OPTAUUID"] == valgt_mod_uuid]
+            
             vis_mode_mod = st.radio("Visning Mod", ["Antal", "xG"], index=0, key="mod_mode", horizontal=True, label_visibility="collapsed")
 
-            s_mod = len(df_modstander)
-            m_mod = len(df_modstander[df_modstander["EVENT_TYPEID"] == 16]) if not df_modstander.empty else 0
-            tot_xg = df_modstander["XG"].sum() if not df_modstander.empty and "XG" in df_modstander.columns else 0.0
+            s_mod = len(d_mod_filtered)
+            m_mod = len(d_mod_filtered[d_mod_filtered["EVENT_TYPEID"] == 16]) if not d_mod_filtered.empty else 0
+            tot_xg = d_mod_filtered["XG"].sum() if not d_mod_filtered.empty and "XG" in d_mod_filtered.columns else 0.0
 
             sc1, sc2, sc3, sc4 = st.columns(4)
             with sc1:
@@ -518,19 +535,16 @@ def vis_side(dp=None):
 
         with c1:
             pitch, fig, ax = get_pitch("halv", t_color="#333333")
-            if not df_modstander.empty:
-                if vis_mode_mod == "Antal":
-                    # Modstander: Ikke-mål er grå cirkler, Mål er røde firkanter
-                    goals_mod = df_modstander[df_modstander["EVENT_TYPEID"] == 16]
-                    ngoals_mod = df_modstander[df_modstander["EVENT_TYPEID"] != 16]
-                    if not ngoals_mod.empty:
-                        ax.scatter(ngoals_mod["X_M"], ngoals_mod["Y_M"], s=100, marker='o', c="#888888", edgecolors="black", zorder=3, alpha=0.8)
-                    if not goals_mod.empty:
-                        ax.scatter(goals_mod["X_M"], goals_mod["Y_M"], s=120, marker='s', c="#cc0000", edgecolors="black", zorder=3, alpha=0.9)
-                else:
-                    plot_shots_on_pitch(ax, df_modstander, "xG", "#333333")
+            plot_shots_on_pitch(ax, d_mod_filtered, vis_mode_mod, "#333333")
 
-            draw_logo_on_pitch(ax, t_logo)
+            # Vis modstanderens logo hvis en specifik kamp er valgt, ellers HIF-logoet
+            display_logo = None
+            if valgt_mod_uuid and valgt_mod_uuid in match_logos:
+                display_logo = get_logo_img(match_logos[valgt_mod_uuid])
+            if not display_logo:
+                display_logo = get_logo_img(TEAMS.get(t_sel, {}).get("logo"))
+
+            draw_logo_on_pitch(ax, display_logo)
             st.pyplot(fig)
 
 
