@@ -180,13 +180,6 @@ def vis_side(dp=None):
             color: #333;
             border: 1px solid #e0e0e0;
         }
-        .xg-legend-title {
-            font-weight: bold;
-            margin-bottom: 5px;
-            text-transform: uppercase;
-            font-size: 0.75rem;
-            color: #555;
-        }
     </style>
     """,
         unsafe_allow_html=True,
@@ -279,7 +272,7 @@ def vis_side(dp=None):
         else:
             df_modstander["XG"] = 0.05
 
-    # Byg kamp-oversigt til dropdowns
+    # Byg kamp-oversigt til dropdowns (sikrer at alle holdets kampe kommer med)
     match_options = {"Alle kampe": None}
     match_logos = {}
     if not df_matches.empty and "MATCH_OPTAUUID" in df_matches.columns:
@@ -366,22 +359,28 @@ def vis_side(dp=None):
     # TAB 1: AFSLUTNINGER
     with tabs[1]:
         st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
-        c1, c2 = st.columns([2, 1])
-        t_color = TEAM_COLORS.get(t_sel, {}).get("primary", HIF_RED)
-        t_logo = get_logo_img(TEAMS.get(t_sel, {}).get("logo"))
-
-        with c2:
+        
+        # Filtre i toppen (Kamp & Spiller side om side)
+        fc1, fc2 = st.columns(2)
+        with fc1:
             kamp_sel_label = st.selectbox("Vælg kamp", list(match_options.keys()), key="afsl_kamp_sel")
+        with fc2:
             valgt_kamp_uuid = match_options[kamp_sel_label]
-
             d_filtered = df_team if valgt_kamp_uuid is None else df_team[df_team["MATCH_OPTAUUID"] == valgt_kamp_uuid]
-            
             spiller_liste = ["Alle spillere"] + sorted(d_filtered["PLAYER_NAME"].unique()) if not d_filtered.empty else ["Alle spillere"]
             p_sel = st.selectbox("Filtrer spiller", spiller_liste, key="afsl_spiller_sel")
-            
-            d_v = d_filtered if p_sel == "Alle spillere" else d_filtered[d_filtered["PLAYER_NAME"] == p_sel]
-            
-            st.markdown("##### Visningstype")
+
+        d_v = d_filtered if p_sel == "Alle spillere" else d_filtered[d_filtered["PLAYER_NAME"] == p_sel]
+        
+        st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
+        c1, c2 = st.columns([2, 1])
+        
+        t_color = TEAM_COLORS.get(t_sel, {}).get("primary", HIF_RED)
+        
+        # Dynamisk logo (hvis specifik kamp er valgt, vises modstanderens logo ellers holdets eget)
+        t_logo = get_logo_img(match_logos.get(valgt_kamp_uuid)) if valgt_kamp_uuid and valgt_kamp_uuid in match_logos else get_logo_img(TEAMS.get(t_sel, {}).get("logo"))
+
+        with c2:
             vis_mode_afsl = st.radio("Vælg visning for skud:", ["Antal", "xG"], index=0, key="afsl_mode")
 
             s, m = len(d_v), len(d_v[d_v["EVENT_TYPEID"] == 16])
