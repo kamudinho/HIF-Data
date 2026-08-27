@@ -166,7 +166,8 @@ def plot_shots_on_pitch(ax, d_subset, vis_mode, default_color):
                 color = default_color if not is_goal else HIF_RED
             edge = "black"
         else:  # xG visning
-            color = get_xg_color(row["XG"])
+            # Mål skal altid være tydelige, men vi bevarer xG farven eller giver dem rød kant/farve
+            color = HIF_RED if is_goal else get_xg_color(row["XG"])
             edge = "black"
 
         ax.scatter(
