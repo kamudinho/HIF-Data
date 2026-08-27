@@ -58,7 +58,6 @@ def load_league_data(liga_uuid):
 
 @st.cache_data(ttl=3600)
 def load_match_dates(liga_uuid):
-    """Henter kamp-datoer og modstandere for kronologisk/omvendt kronologisk sortering"""
     conn = _get_snowflake_conn()
     if not conn or not liga_uuid:
         return {}
@@ -151,7 +150,7 @@ def get_xg_color(xg_val):
 
 
 def plot_shots_on_pitch(ax, d_subset, vis_mode, default_color):
-    """Tegner skud (cirkler) og mål (firkanter) korrekt ved at iterere over punkterne"""
+    """Tegner skud (cirkler) og mål (firkanter) korrekt"""
     if d_subset.empty:
         return
 
@@ -161,8 +160,13 @@ def plot_shots_on_pitch(ax, d_subset, vis_mode, default_color):
         size = 130 if is_goal else 100
         
         if vis_mode == "Antal":
-            color = default_color if not is_goal else (HIF_RED if default_color != "#333333" else HIF_RED)
-            edge = "black" if is_goal else (default_color if default_color != "white" else "black")
+            # Hvis det er holdets egne skud, er ikke-mål holdets primære farve (eller hvid, hvis holdfarven er for mørk)
+            # Hvis det er modstander, er ikke-mål grå. Mål er altid røde.
+            if default_color == "#333333":
+                color = HIF_RED if is_goal else "#888888"
+            else:
+                color = default_color if not is_goal else HIF_RED
+            edge = "black"
         else:  # xG visning
             color = get_xg_color(row["XG"])
             edge = "black"
@@ -205,6 +209,35 @@ def vis_side(dp=None):
         }
         .stat-label { font-size: 0.65rem; text-transform: uppercase; color: #666; font-weight: bold; }
         .stat-value { font-size: 1.1rem; font-weight: 800; color: #1a1a1a; margin-top: 1px; }
+        
+        .xg-legend {
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            padding: 8px 10px;
+            margin-top: 10px;
+            font-size: 0.75rem;
+            color: #333;
+            border: 1px solid #e0e0e0;
+        }
+        .xg-legend-title {
+            font-weight: bold;
+            margin-bottom: 4px;
+            text-transform: uppercase;
+            font-size: 0.7rem;
+            color: #555;
+        }
+        .xg-item {
+            display: inline-block;
+            margin-right: 12px;
+        }
+        .xg-dot {
+            height: 10px;
+            width: 10px;
+            display: inline-block;
+            border-radius: 50%;
+            margin-right: 3px;
+            vertical-align: middle;
+        }
     </style>
     """,
         unsafe_allow_html=True,
@@ -306,11 +339,9 @@ def vis_side(dp=None):
         "AFSLUTNINGER MOD",
     ])
 
-    # Byg en smart sorteret liste af kampe med dato og modstander til dropdowns
     match_options = {"Alle kampe": None}
-    match_logos = {} # Gemmer modstander-logo URL til afsnittet
+    match_logos = {}
     if not df_matches.empty and "MATCH_OPTAUUID" in df_matches.columns:
-        # Konverter dato til datetime for sortering
         df_matches["PARSED_DATE"] = pd.to_datetime(df_matches["MATCH_DATE"], errors="coerce")
         df_matches = df_matches.sort_values(by="PARSED_DATE", ascending=False)
         
@@ -321,11 +352,8 @@ def vis_side(dp=None):
             
             home = str(m_row["HOME_TEAM_NAME"])
             away = str(m_row["AWAY_TEAM_NAME"])
-            
-            # Find hvem der er modstander ift. t_sel
             opp = away if t_sel.lower() in home.lower() else home
             
-            # Formatér dato pænt (f.eks. 25.08.2026)
             date_str = ""
             if pd.notna(m_row["PARSED_DATE"]):
                 date_str = m_row["PARSED_DATE"].strftime("%d.%m.%Y")
@@ -333,7 +361,6 @@ def vis_side(dp=None):
             label = f"vs. {opp} ({date_str})" if date_str else f"vs. {opp}"
             match_options[label] = m_id
             
-            # Find logo til modstanderen hvis den findes i TEAMS mapping
             for t_key, t_val in TEAMS.items():
                 if t_key.lower() in opp.lower() or opp.lower() in t_key.lower():
                     match_logos[m_id] = t_val.get("logo")
@@ -418,7 +445,17 @@ def vis_side(dp=None):
                 st.markdown(f'<div class="stat-box"><div class="stat-label">Konv.</div><div class="stat-value">{(m/s*100 if s>0 else 0):.0f}%</div></div>', unsafe_allow_html=True)
 
             if vis_mode_afsl == "xG":
-                st.markdown("<div style='font-size:0.75rem; color:#555;'>Grå < 0,15 | Grøn 0,15-0,35 | Rød ≥ 0,35</div>", unsafe_allow_html=True)
+                st.markdown(
+                    """
+                    <div class="xg-legend">
+                        <div class="xg-legend-title">xG Kvalitet Definitioner</div>
+                        <div class="xg-item"><span class="xg-dot" style="background-color: #999999;"></span><strong>Lav:</strong> < 0.15</div>
+                        <div class="xg-item"><span class="xg-dot" style="background-color: #2ecc71;"></span><strong>Med:</strong> 0.15 - 0.35</div>
+                        <div class="xg-item"><span class="xg-dot" style="background-color: #e74c3c;"></span><strong>Høj:</strong> ≥ 0.35</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
 
         with c1:
             pitch, fig, ax = get_pitch("halv", t_color=t_color)
@@ -508,7 +545,6 @@ def vis_side(dp=None):
         c1, c2 = st.columns([2.2, 1.3])
 
         with c2:
-            # Dropdown til kampfiltrering under "Afslutninger mod" så man også kan vælge specifik modstander og få det rette logo
             kamp_sel_mod = st.selectbox("Kamp Mod", list(match_options.keys()), label_visibility="collapsed", key="mod_kamp_sel")
             valgt_mod_uuid = match_options[kamp_sel_mod]
 
@@ -531,13 +567,22 @@ def vis_side(dp=None):
                 st.markdown(f'<div class="stat-box"><div class="stat-label">Konv.</div><div class="stat-value">{(m_mod/s_mod*100 if s_mod>0 else 0):.0f}%</div></div>', unsafe_allow_html=True)
 
             if vis_mode_mod == "xG":
-                st.markdown("<div style='font-size:0.75rem; color:#555;'>Grå < 0,15 | Grøn 0,15-0,35 | Rød ≥ 0,35</div>", unsafe_allow_html=True)
+                st.markdown(
+                    """
+                    <div class="xg-legend">
+                        <div class="xg-legend-title">xG Kvalitet Definitioner</div>
+                        <div class="xg-item"><span class="xg-dot" style="background-color: #999999;"></span><strong>Lav:</strong> < 0.15</div>
+                        <div class="xg-item"><span class="xg-dot" style="background-color: #2ecc71;"></span><strong>Med:</strong> 0.15 - 0.35</div>
+                        <div class="xg-item"><span class="xg-dot" style="background-color: #e74c3c;"></span><strong>Høj:</strong> ≥ 0.35</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
 
         with c1:
             pitch, fig, ax = get_pitch("halv", t_color="#333333")
             plot_shots_on_pitch(ax, d_mod_filtered, vis_mode_mod, "#333333")
 
-            # Vis modstanderens logo hvis en specifik kamp er valgt, ellers HIF-logoet
             display_logo = None
             if valgt_mod_uuid and valgt_mod_uuid in match_logos:
                 display_logo = get_logo_img(match_logos[valgt_mod_uuid])
