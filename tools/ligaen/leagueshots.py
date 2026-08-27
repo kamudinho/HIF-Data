@@ -60,7 +60,7 @@ def load_league_data(liga_uuid):
 def load_match_dates(liga_uuid):
     conn = _get_snowflake_conn()
     if not conn or not liga_uuid:
-        return {}
+        return pd.DataFrame()
 
     sql = f"""
         SELECT MATCH_OPTAUUID, MATCH_DATE, HOME_TEAM_NAME, AWAY_TEAM_NAME 
@@ -133,21 +133,9 @@ def map_to_zone(r):
     return "Zone 8"
 
 
-def safe_get_pitch(*args, **kwargs):
-    """Hjælpefunktion til sikkert at hente fig og ax uanset utils implementation"""
-    res = get_pitch(*args, **kwargs)
-    if isinstance(res, tuple) and len(res) == 2:
-        return res
-    elif isinstance(res, plt.Figure):
-        return res, res.gca()
-    elif isinstance(res, plt.Axes):
-        return res.get_figure(), res
-    return plt.subplots()
-
-
 def draw_logo_on_pitch(ax, logo_img):
     if logo_img:
-        ax_logo = ax.inset_axes([0.02, 0.88, 0.10, 0.10], transform=ax.transAxes)
+        ax_logo = ax.inset_axes([0.02, 0.89, 0.12, 0.10], transform=ax.transAxes)
         ax_logo.imshow(logo_img)
         ax_logo.axis("off")
 
@@ -161,38 +149,6 @@ def get_xg_color(xg_val):
         return "#e74c3c"  # Rød
 
 
-def plot_shots_on_pitch(ax, d_subset, vis_mode, default_color):
-    """Tegner skud (cirkler) og mål (firkanter) korrekt"""
-    if d_subset.empty:
-        return
-
-    for _, row in d_subset.iterrows():
-        is_goal = int(row["EVENT_TYPEID"]) == 16
-        marker = 's' if is_goal else 'o'
-        size = 130 if is_goal else 100
-        
-        if vis_mode == "Antal":
-            if default_color == "#333333":
-                color = HIF_RED if is_goal else "#888888"
-            else:
-                color = default_color if not is_goal else HIF_RED
-            edge = "black"
-        else:  # xG visning
-            color = HIF_RED if is_goal else get_xg_color(row["XG"])
-            edge = "black"
-
-        ax.scatter(
-            row["X_M"],
-            row["Y_M"],
-            s=size,
-            marker=marker,
-            c=color,
-            edgecolors=edge,
-            zorder=3,
-            alpha=0.9
-        )
-
-
 # --- MAIN APP ---
 def vis_side(dp=None):
     st.markdown(
@@ -201,52 +157,35 @@ def vis_side(dp=None):
         header {visibility: hidden;}
         .main .block-container { 
             padding-top: 1rem !important; 
-            padding-bottom: 2rem !important; 
+            padding-bottom: 3rem !important; 
             max-width: 1400px !important; 
         }
-        div[row-widget-id] { display: flex; flex-direction: row; }
-        .row-widget.stRadio > div { flex-direction: row; align-items: center; }
-        .row-widget.stRadio > div > label { margin-right: 15px; }
-        
         .stat-box { 
             background-color: #f8f9fa; 
-            padding: 6px 10px !important; 
-            border-radius: 4px; 
-            border-left: 4px solid #cc0000; 
-            margin-bottom: 8px !important; 
-            display: inline-block;
-            width: 100%;
+            padding: 10px !important; 
+            border-radius: 5px; 
+            border-left: 5px solid #cc0000; 
+            margin-bottom: 15px !important; 
+            display: block; 
         }
-        .stat-label { font-size: 0.65rem; text-transform: uppercase; color: #666; font-weight: bold; }
-        .stat-value { font-size: 1.1rem; font-weight: 800; color: #1a1a1a; margin-top: 1px; }
+        .stat-label { font-size: 0.75rem; text-transform: uppercase; color: #666; font-weight: bold; }
+        .stat-value { font-size: 1.3rem; font-weight: 800; color: #1a1a1a; margin-top: 3px; }
         
         .xg-legend {
             background-color: #f8f9fa;
-            border-radius: 4px;
-            padding: 8px 10px;
-            margin-top: 10px;
-            font-size: 0.75rem;
+            border-radius: 5px;
+            padding: 10px;
+            margin-top: 15px;
+            font-size: 0.8rem;
             color: #333;
             border: 1px solid #e0e0e0;
         }
         .xg-legend-title {
             font-weight: bold;
-            margin-bottom: 4px;
+            margin-bottom: 5px;
             text-transform: uppercase;
-            font-size: 0.7rem;
+            font-size: 0.75rem;
             color: #555;
-        }
-        .xg-item {
-            display: inline-block;
-            margin-right: 12px;
-        }
-        .xg-dot {
-            height: 10px;
-            width: 10px;
-            display: inline-block;
-            border-radius: 50%;
-            margin-right: 3px;
-            vertical-align: middle;
         }
     </style>
     """,
@@ -340,15 +279,7 @@ def vis_side(dp=None):
         else:
             df_modstander["XG"] = 0.05
 
-    tabs = st.tabs([
-        "SPILLEROVERSIGT",
-        "AFSLUTNINGER",
-        "DZ-ANALYSE",
-        "SKUDZONER",
-        "MÅLZONER",
-        "AFSLUTNINGER MOD",
-    ])
-
+    # Byg kamp-oversigt til dropdowns
     match_options = {"Alle kampe": None}
     match_logos = {}
     if not df_matches.empty and "MATCH_OPTAUUID" in df_matches.columns:
@@ -376,9 +307,18 @@ def vis_side(dp=None):
                     match_logos[m_id] = t_val.get("logo")
                     break
 
+    tabs = st.tabs([
+        "SPILLEROVERSIGT",
+        "AFSLUTNINGER",
+        "DZ-ANALYSE",
+        "SKUDZONER",
+        "MÅLZONER",
+        "AFSLUTNINGER MOD",
+    ])
+
     # TAB 0: SPILLEROVERSIGT
     with tabs[0]:
-        st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
+        st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
         p_stats = []
         for p, d in df_team.groupby("PLAYER_NAME"):
             s, m = len(d), len(d[d["EVENT_TYPEID"] == 16])
@@ -425,57 +365,78 @@ def vis_side(dp=None):
 
     # TAB 1: AFSLUTNINGER
     with tabs[1]:
-        st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
-        c1, c2 = st.columns([2.2, 1.3])
+        st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
+        c1, c2 = st.columns([2, 1])
         t_color = TEAM_COLORS.get(t_sel, {}).get("primary", HIF_RED)
         t_logo = get_logo_img(TEAMS.get(t_sel, {}).get("logo"))
 
         with c2:
-            kamp_sel_label = st.selectbox("Kamp", list(match_options.keys()), label_visibility="collapsed", key="afsl_kamp")
+            kamp_sel_label = st.selectbox("Vælg kamp", list(match_options.keys()), key="afsl_kamp_sel")
             valgt_kamp_uuid = match_options[kamp_sel_label]
 
             d_filtered = df_team if valgt_kamp_uuid is None else df_team[df_team["MATCH_OPTAUUID"] == valgt_kamp_uuid]
+            
             spiller_liste = ["Alle spillere"] + sorted(d_filtered["PLAYER_NAME"].unique()) if not d_filtered.empty else ["Alle spillere"]
-            p_sel = st.selectbox("Spiller", spiller_liste, label_visibility="collapsed", key="afsl_spiller")
+            p_sel = st.selectbox("Filtrer spiller", spiller_liste, key="afsl_spiller_sel")
             
             d_v = d_filtered if p_sel == "Alle spillere" else d_filtered[d_filtered["PLAYER_NAME"] == p_sel]
-            vis_mode_afsl = st.radio("Visning", ["Antal", "xG"], index=0, key="afsl_mode", horizontal=True, label_visibility="collapsed")
+            
+            st.markdown("##### Visningstype")
+            vis_mode_afsl = st.radio("Vælg visning for skud:", ["Antal", "xG"], index=0, key="afsl_mode")
 
             s, m = len(d_v), len(d_v[d_v["EVENT_TYPEID"] == 16])
             tot_xg_afsl = d_v["XG"].sum() if not d_v.empty else 0.0
 
-            sc1, sc2, sc3, sc4 = st.columns(4)
-            with sc1:
-                st.markdown(f'<div class="stat-box"><div class="stat-label">Skud</div><div class="stat-value">{s}</div></div>', unsafe_allow_html=True)
-            with sc2:
-                st.markdown(f'<div class="stat-box"><div class="stat-label">Mål</div><div class="stat-value">{m}</div></div>', unsafe_allow_html=True)
-            with sc3:
-                st.markdown(f'<div class="stat-box"><div class="stat-label">xG</div><div class="stat-value">{tot_xg_afsl:.1f}</div></div>', unsafe_allow_html=True)
-            with sc4:
-                st.markdown(f'<div class="stat-box"><div class="stat-label">Konv.</div><div class="stat-value">{(m/s*100 if s>0 else 0):.0f}%</div></div>', unsafe_allow_html=True)
+            st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
+            st.markdown(f'<div class="stat-box"><div class="stat-label">Skud</div><div class="stat-value">{s}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="stat-box"><div class="stat-label">Mål</div><div class="stat-value">{m}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="stat-box"><div class="stat-label">Total xG</div><div class="stat-value">{tot_xg_afsl:.2f}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="stat-box"><div class="stat-label">Konvertering</div><div class="stat-value">{(m/s*100 if s>0 else 0):.1f}%</div></div>', unsafe_allow_html=True)
 
             if vis_mode_afsl == "xG":
+                st.markdown("---")
+                st.markdown("**Farveforklaring (xG):**")
                 st.markdown(
-                    """
-                    <div class="xg-legend">
-                        <div class="xg-legend-title">xG Kvalitet Definitioner</div>
-                        <div class="xg-item"><span class="xg-dot" style="background-color: #999999;"></span><strong>Lav:</strong> < 0.15</div>
-                        <div class="xg-item"><span class="xg-dot" style="background-color: #2ecc71;"></span><strong>Med:</strong> 0.15 - 0.35</div>
-                        <div class="xg-item"><span class="xg-dot" style="background-color: #e74c3c;"></span><strong>Høj:</strong> ≥ 0.35</div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True
+                    "Grå = **0 < 0,15** (Lav kvalitet)"
+                    "<br>Grøn = **0,15 < 0,35** (Medium kvalitet)"
+                    "<br>Rød = **0,35 <=** (Høj kvalitet)",
+                    unsafe_allow_html=True,
                 )
 
         with c1:
-            fig, ax = safe_get_pitch("halv", t_color=t_color)
-            plot_shots_on_pitch(ax, d_v, vis_mode_afsl, t_color)
+            pitch, fig, ax = get_pitch("halv", t_color=t_color)
+            
+            if not d_v.empty:
+                if vis_mode_afsl == "Antal":
+                    colors = (d_v["EVENT_TYPEID"] == 16).map({True: t_color, False: "white"})
+                    pitch.scatter(
+                        d_v["X_M"],
+                        d_v["Y_M"],
+                        s=100,
+                        c=colors,
+                        edgecolors=t_color,
+                        ax=ax,
+                        zorder=3,
+                    )
+                else:
+                    colors = d_v["XG"].apply(get_xg_color)
+                    pitch.scatter(
+                        d_v["X_M"],
+                        d_v["Y_M"],
+                        s=120,
+                        c=colors,
+                        edgecolors="black",
+                        ax=ax,
+                        zorder=3,
+                        alpha=0.85,
+                    )
+
             draw_logo_on_pitch(ax, t_logo)
             st.pyplot(fig)
 
     # TAB 2: DZ-ANALYSE
     with tabs[2]:
-        st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
+        st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
         c1, c2 = st.columns([2, 1])
         dz_d = df_team[df_team["IS_DZ"]]
         t_color = TEAM_COLORS.get(t_sel, {}).get("primary", HIF_RED)
@@ -486,7 +447,7 @@ def vis_side(dp=None):
             st.markdown(f'<div class="stat-box"><div class="stat-label">DZ Mål</div><div class="stat-value">{m_dz}</div></div>', unsafe_allow_html=True)
             st.markdown(f'<div class="stat-box"><div class="stat-label">DZ Konv.</div><div class="stat-value">{(m_dz/s_dz*100 if s_dz>0 else 0):.1f}%</div></div>', unsafe_allow_html=True)
         with c1:
-            fig, ax = safe_get_pitch("halv", t_color=t_color)
+            pitch, fig, ax = get_pitch("halv", t_color=t_color)
             ax.add_patch(
                 patches.Rectangle(
                     (25.16, 88.7),
@@ -497,14 +458,22 @@ def vis_side(dp=None):
                     zorder=1,
                 )
             )
-            plot_shots_on_pitch(ax, dz_d, "Antal", t_color)
+            pitch.scatter(
+                dz_d["X_M"],
+                dz_d["Y_M"],
+                s=100,
+                c=(dz_d["EVENT_TYPEID"] == 16).map({True: t_color, False: "white"}),
+                edgecolors=t_color,
+                ax=ax,
+                zorder=3,
+            )
             draw_logo_on_pitch(ax, t_logo)
             st.pyplot(fig)
 
     # TAB 3 & 4: ZONER (Skudzoner & Målzoner)
     for i, is_goal in enumerate([False, True]):
         with tabs[i + 3]:
-            st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
+            st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
             c1, c2 = st.columns([1.6, 1])
             plot_df = df_team[df_team["EVENT_TYPEID"] == 16] if is_goal else df_team
             total_count = len(plot_df)
@@ -540,7 +509,7 @@ def vis_side(dp=None):
                     z: len(plot_df[plot_df["Zone"] == z])
                     for z in ZONE_BOUNDARIES.keys()
                 }
-                fig, ax = safe_get_pitch(
+                pitch, fig, ax = get_pitch(
                     "halv",
                     zone_boundaries=ZONE_BOUNDARIES,
                     zone_data=zone_counts,
@@ -551,55 +520,75 @@ def vis_side(dp=None):
 
     # TAB 5: AFSLUTNINGER MOD
     with tabs[5]:
-        st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
-        c1, c2 = st.columns([2.2, 1.3])
+        st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
+        c1, c2 = st.columns([2, 1])
+        t_logo = get_logo_img(TEAMS.get(t_sel, {}).get("logo"))
 
         with c2:
-            kamp_sel_mod = st.selectbox("Kamp Mod", list(match_options.keys()), label_visibility="collapsed", key="mod_kamp_sel")
-            valgt_mod_uuid = match_options[kamp_sel_mod]
+            st.markdown("##### Visningstype")
+            vis_mode = st.radio(
+                "Vælg visning for skud imod:", ["Antal", "xG"], index=0, key="mod_mode"
+            )
 
-            d_mod_filtered = df_modstander if valgt_mod_uuid is None else df_modstander[df_modstander["MATCH_OPTAUUID"] == valgt_mod_uuid]
-            
-            vis_mode_mod = st.radio("Visning Mod", ["Antal", "xG"], index=0, key="mod_mode", horizontal=True, label_visibility="collapsed")
+            s_mod = len(df_modstander)
+            m_mod = (
+                len(df_modstander[df_modstander["EVENT_TYPEID"] == 16])
+                if not df_modstander.empty
+                else 0
+            )
+            tot_xg = (
+                df_modstander["XG"].sum()
+                if not df_modstander.empty and "XG" in df_modstander.columns
+                else 0.0
+            )
 
-            s_mod = len(d_mod_filtered)
-            m_mod = len(d_mod_filtered[d_mod_filtered["EVENT_TYPEID"] == 16]) if not d_mod_filtered.empty else 0
-            tot_xg = d_mod_filtered["XG"].sum() if not d_mod_filtered.empty and "XG" in d_mod_filtered.columns else 0.0
+            st.markdown("<div style='margin-top: 20px;'></div>", unsafe_allow_html=True)
+            st.markdown(f'<div class="stat-box"><div class="stat-label">Skud Imod</div><div class="stat-value">{s_mod}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="stat-box"><div class="stat-label">Mål Imod</div><div class="stat-value">{m_mod}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="stat-box"><div class="stat-label">Total xG Imod</div><div class="stat-value">{tot_xg:.2f}</div></div>', unsafe_allow_html=True)
 
-            sc1, sc2, sc3, sc4 = st.columns(4)
-            with sc1:
-                st.markdown(f'<div class="stat-box"><div class="stat-label">Skud Imod</div><div class="stat-value">{s_mod}</div></div>', unsafe_allow_html=True)
-            with sc2:
-                st.markdown(f'<div class="stat-box"><div class="stat-label">Mål Imod</div><div class="stat-value">{m_mod}</div></div>', unsafe_allow_html=True)
-            with sc3:
-                st.markdown(f'<div class="stat-box"><div class="stat-label">xG Imod</div><div class="stat-value">{tot_xg:.1f}</div></div>', unsafe_allow_html=True)
-            with sc4:
-                st.markdown(f'<div class="stat-box"><div class="stat-label">Konv.</div><div class="stat-value">{(m_mod/s_mod*100 if s_mod>0 else 0):.0f}%</div></div>', unsafe_allow_html=True)
-
-            if vis_mode_mod == "xG":
+            if vis_mode == "xG":
+                st.markdown("---")
+                st.markdown("**Farveforklaring (xG):**")
                 st.markdown(
-                    """
-                    <div class="xg-legend">
-                        <div class="xg-legend-title">xG Kvalitet Definitioner</div>
-                        <div class="xg-item"><span class="xg-dot" style="background-color: #999999;"></span><strong>Lav:</strong> < 0.15</div>
-                        <div class="xg-item"><span class="xg-dot" style="background-color: #2ecc71;"></span><strong>Med:</strong> 0.15 - 0.35</div>
-                        <div class="xg-item"><span class="xg-dot" style="background-color: #e74c3c;"></span><strong>Høj:</strong> ≥ 0.35</div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True
+                    "Grå = **0 < 0,15** (Lav kvalitet)"
+                    "<br>Grøn = **0,15 < 0,35** (Medium kvalitet)"
+                    "<br>Rød = **0,35 <=** (Høj kvalitet)",
+                    unsafe_allow_html=True,
                 )
 
         with c1:
-            fig, ax = safe_get_pitch("halv", t_color="#333333")
-            plot_shots_on_pitch(ax, d_mod_filtered, vis_mode_mod, "#333333")
+            pitch, fig, ax = get_pitch("halv", t_color="#333333")
 
-            display_logo = None
-            if valgt_mod_uuid and valgt_mod_uuid in match_logos:
-                display_logo = get_logo_img(match_logos[valgt_mod_uuid])
-            if not display_logo:
-                display_logo = get_logo_img(TEAMS.get(t_sel, {}).get("logo"))
+            if not df_modstander.empty:
+                if vis_mode == "Antal":
+                    colors = (df_modstander["EVENT_TYPEID"] == 16).map(
+                        {True: "#cc0000", False: "#888888"}
+                    )
+                    pitch.scatter(
+                        df_modstander["X_M"],
+                        df_modstander["Y_M"],
+                        s=120,
+                        c=colors,
+                        edgecolors="black",
+                        ax=ax,
+                        zorder=3,
+                        alpha=0.8,
+                    )
+                else:
+                    colors = df_modstander["XG"].apply(get_xg_color)
+                    pitch.scatter(
+                        df_modstander["X_M"],
+                        df_modstander["Y_M"],
+                        s=140,
+                        c=colors,
+                        edgecolors="black",
+                        ax=ax,
+                        zorder=3,
+                        alpha=0.85,
+                    )
 
-            draw_logo_on_pitch(ax, display_logo)
+            draw_logo_on_pitch(ax, t_logo)
             st.pyplot(fig)
 
 
