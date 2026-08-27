@@ -160,8 +160,6 @@ def plot_shots_on_pitch(ax, d_subset, vis_mode, default_color):
         size = 130 if is_goal else 100
         
         if vis_mode == "Antal":
-            # Hvis det er holdets egne skud, er ikke-mål holdets primære farve (eller hvid, hvis holdfarven er for mørk)
-            # Hvis det er modstander, er ikke-mål grå. Mål er altid røde.
             if default_color == "#333333":
                 color = HIF_RED if is_goal else "#888888"
             else:
@@ -458,7 +456,7 @@ def vis_side(dp=None):
                 )
 
         with c1:
-            pitch, fig, ax = get_pitch("halv", t_color=t_color)
+            fig, ax = get_pitch("halv", t_color=t_color)
             plot_shots_on_pitch(ax, d_v, vis_mode_afsl, t_color)
             draw_logo_on_pitch(ax, t_logo)
             st.pyplot(fig)
@@ -476,7 +474,7 @@ def vis_side(dp=None):
             st.markdown(f'<div class="stat-box"><div class="stat-label">DZ Mål</div><div class="stat-value">{m_dz}</div></div>', unsafe_allow_html=True)
             st.markdown(f'<div class="stat-box"><div class="stat-label">DZ Konv.</div><div class="stat-value">{(m_dz/s_dz*100 if s_dz>0 else 0):.1f}%</div></div>', unsafe_allow_html=True)
         with c1:
-            pitch, fig, ax = get_pitch("halv", t_color=t_color)
+            fig, ax = get_pitch("halv", t_color=t_color)
             ax.add_patch(
                 patches.Rectangle(
                     (25.16, 88.7),
@@ -530,7 +528,7 @@ def vis_side(dp=None):
                     z: len(plot_df[plot_df["Zone"] == z])
                     for z in ZONE_BOUNDARIES.keys()
                 }
-                pitch, fig, ax = get_pitch(
+                fig, ax = get_pitch(
                     "halv",
                     zone_boundaries=ZONE_BOUNDARIES,
                     zone_data=zone_counts,
@@ -580,7 +578,7 @@ def vis_side(dp=None):
                 )
 
         with c1:
-            pitch, fig, ax = get_pitch("halv", t_color="#333333")
+            fig, ax = get_pitch("halv", t_color="#333333")
             plot_shots_on_pitch(ax, d_mod_filtered, vis_mode_mod, "#333333")
 
             display_logo = None
