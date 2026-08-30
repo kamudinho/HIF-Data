@@ -33,4 +33,12 @@ def get_users():
             ] 
             # Jeppe ser kun Scoutrapport, Database og Emnedatabase under Scouting
         }
+        "mn": {
+            "pass": "MN1234", 
+            "role": "scout",
+            "restricted": [
+                "TESTSIDE", "TILPASNING", "ADMIN", "TRUPPEN", "HIF ANALYSE", "BETINIA LIGAEN", "Sammenligning", "Opret emne"
+            ] 
+            # Jeppe ser kun Scoutrapport, Database og Emnedatabase under Scouting
+        },
     }
