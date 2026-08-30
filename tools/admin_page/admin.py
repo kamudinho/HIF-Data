@@ -5,6 +5,7 @@ import base64
 import csv
 from io import StringIO
 from datetime import datetime
+from zoneinfo import ZoneInfo
 import time
 
 # --- KONFIGURATION ---
@@ -52,7 +53,7 @@ def save_action_log(bruger, handling, mal, _forsoeg=0):
     try:
         content, sha = _hent_fil()
 
-        tidsstempel = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        tidsstempel = datetime.now(ZoneInfo("Europe/Copenhagen")).strftime('%Y-%m-%d %H:%M:%S')
         ny_linje = _byg_csv_linje(tidsstempel, bruger, handling, mal)
 
         if content and not content.endswith('\n'):
