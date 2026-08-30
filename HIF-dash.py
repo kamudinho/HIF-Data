@@ -90,6 +90,14 @@ if not st.session_state["logged_in"]:
                     if u in USER_DB and USER_DB[u]["pass"] == p:
                         st.session_state["logged_in"] = True
                         st.session_state["user"] = u
+
+                        # --- LOGNING: login ---
+                        try:
+                            import tools.admin_page.admin as admin
+                            admin.save_action_log(u, "Login", "HIF Data Hub")
+                        except Exception as log_e:
+                            st.warning(f"Login lykkedes, men kunne ikke skrive til log: {log_e}")
+
                         st.rerun()
                     else: st.error("Ugyldig login")
     st.stop()
@@ -171,6 +179,18 @@ with st.sidebar:
         styles=menu_style
     )
     st.session_state["sub_menu_selection"] = sel
+
+    # --- LOGNING: faneskift ---
+    # Kun log når fanen rent faktisk er ændret, så vi ikke logger ved hver eneste
+    # Streamlit-rerun (som sker meget ofte og ikke er en reel brugerhandling)
+    _nuvaerende_fane = f"{hoved_omraade} -> {sel}"
+    if st.session_state.get("_forrige_fane") != _nuvaerende_fane:
+        try:
+            import tools.admin_page.admin as admin
+            admin.save_action_log(st.session_state["user"], "Skiftede fane", _nuvaerende_fane)
+        except Exception as log_e:
+            st.warning(f"Kunne ikke skrive faneskift til log: {log_e}")
+        st.session_state["_forrige_fane"] = _nuvaerende_fane
 
     st.markdown('</div>', unsafe_allow_html=True) 
 
