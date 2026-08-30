@@ -1,107 +1,145 @@
 import streamlit as st
+import pandas as pd
 import requests
 import base64
-import time
+import csv
+from io import StringIO
 from datetime import datetime
+import time
 
+# --- KONFIGURATION ---
 REPO = "Kamudinho/HIF-data"
 PATH = "data/action_log.csv"
+TOKEN = st.secrets["GITHUB_TOKEN"]
 
-st.title("🔧 GitHub Log – Diagnose")
-st.caption("Tester forbindelsen trin for trin, så vi kan se præcis hvor det knækker.")
-
-TOKEN = st.secrets.get("GITHUB_TOKEN", None)
-
-if not TOKEN:
-    st.error("Der er slet ikke sat en GITHUB_TOKEN i st.secrets. Tjek Streamlit Cloud > Settings > Secrets.")
-    st.stop()
-
-st.success(f"Token fundet i secrets (længde: {len(TOKEN)} tegn, starter med '{TOKEN[:7]}...').")
-
-headers = {
-    "Authorization": f"token {TOKEN}",
-    "Accept": "application/vnd.github.v3+json",
-    "Cache-Control": "no-cache"
-}
-
-# --- TRIN 1: Er tokenet overhovedet gyldigt? ---
-st.markdown("### Trin 1: Er token gyldigt?")
-r1 = requests.get("https://api.github.com/user", headers=headers)
-if r1.status_code == 200:
-    bruger_info = r1.json()
-    st.success(f"✅ Token er gyldigt. Autentificeret som: **{bruger_info.get('login')}**")
-else:
-    st.error(f"❌ Token er IKKE gyldigt. Status: {r1.status_code}")
-    st.code(r1.text)
-    st.info("Løsning: Opret et nyt Personal Access Token på GitHub og opdater det i Streamlit Secrets.")
-    st.stop()
-
-# --- TRIN 2: Har tokenet adgang til repoet? ---
-st.markdown("### Trin 2: Har token adgang til repoet?")
-r2 = requests.get(f"https://api.github.com/repos/{REPO}", headers=headers)
-if r2.status_code == 200:
-    repo_info = r2.json()
-    st.success(f"✅ Repo fundet: **{repo_info.get('full_name')}** (privat: {repo_info.get('private')})")
-    st.write(f"Din bruger har permissions: {repo_info.get('permissions')}")
-else:
-    st.error(f"❌ Kan ikke tilgå repoet '{REPO}'. Status: {r2.status_code}")
-    st.code(r2.text)
-    if r2.status_code == 404:
-        st.info("Enten er repo-navnet forkert/omdøbt, eller også har tokenet ikke adgang til det (fx hvis repoet er blevet privat, eller det er et fine-grained token uden adgang til dette repo).")
-    st.stop()
-
-# --- TRIN 3: Kan vi finde selve filen? ---
-st.markdown("### Trin 3: Kan filen findes?")
-url = f"https://api.github.com/repos/{REPO}/contents/{PATH}?t={int(time.time())}"
-r3 = requests.get(url, headers=headers)
-if r3.status_code == 200:
-    file_data = r3.json()
-    sha = file_data['sha']
-    content = base64.b64decode(file_data['content']).decode('utf-8')
-    antal_linjer = content.count('\n')
-    st.success(f"✅ Filen findes. SHA: {sha[:10]}... Antal linjer (ca.): {antal_linjer}")
-    sidste_linjer = "\n".join(content.strip().split("\n")[-3:])
-    st.code(sidste_linjer, language="text")
-else:
-    st.error(f"❌ Kan ikke hente filen '{PATH}'. Status: {r3.status_code}")
-    st.code(r3.text)
-    st.stop()
-
-# --- TRIN 4: Kan vi rent faktisk SKRIVE til filen? ---
-st.markdown("### Trin 4: Test-skrivning")
-st.write("Dette forsøger at skrive en rigtig test-linje til filen, så vi kan se om selve write-adgangen virker.")
-
-if st.button("Kør test-skrivning nu"):
-    tidsstempel = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    ny_linje = f"{tidsstempel},diagnose_script,Test,Automatisk diagnosticeringstest\n"
-
-    content_opdateret = content
-    if content_opdateret and not content_opdateret.endswith('\n'):
-        content_opdateret += '\n'
-    content_opdateret += ny_linje
-
-    payload = {
-        "message": "Diagnose: testskrivning",
-        "content": base64.b64encode(content_opdateret.encode('utf-8')).decode('utf-8'),
-        "sha": sha
+def get_github_headers():
+    return {
+        "Authorization": f"token {TOKEN}",
+        "Accept": "application/vnd.github.v3+json",
+        "Cache-Control": "no-cache"
     }
 
-    r4 = requests.put(
-        f"https://api.github.com/repos/{REPO}/contents/{PATH}",
-        headers=headers,
-        json=payload
-    )
+def _hent_fil():
+    """Henter rå filindhold + sha fra GitHub. Kaster exception ved fejl."""
+    url = f"https://api.github.com/repos/{REPO}/contents/{PATH}?t={int(time.time())}"
+    r = requests.get(url, headers=get_github_headers())
+    r.raise_for_status()
+    data = r.json()
+    content = base64.b64decode(data['content']).decode('utf-8')
+    return content, data['sha']
 
-    if r4.status_code in (200, 201):
-        st.success("✅ Test-skrivning lykkedes! Skrivning til GitHub virker altså fint fra denne app.")
-        st.json(r4.json().get("commit", {}))
-        st.info("Det betyder at problemet ikke er token/repo/adgang generelt – men noget specifikt i selve app-koden, der kalder save_action_log forkert et sted, eller ikke kalder den længere.")
-    else:
-        st.error(f"❌ Test-skrivning fejlede. Status: {r4.status_code}")
-        st.code(r4.text)
-        if r4.status_code == 403:
-            st.info("403 betyder ofte: tokenet mangler 'contents: write' rettighed, eller I har ramt et rate limit.")
-        elif r4.status_code == 409:
-            st.info("409 betyder SHA-konflikt – filen er ændret siden vi hentede den. Prøv at genindlæse siden og kør testen igen.")
-        elif r4.status_code == 422:
-            st.info("422 betyder ugyldigt payload – kunne tyde på encoding-problemer.")
+def _byg_csv_linje(tidsstempel, bruger, handling, mal):
+    """
+    Bygger en korrekt escaped CSV-linje ved hjælp af csv-modulet, så komma/
+    anførselstegn/linjeskift i felterne ikke ødelægger filens struktur.
+    """
+    ren = lambda x: str(x).replace("\n", " ").replace("\r", " ").strip()
+
+    buffer = StringIO()
+    writer = csv.writer(buffer, quoting=csv.QUOTE_MINIMAL)
+    writer.writerow([tidsstempel, ren(bruger), ren(handling), ren(mal)])
+    return buffer.getvalue()
+
+def save_action_log(bruger, handling, mal, _forsoeg=0):
+    """
+    Logger en handling til CSV-filen på GitHub.
+    Returnerer True ved succes, False ved fejl (fejl vises også via st.error).
+    Prøver automatisk igen én gang ved 409-konflikt (samtidig skrivning).
+    """
+    url = f"https://api.github.com/repos/{REPO}/contents/{PATH}"
+    headers = get_github_headers()
+
+    try:
+        content, sha = _hent_fil()
+
+        tidsstempel = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        ny_linje = _byg_csv_linje(tidsstempel, bruger, handling, mal)
+
+        if content and not content.endswith('\n'):
+            content += '\n'
+
+        opdateret_indhold = content + ny_linje
+
+        payload = {
+            "message": f"Log update: {bruger}",
+            "content": base64.b64encode(opdateret_indhold.encode('utf-8')).decode('utf-8'),
+            "sha": sha
+        }
+
+        put_r = requests.put(url, headers=headers, json=payload)
+
+        if put_r.status_code in (200, 201):
+            return True
+
+        if put_r.status_code == 409 and _forsoeg < 1:
+            return save_action_log(bruger, handling, mal, _forsoeg=_forsoeg + 1)
+
+        st.error(f"Kunne ikke gemme log-handling. GitHub svarede: {put_r.status_code} – {put_r.text}")
+        return False
+
+    except Exception as e:
+        st.error(f"Fejl ved skrivning til log: {e}")
+        return False
+
+
+def vis_log():
+    st.markdown("### System Action Log")
+
+    try:
+        content, _ = _hent_fil()
+
+        df = pd.read_csv(StringIO(content), on_bad_lines='warn', engine="python")
+
+        df['Dato'] = pd.to_datetime(df['Dato'], errors='coerce')
+        antal_ugyldige = df['Dato'].isna().sum()
+        if antal_ugyldige:
+            st.warning(
+                f"⚠️ {antal_ugyldige} række(r) i loggen kunne ikke tolkes korrekt "
+                f"og vises ikke."
+            )
+        df = df.dropna(subset=['Dato'])
+
+        with st.expander("Filter indstillinger", expanded=False):
+            c1, c2 = st.columns(2)
+            with c1:
+                brugere = sorted(df["Bruger"].unique().tolist())
+                v_bruger = st.multiselect("Filtrer Bruger", brugere)
+            with c2:
+                handlinger = sorted(df["Handling"].unique().tolist())
+                v_handling = st.multiselect("Filtrer Handling", handlinger)
+
+            søg = st.text_input("Søg i detaljer/mål")
+
+        mask = pd.Series([True] * len(df))
+        if v_bruger:
+            mask &= df["Bruger"].isin(v_bruger)
+        if v_handling:
+            mask &= df["Handling"].isin(v_handling)
+        if søg:
+            mask &= df["Mål"].astype(str).str.contains(søg, case=False, na=False)
+
+        df_vis = df[mask].sort_values("Dato", ascending=False)
+
+        st.dataframe(
+            df_vis,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "Dato": st.column_config.DatetimeColumn("Tidspunkt", format="DD/MM/YYYY HH:mm:ss"),
+                "Bruger": "Bruger",
+                "Handling": "Handling",
+                "Mål": "Kontekst/Detaljer"
+            }
+        )
+
+        if st.button("Opdater data"):
+            st.rerun()
+
+    except requests.exceptions.HTTPError as e:
+        st.warning(f"Kunne ikke hente loggen fra GitHub: {e}")
+    except Exception as e:
+        st.error(f"Der skete en fejl: {e}")
+
+
+if __name__ == "__main__":
+    vis_log()
