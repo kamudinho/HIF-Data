@@ -1,5 +1,5 @@
 """
-positional_helper.py
+utils/positional_helper.py
 
 To ansvarsområder:
 
@@ -157,6 +157,48 @@ def beregn_primaere_positioner(position_stats_df, match_minutes_df):
     return primaer[[
         "PLAYER_WYID", "PRIMAER_POSITION_KODE", "PRIMAER_POSITIONSGRUPPE", "VEGTEDE_MINUTTER_I_POSITION"
     ]]
+
+
+def berig_med_spillernavne(primaere_positioner_df, players_df):
+    """
+    Beriger resultatet fra beregn_primaere_positioner() med spillernavne fra
+    WYSCOUT_PLAYERS.
+
+    Parametre:
+        primaere_positioner_df: output fra beregn_primaere_positioner()
+        players_df: rådata fra WYSCOUT_PLAYERS. Forventede kolonner (mindst):
+            PLAYER_WYID, SHORTNAME, FIRSTNAME, LASTNAME
+
+    Returnerer:
+        primaere_positioner_df beriget med kolonnerne:
+        NAVN (= SHORTNAME hvis udfyldt, ellers FIRSTNAME + LASTNAME), FIRSTNAME, LASTNAME
+    """
+    if primaere_positioner_df.empty:
+        return primaere_positioner_df
+
+    spillere = players_df.copy()
+    spillere.columns = [c.upper() for c in spillere.columns]
+    spillere["PLAYER_WYID"] = spillere["PLAYER_WYID"].astype(str).str.split(".").str[0].str.strip()
+
+    def afled_navn(row):
+        kort = str(row.get("SHORTNAME", "") or "").strip()
+        if kort and kort.lower() != "nan":
+            return kort
+        fornavn = str(row.get("FIRSTNAME", "") or "").strip()
+        efternavn = str(row.get("LASTNAME", "") or "").strip()
+        navn = f"{fornavn} {efternavn}".strip()
+        return navn if navn else "Ukendt spiller"
+
+    spillere["NAVN"] = spillere.apply(afled_navn, axis=1)
+
+    resultat = primaere_positioner_df.merge(
+        spillere[["PLAYER_WYID", "NAVN", "FIRSTNAME", "LASTNAME"]],
+        on="PLAYER_WYID",
+        how="left"
+    )
+    resultat["NAVN"] = resultat["NAVN"].fillna("Ukendt spiller")
+
+    return resultat
 
 
 def hent_position_for_spiller(pid, primaere_positioner_df):
