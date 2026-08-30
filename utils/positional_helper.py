@@ -181,9 +181,12 @@ def berig_med_spillernavne(primaere_positioner_df, players_df):
     spillere["PLAYER_WYID"] = spillere["PLAYER_WYID"].astype(str).str.split(".").str[0].str.strip()
 
     def afled_navn(row):
-        kort = str(row.get("SHORTNAME", "") or "").strip()
-        if kort and kort.lower() != "nan":
-            return kort
+        # Understøtter både SHORTNAME (fra WYSCOUT_PLAYERS direkte) og
+        # PLAYER_NAME (fra queries["players"]/["wyscout_players"], som omdøber SHORTNAME)
+        for kol in ("SHORTNAME", "PLAYER_NAME"):
+            kort = str(row.get(kol, "") or "").strip()
+            if kort and kort.lower() != "nan":
+                return kort
         fornavn = str(row.get("FIRSTNAME", "") or "").strip()
         efternavn = str(row.get("LASTNAME", "") or "").strip()
         navn = f"{fornavn} {efternavn}".strip()
@@ -191,8 +194,9 @@ def berig_med_spillernavne(primaere_positioner_df, players_df):
 
     spillere["NAVN"] = spillere.apply(afled_navn, axis=1)
 
+    behold_kolonner = ["PLAYER_WYID", "NAVN"] + [c for c in ("FIRSTNAME", "LASTNAME") if c in spillere.columns]
     resultat = primaere_positioner_df.merge(
-        spillere[["PLAYER_WYID", "NAVN", "FIRSTNAME", "LASTNAME"]],
+        spillere[behold_kolonner],
         on="PLAYER_WYID",
         how="left"
     )
