@@ -117,12 +117,13 @@ def vis_side(advanced_stats_df=None, position_base_df=None):
     if not mulige_grupper:
         mulige_grupper = ["Angriber", "Kant", "Central Midtbane", "Back", "Midtstopper", "Målmand"]
 
-    # Gør dropdown-menuen mindre ved at placere den i en smallere kolonne
-    col_select, _ = st.columns([1, 2])
-    with col_select:
-        valgt_gruppe = st.selectbox("Vælg Positionsgruppe", mulige_grupper)
+    # Opsplitning i to hovedkolonner: Venstre (overskrift + dropdown) og Højre (metrics-beskrivelse i fuld højde)
+    col_left, col_right = st.columns([1.2, 1.8])
 
-    # Vis beskrivelse af hvilke metrics der bruges til den valgte gruppe
+    with col_left:
+        st.markdown("##### Vælg positionsgruppe")
+        valgt_gruppe = st.selectbox("Positionsgruppe", mulige_grupper, label_visibility="collapsed")
+
     gruppe_definitioner = METRICS_BY_GROUP.get(valgt_gruppe, METRICS_BY_GROUP["Ukendt"])
     
     beskrivelse_dele = []
@@ -135,13 +136,16 @@ def vis_side(advanced_stats_df=None, position_base_df=None):
             _, navn, succes_kol, total_kol = m_def
             beskrivelse_dele.append(f"**{navn}** (% succes)")
 
-    if beskrivelse_dele:
-        metrics_tekst = ", ".join(beskrivelse_dele)
+    metrics_tekst = ", ".join(beskrivelse_dele) if beskrivelse_dele else "Ingen specifikke nøgletal defineret."
+
+    with col_right:
         st.markdown(f"""
-            <div style='padding: 10px 14px; margin-bottom: 15px; background: #f8f9fa; border-left: 4px solid #df003b; border-radius: 4px; font-size: 0.85rem; color: #333;'>
-                <b>📊 Beregning for {valgt_gruppe}:</b> Scoringsmodellen tager højde for følgende nøgletal: {metrics_tekst}.
+            <div style='height: 100%; min-height: 72px; padding: 10px 14px; background: #f8f9fa; border-left: 4px solid #df003b; border-radius: 4px; font-size: 0.85rem; color: #333; display: flex; align-items: center;'>
+                <div><b>📊 Beregning for {valgt_gruppe}:</b> {metrics_tekst}</div>
             </div>
         """, unsafe_allow_html=True)
+
+    st.markdown("<div style='margin-bottom: 15px;'></div>", unsafe_allow_html=True)
 
     liga_mapping = {
         "328": "1. Division",
