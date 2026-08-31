@@ -1,7 +1,13 @@
-import streamlit as st
-import pandas as pd
+from datetime import datetime, timedelta
+from io import StringIO
+import time
+import base64
 import plotly.graph_objects as go
-import os
+import pandas as pd
+import requests
+import streamlit as st
+
+from utils.positional_helper import hent_position_for_spiller, beregn_metrics_for_gruppe
 
 # HIF Identitet
 HIF_RED = '#df003b'
@@ -11,46 +17,13 @@ def rens_id(val):
     if pd.isna(val) or str(val).strip() in ["", "nan", "None", "0", "0.0"]: return ""
     return str(val).split('.')[0].strip()
 
-def map_position(pos_code):
-    pos_map = {
-        "1": "Målmand", "2": "Højre Back", "3": "Venstre Back",
-        "4": "Midtstopper", "5": "Midtstopper", "6": "Defensiv Midt",
-        "7": "Højre Kant", "8": "Central Midt", "9": "Angriber",
-        "10": "Offensiv Midt", "11": "Venstre Kant"
-    }
-    return pos_map.get(rens_id(pos_code), "Ukendt")
-
 def vis_spiller_billede(img_url, pid):
     pid_c = rens_id(pid)
     url = str(img_url).strip() if pd.notna(img_url) and str(img_url).lower() not in ["0", "0.0", "nan", "none", ""] else ""
     if url == "": return f"https://cdn5.wyscout.com/photos/players/public/{pid_c}.png"
     return url
 
-def beregn_p90_stats(pid, adv_df):
-    clean_pid = rens_id(pid)
-    if adv_df is None or adv_df.empty: return None
-    
-    # Tving kolonnenavne til upper for match
-    adv_df.columns = [c.upper() for c in adv_df.columns]
-    p_row = adv_df[adv_df['PLAYER_WYID'].apply(rens_id) == clean_pid]
-    
-    if p_row.empty: return None
-    r = p_row.iloc[0]
-    mins = float(r.get('MINUTESONFIELD', 0))
-    
-    if mins < 45: 
-        return {k: "-" for k in ["XG P90", "XA P90", "DRIBLINGER", "PASS %", "KEY PASSES", "INTERCEPTIONS", "DUELLER %"]}
-    
-    p90 = lambda val: round((float(r.get(val, 0)) / mins) * 90, 2)
-    pct = lambda suc, tot: round((float(r.get(suc, 0)) / float(r.get(tot, 1))) * 100, 1) if float(r.get(tot, 0)) > 0 else 0.0
-    
-    return {
-        "XG P90": p90('XGSHOT'), "XA P90": p90('XGASSIST'), "DRIBLINGER": p90('DRIBBLES'),
-        "PASS %": pct('SUCCESSFULPASSES', 'PASSES'), "KEY PASSES": p90('KEYPASSES'),
-        "INTERCEPTIONS": p90('INTERCEPTIONS'), "DUELLER %": pct('DUELSWON', 'DUELS')
-    }
-
-def vis_side(df_spillere, d1, d2, career_df, d3, advanced_stats_df):
+def vis_side(df_spillere, d1, d2, career_df, d3, advanced_stats_df, primaer_positioner_df=None):
     st.markdown(f"""
         <style>
             .player-card {{
@@ -103,25 +76,32 @@ def vis_side(df_spillere, d1, d2, career_df, d3, advanced_stats_df):
         if match.empty: return None
         n = match.iloc[0]
         pid = rens_id(n.get('PLAYER_WYID'))
-        
-        # Find stamdata (Klub og Position)
-        pos, klub = "Ukendt", "Ukendt"
-        
-        # A: Tjek lokal trup (df_spillere)
+
+        # --- POSITION: udledt af faktisk kamphistorik (positional_helper) ---
+        # Erstatter det tidligere map_position(ROLECODE3), som ofte var tom i WYSCOUT_PLAYERS
+        pos_kode, positionsgruppe = "Ukendt", "Ukendt"
+        if primaer_positioner_df is not None and not primaer_positioner_df.empty:
+            pos_kode, positionsgruppe = hent_position_for_spiller(pid, primaer_positioner_df)
+
+        klub = "Ukendt"
+
+        # A: Tjek lokal trup (df_spillere) for klub (og evt. nødløsning for position)
         if df_spillere is not None and not df_spillere.empty:
             m = df_spillere[df_spillere['PLAYER_WYID'].apply(rens_id) == pid]
             if not m.empty:
-                pos = map_position(m.iloc[0].get('ROLECODE3', ''))
                 klub = "Hvidovre IF"
-        
+
         # B: Tjek Snowflake search-liste (d3/sql_players)
-        if (klub == "Ukendt" or pos == "Ukendt") and d3 is not None and not d3.empty:
+        if (klub == "Ukendt") and d3 is not None and not d3.empty:
             m_wy = d3[d3['PLAYER_WYID'].apply(rens_id) == pid]
             if not m_wy.empty:
                 klub = m_wy.iloc[0].get('TEAMNAME', klub)
-                # Hvis position ikke er sat endnu
-                if pos == "Ukendt":
-                    pos = m_wy.iloc[0].get('POSITION', pos)
+
+        # Visningstekst for position: brug positionsgruppen, med kode i parentes hvis kendt
+        if positionsgruppe != "Ukendt":
+            pos_visning = f"{positionsgruppe} ({pos_kode.upper()})" if pos_kode and pos_kode != "Ukendt" else positionsgruppe
+        else:
+            pos_visning = "Ukendt"
 
         # C: Billede (fra sql_players/d3)
         img_url = ""
@@ -159,9 +139,13 @@ def vis_side(df_spillere, d1, d2, career_df, d3, advanced_stats_df):
                 if 'MINUTESONFIELD' in r_adv: stats["MIN"] = int(r_adv['MINUTESONFIELD'])
         
         lbls = ['TEKNIK', 'AGGRESIVITET', 'BESLUTSOMHED', 'SPILINTELLIGENS', 'FART', 'ATTITUDE', 'LEDEREGENSKABER', 'UDHOLDENHED']
+
+        # --- METRICS: positionsspecifikke i stedet for fast liste (positional_helper) ---
+        adv_metrics = beregn_metrics_for_gruppe(pid, positionsgruppe, advanced_stats_df)
+
         return {
-            "navn": navn, "pid": pid, "img": img_url, "pos": pos, "klub": klub, "stats": stats, 
-            "adv": beregn_p90_stats(pid, advanced_stats_df),
+            "navn": navn, "pid": pid, "img": img_url, "pos": pos_visning, "positionsgruppe": positionsgruppe, "klub": klub, "stats": stats,
+            "adv": adv_metrics,
             "r": [float(str(n.get(k, 0.1)).replace(',', '.')) for k in lbls],
             "styrker": n.get('Styrker', '-'), "udvikling": n.get('Udvikling', '-'), "vurdering": n.get('Vurdering', '-'),
             "scout_scores": {k: n.get(k, 0) for k in lbls}
