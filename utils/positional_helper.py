@@ -31,8 +31,8 @@ POSITION_GROUP_MAP = {
     "rb": "Back", "lb": "Back", "rb5": "Back", "lb5": "Back",
     "rwb": "Back", "lwb": "Back", "lb3": "Back", "rb3": "Back",
 
-    "rcb": "Midtstopper", "lcb": "Midtstopper", "cb": "Midtstopper",
-    "rcb3": "Midtstopper", "lcb3": "Midtstopper", "cb3": "Midtstopper",
+    "rcb": "Stopper", "lcb": "Stopper", "cb": "Stopper",
+    "rcb3": "Stopper", "lcb3": "Stopper", "cb3": "Stopper",
 
     "dmf": "Def. Midtbane", "rdmf": "Def. Midtbane", "ldmf": "Def. Midtbane",
 
@@ -54,14 +54,14 @@ POSITION_10_GROUP_MAP = {
     "lb3": "Back", "rb3": "Back", "lb5": "Back", "rb5": "Back",
 
     # Midtstoppere
-    "cb": "Midtstopper", "lcb": "Midtstopper", "rcb": "Midtstopper", 
-    "lcb3": "Midtstopper", "rcb3": "Midtstopper", "cb3": "Midtstopper",
+    "cb": "Stopper", "lcb": "Stopper", "rcb": "Stopper", 
+    "lcb3": "Stopper", "rcb3": "Stopper", "cb3": "Stopper",
 
     # Central Midtbane (inkl. DMF og AMF som i din Top 10 SQL)
-    "dmf": "Central Midtbane", "rdmf": "Central Midtbane", "ldmf": "Central Midtbane",
-    "cmf": "Central Midtbane", "lcmf": "Central Midtbane", "rcmf": "Central Midtbane",
-    "lcmf3": "Central Midtbane", "rcmf3": "Central Midtbane", 
-    "amf": "Central Midtbane", "lamf": "Central Midtbane", "ramf": "Central Midtbane",
+    "dmf": "Midtbane", "rdmf": "Midtbane", "ldmf": "Midtbane",
+    "cmf": "Midtbane", "lcmf": "Midtbane", "rcmf": "Midtbane",
+    "lcmf3": "Midtbane", "rcmf3": "Midtbane", 
+    "amf": "Midtbane", "lamf": "Midtbane", "ramf": "Midtbane",
 
     # Kanter
     "lw": "Kant", "rw": "Kant", "lwf": "Kant", "rwf": "Kant",
