@@ -45,6 +45,7 @@ def get_wy_queries(comp_filter, season_filter):
             SELECT 
                 pc.PLAYER_WYID, 
                 s.SEASONNAME, 
+                s.ACTIVE,
                 c.COMPETITIONNAME, 
                 t.TEAMNAME,
                 pc.APPEARANCES AS MATCHES, 
