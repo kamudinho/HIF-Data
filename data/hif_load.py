@@ -1,6 +1,6 @@
-import streamlit as pd # (eller import pandas as pd)
-import os
+import streamlit as st
 import pandas as pd
+import os
 from data.data_load import _get_snowflake_conn, load_local_players
 from data.sql.wy_queries import get_wy_queries
 from utils.positional_helper import beregn_primaere_positioner, berig_med_spillernavne
