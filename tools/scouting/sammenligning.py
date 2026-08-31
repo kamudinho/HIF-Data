@@ -81,80 +81,100 @@ def vis_side(df_spillere, d1, d2, career_df, d3, advanced_stats_df, primaer_posi
         match = df_s[df_s['Navn'] == navn].sort_values('Dato', ascending=False).iloc[:1]
         if match.empty: return None
         n = match.iloc[0]
-        pid = rens_id(n.get('PLAYER_WYID'))
+        
+        # Forsøg at finde spiller-ID på tværs af mulige kolonnenavne i scouting_db
+        pid = ""
+        for col in ['PLAYER_WYID', 'WYID', 'PLAYER_ID', 'ID']:
+            if col in n and pd.notna(n[col]):
+                pid = rens_id(n[col])
+                if pid: break
 
-        # --- POSITION: udledt af faktisk kamphistorik (positional_helper) ---
-        # Erstatter det tidligere map_position(ROLECODE3), som ofte var tom i WYSCOUT_PLAYERS
+        # --- POSITION ---
         pos_kode, positionsgruppe = "Ukendt", "Ukendt"
-        if primaer_positioner_df is not None and not primaer_positioner_df.empty:
-            pos_kode, positionsgruppe = hent_position_for_spiller(pid, primaer_positioner_df)
+        if pid and primaer_positioner_df is not None and not primaer_positioner_df.empty:
+            pos_df = primaer_positioner_df.copy()
+            pos_df.columns = [c.upper().strip() for c in pos_df.columns]
+            id_col = next((c for c in ['PLAYER_WYID', 'WYID', 'PLAYER_ID', 'ID'] if c in pos_df.columns), None)
+            if id_col:
+                pos_df['CLEAN_ID'] = pos_df[id_col].apply(rens_id)
+                match_pos = pos_df[pos_df['CLEAN_ID'] == pid]
+                if not match_pos.empty:
+                    pos_kode = str(match_pos.iloc[0].get('POSITION', match_pos.iloc[0].get('ROLECODE3', 'Ukendt')))
+                    positionsgruppe = str(match_pos.iloc[0].get('POS_GROUP', match_pos.iloc[0].get('POS_GRUPPE', 'Ukendt')))
 
         klub = "Ukendt"
-
-        # A: Tjek lokal trup (df_spillere) for klub (og evt. nødløsning for position)
-        if df_spillere is not None and not df_spillere.empty:
-            m = df_spillere[df_spillere['PLAYER_WYID'].apply(rens_id) == pid]
-            if not m.empty:
-                klub = m.iloc[0].get('TEAMNAME', klub)
-
-        # B: Tjek Snowflake search-liste (d3/sql_players)
-        if (klub == "Ukendt") and d3 is not None and not d3.empty:
-            m_wy = d3[d3['PLAYER_WYID'].apply(rens_id) == pid]
-            if not m_wy.empty:
-                klub = m_wy.iloc[0].get('TEAMNAME', klub)
-
-        # Visningstekst for position: brug positionsgruppen, med kode i parentes hvis kendt
-        if positionsgruppe != "Ukendt":
-            pos_visning = f"{positionsgruppe} ({pos_kode.upper()})" if pos_kode and pos_kode != "Ukendt" else positionsgruppe
-        else:
-            pos_visning = "Ukendt"
-
-        # C: Billede (fra sql_players/d3)
         img_url = ""
-        if d3 is not None and not d3.empty:
-            img_m = d3[d3['PLAYER_WYID'].apply(rens_id) == pid]
-            if not img_m.empty: img_url = img_m.iloc[0].get('IMAGEDATAURL', '')
-        
-        # D: Karriere & Kamp Stats (Kampe, Mål, Assists, Minutter)
+
+        # Hjælpefunktion til at søge i eksterne dataframes (truppen eller sql_players)
+        def sok_i_df(target_df):
+            nonlocal klub, img_url
+            if target_df is None or target_df.empty: return
+            df_temp = target_df.copy()
+            df_temp.columns = [c.upper().strip() for c in df_temp.columns]
+            id_col = next((c for c in ['PLAYER_WYID', 'WYID', 'PLAYER_ID', 'ID'] if c in df_temp.columns), None)
+            if not id_col: return
+            
+            df_temp['CLEAN_ID'] = df_temp[id_col].apply(rens_id)
+            m = df_temp[df_temp['CLEAN_ID'] == pid]
+            if not m.empty:
+                row = m.iloc[0]
+                if klub == "Ukendt":
+                    klub = row.get('TEAMNAME', row.get('KLUB', klub))
+                if not img_url:
+                    img_url = row.get('IMAGEDATAURL', row.get('IMAGE_URL', row.get('BILLEDE', '')))
+
+        # A: Tjek lokal trup
+        if pid and df_spillere is not None and not df_spillere.empty:
+            sok_i_df(df_spillere)
+
+        # B: Tjek Snowflake search-liste (d3)
+        if (klub == "Ukendt" or not img_url) and pid and d3 is not None and not d3.empty:
+            sok_i_df(d3)
+
+        pos_visning = f"{positionsgruppe} ({pos_kode.upper()})" if positionsgruppe != "Ukendt" and pos_kode and pos_kode != "Ukendt" else (positionsgruppe if positionsgruppe != "Ukendt" else pos_kode)
+
+        # D: Karriere & Kamp Stats
         stats = {"K": 0, "M": 0, "A": 0, "MIN": 0}
         
-        # FØRST: Tjek karriere_df for grundlæggende kamptal
-        if career_df is not None and not career_df.empty:
-            c_m = career_df[career_df['PLAYER_WYID'].apply(rens_id) == pid]
+        if pid and career_df is not None and not career_df.empty:
+            c_df = career_df.copy()
+            c_df.columns = [c.upper().strip() for c in c_df.columns]
+            id_col = next((c for c in ['PLAYER_WYID', 'WYID', 'PLAYER_ID', 'ID'] if c in c_df.columns), None)
+            if id_col:
+                c_df['CLEAN_ID'] = c_df[id_col].apply(rens_id)
+                c_m = c_df[c_df['CLEAN_ID'] == pid]
 
-            def _er_aktiv(val):
-                return str(val).strip().upper() in ("TRUE", "1", "T")
+                def _er_aktiv(val):
+                    return str(val).strip().upper() in ("TRUE", "1", "T")
 
-            if 'ACTIVE' in c_m.columns:
-                curr = c_m[c_m['ACTIVE'].apply(_er_aktiv)]
-            else:
-                curr = pd.DataFrame()
-            target = curr.iloc[0] if not curr.empty else (c_m.iloc[0] if not c_m.empty else None)
-            
-            if target is not None:
-                stats["K"] = int(target.get('MATCHES', 0))
-                stats["MIN"] = int(target.get('MINUTES', 0))
-                stats["M"] = int(target.get('GOALS', 0))
-                stats["A"] = int(target.get('ASSISTS', 0))
+                if 'ACTIVE' in c_m.columns:
+                    curr = c_m[c_m['ACTIVE'].apply(_er_aktiv)]
+                else:
+                    curr = pd.DataFrame()
+                target = curr.iloc[0] if not curr.empty else (c_m.iloc[0] if not c_m.empty else None)
+                
+                if target is not None:
+                    stats["K"] = int(target.get('MATCHES', target.get('KAMPEN', 0)) or 0)
+                    stats["MIN"] = int(target.get('MINUTES', target.get('MINUTTER', 0)) or 0)
+                    stats["M"] = int(target.get('GOALS', target.get('MAL', 0)) or 0)
+                    stats["A"] = int(target.get('ASSISTS', 0) or 0)
 
-        # SECONDARY OVERRIDE: Brug Advanced Stats (df_adv) til Mål og Assists
-        # Det er her Andreas Smeds assists gemmer sig!
-        if advanced_stats_df is not None and not advanced_stats_df.empty:
+        # Advanced Stats override
+        if pid and advanced_stats_df is not None and not advanced_stats_df.empty:
             adv_df_upper = advanced_stats_df.copy()
             adv_df_upper.columns = [c.upper() for c in adv_df_upper.columns]
-            
-            p_adv = adv_df_upper[adv_df_upper['PLAYER_WYID'].apply(rens_id) == pid]
-            if not p_adv.empty:
-                r_adv = p_adv.iloc[0]
-                # Vi opdaterer kun hvis værdien findes (Wyscout bruger ofte GOALS og ASSISTS i adv stats)
-                if 'ASSISTS' in r_adv: stats["A"] = int(r_adv['ASSISTS'])
-                if 'GOALS' in r_adv: stats["M"] = int(r_adv['GOALS'])
-                if 'MINUTESONFIELD' in r_adv: stats["MIN"] = int(r_adv['MINUTESONFIELD'])
+            id_col = next((c for c in ['PLAYER_WYID', 'WYID', 'PLAYER_ID', 'ID'] if c in adv_df_upper.columns), None)
+            if id_col:
+                adv_df_upper['CLEAN_ID'] = adv_df_upper[id_col].apply(rens_id)
+                p_adv = adv_df_upper[adv_df_upper['CLEAN_ID'] == pid]
+                if not p_adv.empty:
+                    r_adv = p_adv.iloc[0]
+                    if 'ASSISTS' in r_adv: stats["A"] = int(r_adv['ASSISTS'] or 0)
+                    if 'GOALS' in r_adv: stats["M"] = int(r_adv['GOALS'] or 0)
+                    if 'MINUTESONFIELD' in r_adv: stats["MIN"] = int(r_adv['MINUTESONFIELD'] or 0)
         
         lbls = ['TEKNIK', 'AGGRESIVITET', 'BESLUTSOMHED', 'SPILINTELLIGENS', 'FART', 'ATTITUDE', 'LEDEREGENSKABER', 'UDHOLDENHED']
-
-        # --- METRICS: positionsspecifikke i stedet for fast liste (positional_helper) ---
-        adv_metrics = beregn_metrics_for_gruppe(pid, positionsgruppe, advanced_stats_df)
+        adv_metrics = beregn_metrics_for_gruppe(pid, positionsgruppe, advanced_stats_df) if pid else {}
 
         return {
             "navn": navn, "pid": pid, "img": img_url, "pos": pos_visning, "positionsgruppe": positionsgruppe, "klub": klub, "stats": stats,
