@@ -122,7 +122,7 @@ def vis_side(advanced_stats_df=None, position_base_df=None):
             df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int).astype(str)
 
     # 1. Vælg Hovedgruppe (Mål, Back, Stopper, Midtbane, Kant, Angriber)
-    hoved_grupper = ["Målmand", "Back", "Midtstopper", "Central Midtbane", "Kant", "Angriber"]
+    hoved_grupper = ["Målmand", "Back", "Stopper", "Central Midtbane", "Kant", "Angriber"]
     
     col_left1, col_left2, col_right = st.columns([1.2, 1.2, 1.8])
 
@@ -134,8 +134,8 @@ def vis_side(advanced_stats_df=None, position_base_df=None):
     mapping_under = {
         "Målmand": ["Målmand"],
         "Back": ["Alle Backs", "Højre Back", "Venstre Back"],
-        "Midtstopper": ["Midtstopper"],
-        "Central Midtbane": ["Alle Midtbaner", "Defensiv Midtbane", "Central Midtbane", "Offensiv Midtbane"],
+        "Stopper": ["Stopper"],
+        "Midtbane": ["Alle Midtbaner", "Defensiv Midtbane", "Central Midtbane", "Offensiv Midtbane"],
         "Kant": ["Alle Kanter", "Højre Kant", "Venstre Kant"],
         "Angriber": ["Angriber"]
     }
