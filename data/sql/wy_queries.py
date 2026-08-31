@@ -23,20 +23,26 @@ def get_wy_queries(comp_filter, season_filter):
         # 1. PLAYERS (Behold filter her, så din hovedliste ikke eksploderer)
         # 1. PLAYERS (Optimeret til trupoversigt og liga-filtrering)
         "players": f"""
-            SELECT DISTINCT
-                p.PLAYER_WYID,
-                p.FIRSTNAME,
-                p.LASTNAME,
-                p.SHORTNAME AS PLAYER_NAME,
-                p.ROLECODE3,
-                p.BIRTHDATE,
-                t.TEAMNAME,
-                p.COMPETITION_WYID,
-                p.IMAGEDATAURL
-            FROM {DB}.WYSCOUT_PLAYERS p
-            JOIN {DB}.WYSCOUT_TEAMS t ON p.CURRENTTEAM_WYID = t.TEAM_WYID
-            WHERE p.COMPETITION_WYID IN {liga_ids}
-            AND p.STATUS = 'active'
+            SELECT PLAYER_WYID, FIRSTNAME, LASTNAME, PLAYER_NAME, ROLECODE3, BIRTHDATE, TEAMNAME, COMPETITION_WYID, IMAGEDATAURL
+            FROM (
+                SELECT
+                    p.PLAYER_WYID,
+                    p.FIRSTNAME,
+                    p.LASTNAME,
+                    p.SHORTNAME AS PLAYER_NAME,
+                    p.ROLECODE3,
+                    p.BIRTHDATE,
+                    t.TEAMNAME,
+                    p.COMPETITION_WYID,
+                    p.SEASON_WYID,
+                    p.IMAGEDATAURL,
+                    ROW_NUMBER() OVER (PARTITION BY p.PLAYER_WYID ORDER BY p.SEASON_WYID DESC) AS rn
+                FROM {DB}.WYSCOUT_PLAYERS p
+                JOIN {DB}.WYSCOUT_TEAMS t ON p.CURRENTTEAM_WYID = t.TEAM_WYID
+                WHERE p.COMPETITION_WYID IN {liga_ids}
+                AND p.STATUS = 'active'
+            )
+            WHERE rn = 1
         """,
         
         # 2. PLAYER CAREER (HER VAR FEJLEN!)
