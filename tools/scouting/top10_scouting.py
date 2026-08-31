@@ -24,8 +24,10 @@ def vis_side(advanced_stats_df, position_base_df=None):
 
     if position_base_df is not None and not position_base_df.empty:
         try:
-            primaer_pos_df = beregn_primaere_positioner(position_base_df)
-            if not primaer_pos_df.empty:
+            pos_base_temp = position_base_df.copy()
+            pos_base_temp.columns = [c.upper().strip() for c in pos_base_temp.columns]
+            primaer_pos_df = beregn_primaere_positioner(pos_base_temp)
+            if primaer_pos_df is not None and not primaer_pos_df.empty:
                 primaer_pos_df.columns = [c.upper().strip() for c in primaer_pos_df.columns]
                 id_col_adv = next((c for c in ['PLAYER_WYID', 'WYID', 'PLAYER_ID', 'ID'] if c in df.columns), None)
                 id_col_pos = next((c for c in ['PLAYER_WYID', 'WYID', 'PLAYER_ID', 'ID'] if c in primaer_pos_df.columns), None)
@@ -33,27 +35,28 @@ def vis_side(advanced_stats_df, position_base_df=None):
                 if id_col_adv and id_col_pos:
                     df['TEMP_ID'] = df[id_col_adv].astype(str).str.split('.').str[0].str.strip()
                     primaer_pos_df['TEMP_ID'] = primaer_pos_df[id_col_pos].astype(str).str.split('.').str[0].str.strip()
-                    df = df.merge(primaer_pos_df[['TEMP_ID', 'PRIMAER_POSITIONSGRUPPE']], on='TEMP_ID', how='left')
-                    df = df.rename(columns={'PRIMAER_POSITIONSGRUPPE': 'POS_GROUP'})
+                    
+                    pos_col_name = next((c for c in ['PRIMAER_POSITIONSGRUPPE', 'POSITIONSGRUPPE', 'GROUP'] if c in primaer_pos_df.columns), None)
+                    if pos_col_name:
+                        df = df.merge(primaer_pos_df[['TEMP_ID', pos_col_name]], on='TEMP_ID', how='left')
+                        df = df.rename(columns={pos_col_name: 'POS_GROUP'})
         except Exception as e:
             st.warning(f"Kunne ikke udlede positioner automatisk: {e}")
 
     # Fallback hvis POS_GROUP stadig mangler, men f.eks. ROLECODE3 findes i data
     if 'POS_GROUP' not in df.columns or df['POS_GROUP'].isna().all():
-        role_col = next((c for c in ['ROLECODE3', 'ROLE_CODE3', 'ROLECODE', 'POSITION'] if c in df.columns), None)
+        role_col = next((c for c in ['ROLECODE3', 'ROLE_CODE3', 'ROLECODE', 'POSITION', 'POSITION1CODE'] if c in df.columns), None)
         if role_col:
             df['POS_GROUP'] = df[role_col].astype(str).str.lower().str.strip().map(POSITION_GROUP_MAP).fillna('Ukendt')
+        else:
+            df['POS_GROUP'] = 'Ukendt'
 
-    pos_col = next((c for c in ['POS_GROUP', 'POS_GRUPPE', 'PRIMAER_POSITIONSGRUPPE'] if c in df.columns), None)
+    pos_col = next((c for c in ['POS_GROUP', 'POS_GRUPPE', 'PRIMAER_POSITIONSGRUPPE'] if c in df.columns), 'POS_GROUP')
     
-    if not pos_col:
-        st.error("Kunne ikke finde positionsgrupper. Sørg for at 'position_base' eller ROLECODE3 kolonnen er tilgængelig.")
-        return
-
     mulige_grupper = sorted([g for g in df[pos_col].dropna().unique() if str(g).lower() != "ukendt"])
     if not mulige_grupper:
-        st.info("Ingen gyldige positionsgrupper fundet i data.")
-        return
+        # Hvis alt andet fejler, tillad at vise baseret på tilgængelige grupper eller standard
+        mulige_grupper = ["Angriber", "Kant", "Central Midtbane", "Forsvarer", "Målmand"]
 
     valgt_gruppe = st.selectbox("Vælg Positionsgruppe", mulige_grupper)
 
