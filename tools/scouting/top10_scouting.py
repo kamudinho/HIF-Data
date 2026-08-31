@@ -1,23 +1,134 @@
 import streamlit as st
 import pandas as pd
 from data.data_load import _get_snowflake_conn
-from data.sql.wy_queries import get_wy_queries
-from utils.positional_helper import beregn_primaere_positioner, POSITIONSGRUPPE_ORDEN, METRICS_BY_GROUP
+from utils.positional_helper import POSITIONSGRUPPE_ORDEN, METRICS_BY_GROUP
 
 def vis_side(advanced_stats_df=None, position_base_df=None):
     st.markdown("### Top 10 Scouting – Divisioner", unsafe_allow_html=True)
-    
-    queries = get_wy_queries(comp_filter="(328, 329, 43319)", season_filter=None)
     
     conn = _get_snowflake_conn()
     if not conn:
         st.warning("Kunne ikke oprette forbindelse til databasen.")
         return
 
+    query = """
+    WITH ranked_players AS (
+        SELECT 
+            pt.PLAYER_WYID,
+            p.SHORTNAME AS PLAYER_NAME,
+            t.TEAMNAME,
+            pt.COMPETITION_WYID,
+            s.SEASONNAME,
+            
+            CASE 
+                WHEN GREATEST(
+                    COALESCE(pb.POSITIONS1PERCENT, 0),
+                    COALESCE(pb.POSITIONS2PERCENT, 0),
+                    COALESCE(pb.POSITIONS3PERCENT, 0),
+                    COALESCE(pb.POSITIONS4PERCENT, 0)
+                ) = 0 THEN 'Ukendt'
+                
+                WHEN (
+                    CASE 
+                        WHEN pb.POSITIONS1PERCENT >= GREATEST(COALESCE(pb.POSITIONS2PERCENT,0), COALESCE(pb.POSITIONS3PERCENT,0), COALESCE(pb.POSITIONS4PERCENT,0)) THEN pb.POSITION1CODE
+                        WHEN pb.POSITIONS2PERCENT >= GREATEST(COALESCE(pb.POSITIONS1PERCENT,0), COALESCE(pb.POSITIONS3PERCENT,0), COALESCE(pb.POSITIONS4PERCENT,0)) THEN pb.POSITION2CODE
+                        WHEN pb.POSITIONS3PERCENT >= GREATEST(COALESCE(pb.POSITIONS1PERCENT,0), COALESCE(pb.POSITIONS2PERCENT,0), COALESCE(pb.POSITIONS4PERCENT,0)) THEN pb.POSITION3CODE
+                        ELSE pb.POSITION4CODE
+                    END
+                ) IN ('GK') THEN 'Målmand'
+                
+                WHEN (
+                    CASE 
+                        WHEN pb.POSITIONS1PERCENT >= GREATEST(COALESCE(pb.POSITIONS2PERCENT,0), COALESCE(pb.POSITIONS3PERCENT,0), COALESCE(pb.POSITIONS4PERCENT,0)) THEN pb.POSITION1CODE
+                        WHEN pb.POSITIONS2PERCENT >= GREATEST(COALESCE(pb.POSITIONS1PERCENT,0), COALESCE(pb.POSITIONS3PERCENT,0), COALESCE(pb.POSITIONS4PERCENT,0)) THEN pb.POSITION2CODE
+                        WHEN pb.POSITIONS3PERCENT >= GREATEST(COALESCE(pb.POSITIONS1PERCENT,0), COALESCE(pb.POSITIONS2PERCENT,0), COALESCE(pb.POSITIONS4PERCENT,0)) THEN pb.POSITION3CODE
+                        ELSE pb.POSITION4CODE
+                    END
+                ) IN ('CB', 'LCB', 'RCB') THEN 'Midtstopper'
+                
+                WHEN (
+                    CASE 
+                        WHEN pb.POSITIONS1PERCENT >= GREATEST(COALESCE(pb.POSITIONS2PERCENT,0), COALESCE(pb.POSITIONS3PERCENT,0), COALESCE(pb.POSITIONS4PERCENT,0)) THEN pb.POSITION1CODE
+                        WHEN pb.POSITIONS2PERCENT >= GREATEST(COALESCE(pb.POSITIONS1PERCENT,0), COALESCE(pb.POSITIONS3PERCENT,0), COALESCE(pb.POSITIONS4PERCENT,0)) THEN pb.POSITION2CODE
+                        WHEN pb.POSITIONS3PERCENT >= GREATEST(COALESCE(pb.POSITIONS1PERCENT,0), COALESCE(pb.POSITIONS2PERCENT,0), COALESCE(pb.POSITIONS4PERCENT,0)) THEN pb.POSITION3CODE
+                        ELSE pb.POSITION4CODE
+                    END
+                ) IN ('LB', 'RB', 'LWB', 'RWB') THEN 'Back'
+                
+                WHEN (
+                    CASE 
+                        WHEN pb.POSITIONS1PERCENT >= GREATEST(COALESCE(pb.POSITIONS2PERCENT,0), COALESCE(pb.POSITIONS3PERCENT,0), COALESCE(pb.POSITIONS4PERCENT,0)) THEN pb.POSITION1CODE
+                        WHEN pb.POSITIONS2PERCENT >= GREATEST(COALESCE(pb.POSITIONS1PERCENT,0), COALESCE(pb.POSITIONS3PERCENT,0), COALESCE(pb.POSITIONS4PERCENT,0)) THEN pb.POSITION2CODE
+                        WHEN pb.POSITIONS3PERCENT >= GREATEST(COALESCE(pb.POSITIONS1PERCENT,0), COALESCE(pb.POSITIONS2PERCENT,0), COALESCE(pb.POSITIONS4PERCENT,0)) THEN pb.POSITION3CODE
+                        ELSE pb.POSITION4CODE
+                    END
+                ) IN ('DMF', 'LCMF', 'RCMF', 'AMF', 'CMF') THEN 'Central Midtbane'
+                
+                WHEN (
+                    CASE 
+                        WHEN pb.POSITIONS1PERCENT >= GREATEST(COALESCE(pb.POSITIONS2PERCENT,0), COALESCE(pb.POSITIONS3PERCENT,0), COALESCE(pb.POSITIONS4PERCENT,0)) THEN pb.POSITION1CODE
+                        WHEN pb.POSITIONS2PERCENT >= GREATEST(COALESCE(pb.POSITIONS1PERCENT,0), COALESCE(pb.POSITIONS3PERCENT,0), COALESCE(pb.POSITIONS4PERCENT,0)) THEN pb.POSITION2CODE
+                        WHEN pb.POSITIONS3PERCENT >= GREATEST(COALESCE(pb.POSITIONS1PERCENT,0), COALESCE(pb.POSITIONS2PERCENT,0), COALESCE(pb.POSITIONS4PERCENT,0)) THEN pb.POSITION3CODE
+                        ELSE pb.POSITION4CODE
+                    END
+                ) IN ('LW', 'RW', 'LWF', 'RWF') THEN 'Kant'
+                
+                ELSE 'Angriber'
+            END AS POS_GROUP,
+
+            pt.MINUTESONFIELD,
+            pt.GOALS,
+            pt.ASSISTS,
+            pt.SHOTS,
+            pt.XGSHOT,
+            pt.XGASSIST,
+            pt.DRIBBLES,
+            pt.SUCCESSFULDRIBBLES,
+            pt.PROGRESSIVERUN,
+            pt.PROGRESSIVEPASSES,
+            pt.SUCCESSFULPROGRESSIVEPASSES,
+            pt.PASSES,
+            pt.SUCCESSFULPASSES,
+            pt.KEYPASSES,
+            pt.RECOVERIES,
+            pt.INTERCEPTIONS,
+            pt.DUELS,
+            pt.DUELSWON,
+            pt.DEFENSIVEDUELS,
+            pt.DEFENSIVEDUELSWON,
+            pt.AERIALDUELS,
+            pt.AERIALDUELSWON,
+            pt.CLEARANCES,
+            pt.SLIDINGTACKLES,
+            pt.SUCCESSFULSLIDINGTACKLES,
+            pt.CROSSES,
+            pt.SUCCESSFULCROSSES,
+            pt.TOUCHINBOX,
+            pt.GKSAVES,
+            pt.GKCONCEDEDGOALS,
+            pt.GKEXITS,
+            pt.GKSUCCESSFULEXITS,
+            pt.GKAERIALDUELS,
+            pt.GKAERIALDUELSWON,
+            ROW_NUMBER() OVER (
+                PARTITION BY pt.PLAYER_WYID, pt.COMPETITION_WYID 
+                ORDER BY pt.MINUTESONFIELD DESC
+            ) as rn
+        FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL pt
+        JOIN KLUB_HVIDOVREIF.AXIS.WYSCOUT_SEASONS s ON pt.SEASON_WYID = s.SEASON_WYID
+        JOIN KLUB_HVIDOVREIF.AXIS.WYSCOUT_PLAYERS p ON pt.PLAYER_WYID = p.PLAYER_WYID AND pt.SEASON_WYID = p.SEASON_WYID
+        JOIN KLUB_HVIDOVREIF.AXIS.WYSCOUT_TEAMS t ON p.CURRENTTEAM_WYID = t.TEAM_WYID
+        LEFT JOIN KLUB_HVIDOVREIF.AXIS.WYSCOUT_PLAYERADVANCEDSTATS_BASE pb ON pt.PLAYER_WYID = pb.PLAYER_WYID AND pt.SEASON_WYID = pb.SEASON_WYID
+        WHERE pt.COMPETITION_WYID IN (328, 329, 43319)
+          AND s.ACTIVE = TRUE
+    )
+    SELECT * FROM ranked_players WHERE rn = 1;
+    """
+
     try:
-        df = conn.query(queries["players_top10"])
+        df = conn.query(query)
     except Exception as e:
-        st.error(f"Fejl ved hentning af top10 data: {e}")
+        st.error(f"Fejl ved hentning af data: {e}")
         return
 
     if df is None or df.empty:
@@ -29,70 +140,6 @@ def vis_side(advanced_stats_df=None, position_base_df=None):
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int).astype(str)
 
-    # Hent position_base hvis den mangler, baseret på spiller-id'erne fra df
-    if position_base_df is None or position_base_df.empty:
-        try:
-            unikt_id_liste = tuple(df['PLAYER_WYID'].dropna().unique())
-            if unikt_id_liste:
-                if len(unikt_id_liste) == 1:
-                    id_str = f"('{unikt_id_liste[0]}')"
-                else:
-                    id_str = str(unikt_id_liste)
-                
-                pos_query_template = queries["position_base"]
-                pos_query = pos_query_template.format(id_list=id_str)
-                position_base_df = conn.query(pos_query)
-        except Exception:
-            pass
-
-    df['POS_GROUP'] = 'Ukendt'
-
-    # Prioritér beregning via position_base_df hvis den er tilgængelig
-    if position_base_df is not None and not position_base_df.empty:
-        pos_base = position_base_df.copy()
-        pos_base.columns = [c.upper().strip() for c in pos_base.columns]
-        
-        if 'PLAYER_WYID' in pos_base.columns:
-            pos_base['PLAYER_WYID'] = pd.to_numeric(pos_base['PLAYER_WYID'], errors='coerce').fillna(0).astype(int).astype(str)
-            
-            try:
-                beregned_pos = beregn_primaere_positioner(pos_base)
-                if beregned_pos is not None and not beregned_pos.empty:
-                    beregned_pos.columns = [c.upper().strip() for c in beregned_pos.columns]
-                    if 'PLAYER_WYID' in beregned_pos.columns and 'PRIMAER_POSITIONSGRUPPE' in beregned_pos.columns:
-                        beregned_pos['PLAYER_WYID'] = pd.to_numeric(beregned_pos['PLAYER_WYID'], errors='coerce').fillna(0).astype(int).astype(str)
-                        
-                        # Vi bruger unikt map for at undgå merge-dubletter
-                        pos_map = beregned_pos.set_index('PLAYER_WYID')['PRIMAER_POSITIONSGRUPPE'].to_dict()
-                        df['POS_GROUP'] = df['PLAYER_WYID'].map(pos_map).fillna('Ukendt')
-            except Exception as e:
-                st.error(f"Fejl ved beregning af positioner: {e}")
-
-    # Hvis pos_group stadig er Ukendt, forsøger vi at beregne direkte på df hvis kolonnerne findes, ellers sættes den til Angriber
-    if (df['POS_GROUP'] == 'Ukendt').all():
-        try:
-            beregned_pos = beregn_primaere_positioner(df)
-            if beregned_pos is not None and not beregned_pos.empty:
-                beregned_pos.columns = [c.upper().strip() for c in beregned_pos.columns]
-                if 'PLAYER_WYID' in beregned_pos.columns and 'PRIMAER_POSITIONSGRUPPE' in beregned_pos.columns:
-                    beregned_pos['PLAYER_WYID'] = pd.to_numeric(beregned_pos['PLAYER_WYID'], errors='coerce').fillna(0).astype(int).astype(str)
-                    pos_map = beregned_pos.set_index('PLAYER_WYID')['PRIMAER_POSITIONSGRUPPE'].to_dict()
-                    df['POS_GROUP'] = df['PLAYER_WYID'].map(pos_map).fillna('Angriber')
-        except Exception:
-            df['POS_GROUP'] = 'Angriber'
-
-    df['POS_GROUP'] = df['POS_GROUP'].fillna('Angriber')
-
-    # Aggreger data pr. spiller og turnering for at undgå dubletter
-    agg_cols_to_sum = [c for c in df.select_dtypes(include=['number']).columns if c not in ['COMPETITION_WYID', 'PLAYER_WYID', 'SEASON_WYID']]
-    agg_regler = {col: 'sum' for col in agg_cols_to_sum}
-    for col in ['PLAYER_NAME', 'TEAMNAME', 'POS_GROUP']:
-        if col in df.columns:
-            agg_regler[col] = 'first'
-            
-    df = df.groupby(['PLAYER_WYID', 'COMPETITION_WYID'], as_index=False).agg(agg_regler)
-
-    # Sørg for at alle mulige grupper fra POSITIONSGRUPPE_ORDEN altid er tilgængelige
     mulige_grupper = [g for g in POSITIONSGRUPPE_ORDEN if g != "Ukendt"]
     andre_grupper = sorted([g for g in df['POS_GROUP'].dropna().unique() if g not in POSITIONSGRUPPE_ORDEN and g != "Ukendt"])
     for g in andre_grupper:
