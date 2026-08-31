@@ -23,21 +23,20 @@ st.set_page_config(
     initial_sidebar_state="auto"
 )
 
-# Centraliseret CSS
+# Centraliseret CSS (Header holdes synlig, så sidebarknappen virker, men gennemsigtig så den ikke dækker)
 st.markdown(f"""
     <style>
-        #MainMenu {{{{visibility: hidden;}}}}
-        footer {{{{visibility: hidden;}}}}
+        #MainMenu {{visibility: hidden;}}
+        footer {{visibility: hidden;}}
         
-        /* Gør headeren synlig og flydende, så den kun viser knappen uden at blokere */
-        header {{{{visibility: visible !important; background: transparent !important; z-index: 99999;}}}}
-        [data-testid="stHeader"] {{{{background-color: transparent !important;}}}}
-        [data-testid="stDecoration"] {{{{display: none;}}}}
+        /* Gør headeren synlig så sidebarknappen dukker op, men gør den helt transparent */
+        header {{visibility: visible !important; background: transparent !important;}}
+        [data-testid="stHeader"] {{background-color: transparent !important;}}
+        [data-testid="stDecoration"] {{display: none;}}
         
-        /* Sikrer at hovedindholdet starter pænt under den røde bjælke */
-        .block-container {{{{ padding-top: 1.5rem !important; }}}}
+        .block-container {{ padding-top: 1.5rem !important; }}
         
-        .hif-header-container {{{{
+        .hif-header-container {{
             background-color: {HIF_ROD};
             height: 50px;
             display: flex;
@@ -46,14 +45,14 @@ st.markdown(f"""
             border-radius: 4px;
             margin-bottom: 15px;
             width: 100%;
-        }}}}
-        .hif-header-text {{{{
+        }}
+        .hif-header-text {{
             color: white !important;
             text-transform: uppercase;
             letter-spacing: 2px;
             font-weight: 600;
             margin: 0;
-        }}}}
+        }}
     </style>
 """, unsafe_allow_html=True)
 
@@ -84,7 +83,6 @@ if not st.session_state["logged_in"]:
     with col_left:
         st.markdown("<br><br><br><br><br>", unsafe_allow_html=True)
         
-        # Ændret fra [1, 2, 1] til [0.8, 2.4, 0.8] for at give lidt mere bredde til login-boksen i midten
         _, center, _ = st.columns([0.8, 2.4, 0.8])
         with center:
             st.markdown(f'<div style="display: flex; justify-content: center;"><img src="{HIF_LOGO_URL}" style="width: 70px;"></div>', unsafe_allow_html=True)
@@ -187,8 +185,6 @@ with st.sidebar:
     st.session_state["sub_menu_selection"] = sel
 
     # --- LOGNING: faneskift ---
-    # Kun log når fanen rent faktisk er ændret, så vi ikke logger ved hver eneste
-    # Streamlit-rerun (som sker meget ofte og ikke er en reel brugerhandling)
     _nuvaerende_fane = f"{hoved_omraade} -> {sel}"
     if st.session_state.get("_forrige_fane") != _nuvaerende_fane:
         try:
