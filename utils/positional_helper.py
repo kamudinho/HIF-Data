@@ -1,6 +1,24 @@
 """
 utils/positional_helper.py
 
+To ansvarsområder:
+
+1. Udledning af en spillers PRIMÆRE position ud fra kamphistorik, vægtet efter
+   minutter spillet i den position (funktion: beregn_primaere_positioner).
+   Kræver to rå Wyscout-tabeller på kamp-niveau:
+     - WYSCOUT_PLAYERADVANCEDSTATS_BASE (POSITION1-4CODE / POSITION1-4PERCENT)
+     - WYSCOUT_MATCHADVANCEDPLAYERSTATS_TOTAL (MINUTESONFIELD)
+   Disse skal joines på MATCH_WYID + PLAYER_WYID.
+
+2. Definition af hvilke metrics der er relevante for hver positionsgruppe, og
+   udregning af dem ud fra det eksisterende sæson-aggregerede advanced_stats_df
+   (samme datakilde som beregn_p90_stats i comparison.py bruger).
+
+BEMÆRK: POSITION_GROUP_MAP er baseret på standard Wyscout-positionskoder.
+Hvis der dukker ukendte koder op i jeres data, mappes de til "Ukendt" - tjek
+periodisk om der mangler koder (se find_ukendte_koder nederst).
+"""
+
 import pandas as pd
 
 # --------------------------------------------------------------------------
