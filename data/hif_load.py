@@ -66,12 +66,16 @@ def get_scouting_package():
                 
     all_relevant_ids = list(set([int(x) for x in all_relevant_ids if x]))
     
-    df_sql_p, df_career, df_wyscout_search, df_adv = pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+    df_sql_p, df_career, df_wyscout_search, df_adv, df_top10_stats = pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
     df_primaer_positioner = pd.DataFrame()
     
     try:
         # A. HENT LIGA-DATA
         df_wyscout_search = conn.query(queries["players"])
+        
+        # Hent top10 stats hvis forespørgslen findes i wy_queries
+        if "players_top10" in queries:
+            df_top10_stats = conn.query(queries["players_top10"])
         
         # B. HENT SPECIFIK DATA (Hvis IDs findes)
         if all_relevant_ids:
@@ -107,7 +111,7 @@ def get_scouting_package():
                 df_primaer_positioner = pd.DataFrame()
 
         # --- CENTRAL RENS AF DATA ---
-        for df in [df_sql_p, df_career, df_wyscout_search, df_adv]:
+        for df in [df_sql_p, df_career, df_wyscout_search, df_adv, df_top10_stats]:
             if df is not None and not df.empty:
                 df.columns = [str(c).upper().strip() for c in df.columns]
                 for col in ['PLAYER_WYID', 'COMPETITION_WYID']:
@@ -125,5 +129,6 @@ def get_scouting_package():
         "sql_players": df_sql_p,
         "career": df_career,
         "advanced_stats": df_adv,
+        "top10_stats": df_top10_stats,
         "primaer_positioner": df_primaer_positioner,
     }
