@@ -93,14 +93,16 @@ def get_wy_queries(comp_filter, season_filter):
                 pt.PLAYER_WYID,
                 s.SEASONNAME,
                 pt.MINUTESONFIELD,
-                pt.GOALS,          -- Tilføj denne hvis du vil have totaler herfra
-                pt.ASSISTS,        -- <--- NY: Her ligger de faktiske assists!
+                pt.GOALS,
+                pt.ASSISTS,
+                pt.SHOTS,
                 pt.XGSHOT,
                 pt.XGASSIST,
                 pt.DRIBBLES,
                 pt.SUCCESSFULDRIBBLES,
                 pt.PROGRESSIVERUN,
                 pt.PROGRESSIVEPASSES,
+                pt.SUCCESSFULPROGRESSIVEPASSES,
                 pt.PASSES,
                 pt.SUCCESSFULPASSES,
                 pt.KEYPASSES,
@@ -108,33 +110,39 @@ def get_wy_queries(comp_filter, season_filter):
                 pt.INTERCEPTIONS,
                 pt.DUELS,
                 pt.DUELSWON,
-                pt.TOUCHINBOX
+                pt.DEFENSIVEDUELS,
+                pt.DEFENSIVEDUELSWON,
+                pt.AERIALDUELS,
+                pt.AERIALDUELSWON,
+                pt.CLEARANCES,
+                pt.SLIDINGTACKLES,
+                pt.SUCCESSFULSLIDINGTACKLES,
+                pt.CROSSES,
+                pt.SUCCESSFULCROSSES,
+                pt.TOUCHINBOX,
+                pt.GKSAVES,
+                pt.GKCONCEDEDGOALS,
+                pt.GKEXITS,
+                pt.GKSUCCESSFULEXITS,
+                pt.GKAERIALDUELS,
+                pt.GKAERIALDUELSWON
             FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL pt
             JOIN {DB}.WYSCOUT_SEASONS s ON pt.SEASON_WYID = s.SEASON_WYID
             WHERE s.SEASONNAME {s_f}
         """,
 
-        # --- NYE QUERIES TIL POSITIONSUDLEDNING (positional_helper.py) ---
-        # Rå kamp-niveau positionsdata pr. spiller (op til 4 positioner + andel af kampen)
+        # --- NY QUERY TIL POSITIONSUDLEDNING (positional_helper.py) ---
+        # Sæson-aggregeret positionsdata pr. spiller (allerede procentberegnet af Wyscout)
         "position_base": f"""
             SELECT
-                MATCH_WYID,
                 PLAYER_WYID,
-                POSITION1CODE, POSITION1PERCENT,
-                POSITION2CODE, POSITION2PERCENT,
-                POSITION3CODE, POSITION3PERCENT,
-                POSITION4CODE, POSITION4PERCENT
+                SEASON_WYID,
+                COMPETITION_WYID,
+                POSITION1CODE, POSITIONS1PERCENT,
+                POSITION2CODE, POSITIONS2PERCENT,
+                POSITION3CODE, POSITIONS3PERCENT,
+                POSITION4CODE, POSITIONS4PERCENT
             FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_BASE
-            WHERE PLAYER_WYID IN {{id_list}}
-        """,
-
-        # Minutter spillet pr. kamp (bruges til at vægte positionerne ovenfor)
-        "match_minutes": f"""
-            SELECT
-                MATCH_WYID,
-                PLAYER_WYID,
-                MINUTESONFIELD
-            FROM {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_TOTAL
             WHERE PLAYER_WYID IN {{id_list}}
         """,
     }
