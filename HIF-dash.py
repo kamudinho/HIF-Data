@@ -8,7 +8,7 @@ import pandas as pd
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 # IMPORTS
-import data.HIF_load as hif_load
+import data.hif_load as hif_load
 from data.data_load import _get_snowflake_conn
 from data.users import get_users
 
