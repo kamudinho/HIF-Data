@@ -34,12 +34,12 @@ POSITION_GROUP_MAP = {
     "rcb": "Midtstopper", "lcb": "Midtstopper", "cb": "Midtstopper",
     "rcb3": "Midtstopper", "lcb3": "Midtstopper",
 
-    "dmf": "Defensiv Midtbane", "rdmf": "Defensiv Midtbane", "ldmf": "Defensiv Midtbane",
+    "dmf": "Def. Midtbane", "rdmf": "Def. Midtbane", "ldmf": "Def. Midtbane",
 
     "rcmf": "Central Midtbane", "lcmf": "Central Midtbane",
     "rcmf3": "Central Midtbane", "lcmf3": "Central Midtbane", "cmf": "Central Midtbane",
 
-    "amf": "Offensiv Midtbane", "ramf": "Offensiv Midtbane", "lamf": "Offensiv Midtbane",
+    "amf": "Off. Midtbane", "ramf": "Off. Midtbane", "lamf": "Off. Midtbane",
 
     "rw": "Kant", "lw": "Kant", "rwf": "Kant", "lwf": "Kant",
 
@@ -48,8 +48,8 @@ POSITION_GROUP_MAP = {
 
 # Rækkefølge til visning/dropdowns
 POSITIONSGRUPPE_ORDEN = [
-    "Målmand", "Back", "Midtstopper", "Defensiv Midtbane",
-    "Central Midtbane", "Offensiv Midtbane", "Kant", "Angriber", "Ukendt"
+    "Målmand", "Back", "Midtstopper", "Def. Midtbane",
+    "Central Midtbane", "Off. Midtbane", "Kant", "Angriber", "Ukendt"
 ]
 
 
@@ -229,8 +229,8 @@ METRICS_BY_GROUP = {
         ("pct", "Defensive dueller vundet %", "DEFENSIVEDUELSWON", "DEFENSIVEDUELS"),
         ("p90", "Interceptions P90", "INTERCEPTIONS"),
         ("p90", "Driblinger P90", "SUCCESSFULDRIBBLES"),
-        ("pct", "Pasningssikkerhed %", "SUCCESSFULPASSES", "PASSES"),
-        ("p90", "Crosses P90", "SUCCESSFULCROSSES"),
+        ("pct", "Pasning %", "SUCCESSFULPASSES", "PASSES"),
+        ("p90", "Indlæg P90", "SUCCESSFULCROSSES"),
     ],
     "Midtstopper": [
         ("pct", "Dueller vundet %", "DUELSWON", "DUELS"),
@@ -238,17 +238,17 @@ METRICS_BY_GROUP = {
         ("pct", "Luftdueller vundet %", "AERIALDUELSWON", "AERIALDUELS"),
         ("p90", "Interceptions P90", "INTERCEPTIONS"),
         ("p90", "Clearances P90", "CLEARANCES"),
-        ("pct", "Pasningssikkerhed %", "SUCCESSFULPASSES", "PASSES"),
+        ("pct", "Pasning %", "SUCCESSFULPASSES", "PASSES"),
     ],
     "Defensiv Midtbane": [
         ("pct", "Dueller vundet %", "DUELSWON", "DUELS"),
         ("p90", "Interceptions P90", "INTERCEPTIONS"),
         ("p90", "Recoveries P90", "RECOVERIES"),
-        ("pct", "Pasningssikkerhed %", "SUCCESSFULPASSES", "PASSES"),
+        ("pct", "Pasning %", "SUCCESSFULPASSES", "PASSES"),
         ("p90", "Progressive pasninger P90", "SUCCESSFULPROGRESSIVEPASSES"),
     ],
     "Central Midtbane": [
-        ("pct", "Pasningssikkerhed %", "SUCCESSFULPASSES", "PASSES"),
+        ("pct", "Pasning %", "SUCCESSFULPASSES", "PASSES"),
         ("p90", "Progressive pasninger P90", "SUCCESSFULPROGRESSIVEPASSES"),
         ("p90", "Key Passes P90", "KEYPASSES"),
         ("p90", "Interceptions P90", "INTERCEPTIONS"),
@@ -265,7 +265,7 @@ METRICS_BY_GROUP = {
         ("p90", "Driblinger P90", "SUCCESSFULDRIBBLES"),
         ("p90", "XA P90", "XGASSIST"),
         ("p90", "XG P90", "XGSHOT"),
-        ("p90", "Crosses P90", "SUCCESSFULCROSSES"),
+        ("p90", "Indlæg P90", "SUCCESSFULCROSSES"),
         ("p90", "Touches i feltet P90", "TOUCHINBOX"),
     ],
     "Angriber": [
@@ -277,7 +277,8 @@ METRICS_BY_GROUP = {
     ],
     "Ukendt": [
         ("pct", "Dueller vundet %", "DUELSWON", "DUELS"),
-        ("pct", "Pasningssikkerhed %", "SUCCESSFULPASSES", "PASSES"),
+        ("p90", "Driblinger P90", "SUCCESSFULDRIBBLES"),
+        ("pct", "Pasning %", "SUCCESSFULPASSES", "PASSES"),
         ("p90", "XG P90", "XGSHOT"),
     ],
 }
