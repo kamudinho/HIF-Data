@@ -29,46 +29,25 @@ def vis_side(advanced_stats_df=None, position_base_df=None):
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int).astype(str)
 
-    # Dynamisk hentning af positioner baseret på alle spiller-id'er, hvis ikke allerede hentet
-    if position_base_df is None or position_base_df.empty:
-        try:
-            unikt_id_liste = tuple(df['PLAYER_WYID'].dropna().unique())
-            if unikt_id_liste:
-                if len(unikt_id_liste) == 1:
-                    id_str = f"('{unikt_id_liste[0]}')"
-                else:
-                    id_str = str(unikt_id_liste)
-                
-                pos_query_template = queries["position_base"]
-                pos_query = pos_query_template.format(id_list=id_str)
-                position_base_df = conn.query(pos_query)
-        except Exception:
-            pass
-
     df['POS_GROUP'] = 'Ukendt'
-    
-    # Prioritér kolonne fra SQL hvis den findes (f.eks. hvis den er medtaget direkte), ellers brug position_base_df
-    if 'PRIMAER_POSITIONSGRUPPE' in df.columns:
-        df['POS_GROUP'] = df['PRIMAER_POSITIONSGRUPPE'].fillna('Ukendt')
-    elif position_base_df is not None and not position_base_df.empty:
-        pos_base = position_base_df.copy()
-        pos_base.columns = [c.upper().strip() for c in pos_base.columns]
-        
-        if 'PLAYER_WYID' in pos_base.columns:
-            pos_base['PLAYER_WYID'] = pd.to_numeric(pos_base['PLAYER_WYID'], errors='coerce').fillna(0).astype(int).astype(str)
-            
-            try:
-                beregned_pos = beregn_primaere_positioner(pos_base)
-                if beregned_pos is not None and not beregned_pos.empty:
-                    beregned_pos.columns = [c.upper().strip() for c in beregned_pos.columns]
-                    if 'PLAYER_WYID' in beregned_pos.columns and 'PRIMAER_POSITIONSGRUPPE' in beregned_pos.columns:
-                        beregned_pos['PLAYER_WYID'] = pd.to_numeric(beregned_pos['PLAYER_WYID'], errors='coerce').fillna(0).astype(int).astype(str)
-                        
-                        df = df.merge(beregned_pos[['PLAYER_WYID', 'PRIMAER_POSITIONSGRUPPE']], on='PLAYER_WYID', how='left')
-                        if 'PRIMAER_POSITIONSGRUPPE' in df.columns:
-                            df['POS_GROUP'] = df['PRIMAER_POSITIONSGRUPPE'].fillna('Ukendt')
-            except Exception as e:
-                st.error(f"Fejl ved beregning af positioner: {e}")
+
+    # Da SQL'en nu henter positionstabellen med (POSITION1CODE, POSITIONS1PERCENT osv.), 
+    # kan vi sende 'df' direkte igennem beregn_primaere_positioner i stedet for at lave et ekstra databasekald!
+    try:
+        beregned_pos = beregn_primaere_positioner(df)
+        if beregned_pos is not None and not beregned_pos.empty:
+            beregned_pos.columns = [c.upper().strip() for c in beregned_pos.columns]
+            if 'PLAYER_WYID' in beregned_pos.columns and 'PRIMAER_POSITIONSGRUPPE' in beregned_pos.columns:
+                beregned_pos['PLAYER_WYID'] = pd.to_numeric(beregned_pos['PLAYER_WYID'], errors='coerce').fillna(0).astype(int).astype(str)
+                
+                # Merge den beregnede positionsgruppe ind på spillerne
+                df = df.merge(beregned_pos[['PLAYER_WYID', 'COMPETITION_WYID', 'PRIMAER_POSITIONSGRUPPE']], 
+                              on=['PLAYER_WYID', 'COMPETITION_WYID'], how='left', suffixes=('', '_calc'))
+                
+                if 'PRIMAER_POSITIONSGRUPPE' in df.columns:
+                    df['POS_GROUP'] = df['PRIMAER_POSITIONSGRUPPE'].fillna('Ukendt')
+    except Exception as e:
+        st.error(f"Fejl ved beregning af positioner: {e}")
 
     df['POS_GROUP'] = df['POS_GROUP'].fillna('Angriber')
 
