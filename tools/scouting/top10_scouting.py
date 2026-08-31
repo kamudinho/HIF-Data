@@ -71,16 +71,20 @@ def _hent_top10_data():
         return pd.DataFrame()
 
 def vis_side(advanced_stats_df=None, position_base_df=None):
-    st.write("DEBUG - Kolonner i dataframe:", list(df.columns))
-    st.write(df.head(2))
-    
     st.markdown("### Top 10 Scouting – Divisioner", unsafe_allow_html=True)
-
+    
+    # 1. Hent data først (sørger for at 'df' eksisterer)
     df = _hent_top10_data()
     
     if df is None or df.empty:
         st.warning("Ingen data tilgængelig fra databasen.")
         return
+
+    # Debug udskrift placeret efter df er defineret
+    st.write("DEBUG - Kolonner i dataframe:", list(df.columns))
+    st.write("DEBUG - Antal rækker hentet:", len(df))
+    if 'COMPETITION_WYID' in df.columns:
+        st.write("DEBUG - Unikke ligaer i data:", df['COMPETITION_WYID'].unique())
 
     if position_base_df is None or position_base_df.empty:
         try:
@@ -112,6 +116,8 @@ def vis_side(advanced_stats_df=None, position_base_df=None):
 
     if 'POS_GROUP' not in df.columns or df['POS_GROUP'].isna().all():
         df['POS_GROUP'] = 'Ukendt'
+
+    st.write("DEBUG - Unikke positionsgrupper:", df['POS_GROUP'].unique() if 'POS_GROUP' in df.columns else "Ingen POS_GROUP endnu")
 
     tilgængelige_grupper = [g for g in POSITIONSGRUPPE_ORDEN if g in df['POS_GROUP'].unique() and g != "Ukendt"]
     andre_grupper = sorted([g for g in df['POS_GROUP'].dropna().unique() if g not in POSITIONSGRUPPE_ORDEN and g != "Ukendt"])
