@@ -112,5 +112,29 @@ def get_wy_queries(comp_filter, season_filter):
             FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL pt
             JOIN {DB}.WYSCOUT_SEASONS s ON pt.SEASON_WYID = s.SEASON_WYID
             WHERE s.SEASONNAME {s_f}
-        """
+        """,
+
+        # --- NYE QUERIES TIL POSITIONSUDLEDNING (positional_helper.py) ---
+        # Rå kamp-niveau positionsdata pr. spiller (op til 4 positioner + andel af kampen)
+        "position_base": f"""
+            SELECT
+                MATCH_WYID,
+                PLAYER_WYID,
+                POSITION1CODE, POSITION1PERCENT,
+                POSITION2CODE, POSITION2PERCENT,
+                POSITION3CODE, POSITION3PERCENT,
+                POSITION4CODE, POSITION4PERCENT
+            FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_BASE
+            WHERE PLAYER_WYID IN {{id_list}}
+        """,
+
+        # Minutter spillet pr. kamp (bruges til at vægte positionerne ovenfor)
+        "match_minutes": f"""
+            SELECT
+                MATCH_WYID,
+                PLAYER_WYID,
+                MINUTESONFIELD
+            FROM {DB}.WYSCOUT_MATCHADVANCEDPLAYERSTATS_TOTAL
+            WHERE PLAYER_WYID IN {{id_list}}
+        """,
     }
