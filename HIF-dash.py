@@ -29,11 +29,12 @@ st.markdown(f"""
         #MainMenu {{{{visibility: hidden;}}}}
         footer {{{{visibility: hidden;}}}}
         
-        /* Tillad at headeren vises, så toggle-knappen til sidebaren kommer frem igen */
+        /* Gør headeren synlig så sidebarknappen vises, men sørg for den er transparent */
         header {{{{visibility: visible !important; background-color: transparent !important;}}}}
         [data-testid="stDecoration"] {{{{display: none;}}}}
         
-        .block-container {{{{ padding-top: 0.5rem !important; }}}}
+        /* Sørg for at hovedcontaineren ikke trækker sig for langt op under headeren */
+        .block-container {{{{ padding-top: 2rem !important; }}}}
         
         .hif-header-container {{{{
             background-color: {HIF_ROD};
