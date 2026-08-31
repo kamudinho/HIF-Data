@@ -29,29 +29,46 @@ def vis_side(advanced_stats_df=None, position_base_df=None):
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int).astype(str)
 
+    # Hent position_base separat for at sikre korrekte positionsgrupper via hjælpefunktionen
+    if position_base_df is None or position_base_df.empty:
+        try:
+            unikt_id_liste = tuple(df['PLAYER_WYID'].dropna().unique())
+            if unikt_id_liste:
+                if len(unikt_id_liste) == 1:
+                    id_str = f"('{unikt_id_liste[0]}')"
+                else:
+                    id_str = str(unikt_id_liste)
+                
+                pos_query_template = queries["position_base"]
+                pos_query = pos_query_template.format(id_list=id_str)
+                position_base_df = conn.query(pos_query)
+        except Exception:
+            pass
+
     df['POS_GROUP'] = 'Ukendt'
 
-    try:
-        beregned_pos = beregn_primaere_positioner(df)
-        if beregned_pos is not None and not beregned_pos.empty:
-            beregned_pos.columns = [c.upper().strip() for c in beregned_pos.columns]
-            if 'PLAYER_WYID' in beregned_pos.columns and 'PRIMAER_POSITIONSGRUPPE' in beregned_pos.columns:
-                beregned_pos['PLAYER_WYID'] = pd.to_numeric(beregned_pos['PLAYER_WYID'], errors='coerce').fillna(0).astype(int).astype(str)
-                
-                # Hvis COMPETITION_WYID findes i beregned_pos, merger vi på begge, ellers kun på PLAYER_WYID
-                merge_keys = ['PLAYER_WYID', 'COMPETITION_WYID'] if 'COMPETITION_WYID' in beregned_pos.columns else ['PLAYER_WYID']
-                if 'COMPETITION_WYID' in merge_keys and 'COMPETITION_WYID' not in beregned_pos.columns:
-                    merge_keys = ['PLAYER_WYID']
+    if position_base_df is not None and not position_base_df.empty:
+        pos_base = position_base_df.copy()
+        pos_base.columns = [c.upper().strip() for c in pos_base.columns]
+        
+        if 'PLAYER_WYID' in pos_base.columns:
+            pos_base['PLAYER_WYID'] = pd.to_numeric(pos_base['PLAYER_WYID'], errors='coerce').fillna(0).astype(int).astype(str)
+            
+            try:
+                beregned_pos = beregn_primaere_positioner(pos_base)
+                if beregned_pos is not None and not beregned_pos.empty:
+                    beregned_pos.columns = [c.upper().strip() for c in beregned_pos.columns]
+                    if 'PLAYER_WYID' in beregned_pos.columns and 'PRIMAER_POSITIONSGRUPPE' in beregned_pos.columns:
+                        beregned_pos['PLAYER_WYID'] = pd.to_numeric(beregned_pos['PLAYER_WYID'], errors='coerce').fillna(0).astype(int).astype(str)
+                        
+                        df = df.merge(beregned_pos[['PLAYER_WYID', 'PRIMAER_POSITIONSGRUPPE']], on='PLAYER_WYID', how='left')
+                        if 'PRIMAER_POSITIONSGRUPPE' in df.columns:
+                            df['POS_GROUP'] = df['PRIMAER_POSITIONSGRUPPE'].fillna('Ukendt')
+            except Exception as e:
+                st.error(f"Fejl ved beregning af positioner: {e}")
 
-                df = df.merge(beregned_pos[merge_keys + ['PRIMAER_POSITIONSGRUPPE']], 
-                              on=merge_keys, how='left', suffixes=('', '_calc'))
-                
-                if 'PRIMAER_POSITIONSGRUPPE' in df.columns:
-                    df['POS_GROUP'] = df['PRIMAER_POSITIONSGRUPPE'].fillna('Ukendt')
-    except Exception as e:
-        st.error(f"Fejl ved beregning af positioner: {e}")
-
-    df['POS_GROUP'] = df['POS_GROUP'].fillna('Angriber')
+    # Hvis pos_group stadig er Ukendt, sletter vi ikke data, men sætter dem til en standardgruppe så de vises
+    df['POS_GROUP'] = df['POS_GROUP'].replace('Ukendt', 'Angriber').fillna('Angriber')
 
     # Aggreger data pr. spiller og turnering for at undgå dubletter
     agg_cols_to_sum = [c for c in df.select_dtypes(include=['number']).columns if c not in ['COMPETITION_WYID', 'PLAYER_WYID', 'SEASON_WYID']]
