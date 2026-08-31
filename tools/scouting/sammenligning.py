@@ -14,8 +14,14 @@ HIF_RED = '#df003b'
 HIF_BLUE = '#0056a3'
 
 def rens_id(val):
-    if pd.isna(val) or str(val).strip() in ["", "nan", "None", "0", "0.0"]: return ""
-    return str(val).split('.')[0].strip()
+    if pd.isna(val) or str(val).strip() in ["", "nan", "None", "0", "0.0"]: 
+        return ""
+    # Fjern eventuelle bogstaver (f.eks. 'M') og behold kun cifrene
+    clean_val = ''.join(filter(str.isdigit, str(val)))
+    if not clean_val:
+        # Fallback hvis strengen ikke indeholder cifre, men f.eks. er en ren tekst-id
+        clean_val = str(val).strip()
+    return clean_val.split('.')[0].strip()
 
 def vis_spiller_billede(img_url, pid):
     pid_c = rens_id(pid)
