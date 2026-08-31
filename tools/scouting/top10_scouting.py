@@ -110,7 +110,6 @@ def hent_scouting_data():
         return None
 
 def vis_side(advanced_stats_df=None, position_base_df=None):
-    st.caption("Top 10 Scouting – Divisioner", unsafe_allow_html=True)
     
     df = hent_scouting_data()
     if df is None or df.empty:
@@ -165,7 +164,7 @@ def vis_side(advanced_stats_df=None, position_base_df=None):
     with col_right:
         st.markdown(f"""
             <div style='height: 100%; min-height: 72px; padding: 10px 14px; background: #f8f9fa; border-left: 4px solid #df003b; border-radius: 4px; font-size: 0.85rem; color: #333; display: flex; align-items: center;'>
-                <div><b>📊 Beregning for {valgt_gruppe}:</b> {metrics_tekst}</div>
+                <div><b>Beregning for {valgt_gruppe}:</b> {metrics_tekst}</div>
             </div>
         """, unsafe_allow_html=True)
 
