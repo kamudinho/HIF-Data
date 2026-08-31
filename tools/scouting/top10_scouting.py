@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from utils.positional_helper import beregn_primaere_positioner
+from utils.positional_helper import beregn_primaere_positioner, POSITION_GROUP_MAP
 
 def vis_side(advanced_stats_df, position_base_df=None):
     st.markdown("### Top 10 Scouting – Divisioner", unsafe_allow_html=True)
@@ -12,25 +12,45 @@ def vis_side(advanced_stats_df, position_base_df=None):
     df = advanced_stats_df.copy()
     df.columns = [c.upper().strip() for c in df.columns]
 
-    if position_base_df is not None and not position_base_df.empty:
-        primaer_pos_df = beregn_primaere_positioner(position_base_df)
-        if not primaer_pos_df.empty:
-            primaer_pos_df.columns = [c.upper().strip() for c in primaer_pos_df.columns]
-            id_col_adv = next((c for c in ['PLAYER_WYID', 'WYID', 'PLAYER_ID', 'ID'] if c in df.columns), None)
-            id_col_pos = next((c for c in ['PLAYER_WYID', 'WYID', 'PLAYER_ID', 'ID'] if c in primaer_pos_df.columns), None)
-            
-            if id_col_adv and id_col_pos:
-                df['TEMP_ID'] = df[id_col_adv].astype(str).str.split('.').str[0].str.strip()
-                primaer_pos_df['TEMP_ID'] = primaer_pos_df[id_col_pos].astype(str).str.split('.').str[0].str.strip()
-                df = df.merge(primaer_pos_df[['TEMP_ID', 'PRIMAER_POSITIONSGRUPPE']], on='TEMP_ID', how='left')
-                df = df.rename(columns={'PRIMAER_POSITIONSGRUPPE': 'POS_GROUP'})
+    # Hvis position_base_df ikke blev sendt med som argument, prøv at hente den via hif_load
+    if position_base_df is None or position_base_df.empty:
+        try:
+            import data.hif_load as hif_load
+            scouting_pkg = hif_load.get_scouting_package()
+            if scouting_pkg and "position_base" in scouting_pkg:
+                position_base_df = scouting_pkg["position_base"]
+        except Exception:
+            pass
 
-    pos_col = 'POS_GROUP' if 'POS_GROUP' in df.columns else ('POS_GRUPPE' if 'POS_GRUPPE' in df.columns else None)
+    if position_base_df is not None and not position_base_df.empty:
+        try:
+            primaer_pos_df = beregn_primaere_positioner(position_base_df)
+            if not primaer_pos_df.empty:
+                primaer_pos_df.columns = [c.upper().strip() for c in primaer_pos_df.columns]
+                id_col_adv = next((c for c in ['PLAYER_WYID', 'WYID', 'PLAYER_ID', 'ID'] if c in df.columns), None)
+                id_col_pos = next((c for c in ['PLAYER_WYID', 'WYID', 'PLAYER_ID', 'ID'] if c in primaer_pos_df.columns), None)
+                
+                if id_col_adv and id_col_pos:
+                    df['TEMP_ID'] = df[id_col_adv].astype(str).str.split('.').str[0].str.strip()
+                    primaer_pos_df['TEMP_ID'] = primaer_pos_df[id_col_pos].astype(str).str.split('.').str[0].str.strip()
+                    df = df.merge(primaer_pos_df[['TEMP_ID', 'PRIMAER_POSITIONSGRUPPE']], on='TEMP_ID', how='left')
+                    df = df.rename(columns={'PRIMAER_POSITIONSGRUPPE': 'POS_GROUP'})
+        except Exception as e:
+            st.warning(f"Kunne ikke udlede positioner automatisk: {e}")
+
+    # Fallback hvis POS_GROUP stadig mangler, men f.eks. ROLECODE3 findes i data
+    if 'POS_GROUP' not in df.columns or df['POS_GROUP'].isna().all():
+        role_col = next((c for c in ['ROLECODE3', 'ROLE_CODE3', 'ROLECODE', 'POSITION'] if c in df.columns), None)
+        if role_col:
+            df['POS_GROUP'] = df[role_col].astype(str).str.lower().str.strip().map(POSITION_GROUP_MAP).fillna('Ukendt')
+
+    pos_col = next((c for c in ['POS_GROUP', 'POS_GRUPPE', 'PRIMAER_POSITIONSGRUPPE'] if c in df.columns), None)
+    
     if not pos_col:
-        st.error("Kunne ikke finde positionsgrupper. Sørg for at position_base_df (WYSCOUT_PLAYERADVANCEDSTATS_BASE) sendes med til siden.")
+        st.error("Kunne ikke finde positionsgrupper. Sørg for at 'position_base' eller ROLECODE3 kolonnen er tilgængelig.")
         return
 
-    mulige_grupper = sorted([g for g in df[pos_col].dropna().unique() if g != "Ukendt"])
+    mulige_grupper = sorted([g for g in df[pos_col].dropna().unique() if str(g).lower() != "ukendt"])
     if not mulige_grupper:
         st.info("Ingen gyldige positionsgrupper fundet i data.")
         return
@@ -72,7 +92,6 @@ def vis_side(advanced_stats_df, position_base_df=None):
                 st.info("Ingen spillere fundet.")
                 continue
 
-            # Konverter minutter og udregn P90 for de valgte rå kolonner
             mins_col = next((c for c in ['MINUTESONFIELD', 'MINUTES', 'MIN'] if c in liga_df.columns), None)
             
             Eksisterende_metrikker = []
