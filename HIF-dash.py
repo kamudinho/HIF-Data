@@ -232,8 +232,10 @@ try:
             import tools.scouting.emne_db as edb
             edb.vis_side()
         elif s == "Sammenligning":
-            import tools.scouting.sammenligning as sammen
-            sammen.vis_side(dp["players"], None, None, dp["career"], dp["sql_players"], dp["advanced_stats"], dp.get("primaer_positioner"))
+            import tools.scouting.sammenligning as comp
+            st.write("DEBUG: import lykkedes, kalder nu vis_side")
+            comp.vis_side(dp["players"], None, None, dp["career"], dp["sql_players"], dp["advanced_stats"], dp.get("primaer_positioner"))
+            st.write("DEBUG: vis_side blev kaldt færdig")
         elif s == "Transfers":
             import tools.scouting.transfer_input as t_input
             t_input.vis_side()
