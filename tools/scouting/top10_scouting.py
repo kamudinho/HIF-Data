@@ -71,15 +71,9 @@ def _hent_top10_data():
         return pd.DataFrame()
 
 def vis_side(advanced_stats_df=None, position_base_df=None):
-
-    st.write("DEBUG - Antal rækker hentet:", len(df))
-if not df.empty:
-    st.write("DEBUG - Unikke ligaer i data:", df['COMPETITION_WYID'].unique())
-    st.write("DEBUG - Unikke positionsgrupper:", df['POS_GROUP'].unique() if 'POS_GROUP' in df.columns else "Ingen POS_GROUP endnu")
-    
     st.markdown("### Top 10 Scouting – Divisioner", unsafe_allow_html=True)
     
-    # Hent data direkte herfra, så vi er uafhængige af hif_load
+    # 1. Hent data først, før vi tjekker debug eller lister
     df = _hent_top10_data()
     
     if df is None or df.empty:
@@ -91,7 +85,7 @@ if not df.empty:
         try:
             conn = _get_snowflake_conn()
             if conn:
-                pos_query = f"SELECT PLAYER_WYID, POSITION, POSITIONSGROUP FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_PLAYERS" # eller tilsvarende tabeller
+                pos_query = f"SELECT PLAYER_WYID, POSITION, POSITIONSGROUP FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_PLAYERS"
                 position_base_df = conn.query(pos_query)
         except:
             pass
@@ -117,6 +111,11 @@ if not df.empty:
 
     if 'POS_GROUP' not in df.columns or df['POS_GROUP'].isna().all():
         df['POS_GROUP'] = 'Ukendt'
+
+    # DEBUG - Udskriv direkte på skærmen, så vi ser hvad der reelt er i data
+    st.write("DEBUG - Antal rækker hentet:", len(df))
+    st.write("DEBUG - Unikke ligaer i data:", df['COMPETITION_WYID'].unique() if 'COMPETITION_WYID' in df.columns else "Ingen kolonne")
+    st.write("DEBUG - Unikke positionsgrupper:", df['POS_GROUP'].unique() if 'POS_GROUP' in df.columns else "Ingen POS_GROUP endnu")
 
     tilgængelige_grupper = [g for g in POSITIONSGRUPPE_ORDEN if g in df['POS_GROUP'].unique() and g != "Ukendt"]
     andre_grupper = sorted([g for g in df['POS_GROUP'].dropna().unique() if g not in POSITIONSGRUPPE_ORDEN and g != "Ukendt"])
