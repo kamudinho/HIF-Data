@@ -157,9 +157,9 @@ with st.sidebar:
         "HOLDANALYSE": ["Modstanderanalyse", "Ligaoversigt", "Kampoversigt", "Kampudvikling", "Afslutninger", "Målsekvenser", "Grafer"],
         "SPILLERANALYSE": ["Spilleraktioner", "Spiller-stats", "Spiller-profil", "Spilleroversigt", "Spillerprofil"],
         "FYSISK DATA": ["Fysisk data"],
-        "SCOUTING": ["Scoutrapport", "Database", "Emnedatabase", "Transfers"],
+        "SCOUTING": ["Scoutrapport", "Database", "Emnedatabase", "Sammenligning", "Transfers"],
         "TILPASNING": ["Spillerdata", "Spiller-score", "Standardsituationer", "Model"],
-        "TESTSIDE": ["Performance", "Winning Performance", "1. Div-tilpasning", "Sammenligning", "Charts", "Oversigt", "Forecast"],
+        "TESTSIDE": ["Performance", "Winning Performance", "1. Div-tilpasning", "Charts", "Oversigt", "Forecast"],
         "ADMIN": ["System Log", "Profil", "Datakatalog", "Konklusion", "Fysisk profil", "Hold: Fysisk profil", "Intern analyse", "Top 5: Spillere", "Ordbog"]
     }
     
@@ -232,10 +232,8 @@ try:
             import tools.scouting.emne_db as edb
             edb.vis_side()
         elif s == "Sammenligning":
-            import tools.scouting.sammenligning as comp
-            st.write("DEBUG: import lykkedes, kalder nu vis_side")
+            import tools.scouting.comparison as comp
             comp.vis_side(dp["players"], None, None, dp["career"], dp["sql_players"], dp["advanced_stats"], dp.get("primaer_positioner"))
-            st.write("DEBUG: vis_side blev kaldt færdig")
         elif s == "Transfers":
             import tools.scouting.transfer_input as t_input
             t_input.vis_side()
