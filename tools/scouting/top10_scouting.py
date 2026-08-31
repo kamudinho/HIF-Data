@@ -73,7 +73,7 @@ def _hent_top10_data():
 def vis_side(advanced_stats_df=None, position_base_df=None):
 
     st.write("DEBUG - Antal rækker hentet:", len(df))
-    if not df.empty:
+if not df.empty:
     st.write("DEBUG - Unikke ligaer i data:", df['COMPETITION_WYID'].unique())
     st.write("DEBUG - Unikke positionsgrupper:", df['POS_GROUP'].unique() if 'POS_GROUP' in df.columns else "Ingen POS_GROUP endnu")
     
