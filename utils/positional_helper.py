@@ -240,7 +240,7 @@ METRICS_BY_GROUP = {
         ("p90", "Clearances P90", "CLEARANCES"),
         ("pct", "Pasning %", "SUCCESSFULPASSES", "PASSES"),
     ],
-    "Defensiv Midtbane": [
+    "Def. Midtbane": [
         ("pct", "Dueller vundet %", "DUELSWON", "DUELS"),
         ("p90", "Interceptions P90", "INTERCEPTIONS"),
         ("p90", "Recoveries P90", "RECOVERIES"),
@@ -254,7 +254,7 @@ METRICS_BY_GROUP = {
         ("p90", "Interceptions P90", "INTERCEPTIONS"),
         ("pct", "Dueller vundet %", "DUELSWON", "DUELS"),
     ],
-    "Offensiv Midtbane": [
+    "Off. Midtbane": [
         ("p90", "Key Passes P90", "KEYPASSES"),
         ("p90", "XA P90", "XGASSIST"),
         ("p90", "XG P90", "XGSHOT"),
