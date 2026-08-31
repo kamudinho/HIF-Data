@@ -89,7 +89,7 @@ def vis_side(df_spillere, d1, d2, career_df, d3, advanced_stats_df, primaer_posi
         if df_spillere is not None and not df_spillere.empty:
             m = df_spillere[df_spillere['PLAYER_WYID'].apply(rens_id) == pid]
             if not m.empty:
-                klub = "Hvidovre IF"
+                klub = m.iloc[0].get('TEAMNAME', klub)
 
         # B: Tjek Snowflake search-liste (d3/sql_players)
         if (klub == "Ukendt") and d3 is not None and not d3.empty:
@@ -115,7 +115,14 @@ def vis_side(df_spillere, d1, d2, career_df, d3, advanced_stats_df, primaer_posi
         # FØRST: Tjek karriere_df for grundlæggende kamptal
         if career_df is not None and not career_df.empty:
             c_m = career_df[career_df['PLAYER_WYID'].apply(rens_id) == pid]
-            curr = c_m[c_m['SEASONNAME'].astype(str).str.contains("2025/2026", na=False)]
+
+            def _er_aktiv(val):
+                return str(val).strip().upper() in ("TRUE", "1", "T")
+
+            if 'ACTIVE' in c_m.columns:
+                curr = c_m[c_m['ACTIVE'].apply(_er_aktiv)]
+            else:
+                curr = pd.DataFrame()
             target = curr.iloc[0] if not curr.empty else (c_m.iloc[0] if not c_m.empty else None)
             
             if target is not None:
