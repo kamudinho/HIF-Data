@@ -4,7 +4,7 @@ from data.data_load import _get_snowflake_conn
 from utils.positional_helper import POSITIONSGRUPPE_ORDEN, METRICS_BY_GROUP
 
 def vis_side(advanced_stats_df=None, position_base_df=None):
-    st.markdown("### Top 10 Scouting – Divisioner", unsafe_allow_html=True)
+    st.markdown("## Top 10 Scouting – Divisioner", unsafe_allow_html=True)
     
     conn = _get_snowflake_conn()
     if not conn:
