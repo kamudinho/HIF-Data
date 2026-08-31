@@ -140,11 +140,11 @@ def vis_side(advanced_stats_df=None, position_base_df=None):
     with col_right:
         st.markdown(f"""
             <div style='height: 100%; min-height: 72px; padding: 10px 14px; background: #f8f9fa; border-left: 4px solid #df003b; border-radius: 4px; font-size: 0.85rem; color: #333; display: flex; align-items: center;'>
-                <div><b>📊 Beregning for {valgt_gruppe}:</b> {metrics_tekst}</div>
+                <div><b>Beregning for {valgt_gruppe}:</b> {metrics_tekst}</div>
             </div>
         """, unsafe_allow_html=True)
 
-    st.markdown("<div style='margin-bottom: 15px;'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='margin-bottom: 7px;'></div>", unsafe_allow_html=True)
 
     liga_mapping = {
         "328": "1. Division",
@@ -162,7 +162,7 @@ def vis_side(advanced_stats_df=None, position_base_df=None):
 
     for idx, (komp_id, liga_navn) in enumerate(liga_mapping.items()):
         with kolonner[idx]:
-            st.markdown(f"#### {liga_navn}")
+            st.markdown(f"###### {liga_navn}")
 
             liga_df = df[(df[komp_col].astype(str) == str(komp_id)) & (df['POS_GROUP'] == valgt_gruppe)].copy()
 
@@ -207,7 +207,7 @@ def vis_side(advanced_stats_df=None, position_base_df=None):
             liga_df = liga_df.drop_duplicates(subset=['PLAYER_WYID'])
             top10 = liga_df.sort_values(by='SCORE', ascending=False).head(10)
 
-            for i, (_, row) in enumerate(top10.iterrows(), 1):
+            for i, (_, row) in enumerate(top8.iterrows(), 1):
                 p_navn = str(row.get('PLAYER_NAME', "Ukendt spiller"))
                 p_hold = str(row.get('TEAMNAME', ""))
                 p_score = round(float(row.get('SCORE', 0)), 2)
