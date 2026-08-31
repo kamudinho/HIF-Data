@@ -30,25 +30,31 @@ def hent_scouting_data():
             pt.COMPETITION_WYID,
             s.SEASONNAME,
             
-            -- Specifik undergruppe (tilintern brug eller finkornet opslag)
+            -- Specifik undergruppe (finere opdeling til filtrering)
             CASE 
                 WHEN UPPER(TRIM(rb.PRIMARY_POS_CODE)) = 'GK' THEN 'Målmand'
-                WHEN UPPER(TRIM(rb.PRIMARY_POS_CODE)) IN ('CB', 'LCB', 'RCB', 'LCB3', 'RCB3', 'CB3') THEN 'Stopper'
-                WHEN UPPER(TRIM(rb.PRIMARY_POS_CODE)) IN ('RB', 'LB', 'RWB', 'LWB', 'RB3', 'LB3', 'RB5', 'LB5') THEN 'Back'
-                WHEN UPPER(TRIM(rb.PRIMARY_POS_CODE)) IN ('DMF', 'LDMF', 'RDMF', 'CMF', 'LCMF', 'RCMF', 'LCMF3', 'RCMF3', 'AMF', 'LAMF', 'RAMF') THEN 'Midtbane'
-                WHEN UPPER(TRIM(rb.PRIMARY_POS_CODE)) IN ('RW', 'LW', 'RWF', 'LWF') THEN 'Kant'
+                WHEN UPPER(TRIM(rb.PRIMARY_POS_CODE)) IN ('RCB', 'RCB3') THEN 'Højre Stopper'
+                WHEN UPPER(TRIM(rb.PRIMARY_POS_CODE)) IN ('LCB', 'LCB3') THEN 'Venstre Stopper'
+                WHEN UPPER(TRIM(rb.PRIMARY_POS_CODE)) IN ('CB', 'CB3') Central Stopper'
+                WHEN UPPER(TRIM(rb.PRIMARY_POS_CODE)) IN ('RB', 'RWB', 'RB3', 'RB5') THEN 'Højre Back'
+                WHEN UPPER(TRIM(rb.PRIMARY_POS_CODE)) IN ('LB', 'LWB', 'LB3', 'LB5') THEN 'Venstre Back'
+                WHEN UPPER(TRIM(rb.PRIMARY_POS_CODE)) IN ('DMF', 'LDMF', 'RDMF') THEN 'Defensiv Midtbane (6\'er)'
+                WHEN UPPER(TRIM(rb.PRIMARY_POS_CODE)) IN ('CMF', 'LCMF', 'RCMF', 'LCMF3', 'RCMF3') THEN 'Central Midtbane (8\'er)'
+                WHEN UPPER(TRIM(rb.PRIMARY_POS_CODE)) IN ('AMF', 'LAMF', 'RAMF') THEN 'Offensiv Midtbane (10\'er)'
+                WHEN UPPER(TRIM(rb.PRIMARY_POS_CODE)) IN ('RW', 'RWF') THEN 'Højre Kant'
+                WHEN UPPER(TRIM(rb.PRIMARY_POS_CODE)) IN ('LW', 'LWF') THEN 'Venstre Kant'
                 WHEN UPPER(TRIM(rb.PRIMARY_POS_CODE)) IN ('CF', 'ST', 'SS') THEN 'Angriber'
                 WHEN rb.PRIMARY_POS_CODE IS NULL THEN 'Ukendt'
                 ELSE CONCAT('Ukendt Code: ', rb.PRIMARY_POS_CODE)
             END AS POS_SPECIFIC,
 
-            -- Overordnet hovedgruppe (præcis de 6 ønskede kategorier)
+            -- Overordnet hovedgruppe (til valg i første dropdown)
             CASE 
                 WHEN UPPER(TRIM(rb.PRIMARY_POS_CODE)) = 'GK' THEN 'Målmand'
                 WHEN UPPER(TRIM(rb.PRIMARY_POS_CODE)) IN ('CB', 'LCB', 'RCB', 'LCB3', 'RCB3', 'CB3') THEN 'Stopper'
                 WHEN UPPER(TRIM(rb.PRIMARY_POS_CODE)) IN ('RB', 'LB', 'RWB', 'LWB', 'RB3', 'LB3', 'RB5', 'LB5') THEN 'Back'
                 WHEN UPPER(TRIM(rb.PRIMARY_POS_CODE)) IN ('DMF', 'LDMF', 'RDMF', 'CMF', 'LCMF', 'RCMF', 'LCMF3', 'RCMF3', 'AMF', 'LAMF', 'RAMF') THEN 'Midtbane'
-                WHEN UPPER(TRIM(rb.PRIMARY_POS_CODE)) IN ('RW', 'LW', 'RWF', 'LWF') THEN 'Kant'
+                WHEN UPPER(TRIM(rb.PRIMARY_POS_CODE)) IN ('LW', 'RW', 'LWF', 'RWF') THEN 'Kant'
                 WHEN UPPER(TRIM(rb.PRIMARY_POS_CODE)) IN ('CF', 'ST', 'SS') THEN 'Angriber'
                 ELSE 'Ukendt'
             END AS POS_GROUP,
@@ -119,17 +125,32 @@ def vis_side(advanced_stats_df=None, position_base_df=None):
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int).astype(str)
 
-    # De 6 præcise hovedkategorier
     hoved_grupper = ["Målmand", "Stopper", "Back", "Midtbane", "Kant", "Angriber"]
     
-    col_left, col_right = st.columns([2.2, 1.8])
+    col_left1, col_left2, col_right = st.columns([1.2, 1.2, 1.8])
 
-    with col_left:
+    with col_left1:
         st.markdown("**Positionsgruppe**")
-        valgt_gruppe = st.selectbox("Kategori", hoved_grupper, label_visibility="collapsed")
+        valgt_hovedgruppe = st.selectbox("Hovedgruppe", hoved_grupper, label_visibility="collapsed")
 
-    # Hent metrics definition direkte baseret på den valgte kategori
-    gruppe_definitioner = METRICS_BY_GROUP.get(valgt_gruppe, METRICS_BY_GROUP["Ukendt"])
+    # Dynamiske undergrupper baseret på hovedgruppe
+    mapping_under = {
+        "Målmand": ["Målmand"],
+        "Stopper": ["Alle Stoppere", "Højre Stopper", "Venstre Stopper", "Central Stopper"],
+        "Back": ["Alle Backs", "Højre Back", "Venstre Back"],
+        "Midtbane": ["Alle Midtbaner", "Defensiv Midtbane (6'er)", "Central Midtbane (8'er)", "Offensiv Midtbane (10'er)"],
+        "Kant": ["Alle Kanter", "Højre Kant", "Venstre Kant"],
+        "Angriber": ["Angriber"]
+    }
+
+    tilgængelige_under = mapping_under.get(valgt_hovedgruppe, [valgt_hovedgruppe])
+
+    with col_left2:
+        st.markdown("**Pladsspecifik**")
+        valgt_gruppe = st.selectbox("Specifik", tilgængelige_under, label_visibility="collapsed")
+
+    # Hent metrics definition (fanger undergruppen eller falder tilbage til hovedgruppen)
+    gruppe_definitioner = METRICS_BY_GROUP.get(valgt_gruppe, METRICS_BY_GROUP.get(valgt_hovedgruppe, METRICS_BY_GROUP["Ukendt"]))
     
     beskrivelse_dele = []
     for m_def in gruppe_definitioner:
@@ -145,7 +166,7 @@ def vis_side(advanced_stats_df=None, position_base_df=None):
 
     with col_right:
         st.markdown(f"""
-            <div style='height: 100%; min-height: 42px; padding: 10px 14px; background: #f8f9fa; border-left: 4px solid #df003b; border-radius: 4px; font-size: 0.85rem; color: #333; display: flex; align-items: center;'>
+            <div style='height: 100%; min-height: 72px; padding: 10px 14px; background: #f8f9fa; border-left: 4px solid #df003b; border-radius: 4px; font-size: 0.85rem; color: #333; display: flex; align-items: center;'>
                 <div><b>Beregning for {valgt_gruppe}:</b> {metrics_tekst}</div>
             </div>
         """, unsafe_allow_html=True)
@@ -170,8 +191,12 @@ def vis_side(advanced_stats_df=None, position_base_df=None):
         with kolonner[idx]:
             st.markdown(f"#### {liga_navn}")
 
-            # Filtrer direkte på POS_GROUP kolonnen efter de 6 kategorier
-            liga_df = df[(df[komp_col].astype(str) == str(komp_id)) & (df['POS_GROUP'] == valgt_gruppe)].copy()
+            # Filtrering baseret på om der er valgt en overordnet gruppe (Alle ...) eller specifik undergruppe
+            if valgt_gruppe.startswith("Alle "):
+                søg_term = valgt_hovedgruppe
+                liga_df = df[(df[komp_col].astype(str) == str(komp_id)) & (df['POS_SPECIFIC'].str.contains(søg_term, case=False, na=False))].copy()
+            else:
+                liga_df = df[(df[komp_col].astype(str) == str(komp_id)) & (df['POS_SPECIFIC'] == valgt_gruppe)].copy()
 
             if liga_df.empty:
                 st.info("Ingen spillere fundet.")
