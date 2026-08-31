@@ -117,7 +117,31 @@ def vis_side(advanced_stats_df=None, position_base_df=None):
     if not mulige_grupper:
         mulige_grupper = ["Angriber", "Kant", "Central Midtbane", "Back", "Midtstopper", "Målmand"]
 
-    valgt_gruppe = st.selectbox("Vælg Positionsgruppe", mulige_grupper)
+    # Gør dropdown-menuen mindre ved at placere den i en smallere kolonne
+    col_select, _ = st.columns([1, 2])
+    with col_select:
+        valgt_gruppe = st.selectbox("Vælg Positionsgruppe", mulige_grupper)
+
+    # Vis beskrivelse af hvilke metrics der bruges til den valgte gruppe
+    gruppe_definitioner = METRICS_BY_GROUP.get(valgt_gruppe, METRICS_BY_GROUP["Ukendt"])
+    
+    beskrivelse_dele = []
+    for m_def in gruppe_definitioner:
+        b_type = m_def[0]
+        if b_type == "p90":
+            _, navn, kolonne = m_def
+            beskrivelse_dele.append(f"**{navn}** (pr. 90 min)")
+        elif b_type == "pct":
+            _, navn, succes_kol, total_kol = m_def
+            beskrivelse_dele.append(f"**{navn}** (% succes)")
+
+    if beskrivelse_dele:
+        metrics_tekst = ", ".join(beskrivelse_dele)
+        st.markdown(f"""
+            <div style='padding: 10px 14px; margin-bottom: 15px; background: #f8f9fa; border-left: 4px solid #df003b; border-radius: 4px; font-size: 0.85rem; color: #333;'>
+                <b>📊 Beregning for {valgt_gruppe}:</b> Scoringsmodellen tager højde for følgende nøgletal: {metrics_tekst}.
+            </div>
+        """, unsafe_allow_html=True)
 
     liga_mapping = {
         "328": "1. Division",
@@ -132,8 +156,6 @@ def vis_side(advanced_stats_df=None, position_base_df=None):
     
     col1, col2, col3 = st.columns(3)
     kolonner = [col1, col2, col3]
-
-    gruppe_definitioner = METRICS_BY_GROUP.get(valgt_gruppe, METRICS_BY_GROUP["Ukendt"])
 
     for idx, (komp_id, liga_navn) in enumerate(liga_mapping.items()):
         with kolonner[idx]:
