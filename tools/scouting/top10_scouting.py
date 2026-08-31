@@ -1,28 +1,102 @@
 import streamlit as st
 import pandas as pd
+from data.data_load import _get_snowflake_conn
 from utils.positional_helper import beregn_primaere_positioner, POSITIONSGRUPPE_ORDEN, METRICS_BY_GROUP
 
-def vis_side(advanced_stats_df, position_base_df=None):
+@st.cache_data(ttl=600)
+def _hent_top10_data():
+    conn = _get_snowflake_conn()
+    if not conn:
+        return pd.DataFrame()
+    
+    DB = "KLUB_HVIDOVREIF.AXIS"
+    query = f"""
+        SELECT DISTINCT
+            pt.PLAYER_WYID,
+            p.SHORTNAME AS PLAYER_NAME,
+            t.TEAMNAME,
+            pt.COMPETITION_WYID,
+            s.SEASONNAME,
+            pt.MINUTESONFIELD,
+            pt.GOALS,
+            pt.ASSISTS,
+            pt.SHOTS,
+            pt.XGSHOT,
+            pt.XGASSIST,
+            pt.DRIBBLES,
+            pt.SUCCESSFULDRIBBLES,
+            pt.PROGRESSIVERUN,
+            pt.PROGRESSIVEPASSES,
+            pt.SUCCESSFULPROGRESSIVEPASSES,
+            pt.PASSES,
+            pt.SUCCESSFULPASSES,
+            pt.KEYPASSES,
+            pt.RECOVERIES,
+            pt.INTERCEPTIONS,
+            pt.DUELS,
+            pt.DUELSWON,
+            pt.DEFENSIVEDUELS,
+            pt.DEFENSIVEDUELSWON,
+            pt.AERIALDUELS,
+            pt.AERIALDUELSWON,
+            pt.CLEARANCES,
+            pt.SLIDINGTACKLES,
+            pt.SUCCESSFULSLIDINGTACKLES,
+            pt.CROSSES,
+            pt.SUCCESSFULCROSSES,
+            pt.TOUCHINBOX,
+            pt.GKSAVES,
+            pt.GKCONCEDEDGOALS,
+            pt.GKEXITS,
+            pt.GKSUCCESSFULEXITS,
+            pt.GKAERIALDUELS,
+            pt.GKAERIALDUELSWON
+        FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL pt
+        JOIN {DB}.WYSCOUT_SEASONS s ON pt.SEASON_WYID = s.SEASON_WYID
+        JOIN {DB}.WYSCOUT_PLAYERS p ON pt.PLAYER_WYID = p.PLAYER_WYID AND pt.SEASON_WYID = p.SEASON_WYID
+        JOIN {DB}.WYSCOUT_TEAMS t ON p.CURRENTTEAM_WYID = t.TEAM_WYID
+        WHERE pt.COMPETITION_WYID IN (329, 43319, 328)
+          AND s.ACTIVE = TRUE
+    """
+    try:
+        df = conn.query(query)
+        if df is not None and not df.empty:
+            df.columns = [str(c).upper().strip() for c in df.columns]
+            for col in ['PLAYER_WYID', 'COMPETITION_WYID']:
+                if col in df.columns:
+                    df[col] = df[col].astype(str).str.split('.').str[0].str.strip()
+        return df
+    except Exception as e:
+        st.error(f"Fejl ved direkte hentning af top10 data: {e}")
+        return pd.DataFrame()
+
+def vis_side(advanced_stats_df=None, position_base_df=None):
     st.markdown("### Top 10 Scouting – Divisioner", unsafe_allow_html=True)
     
-    if advanced_stats_df is None or advanced_stats_df.empty:
-        st.warning("Ingen avanceret statistik tilgængelig.")
+    # Hent data direkte herfra, så vi er uafhængige af hif_load
+    df = _hent_top10_data()
+    
+    if df is None or df.empty:
+        st.warning("Ingen data tilgængelig fra databasen.")
         return
 
-    df = advanced_stats_df.copy()
-    df.columns = [c.upper().strip() for c in df.columns]
+    # Hent også position_base direkte hvis nødvendigt eller brug den medsendte
+    if position_base_df is None or position_base_df.empty:
+        try:
+            conn = _get_snowflake_conn()
+            if conn:
+                pos_query = f"SELECT PLAYER_WYID, POSITION, POSITIONSGROUP FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_PLAYERS" # eller tilsvarende tabeller
+                position_base_df = conn.query(pos_query)
+        except:
+            pass
 
-    # 1. Beregn positioner via positional_helper og position_base_df
     if position_base_df is not None and not position_base_df.empty:
         pos_base = position_base_df.copy()
         pos_base.columns = [c.upper().strip() for c in pos_base.columns]
         
-        id_adv = 'PLAYER_WYID' if 'PLAYER_WYID' in df.columns else None
-        id_pos = 'PLAYER_WYID' if 'PLAYER_WYID' in pos_base.columns else None
-        
-        if id_adv and id_pos:
-            df['TEMP_ID'] = df[id_adv].astype(str).str.split('.').str[0].str.strip()
-            pos_base['TEMP_ID'] = pos_base[id_pos].astype(str).str.split('.').str[0].str.strip()
+        if 'PLAYER_WYID' in df.columns and 'PLAYER_WYID' in pos_base.columns:
+            df['TEMP_ID'] = df['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
+            pos_base['TEMP_ID'] = pos_base['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
             
             try:
                 beregned_pos = beregn_primaere_positioner(pos_base)
@@ -38,7 +112,6 @@ def vis_side(advanced_stats_df, position_base_df=None):
     if 'POS_GROUP' not in df.columns or df['POS_GROUP'].isna().all():
         df['POS_GROUP'] = 'Ukendt'
 
-    # Sorter positionsgrupperne pænt
     tilgængelige_grupper = [g for g in POSITIONSGRUPPE_ORDEN if g in df['POS_GROUP'].unique() and g != "Ukendt"]
     andre_grupper = sorted([g for g in df['POS_GROUP'].dropna().unique() if g not in POSITIONSGRUPPE_ORDEN and g != "Ukendt"])
     mulige_grupper = tilgængelige_grupper + andre_grupper
@@ -48,16 +121,15 @@ def vis_side(advanced_stats_df, position_base_df=None):
 
     valgt_gruppe = st.selectbox("Vælg Positionsgruppe", mulige_grupper)
 
-    # 2. Match præcist med de turnerings-ID'er din SQL henter ind (328, 329, 43319)
     liga_mapping = {
-        328: "1. Division",
-        329: "2. Division",
-        43319: "3. Division"
+        "328": "1. Division",
+        "329": "2. Division",
+        "43319": "3. Division"
     }
 
     komp_col = 'COMPETITION_WYID'
     if komp_col not in df.columns:
-        st.error(f"Kolonnen '{komp_col}' blev ikke fundet i data.")
+        st.error(f"Kolonnen '{komp_col}' blev ikke fundet i data. Kolonner: {list(df.columns)}")
         return
     
     col1, col2, col3 = st.columns(3)
@@ -69,7 +141,6 @@ def vis_side(advanced_stats_df, position_base_df=None):
         with kolonner[idx]:
             st.markdown(f"#### {liga_navn}")
 
-            # Filtrer direkte på det specifikke turnerings-ID fra din SQL
             liga_df = df[(df[komp_col].astype(str) == str(komp_id)) & (df['POS_GROUP'] == valgt_gruppe)].copy()
 
             if liga_df.empty:
@@ -80,7 +151,6 @@ def vis_side(advanced_stats_df, position_base_df=None):
             liga_df['SCORE'] = 0
             antal_aktive_metrics = 0
 
-            # Beregn score ud fra de definerede metrics i positional_helper
             for metrik_def in gruppe_definitioner:
                 beregn_type = metrik_def[0]
                 
@@ -117,9 +187,9 @@ def vis_side(advanced_stats_df, position_base_df=None):
             hold_col = 'TEAMNAME' if 'TEAMNAME' in top10.columns else None
 
             for i, (_, row) in enumerate(top10.iterrows(), 1):
-                p_navn = row.get(navn_col, "Spiller") if navn_col else "Ukendt spiller"
-                p_hold = row.get(hold_col, "") if hold_col else ""
-                p_score = round(row.get('SCORE', 0), 2)
+                p_navn = str(row.get(navn_col, "Spiller")) if navn_col else "Ukendt spiller"
+                p_hold = str(row.get(hold_col, "")) if hold_col else ""
+                p_score = round(float(row.get('SCORE', 0)), 2)
                 
                 st.markdown(f"""
                     <div style='padding: 8px 10px; margin-bottom: 6px; background: #fff; border: 1px solid #eee; border-radius: 6px; display: flex; justify-content: space-between; align-items: center;'>
