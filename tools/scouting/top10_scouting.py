@@ -29,11 +29,17 @@ def vis_side(advanced_stats_df=None, position_base_df=None):
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int).astype(str)
 
+    # Dynamisk hentning af positioner baseret på alle spiller-id'er
     if position_base_df is None or position_base_df.empty:
         try:
-            unikt_id_liste = tuple(df['PLAYER_WYID'].unique())
+            unikt_id_liste = tuple(df['PLAYER_WYID'].dropna().unique())
             if unikt_id_liste:
-                id_str = str(unikt_id_liste[0]) if len(unikt_id_liste) == 1 else str(unikt_id_liste)
+                # Opret en korrekt SQL-venlig tuple-streng (f.eks. ('123', '456') eller ('123',))
+                if len(unikt_id_liste) == 1:
+                    id_str = f"('{unikt_id_liste[0]}')"
+                else:
+                    id_str = str(unikt_id_liste)
+                
                 pos_query_template = queries["position_base"]
                 pos_query = pos_query_template.format(id_list=id_str)
                 position_base_df = conn.query(pos_query)
@@ -46,36 +52,25 @@ def vis_side(advanced_stats_df=None, position_base_df=None):
         pos_base = position_base_df.copy()
         pos_base.columns = [c.upper().strip() for c in pos_base.columns]
         
-        for col in ['PLAYER_WYID', 'SEASON_WYID']:
-            if col in pos_base.columns:
-                pos_base[col] = pd.to_numeric(pos_base[col], errors='coerce').fillna(0).astype(int).astype(str)
-        
-        try:
-            beregned_pos = beregn_primaere_positioner(pos_base)
-            if beregned_pos is not None and not beregned_pos.empty:
-                beregned_pos.columns = [c.upper().strip() for c in beregned_pos.columns]
-                
-                for col in ['PLAYER_WYID', 'SEASON_WYID']:
-                    if col in beregned_pos.columns:
-                        beregned_pos[col] = pd.to_numeric(beregned_pos[col], errors='coerce').fillna(0).astype(int).astype(str)
-                
-                merge_keys = ['PLAYER_WYID']
-                if 'SEASON_WYID' in df.columns and 'SEASON_WYID' in beregned_pos.columns:
-                    merge_keys.append('SEASON_WYID')
-                
-                df = df.merge(beregned_pos, on=merge_keys, how='left', suffixes=('', '_pos'))
-                
-                pos_col_kandidater = ['PRIMAER_POSITIONSGRUPPE', 'POSITIONSGROUP', 'POS_GROUP_pos']
-                for pc in pos_col_kandidater:
-                    if pc in df.columns:
-                        df['POS_GROUP'] = df[pc].fillna(df['POS_GROUP'])
-                        break
-        except Exception as e:
-            st.error(f"Fejl ved beregning/merge af positioner: {e}")
+        if 'PLAYER_WYID' in pos_base.columns:
+            pos_base['PLAYER_WYID'] = pd.to_numeric(pos_base['PLAYER_WYID'], errors='coerce').fillna(0).astype(int).astype(str)
+            
+            try:
+                beregned_pos = beregn_primaere_positioner(pos_base)
+                if beregned_pos is not None and not beregned_pos.empty:
+                    beregned_pos.columns = [c.upper().strip() for c in beregned_pos.columns]
+                    if 'PLAYER_WYID' in beregned_pos.columns and 'PRIMAER_POSITIONSGRUPPE' in beregned_pos.columns:
+                        beregned_pos['PLAYER_WYID'] = pd.to_numeric(beregned_pos['PLAYER_WYID'], errors='coerce').fillna(0).astype(int).astype(str)
+                        
+                        df = df.merge(beregned_pos[['PLAYER_WYID', 'PRIMAER_POSITIONSGRUPPE']], on='PLAYER_WYID', how='left')
+                        if 'PRIMAER_POSITIONSGRUPPE' in df.columns:
+                            df['POS_GROUP'] = df['PRIMAER_POSITIONSGRUPPE'].fillna('Ukendt')
+            except Exception as e:
+                st.error(f"Fejl ved beregning af positioner: {e}")
 
     df['POS_GROUP'] = df['POS_GROUP'].fillna('Angriber')
 
-    # Første aggregering: Saml dubletter pr. spiller og turnering med 'sum' og 'first'
+    # Aggreger data pr. spiller og turnering, så du undgår dubletter og får samlet statistik
     agg_cols_to_sum = [c for c in df.select_dtypes(include=['number']).columns if c not in ['COMPETITION_WYID', 'PLAYER_WYID', 'SEASON_WYID']]
     agg_regler = {col: 'sum' for col in agg_cols_to_sum}
     for col in ['PLAYER_NAME', 'TEAMNAME', 'POS_GROUP']:
@@ -153,9 +148,8 @@ def vis_side(advanced_stats_df=None, position_base_df=None):
                     liga_df[m] = pd.to_numeric(liga_df[m], errors='coerce').fillna(0)
                     liga_df['SCORE'] += liga_df[m]
 
-            # Drop duplicates på spiller-ID for at garantere 10 unikke spillere
+            # Sørg for fuldstændig unikt sæt af spillere per liga før udtræk af top 10
             liga_df = liga_df.drop_duplicates(subset=['PLAYER_WYID'])
-
             top10 = liga_df.sort_values(by='SCORE', ascending=False).head(10)
 
             navn_col = 'PLAYER_NAME' if 'PLAYER_NAME' in top10.columns else 'SHORTNAME'
