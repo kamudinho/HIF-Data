@@ -29,7 +29,6 @@ def vis_side(advanced_stats_df=None, position_base_df=None):
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int).astype(str)
 
-    # Hent position_base separat for at sikre korrekte positionsgrupper via hjælpefunktionen
     if position_base_df is None or position_base_df.empty:
         try:
             unikt_id_liste = tuple(df['PLAYER_WYID'].dropna().unique())
@@ -67,8 +66,7 @@ def vis_side(advanced_stats_df=None, position_base_df=None):
             except Exception as e:
                 st.error(f"Fejl ved beregning af positioner: {e}")
 
-    # Hvis pos_group stadig er Ukendt, sletter vi ikke data, men sætter dem til en standardgruppe så de vises
-    df['POS_GROUP'] = df['POS_GROUP'].replace('Ukendt', 'Angriber').fillna('Angriber')
+    df['POS_GROUP'] = df['POS_GROUP'].fillna('Angriber')
 
     # Aggreger data pr. spiller og turnering for at undgå dubletter
     agg_cols_to_sum = [c for c in df.select_dtypes(include=['number']).columns if c not in ['COMPETITION_WYID', 'PLAYER_WYID', 'SEASON_WYID']]
@@ -79,9 +77,10 @@ def vis_side(advanced_stats_df=None, position_base_df=None):
             
     df = df.groupby(['PLAYER_WYID', 'COMPETITION_WYID'], as_index=False).agg(agg_regler)
 
-    tilgængelige_grupper = [g for g in POSITIONSGRUPPE_ORDEN if g in df['POS_GROUP'].unique() and g != "Ukendt"]
+    # Brug POSITIONSGRUPPE_ORDEN direkte, så alle positioner altid kan vælges
+    mulige_grupper = [g for g in POSITIONSGRUPPE_ORDEN if g != "Ukendt"]
     andre_grupper = sorted([g for g in df['POS_GROUP'].dropna().unique() if g not in POSITIONSGRUPPE_ORDEN and g != "Ukendt"])
-    mulige_grupper = tilgængelige_grupper + andre_grupper
+    mulige_grupper = mulige_grupper + [g for g in andre_grupper if g not in mulige_grupper]
 
     if not mulige_grupper:
         mulige_grupper = ["Angriber", "Kant", "Central Midtbane", "Back", "Midtstopper", "Målmand"]
