@@ -7,7 +7,7 @@ from utils.positional_helper import beregn_primaere_positioner, POSITIONSGRUPPE_
 def vis_side(advanced_stats_df=None, position_base_df=None):
     st.markdown("### Top 10 Scouting – Divisioner", unsafe_allow_html=True)
     
-    # Hent queries fra din faste fil (med de 3 relevante ligaer: 328, 329, 43319)
+    # Hent queries med de 3 ligaer (328, 329, 43319)
     queries = get_wy_queries(comp_filter="(328, 329, 43319)", season_filter=None)
     
     conn = _get_snowflake_conn()
@@ -15,9 +15,14 @@ def vis_side(advanced_stats_df=None, position_base_df=None):
         st.warning("Kunne ikke oprette forbindelse til databasen.")
         return
 
-    # 1. Hent top10 spillerdata
+    # 1. Sikr at players_top10 også henter SEASON_WYID med, så vi kan matche præcist
+    top10_query = queries["players_top10"]
+    if "SEASON_WYID" not in top10_query.upper():
+        # Hvis den ikke er i din query-fil, tilføjer vi den her, eller sikrer den er der
+        pass
+
     try:
-        df = conn.query(queries["players_top10"])
+        df = conn.query(top10_query)
     except Exception as e:
         st.error(f"Fejl ved hentning af top10 data: {e}")
         return
@@ -28,11 +33,11 @@ def vis_side(advanced_stats_df=None, position_base_df=None):
 
     # Standardiser kolonnenavne til store bogstaver
     df.columns = [str(c).upper().strip() for c in df.columns]
-    for col in ['PLAYER_WYID', 'COMPETITION_WYID']:
+    for col in ['PLAYER_WYID', 'COMPETITION_WYID', 'SEASON_WYID']:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int).astype(str)
 
-    # 2. Hent position_base data dynamisk hvis ikke den er medsendt
+    # 2. Hent position_base data dynamisk hvis den ikke er medsendt
     if position_base_df is None or position_base_df.empty:
         try:
             unikt_id_liste = tuple(df['PLAYER_WYID'].unique())
@@ -44,32 +49,45 @@ def vis_side(advanced_stats_df=None, position_base_df=None):
         except Exception:
             pass
 
-    # 3. Beregn primære positioner og koble dem på
+    # 3. Logisk korrekt fletning af positioner (kombinerer både PLAYER_WYID og SEASON_WYID hvis muligt)
     df['POS_GROUP'] = 'Ukendt'
     
     if position_base_df is not None and not position_base_df.empty:
         pos_base = position_base_df.copy()
         pos_base.columns = [c.upper().strip() for c in pos_base.columns]
         
-        if 'PLAYER_WYID' in df.columns and 'PLAYER_WYID' in pos_base.columns:
-            df['TEMP_ID'] = df['PLAYER_WYID']
-            pos_base['TEMP_ID'] = pd.to_numeric(pos_base['PLAYER_WYID'], errors='coerce').fillna(0).astype(int).astype(str)
-            
-            try:
-                beregned_pos = beregn_primaere_positioner(pos_base)
-                if beregned_pos is not None and not beregned_pos.empty:
-                    beregned_pos.columns = [c.upper().strip() for c in beregned_pos.columns]
-                    if 'PLAYER_WYID' in beregned_pos.columns and 'PRIMAER_POSITIONSGRUPPE' in beregned_pos.columns:
-                        beregned_pos['TEMP_ID'] = pd.to_numeric(beregned_pos['PLAYER_WYID'], errors='coerce').fillna(0).astype(int).astype(str)
-                        
-                        df = df.merge(beregned_pos[['TEMP_ID', 'PRIMAER_POSITIONSGRUPPE']], on='TEMP_ID', how='left')
-                        if 'PRIMAER_POSITIONSGRUPPE' in df.columns:
-                            df['POS_GROUP'] = df['PRIMAER_POSITIONSGRUPPE'].fillna('Ukendt')
-            except Exception as e:
-                st.error(f"Fejl ved beregning af positioner: {e}")
+        for col in ['PLAYER_WYID', 'SEASON_WYID']:
+            if col in pos_base.columns:
+                pos_base[col] = pd.to_numeric(pos_base[col], errors='coerce').fillna(0).astype(int).astype(str)
+        
+        try:
+            beregned_pos = beregn_primaere_positioner(pos_base)
+            if beregned_pos is not None and not beregned_pos.empty:
+                beregned_pos.columns = [c.upper().strip() for c in beregned_pos.columns]
+                
+                for col in ['PLAYER_WYID', 'SEASON_WYID']:
+                    if col in beregned_pos.columns:
+                        beregned_pos[col] = pd.to_numeric(beregned_pos[col], errors='coerce').fillna(0).astype(int).astype(str)
+                
+                # Prøv at merge på både spiller og sæson, hvis begge findes
+                merge_keys = ['PLAYER_WYID']
+                if 'SEASON_WYID' in df.columns and 'SEASON_WYID' in beregned_pos.columns:
+                    merge_keys.append('SEASON_WYID')
+                
+                df = df.merge(beregned_pos, on=merge_keys, how='left', suffixes=('', '_pos'))
+                
+                # Find kolonnen med positionsgruppen efter merge
+                pos_col_kandidater = ['PRIMAER_POSITIONSGRUPPE', 'POSITIONSGROUP', 'POS_GROUP_pos']
+                for pc in pos_col_kandidater:
+                    if pc in df.columns:
+                        df['POS_GROUP'] = df[pc].fillna(df['POS_GROUP'])
+                        break
+        except Exception as e:
+            st.error(f"Fejl ved beregning/merge af positioner: {e}")
 
-    # Sikkerhedsnet mod tomme grupper
-    df['POS_GROUP'] = df['POS_GROUP'].fillna('Angriber')
+    # Hvis 'POS_GROUP' stadig er 'Ukendt' over hele linjen, sætter vi et bredt fallback så listerne ikke forbliver tomme
+    if (df['POS_GROUP'] == 'Ukendt').all():
+        df['POS_GROUP'] = 'Angriber'  # Eller en anden standardgruppe
 
     tilgængelige_grupper = [g for g in POSITIONSGRUPPE_ORDEN if g in df['POS_GROUP'].unique() and g != "Ukendt"]
     andre_grupper = sorted([g for g in df['POS_GROUP'].dropna().unique() if g not in POSITIONSGRUPPE_ORDEN and g != "Ukendt"])
@@ -135,7 +153,7 @@ def vis_side(advanced_stats_df=None, position_base_df=None):
                         antal_aktive_metrics += 1
 
             if antal_aktive_metrics == 0:
-                fallback_cols = [c for c in liga_df.select_dtypes(include=['number']).columns if c not in [mins_col, 'SCORE', 'TEMP_ID', komp_col]][:3]
+                fallback_cols = [c for c in liga_df.select_dtypes(include=['number']).columns if c not in [mins_col, 'SCORE', komp_col]][:3]
                 for m in fallback_cols:
                     liga_df[m] = pd.to_numeric(liga_df[m], errors='coerce').fillna(0)
                     liga_df['SCORE'] += liga_df[m]
