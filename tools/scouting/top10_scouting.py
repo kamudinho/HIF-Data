@@ -1,112 +1,75 @@
 import streamlit as st
 import pandas as pd
 from data.data_load import _get_snowflake_conn
+from data.sql.wy_queries import get_wy_queries
 from utils.positional_helper import beregn_primaere_positioner, POSITIONSGRUPPE_ORDEN, METRICS_BY_GROUP
-
-@st.cache_data(ttl=600)
-def _hent_top10_data():
-    conn = _get_snowflake_conn()
-    if not conn:
-        return pd.DataFrame()
-    
-    DB = "KLUB_HVIDOVREIF.AXIS"
-    query = f"""
-        SELECT DISTINCT
-            pt.PLAYER_WYID,
-            p.SHORTNAME AS PLAYER_NAME,
-            t.TEAMNAME,
-            pt.COMPETITION_WYID,
-            s.SEASONNAME,
-            pt.MINUTESONFIELD,
-            pt.GOALS,
-            pt.ASSISTS,
-            pt.SHOTS,
-            pt.XGSHOT,
-            pt.XGASSIST,
-            pt.DRIBBLES,
-            pt.SUCCESSFULDRIBBLES,
-            pt.PROGRESSIVERUN,
-            pt.PROGRESSIVEPASSES,
-            pt.SUCCESSFULPROGRESSIVEPASSES,
-            pt.PASSES,
-            pt.SUCCESSFULPASSES,
-            pt.KEYPASSES,
-            pt.RECOVERIES,
-            pt.INTERCEPTIONS,
-            pt.DUELS,
-            pt.DUELSWON,
-            pt.DEFENSIVEDUELS,
-            pt.DEFENSIVEDUELSWON,
-            pt.AERIALDUELS,
-            pt.AERIALDUELSWON,
-            pt.CLEARANCES,
-            pt.SLIDINGTACKLES,
-            pt.SUCCESSFULSLIDINGTACKLES,
-            pt.CROSSES,
-            pt.SUCCESSFULCROSSES,
-            pt.TOUCHINBOX,
-            pt.GKSAVES,
-            pt.GKCONCEDEDGOALS,
-            pt.GKEXITS,
-            pt.GKSUCCESSFULEXITS,
-            pt.GKAERIALDUELS,
-            pt.GKAERIALDUELSWON,
-            p.POSITIONSGROUP AS DB_POS_GROUP
-        FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL pt
-        JOIN {DB}.WYSCOUT_SEASONS s ON pt.SEASON_WYID = s.SEASON_WYID
-        JOIN {DB}.WYSCOUT_PLAYERS p ON pt.PLAYER_WYID = p.PLAYER_WYID AND pt.SEASON_WYID = p.SEASON_WYID
-        JOIN {DB}.WYSCOUT_TEAMS t ON p.CURRENTTEAM_WYID = t.TEAM_WYID
-        WHERE pt.COMPETITION_WYID IN (329, 43319, 328)
-          AND s.ACTIVE = TRUE
-    """
-    try:
-        df = conn.query(query)
-        if df is not None and not df.empty:
-            df.columns = [str(c).upper().strip() for c in df.columns]
-            for col in ['PLAYER_WYID', 'COMPETITION_WYID']:
-                if col in df.columns:
-                    df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int).astype(str)
-        return df
-    except Exception as e:
-        st.error(f"Fejl ved direkte hentning af top10 data: {e}")
-        return pd.DataFrame()
 
 def vis_side(advanced_stats_df=None, position_base_df=None):
     st.markdown("### Top 10 Scouting – Divisioner", unsafe_allow_html=True)
     
-    df = _hent_top10_data()
+    # Hent queries fra din faste fil (med de 3 relevante ligaer: 328, 329, 43319)
+    queries = get_wy_queries(comp_filter="(328, 329, 43319)", season_filter=None)
     
+    conn = _get_snowflake_conn()
+    if not conn:
+        st.warning("Kunne ikke oprette forbindelse til databasen.")
+        return
+
+    # 1. Hent top10 spillerdata
+    try:
+        df = conn.query(queries["players_top10"])
+    except Exception as e:
+        st.error(f"Fejl ved hentning af top10 data: {e}")
+        return
+
     if df is None or df.empty:
         st.warning("Ingen data tilgængelig fra databasen.")
         return
 
-    # Brug DB_POS_GROUP direkte fra tabellen hvis den findes, ellers forsøg helper
-    if 'DB_POS_GROUP' in df.columns and not df['DB_POS_GROUP'].isna().all():
-        df['POS_GROUP'] = df['DB_POS_GROUP']
-    else:
-        df['POS_GROUP'] = 'Ukendt'
+    # Standardiser kolonnenavne til store bogstaver
+    df.columns = [str(c).upper().strip() for c in df.columns]
+    for col in ['PLAYER_WYID', 'COMPETITION_WYID']:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int).astype(str)
 
-    # Hvis vi stadig mangler gyldige positionsgrupper, prøver vi position_base_df
-    if (df['POS_GROUP'] == 'Ukendt').all() and position_base_df is not None and not position_base_df.empty:
+    # 2. Hent position_base data dynamisk hvis ikke den er medsendt
+    if position_base_df is None or position_base_df.empty:
+        try:
+            unikt_id_liste = tuple(df['PLAYER_WYID'].unique())
+            if unikt_id_liste:
+                id_str = str(unikt_id_liste[0]) if len(unikt_id_liste) == 1 else str(unikt_id_liste)
+                pos_query_template = queries["position_base"]
+                pos_query = pos_query_template.format(id_list=id_str)
+                position_base_df = conn.query(pos_query)
+        except Exception:
+            pass
+
+    # 3. Beregn primære positioner og koble dem på
+    df['POS_GROUP'] = 'Ukendt'
+    
+    if position_base_df is not None and not position_base_df.empty:
         pos_base = position_base_df.copy()
         pos_base.columns = [c.upper().strip() for c in pos_base.columns]
+        
         if 'PLAYER_WYID' in df.columns and 'PLAYER_WYID' in pos_base.columns:
             df['TEMP_ID'] = df['PLAYER_WYID']
             pos_base['TEMP_ID'] = pd.to_numeric(pos_base['PLAYER_WYID'], errors='coerce').fillna(0).astype(int).astype(str)
+            
             try:
                 beregned_pos = beregn_primaere_positioner(pos_base)
                 if beregned_pos is not None and not beregned_pos.empty:
                     beregned_pos.columns = [c.upper().strip() for c in beregned_pos.columns]
                     if 'PLAYER_WYID' in beregned_pos.columns and 'PRIMAER_POSITIONSGRUPPE' in beregned_pos.columns:
                         beregned_pos['TEMP_ID'] = pd.to_numeric(beregned_pos['PLAYER_WYID'], errors='coerce').fillna(0).astype(int).astype(str)
-                        df = df.merge(beregned_pos[['TEMP_ID', 'PRIMAER_POSITIONSGRUPPE']], on='TEMP_ID', how='left', suffixes=('', '_calc'))
+                        
+                        df = df.merge(beregned_pos[['TEMP_ID', 'PRIMAER_POSITIONSGRUPPE']], on='TEMP_ID', how='left')
                         if 'PRIMAER_POSITIONSGRUPPE' in df.columns:
-                            df['POS_GROUP'] = df['PRIMAER_POSITIONSGRUPPE'].fillna(df['POS_GROUP'])
+                            df['POS_GROUP'] = df['PRIMAER_POSITIONSGRUPPE'].fillna('Ukendt')
             except Exception as e:
-                pass
+                st.error(f"Fejl ved beregning af positioner: {e}")
 
-    if 'POS_GROUP' not in df.columns or df['POS_GROUP'].isna().all():
-        df['POS_GROUP'] = 'Angriber'  # Sidste sikkerhedsnet så dropdown ikke er tom
+    # Sikkerhedsnet mod tomme grupper
+    df['POS_GROUP'] = df['POS_GROUP'].fillna('Angriber')
 
     tilgængelige_grupper = [g for g in POSITIONSGRUPPE_ORDEN if g in df['POS_GROUP'].unique() and g != "Ukendt"]
     andre_grupper = sorted([g for g in df['POS_GROUP'].dropna().unique() if g not in POSITIONSGRUPPE_ORDEN and g != "Ukendt"])
