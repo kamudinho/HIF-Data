@@ -72,7 +72,10 @@ def _hent_top10_data():
 
 def vis_side(advanced_stats_df=None, position_base_df=None):
     st.markdown("### Top 10 Scouting – Divisioner", unsafe_allow_html=True)
-    
+
+    st.write("DEBUG - Kolonner i dataframe:", list(df.columns))
+    st.write(df.head(2))
+
     df = _hent_top10_data()
     
     if df is None or df.empty:
