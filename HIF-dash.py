@@ -233,7 +233,7 @@ try:
             edb.vis_side()
         elif s == "Sammenligning":
             import tools.scouting.sammenligning as comp
-            comp.vis_side(dp["players"], None, None, dp["career"], dp["sql_players"], dp["advanced_stats"], dp.get("primaer_positioner"))
+            comp.vis_side(dp["players"], None, dp["wyscout_players"], dp["career"], dp["sql_players"], dp["advanced_stats"], dp.get("primaer_positioner"))
         elif s == "Transfers":
             import tools.scouting.transfer_input as t_input
             t_input.vis_side()
