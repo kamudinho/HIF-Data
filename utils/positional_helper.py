@@ -1,24 +1,6 @@
 """
 utils/positional_helper.py
 
-To ansvarsområder:
-
-1. Udledning af en spillers PRIMÆRE position ud fra kamphistorik, vægtet efter
-   minutter spillet i den position (funktion: beregn_primaere_positioner).
-   Kræver to rå Wyscout-tabeller på kamp-niveau:
-     - WYSCOUT_PLAYERADVANCEDSTATS_BASE (POSITION1-4CODE / POSITION1-4PERCENT)
-     - WYSCOUT_MATCHADVANCEDPLAYERSTATS_TOTAL (MINUTESONFIELD)
-   Disse skal joines på MATCH_WYID + PLAYER_WYID.
-
-2. Definition af hvilke metrics der er relevante for hver positionsgruppe, og
-   udregning af dem ud fra det eksisterende sæson-aggregerede advanced_stats_df
-   (samme datakilde som beregn_p90_stats i comparison.py bruger).
-
-BEMÆRK: POSITION_GROUP_MAP er baseret på standard Wyscout-positionskoder.
-Hvis der dukker ukendte koder op i jeres data, mappes de til "Ukendt" - tjek
-periodisk om der mangler koder (se find_ukendte_koder nederst).
-"""
-
 import pandas as pd
 
 # --------------------------------------------------------------------------
@@ -74,88 +56,76 @@ def find_ukendte_koder(position_stats_df, kode_kolonner=("POSITION1CODE", "POSIT
 # 2. PRIMÆR POSITION (vægtet efter minutter)
 # --------------------------------------------------------------------------
 
-def beregn_primaere_positioner(position_stats_df, match_minutes_df):
+def beregn_primaere_positioner(position_stats_df):
     """
-    Udleder hver spillers primære position ud fra kamphistorik, vægtet efter
-    minutter spillet i den pågældende position.
+    Udleder hver spillers primære position ud fra WYSCOUT_PLAYERADVANCEDSTATS_BASE.
+
+    VIGTIGT: Denne tabel er sæson-aggregeret (nøglet på SEASON_WYID + PLAYER_WYID +
+    COMPETITION_WYID), IKKE kamp-niveau - der findes ingen MATCH_WYID. Wyscout har
+    allerede beregnet hvor stor en andel af sæsonen spilleren har spillet i hver
+    position (POSITIONS1PERCENT osv. - bemærk "S" i navnet).
+
+    Hvis en spiller har flere rækker (flere sæsoner/konkurrencer i det hentede
+    datasæt), lægges procenterne sammen på tværs, så vi stadig får ét samlet bud
+    på den mest spillede position.
 
     Parametre:
         position_stats_df: rådata fra WYSCOUT_PLAYERADVANCEDSTATS_BASE.
-            Forventede kolonner: MATCH_WYID, PLAYER_WYID,
-            POSITION1CODE..POSITION4CODE, POSITION1PERCENT..POSITION4PERCENT
-        match_minutes_df: rådata fra WYSCOUT_MATCHADVANCEDPLAYERSTATS_TOTAL.
-            Forventede kolonner: MATCH_WYID, PLAYER_WYID, MINUTESONFIELD
+            Forventede kolonner: PLAYER_WYID,
+            POSITION1CODE..POSITION4CODE, POSITIONS1PERCENT..POSITIONS4PERCENT
 
     Returnerer:
         DataFrame med én række pr. spiller:
         PLAYER_WYID, PRIMAER_POSITION_KODE, PRIMAER_POSITIONSGRUPPE,
-        VEGTEDE_MINUTTER_I_POSITION (til debugging/gennemsigtighed)
+        SAMLET_PROCENT_I_POSITION (til debugging/gennemsigtighed)
     """
     pos_df = position_stats_df.copy()
     pos_df.columns = [c.upper() for c in pos_df.columns]
 
-    min_df = match_minutes_df.copy()
-    min_df.columns = [c.upper() for c in min_df.columns]
+    if "PLAYER_WYID" not in pos_df.columns:
+        raise ValueError("position_stats_df skal indeholde PLAYER_WYID")
 
-    if "MATCH_WYID" not in pos_df.columns or "PLAYER_WYID" not in pos_df.columns:
-        raise ValueError("position_stats_df skal indeholde MATCH_WYID og PLAYER_WYID")
-    if "MINUTESONFIELD" not in min_df.columns:
-        raise ValueError("match_minutes_df skal indeholde MINUTESONFIELD")
+    pos_df["PLAYER_WYID"] = pos_df["PLAYER_WYID"].astype(str).str.split(".").str[0].str.strip()
 
-    # Ét ID-format at joine på (undgår float/streng-mismatch, samme princip som rens_id andre steder)
-    for df_ in (pos_df, min_df):
-        df_["MATCH_WYID"] = df_["MATCH_WYID"].astype(str).str.split(".").str[0]
-        df_["PLAYER_WYID"] = df_["PLAYER_WYID"].astype(str).str.split(".").str[0]
-
-    minutter = min_df[["MATCH_WYID", "PLAYER_WYID", "MINUTESONFIELD"]].drop_duplicates(
-        subset=["MATCH_WYID", "PLAYER_WYID"]
-    )
-
-    joined = pos_df.merge(minutter, on=["MATCH_WYID", "PLAYER_WYID"], how="left")
-    joined["MINUTESONFIELD"] = joined["MINUTESONFIELD"].fillna(0)
-
-    # Fold de 4 position-slots ud til lange rækker: én række pr. (kamp, spiller, position-slot)
+    # Fold de 4 position-slots ud til lange rækker: én række pr. (spiller, position-slot)
     slots = []
     for i in range(1, 5):
         kode_kol = f"POSITION{i}CODE"
-        pct_kol = f"POSITION{i}PERCENT"
-        if kode_kol not in joined.columns or pct_kol not in joined.columns:
+        pct_kol = f"POSITIONS{i}PERCENT"  # bemærk "S" - sådan hedder kolonnen faktisk
+        if kode_kol not in pos_df.columns or pct_kol not in pos_df.columns:
             continue
-        slot = joined[["PLAYER_WYID", "MINUTESONFIELD", kode_kol, pct_kol]].copy()
+        slot = pos_df[["PLAYER_WYID", kode_kol, pct_kol]].copy()
         slot = slot.rename(columns={kode_kol: "POSITIONKODE", pct_kol: "POSITIONPCT"})
         slots.append(slot)
 
     if not slots:
         return pd.DataFrame(columns=[
             "PLAYER_WYID", "PRIMAER_POSITION_KODE", "PRIMAER_POSITIONSGRUPPE",
-            "VEGTEDE_MINUTTER_I_POSITION"
+            "SAMLET_PROCENT_I_POSITION"
         ])
 
     lang = pd.concat(slots, ignore_index=True)
     lang["POSITIONKODE"] = lang["POSITIONKODE"].astype(str).str.lower().str.strip()
     lang = lang[lang["POSITIONKODE"].notna() & (lang["POSITIONKODE"] != "") & (lang["POSITIONKODE"] != "nan")]
-
-    lang["VEGTEDE_MINUTTER"] = (
-        lang["MINUTESONFIELD"].astype(float) * (lang["POSITIONPCT"].fillna(0).astype(float) / 100)
-    )
+    lang["POSITIONPCT"] = pd.to_numeric(lang["POSITIONPCT"], errors="coerce").fillna(0)
 
     agg = (
-        lang.groupby(["PLAYER_WYID", "POSITIONKODE"])["VEGTEDE_MINUTTER"]
+        lang.groupby(["PLAYER_WYID", "POSITIONKODE"])["POSITIONPCT"]
         .sum()
         .reset_index()
     )
 
-    # Vælg positionen med flest vægtede minutter pr. spiller
-    idx = agg.groupby("PLAYER_WYID")["VEGTEDE_MINUTTER"].idxmax()
+    # Vælg positionen med højest samlet procent pr. spiller
+    idx = agg.groupby("PLAYER_WYID")["POSITIONPCT"].idxmax()
     primaer = agg.loc[idx].reset_index(drop=True)
     primaer = primaer.rename(columns={
         "POSITIONKODE": "PRIMAER_POSITION_KODE",
-        "VEGTEDE_MINUTTER": "VEGTEDE_MINUTTER_I_POSITION"
+        "POSITIONPCT": "SAMLET_PROCENT_I_POSITION"
     })
     primaer["PRIMAER_POSITIONSGRUPPE"] = primaer["PRIMAER_POSITION_KODE"].map(POSITION_GROUP_MAP).fillna("Ukendt")
 
     return primaer[[
-        "PLAYER_WYID", "PRIMAER_POSITION_KODE", "PRIMAER_POSITIONSGRUPPE", "VEGTEDE_MINUTTER_I_POSITION"
+        "PLAYER_WYID", "PRIMAER_POSITION_KODE", "PRIMAER_POSITIONSGRUPPE", "SAMLET_PROCENT_I_POSITION"
     ]]
 
 
