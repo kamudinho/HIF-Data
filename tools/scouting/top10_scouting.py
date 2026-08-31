@@ -31,8 +31,6 @@ def vis_side(advanced_stats_df=None, position_base_df=None):
 
     df['POS_GROUP'] = 'Ukendt'
 
-    # Da SQL'en nu henter positionstabellen med (POSITION1CODE, POSITIONS1PERCENT osv.), 
-    # kan vi sende 'df' direkte igennem beregn_primaere_positioner i stedet for at lave et ekstra databasekald!
     try:
         beregned_pos = beregn_primaere_positioner(df)
         if beregned_pos is not None and not beregned_pos.empty:
@@ -40,9 +38,13 @@ def vis_side(advanced_stats_df=None, position_base_df=None):
             if 'PLAYER_WYID' in beregned_pos.columns and 'PRIMAER_POSITIONSGRUPPE' in beregned_pos.columns:
                 beregned_pos['PLAYER_WYID'] = pd.to_numeric(beregned_pos['PLAYER_WYID'], errors='coerce').fillna(0).astype(int).astype(str)
                 
-                # Merge den beregnede positionsgruppe ind på spillerne
-                df = df.merge(beregned_pos[['PLAYER_WYID', 'COMPETITION_WYID', 'PRIMAER_POSITIONSGRUPPE']], 
-                              on=['PLAYER_WYID', 'COMPETITION_WYID'], how='left', suffixes=('', '_calc'))
+                # Hvis COMPETITION_WYID findes i beregned_pos, merger vi på begge, ellers kun på PLAYER_WYID
+                merge_keys = ['PLAYER_WYID', 'COMPETITION_WYID'] if 'COMPETITION_WYID' in beregned_pos.columns else ['PLAYER_WYID']
+                if 'COMPETITION_WYID' in merge_keys and 'COMPETITION_WYID' not in beregned_pos.columns:
+                    merge_keys = ['PLAYER_WYID']
+
+                df = df.merge(beregned_pos[merge_keys + ['PRIMAER_POSITIONSGRUPPE']], 
+                              on=merge_keys, how='left', suffixes=('', '_calc'))
                 
                 if 'PRIMAER_POSITIONSGRUPPE' in df.columns:
                     df['POS_GROUP'] = df['PRIMAER_POSITIONSGRUPPE'].fillna('Ukendt')
