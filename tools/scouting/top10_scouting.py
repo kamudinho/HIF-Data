@@ -28,50 +28,50 @@ def vis_side(advanced_stats_df=None, position_base_df=None):
                     COALESCE(pb.POSITIONS4PERCENT, 0)
                 ) = 0 THEN 'Ukendt'
                 
-                WHEN (
+                WHEN UPPER(TRIM(
                     CASE 
                         WHEN pb.POSITIONS1PERCENT >= GREATEST(COALESCE(pb.POSITIONS2PERCENT,0), COALESCE(pb.POSITIONS3PERCENT,0), COALESCE(pb.POSITIONS4PERCENT,0)) THEN pb.POSITION1CODE
                         WHEN pb.POSITIONS2PERCENT >= GREATEST(COALESCE(pb.POSITIONS1PERCENT,0), COALESCE(pb.POSITIONS3PERCENT,0), COALESCE(pb.POSITIONS4PERCENT,0)) THEN pb.POSITION2CODE
                         WHEN pb.POSITIONS3PERCENT >= GREATEST(COALESCE(pb.POSITIONS1PERCENT,0), COALESCE(pb.POSITIONS2PERCENT,0), COALESCE(pb.POSITIONS4PERCENT,0)) THEN pb.POSITION3CODE
                         ELSE pb.POSITION4CODE
                     END
-                ) IN ('GK') THEN 'Målmand'
+                )) = 'GK' THEN 'Målmand'
                 
-                WHEN (
+                WHEN UPPER(TRIM(
                     CASE 
                         WHEN pb.POSITIONS1PERCENT >= GREATEST(COALESCE(pb.POSITIONS2PERCENT,0), COALESCE(pb.POSITIONS3PERCENT,0), COALESCE(pb.POSITIONS4PERCENT,0)) THEN pb.POSITION1CODE
                         WHEN pb.POSITIONS2PERCENT >= GREATEST(COALESCE(pb.POSITIONS1PERCENT,0), COALESCE(pb.POSITIONS3PERCENT,0), COALESCE(pb.POSITIONS4PERCENT,0)) THEN pb.POSITION2CODE
                         WHEN pb.POSITIONS3PERCENT >= GREATEST(COALESCE(pb.POSITIONS1PERCENT,0), COALESCE(pb.POSITIONS2PERCENT,0), COALESCE(pb.POSITIONS4PERCENT,0)) THEN pb.POSITION3CODE
                         ELSE pb.POSITION4CODE
                     END
-                ) IN ('CB', 'LCB', 'RCB') THEN 'Midtstopper'
+                )) IN ('CB', 'LCB', 'RCB', 'LCB3', 'RCB3', 'CB3') THEN 'Midtstopper'
                 
-                WHEN (
+                WHEN UPPER(TRIM(
                     CASE 
                         WHEN pb.POSITIONS1PERCENT >= GREATEST(COALESCE(pb.POSITIONS2PERCENT,0), COALESCE(pb.POSITIONS3PERCENT,0), COALESCE(pb.POSITIONS4PERCENT,0)) THEN pb.POSITION1CODE
                         WHEN pb.POSITIONS2PERCENT >= GREATEST(COALESCE(pb.POSITIONS1PERCENT,0), COALESCE(pb.POSITIONS3PERCENT,0), COALESCE(pb.POSITIONS4PERCENT,0)) THEN pb.POSITION2CODE
                         WHEN pb.POSITIONS3PERCENT >= GREATEST(COALESCE(pb.POSITIONS1PERCENT,0), COALESCE(pb.POSITIONS2PERCENT,0), COALESCE(pb.POSITIONS4PERCENT,0)) THEN pb.POSITION3CODE
                         ELSE pb.POSITION4CODE
                     END
-                ) IN ('LB', 'RB', 'LWB', 'RWB') THEN 'Back'
+                )) IN ('LB', 'RB', 'LWB', 'RWB', 'LB3', 'RB3', 'LB5', 'RB5') THEN 'Back'
                 
-                WHEN (
+                WHEN UPPER(TRIM(
                     CASE 
                         WHEN pb.POSITIONS1PERCENT >= GREATEST(COALESCE(pb.POSITIONS2PERCENT,0), COALESCE(pb.POSITIONS3PERCENT,0), COALESCE(pb.POSITIONS4PERCENT,0)) THEN pb.POSITION1CODE
                         WHEN pb.POSITIONS2PERCENT >= GREATEST(COALESCE(pb.POSITIONS1PERCENT,0), COALESCE(pb.POSITIONS3PERCENT,0), COALESCE(pb.POSITIONS4PERCENT,0)) THEN pb.POSITION2CODE
                         WHEN pb.POSITIONS3PERCENT >= GREATEST(COALESCE(pb.POSITIONS1PERCENT,0), COALESCE(pb.POSITIONS2PERCENT,0), COALESCE(pb.POSITIONS4PERCENT,0)) THEN pb.POSITION3CODE
                         ELSE pb.POSITION4CODE
                     END
-                ) IN ('DMF', 'LCMF', 'RCMF', 'AMF', 'CMF') THEN 'Central Midtbane'
+                )) IN ('DMF', 'LCMF', 'RCMF', 'AMF', 'CMF', 'LCMF3', 'RCMF3', 'LAMF', 'RAMF', 'LDMF', 'RDMF') THEN 'Central Midtbane'
                 
-                WHEN (
+                WHEN UPPER(TRIM(
                     CASE 
                         WHEN pb.POSITIONS1PERCENT >= GREATEST(COALESCE(pb.POSITIONS2PERCENT,0), COALESCE(pb.POSITIONS3PERCENT,0), COALESCE(pb.POSITIONS4PERCENT,0)) THEN pb.POSITION1CODE
                         WHEN pb.POSITIONS2PERCENT >= GREATEST(COALESCE(pb.POSITIONS1PERCENT,0), COALESCE(pb.POSITIONS3PERCENT,0), COALESCE(pb.POSITIONS4PERCENT,0)) THEN pb.POSITION2CODE
                         WHEN pb.POSITIONS3PERCENT >= GREATEST(COALESCE(pb.POSITIONS1PERCENT,0), COALESCE(pb.POSITIONS2PERCENT,0), COALESCE(pb.POSITIONS4PERCENT,0)) THEN pb.POSITION3CODE
                         ELSE pb.POSITION4CODE
                     END
-                ) IN ('LW', 'RW', 'LWF', 'RWF') THEN 'Kant'
+                )) IN ('LW', 'RW', 'LWF', 'RWF') THEN 'Kant'
                 
                 ELSE 'Angriber'
             END AS POS_GROUP,
@@ -215,7 +215,7 @@ def vis_side(advanced_stats_df=None, position_base_df=None):
             top10 = liga_df.sort_values(by='SCORE', ascending=False).head(10)
 
             for i, (_, row) in enumerate(top10.iterrows(), 1):
-                p_navn = str(row.get('PLAYER_NAME', "Ukendir spiller"))
+                p_navn = str(row.get('PLAYER_NAME', "Ukendt spiller"))
                 p_hold = str(row.get('TEAMNAME', ""))
                 p_score = round(float(row.get('SCORE', 0)), 2)
                 
