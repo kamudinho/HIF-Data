@@ -29,6 +29,7 @@ def vis_side(advanced_stats_df=None, position_base_df=None):
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int).astype(str)
 
+    # Hent position_base hvis den mangler, baseret på spiller-id'erne fra df
     if position_base_df is None or position_base_df.empty:
         try:
             unikt_id_liste = tuple(df['PLAYER_WYID'].dropna().unique())
@@ -46,6 +47,7 @@ def vis_side(advanced_stats_df=None, position_base_df=None):
 
     df['POS_GROUP'] = 'Ukendt'
 
+    # Prioritér beregning via position_base_df hvis den er tilgængelig
     if position_base_df is not None and not position_base_df.empty:
         pos_base = position_base_df.copy()
         pos_base.columns = [c.upper().strip() for c in pos_base.columns]
@@ -60,11 +62,24 @@ def vis_side(advanced_stats_df=None, position_base_df=None):
                     if 'PLAYER_WYID' in beregned_pos.columns and 'PRIMAER_POSITIONSGRUPPE' in beregned_pos.columns:
                         beregned_pos['PLAYER_WYID'] = pd.to_numeric(beregned_pos['PLAYER_WYID'], errors='coerce').fillna(0).astype(int).astype(str)
                         
-                        df = df.merge(beregned_pos[['PLAYER_WYID', 'PRIMAER_POSITIONSGRUPPE']], on='PLAYER_WYID', how='left')
-                        if 'PRIMAER_POSITIONSGRUPPE' in df.columns:
-                            df['POS_GROUP'] = df['PRIMAER_POSITIONSGRUPPE'].fillna('Ukendt')
+                        # Vi bruger unikt map for at undgå merge-dubletter
+                        pos_map = beregned_pos.set_index('PLAYER_WYID')['PRIMAER_POSITIONSGRUPPE'].to_dict()
+                        df['POS_GROUP'] = df['PLAYER_WYID'].map(pos_map).fillna('Ukendt')
             except Exception as e:
                 st.error(f"Fejl ved beregning af positioner: {e}")
+
+    # Hvis pos_group stadig er Ukendt, forsøger vi at beregne direkte på df hvis kolonnerne findes, ellers sættes den til Angriber
+    if (df['POS_GROUP'] == 'Ukendt').all():
+        try:
+            beregned_pos = beregn_primaere_positioner(df)
+            if beregned_pos is not None and not beregned_pos.empty:
+                beregned_pos.columns = [c.upper().strip() for c in beregned_pos.columns]
+                if 'PLAYER_WYID' in beregned_pos.columns and 'PRIMAER_POSITIONSGRUPPE' in beregned_pos.columns:
+                    beregned_pos['PLAYER_WYID'] = pd.to_numeric(beregned_pos['PLAYER_WYID'], errors='coerce').fillna(0).astype(int).astype(str)
+                    pos_map = beregned_pos.set_index('PLAYER_WYID')['PRIMAER_POSITIONSGRUPPE'].to_dict()
+                    df['POS_GROUP'] = df['PLAYER_WYID'].map(pos_map).fillna('Angriber')
+        except Exception:
+            df['POS_GROUP'] = 'Angriber'
 
     df['POS_GROUP'] = df['POS_GROUP'].fillna('Angriber')
 
@@ -77,10 +92,12 @@ def vis_side(advanced_stats_df=None, position_base_df=None):
             
     df = df.groupby(['PLAYER_WYID', 'COMPETITION_WYID'], as_index=False).agg(agg_regler)
 
-    # Brug POSITIONSGRUPPE_ORDEN direkte, så alle positioner altid kan vælges
+    # Sørg for at alle mulige grupper fra POSITIONSGRUPPE_ORDEN altid er tilgængelige
     mulige_grupper = [g for g in POSITIONSGRUPPE_ORDEN if g != "Ukendt"]
     andre_grupper = sorted([g for g in df['POS_GROUP'].dropna().unique() if g not in POSITIONSGRUPPE_ORDEN and g != "Ukendt"])
-    mulige_grupper = mulige_grupper + [g for g in andre_grupper if g not in mulige_grupper]
+    for g in andre_grupper:
+        if g not in mulige_grupper:
+            mulige_grupper.append(g)
 
     if not mulige_grupper:
         mulige_grupper = ["Angriber", "Kant", "Central Midtbane", "Back", "Midtstopper", "Målmand"]
