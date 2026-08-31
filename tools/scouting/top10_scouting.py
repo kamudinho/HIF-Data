@@ -121,7 +121,7 @@ def vis_side(advanced_stats_df=None, position_base_df=None):
     col_left, col_right = st.columns([1.2, 1.8])
 
     with col_left:
-        st.markdown("## Vælg positionsgruppe")
+        st.caption("##### Vælg positionsgruppe")
         valgt_gruppe = st.selectbox("Positionsgruppe", mulige_grupper, label_visibility="collapsed")
 
     gruppe_definitioner = METRICS_BY_GROUP.get(valgt_gruppe, METRICS_BY_GROUP["Ukendt"])
