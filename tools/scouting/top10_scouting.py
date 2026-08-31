@@ -35,12 +35,12 @@ def hent_scouting_data():
                 WHEN UPPER(TRIM(rb.PRIMARY_POS_CODE)) = 'GK' THEN 'Målmand'
                 WHEN UPPER(TRIM(rb.PRIMARY_POS_CODE)) IN ('RCB', 'RCB3') THEN 'Højre Stopper'
                 WHEN UPPER(TRIM(rb.PRIMARY_POS_CODE)) IN ('LCB', 'LCB3') THEN 'Venstre Stopper'
-                WHEN UPPER(TRIM(rb.PRIMARY_POS_CODE)) IN ('CB', 'CB3') Central Stopper'
+                WHEN UPPER(TRIM(rb.PRIMARY_POS_CODE)) IN ('CB', 'CB3') THEN 'Central Stopper'
                 WHEN UPPER(TRIM(rb.PRIMARY_POS_CODE)) IN ('RB', 'RWB', 'RB3', 'RB5') THEN 'Højre Back'
                 WHEN UPPER(TRIM(rb.PRIMARY_POS_CODE)) IN ('LB', 'LWB', 'LB3', 'LB5') THEN 'Venstre Back'
-                WHEN UPPER(TRIM(rb.PRIMARY_POS_CODE)) IN ('DMF', 'LDMF', 'RDMF') THEN 'Defensiv Midtbane (6\'er)'
-                WHEN UPPER(TRIM(rb.PRIMARY_POS_CODE)) IN ('CMF', 'LCMF', 'RCMF', 'LCMF3', 'RCMF3') THEN 'Central Midtbane (8\'er)'
-                WHEN UPPER(TRIM(rb.PRIMARY_POS_CODE)) IN ('AMF', 'LAMF', 'RAMF') THEN 'Offensiv Midtbane (10\'er)'
+                WHEN UPPER(TRIM(rb.PRIMARY_POS_CODE)) IN ('DMF', 'LDMF', 'RDMF') THEN 'Defensiv Midtbane (6''er)'
+                WHEN UPPER(TRIM(rb.PRIMARY_POS_CODE)) IN ('CMF', 'LCMF', 'RCMF', 'LCMF3', 'RCMF3') THEN 'Central Midtbane (8''er)'
+                WHEN UPPER(TRIM(rb.PRIMARY_POS_CODE)) IN ('AMF', 'LAMF', 'RAMF') THEN 'Offensiv Midtbane (10''er)'
                 WHEN UPPER(TRIM(rb.PRIMARY_POS_CODE)) IN ('RW', 'RWF') THEN 'Højre Kant'
                 WHEN UPPER(TRIM(rb.PRIMARY_POS_CODE)) IN ('LW', 'LWF') THEN 'Venstre Kant'
                 WHEN UPPER(TRIM(rb.PRIMARY_POS_CODE)) IN ('CF', 'ST', 'SS') THEN 'Angriber'
@@ -133,7 +133,6 @@ def vis_side(advanced_stats_df=None, position_base_df=None):
         st.markdown("**Positionsgruppe**")
         valgt_hovedgruppe = st.selectbox("Hovedgruppe", hoved_grupper, label_visibility="collapsed")
 
-    # Dynamiske undergrupper baseret på hovedgruppe
     mapping_under = {
         "Målmand": ["Målmand"],
         "Stopper": ["Alle Stoppere", "Højre Stopper", "Venstre Stopper", "Central Stopper"],
@@ -149,7 +148,6 @@ def vis_side(advanced_stats_df=None, position_base_df=None):
         st.markdown("**Pladsspecifik**")
         valgt_gruppe = st.selectbox("Specifik", tilgængelige_under, label_visibility="collapsed")
 
-    # Hent metrics definition (fanger undergruppen eller falder tilbage til hovedgruppen)
     gruppe_definitioner = METRICS_BY_GROUP.get(valgt_gruppe, METRICS_BY_GROUP.get(valgt_hovedgruppe, METRICS_BY_GROUP["Ukendt"]))
     
     beskrivelse_dele = []
@@ -191,7 +189,6 @@ def vis_side(advanced_stats_df=None, position_base_df=None):
         with kolonner[idx]:
             st.markdown(f"#### {liga_navn}")
 
-            # Filtrering baseret på om der er valgt en overordnet gruppe (Alle ...) eller specifik undergruppe
             if valgt_gruppe.startswith("Alle "):
                 søg_term = valgt_hovedgruppe
                 liga_df = df[(df[komp_col].astype(str) == str(komp_id)) & (df['POS_SPECIFIC'].str.contains(søg_term, case=False, na=False))].copy()
