@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from utils.positional_helper import beregn_primaere_positioner, POSITION_GROUP_MAP
+from utils.positional_helper import POSITION_GROUP_MAP
 
 def vis_side(advanced_stats_df, position_base_df=None):
     st.markdown("### Top 10 Scouting – Divisioner", unsafe_allow_html=True)
@@ -12,73 +12,14 @@ def vis_side(advanced_stats_df, position_base_df=None):
     df = advanced_stats_df.copy()
     df.columns = [c.upper().strip() for c in df.columns]
 
-    # Hvis position_base_df ikke blev sendt med som argument, prøv at hente den via hif_load
-    scouting_pkg = {}
-    if position_base_df is None or position_base_df.empty:
-        try:
-            import data.hif_load as hif_load
-            scouting_pkg = hif_load.get_scouting_package()
-            if scouting_pkg and "primaer_positioner" in scouting_pkg:
-                position_base_df = scouting_pkg["primaer_positioner"]
-        except Exception:
-            pass
-
-    # Sørg for at få positionsgruppe med på df
+    # Sikr POS_GROUP via roller/positioner eller fast fallback uden eksterne afhængigheder
     pos_col = 'POS_GROUP'
-    if pos_col not in df.columns:
-        if position_base_df is not None and not position_base_df.empty:
-            pos_base_temp = position_base_df.copy()
-            pos_base_temp.columns = [c.upper().strip() for c in pos_base_temp.columns]
-            
-            id_col_adv = next((c for c in ['PLAYER_WYID', 'WYID', 'PLAYER_ID', 'ID'] if c in df.columns), None)
-            id_col_pos = next((c for c in ['PLAYER_WYID', 'WYID', 'PLAYER_ID', 'ID'] if c in pos_base_temp.columns), None)
-            
-            if id_col_adv and id_col_pos:
-                df['TEMP_ID'] = df[id_col_adv].astype(str).str.split('.').str[0].str.strip()
-                pos_base_temp['TEMP_ID'] = pos_base_temp[id_col_pos].astype(str).str.split('.').str[0].str.strip()
-                
-                # Find kolonne til gruppe
-                pos_col_name = next((c for c in ['PRIMAER_POSITIONSGRUPPE', 'POSITIONSGRUPPE', 'GROUP', 'POS_GROUP'] if c in pos_base_temp.columns), None)
-                if pos_col_name:
-                    df = df.merge(pos_base_temp[['TEMP_ID', pos_col_name]], on='TEMP_ID', how='left')
-                    df = df.rename(columns={pos_col_name: 'POS_GROUP'})
-
-        # Fallback hvis POS_GROUP stadig mangler
-        if 'POS_GROUP' not in df.columns or df['POS_GROUP'].isna().all():
-            role_col = next((c for c in ['ROLECODE3', 'ROLE_CODE3', 'ROLECODE', 'POSITION', 'POSITION1CODE'] if c in df.columns), None)
-            if role_col:
-                df['POS_GROUP'] = df[role_col].astype(str).str.lower().str.strip().map(POSITION_GROUP_MAP).fillna('Ukendt')
-            else:
-                df['POS_GROUP'] = 'Ukendt'
-
-    # Hvis 'PLAYER_NAME' eller 'TEAMNAME' mangler i advanced_stats_df, berig via wyscout_players fra pakken
-    if not any(c in df.columns for c in ['PLAYER_NAME', 'PLAYERNAME', 'NAVN']):
-        if not scouting_pkg:
-            try:
-                import data.hif_load as hif_load
-                scouting_pkg = hif_load.get_scouting_package()
-            except:
-                pass
-        
-        wyscout_pl = scouting_pkg.get("wyscout_players") if scouting_pkg else None
-        if wyscout_pl is not None and not wyscout_pl.empty:
-            w_temp = wyscout_pl.copy()
-            w_temp.columns = [c.upper().strip() for c in w_temp.columns]
-            id_adv = next((c for c in ['PLAYER_WYID', 'WYID'] if c in df.columns), None)
-            id_w = next((c for c in ['PLAYER_WYID', 'WYID'] if c in w_temp.columns), None)
-            
-            if id_adv and id_w:
-                df['TEMP_ID'] = df[id_adv].astype(str).str.split('.').str[0].str.strip()
-                w_temp['TEMP_ID'] = w_temp[id_w].astype(str).str.split('.').str[0].str.strip()
-                
-                # Vælg relevante kolonner hvis de findes
-                merge_cols = ['TEMP_ID']
-                for col_kand in ['PLAYER_NAME', 'PLAYERNAME', 'NAME', 'TEAMNAME', 'TEAM_NAME', 'KLUB']:
-                    if col_kand in w_temp.columns and col_kand not in merge_cols:
-                        merge_cols.append(col_kand)
-                
-                if len(merge_cols) > 1:
-                    df = df.merge(w_temp[merge_cols], on='TEMP_ID', how='left', suffixes=('', '_wy'))
+    if pos_col not in df.columns or df[pos_col].isna().all():
+        role_col = next((c for c in ['ROLECODE3', 'ROLE_CODE3', 'ROLECODE', 'POSITION', 'POSITION1CODE'] if c in df.columns), None)
+        if role_col:
+            df['POS_GROUP'] = df[role_col].astype(str).str.lower().str.strip().map(POSITION_GROUP_MAP).fillna('Angriber')
+        else:
+            df['POS_GROUP'] = 'Angriber'
 
     mulige_grupper = sorted([g for g in df['POS_GROUP'].dropna().unique() if str(g).lower() != "ukendt"])
     if not mulige_grupper:
@@ -89,7 +30,7 @@ def vis_side(advanced_stats_df, position_base_df=None):
     liga_mapping = {
         328: "1. Division",
         329: "2. Division",
-        43149: "3. Division"
+        43319: "3. Division"
     }
 
     komp_col = next((c for c in ['COMPETITION_WYID', 'COMPETITION_ID', 'LEAGUE_ID', 'COMP_ID'] if c in df.columns), None)
@@ -130,7 +71,7 @@ def vis_side(advanced_stats_df, position_base_df=None):
                     Eksisterende_metrikker.append(match_col)
 
             if not Eksisterende_metrikker:
-                Eksisterende_metrikker = [c for c in liga_df.select_dtypes(include=['number']).columns if c not in [mins_col, 'SCORE', 'TEMP_ID']][:3]
+                Eksisterende_metrikker = [c for c in liga_df.select_dtypes(include=['number']).columns if c not in [mins_col, 'SCORE', 'PLAYER_WYID']][:3]
 
             if not Eksisterende_metrikker:
                 st.info("Ingen relevante metrics fundet.")
@@ -141,6 +82,7 @@ def vis_side(advanced_stats_df, position_base_df=None):
                 liga_df[m] = pd.to_numeric(liga_df[m], errors='coerce').fillna(0)
                 if mins_col and mins_col in liga_df.columns:
                     mins = pd.to_numeric(liga_df[mins_col], errors='coerce').fillna(1)
+                    mins = mins.apply(lambda x: max(x, 1))
                     p90_val = (liga_df[m] / mins) * 90
                 else:
                     p90_val = liga_df[m]
@@ -148,11 +90,11 @@ def vis_side(advanced_stats_df, position_base_df=None):
 
             top10 = liga_df.sort_values(by='SCORE', ascending=False).head(10)
 
-            navn_col = next((c for c in ['PLAYER_NAME', 'PLAYERNAME', 'NAVN', 'NAME'] if c in top10.columns), None)
+            navn_col = next((c for c in ['PLAYER_NAME', 'PLAYERNAME', 'NAVN', 'NAME', 'SHORTNAME'] if c in top10.columns), None)
             hold_col = next((c for c in ['TEAMNAME', 'TEAM_NAME', 'KLUB'] if c in top10.columns), None)
 
             for i, (_, row) in enumerate(top10.iterrows(), 1):
-                p_navn = row.get(navn_col, f"Spiller") if navn_col else "Ukendt spiller"
+                p_navn = row.get(navn_col, "Spiller") if navn_col else "Ukendt spiller"
                 p_hold = row.get(hold_col, "") if hold_col else ""
                 p_score = round(row.get('SCORE', 0), 2)
                 
