@@ -3,6 +3,8 @@ import pandas as pd
 import os
 from data.data_load import _get_snowflake_conn, load_local_players
 from data.sql.wy_queries import get_wy_queries
+from utils.positional_helper import beregn_primaere_positioner, berig_med_spillernavne
+
 
 @st.cache_data(ttl=600)
 def get_squad_only():
@@ -16,6 +18,7 @@ def get_squad_only():
         scout_df = pd.DataFrame()
     return {"players": df_local, "scout_reports": scout_df}
 
+
 @st.cache_data(ttl=600)
 def get_scouting_package():
     """DEN TUNGE PAKKE: Snowflake, karriere, stats og profilbilleder."""
@@ -26,7 +29,6 @@ def get_scouting_package():
         
     DB = "KLUB_HVIDOVREIF.AXIS"
     queries = get_wy_queries("", "")
-
     # 1. Hent grundlæggende data (Lokale filer)
     df_local = load_local_players()
     try:
@@ -35,7 +37,6 @@ def get_scouting_package():
         scout_df.columns = [c.strip().upper() for c in scout_df.columns]
     except:
         scout_df = pd.DataFrame()
-
     # ID Opsamling
     all_relevant_ids = []
     if not df_local.empty and 'PLAYER_WYID' in df_local.columns:
@@ -44,13 +45,11 @@ def get_scouting_package():
         scout_ids = scout_df['PLAYER_WYID'].astype(str).str.split('.').str[0].unique().tolist()
         all_relevant_ids.extend(scout_ids)
     all_relevant_ids = list(set([str(x) for x in all_relevant_ids if x and str(x) != 'nan']))
-
     df_sql_p, df_career, df_wyscout_search, df_adv = pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
-
+    df_primaer_positioner = pd.DataFrame()
     try:
         # A. HENT LIGA-DATA
         df_wyscout_search = conn.query(queries["players"])
-
         # B. HENT SPECIFIK DATA (Hvis IDs findes)
         if all_relevant_ids:
             id_str = f"({all_relevant_ids[0]})" if len(all_relevant_ids) == 1 else str(tuple(all_relevant_ids))
@@ -68,6 +67,20 @@ def get_scouting_package():
             adv_q += f" AND pt.PLAYER_WYID IN {id_str}" if "WHERE" in adv_q else f" WHERE pt.PLAYER_WYID IN {id_str}"
             df_adv = conn.query(adv_q)
 
+            # --- NYT: PRIMÆR POSITION (erstatter ROLECODE3/map_position) ---
+            try:
+                pos_q = queries["position_base"].format(id_list=id_str)
+                min_q = queries["match_minutes"].format(id_list=id_str)
+                df_position_base = conn.query(pos_q)
+                df_match_minutes = conn.query(min_q)
+
+                if not df_position_base.empty and not df_match_minutes.empty:
+                    df_primaer_positioner = beregn_primaere_positioner(df_position_base, df_match_minutes)
+                    df_primaer_positioner = berig_med_spillernavne(df_primaer_positioner, df_wyscout_search)
+            except Exception as pos_e:
+                st.warning(f"Kunne ikke beregne primær-positioner: {pos_e}")
+                df_primaer_positioner = pd.DataFrame()
+
         # --- CENTRAL RENS AF DATA ---
         for df in [df_sql_p, df_career, df_wyscout_search, df_adv]:
             if df is not None and not df.empty:
@@ -76,10 +89,8 @@ def get_scouting_package():
                 for col in ['PLAYER_WYID', 'COMPETITION_WYID']:
                     if col in df.columns:
                         df[col] = df[col].astype(str).str.split('.').str[0].str.strip()
-
     except Exception as e:
         st.error(f"SQL Fejl i Scouting Load: {e}")
-
     return {
         "scout_reports": scout_df,
         "wyscout_players": df_wyscout_search,
@@ -87,5 +98,6 @@ def get_scouting_package():
         "local_players": df_local, 
         "sql_players": df_sql_p,
         "career": df_career,
-        "advanced_stats": df_adv
+        "advanced_stats": df_adv,
+        "primaer_positioner": df_primaer_positioner,
     }
