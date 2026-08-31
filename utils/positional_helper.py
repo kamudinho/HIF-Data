@@ -29,10 +29,10 @@ POSITION_GROUP_MAP = {
     "gk": "Målmand",
 
     "rb": "Back", "lb": "Back", "rb5": "Back", "lb5": "Back",
-    "rwb": "Back", "lwb": "Back",
+    "rwb": "Back", "lwb": "Back", "lb3": "Back", "rb3": "Back",
 
     "rcb": "Midtstopper", "lcb": "Midtstopper", "cb": "Midtstopper",
-    "rcb3": "Midtstopper", "lcb3": "Midtstopper",
+    "rcb3": "Midtstopper", "lcb3": "Midtstopper", "cb3": "Midtstopper",
 
     "dmf": "Def. Midtbane", "rdmf": "Def. Midtbane", "ldmf": "Def. Midtbane",
 
@@ -43,7 +43,31 @@ POSITION_GROUP_MAP = {
 
     "rw": "Kant", "lw": "Kant", "rwf": "Kant", "lwf": "Kant",
 
-    "ss": "Angriber", "cf": "Angriber",
+    "ss": "Angriber", "cf": "Angriber", "st": "Angriber",
+}
+
+POSITION_10_GROUP_MAP = {
+    "gk": "Målmand",
+    
+    # Backs
+    "lb": "Back", "rb": "Back", "lwb": "Back", "rwb": "Back", 
+    "lb3": "Back", "rb3": "Back", "lb5": "Back", "rb5": "Back",
+
+    # Midtstoppere
+    "cb": "Midtstopper", "lcb": "Midtstopper", "rcb": "Midtstopper", 
+    "lcb3": "Midtstopper", "rcb3": "Midtstopper", "cb3": "Midtstopper",
+
+    # Central Midtbane (inkl. DMF og AMF som i din Top 10 SQL)
+    "dmf": "Central Midtbane", "rdmf": "Central Midtbane", "ldmf": "Central Midtbane",
+    "cmf": "Central Midtbane", "lcmf": "Central Midtbane", "rcmf": "Central Midtbane",
+    "lcmf3": "Central Midtbane", "rcmf3": "Central Midtbane", 
+    "amf": "Central Midtbane", "lamf": "Central Midtbane", "ramf": "Central Midtbane",
+
+    # Kanter
+    "lw": "Kant", "rw": "Kant", "lwf": "Kant", "rwf": "Kant",
+
+    # Angribere
+    "cf": "Angriber", "st": "Angriber", "ss": "Angriber",
 }
 
 # Rækkefølge til visning/dropdowns
