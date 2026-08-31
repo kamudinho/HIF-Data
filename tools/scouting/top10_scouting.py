@@ -128,7 +128,7 @@ def vis_side(advanced_stats_df=None, position_base_df=None):
     col_left1, col_left2, col_right = st.columns([1.2, 1.2, 1.8])
 
     with col_left1:
-        st.markdown("**Hovedgruppe**")
+        st.markdown("**Position**")
         valgt_hovedgruppe = st.selectbox("Hovedgruppe", hoved_grupper, label_visibility="collapsed")
 
     # Filtrér specifikke undergrupper baseret på hvad der passer til hovedgruppen
@@ -144,7 +144,7 @@ def vis_side(advanced_stats_df=None, position_base_df=None):
     tilgængelige_under = mapping_under.get(valgt_hovedgruppe, [valgt_hovedgruppe])
 
     with col_left2:
-        st.markdown("**Specifik Side/Rolle**")
+        st.markdown("**Pladsspecifik**")
         valgt_gruppe = st.selectbox("Specifik", tilgængelige_under, label_visibility="collapsed")
 
     # Hent metrics definition (hvis undergruppen ikke har en specifik i helper, falder den tilbage på hovedgruppen)
