@@ -3,6 +3,10 @@ import pandas as pd
 from utils.positional_helper import beregn_primaere_positioner, POSITION_GROUP_MAP
 
 def vis_side(advanced_stats_df, position_base_df=None):
+    st.write("Kolonner i advanced_stats_df:", list(advanced_stats_df.columns))
+    st.write("Unik værdier i turnerings-kolonnen:", advanced_stats_df['COMPETITION_WYID'].unique() if 'COMPETITION_WYID' in advanced_stats_df.columns else "Ingen komp-kolonne fundet")
+    st.write("Unik værdier i POS_GROUP efter udledning:", df['POS_GROUP'].unique() if 'POS_GROUP' in df.columns else "Ingen POS_GROUP")
+        
     st.markdown("### Top 10 Scouting – Divisioner", unsafe_allow_html=True)
     
     if advanced_stats_df is None or advanced_stats_df.empty:
