@@ -50,7 +50,8 @@ def _hent_top10_data():
             pt.GKEXITS,
             pt.GKSUCCESSFULEXITS,
             pt.GKAERIALDUELS,
-            pt.GKAERIALDUELSWON
+            pt.GKAERIALDUELSWON,
+            p.POSITIONSGROUP AS DB_POS_GROUP
         FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL pt
         JOIN {DB}.WYSCOUT_SEASONS s ON pt.SEASON_WYID = s.SEASON_WYID
         JOIN {DB}.WYSCOUT_PLAYERS p ON pt.PLAYER_WYID = p.PLAYER_WYID AND pt.SEASON_WYID = p.SEASON_WYID
@@ -73,51 +74,39 @@ def _hent_top10_data():
 def vis_side(advanced_stats_df=None, position_base_df=None):
     st.markdown("### Top 10 Scouting – Divisioner", unsafe_allow_html=True)
     
-    # 1. Hent data først (sørger for at 'df' eksisterer)
     df = _hent_top10_data()
     
     if df is None or df.empty:
         st.warning("Ingen data tilgængelig fra databasen.")
         return
 
-    # Debug udskrift placeret efter df er defineret
-    st.write("DEBUG - Kolonner i dataframe:", list(df.columns))
-    st.write("DEBUG - Antal rækker hentet:", len(df))
-    if 'COMPETITION_WYID' in df.columns:
-        st.write("DEBUG - Unikke ligaer i data:", df['COMPETITION_WYID'].unique())
+    # Brug DB_POS_GROUP direkte fra tabellen hvis den findes, ellers forsøg helper
+    if 'DB_POS_GROUP' in df.columns and not df['DB_POS_GROUP'].isna().all():
+        df['POS_GROUP'] = df['DB_POS_GROUP']
+    else:
+        df['POS_GROUP'] = 'Ukendt'
 
-    if position_base_df is None or position_base_df.empty:
-        try:
-            conn = _get_snowflake_conn()
-            if conn:
-                pos_query = f"SELECT PLAYER_WYID, POSITION, POSITIONSGROUP FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_PLAYERS"
-                position_base_df = conn.query(pos_query)
-        except:
-            pass
-
-    if position_base_df is not None and not position_base_df.empty:
+    # Hvis vi stadig mangler gyldige positionsgrupper, prøver vi position_base_df
+    if (df['POS_GROUP'] == 'Ukendt').all() and position_base_df is not None and not position_base_df.empty:
         pos_base = position_base_df.copy()
         pos_base.columns = [c.upper().strip() for c in pos_base.columns]
-        
         if 'PLAYER_WYID' in df.columns and 'PLAYER_WYID' in pos_base.columns:
             df['TEMP_ID'] = df['PLAYER_WYID']
             pos_base['TEMP_ID'] = pd.to_numeric(pos_base['PLAYER_WYID'], errors='coerce').fillna(0).astype(int).astype(str)
-            
             try:
                 beregned_pos = beregn_primaere_positioner(pos_base)
                 if beregned_pos is not None and not beregned_pos.empty:
                     beregned_pos.columns = [c.upper().strip() for c in beregned_pos.columns]
                     if 'PLAYER_WYID' in beregned_pos.columns and 'PRIMAER_POSITIONSGRUPPE' in beregned_pos.columns:
                         beregned_pos['TEMP_ID'] = pd.to_numeric(beregned_pos['PLAYER_WYID'], errors='coerce').fillna(0).astype(int).astype(str)
-                        df = df.merge(beregned_pos[['TEMP_ID', 'PRIMAER_POSITIONSGRUPPE']], on='TEMP_ID', how='left')
-                        df = df.rename(columns={'PRIMAER_POSITIONSGRUPPE': 'POS_GROUP'})
+                        df = df.merge(beregned_pos[['TEMP_ID', 'PRIMAER_POSITIONSGRUPPE']], on='TEMP_ID', how='left', suffixes=('', '_calc'))
+                        if 'PRIMAER_POSITIONSGRUPPE' in df.columns:
+                            df['POS_GROUP'] = df['PRIMAER_POSITIONSGRUPPE'].fillna(df['POS_GROUP'])
             except Exception as e:
-                st.error(f"Fejl ved beregning af positioner: {e}")
+                pass
 
     if 'POS_GROUP' not in df.columns or df['POS_GROUP'].isna().all():
-        df['POS_GROUP'] = 'Ukendt'
-
-    st.write("DEBUG - Unikke positionsgrupper:", df['POS_GROUP'].unique() if 'POS_GROUP' in df.columns else "Ingen POS_GROUP endnu")
+        df['POS_GROUP'] = 'Angriber'  # Sidste sikkerhedsnet så dropdown ikke er tom
 
     tilgængelige_grupper = [g for g in POSITIONSGRUPPE_ORDEN if g in df['POS_GROUP'].unique() and g != "Ukendt"]
     andre_grupper = sorted([g for g in df['POS_GROUP'].dropna().unique() if g not in POSITIONSGRUPPE_ORDEN and g != "Ukendt"])
