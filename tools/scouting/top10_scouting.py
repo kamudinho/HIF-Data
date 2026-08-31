@@ -12,7 +12,7 @@ def vis_side(advanced_stats_df, position_base_df=None):
     df = advanced_stats_df.copy()
     df.columns = [c.upper().strip() for c in df.columns]
 
-    # Brug positional_helper og position_base_df til at beregne og tildele primære positioner/grupper
+    # Brug positional_helper og position_base_df til at berige med primære positioner og grupper
     if position_base_df is not None and not position_base_df.empty:
         pos_base = position_base_df.copy()
         pos_base.columns = [c.upper().strip() for c in pos_base.columns]
@@ -24,7 +24,6 @@ def vis_side(advanced_stats_df, position_base_df=None):
             df['TEMP_ID'] = df[id_adv].astype(str).str.split('.').str[0].str.strip()
             pos_base['TEMP_ID'] = pos_base[id_pos].astype(str).str.split('.').str[0].str.strip()
             
-            # Beregn eller flet positioner via hjælperen hvis den stilles til rådighed
             try:
                 beregned_pos = beregn_primaere_positioner(pos_base)
                 if beregned_pos is not None and not beregned_pos.empty:
@@ -53,6 +52,7 @@ def vis_side(advanced_stats_df, position_base_df=None):
 
     valgt_gruppe = st.selectbox("Vælg Positionsgruppe", mulige_grupper)
 
+    # Turnerings-mapping ud fra din SQL-forespørgsel (COMPETITION_WYID)
     liga_mapping = {
         328: "1. Division",
         329: "2. Division",
@@ -79,9 +79,10 @@ def vis_side(advanced_stats_df, position_base_df=None):
             st.markdown(f"#### {liga_navn}")
 
             if not komp_col:
-                liga_df = df[df['POS_GROUP'] == valgt_gruppe].copy()
-            else:
-                liga_df = df[(df[komp_col].astype(str).str.contains(str(komp_id))) & (df['POS_GROUP'] == valgt_gruppe)].copy()
+                st.error("Turneringskolonne (COMPETITION_WYID) mangler i datasættet.")
+                continue
+
+            liga_df = df[(df[komp_col].astype(str).str.contains(str(komp_id))) & (df['POS_GROUP'] == valgt_gruppe)].copy()
 
             if liga_df.empty:
                 st.info("Ingen spillere fundet.")
