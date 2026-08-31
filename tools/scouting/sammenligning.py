@@ -16,10 +16,8 @@ HIF_BLUE = '#0056a3'
 def rens_id(val):
     if pd.isna(val) or str(val).strip() in ["", "nan", "None", "0", "0.0"]: 
         return ""
-    # Fjern eventuelle bogstaver (f.eks. 'M') og behold kun cifrene
     clean_val = ''.join(filter(str.isdigit, str(val)))
     if not clean_val:
-        # Fallback hvis strengen ikke indeholder cifre, men f.eks. er en ren tekst-id
         clean_val = str(val).strip()
     return clean_val.split('.')[0].strip()
 
@@ -61,7 +59,6 @@ def vis_side(df_spillere, d1, d2, career_df, d3, advanced_stats_df, primaer_posi
     try:
         df_s = pd.read_csv('data/scouting_db.csv')
         df_s.columns = [c.upper().strip() for c in df_s.columns]
-        # Omdøb tilbage til display-navne for nemhed
         df_s = df_s.rename(columns={'NAVN': 'Navn', 'DATO': 'Dato', 'STYRKER': 'Styrker', 'UDVIKLING': 'Udvikling', 'VURDERING': 'Vurdering'})
     except:
         st.error("Kunne ikke indlæse scouting_db.csv")
@@ -77,35 +74,24 @@ def vis_side(df_spillere, d1, d2, career_df, d3, advanced_stats_df, primaer_posi
     s2_navn = c2.selectbox("Vælg Spiller 2 (Blå)", navne_liste, index=min(1, len(navne_liste)-1))
 
     def hent_data(navn):
-        # Nyeste rapport
         match = df_s[df_s['Navn'] == navn].sort_values('Dato', ascending=False).iloc[:1]
         if match.empty: return None
         n = match.iloc[0]
         
-        # Forsøg at finde spiller-ID på tværs af mulige kolonnenavne i scouting_db
         pid = ""
         for col in ['PLAYER_WYID', 'WYID', 'PLAYER_ID', 'ID']:
             if col in n and pd.notna(n[col]):
                 pid = rens_id(n[col])
                 if pid: break
 
-        # --- POSITION ---
+        # --- POSITION VIA POSITIONAL HELPER ---
         pos_kode, positionsgruppe = "Ukendt", "Ukendt"
         if pid and primaer_positioner_df is not None and not primaer_positioner_df.empty:
-            pos_df = primaer_positioner_df.copy()
-            pos_df.columns = [c.upper().strip() for c in pos_df.columns]
-            id_col = next((c for c in ['PLAYER_WYID', 'WYID', 'PLAYER_ID', 'ID'] if c in pos_df.columns), None)
-            if id_col:
-                pos_df['CLEAN_ID'] = pos_df[id_col].apply(rens_id)
-                match_pos = pos_df[pos_df['CLEAN_ID'] == pid]
-                if not match_pos.empty:
-                    pos_kode = str(match_pos.iloc[0].get('POSITION', match_pos.iloc[0].get('ROLECODE3', 'Ukendt')))
-                    positionsgruppe = str(match_pos.iloc[0].get('POS_GROUP', match_pos.iloc[0].get('POS_GRUPPE', 'Ukendt')))
+            pos_kode, positionsgruppe = hent_position_for_spiller(pid, primaer_positioner_df)
 
         klub = "Ukendt"
         img_url = ""
 
-        # Hjælpefunktion til at søge i eksterne dataframes (truppen eller sql_players)
         def sok_i_df(target_df):
             nonlocal klub, img_url
             if target_df is None or target_df.empty: return
@@ -123,17 +109,14 @@ def vis_side(df_spillere, d1, d2, career_df, d3, advanced_stats_df, primaer_posi
                 if not img_url:
                     img_url = row.get('IMAGEDATAURL', row.get('IMAGE_URL', row.get('BILLEDE', '')))
 
-        # A: Tjek lokal trup
         if pid and df_spillere is not None and not df_spillere.empty:
             sok_i_df(df_spillere)
 
-        # B: Tjek Snowflake search-liste (d3)
         if (klub == "Ukendt" or not img_url) and pid and d3 is not None and not d3.empty:
             sok_i_df(d3)
 
         pos_visning = f"{positionsgruppe} ({pos_kode.upper()})" if positionsgruppe != "Ukendt" and pos_kode and pos_kode != "Ukendt" else (positionsgruppe if positionsgruppe != "Ukendt" else pos_kode)
 
-        # D: Karriere & Kamp Stats
         stats = {"K": 0, "M": 0, "A": 0, "MIN": 0}
         
         if pid and career_df is not None and not career_df.empty:
@@ -159,7 +142,6 @@ def vis_side(df_spillere, d1, d2, career_df, d3, advanced_stats_df, primaer_posi
                     stats["M"] = int(target.get('GOALS', target.get('MAL', 0)) or 0)
                     stats["A"] = int(target.get('ASSISTS', 0) or 0)
 
-        # Advanced Stats override
         if pid and advanced_stats_df is not None and not advanced_stats_df.empty:
             adv_df_upper = advanced_stats_df.copy()
             adv_df_upper.columns = [c.upper() for c in adv_df_upper.columns]
