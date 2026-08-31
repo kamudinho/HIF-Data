@@ -214,12 +214,9 @@ def vis_side(advanced_stats_df=None, position_base_df=None):
             liga_df = liga_df.drop_duplicates(subset=['PLAYER_WYID'])
             top10 = liga_df.sort_values(by='SCORE', ascending=False).head(10)
 
-            navn_col = 'PLAYER_NAME' if 'PLAYER_NAME' in top10.columns else 'SHORTNAME'
-            hold_col = 'TEAMNAME' if 'TEAMNAME' in top10.columns else None
-
             for i, (_, row) in enumerate(top10.iterrows(), 1):
-                p_navn = str(row.get(navn_col, "Spiller")) if navn_col else "Ukendt spiller"
-                p_hold = str(row.get(hold_col, "")) if hold_col else ""
+                p_navn = str(row.get('PLAYER_NAME', "Ukendir spiller"))
+                p_hold = str(row.get('TEAMNAME', ""))
                 p_score = round(float(row.get('SCORE', 0)), 2)
                 
                 st.markdown(f"""
