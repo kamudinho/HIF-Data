@@ -22,11 +22,12 @@ def vis_side(advanced_stats_df, position_base_df=None):
             if id_col_adv and id_col_pos:
                 df['TEMP_ID'] = df[id_col_adv].astype(str).str.split('.').str[0].str.strip()
                 primaer_pos_df['TEMP_ID'] = primaer_pos_df[id_col_pos].astype(str).str.split('.').str[0].str.strip()
-                df = df.merge(primaer_pos_df[['TEMP_ID', 'POS_GROUP', 'POSITION']], on='TEMP_ID', how='left')
+                df = df.merge(primaer_pos_df[['TEMP_ID', 'PRIMAER_POSITIONSGRUPPE']], on='TEMP_ID', how='left')
+                df = df.rename(columns={'PRIMAER_POSITIONSGRUPPE': 'POS_GROUP'})
 
     pos_col = 'POS_GROUP' if 'POS_GROUP' in df.columns else ('POS_GRUPPE' if 'POS_GRUPPE' in df.columns else None)
     if not pos_col:
-        st.error("Kunne ikke finde positionsgrupper. Kør venligst positional_helper først.")
+        st.error("Kunne ikke finde positionsgrupper. Sørg for at position_base_df (WYSCOUT_PLAYERADVANCEDSTATS_BASE) sendes med til siden.")
         return
 
     mulige_grupper = sorted([g for g in df[pos_col].dropna().unique() if g != "Ukendt"])
@@ -39,7 +40,7 @@ def vis_side(advanced_stats_df, position_base_df=None):
     liga_mapping = {
         328: "1. Division",
         329: "2. Division",
-        43319: "3. Division"
+        43149: "3. Division"
     }
 
     komp_col = next((c for c in ['COMPETITION_WYID', 'COMPETITION_ID', 'LEAGUE_ID', 'COMP_ID'] if c in df.columns), None)
@@ -48,14 +49,14 @@ def vis_side(advanced_stats_df, position_base_df=None):
     kolonner = [col1, col2, col3]
 
     metrik_mapping = {
-        "Angriber": ["GOALS P90", "SHOTS P90", "TOUCHESINBOX P90", "EXPECTEDGOALS P90"],
-        "Kant": ["ASSISTS P90", "CROSSESVALUABLE P90", "DRIBBLES P90", "KEYPASSES P90"],
-        "Central Midtbane": ["PASSESACCURATE P90", "RECOVERIES P90", "DUELSWON P90", "KEYPASSES P90"],
-        "Forsvarer": ["DUELSWON P90", "INTERCEPTIONS P90", "CLEARANCES P90", "AERIALDUELSWON P90"],
-        "Målmand": ["SAVES P90", "PREVENTEDGOALS P90"]
+        "Angriber": ["GOALS", "SHOTS", "TOUCHINBOX", "XGSHOT"],
+        "Kant": ["ASSISTS", "SUCCESSFULCROSSES", "SUCCESSFULDRIBBLES", "KEYPASSES"],
+        "Central Midtbane": ["SUCCESSFULPASSES", "RECOVERIES", "DUELSWON", "KEYPASSES"],
+        "Forsvarer": ["DUELSWON", "INTERCEPTIONS", "CLEARANCES", "AERIALDUELSWON"],
+        "Målmand": ["GKSAVES", "GKSUCCESSFULEXITS"]
     }
 
-    aktive_metrikker = metrik_mapping.get(valgt_gruppe, ["PASSESACCURATE P90", "DUELSWON P90"])
+    aktive_metrikker = metrik_mapping.get(valgt_gruppe, ["SUCCESSFULPASSES", "DUELSWON"])
 
     for idx, (komp_id, liga_navn) in enumerate(liga_mapping.items()):
         with kolonner[idx]:
@@ -71,6 +72,9 @@ def vis_side(advanced_stats_df, position_base_df=None):
                 st.info("Ingen spillere fundet.")
                 continue
 
+            # Konverter minutter og udregn P90 for de valgte rå kolonner
+            mins_col = next((c for c in ['MINUTESONFIELD', 'MINUTES', 'MIN'] if c in liga_df.columns), None)
+            
             Eksisterende_metrikker = []
             for m in aktive_metrikker:
                 match_col = next((c for c in liga_df.columns if m.replace(" ", "") in c.replace(" ", "")), None)
@@ -78,7 +82,7 @@ def vis_side(advanced_stats_df, position_base_df=None):
                     Eksisterende_metrikker.append(match_col)
 
             if not Eksisterende_metrikker:
-                Eksisterende_metrikker = [c for c in liga_df.select_dtypes(include=['number']).columns if 'P90' in c][:3]
+                Eksisterende_metrikker = [c for c in liga_df.select_dtypes(include=['number']).columns if c not in [mins_col, 'SCORE']][:3]
 
             if not Eksisterende_metrikker:
                 st.info("Ingen relevante metrics fundet.")
@@ -87,7 +91,12 @@ def vis_side(advanced_stats_df, position_base_df=None):
             liga_df['SCORE'] = 0
             for m in Eksisterende_metrikker:
                 liga_df[m] = pd.to_numeric(liga_df[m], errors='coerce').fillna(0)
-                liga_df['SCORE'] += liga_df[m]
+                if mins_col and mins_col in liga_df.columns:
+                    mins = pd.to_numeric(liga_df[mins_col], errors='coerce').fillna(1)
+                    p90_val = (liga_df[m] / mins) * 90
+                else:
+                    p90_val = liga_df[m]
+                liga_df['SCORE'] += p90_val
 
             top10 = liga_df.sort_values(by='SCORE', ascending=False).head(10)
 
