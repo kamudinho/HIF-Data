@@ -29,12 +29,13 @@ st.markdown(f"""
         #MainMenu {{{{visibility: hidden;}}}}
         footer {{{{visibility: hidden;}}}}
         
-        /* Gør kun selve headeren og dens knap synlig, fjern dens baggrund */
-        header {{{{visibility: visible !important; background: transparent !important;}}}}
+        /* Gør headeren synlig og flydende, så den kun viser knappen uden at blokere */
+        header {{{{visibility: visible !important; background: transparent !important; z-index: 99999;}}}}
         [data-testid="stHeader"] {{{{background-color: transparent !important;}}}}
         [data-testid="stDecoration"] {{{{display: none;}}}}
         
-        .block-container {{{{ padding-top: 0.5rem !important; }}}}
+        /* Sikrer at hovedindholdet starter pænt under den røde bjælke */
+        .block-container {{{{ padding-top: 1.5rem !important; }}}}
         
         .hif-header-container {{{{
             background-color: {HIF_ROD};
@@ -44,6 +45,7 @@ st.markdown(f"""
             justify-content: center;
             border-radius: 4px;
             margin-bottom: 15px;
+            width: 100%;
         }}}}
         .hif-header-text {{{{
             color: white !important;
