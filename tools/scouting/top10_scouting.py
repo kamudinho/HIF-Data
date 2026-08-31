@@ -7,7 +7,6 @@ from utils.positional_helper import beregn_primaere_positioner, POSITIONSGRUPPE_
 def vis_side(advanced_stats_df=None, position_base_df=None):
     st.markdown("### Top 10 Scouting – Divisioner", unsafe_allow_html=True)
     
-    # Hent queries med de 3 ligaer (328, 329, 43319)
     queries = get_wy_queries(comp_filter="(328, 329, 43319)", season_filter=None)
     
     conn = _get_snowflake_conn()
@@ -15,14 +14,8 @@ def vis_side(advanced_stats_df=None, position_base_df=None):
         st.warning("Kunne ikke oprette forbindelse til databasen.")
         return
 
-    # 1. Sikr at players_top10 også henter SEASON_WYID med, så vi kan matche præcist
-    top10_query = queries["players_top10"]
-    if "SEASON_WYID" not in top10_query.upper():
-        # Hvis den ikke er i din query-fil, tilføjer vi den her, eller sikrer den er der
-        pass
-
     try:
-        df = conn.query(top10_query)
+        df = conn.query(queries["players_top10"])
     except Exception as e:
         st.error(f"Fejl ved hentning af top10 data: {e}")
         return
@@ -31,13 +24,11 @@ def vis_side(advanced_stats_df=None, position_base_df=None):
         st.warning("Ingen data tilgængelig fra databasen.")
         return
 
-    # Standardiser kolonnenavne til store bogstaver
     df.columns = [str(c).upper().strip() for c in df.columns]
-    for col in ['PLAYER_WYID', 'COMPETITION_WYID', 'SEASON_WYID']:
+    for col in ['PLAYER_WYID', 'COMPETITION_WYID']:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int).astype(str)
 
-    # 2. Hent position_base data dynamisk hvis den ikke er medsendt
     if position_base_df is None or position_base_df.empty:
         try:
             unikt_id_liste = tuple(df['PLAYER_WYID'].unique())
@@ -49,7 +40,6 @@ def vis_side(advanced_stats_df=None, position_base_df=None):
         except Exception:
             pass
 
-    # 3. Logisk korrekt fletning af positioner (kombinerer både PLAYER_WYID og SEASON_WYID hvis muligt)
     df['POS_GROUP'] = 'Ukendt'
     
     if position_base_df is not None and not position_base_df.empty:
@@ -69,14 +59,12 @@ def vis_side(advanced_stats_df=None, position_base_df=None):
                     if col in beregned_pos.columns:
                         beregned_pos[col] = pd.to_numeric(beregned_pos[col], errors='coerce').fillna(0).astype(int).astype(str)
                 
-                # Prøv at merge på både spiller og sæson, hvis begge findes
                 merge_keys = ['PLAYER_WYID']
                 if 'SEASON_WYID' in df.columns and 'SEASON_WYID' in beregned_pos.columns:
                     merge_keys.append('SEASON_WYID')
                 
                 df = df.merge(beregned_pos, on=merge_keys, how='left', suffixes=('', '_pos'))
                 
-                # Find kolonnen med positionsgruppen efter merge
                 pos_col_kandidater = ['PRIMAER_POSITIONSGRUPPE', 'POSITIONSGROUP', 'POS_GROUP_pos']
                 for pc in pos_col_kandidater:
                     if pc in df.columns:
@@ -85,9 +73,16 @@ def vis_side(advanced_stats_df=None, position_base_df=None):
         except Exception as e:
             st.error(f"Fejl ved beregning/merge af positioner: {e}")
 
-    # Hvis 'POS_GROUP' stadig er 'Ukendt' over hele linjen, sætter vi et bredt fallback så listerne ikke forbliver tomme
-    if (df['POS_GROUP'] == 'Ukendt').all():
-        df['POS_GROUP'] = 'Angriber'  # Eller en anden standardgruppe
+    df['POS_GROUP'] = df['POS_GROUP'].fillna('Angriber')
+
+    # Første aggregering: Saml dubletter pr. spiller og turnering med 'sum' og 'first'
+    agg_cols_to_sum = [c for c in df.select_dtypes(include=['number']).columns if c not in ['COMPETITION_WYID', 'PLAYER_WYID', 'SEASON_WYID']]
+    agg_regler = {col: 'sum' for col in agg_cols_to_sum}
+    for col in ['PLAYER_NAME', 'TEAMNAME', 'POS_GROUP']:
+        if col in df.columns:
+            agg_regler[col] = 'first'
+            
+    df = df.groupby(['PLAYER_WYID', 'COMPETITION_WYID'], as_index=False).agg(agg_regler)
 
     tilgængelige_grupper = [g for g in POSITIONSGRUPPE_ORDEN if g in df['POS_GROUP'].unique() and g != "Ukendt"]
     andre_grupper = sorted([g for g in df['POS_GROUP'].dropna().unique() if g not in POSITIONSGRUPPE_ORDEN and g != "Ukendt"])
@@ -157,6 +152,9 @@ def vis_side(advanced_stats_df=None, position_base_df=None):
                 for m in fallback_cols:
                     liga_df[m] = pd.to_numeric(liga_df[m], errors='coerce').fillna(0)
                     liga_df['SCORE'] += liga_df[m]
+
+            # Drop duplicates på spiller-ID for at garantere 10 unikke spillere
+            liga_df = liga_df.drop_duplicates(subset=['PLAYER_WYID'])
 
             top10 = liga_df.sort_values(by='SCORE', ascending=False).head(10)
 
