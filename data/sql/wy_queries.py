@@ -11,8 +11,6 @@ def get_wy_queries(comp_filter, season_filter):
         c_f = f"({comp_filter})"
 
     if not season_filter:
-        # Robust standard: peger altid på den aktive sæson, uanset år -
-        # ingen grund til at rette et hardcodet sæsonnavn hvert år.
         season_where = "s.ACTIVE = TRUE"
     elif isinstance(season_filter, str) and not season_filter.startswith('='):
         season_where = f"s.SEASONNAME = '{season_filter}'"
@@ -20,8 +18,7 @@ def get_wy_queries(comp_filter, season_filter):
         season_where = f"s.SEASONNAME {season_filter}"
 
     return {
-        # 1. PLAYERS (Behold filter her, så din hovedliste ikke eksploderer)
-        # 1. PLAYERS (Optimeret til trupoversigt og liga-filtrering)
+        # 1. PLAYERS
         "players": f"""
             SELECT PLAYER_WYID, FIRSTNAME, LASTNAME, PLAYER_NAME, ROLECODE3, BIRTHDATE, TEAMNAME, COMPETITION_WYID, IMAGEDATAURL
             FROM (
@@ -45,8 +42,7 @@ def get_wy_queries(comp_filter, season_filter):
             WHERE rn = 1
         """,
         
-        # 2. PLAYER CAREER (HER VAR FEJLEN!)
-        # Vi fjerner WHERE pc.COMPETITION_WYID, så vi får hele historikken på tværs af ligaer
+        # 2. PLAYER CAREER
         "player_career": f"""
             SELECT 
                 pc.PLAYER_WYID, 
@@ -78,11 +74,13 @@ def get_wy_queries(comp_filter, season_filter):
             SELECT TEAM_WYID, TEAMNAME, IMAGEDATAURL AS TEAM_LOGO 
             FROM {DB}.WYSCOUT_TEAMS
         """,
+        
         "scout_images_only": f"""
             SELECT PLAYER_WYID, IMAGEDATAURL 
             FROM {DB}.WYSCOUT_PLAYERS 
             WHERE PLAYER_WYID IN {{id_list}}
         """,
+        
         "wyscout_players": f"""
             SELECT DISTINCT
                 p.PLAYER_WYID, 
@@ -99,6 +97,7 @@ def get_wy_queries(comp_filter, season_filter):
             AND {season_where}
         """,
 
+        # --- DEN ORIGINALE (Beholdes uændret, da den bruges andre steder) ---
         "player_stats_total": f"""
             SELECT 
                 pt.PLAYER_WYID,
@@ -142,10 +141,57 @@ def get_wy_queries(comp_filter, season_filter):
             WHERE {season_where}
         """,
 
-        # --- NY QUERY TIL POSITIONSUDLEDNING (positional_helper.py) ---
-        # Sæson-aggregeret positionsdata pr. spiller (allerede procentberegnet af Wyscout)
-        # Filtreret til samme sæson som player_stats_total, så gamle sæsoner ikke
-        # dominerer positionsberegningen for en spiller med flere års historik.
+        # --- DEN NYE TIL TOP 10 (Med navn, hold og turnering joinet på) ---
+        "players_top10": f"""
+            SELECT 
+                pt.PLAYER_WYID,
+                p.SHORTNAME AS PLAYER_NAME,
+                t.TEAMNAME,
+                pt.COMPETITION_WYID,
+                s.SEASONNAME,
+                pt.MINUTESONFIELD,
+                pt.GOALS,
+                pt.ASSISTS,
+                pt.SHOTS,
+                pt.XGSHOT,
+                pt.XGASSIST,
+                pt.DRIBBLES,
+                pt.SUCCESSFULDRIBBLES,
+                pt.PROGRESSIVERUN,
+                pt.PROGRESSIVEPASSES,
+                pt.SUCCESSFULPROGRESSIVEPASSES,
+                pt.PASSES,
+                pt.SUCCESSFULPASSES,
+                pt.KEYPASSES,
+                pt.RECOVERIES,
+                pt.INTERCEPTIONS,
+                pt.DUELS,
+                pt.DUELSWON,
+                pt.DEFENSIVEDUELS,
+                pt.DEFENSIVEDUELSWON,
+                pt.AERIALDUELS,
+                pt.AERIALDUELSWON,
+                pt.CLEARANCES,
+                pt.SLIDINGTACKLES,
+                pt.SUCCESSFULSLIDINGTACKLES,
+                pt.CROSSES,
+                pt.SUCCESSFULCROSSES,
+                pt.TOUCHINBOX,
+                pt.GKSAVES,
+                pt.GKCONCEDEDGOALS,
+                pt.GKEXITS,
+                pt.GKSUCCESSFULEXITS,
+                pt.GKAERIALDUELS,
+                pt.GKAERIALDUELSWON
+            FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL pt
+            JOIN {DB}.WYSCOUT_SEASONS s ON pt.SEASON_WYID = s.SEASON_WYID
+            JOIN {DB}.WYSCOUT_PLAYERS p ON pt.PLAYER_WYID = p.PLAYER_WYID AND pt.SEASON_WYID = p.SEASON_WYID
+            JOIN {DB}.WYSCOUT_TEAMS t ON p.CURRENTTEAM_WYID = t.TEAM_WYID
+            WHERE pt.COMPETITION_WYID IN {liga_ids} 
+            AND {season_where}
+        """,
+
+        # --- POSITIONALS BASE ---
         "position_base": f"""
             SELECT
                 pb.PLAYER_WYID,
