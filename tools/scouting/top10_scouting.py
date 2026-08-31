@@ -29,12 +29,11 @@ def vis_side(advanced_stats_df=None, position_base_df=None):
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int).astype(str)
 
-    # Dynamisk hentning af positioner baseret på alle spiller-id'er
+    # Dynamisk hentning af positioner baseret på alle spiller-id'er, hvis ikke allerede hentet
     if position_base_df is None or position_base_df.empty:
         try:
             unikt_id_liste = tuple(df['PLAYER_WYID'].dropna().unique())
             if unikt_id_liste:
-                # Opret en korrekt SQL-venlig tuple-streng (f.eks. ('123', '456') eller ('123',))
                 if len(unikt_id_liste) == 1:
                     id_str = f"('{unikt_id_liste[0]}')"
                 else:
@@ -48,7 +47,10 @@ def vis_side(advanced_stats_df=None, position_base_df=None):
 
     df['POS_GROUP'] = 'Ukendt'
     
-    if position_base_df is not None and not position_base_df.empty:
+    # Prioritér kolonne fra SQL hvis den findes (f.eks. hvis den er medtaget direkte), ellers brug position_base_df
+    if 'PRIMAER_POSITIONSGRUPPE' in df.columns:
+        df['POS_GROUP'] = df['PRIMAER_POSITIONSGRUPPE'].fillna('Ukendt')
+    elif position_base_df is not None and not position_base_df.empty:
         pos_base = position_base_df.copy()
         pos_base.columns = [c.upper().strip() for c in pos_base.columns]
         
@@ -70,7 +72,7 @@ def vis_side(advanced_stats_df=None, position_base_df=None):
 
     df['POS_GROUP'] = df['POS_GROUP'].fillna('Angriber')
 
-    # Aggreger data pr. spiller og turnering, så du undgår dubletter og får samlet statistik
+    # Aggreger data pr. spiller og turnering for at undgå dubletter
     agg_cols_to_sum = [c for c in df.select_dtypes(include=['number']).columns if c not in ['COMPETITION_WYID', 'PLAYER_WYID', 'SEASON_WYID']]
     agg_regler = {col: 'sum' for col in agg_cols_to_sum}
     for col in ['PLAYER_NAME', 'TEAMNAME', 'POS_GROUP']:
@@ -148,7 +150,6 @@ def vis_side(advanced_stats_df=None, position_base_df=None):
                     liga_df[m] = pd.to_numeric(liga_df[m], errors='coerce').fillna(0)
                     liga_df['SCORE'] += liga_df[m]
 
-            # Sørg for fuldstændig unikt sæt af spillere per liga før udtræk af top 10
             liga_df = liga_df.drop_duplicates(subset=['PLAYER_WYID'])
             top10 = liga_df.sort_values(by='SCORE', ascending=False).head(10)
 
