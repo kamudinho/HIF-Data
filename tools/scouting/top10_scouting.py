@@ -96,7 +96,6 @@ def hent_scouting_data():
         return None
 
 def vis_side(advanced_stats_df=None, position_base_df=None):
-    st.caption("Top 10 Scouting – Divisioner", unsafe_allow_html=True)
     
     df = hent_scouting_data()
     if df is None or df.empty:
