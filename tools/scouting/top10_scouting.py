@@ -3,13 +3,11 @@ import pandas as pd
 from data.data_load import _get_snowflake_conn
 from utils.positional_helper import POSITIONSGRUPPE_ORDEN, METRICS_BY_GROUP
 
-def vis_side(advanced_stats_df=None, position_base_df=None):
-    st.caption("Top 10 Scouting – Divisioner", unsafe_allow_html=True)
-    
+@st.cache_data(ttl=600)
+def hent_scouting_data():
     conn = _get_snowflake_conn()
     if not conn:
-        st.warning("Kunne ikke oprette forbindelse til databasen.")
-        return
+        return None
 
     query = """
     WITH ranked_base AS (
@@ -91,13 +89,16 @@ def vis_side(advanced_stats_df=None, position_base_df=None):
     )
     SELECT * FROM ranked_players WHERE rn = 1;
     """
-
     try:
-        df = conn.query(query)
+        return conn.query(query)
     except Exception as e:
         st.error(f"Fejl ved hentning af data: {e}")
-        return
+        return None
 
+def vis_side(advanced_stats_df=None, position_base_df=None):
+    st.caption("Top 10 Scouting – Divisioner", unsafe_allow_html=True)
+    
+    df = hent_scouting_data()
     if df is None or df.empty:
         st.warning("Ingen data tilgængelig fra databasen.")
         return
