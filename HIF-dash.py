@@ -28,7 +28,10 @@ st.markdown(f"""
     <style>
         #MainMenu {{visibility: hidden;}}
         footer {{visibility: hidden;}}
-        header {{visibility: hidden;}} 
+        
+        /* Tillad at headeren vises, men skjul standard elementer i den, så kun toggle-knappen til sidebaren er tilgængelig */
+        header {{visibility: visible !important; background-color: transparent !important;}}
+        [data-testid="stDecoration"] {{display: none;}}
         
         .block-container {{ padding-top: 0.5rem !important; }}
         
@@ -40,7 +43,7 @@ st.markdown(f"""
             justify-content: center;
             border-radius: 4px;
             margin-bottom: 15px;
-        }}
+        }
         .hif-header-text {{
             color: white !important;
             text-transform: uppercase;
