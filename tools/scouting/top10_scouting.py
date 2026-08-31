@@ -64,7 +64,7 @@ def _hent_top10_data():
             df.columns = [str(c).upper().strip() for c in df.columns]
             for col in ['PLAYER_WYID', 'COMPETITION_WYID']:
                 if col in df.columns:
-                    df[col] = df[col].astype(str).str.split('.').str[0].str.strip()
+                    df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int).astype(str)
         return df
     except Exception as e:
         st.error(f"Fejl ved direkte hentning af top10 data: {e}")
@@ -73,14 +73,12 @@ def _hent_top10_data():
 def vis_side(advanced_stats_df=None, position_base_df=None):
     st.markdown("### Top 10 Scouting – Divisioner", unsafe_allow_html=True)
     
-    # 1. Hent data først, før vi tjekker debug eller lister
     df = _hent_top10_data()
     
     if df is None or df.empty:
         st.warning("Ingen data tilgængelig fra databasen.")
         return
 
-    # Hent også position_base direkte hvis nødvendigt eller brug den medsendte
     if position_base_df is None or position_base_df.empty:
         try:
             conn = _get_snowflake_conn()
@@ -95,15 +93,15 @@ def vis_side(advanced_stats_df=None, position_base_df=None):
         pos_base.columns = [c.upper().strip() for c in pos_base.columns]
         
         if 'PLAYER_WYID' in df.columns and 'PLAYER_WYID' in pos_base.columns:
-            df['TEMP_ID'] = df['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
-            pos_base['TEMP_ID'] = pos_base['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
+            df['TEMP_ID'] = df['PLAYER_WYID']
+            pos_base['TEMP_ID'] = pd.to_numeric(pos_base['PLAYER_WYID'], errors='coerce').fillna(0).astype(int).astype(str)
             
             try:
                 beregned_pos = beregn_primaere_positioner(pos_base)
                 if beregned_pos is not None and not beregned_pos.empty:
                     beregned_pos.columns = [c.upper().strip() for c in beregned_pos.columns]
                     if 'PLAYER_WYID' in beregned_pos.columns and 'PRIMAER_POSITIONSGRUPPE' in beregned_pos.columns:
-                        beregned_pos['TEMP_ID'] = beregned_pos['PLAYER_WYID'].astype(str).str.split('.').str[0].str.strip()
+                        beregned_pos['TEMP_ID'] = pd.to_numeric(beregned_pos['PLAYER_WYID'], errors='coerce').fillna(0).astype(int).astype(str)
                         df = df.merge(beregned_pos[['TEMP_ID', 'PRIMAER_POSITIONSGRUPPE']], on='TEMP_ID', how='left')
                         df = df.rename(columns={'PRIMAER_POSITIONSGRUPPE': 'POS_GROUP'})
             except Exception as e:
@@ -111,11 +109,6 @@ def vis_side(advanced_stats_df=None, position_base_df=None):
 
     if 'POS_GROUP' not in df.columns or df['POS_GROUP'].isna().all():
         df['POS_GROUP'] = 'Ukendt'
-
-    # DEBUG - Udskriv direkte på skærmen, så vi ser hvad der reelt er i data
-    st.write("DEBUG - Antal rækker hentet:", len(df))
-    st.write("DEBUG - Unikke ligaer i data:", df['COMPETITION_WYID'].unique() if 'COMPETITION_WYID' in df.columns else "Ingen kolonne")
-    st.write("DEBUG - Unikke positionsgrupper:", df['POS_GROUP'].unique() if 'POS_GROUP' in df.columns else "Ingen POS_GROUP endnu")
 
     tilgængelige_grupper = [g for g in POSITIONSGRUPPE_ORDEN if g in df['POS_GROUP'].unique() and g != "Ukendt"]
     andre_grupper = sorted([g for g in df['POS_GROUP'].dropna().unique() if g not in POSITIONSGRUPPE_ORDEN and g != "Ukendt"])
@@ -134,7 +127,7 @@ def vis_side(advanced_stats_df=None, position_base_df=None):
 
     komp_col = 'COMPETITION_WYID'
     if komp_col not in df.columns:
-        st.error(f"Kolonnen '{komp_col}' blev ikke fundet i data. Kolonner: {list(df.columns)}")
+        st.error(f"Kolonnen '{komp_col}' blev ikke fundet i data.")
         return
     
     col1, col2, col3 = st.columns(3)
