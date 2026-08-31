@@ -13,64 +13,74 @@ def vis_side(advanced_stats_df, position_base_df=None):
     df.columns = [c.upper().strip() for c in df.columns]
 
     # Hvis position_base_df ikke blev sendt med som argument, prøv at hente den via hif_load
+    scouting_pkg = {}
     if position_base_df is None or position_base_df.empty:
         try:
             import data.hif_load as hif_load
             scouting_pkg = hif_load.get_scouting_package()
-            if scouting_pkg and "position_base" in scouting_pkg:
-                position_base_df = scouting_pkg["position_base"]
+            if scouting_pkg and "primaer_positioner" in scouting_pkg:
+                position_base_df = scouting_pkg["primaer_positioner"]
         except Exception:
             pass
 
-    # Vi har brug for data fra position_base_df for at få Navn, Hold og Turnering (da advanced_stats_df kun har stats)
-    if position_base_df is not None and not position_base_df.empty:
-        pos_base_temp = position_base_df.copy()
-        pos_base_temp.columns = [c.upper().strip() for c in pos_base_temp.columns]
-        
-        id_col_adv = next((c for c in ['PLAYER_WYID', 'WYID', 'PLAYER_ID', 'ID'] if c in df.columns), None)
-        id_col_pos = next((c for c in ['PLAYER_WYID', 'WYID', 'PLAYER_ID', 'ID'] if c in pos_base_temp.columns), None)
-        
-        if id_col_adv and id_col_pos:
-            df['TEMP_ID'] = df[id_col_adv].astype(str).str.split('.').str[0].str.strip()
-            pos_base_temp['TEMP_ID'] = pos_base_temp[id_col_pos].astype(str).str.split('.').str[0].str.strip()
+    # Sørg for at få positionsgruppe med på df
+    pos_col = 'POS_GROUP'
+    if pos_col not in df.columns:
+        if position_base_df is not None and not position_base_df.empty:
+            pos_base_temp = position_base_df.copy()
+            pos_base_temp.columns = [c.upper().strip() for c in pos_base_temp.columns]
             
-            # Udled positioner
+            id_col_adv = next((c for c in ['PLAYER_WYID', 'WYID', 'PLAYER_ID', 'ID'] if c in df.columns), None)
+            id_col_pos = next((c for c in ['PLAYER_WYID', 'WYID', 'PLAYER_ID', 'ID'] if c in pos_base_temp.columns), None)
+            
+            if id_col_adv and id_col_pos:
+                df['TEMP_ID'] = df[id_col_adv].astype(str).str.split('.').str[0].str.strip()
+                pos_base_temp['TEMP_ID'] = pos_base_temp[id_col_pos].astype(str).str.split('.').str[0].str.strip()
+                
+                # Find kolonne til gruppe
+                pos_col_name = next((c for c in ['PRIMAER_POSITIONSGRUPPE', 'POSITIONSGRUPPE', 'GROUP', 'POS_GROUP'] if c in pos_base_temp.columns), None)
+                if pos_col_name:
+                    df = df.merge(pos_base_temp[['TEMP_ID', pos_col_name]], on='TEMP_ID', how='left')
+                    df = df.rename(columns={pos_col_name: 'POS_GROUP'})
+
+        # Fallback hvis POS_GROUP stadig mangler
+        if 'POS_GROUP' not in df.columns or df['POS_GROUP'].isna().all():
+            role_col = next((c for c in ['ROLECODE3', 'ROLE_CODE3', 'ROLECODE', 'POSITION', 'POSITION1CODE'] if c in df.columns), None)
+            if role_col:
+                df['POS_GROUP'] = df[role_col].astype(str).str.lower().str.strip().map(POSITION_GROUP_MAP).fillna('Ukendt')
+            else:
+                df['POS_GROUP'] = 'Ukendt'
+
+    # Hvis 'PLAYER_NAME' eller 'TEAMNAME' mangler i advanced_stats_df, berig via wyscout_players fra pakken
+    if not any(c in df.columns for c in ['PLAYER_NAME', 'PLAYERNAME', 'NAVN']):
+        if not scouting_pkg:
             try:
-                primaer_pos_df = beregn_primaere_positioner(pos_base_temp)
-                if primaer_pos_df is not None and not primaer_pos_df.empty:
-                    primaer_pos_df.columns = [c.upper().strip() for c in primaer_pos_df.columns]
-                    id_p_col = next((c for c in ['PLAYER_WYID', 'WYID', 'PLAYER_ID', 'ID'] if c in primaer_pos_df.columns), None)
-                    pos_col_name = next((c for c in ['PRIMAER_POSITIONSGRUPPE', 'POSITIONSGRUPPE', 'GROUP'] if c in primaer_pos_df.columns), None)
-                    if id_p_col and pos_col_name:
-                        primaer_pos_df['TEMP_ID'] = primaer_pos_df[id_p_col].astype(str).str.split('.').str[0].str.strip()
-                        df = df.merge(primaer_pos_df[['TEMP_ID', pos_col_name]], on='TEMP_ID', how='left')
-                        df = df.rename(columns={pos_col_name: 'POS_GROUP'})
-            except Exception:
+                import data.hif_load as hif_load
+                scouting_pkg = hif_load.get_scouting_package()
+            except:
                 pass
-
-            # Hent også Navn, Hold og Turnering (Competition) ind fra position_base_df hvis de findes der
-            meta_cols = []
-            for col_sok in ['PLAYERNAME', 'NAVN', 'PLAYER_NAME', 'NAME', 'TEAMNAME', 'KLUB', 'TEAM_NAME', 'COMPETITION_WYID', 'COMPETITION_ID', 'LEAGUE_ID', 'COMP_ID']:
-                funnet_c = next((c for c in pos_base_temp.columns if col_sok in c), None)
-                if funnet_c and funnet_c not in pos_base_temp.columns.drop('TEMP_ID'):
-                    meta_cols.append(funnet_c)
+        
+        wyscout_pl = scouting_pkg.get("wyscout_players") if scouting_pkg else None
+        if wyscout_pl is not None and not wyscout_pl.empty:
+            w_temp = wyscout_pl.copy()
+            w_temp.columns = [c.upper().strip() for c in w_temp.columns]
+            id_adv = next((c for c in ['PLAYER_WYID', 'WYID'] if c in df.columns), None)
+            id_w = next((c for c in ['PLAYER_WYID', 'WYID'] if c in w_temp.columns), None)
             
-            if meta_cols:
-                # Undgå dublerede kolonner ved merge
-                maengde_cols = list(set(['TEMP_ID'] + meta_cols))
-                df = df.merge(pos_base_temp[maengde_cols], on='TEMP_ID', how='left', suffixes=('', '_base'))
+            if id_adv and id_w:
+                df['TEMP_ID'] = df[id_adv].astype(str).str.split('.').str[0].str.strip()
+                w_temp['TEMP_ID'] = w_temp[id_w].astype(str).str.split('.').str[0].str.strip()
+                
+                # Vælg relevante kolonner hvis de findes
+                merge_cols = ['TEMP_ID']
+                for col_kand in ['PLAYER_NAME', 'PLAYERNAME', 'NAME', 'TEAMNAME', 'TEAM_NAME', 'KLUB']:
+                    if col_kand in w_temp.columns and col_kand not in merge_cols:
+                        merge_cols.append(col_kand)
+                
+                if len(merge_cols) > 1:
+                    df = df.merge(w_temp[merge_cols], on='TEMP_ID', how='left', suffixes=('', '_wy'))
 
-    # Fallback hvis POS_GROUP stadig mangler
-    if 'POS_GROUP' not in df.columns or df['POS_GROUP'].isna().all():
-        role_col = next((c for c in ['ROLECODE3', 'ROLE_CODE3', 'ROLECODE', 'POSITION', 'POSITION1CODE'] if c in df.columns), None)
-        if role_col:
-            df['POS_GROUP'] = df[role_col].astype(str).str.lower().str.strip().map(POSITION_GROUP_MAP).fillna('Ukendt')
-        else:
-            df['POS_GROUP'] = 'Ukendt'
-
-    pos_col = next((c for c in ['POS_GROUP', 'POS_GRUPPE', 'PRIMAER_POSITIONSGRUPPE'] if c in df.columns), 'POS_GROUP')
-    
-    mulige_grupper = sorted([g for g in df[pos_col].dropna().unique() if str(g).lower() != "ukendt"])
+    mulige_grupper = sorted([g for g in df['POS_GROUP'].dropna().unique() if str(g).lower() != "ukendt"])
     if not mulige_grupper:
         mulige_grupper = ["Angriber", "Kant", "Central Midtbane", "Forsvarer", "Målmand"]
 
@@ -82,7 +92,7 @@ def vis_side(advanced_stats_df, position_base_df=None):
         43149: "3. Division"
     }
 
-    komp_col = next((c for c in ['COMPETITION_WYID', 'COMPETITION_ID', 'LEAGUE_ID', 'COMP_ID', 'COMPETITION_WYID_BASE'] if c in df.columns), None)
+    komp_col = next((c for c in ['COMPETITION_WYID', 'COMPETITION_ID', 'LEAGUE_ID', 'COMP_ID'] if c in df.columns), None)
     
     col1, col2, col3 = st.columns(3)
     kolonner = [col1, col2, col3]
@@ -102,10 +112,10 @@ def vis_side(advanced_stats_df, position_base_df=None):
             st.markdown(f"#### {liga_navn}")
 
             if not komp_col:
-                st.error("Kunne ikke finde turnering-kolonne. Tjek om position_base indeholder turneringer.")
+                st.error("Kunne ikke finde turneringskolonne i data.")
                 continue
 
-            liga_df = df[(df[komp_col].astype(str).str.contains(str(komp_id))) & (df[pos_col] == valgt_gruppe)].copy()
+            liga_df = df[(df[komp_col].astype(str).str.contains(str(komp_id))) & (df['POS_GROUP'] == valgt_gruppe)].copy()
 
             if liga_df.empty:
                 st.info("Ingen spillere fundet.")
@@ -138,11 +148,11 @@ def vis_side(advanced_stats_df, position_base_df=None):
 
             top10 = liga_df.sort_values(by='SCORE', ascending=False).head(10)
 
-            navn_col = next((c for c in ['PLAYERNAME', 'NAVN', 'PLAYER_NAME', 'NAME'] if c in top10.columns), None)
-            hold_col = next((c for c in ['TEAMNAME', 'KLUB', 'TEAM_NAME'] if c in top10.columns), None)
+            navn_col = next((c for c in ['PLAYER_NAME', 'PLAYERNAME', 'NAVN', 'NAME'] if c in top10.columns), None)
+            hold_col = next((c for c in ['TEAMNAME', 'TEAM_NAME', 'KLUB'] if c in top10.columns), None)
 
             for i, (_, row) in enumerate(top10.iterrows(), 1):
-                p_navn = row.get(navn_col, f"Spiller {row.get('TEMP_ID', '')}") if navn_col else f"Spiller {row.get('TEMP_ID', '')}"
+                p_navn = row.get(navn_col, f"Spiller") if navn_col else "Ukendt spiller"
                 p_hold = row.get(hold_col, "") if hold_col else ""
                 p_score = round(row.get('SCORE', 0), 2)
                 
