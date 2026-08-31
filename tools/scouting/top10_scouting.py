@@ -213,7 +213,7 @@ def vis_side(advanced_stats_df=None, position_base_df=None):
                 p_score = round(float(row.get('SCORE', 0)), 2)
                 
                 st.markdown(f"""
-                    <div style='padding: 5px 8px; margin-bottom: 4px; background: #fff; border: 1px solid #eee; border-radius: 4px; display: flex; justify-content: space-between; align-items: center;'>
+                    <div style='padding: 5px 8px; margin-bottom: 4px; background: #fff; border: 1px solid #eee; border-radius: 3px; display: flex; justify-content: space-between; align-items: center;'>
                         <div style='line-height: 1.2;'>
                             <span style='font-weight: bold; color: #df003b; margin-right: 4px;'>{i}.</span> 
                             <span style='font-weight: 600; font-size: 0.85rem;'>{p_navn}</span>
