@@ -23,7 +23,7 @@ st.set_page_config(
     initial_sidebar_state="auto"
 )
 
-# Centraliseret CSS (Header holdes synlig, så sidebarknappen virker, men gennemsigtig så den ikke dækker)
+# Centraliseret CSS
 st.markdown(f"""
     <style>
         #MainMenu {{visibility: hidden;}}
@@ -35,29 +35,15 @@ st.markdown(f"""
         [data-testid="stDecoration"] {{display: none;}}
         
         .block-container {{ padding-top: 1.5rem !important; }}
-        
-        .hif-header-container {{
-            background-color: {HIF_ROD};
-            height: 50px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 4px;
-            margin-bottom: 15px;
-            width: 100%;
-        }}
-        .hif-header-text {{
-            color: white !important;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-            font-weight: 600;
-            margin: 0;
-        }}
     </style>
 """, unsafe_allow_html=True)
 
 def render_hif_header(titel):
-    st.markdown(f'<div class="hif-header-container"><p class="hif-header-text">{titel}</p></div>', unsafe_allow_html=True)
+    st.markdown(f'''
+        <div style="background-color: {HIF_ROD} !important; background: {HIF_ROD} !important; height: 50px; display: flex; align-items: center; justify-content: center; border-radius: 4px; margin-bottom: 15px; width: 100%;">
+            <p style="color: white !important; text-transform: uppercase; letter-spacing: 2px; font-weight: 600; margin: 0;">{titel}</p>
+        </div>
+    ''', unsafe_allow_html=True)
 
 # --- 2. LOGIN SYSTEM ---
 USER_DB = get_users()
