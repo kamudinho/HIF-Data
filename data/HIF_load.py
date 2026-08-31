@@ -70,12 +70,10 @@ def get_scouting_package():
             # --- NYT: PRIMÆR POSITION (erstatter ROLECODE3/map_position) ---
             try:
                 pos_q = queries["position_base"].format(id_list=id_str)
-                min_q = queries["match_minutes"].format(id_list=id_str)
                 df_position_base = conn.query(pos_q)
-                df_match_minutes = conn.query(min_q)
 
-                if not df_position_base.empty and not df_match_minutes.empty:
-                    df_primaer_positioner = beregn_primaere_positioner(df_position_base, df_match_minutes)
+                if not df_position_base.empty:
+                    df_primaer_positioner = beregn_primaere_positioner(df_position_base)
                     df_primaer_positioner = berig_med_spillernavne(df_primaer_positioner, df_wyscout_search)
             except Exception as pos_e:
                 st.warning(f"Kunne ikke beregne primær-positioner: {pos_e}")
