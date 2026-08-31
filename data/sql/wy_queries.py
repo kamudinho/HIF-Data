@@ -10,10 +10,14 @@ def get_wy_queries(comp_filter, season_filter):
     else:
         c_f = f"({comp_filter})"
 
-    if isinstance(season_filter, str) and not season_filter.startswith('='):
-        s_f = f" = '{season_filter}'"
+    if not season_filter:
+        # Robust standard: peger altid på den aktive sæson, uanset år -
+        # ingen grund til at rette et hardcodet sæsonnavn hvert år.
+        season_where = "s.ACTIVE = TRUE"
+    elif isinstance(season_filter, str) and not season_filter.startswith('='):
+        season_where = f"s.SEASONNAME = '{season_filter}'"
     else:
-        s_f = season_filter if season_filter else " = '2026/2027'"
+        season_where = f"s.SEASONNAME {season_filter}"
 
     return {
         # 1. PLAYERS (Behold filter her, så din hovedliste ikke eksploderer)
@@ -60,7 +64,7 @@ def get_wy_queries(comp_filter, season_filter):
             FROM {DB}.WYSCOUT_TEAMSADVANCEDSTATS_TOTAL AS t
             JOIN {DB}.WYSCOUT_SEASONS AS s ON t.SEASON_WYID = s.SEASON_WYID
             JOIN {DB}.WYSCOUT_TEAMS AS tm ON t.TEAM_WYID = tm.TEAM_WYID
-            WHERE t.COMPETITION_WYID IN {c_f} AND s.SEASONNAME {s_f}
+            WHERE t.COMPETITION_WYID IN {c_f} AND {season_where}
         """,
         
         "team_logos": f"""
@@ -85,7 +89,7 @@ def get_wy_queries(comp_filter, season_filter):
             JOIN {DB}.WYSCOUT_TEAMS t ON p.CURRENTTEAM_WYID = t.TEAM_WYID
             JOIN {DB}.WYSCOUT_SEASONS s ON p.COMPETITION_WYID = s.COMPETITION_WYID
             WHERE p.COMPETITION_WYID IN {liga_ids} 
-            AND s.SEASONNAME = {s_f}
+            AND {season_where}
         """,
 
         "player_stats_total": f"""
@@ -128,21 +132,25 @@ def get_wy_queries(comp_filter, season_filter):
                 pt.GKAERIALDUELSWON
             FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_TOTAL pt
             JOIN {DB}.WYSCOUT_SEASONS s ON pt.SEASON_WYID = s.SEASON_WYID
-            WHERE s.SEASONNAME {s_f}
+            WHERE {season_where}
         """,
 
         # --- NY QUERY TIL POSITIONSUDLEDNING (positional_helper.py) ---
         # Sæson-aggregeret positionsdata pr. spiller (allerede procentberegnet af Wyscout)
+        # Filtreret til samme sæson som player_stats_total, så gamle sæsoner ikke
+        # dominerer positionsberegningen for en spiller med flere års historik.
         "position_base": f"""
             SELECT
-                PLAYER_WYID,
-                SEASON_WYID,
-                COMPETITION_WYID,
-                POSITION1CODE, POSITIONS1PERCENT,
-                POSITION2CODE, POSITIONS2PERCENT,
-                POSITION3CODE, POSITIONS3PERCENT,
-                POSITION4CODE, POSITIONS4PERCENT
-            FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_BASE
-            WHERE PLAYER_WYID IN {{id_list}}
+                pb.PLAYER_WYID,
+                pb.SEASON_WYID,
+                pb.COMPETITION_WYID,
+                pb.POSITION1CODE, pb.POSITIONS1PERCENT,
+                pb.POSITION2CODE, pb.POSITIONS2PERCENT,
+                pb.POSITION3CODE, pb.POSITIONS3PERCENT,
+                pb.POSITION4CODE, pb.POSITIONS4PERCENT
+            FROM {DB}.WYSCOUT_PLAYERADVANCEDSTATS_BASE pb
+            JOIN {DB}.WYSCOUT_SEASONS s ON pb.SEASON_WYID = s.SEASON_WYID
+            WHERE pb.PLAYER_WYID IN {{id_list}}
+            AND {season_where}
         """,
     }
