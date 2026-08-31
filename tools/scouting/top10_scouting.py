@@ -207,7 +207,7 @@ def vis_side(advanced_stats_df=None, position_base_df=None):
             liga_df = liga_df.drop_duplicates(subset=['PLAYER_WYID'])
             top10 = liga_df.sort_values(by='SCORE', ascending=False).head(10)
 
-            for i, (_, row) in enumerate(top8.iterrows(), 1):
+            for i, (_, row) in enumerate(top10.iterrows(), 1):
                 p_navn = str(row.get('PLAYER_NAME', "Ukendt spiller"))
                 p_hold = str(row.get('TEAMNAME', ""))
                 p_score = round(float(row.get('SCORE', 0)), 2)
