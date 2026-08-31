@@ -26,16 +26,16 @@ st.set_page_config(
 # Centraliseret CSS
 st.markdown(f"""
     <style>
-        #MainMenu {{visibility: hidden;}}
-        footer {{visibility: hidden;}}
+        #MainMenu {{{{visibility: hidden;}}}}
+        footer {{{{visibility: hidden;}}}}
         
-        /* Tillad at headeren vises, men skjul standard elementer i den, så kun toggle-knappen til sidebaren er tilgængelig */
-        header {{visibility: visible !important; background-color: transparent !important;}}
-        [data-testid="stDecoration"] {{display: none;}}
+        /* Tillad at headeren vises, så toggle-knappen til sidebaren kommer frem igen */
+        header {{{{visibility: visible !important; background-color: transparent !important;}}}}
+        [data-testid="stDecoration"] {{{{display: none;}}}}
         
-        .block-container {{ padding-top: 0.5rem !important; }}
+        .block-container {{{{ padding-top: 0.5rem !important; }}}}
         
-        .hif-header-container {{
+        .hif-header-container {{{{
             background-color: {HIF_ROD};
             height: 50px;
             display: flex;
@@ -43,14 +43,14 @@ st.markdown(f"""
             justify-content: center;
             border-radius: 4px;
             margin-bottom: 15px;
-        }
-        .hif-header-text {{
+        }}}}
+        .hif-header-text {{{{
             color: white !important;
             text-transform: uppercase;
             letter-spacing: 2px;
             font-weight: 600;
             margin: 0;
-        }}
+        }}}}
     </style>
 """, unsafe_allow_html=True)
 
