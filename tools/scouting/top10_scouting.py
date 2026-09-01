@@ -14,7 +14,9 @@ def hent_scouting_data():
         SELECT 
             PLAYER_WYID,
             SEASON_WYID,
+            COMPETITION_WYID,
             CASE 
+                WHEN GREATEST(COALESCE(POSITIONS1PERCENT,0), COALESCE(POSITIONS2PERCENT,0), COALESCE(POSITIONS3PERCENT,0), COALESCE(POSITIONS4PERCENT,0)) <= 0 THEN NULL
                 WHEN COALESCE(POSITIONS1PERCENT, 0) >= GREATEST(COALESCE(POSITIONS2PERCENT,0), COALESCE(POSITIONS3PERCENT,0), COALESCE(POSITIONS4PERCENT,0)) THEN POSITION1CODE
                 WHEN COALESCE(POSITIONS2PERCENT, 0) >= GREATEST(COALESCE(POSITIONS1PERCENT,0), COALESCE(POSITIONS3PERCENT,0), COALESCE(POSITIONS4PERCENT,0)) THEN POSITION2CODE
                 WHEN COALESCE(POSITIONS3PERCENT, 0) >= GREATEST(COALESCE(POSITIONS1PERCENT,0), COALESCE(POSITIONS2PERCENT,0), COALESCE(POSITIONS4PERCENT,0)) THEN POSITION3CODE
@@ -32,6 +34,7 @@ def hent_scouting_data():
             
             -- Specifik undergruppe (finere opdeling til filtrering)
             CASE 
+                WHEN rb.PRIMARY_POS_CODE IS NULL THEN 'Ukendt'
                 WHEN UPPER(TRIM(rb.PRIMARY_POS_CODE)) = 'GK' THEN 'Målmand'
                 WHEN UPPER(TRIM(rb.PRIMARY_POS_CODE)) IN ('RCB', 'RCB3') THEN 'Højre Stopper'
                 WHEN UPPER(TRIM(rb.PRIMARY_POS_CODE)) IN ('LCB', 'LCB3') THEN 'Venstre Stopper'
@@ -44,12 +47,12 @@ def hent_scouting_data():
                 WHEN UPPER(TRIM(rb.PRIMARY_POS_CODE)) IN ('RW', 'RWF') THEN 'Højre Kant'
                 WHEN UPPER(TRIM(rb.PRIMARY_POS_CODE)) IN ('LW', 'LWF') THEN 'Venstre Kant'
                 WHEN UPPER(TRIM(rb.PRIMARY_POS_CODE)) IN ('CF', 'ST', 'SS') THEN 'Angriber'
-                WHEN rb.PRIMARY_POS_CODE IS NULL THEN 'Ukendt'
                 ELSE CONCAT('Ukendt Code: ', rb.PRIMARY_POS_CODE)
             END AS POS_SPECIFIC,
 
             -- Overordnet hovedgruppe (til valg i første dropdown)
             CASE 
+                WHEN rb.PRIMARY_POS_CODE IS NULL THEN 'Ukendt'
                 WHEN UPPER(TRIM(rb.PRIMARY_POS_CODE)) = 'GK' THEN 'Målmand'
                 WHEN UPPER(TRIM(rb.PRIMARY_POS_CODE)) IN ('CB', 'LCB', 'RCB', 'LCB3', 'RCB3', 'CB3') THEN 'Stopper'
                 WHEN UPPER(TRIM(rb.PRIMARY_POS_CODE)) IN ('RB', 'LB', 'RWB', 'LWB', 'RB3', 'LB3', 'RB5', 'LB5') THEN 'Back'
@@ -101,7 +104,10 @@ def hent_scouting_data():
         JOIN KLUB_HVIDOVREIF.AXIS.WYSCOUT_SEASONS s ON pt.SEASON_WYID = s.SEASON_WYID
         JOIN KLUB_HVIDOVREIF.AXIS.WYSCOUT_PLAYERS p ON pt.PLAYER_WYID = p.PLAYER_WYID AND pt.SEASON_WYID = p.SEASON_WYID
         JOIN KLUB_HVIDOVREIF.AXIS.WYSCOUT_TEAMS t ON p.CURRENTTEAM_WYID = t.TEAM_WYID
-        LEFT JOIN ranked_base rb ON pt.PLAYER_WYID = rb.PLAYER_WYID AND pt.SEASON_WYID = rb.SEASON_WYID
+        LEFT JOIN ranked_base rb 
+            ON pt.PLAYER_WYID = rb.PLAYER_WYID 
+            AND pt.SEASON_WYID = rb.SEASON_WYID
+            AND pt.COMPETITION_WYID = rb.COMPETITION_WYID
         WHERE pt.COMPETITION_WYID IN (328, 329, 43319)
           AND s.ACTIVE = TRUE
     )
