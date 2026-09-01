@@ -3,6 +3,7 @@ import pandas as pd
 import requests
 import base64
 import csv
+import threading
 from io import StringIO
 from datetime import datetime
 import time
@@ -40,11 +41,18 @@ def _byg_csv_linje(tidsstempel, bruger, handling, mal):
     writer.writerow([tidsstempel, ren(bruger), ren(handling), ren(mal)])
     return buffer.getvalue()
 
-def save_action_log(bruger, handling, mal, _forsoeg=0):
+def _save_action_log_sync(bruger, handling, mal, _forsoeg=0):
     """
-    Logger en handling til CSV-filen på GitHub.
-    Returnerer True ved succes, False ved fejl (fejl vises også via st.error).
-    Prøver automatisk igen ved 409-konflikt (samtidig skrivning), op til 5 forsøg med eksponentiel backoff.
+    Selve skrive-logikken - kører i en baggrundstråd (se save_action_log
+    nedenfor), og kalder derfor ALDRIG st.* (Streamlit's UI-kald er ikke
+    trådsikre uden for hovedtråden). Fejl skrives til konsol/logs i stedet.
+
+    Retry-strategi:
+    - 409 (SHA-konflikt, fx to samtidige skrivninger): prøv igen med kort
+      eksponentiel backoff, op til 3 forsøg - det er et forbigående problem.
+    - 429 (rate limit fra GitHub): prøver IKKE igen. At blive ved med at
+      banke på når GitHub beder om ro, forværrer kun rate-limiteringen.
+      Fejlen logges og opgives med det samme.
     """
     url = f"https://api.github.com/repos/{REPO}/contents/{PATH}"
     headers = get_github_headers()
@@ -71,20 +79,40 @@ def save_action_log(bruger, handling, mal, _forsoeg=0):
         if put_r.status_code in (200, 201):
             return True
 
-        if put_r.status_code == 409 and _forsoeg < 5:
-            # SHA'en var forældet, fordi en anden skrev til filen først.
-            # Eksponentiel backoff (0.2s, 0.4s, 0.8s, 1.6s, 3.2s) i stedet for
-            # fast 0.3s - giver bedre chance for at ramme et roligt vindue,
-            # især ved flere hurtige faneskift/testsessioner samtidig.
+        if put_r.status_code == 409 and _forsoeg < 3:
             time.sleep(0.2 * (2 ** _forsoeg))
-            return save_action_log(bruger, handling, mal, _forsoeg=_forsoeg + 1)
+            return _save_action_log_sync(bruger, handling, mal, _forsoeg=_forsoeg + 1)
 
-        st.error(f"Kunne ikke gemme log-handling. GitHub svarede: {put_r.status_code} – {put_r.text}")
+        if put_r.status_code == 429:
+            print(f"[action_log] Rate limited af GitHub (429) - dropper dette log-forsøg for {bruger}.")
+            return False
+
+        print(f"[action_log] Kunne ikke gemme log-handling. GitHub svarede: {put_r.status_code} – {put_r.text}")
         return False
 
     except Exception as e:
-        st.error(f"Fejl ved skrivning til log: {e}")
+        print(f"[action_log] Fejl ved skrivning til log: {e}")
         return False
+
+
+def save_action_log(bruger, handling, mal):
+    """
+    Logger en handling til CSV-filen på GitHub - ASYNKRONT (fire-and-forget).
+
+    Selve netværkskaldet køres i en baggrundstråd, så et langsomt eller
+    rate-limitet GitHub-kald aldrig blokerer sideindlæsningen for brugeren.
+    Funktionen returnerer med det samme og venter ikke på resultatet.
+
+    Fejl vises ikke i UI'en (det ville kræve at vente på tråden) - de
+    printes til konsol/Streamlit-logs i stedet. Det er en bevidst afvejning:
+    logning er "best effort" og må aldrig gå ud over app-oplevelsen.
+    """
+    thread = threading.Thread(
+        target=_save_action_log_sync,
+        args=(bruger, handling, mal),
+        daemon=True
+    )
+    thread.start()
 
 
 def vis_log():
