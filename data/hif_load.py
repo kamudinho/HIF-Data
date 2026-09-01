@@ -31,7 +31,14 @@ def get_squad_only():
 
 @st.cache_data(ttl=600)
 def get_scouting_package():
-    """DEN TUNGE PAKKE: Snowflake, karriere, stats og profilbilleder."""
+    """DEN TUNGE PAKKE: Snowflake, karriere, stats og profilbilleder.
+
+    BEMÆRK: Henter IKKE top10-data (alle spillere i ligaerne) - det gør
+    tools/scouting/top10_scouting.py selv, i sin egen cachede funktion,
+    og kun når brugeren rent faktisk åbner Top10-siden. At hente det her
+    ville køre en tung, ufiltreret query for alle spillere ved ethvert
+    besøg på en hvilken som helst scouting-underside.
+    """
     conn = _get_snowflake_conn()
     if not conn:
         st.error("Kunne ikke oprette forbindelse til Snowflake.")
@@ -66,16 +73,13 @@ def get_scouting_package():
                 
     all_relevant_ids = list(set([int(x) for x in all_relevant_ids if x]))
     
-    df_sql_p, df_career, df_wyscout_search, df_adv, df_top10_stats = pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+    df_sql_p, df_career, df_wyscout_search, df_adv = pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
     df_primaer_positioner = pd.DataFrame()
     
     try:
-        # A. HENT LIGA-DATA
+        # A. HENT LIGA-DATA (alle spillere i de konfigurerede ligaer - bruges til
+        # dropdown/søgning, ikke kun jeres egne scoutede spillere)
         df_wyscout_search = conn.query(queries["players"])
-        
-        # Hent top10 stats hvis forespørgslen findes i wy_queries
-        if "players_top10" in queries:
-            df_top10_stats = conn.query(queries["players_top10"])
         
         # B. HENT SPECIFIK DATA (Hvis IDs findes)
         if all_relevant_ids:
@@ -98,7 +102,7 @@ def get_scouting_package():
             adv_q += f" AND pt.PLAYER_WYID IN {id_str}" if "WHERE" in adv_q else f" WHERE pt.PLAYER_WYID IN {id_str}"
             df_adv = conn.query(adv_q)
 
-            # --- PRIMÆR POSITION ---
+            # --- PRIMÆR POSITION (kun for jeres relevante spillere, ikke alle 711) ---
             try:
                 pos_q = queries["position_base"].format(id_list=id_str)
                 df_position_base = conn.query(pos_q)
@@ -111,7 +115,7 @@ def get_scouting_package():
                 df_primaer_positioner = pd.DataFrame()
 
         # --- CENTRAL RENS AF DATA ---
-        for df in [df_sql_p, df_career, df_wyscout_search, df_adv, df_top10_stats]:
+        for df in [df_sql_p, df_career, df_wyscout_search, df_adv]:
             if df is not None and not df.empty:
                 df.columns = [str(c).upper().strip() for c in df.columns]
                 for col in ['PLAYER_WYID', 'COMPETITION_WYID']:
@@ -129,6 +133,5 @@ def get_scouting_package():
         "sql_players": df_sql_p,
         "career": df_career,
         "advanced_stats": df_adv,
-        "top10_stats": df_top10_stats,
         "primaer_positioner": df_primaer_positioner,
     }
