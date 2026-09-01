@@ -201,8 +201,15 @@ def vis_side(advanced_stats_df=None, position_base_df=None):
             else:
                 liga_df = df[(df[komp_col].astype(str) == str(komp_id)) & (df['POS_SPECIFIC'] == valgt_gruppe)].copy()
 
+            # Filtrer spillere med for lidt spilletid fra - ellers kan et par
+            # gode minutter give urealistisk høje P90-tal og dominere Top10
+            MIN_MINUTTER = 200
+            if 'MINUTESONFIELD' in liga_df.columns:
+                liga_df['MINUTESONFIELD'] = pd.to_numeric(liga_df['MINUTESONFIELD'], errors='coerce').fillna(0)
+                liga_df = liga_df[liga_df['MINUTESONFIELD'] >= MIN_MINUTTER]
+
             if liga_df.empty:
-                st.info("Ingen spillere fundet.")
+                st.info(f"Ingen spillere fundet med mindst {MIN_MINUTTER} minutters spilletid.")
                 continue
 
             mins_col = 'MINUTESONFIELD'
