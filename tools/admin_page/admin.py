@@ -22,7 +22,7 @@ def get_github_headers():
 def _hent_fil():
     """Henter rå filindhold + sha fra GitHub. Kaster exception ved fejl."""
     url = f"https://api.github.com/repos/{REPO}/contents/{PATH}?t={int(time.time())}"
-    r = requests.get(url, headers=get_github_headers())
+    r = requests.get(url, headers=get_github_headers(), timeout=5)
     r.raise_for_status()
     data = r.json()
     content = base64.b64decode(data['content']).decode('utf-8')
@@ -44,7 +44,7 @@ def save_action_log(bruger, handling, mal, _forsoeg=0):
     """
     Logger en handling til CSV-filen på GitHub.
     Returnerer True ved succes, False ved fejl (fejl vises også via st.error).
-    Prøver automatisk igen ved 409-konflikt (samtidig skrivning), op til 3 forsøg.
+    Prøver automatisk igen ved 409-konflikt (samtidig skrivning), op til 5 forsøg med eksponentiel backoff.
     """
     url = f"https://api.github.com/repos/{REPO}/contents/{PATH}"
     headers = get_github_headers()
@@ -66,15 +66,17 @@ def save_action_log(bruger, handling, mal, _forsoeg=0):
             "sha": sha
         }
 
-        put_r = requests.put(url, headers=headers, json=payload)
+        put_r = requests.put(url, headers=headers, json=payload, timeout=5)
 
         if put_r.status_code in (200, 201):
             return True
 
-        if put_r.status_code == 409 and _forsoeg < 3:
+        if put_r.status_code == 409 and _forsoeg < 5:
             # SHA'en var forældet, fordi en anden skrev til filen først.
-            # Vent kort og prøv igen med frisk SHA (op til 3 forsøg).
-            time.sleep(0.3)
+            # Eksponentiel backoff (0.2s, 0.4s, 0.8s, 1.6s, 3.2s) i stedet for
+            # fast 0.3s - giver bedre chance for at ramme et roligt vindue,
+            # især ved flere hurtige faneskift/testsessioner samtidig.
+            time.sleep(0.2 * (2 ** _forsoeg))
             return save_action_log(bruger, handling, mal, _forsoeg=_forsoeg + 1)
 
         st.error(f"Kunne ikke gemme log-handling. GitHub svarede: {put_r.status_code} – {put_r.text}")
