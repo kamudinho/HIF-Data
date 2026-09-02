@@ -338,7 +338,7 @@ try:
             import utils.ordbog as ob
             ob.vis_side()
         elif s == "Spillerradar":
-            import tools.players.spillerrader as sr
+            import tools.players.spillerradar as sr
             sr.vis_side()
 
 except Exception as e:
