@@ -8,8 +8,12 @@ def vis_side():
     st.markdown("### Jerailly Wielzen - Spillerprofil & Admin Dashboard")
     st.markdown("Dette dashboard er låst til at vise en komplet spillerprofil, historiske percentiler samt grunddata for **Jerailly Wielzen** direkte fra Snowflake.")
 
-    # 1. Hent data fra Snowflake for Jerailly Wielzen
-    conn = _get_snowflake_conn()
+    # 1. Hent data fra Snowflake med genetablering af forbindelse ved udløbet session
+    try:
+        conn = _get_snowflake_conn()
+    except Exception:
+        st.cache_data.clear()
+        conn = _get_snowflake_conn()
     
     query = """
     WITH ranked_base AS (
@@ -84,7 +88,13 @@ def vis_side():
 
     @st.cache_data(ttl=600)
     def load_data(q):
-        return pd.read_sql(q, conn)
+        try:
+            current_conn = _get_snowflake_conn()
+            return pd.read_sql(q, current_conn)
+        except Exception:
+            st.cache_data.clear()
+            current_conn = _get_snowflake_conn()
+            return pd.read_sql(q, current_conn)
 
     try:
         df = load_data(query)
