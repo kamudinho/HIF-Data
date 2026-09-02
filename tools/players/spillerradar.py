@@ -8,7 +8,6 @@ def vis_side():
     st.markdown("### Jerailly Wielzen - Spillerprofil & Admin Dashboard")
     st.markdown("Dette dashboard er låst til at vise en komplet spillerprofil, historiske percentiler samt grunddata for **Jerailly Wielzen** direkte fra Snowflake.")
 
-    # 1. Hent data fra Snowflake med genetablering af forbindelse ved udløbet session
     try:
         conn = _get_snowflake_conn()
     except Exception:
@@ -43,7 +42,7 @@ def vis_side():
             s.SEASON_WYID,
             pt.PLAYER_WYID,
             
-            COALESCE(pt.MATCHESPLAYED, 0) AS MATCHESPLAYED,
+            COALESCE(pt.MATCHES, 0) AS MATCHESPLAYED,
             pt.MINUTESONFIELD,
             COALESCE(pt.GOALS, 0) AS GOALS,
             COALESCE(pt.ASSISTS, 0) AS ASSISTS,
@@ -106,13 +105,11 @@ def vis_side():
         st.warning("Ingen data fundet for Jerailly Wielzen.")
         return
 
-    # Vælg sæson via selectbox
     seasons = df["SEASONNAME"].unique().tolist()
     selected_season = st.selectbox("Vælg sæson for profil:", seasons)
 
     player_data = df[df["SEASONNAME"] == selected_season].iloc[0]
 
-    # --- 2. VIS GRUNDDATA & STATISTIK ---
     st.markdown(f"### {player_data['PLAYER_NAME']} ({player_data['TEAMNAME']})")
     
     col1, col2, col3, col4 = st.columns(4)
@@ -131,7 +128,6 @@ def vis_side():
 
     st.markdown("---")
 
-    # --- 3. RADAR / PERCENTIL GRAF ---
     st.markdown("#### Spillerprofil & Percentil-ranking")
 
     metrics = [
@@ -154,7 +150,6 @@ def vis_side():
         float(player_data["TOUCH_IN_BOX_PCTILE"])
     ]
 
-    # Generer radardiagram med matplotlib
     angles = np.linspace(0, 2 * np.pi, len(metrics), endpoint=False).tolist()
     percentiles_plot = percentiles + percentiles[:1]
     angles_plot = angles + angles[:1]
@@ -176,7 +171,6 @@ def vis_side():
     plt.title(f"Percentil-oversigt vs. Ligaen ({selected_season})", size=12, fontweight="bold", pad=15)
     st.pyplot(fig)
 
-    # --- 4. TABEL MED RÅ P90 & PERCENTILER ---
     st.markdown("#### Detaljerede målinger (Percentil & P90 værdier)")
     
     detail_df = pd.DataFrame({
