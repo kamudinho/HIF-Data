@@ -89,14 +89,14 @@ def vis_side():
     try:
         df = load_data(query)
     except Exception as e:
-        st.error(f>Fejl ved hentning af data fra Snowflake: {e}")
+        st.error(f"Fejl ved hentning af data fra Snowflake: {e}")
         return
 
     if df.empty:
         st.warning("Ingen data fundet for Jerailly Wielzen.")
         return
 
-    # Vælg sæson viaselectbox
+    # Vælg sæson via selectbox
     seasons = df["SEASONNAME"].unique().tolist()
     selected_season = st.selectbox("Vælg sæson for profil:", seasons)
 
