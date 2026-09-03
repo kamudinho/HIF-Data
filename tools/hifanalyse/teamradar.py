@@ -64,14 +64,16 @@ def fetch_data():
             tp.TEAM_WYID,
             st.TOTALPLAYED AS MATCHES,
             
-            -- Mål & Generelt
+            -- Mål & Generelt (fra total-tabellen)
             COALESCE(tp.GOALS, 0) AS GOALS,
             COALESCE(tp.SHOTS, 0) AS SHOTS,
             COALESCE(tp.CONCEDEDGOALS, 0) AS CONCEDEDGOALS,
             CASE WHEN COALESCE(tp.SHOTS, 0) > 0 THEN (COALESCE(tp.GOALS, 0) * 100.0 / tp.SHOTS) ELSE 0 END AS CONVERSION_RATE,
-            COALESCE(tp.POSSESSIONPERCENT, 0) AS POSSESSIONPERCENT,
             
-            -- Pasningskategorier & Detaljer (Hentet direkte fra total-tabellen for at sikre match)
+            -- Possession (fra average-tabellen)
+            COALESCE(avg_stats.POSSESSIONPERCENT, 0) AS POSSESSIONPERCENT,
+            
+            -- Pasningskategorier & Detaljer (fra total-tabellen)
             COALESCE(tp.PASSES, 0) AS PASSES,
             COALESCE(tp.SUCCESSFULPASSES, 0) AS SUCCESSFUL_PASSES,
             COALESCE(tp.SUCCESSFULFORWARDPASSES, 0) AS SUCCESSFUL_FORWARD_PASSES,
@@ -100,6 +102,9 @@ def fetch_data():
         JOIN KLUB_HVIDOVREIF.AXIS.WYSCOUT_TEAMS t ON tp.TEAM_WYID = t.TEAM_WYID
         JOIN KLUB_HVIDOVREIF.AXIS.WYSCOUT_SEASONS_STANDINGS st 
             ON tp.TEAM_WYID = st.TEAM_WYID AND tp.SEASON_WYID = st.SEASON_WYID
+        LEFT JOIN KLUB_HVIDOVREIF.AXIS.WYSCOUT_TEAMSADVANCEDSTATS_AVERAGE avg_stats 
+            ON tp.TEAM_WYID = avg_stats.TEAM_WYID 
+            AND tp.SEASON_WYID = avg_stats.SEASON_WYID 
         WHERE tp.MATCHES >= 1 AND tp.COMPETITION_WYID = 328 AND s.SEASONNAME = '2025/2026'
     ),
     deduped_team_stats AS (
