@@ -9,21 +9,22 @@ from io import BytesIO
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 from data.data_load import _get_snowflake_conn
 
-# --- 1. DATA OPSÆTNING MED FLERE KATEGORIER ---
+# --- 1. DATA OPSÆTNING ---
 METRIC_PAIRS = {
     'OFFENSIV': [
-        ('Mål', 'GOALS'), 
-        ('Skud', 'SHOTS'), 
-        ('Konvertering', 'CONVERSION_RATE'),
-        ('Offensiv Akt.', 'ATTACKING_ACTIONS')
+        ('GOALS', 'GOALS'), ('SHOTS', 'SHOTS'), ('DRIBBLES', 'SUCCESSFULDRIBBLES'),
+        ('ATTACKING ACTIONS', 'SUCCESSFULATTACKINGACTIONS'), ('TOUCH IN BOX', 'TOUCHINBOX'),
+        ('CROSSES', 'SUCCESSFULCROSSES'), ('XGSHOT', 'XGSHOT')
     ],
     'OPBYGNING': [
-        ('Possession', 'POSSESSIONPERCENT'), 
-        ('Pasningsfaktor', 'PASSING_FACTOR_AVGVAL')
+        ('FORWARD PASSES', 'SUCCESSFULFORWARDPASSES'),
+        ('PROGRESSIVE RUN', 'PROGRESSIVERUN'), ('PASSES', 'SUCCESSFULPASSES'),
+        ('PASSES TO FINAL THIRD', 'SUCCESSFULPASSESTOFINALTHIRD')
     ],
     'DEFENSIV': [
-        ('Mål Imod', 'CONCEDEDGOALS'), 
-        ('Defensiv Akt.', 'DEFENSIVE_ACTIONS')
+        ('DEFENSIVEDUELS', 'DEFENSIVEDUELSWON'), ('AERIALDUELS', 'AERIALDUELSWON'),
+        ('PPDA', 'PPDA'), ('INTERCEPTIONS', 'INTERCEPTIONS'),
+        ('CONCEDEDGOALS', 'CONCEDEDGOALS'), ('RECOVERIES', 'RECOVERIES')
     ]
 }
 
@@ -39,39 +40,42 @@ def fetch_data():
     query = """
     WITH team_base AS (
         SELECT 
-            t.TEAMNAME,
-            t.IMAGEDATAURL,
+            tm.TEAMNAME,
+            tm.IMAGEDATAURL,
             s.SEASONNAME,
-            tp.COMPETITION_WYID,
+            t.COMPETITION_WYID,
             s.SEASON_WYID,
-            tp.TEAM_WYID,
+            t.TEAM_WYID,
             st.TOTALPLAYED AS MATCHES,
             
-            COALESCE(tp.GOALS, 0) AS GOALS,
-            COALESCE(tp.SHOTS, 0) AS SHOTS,
-            COALESCE(tp.CONCEDEDGOALS, 0) AS CONCEDEDGOALS,
-            CASE WHEN COALESCE(tp.SHOTS, 0) > 0 THEN (COALESCE(tp.GOALS, 0) * 100.0 / tp.SHOTS) ELSE 0 END AS CONVERSION_RATE,
+            COALESCE(t.GOALS, 0) AS GOALS,
+            COALESCE(t.SHOTS, 0) AS SHOTS,
+            COALESCE(t.SUCCESSFULDRIBBLES, 0) AS SUCCESSFULDRIBBLES,
+            COALESCE(t.SUCCESSFULATTACKINGACTIONS, 0) AS SUCCESSFULATTACKINGACTIONS,
+            COALESCE(t.TOUCHINBOX, 0) AS TOUCHINBOX,
+            COALESCE(t.SUCCESSFULCROSSES, 0) AS SUCCESSFULCROSSES,
+            COALESCE(t.XGSHOT, 0) AS XGSHOT,
             
-            COALESCE(avg_stats.POSSESSIONPERCENT, 0) AS POSSESSIONPERCENT,
+            COALESCE(t.SUCCESSFULFORWARDPASSES, 0) AS SUCCESSFULFORWARDPASSES,
+            COALESCE(t.PROGRESSIVERUN, 0) AS PROGRESSIVERUN,
+            COALESCE(t.SUCCESSFULPASSES, 0) AS SUCCESSFULPASSES,
+            COALESCE(t.SUCCESSFULPASSESTOFINALTHIRD, 0) AS SUCCESSFULPASSESTOFINALTHIRD,
             
-            COALESCE(avg_stats.PASSES, 0) AS PASSES,
-            COALESCE(avg_stats.SUCCESSFULPASSES, 0) AS SUCCESSFUL_PASSES,
-            COALESCE(avg_stats.SUCCESSFULFORWARDPASSES, 0) AS SUCCESSFUL_FORWARD_PASSES,
-            COALESCE(avg_stats.PASSLENGTH, 0) AS PASS_LENGTH,
-            
-            COALESCE(tp.ATTACKINGACTIONS, 0) AS ATTACKING_ACTIONS,
-            COALESCE(tp.DEFENSIVEACTIONS, 0) AS DEFENSIVE_ACTIONS,
+            COALESCE(t.DEFENSIVEDUELSWON, 0) AS DEFENSIVEDUELSWON,
+            COALESCE(t.AERIALDUELSWON, 0) AS AERIALDUELSWON,
+            COALESCE(t.PPDA, 0) AS PPDA,
+            COALESCE(t.INTERCEPTIONS, 0) AS INTERCEPTIONS,
+            COALESCE(t.CONCEDEDGOALS, 0) AS CONCEDEDGOALS,
+            COALESCE(t.RECOVERIES, 0) AS RECOVERIES,
 
-            ROW_NUMBER() OVER (PARTITION BY tp.TEAM_WYID, tp.SEASON_WYID, tp.COMPETITION_WYID ORDER BY tp.TEAM_WYID) as rn
-        FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_TEAMSADVANCEDSTATS_TOTAL tp
-        JOIN KLUB_HVIDOVREIF.AXIS.WYSCOUT_SEASONS s ON tp.SEASON_WYID = s.SEASON_WYID
-        JOIN KLUB_HVIDOVREIF.AXIS.WYSCOUT_TEAMS t ON tp.TEAM_WYID = t.TEAM_WYID
-        JOIN KLUB_HVIDOVREIF.AXIS.WYSCOUT_SEASONS_STANDINGS st 
-            ON tp.TEAM_WYID = st.TEAM_WYID AND tp.SEASON_WYID = st.SEASON_WYID
-        LEFT JOIN KLUB_HVIDOVREIF.AXIS.WYSCOUT_TEAMSADVANCEDSTATS_AVERAGE avg_stats 
-            ON tp.TEAM_WYID = avg_stats.TEAM_WYID 
-            AND tp.SEASON_WYID = avg_stats.SEASON_WYID 
-        WHERE tp.MATCHES >= 1 AND tp.COMPETITION_WYID = 328 AND s.SEASONNAME = '2025/2026'
+            ROW_NUMBER() OVER (PARTITION BY t.TEAM_WYID, t.SEASON_WYID, t.COMPETITION_WYID ORDER BY t.TEAM_WYID) as rn
+        FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_TEAMSADVANCEDSTATS_TOTAL AS t
+        JOIN KLUB_HVIDOVREIF.AXIS.WYSCOUT_SEASONS AS s ON t.SEASON_WYID = s.SEASON_WYID
+        JOIN KLUB_HVIDOVREIF.AXIS.WYSCOUT_TEAMS AS tm ON t.TEAM_WYID = tm.TEAM_WYID
+        JOIN KLUB_HVIDOVREIF.AXIS.WYSCOUT_SEASONS_STANDINGS AS st 
+            ON t.TEAM_WYID = st.TEAM_WYID AND t.SEASON_WYID = st.SEASON_WYID
+        WHERE t.COMPETITION_WYID = 328
+        AND s.SEASONNAME = '2025/2026'
     ),
     deduped_team_stats AS (
         SELECT * FROM team_base WHERE rn = 1
@@ -81,55 +85,48 @@ def fetch_data():
             dt.*,
             COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.GOALS), 0) * 100 AS GOALS_PCTILE,
             COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.SHOTS), 0) * 100 AS SHOTS_PCTILE,
-            COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.CONVERSION_RATE), 0) * 100 AS CONVERSION_PCTILE,
-            -- Omvendt percentil for Mål Imod (færrest mål = 100% / bedst)
+            COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.SUCCESSFULDRIBBLES), 0) * 100 AS SUCCESSFULDRIBBLES_PCTILE,
+            COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.SUCCESSFULATTACKINGACTIONS), 0) * 100 AS SUCCESSFULATTACKINGACTIONS_PCTILE,
+            COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.TOUCHINBOX), 0) * 100 AS TOUCHINBOX_PCTILE,
+            COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.SUCCESSFULCROSSES), 0) * 100 AS SUCCESSFULCROSSES_PCTILE,
+            COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.XGSHOT), 0) * 100 AS XGSHOT_PCTILE,
+            
+            COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.SUCCESSFULFORWARDPASSES), 0) * 100 AS SUCCESSFULFORWARDPASSES_PCTILE,
+            COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.PROGRESSIVERUN), 0) * 100 AS PROGRESSIVERUN_PCTILE,
+            COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.SUCCESSFULPASSES), 0) * 100 AS SUCCESSFULPASSES_PCTILE,
+            COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.SUCCESSFULPASSESTOFINALTHIRD), 0) * 100 AS SUCCESSFULPASSESTOFINALTHIRD_PCTILE,
+            
+            COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.DEFENSIVEDUELSWON), 0) * 100 AS DEFENSIVEDUELSWON_PCTILE,
+            COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.AERIALDUELSWON), 0) * 100 AS AERIALDUELSWON_PCTILE,
+            -- Omvendt for PPDA (lavest er bedst)
+            100 - (COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.PPDA), 0) * 100) AS PPDA_PCTILE,
+            COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.INTERCEPTIONS), 0) * 100 AS INTERCEPTIONS_PCTILE,
+            -- Omvendt for Conceded Goals (færrest mål imod er bedst)
             100 - (COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.CONCEDEDGOALS), 0) * 100) AS CONCEDEDGOALS_PCTILE,
-            COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.POSSESSIONPERCENT), 0) * 100 AS POSSESSION_PCTILE,
-            
-            COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.PASSES), 0) * 100 AS P_PASSES,
-            COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.SUCCESSFUL_PASSES), 0) * 100 AS P_SUCC_PASSES,
-            COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.SUCCESSFUL_FORWARD_PASSES), 0) * 100 AS P_FWD_PASSES,
-            COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.PASS_LENGTH), 0) * 100 AS P_PASS_LENGTH,
-            
-            COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.ATTACKING_ACTIONS), 0) * 100 AS ATTACKING_PCTILE,
-            COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.DEFENSIVE_ACTIONS), 0) * 100 AS DEFENSIVE_PCTILE,
+            COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.RECOVERIES), 0) * 100 AS RECOVERIES_PCTILE,
 
             RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.GOALS DESC) AS GOALS_RANK,
             RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.SHOTS DESC) AS SHOTS_RANK,
-            RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.CONVERSION_RATE DESC) AS CONVERSION_RANK,
-            -- Omvendt rank for Mål Imod (færrest mål = #1)
+            RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.SUCCESSFULDRIBBLES DESC) AS SUCCESSFULDRIBBLES_RANK,
+            RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.SUCCESSFULATTACKINGACTIONS DESC) AS SUCCESSFULATTACKINGACTIONS_RANK,
+            RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.TOUCHINBOX DESC) AS TOUCHINBOX_RANK,
+            RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.SUCCESSFULCROSSES DESC) AS SUCCESSFULCROSSES_RANK,
+            RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.XGSHOT DESC) AS XGSHOT_RANK,
+            
+            RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.SUCCESSFULFORWARDPASSES DESC) AS SUCCESSFULFORWARDPASSES_RANK,
+            RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.PROGRESSIVERUN DESC) AS PROGRESSIVERUN_RANK,
+            RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.SUCCESSFULPASSES DESC) AS SUCCESSFULPASSES_RANK,
+            RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.SUCCESSFULPASSESTOFINALTHIRD DESC) AS SUCCESSFULPASSESTOFINALTHIRD_RANK,
+            
+            RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.DEFENSIVEDUELSWON DESC) AS DEFENSIVEDUELSWON_RANK,
+            RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.AERIALDUELSWON DESC) AS AERIALDUELSWON_RANK,
+            RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.PPDA ASC) AS PPDA_RANK,
+            RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.INTERCEPTIONS DESC) AS INTERCEPTIONS_RANK,
             RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.CONCEDEDGOALS ASC) AS CONCEDEDGOALS_RANK,
-            RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.POSSESSIONPERCENT DESC) AS POSSESSION_RANK,
-            RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.ATTACKING_ACTIONS DESC) AS ATTACKING_RANK,
-            RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.DEFENSIVE_ACTIONS DESC) AS DEFENSIVE_RANK
+            RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.RECOVERIES DESC) AS RECOVERIES_RANK
         FROM deduped_team_stats dt
-    ),
-    team_combined_passing AS (
-        SELECT 
-            tp.*,
-            (P_PASSES + P_SUCC_PASSES + P_FWD_PASSES + P_PASS_LENGTH) / 4.0 AS PASSING_FACTOR_PCTILE,
-            (PASSES + SUCCESSFUL_PASSES + SUCCESSFUL_FORWARD_PASSES + PASS_LENGTH) / 4.0 AS PASSING_FACTOR_AVGVAL
-        FROM team_percentile_calc tp
-    ),
-    team_passing_rank AS (
-        SELECT 
-            cp.*,
-            RANK() OVER (PARTITION BY cp.COMPETITION_WYID, cp.SEASON_WYID ORDER BY cp.PASSING_FACTOR_PCTILE DESC) AS PASS_RANK
-        FROM team_combined_passing cp
-    ),
-    team_overall_score AS (
-        SELECT 
-            pr.*,
-            (GOALS_PCTILE + SHOTS_PCTILE + CONVERSION_PCTILE + CONCEDEDGOALS_PCTILE + POSSESSION_PCTILE + PASSING_FACTOR_PCTILE + ATTACKING_PCTILE + DEFENSIVE_PCTILE) / 8.0 AS TOTAL_SCORE_PCTILE
-        FROM team_passing_rank pr
-    ),
-    team_final_rank AS (
-        SELECT 
-            os.*,
-            RANK() OVER (PARTITION BY os.COMPETITION_WYID, os.SEASON_WYID ORDER BY os.TOTAL_SCORE_PCTILE DESC) AS TOTAL_RANK_VAL
-        FROM team_overall_score os
     )
-    SELECT * FROM team_final_rank
+    SELECT * FROM team_percentile_calc
     """
     df = pd.DataFrame(conn.query(query))
     df.columns = [c.upper() for c in df.columns]
@@ -177,9 +174,16 @@ def vis_side(*args, **kwargs):
 
         team_id = target_team_raw['TEAM_WYID'].values[0]
         logo_url = target_team_raw['IMAGEDATAURL'].values[0]
+
+        # Beregn per kamp for værdierne (undtagen PPDA)
+        all_metrics_cols = [pair[1] for group in METRIC_PAIRS.values() for pair in group]
+        for col in list(set(all_metrics_cols)):
+            if col in df.columns and col != 'PPDA':
+                df[col] = pd.to_numeric(df[col], errors='coerce') / df['MATCHES']
+        
         target_team = df[df['TEAM_WYID'] == team_id].iloc[0]
 
-        # --- KANTET RADAR / PIZZA CHART (POLAR PLOT) ---
+        # --- PIZZA CHART POSITIONERING ---
         fig, ax = plt.subplots(figsize=(10, 10), subplot_kw=dict(polar=True))
         fig.patch.set_alpha(0)
         
@@ -192,52 +196,35 @@ def vis_side(*args, **kwargs):
         color_map = {'OFFENSIV': '#2ecc71', 'OPBYGNING': '#f1c40f', 'DEFENSIV': '#e74c3c'}
         plot_labels, values, display_values, plot_colors = [], [], [], []
 
-        metric_column_mapping = {
-            'GOALS': ('GOALS_PCTILE', 'GOALS_RANK'),
-            'SHOTS': ('SHOTS_PCTILE', 'SHOTS_RANK'),
-            'CONVERSION_RATE': ('CONVERSION_PCTILE', 'CONVERSION_RANK'),
-            'ATTACKING_ACTIONS': ('ATTACKING_PCTILE', 'ATTACKING_RANK'),
-            'POSSESSIONPERCENT': ('POSSESSION_PCTILE', 'POSSESSION_RANK'),
-            'PASSING_FACTOR_AVGVAL': ('PASSING_FACTOR_PCTILE', 'PASS_RANK'),
-            'CONCEDEDGOALS': ('CONCEDEDGOALS_PCTILE', 'CONCEDEDGOALS_RANK'),
-            'DEFENSIVE_ACTIONS': ('DEFENSIVE_PCTILE', 'DEFENSIVE_RANK')
-        }
-
         for group_name, pairs in METRIC_PAIRS.items():
             for display_label, data_col in pairs:
                 if data_col not in df.columns: continue
                 
-                pctile_col, rank_col = metric_column_mapping[data_col]
-                p_val = float(target_team[pctile_col])
-                r_val = int(target_team[rank_col])
+                pctile_col = f"{data_col}_PCTILE"
+                rank_col = f"{data_col}_RANK"
+                
+                p_val = float(target_team[pctile_col]) if pctile_col in target_team else 50.0
+                r_val = int(target_team[rank_col]) if rank_col in target_team else 1
                 
                 plot_labels.append(display_label)
                 scaled_val = V_OFFSET + (p_val * (100 - V_OFFSET) / 100)
                 values.append(scaled_val)
                 
                 raw_val = target_team[data_col]
-                if data_col in ['CONVERSION_RATE', 'POSSESSIONPERCENT', 'PASSING_FACTOR_AVGVAL']:
-                    disp_str = f"{raw_val:.1f} (#{r_val})"
+                if data_col == 'XGSHOT':
+                    disp_str = f"{raw_val:.2f} (#{r_val})"
                 else:
-                    disp_str = f"{int(raw_val)} (#{r_val})"
+                    disp_str = f"{raw_val:.1f} (#{r_val})"
                     
                 display_values.append(disp_str)
                 plot_colors.append(color_map[group_name])
 
         num_vars = len(plot_labels)
-        angles = np.linspace(0, 2 * np.pi, num_vars, endpoint=False).tolist()
+        angles = np.linspace(0, 2 * np.pi, num_vars, endpoint=False)
         width = (2 * np.pi) / num_vars
 
-        # Gør den kantet ved at lukke polygonen (tilføj første element til sidst)
-        angles_plot = angles + angles[:1]
-        values_plot = values + values[:1]
-
-        # Baggrundscirkler/-linjer
         ax.bar(angles, [100] * num_vars, width=width, color='none', edgecolor='white', linewidth=0.6, alpha=0.2, zorder=1)
-        
-        # Tegn den kantede polygon (radar/pizza fill)
-        ax.plot(angles_plot, values_plot, color="#df003b", linewidth=2, linestyle="solid", marker="o", markersize=5, zorder=2)
-        ax.fill(angles_plot, values_plot, color="#df003b", alpha=0.25, zorder=2)
+        ax.bar(angles, values, width=width, bottom=0, color=plot_colors, alpha=0.9, edgecolor='white', linewidth=1.2, zorder=3)
 
         logo_img = get_logo(logo_url)
         if logo_img:
