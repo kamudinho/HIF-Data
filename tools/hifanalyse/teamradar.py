@@ -184,6 +184,7 @@ def vis_side(*args, **kwargs):
             )
         )
 
+        ax.set_aspect('equal')
         fig.patch.set_facecolor('#FFFFFF')
 
         val_idx = 0
@@ -193,15 +194,9 @@ def vis_side(*args, **kwargs):
                 txt.set_text(str(int(values[val_idx])))
                 val_idx += 1
 
-        # Kun titel (ingen legende)
-        fig.text(0.5, 0.94, f"{valgt_hold_navn}", size=16,
-                 ha="center", fontweight="bold", color="#111111")
-        fig.text(0.5, 0.91, "Percentil Rank vs Ligaens Hold | Sæson 2026/2027", size=11,
-                 ha="center", fontweight="bold", color="#555555")
-
         logo_img = get_logo(logo_url)
         if logo_img:
-            ax.add_artist(AnnotationBbox(OffsetImage(logo_img, zoom=0.30), (0, 0), frameon=True, 
+            ax.add_artist(AnnotationBbox(OffsetImage(logo_img, zoom=0.28), (0, 0), frameon=True, 
                                           bboxprops=dict(facecolor='white', edgecolor='#222222', linewidth=1.5, boxstyle='circle'), 
                                           zorder=10))
 
