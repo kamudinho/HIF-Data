@@ -154,7 +154,7 @@ def vis_side(*args, **kwargs):
             straight_line_color="#222222",
             last_circle_color="#222222",
             last_circle_lw=1.5,
-            other_circle_lw=0.5,
+            other_circle_lw=0,  # Sat til 0 for at fjerne de indre stiplede/gitterlinjer
             other_circle_color="#DDDDDD",
             inner_circle_size=8,
         )
@@ -195,7 +195,6 @@ def vis_side(*args, **kwargs):
 
         logo_img = get_logo(logo_url)
         if logo_img:
-            # Bruger add_image i stedet for AnnotationBbox med tilpassede proportioner til midten
             ax_image = add_image(
                 logo_img, fig, left=0.4478, bottom=0.4315, width=0.13, height=0.127
             )
