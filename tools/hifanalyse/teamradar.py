@@ -156,16 +156,20 @@ def vis_side(*args, **kwargs):
             'CONCEDEDGOALS_RANK', 'DEFENSIVE_RANK'
         ]
 
+        # Kategori-labels: navn + rank (bevidst anderledes end referencebilledet,
+        # som kun viser kategorinavn - I ville gerne have rank med)
         params = []
         for bp, r_col in zip(base_params, rank_cols):
             rank = int(target_team[r_col]) if r_col in target_team and not pd.isna(target_team[r_col]) else 0
             params.append(f"{bp}\nRank: {rank}")
 
+        # Skivelængden styres af PERCENTIL (hvor godt holdet ligger ift. resten af ligaen)
         pizza_values = []
         for p_col in percentile_cols:
             val = float(target_team[p_col]) if p_col in target_team and not pd.isna(target_team[p_col]) else 50.0
             pizza_values.append(val)
 
+        # Men det der VISES i boksene er de rå METRIC-værdier, ikke percentilen
         display_values = []
         for r_col in raw_cols:
             val = float(target_team[r_col]) if r_col in target_team and not pd.isna(target_team[r_col]) else 0.0
@@ -190,7 +194,7 @@ def vis_side(*args, **kwargs):
             straight_line_color="#222222",
             last_circle_color="#222222",
             last_circle_lw=1.5,
-            other_circle_lw=0,  
+            other_circle_lw=1,
             other_circle_color="#DDDDDD",
             inner_circle_size=3,
         )
@@ -222,6 +226,9 @@ def vis_side(*args, **kwargs):
 
         ax.set_aspect('equal')
         fig.patch.set_facecolor('#FFFFFF')
+
+        # Bevidst INGEN titel/overskrift (fig.suptitle) - I bad om at undlade
+        # navne/overskrifter, i modsætning til referencebilledet
 
         logo_img = get_logo(logo_url)
         if logo_img:
