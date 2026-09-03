@@ -9,7 +9,7 @@ from io import BytesIO
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 from data.data_load import _get_snowflake_conn
 
-# --- 1. DATA OPSÆTNING MED PASNINGSKATEGORIER & TOUCHES IN BOX ---
+# --- 1. DATA OPSÆTNING MED NYE PASNINGSKATEGORIER & TOUCHES IN BOX ---
 METRIC_PAIRS = {
     'OFFENSIV': [
         ('Mål', 'GOALS'), 
@@ -27,18 +27,19 @@ METRIC_PAIRS = {
         ('Alle Pasninger', 'PASSES'),
         ('Succesfulde Pas.', 'SUCCESSFUL_PASSES'),
         ('Fremadrettede Pas.', 'SUCCESSFUL_FORWARD_PASSES'),
-        ('Korte Pasninger', 'SUCCESSFULSHORTPASSES' if 'SUCCESSFULSHORTPASSES' in [] else 'SUCCESSFUL_SHORT_PASSES'), # Sikret via dynamisk mapping eller standard
         ('Lange Pasninger', 'SUCCESSFULLONGPASSES'),
-        ('Lænerale Pas.', 'SUCCESSFULLATERALPASSES'),
+        ('Laterale Pas.', 'SUCCESSFULLATERALPASSES'),
         ('Bagudrettede Pas.', 'SUCCESSFULBACKPASSES'),
-        ('Progressive Løb', 'PROGRESSIVERUN'),
+        ('Smart Passes', 'SUCCESSFULSMARTPASSES'),
         ('Pas. til Sidste 3.', 'SUCCESSFULPASSESTOFINALTHIRD'),
-        ('Smart Passes', 'SUCCESSFULSMARTPASSES')
+        ('Progressive Løb', 'PROGRESSIVERUN'),
+        ('Pasningslængde', 'PASS_LENGTH')
     ],
     'DEFENSIV': [
         ('Mål Imod', 'CONCEDEDGOALS'), 
         ('Defensiv Akt.', 'DEFENSIVE_ACTIONS'),
-        ('Genvindinger', 'RECOVERIES'),
+        ('Genvindinger (Modh.)', 'OPPONENTHALFRECOVERIES'),
+        ('Succes. Def. Akt.', 'SUCCESSFULDEFENSIVEACTION'),
         ('Interceptions', 'INTERCEPTIONS')
     ]
 }
@@ -89,7 +90,8 @@ def fetch_data():
             COALESCE(avg_stats.TOUCHINBOX, 0) AS TOUCHINBOX,
             COALESCE(avg_stats.SUCCESSFULCROSSES, 0) AS SUCCESSFULCROSSES,
             COALESCE(avg_stats.XGSHOT, 0) AS XGSHOT,
-            COALESCE(avg_stats.RECOVERIES, 0) AS RECOVERIES,
+            COALESCE(avg_stats.OPPONENTHALFRECOVERIES, 0) AS OPPONENTHALFRECOVERIES,
+            COALESCE(avg_stats.SUCCESSFULDEFENSIVEACTION, 0) AS SUCCESSFULDEFENSIVEACTION,
             COALESCE(avg_stats.INTERCEPTIONS, 0) AS INTERCEPTIONS,
             
             COALESCE(tp.ATTACKINGACTIONS, 0) AS ATTACKING_ACTIONS,
@@ -118,7 +120,7 @@ def fetch_data():
             100 - (COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.CONCEDEDGOALS), 0) * 100) AS CONCEDEDGOALS_PCTILE,
             COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.POSSESSIONPERCENT), 0) * 100 AS POSSESSION_PCTILE,
             
-            -- Pctiles for pasninger
+            -- Pctiles for pasninger og aktioner
             COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.PASSES), 0) * 100 AS PASSES_PCTILE,
             COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.SUCCESSFUL_PASSES), 0) * 100 AS SUCCESSFUL_PASSES_PCTILE,
             COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.SUCCESSFUL_FORWARD_PASSES), 0) * 100 AS SUCCESSFUL_FORWARD_PASSES_PCTILE,
@@ -134,7 +136,8 @@ def fetch_data():
             COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.TOUCHINBOX), 0) * 100 AS TOUCHINBOX_PCTILE,
             COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.SUCCESSFULCROSSES), 0) * 100 AS SUCCESSFULCROSSES_PCTILE,
             COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.XGSHOT), 0) * 100 AS XGSHOT_PCTILE,
-            COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.RECOVERIES), 0) * 100 AS RECOVERIES_PCTILE,
+            COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.OPPONENTHALFRECOVERIES), 0) * 100 AS OPPONENTHALFRECOVERIES_PCTILE,
+            COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.SUCCESSFULDEFENSIVEACTION), 0) * 100 AS SUCCESSFULDEFENSIVEACTION_PCTILE,
             COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.INTERCEPTIONS), 0) * 100 AS INTERCEPTIONS_PCTILE,
             
             COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.ATTACKING_ACTIONS), 0) * 100 AS ATTACKING_PCTILE,
@@ -160,7 +163,8 @@ def fetch_data():
             RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.TOUCHINBOX DESC) AS TOUCHINBOX_RANK,
             RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.SUCCESSFULCROSSES DESC) AS SUCCESSFULCROSSES_RANK,
             RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.XGSHOT DESC) AS XGSHOT_RANK,
-            RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.RECOVERIES DESC) AS RECOVERIES_RANK,
+            RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.OPPONENTHALFRECOVERIES DESC) AS OPPONENTHALFRECOVERIES_RANK,
+            RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.SUCCESSFULDEFENSIVEACTION DESC) AS SUCCESSFULDEFENSIVEACTION_RANK,
             RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.INTERCEPTIONS DESC) AS INTERCEPTIONS_RANK,
             RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.ATTACKING_ACTIONS DESC) AS ATTACKING_RANK,
             RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.DEFENSIVE_ACTIONS DESC) AS DEFENSIVE_RANK
@@ -241,7 +245,7 @@ def vis_side(*args, **kwargs):
         logo_url = target_team_raw['IMAGEDATAURL'].values[0]
         target_team = df[df['TEAM_WYID'] == team_id].iloc[0]
 
-        # --- PIZZA CHART (FLERE VARIABLE -> STØRRE HJUL) ---
+        # --- PIZZA CHART (STØRRE HJUL TIL FLERE METRIKKER) ---
         fig, ax = plt.subplots(figsize=(10, 10), subplot_kw=dict(polar=True))
         fig.patch.set_alpha(0)
         
@@ -295,11 +299,11 @@ def vis_side(*args, **kwargs):
 
         for angle, label, disp, color in zip(angles, plot_labels, display_values, plot_colors):
             ax.text(angle, 112, disp, ha='center', va='center', 
-                    fontsize=7.5, fontweight='bold', color='white', zorder=12,
+                    fontsize=7, fontweight='bold', color='white', zorder=12,
                     bbox=dict(facecolor=color, edgecolor='white', boxstyle='round,pad=0.25', linewidth=0.8))
             
             ax.text(angle, 146, label, ha='center', va='center',
-                    fontsize=6, fontweight='bold', color='black', zorder=11,
+                    fontsize=5.5, fontweight='bold', color='black', zorder=11,
                     bbox=dict(facecolor='white', edgecolor='black', boxstyle='round,pad=0.35', linewidth=0.6))
 
         st.pyplot(fig, use_container_width=True)
