@@ -26,7 +26,6 @@ METRIC_PAIRS = {
     ]
 }
 
-# Farver til de forskellige grupper (Athletic-stil)
 GROUP_COLORS = {
     'OFFENSIV': '#4A90E2',   # Blå
     'OPBYGNING': '#50E3C2',  # Mint / Turkis
@@ -190,12 +189,11 @@ def vis_side(*args, **kwargs):
         LIMIT_Y = 100 
         ax.set_ylim(0, LIMIT_Y)
         
-        plot_labels, heights, slice_colors, display_values, boundary_angles = [], [], [], [], []
+        plot_labels, heights, slice_colors, display_values = [], [], [], []
 
         total_vars = sum(len(pairs) for pairs in METRIC_PAIRS.values())
         width = (2 * np.pi) / total_vars
         
-        current_idx = 0
         for group_name, pairs in METRIC_PAIRS.items():
             group_color = GROUP_COLORS.get(group_name, '#DA291C')
             for display_label, data_col in pairs:
@@ -205,11 +203,11 @@ def vis_side(*args, **kwargs):
                     pctile_col = f"{data_col}_PCTILE"
                     rank_col = f"{data_col}_RANK"
                 
-                # Percentil styrer selve kilens højde (radius 0 til 100)
+                # Percentil styrer kilens højde (radius 0 til 100)
                 p_val = float(target_team[pctile_col]) if pctile_col in target_team and not pd.isna(target_team[pctile_col]) else 50.0
                 r_val = int(target_team[rank_col]) if rank_col in target_team and not pd.isna(target_team[rank_col]) else 1
                 
-                # Rå værdi der skal vises inde i feltet
+                # Rå værdi der vises inde i feltet
                 raw_val = float(target_team[data_col]) if data_col in target_team and not pd.isna(target_team[data_col]) else 0.0
                 
                 plot_labels.append(f"{display_label}\n(Rank: {r_val})")
@@ -221,29 +219,24 @@ def vis_side(*args, **kwargs):
                 else:
                     display_values.append(f"{int(raw_val)}")
 
-            current_idx += len(pairs)
-            # Beregn vinkel for grænsen mellem grupper (forskudt med halvdelen af en kile / rotation)
-            boundary_angle = (current_idx * width) - (width / 2)
-            boundary_angles.append(boundary_angle)
-
         angles = np.linspace(0, 2 * np.pi, total_vars, endpoint=False)
 
-        # Cirkel-gitter (diskret ringmønster)
+        # Cirkel-gitter (diskret ringmønster inkl. den yderste 100%-ring)
         ax.set_yticks([20, 40, 60, 80, 100])
         ax.grid(True, color='#D3D3D3', linewidth=0.8, linestyle='--', alpha=0.6, zorder=2)
         
-        # Rotér startretning så toppen er mod klokken 12 (som i eksemplet)
+        # Sørg for at den yderste kant (100%) tegnes som en komplet, fast cirkel
+        ax.spines['polar'].set_visible(True)
+        ax.spines['polar'].set_color('#111111')
+        ax.spines['polar'].set_linewidth(1.5)
+
+        # Rotér startretning så toppen er mod klokken 12
         rotation_offset = np.pi / 2 + (width / 2)
         ax.set_theta_offset(rotation_offset)
         ax.set_theta_direction(-1)
 
-        # Tegn slices ud fra percentil-højderne
-        ax.bar(angles, heights, width=width, bottom=0, color=slice_colors, alpha=0.35, edgecolor='#2C3E50', linewidth=1.0, zorder=3)
-
-        # Tykke mørke grænselinjer mellem grupperne
-        for b_angle in boundary_angles:
-            # Da theta_offset er justeret, tilpasses stregernes vinkler
-            ax.plot([b_angle - rotation_offset, b_angle - rotation_offset], [0, LIMIT_Y], color='#111111', linewidth=2.5, zorder=5)
+        # Tegn slices ud fra percentil-højderne (uden tykke gruppe-skillelinjer)
+        ax.bar(angles, heights, width=width, bottom=0, color=slice_colors, alpha=0.35, edgecolor='#111111', linewidth=0.8, zorder=3)
 
         logo_img = get_logo(logo_url)
         if logo_img:
