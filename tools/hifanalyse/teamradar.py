@@ -2,14 +2,13 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy import stats
 from PIL import Image
 import requests
 from io import BytesIO
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 from data.data_load import _get_snowflake_conn
 
-# --- 1. KERNEMETRIKKER (MÅL, OPBYGNING & DEFENSIV) ---
+# --- 1. KERNEMETRIKKER ---
 METRIC_PAIRS = {
     'OFFENSIV': [
         ('Mål', 'GOALS'), 
@@ -47,7 +46,6 @@ def fetch_data():
             tp.TEAM_WYID,
             st.TOTALPLAYED AS MATCHES,
             
-            -- Mål & Grundlæggende (fra total-tabellen)
             COALESCE(tp.GOALS, 0) AS GOALS,
             COALESCE(tp.SHOTS, 0) AS SHOTS,
             COALESCE(tp.CONCEDEDGOALS, 0) AS CONCEDEDGOALS,
@@ -55,7 +53,6 @@ def fetch_data():
             COALESCE(tp.ATTACKINGACTIONS, 0) AS ATTACKING_ACTIONS,
             COALESCE(tp.DEFENSIVEACTIONS, 0) AS DEFENSIVE_ACTIONS,
             
-            -- Opbygning / Pasninger (fra average-tabellen)
             COALESCE(avg_stats.POSSESSIONPERCENT, 0) AS POSSESSIONPERCENT,
             COALESCE(avg_stats.PASSES, 0) AS PASSES,
             COALESCE(avg_stats.SUCCESSFULPASSES, 0) AS SUCCESSFUL_PASSES,
@@ -93,7 +90,6 @@ def fetch_data():
             COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.ATTACKING_ACTIONS), 0) * 100 AS ATTACKING_PCTILE,
             COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.DEFENSIVE_ACTIONS), 0) * 100 AS DEFENSIVE_PCTILE,
 
-            -- Ranks
             RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.GOALS DESC) AS GOALS_RANK,
             RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.SHOTS DESC) AS SHOTS_RANK,
             RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.CONVERSION_RATE DESC) AS CONVERSION_RANK,
@@ -148,18 +144,9 @@ def vis_side(*args, **kwargs):
 
     st.markdown("""
         <style>
-            [data-testid="column"] {
-                padding: 0rem !important;
-                margin: 0rem !important;
-            }
-            [data-testid="stHorizontalBlock"] {
-                gap: 0rem !important;
-            }
-            div.stDownloadButton > button {
-                width: auto !important;
-                min-width: 100px;
-                padding: 0.2rem 1rem !important;
-            }
+            [data-testid="column"] { padding: 0rem !important; margin: 0rem !important; }
+            [data-testid="stHorizontalBlock"] { gap: 0rem !important; }
+            div.stDownloadButton > button { width: auto !important; min-width: 100px; padding: 0.2rem 1rem !important; }
         </style>
     """, unsafe_allow_html=True)
 
@@ -181,18 +168,19 @@ def vis_side(*args, **kwargs):
         logo_url = target_team_raw['IMAGEDATAURL'].values[0]
         target_team = df[df['TEAM_WYID'] == team_id].iloc[0]
 
-        # --- PIZZA CHART (MED 8 KERNEMETRIKKER) ---
+        # --- FIGUR SETUP (MØRK TEMA SOM HAALAND-EKSEMPLET) ---
         fig, ax = plt.subplots(figsize=(9, 9), subplot_kw=dict(polar=True))
-        fig.patch.set_alpha(0)
         
-        plt.subplots_adjust(left=0.05, right=0.95, top=0.95, bottom=0.05)
+        # Sæt mørk baggrundsfarve på både figur og axes
+        fig.patch.set_facecolor('#121212')
+        ax.set_facecolor('#121212')
         
-        V_OFFSET = 20
-        LIMIT_Y = 150 
+        plt.subplots_adjust(left=0.05, right=0.95, top=0.9, bottom=0.05)
+        
+        LIMIT_Y = 100 
         ax.set_ylim(0, LIMIT_Y)
         
-        color_map = {'OFFENSIV': '#2ecc71', 'OPBYGNING': '#f1c40f', 'DEFENSIV': '#e74c3c'}
-        plot_labels, values, display_values, plot_colors = [], [], [], []
+        plot_labels, values, display_values = [], [], []
 
         for group_name, pairs in METRIC_PAIRS.items():
             for display_label, data_col in pairs:
@@ -206,66 +194,66 @@ def vis_side(*args, **kwargs):
                 r_val = int(target_team[rank_col]) if rank_col in target_team and not pd.isna(target_team[rank_col]) else 1
                 
                 plot_labels.append(display_label)
-                scaled_val = V_OFFSET + (p_val * (100 - V_OFFSET) / 100)
-                values.append(scaled_val)
+                values.append(p_val)
                 
                 raw_val = target_team[data_col] if data_col in target_team and not pd.isna(target_team[data_col]) else 0
-                
-                # Beregn ligagennemsnit for denne kolonne for sammenligning
-                if pctile_col in df:
-                    # Udledråw gennemsnit fra kolonnen
-                    base_col_name = data_col if data_col != 'PASSING_FACTOR_AVGVAL' else 'PASSES' # Tilnærmelse eller direkte
-                    mean_val = df[data_col].mean() if data_col in df else 0
-                else:
-                    mean_val = 0
+                mean_val = df[data_col].mean() if data_col in df else 0
 
                 if data_col in ['CONVERSION_RATE', 'POSSESSIONPERCENT', 'PASSING_FACTOR_AVGVAL']:
-                    disp_str = f"{raw_val:.1f} (#{r_val})\n(Snit: {mean_val:.1f})"
+                    disp_str = f"{int(p_val)}" # Viser percentilen i boksen som på referencen
                 else:
-                    disp_str = f"{int(raw_val)} (#{r_val})\n(Snit: {int(mean_val)})"
+                    disp_str = f"{int(p_val)}"
                     
                 display_values.append(disp_str)
-                plot_colors.append(color_map[group_name])
 
         num_vars = len(plot_labels)
         angles = np.linspace(0, 2 * np.pi, num_vars, endpoint=False)
         width = (2 * np.pi) / num_vars
 
-        # Tegn baggrundsrammer (100%-skala) og 50%-gennemsnitslinje
-        ax.bar(angles, [100] * num_vars, width=width, color='none', edgecolor='white', linewidth=0.8, alpha=0.3, zorder=1)
-        ax.bar(angles, [50] * num_vars, width=width, color='none', edgecolor='gray', linestyle='--', linewidth=0.8, alpha=0.5, zorder=2)
+        # Hvide gitterlinjer og cirkler
+        ax.grid(True, color='white', linewidth=0.6, alpha=0.3)
+        
+        # Tegn sektor-blokkene i ensartet lyseblå farve (#5DADE2)
+        ax.bar(angles, values, width=width, bottom=0, color='#5DADE2', alpha=0.95, edgecolor='#121212', linewidth=1.5, zorder=3)
 
-        # Tegn holdets værdier
-        ax.bar(angles, values, width=width, bottom=0, color=plot_colors, alpha=0.9, edgecolor='white', linewidth=1.2, zorder=3)
+        # Overskrift (Holdnavn i toppen)
+        plt.suptitle(valgt_hold_navn, color='white', fontsize=18, fontweight='bold', y=0.94, fontfamily='sans-serif')
 
         logo_img = get_logo(logo_url)
         if logo_img:
-            ax.add_artist(AnnotationBbox(OffsetImage(logo_img, zoom=0.55), (0, 0), frameon=False, zorder=10))
+            ax.add_artist(AnnotationBbox(OffsetImage(logo_img, zoom=0.45), (0, 0), frameon=False, zorder=10))
 
         ax.set_theta_offset(np.pi / 2)
         ax.set_theta_direction(-1)
         ax.axis('off')
 
-        for angle, label, disp, color in zip(angles, plot_labels, display_values, plot_colors):
-            # Værdi + Rang + Ligagennemsnit ude på baren
-            ax.text(angle, 112, disp, ha='center', va='center', 
-                    fontsize=6.5, fontweight='bold', color='white', zorder=12,
-                    bbox=dict(facecolor=color, edgecolor='white', boxstyle='round,pad=0.3', linewidth=0.8))
+        # Placering af værdier og labels magen til referencen
+        for angle, label, disp in zip(angles, plot_labels, display_values):
+            # Beregn rotationsvinkel for tekst i kanten, så den følger hjulet
+            angle_deg = np.degrees(angle)
+            rotation = angle_deg - 90
+            if angle_deg > 180:
+                rotation = angle_deg + 90
+
+            # Værdi-boks inde på baren
+            ax.text(angle, 55, disp, ha='center', va='center', 
+                    fontsize=8, fontweight='bold', color='white', zorder=12,
+                    bbox=dict(facecolor='#2980B9', edgecolor='white', boxstyle='round,pad=0.3', linewidth=0.8))
             
-            # Navn på metrikken yderst
-            ax.text(angle, 142, label, ha='center', va='center',
-                    fontsize=7, fontweight='bold', color='black', zorder=11,
-                    bbox=dict(facecolor='white', edgecolor='black', boxstyle='round,pad=0.4', linewidth=0.6))
+            # Metrik-navn yderst i kanten (roteret pænt ligesom eksemplet)
+            ax.text(angle, 112, label, ha='center', va='center',
+                    fontsize=9, fontweight='bold', color='white', zorder=11,
+                    rotation=0)
 
         st.pyplot(fig, use_container_width=True)
 
         buf = BytesIO()
-        fig.savefig(buf, format="png", transparent=True, bbox_inches='tight', pad_inches=0.1, dpi=300)
+        fig.savefig(buf, format="png", facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight', pad_inches=0.1, dpi=300)
         
         with download_placeholder:
             st.download_button(
                 label="Download",
                 data=buf.getvalue(),
-                file_name=f"Pizzachart_{valgt_hold_navn}.png",
+                file_name=f"Radar_{valgt_hold_navn}.png",
                 mime="image/png"
             )
