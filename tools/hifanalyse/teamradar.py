@@ -156,20 +156,16 @@ def vis_side(*args, **kwargs):
             'CONCEDEDGOALS_RANK', 'DEFENSIVE_RANK'
         ]
 
-        # Kategori-labels: navn + rank (bevidst anderledes end referencebilledet,
-        # som kun viser kategorinavn - I ville gerne have rank med)
         params = []
         for bp, r_col in zip(base_params, rank_cols):
             rank = int(target_team[r_col]) if r_col in target_team and not pd.isna(target_team[r_col]) else 0
             params.append(f"{bp}\nRank: {rank}")
 
-        # Skivelængden styres af PERCENTIL (hvor godt holdet ligger ift. resten af ligaen)
         pizza_values = []
         for p_col in percentile_cols:
             val = float(target_team[p_col]) if p_col in target_team and not pd.isna(target_team[p_col]) else 50.0
             pizza_values.append(val)
 
-        # Men det der VISES i boksene er de rå METRIC-værdier, ikke percentilen
         display_values = []
         for r_col in raw_cols:
             val = float(target_team[r_col]) if r_col in target_team and not pd.isna(target_team[r_col]) else 0.0
@@ -227,20 +223,11 @@ def vis_side(*args, **kwargs):
         ax.set_aspect('equal')
         fig.patch.set_facecolor('#FFFFFF')
 
-        # Alle skiver møder det sande centrum (inner_circle_size=0 ovenfor) -
-        # men vi vil ikke have tal-labels for lave værdier til at havne inde
-        # under logoet. Derfor tvinges hver labels radiale position til
-        # minimum MIN_LABEL_RADIUS, uafhængigt af den faktiske percentil-
-        # beregning (som stadig er 100% korrekt - det er kun VISNINGEN af
-        # tallet, der flyttes udad).
         MIN_LABEL_RADIUS = 15
         for text_obj in baker.get_value_texts():
             theta, r = text_obj.get_position()
             if r < MIN_LABEL_RADIUS:
                 text_obj.set_position((theta, MIN_LABEL_RADIUS))
-
-        # Bevidst INGEN titel/overskrift (fig.suptitle) - I bad om at undlade
-        # navne/overskrifter, i modsætning til referencebilledet
 
         logo_img = get_logo(logo_url)
         if logo_img:
@@ -260,3 +247,28 @@ def vis_side(*args, **kwargs):
                 file_name=f"Radar_{valgt_hold_navn}.png",
                 mime="image/png"
             )
+
+        # --- TILFØJELSE AF DATATABEL NEDENFOR ---
+        st.markdown("### Detaljerede statistikker")
+        table_data = []
+        for bp, r_col, rc_col, pc_col in zip(base_params, rank_cols, raw_cols, percentile_cols):
+            rank_val = int(target_team[r_col]) if r_col in target_team and not pd.isna(target_team[r_col]) else 0
+            raw_val = float(target_team[rc_col]) if rc_col in target_team and not pd.isna(target_team[rc_col]) else 0.0
+            pct_val = float(target_team[pc_col]) if pc_col in target_team and not pd.isna(target_team[pc_col]) else 0.0
+            
+            if rc_col == 'CONVERSION_RATE':
+                raw_str = f"{raw_val:.1f}%"
+            elif rc_col in ['PASSING_FACTOR_AVGVAL', 'POSSESSIONPERCENT']:
+                raw_str = f"{raw_val:.1f}"
+            else:
+                raw_str = str(int(raw_val))
+
+            table_data.append({
+                "Kategori": bp,
+                "Rank": rank_val,
+                "Metric (Værdi)": raw_str,
+                "Percentile (%)": f"{pct_val:.1f}%"
+            })
+
+        df_table = pd.DataFrame(table_data)
+        st.dataframe(df_table, use_container_width=True, hide_index=True)
