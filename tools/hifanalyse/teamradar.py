@@ -164,7 +164,7 @@ def vis_side(*args, **kwargs):
             values,
             figsize=(10, 10),
             color_blank_space="same",
-            blank_alpha=0.4,
+            blank_alpha=0.1,
             param_location=110,
             kwargs_slices=dict(
                 facecolor=slice_colors, edgecolor="#222222",
