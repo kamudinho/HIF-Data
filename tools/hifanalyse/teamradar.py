@@ -129,14 +129,12 @@ def vis_side(*args, **kwargs):
             "Mål Imod", "Defensiv Akt."
         ]
         
-        # Bruges til at beregne størrelsen på slice (0-100 percentil)
         percentile_cols = [
             'GOALS_PCTILE', 'SHOTS_PCTILE', 'CONVERSION_PCTILE',
             'POSSESSION_PCTILE', 'PASSING_FACTOR_PCTILE', 'ATTACKING_PCTILE',
             'CONCEDEDGOALS_PCTILE', 'DEFENSIVE_PCTILE'
         ]
 
-        # Bruges til selve teksten, der vises i boksen (rå værdier)
         raw_cols = [
             'GOALS', 'SHOTS', 'CONVERSION_RATE',
             'POSSESSIONPERCENT', 'PASSING_FACTOR_AVGVAL', 'ATTACKING_ACTIONS',
@@ -166,22 +164,21 @@ def vis_side(*args, **kwargs):
             params=params,
             min_range=[0]*len(params),
             max_range=[100]*len(params),
-            background_color="#FFFFFF",
+            background_color="#F8F9FA",
             straight_line_color="#222222",
             last_circle_color="#222222",
             last_circle_lw=1.5,
-            other_circle_lw=0,  # Fjerner de stiplede linjer
+            other_circle_lw=0,  
             other_circle_color="#DDDDDD",
             inner_circle_size=8,
         )
 
-        # Sender percentilerne ind til størrelse, og de rå værdier med alt_text_values til visning i boksene
         fig, ax = baker.make_pizza(
             pizza_values,
             alt_text_values=display_values,
             figsize=(10, 10),
             color_blank_space="same",
-            blank_alpha=0.4,
+            blank_alpha=0.2,
             param_location=110,
             kwargs_slices=dict(
                 facecolor=slice_colors, edgecolor="#222222",
@@ -202,7 +199,7 @@ def vis_side(*args, **kwargs):
         )
 
         ax.set_aspect('equal')
-        fig.patch.set_facecolor('#FFFFFF')
+        fig.patch.set_facecolor('#F8F9FA')
 
         logo_img = get_logo(logo_url)
         if logo_img:
@@ -213,7 +210,7 @@ def vis_side(*args, **kwargs):
         st.pyplot(fig, use_container_width=True)
 
         buf = BytesIO()
-        fig.savefig(buf, format="png", facecolor="#FFFFFF", edgecolor='none', bbox_inches=None, dpi=300)
+        fig.savefig(buf, format="png", facecolor="#F8F9FA", edgecolor='none', bbox_inches=None, dpi=300)
         
         with download_placeholder:
             st.download_button(
