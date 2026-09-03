@@ -36,7 +36,7 @@ def fetch_data():
     WITH team_base AS (
         SELECT 
             t.TEAMNAME,
-            tm.IMAGEDATAURL,
+            t.IMAGEDATAURL,
             s.SEASONNAME,
             tp.COMPETITION_WYID,
             s.SEASON_WYID,
@@ -64,7 +64,6 @@ def fetch_data():
         JOIN KLUB_HVIDOVREIF.AXIS.WYSCOUT_TEAMS t ON tp.TEAM_WYID = t.TEAM_WYID
         JOIN KLUB_HVIDOVREIF.AXIS.WYSCOUT_SEASONS_STANDINGS st 
             ON tp.TEAM_WYID = st.TEAM_WYID AND tp.SEASON_WYID = st.SEASON_WYID
-        LEFT JOIN KLUB_HVIDOVREIF.AXIS.WYSCOUT_TEAMS t_logo ON tp.TEAM_WYID = t_logo.TEAM_WYID
         LEFT JOIN KLUB_HVIDOVREIF.AXIS.WYSCOUT_TEAMSADVANCEDSTATS_AVERAGE avg_stats 
             ON tp.TEAM_WYID = avg_stats.TEAM_WYID 
             AND tp.SEASON_WYID = avg_stats.SEASON_WYID 
@@ -184,7 +183,6 @@ def vis_side(*args, **kwargs):
         color_map = {'OFFENSIV': '#2ecc71', 'OPBYGNING': '#f1c40f', 'DEFENSIV': '#e74c3c'}
         plot_labels, values, display_values, plot_colors = [], [], [], []
 
-        # Mapping fra dine SQL-kolonner til visning og ranks
         metric_column_mapping = {
             'GOALS': ('GOALS_PCTILE', 'GOALS_RANK'),
             'SHOTS': ('SHOTS_PCTILE', 'SHOTS_RANK'),
@@ -208,7 +206,6 @@ def vis_side(*args, **kwargs):
                 scaled_val = V_OFFSET + (p_val * (100 - V_OFFSET) / 100)
                 values.append(scaled_val)
                 
-                # Viser både rå værdi/snit og rank (#1, #2 osv.)
                 raw_val = target_team[data_col]
                 if data_col == 'CONVERSION_RATE' or data_col == 'POSSESSIONPERCENT' or data_col == 'PASSING_FACTOR_AVGVAL':
                     disp_str = f"{raw_val:.1f} (#{r_val})"
