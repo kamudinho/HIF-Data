@@ -196,7 +196,8 @@ def vis_side(*args, **kwargs):
 
         logo_img = get_logo(logo_url)
         if logo_img:
-            ax.add_artist(AnnotationBbox(OffsetImage(logo_img, zoom=0.60), (0, 0), frameon=True, 
+            # Justeret y-koordinat til -0.18 for at trække logoet ned på plads i midten
+            ax.add_artist(AnnotationBbox(OffsetImage(logo_img, zoom=0.60), (0, -0.18), frameon=True, 
                                           bboxprops=dict(facecolor='white', edgecolor='#222222', linewidth=1.5, boxstyle='circle'), 
                                           zorder=10))
 
