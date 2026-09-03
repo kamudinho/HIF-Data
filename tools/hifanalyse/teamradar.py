@@ -209,10 +209,11 @@ def vis_side(*args, **kwargs):
         angles = np.linspace(0, 2 * np.pi, num_vars, endpoint=False)
         width = (2 * np.pi) / num_vars
 
-        # Gitterlinjer og omrids
+        # Sætter yticks, så den yderste ring (100%) tegnes fuldt ud som en cirkelkant
+        ax.set_yticks([20, 40, 60, 80, 100])
         ax.grid(True, color='#2C3E50', linewidth=0.8, alpha=0.4, zorder=4)
         
-        # Slices med hvidovre-rød og fin opacitet
+        # Slices med hvidovre-rød, opacitet og tydeligt omrids der går ud til 100%
         ax.bar(angles, values, width=width, bottom=0, color='#DA291C', alpha=0.4, edgecolor='#DA291C', linewidth=1.5, zorder=3)
 
         logo_img = get_logo(logo_url)
