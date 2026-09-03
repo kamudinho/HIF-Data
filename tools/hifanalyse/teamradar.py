@@ -164,7 +164,7 @@ def vis_side(*args, **kwargs):
             values,
             figsize=(10, 10),
             color_blank_space="same",
-            blank_alpha=0.1,
+            blank_alpha=0.4,
             param_location=110,
             kwargs_slices=dict(
                 facecolor=slice_colors, edgecolor="#222222",
@@ -196,7 +196,7 @@ def vis_side(*args, **kwargs):
 
         logo_img = get_logo(logo_url)
         if logo_img:
-            ax.add_artist(AnnotationBbox(OffsetImage(logo_img, zoom=0.30), (0, 0), frameon=True, 
+            ax.add_artist(AnnotationBbox(OffsetImage(logo_img, zoom=0.60), (0, 0), frameon=True, 
                                           bboxprops=dict(facecolor='white', edgecolor='#222222', linewidth=1.5, boxstyle='circle'), 
                                           zorder=10))
 
