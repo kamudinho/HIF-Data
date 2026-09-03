@@ -72,7 +72,6 @@ def fetch_data():
             COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.ATTACKING_ACTIONS), 0) * 100 AS ATTACKING_PCTILE,
             COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.DEFENSIVE_ACTIONS), 0) * 100 AS DEFENSIVE_PCTILE,
 
-            -- Ranks (1 er bedst for flest undtagen conceded goals hvor lavest er bedst, eller omvendt afhængigt af præference - her sorteres standard stigende/faldende)
             ROW_NUMBER() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.GOALS DESC) AS GOALS_RANK,
             ROW_NUMBER() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.SHOTS DESC) AS SHOTS_RANK,
             ROW_NUMBER() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.CONVERSION_RATE DESC) AS CONVERSION_RANK,
@@ -133,7 +132,7 @@ def vis_side(*args, **kwargs):
         logo_url = target_team_raw['IMAGEDATAURL'].values[0]
         target_team = target_team_raw.iloc[0]
 
-        params = [
+        base_params = [
             "Mål", "Skud", "Konvertering",
             "Possession", "Pasningsfaktor", "Offensiv Akt.",
             "Mål Imod", "Defensiv Akt."
@@ -157,22 +156,26 @@ def vis_side(*args, **kwargs):
             'CONCEDEDGOALS_RANK', 'DEFENSIVE_RANK'
         ]
 
+        # Byg parametre med rangering under kategorinavnet
+        params = []
+        for bp, r_col in zip(base_params, rank_cols):
+            rank = int(target_team[r_col]) if r_col in target_team and not pd.isna(target_team[r_col]) else 0
+            params.append(f"{bp}\n({rank}.)")
+
         pizza_values = []
         for p_col in percentile_cols:
             val = float(target_team[p_col]) if p_col in target_team and not pd.isna(target_team[p_col]) else 50.0
             pizza_values.append(val)
 
         display_values = []
-        for r_col, rank_col in zip(raw_cols, rank_cols):
+        for r_col in raw_cols:
             val = float(target_team[r_col]) if r_col in target_team and not pd.isna(target_team[r_col]) else 0.0
-            rank = int(target_team[rank_col]) if rank_col in target_team and not pd.isna(target_team[rank_col]) else 0
-            
             if r_col == 'CONVERSION_RATE':
-                display_values.append(f"{val:.1f}% ({rank}.)")
+                display_values.append(f"{val:.1f}%")
             elif r_col in ['PASSING_FACTOR_AVGVAL', 'POSSESSIONPERCENT']:
-                display_values.append(f"{val:.1f} ({rank}.)")
+                display_values.append(f"{val:.1f}")
             else:
-                display_values.append(f"{int(val)} ({rank}.)")
+                display_values.append(str(int(val)))
 
         slice_colors = (
             ["#D32F2F"] * 3 +  
@@ -205,11 +208,11 @@ def vis_side(*args, **kwargs):
                 zorder=1, linewidth=0.8
             ),
             kwargs_params=dict(
-                color="#111111", fontsize=10, zorder=5,
+                color="#111111", fontsize=9, zorder=5,
                 va="center", fontweight="bold"
             ),
             kwargs_values=dict(
-                color="#FFFFFF", fontsize=8,
+                color="#FFFFFF", fontsize=9,
                 zorder=3,
                 bbox=dict(
                     edgecolor="#222222", facecolor="#111111",
