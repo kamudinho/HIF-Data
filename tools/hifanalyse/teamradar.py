@@ -196,7 +196,7 @@ def vis_side(*args, **kwargs):
             last_circle_lw=1.5,
             other_circle_lw=1,
             other_circle_color="#DDDDDD",
-            inner_circle_size=3,
+            inner_circle_size=20,
         )
 
         fig, ax = baker.make_pizza(
@@ -233,7 +233,7 @@ def vis_side(*args, **kwargs):
         logo_img = get_logo(logo_url)
         if logo_img:
             ax_image = add_image(
-                logo_img, fig, left=0.463, bottom=0.456, width=0.085, height=0.083
+                logo_img, fig, left=0.450, bottom=0.443, width=0.11, height=0.108
             )
 
         st.pyplot(fig, use_container_width=True)
