@@ -164,7 +164,7 @@ def vis_side(*args, **kwargs):
             params=params,
             min_range=[0]*len(params),
             max_range=[100]*len(params),
-            background_color="#F8F9FA",
+            background_color="#FFFFFF",
             straight_line_color="#222222",
             last_circle_color="#222222",
             last_circle_lw=1.5,
@@ -178,7 +178,7 @@ def vis_side(*args, **kwargs):
             alt_text_values=display_values,
             figsize=(10, 10),
             color_blank_space="same",
-            blank_alpha=0.2,
+            blank_alpha=0.4,
             param_location=110,
             kwargs_slices=dict(
                 facecolor=slice_colors, edgecolor="#222222",
@@ -199,7 +199,7 @@ def vis_side(*args, **kwargs):
         )
 
         ax.set_aspect('equal')
-        fig.patch.set_facecolor('#F8F9FA')
+        fig.patch.set_facecolor('#FFFFFF')
 
         logo_img = get_logo(logo_url)
         if logo_img:
@@ -210,7 +210,7 @@ def vis_side(*args, **kwargs):
         st.pyplot(fig, use_container_width=True)
 
         buf = BytesIO()
-        fig.savefig(buf, format="png", facecolor="#F8F9FA", edgecolor='none', bbox_inches=None, dpi=300)
+        fig.savefig(buf, format="png", facecolor="#FFFFFF", edgecolor='none', bbox_inches=None, dpi=300)
         
         with download_placeholder:
             st.download_button(
