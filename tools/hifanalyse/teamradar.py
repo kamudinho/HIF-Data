@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from PIL import Image
 import requests
 from io import BytesIO
+from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 from mplsoccer import PyPizza
 from data.data_load import _get_snowflake_conn
 
@@ -123,14 +124,12 @@ def vis_side(*args, **kwargs):
         logo_url = target_team_raw['IMAGEDATAURL'].values[0]
         target_team = target_team_raw.iloc[0]
 
-        # 1. Opsæt parametre og tilhørende datakilder
         params = [
             "Mål", "Skud", "Konvertering", "Offensiv Akt.",
             "Possession", "Pasningsfaktor",
             "Mål Imod", "Defensiv Akt."
         ]
         
-        # Hent percentiler (bruges til at styre hvor langt kilerne rækker ud fra 0-100)
         percentile_cols = [
             'GOALS_PCTILE', 'SHOTS_PCTILE', 'CONVERSION_PCTILE', 'ATTACKING_PCTILE',
             'POSSESSION_PERCENT_PCTILE' if 'POSSESSION_PERCENT_PCTILE' in target_team else 'POSSESSION_PCTILE',
@@ -138,7 +137,6 @@ def vis_side(*args, **kwargs):
             'CONCEDEDGOALS_PCTILE', 'DEFENSIVE_PCTILE'
         ]
         
-        # Hent de rå værdier (vises inde i kilerne)
         raw_cols = [
             'GOALS', 'SHOTS', 'CONVERSION_RATE', 'ATTACKING_ACTIONS',
             'POSSESSIONPERCENT', 'PASSING_FACTOR_AVGVAL',
@@ -158,7 +156,6 @@ def vis_side(*args, **kwargs):
             else:
                 raw_display_values.append(str(int(val)))
 
-        # 2. Initialiser PyPizza fra mplsoccer
         baker = PyPizza(
             params=params,
             min_range=[0]*len(params),
@@ -172,7 +169,6 @@ def vis_side(*args, **kwargs):
             inner_circle_size=18,
         )
 
-        # 3. Byg selve pizza-diagrammet i Hvidovre-rød (#DA291C)
         fig, ax = baker.make_pizza(
             values,
             figsize=(9, 9),
@@ -197,13 +193,10 @@ def vis_side(*args, **kwargs):
             )
         )
 
-        # Tilpas værdierne indeni til at vise de RÅ værdier i stedet for percentilerne
         for txt, raw_val in zip(ax.texts, raw_display_values):
-            # Tjek om teksten er en af værdiboksene (og ikke et parameter-navn)
             if txt.get_position()[1] < 100 and txt.get_text().replace('.', '', 1).isdigit():
                 txt.set_text(raw_val)
 
-        # 4. Indsæt holdets logo i midten
         logo_img = get_logo(logo_url)
         if logo_img:
             ax.add_artist(AnnotationBbox(OffsetImage(logo_img, zoom=0.35), (0, 0), frameon=True, 
