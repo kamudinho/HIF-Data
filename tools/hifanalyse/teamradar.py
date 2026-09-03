@@ -196,7 +196,7 @@ def vis_side(*args, **kwargs):
             last_circle_lw=1.5,
             other_circle_lw=1,
             other_circle_color="#DDDDDD",
-            inner_circle_size=5,
+            inner_circle_size=0,
         )
 
         fig, ax = baker.make_pizza(
@@ -227,13 +227,25 @@ def vis_side(*args, **kwargs):
         ax.set_aspect('equal')
         fig.patch.set_facecolor('#FFFFFF')
 
+        # Alle skiver møder det sande centrum (inner_circle_size=0 ovenfor) -
+        # men vi vil ikke have tal-labels for lave værdier til at havne inde
+        # under logoet. Derfor tvinges hver labels radiale position til
+        # minimum MIN_LABEL_RADIUS, uafhængigt af den faktiske percentil-
+        # beregning (som stadig er 100% korrekt - det er kun VISNINGEN af
+        # tallet, der flyttes udad).
+        MIN_LABEL_RADIUS = 15
+        for text_obj in baker.get_value_texts():
+            theta, r = text_obj.get_position()
+            if r < MIN_LABEL_RADIUS:
+                text_obj.set_position((theta, MIN_LABEL_RADIUS))
+
         # Bevidst INGEN titel/overskrift (fig.suptitle) - I bad om at undlade
         # navne/overskrifter, i modsætning til referencebilledet
 
         logo_img = get_logo(logo_url)
         if logo_img:
             ax_image = add_image(
-                logo_img, fig, left=0.450, bottom=0.443, width=0.11, height=0.108
+                logo_img, fig, left=0.4675, bottom=0.4595, width=0.075, height=0.075
             )
 
         st.pyplot(fig, use_container_width=True)
