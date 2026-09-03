@@ -174,7 +174,6 @@ def vis_side(*args, **kwargs):
         fig.patch.set_facecolor('white')
         ax.set_facecolor('white')
         
-        # Tættere layout da overskriften er fjernet
         plt.subplots_adjust(left=0.05, right=0.95, top=0.95, bottom=0.05)
         
         LIMIT_Y = 100 
@@ -191,13 +190,12 @@ def vis_side(*args, **kwargs):
                     rank_col = f"{data_col}_RANK"
                 
                 p_val = float(target_team[pctile_col]) if pctile_col in target_team and not pd.isna(target_team[pctile_col]) else 50.0
-                r_val = int(target_team[rank_col]) if rank_col in target_team and not pd.isna(target_team[rank_col]) else 1
+                r_val = int(target_team[rank_col]) if target_team in target_team and not pd.isna(target_team[rank_col]) else 1
                 raw_val = float(target_team[data_col]) if data_col in target_team and not pd.isna(target_team[data_col]) else 0.0
                 
                 plot_labels.append(f"{display_label}\n(Rank: {r_val})")
                 values.append(p_val)
                 
-                # Formatér den faktiske værdi pænt
                 if data_col in ['CONVERSION_RATE', 'POSSESSIONPERCENT', 'PASSING_FACTOR_AVGVAL']:
                     display_values.append(f"{raw_val:.1f}")
                 else:
@@ -207,11 +205,11 @@ def vis_side(*args, **kwargs):
         angles = np.linspace(0, 2 * np.pi, num_vars, endpoint=False)
         width = (2 * np.pi) / num_vars
 
-        # Gitterlinjer
-        ax.grid(True, color='#2C3E50', linewidth=0.6, alpha=0.3)
+        # Tydelige gitterlinjer og omrids (streger på pizzaen)
+        ax.grid(True, color='#2C3E50', linewidth=0.8, alpha=0.4, zorder=4)
         
-        # Slices i Hvidovre-rød (#DA291C) med opacitet (alpha=0.85)
-        ax.bar(angles, values, width=width, bottom=0, color='#DA291C', alpha=0.85, edgecolor='#2C3E50', linewidth=1.2, zorder=3)
+        # Slices i Hvidovre-rød (#DA291C) med lavere opacitet (alpha=0.4) og synlige kanter/omrids
+        ax.bar(angles, values, width=width, bottom=0, color='#DA291C', alpha=0.4, edgecolor='#DA291C', linewidth=1.5, zorder=3)
 
         logo_img = get_logo(logo_url)
         if logo_img:
@@ -221,14 +219,12 @@ def vis_side(*args, **kwargs):
         ax.set_theta_direction(-1)
         ax.axis('off')
 
-        # Placering af faktiske værdier og navne med rank under
+        # Placering af værdier og labels
         for angle, label, disp in zip(angles, plot_labels, display_values):
-            # Værdi-boks inde på baren (mørkere rød/rødlig baggrund)
             ax.text(angle, 55, disp, ha='center', va='center', 
                     fontsize=8, fontweight='bold', color='white', zorder=12,
-                    bbox=dict(facecolor='#B51D12', edgecolor='#2C3E50', boxstyle='round,pad=0.3', linewidth=0.8))
+                    bbox=dict(facecolor='#DA291C', edgecolor='#2C3E50', boxstyle='round,pad=0.3', linewidth=0.8))
             
-            # Metrik-navn + Rank yderst i kanten
             ax.text(angle, 112, label, ha='center', va='center',
                     fontsize=8.5, fontweight='bold', color='#2C3E50', zorder=11,
                     rotation=0)
