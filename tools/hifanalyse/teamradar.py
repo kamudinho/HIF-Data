@@ -124,17 +124,11 @@ def vis_side(*args, **kwargs):
         logo_url = target_team_raw['IMAGEDATAURL'].values[0]
         target_team = target_team_raw.iloc[0]
 
+        # 1. Opsæt parametre, rækker og beregn min/max for skalaen automatisk ud fra hele ligaen
         params = [
             "Mål", "Skud", "Konvertering", "Offensiv Akt.",
             "Possession", "Pasningsfaktor",
             "Mål Imod", "Defensiv Akt."
-        ]
-        
-        percentile_cols = [
-            'GOALS_PCTILE', 'SHOTS_PCTILE', 'CONVERSION_PCTILE', 'ATTACKING_PCTILE',
-            'POSSESSION_PERCENT_PCTILE' if 'POSSESSION_PERCENT_PCTILE' in target_team else 'POSSESSION_PCTILE',
-            'PASSING_FACTOR_PCTILE',
-            'CONCEDEDGOALS_PCTILE', 'DEFENSIVE_PCTILE'
         ]
         
         raw_cols = [
@@ -143,37 +137,48 @@ def vis_side(*args, **kwargs):
             'CONCEDEDGOALS', 'DEFENSIVE_ACTIONS'
         ]
 
+        # Hent faktiske rå værdier for det valgte hold
         values = []
-        for p_col, r_col in zip(percentile_cols, raw_cols):
-            p_val = float(target_team[p_col]) if p_col in target_team and not pd.isna(target_team[p_col]) else 50.0
-            values.append(p_val)
-
-        raw_display_values = []
         for r_col in raw_cols:
             val = float(target_team[r_col]) if r_col in target_team and not pd.isna(target_team[r_col]) else 0.0
-            if r_col in ['CONVERSION_RATE', 'POSSESSIONPERCENT', 'PASSING_FACTOR_AVGVAL']:
-                raw_display_values.append(f"{val:.1f}")
-            else:
-                raw_display_values.append(str(int(val)))
+            values.append(val)
 
+        # Beregn min_range og max_range på tværs af hele ligaen for at få rigtige percentiler/proportioner
+        min_range = []
+        max_range = []
+        for r_col in raw_cols:
+            col_min = float(df[r_col].min())
+            col_max = float(df[r_col].max())
+            # For "Mål Imod" (CONCEDEDGOALS) vil lavere være bedre, men PyPizza håndterer lineær skala. 
+            # Hvis col_min == col_max, sætter vi et spænd for at undgå division med 0.
+            if col_min == col_max:
+                col_min = 0.0
+                col_max = max(col_max, 1.0)
+            
+            # Sørg for lidt luft i min/max
+            min_range.append(col_min * 0.9 if col_min > 0 else 0)
+            max_range.append(col_max * 1.1 if col_max > 0 else 10.0)
+
+        # 2. Initialiser PyPizza med HVID baggrund (#FFFFFF)
         baker = PyPizza(
             params=params,
-            min_range=[0]*len(params),
-            max_range=[100]*len(params),
-            background_color="#F9F6F0",
+            min_range=min_range,
+            max_range=max_range,
+            background_color="#FFFFFF",
             straight_line_color="#111111",
             last_circle_color="#111111",
             last_circle_lw=1.5,
             other_circle_lw=0.8,
-            other_circle_color="#D3D3D3",
+            other_circle_color="#E0E0E0",
             inner_circle_size=18,
         )
 
+        # 3. Byg selve pizza-diagrammet i Hvidovre-rød (#DA291C)
         fig, ax = baker.make_pizza(
             values,
             figsize=(9, 9),
             color_blank_space="same",
-            blank_alpha=0.3,
+            blank_alpha=0.2,
             param_location=110,
             kwargs_slices=dict(
                 facecolor="#DA291C", edgecolor="#111111",
@@ -187,20 +192,27 @@ def vis_side(*args, **kwargs):
                 color="#111111", fontsize=9,
                 zorder=3,
                 bbox=dict(
-                    edgecolor="none", facecolor="#F9F6F0",
-                    boxstyle="round,pad=0.2", lw=0
+                    edgecolor="#111111", facecolor="#FFFFFF",
+                    boxstyle="round,pad=0.2", lw=0.6
                 )
             )
         )
 
-        for txt, raw_val in zip(ax.texts, raw_display_values):
-            if txt.get_position()[1] < 100 and txt.get_text().replace('.', '', 1).isdigit():
-                txt.set_text(raw_val)
+        # Sørg for at værdierne vises pænt formateret (decimaler til procenter/snit, heltal til mål/skud)
+        for i, txt in enumerate(ax.texts):
+            # Tjek om det er en værditekst (og ikke parameter-navn udefra)
+            if txt.get_position()[1] < 100:
+                val = values[i] if i < len(values) else 0
+                if raw_cols[i] in ['CONVERSION_RATE', 'POSSESSIONPERCENT', 'PASSING_FACTOR_AVGVAL']:
+                    txt.set_text(f"{val:.1f}")
+                else:
+                    txt.set_text(str(int(val)))
 
+        # 4. Indsæt holdets logo pænt i midten med hvid baggrundscirkel
         logo_img = get_logo(logo_url)
         if logo_img:
-            ax.add_artist(AnnotationBbox(OffsetImage(logo_img, zoom=0.35), (0, 0), frameon=True, 
-                                          bboxprops=dict(facecolor='white', edgecolor='#111111', linewidth=1.5, boxstyle='circle'), 
+            ax.add_artist(AnnotationBbox(OffsetImage(logo_img, zoom=0.30), (0, 0), frameon=True, 
+                                          bboxprops=dict(facecolor='white', edgecolor='#111111', linewidth=1.2, boxstyle='circle'), 
                                           zorder=10))
 
         st.pyplot(fig, use_container_width=True)
