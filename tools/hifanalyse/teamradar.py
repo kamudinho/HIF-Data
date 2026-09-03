@@ -170,14 +170,15 @@ def vis_side(*args, **kwargs):
             straight_line_color="#222222",
             last_circle_color="#222222",
             last_circle_lw=1.5,
-            other_circle_lw=0,  
+            other_circle_lw=0,  # Fjerner de stiplede linjer
             other_circle_color="#DDDDDD",
             inner_circle_size=8,
         )
 
-        # Sender percentilerne ind, så størrelserne beregnes korrekt ud fra 0-100 skalaen
+        # Sender percentilerne ind til størrelse, og de rå værdier med alt_text_values til visning i boksene
         fig, ax = baker.make_pizza(
             pizza_values,
+            alt_text_values=display_values,
             figsize=(10, 10),
             color_blank_space="same",
             blank_alpha=0.4,
@@ -202,14 +203,6 @@ def vis_side(*args, **kwargs):
 
         ax.set_aspect('equal')
         fig.patch.set_facecolor('#FFFFFF')
-
-        # Overskriver tekstboksene med de faktiske rå værdier i stedet for percentilerne
-        val_idx = 0
-        for txt in ax.texts:
-            pos = txt.get_position()
-            if pos[1] < 100 and val_idx < len(display_values):
-                txt.set_text(display_values[val_idx])
-                val_idx += 1
 
         logo_img = get_logo(logo_url)
         if logo_img:
