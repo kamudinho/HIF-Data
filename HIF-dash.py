@@ -150,7 +150,7 @@ with st.sidebar:
         "SCOUTING": ["Scoutrapport", "Database", "Emnedatabase", "Sammenligning", "Transfers", "Top10-scouting"],
         "TILPASNING": ["Spillerdata", "Spiller-score", "Standardsituationer", "Model"],
         "TESTSIDE": ["Performance", "Winning Performance", "1. Div-tilpasning", "Charts", "Oversigt", "Forecast"],
-        "ADMIN": ["System Log", "Profil", "Datakatalog", "Konklusion", "Spillerradar", "Fysisk profil", "Hold: Fysisk profil", "Intern analyse", "Top 5: Spillere", "Ordbog"]
+        "ADMIN": ["System Log", "Profil", "Datakatalog", "Konklusion", "Teamradar", "Spillerradar", "Fysisk profil", "Hold: Fysisk profil", "Intern analyse", "Top 5: Spillere", "Ordbog"]
     }
     
     aktuel_undermenu = [o for o in menu_map.get(hoved_omraade, ["Forside"]) if o.lower().strip() not in restriktioner]
@@ -340,6 +340,9 @@ try:
         elif s == "Spillerradar":
             import tools.players.spillerradar as sr
             sr.vis_side()
+        elif s == "Teamradar":
+            import tools.hifanalyse.teamradar as tr
+            tr.vis_side()
 
 except Exception as e:
     st.error(f"Fejl ved indlæsning: {e}")
