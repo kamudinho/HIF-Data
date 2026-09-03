@@ -21,15 +21,15 @@ METRIC_PAIRS = {
         ('Pasningsfaktor', 'PASSING_FACTOR_AVGVAL')
     ],
     'DEFENSIV': [
-        ('Mål Imiteret / Imod', 'CONCEDEDGOALS'), 
+        ('Mål Imod', 'CONCEDEDGOALS'), 
         ('Defensiv Akt.', 'DEFENSIVE_ACTIONS')
     ]
 }
 
-# Farver til de forskellige grupper (inspireret af The Athletic-stilen)
+# Farver til de forskellige grupper (Athletic-stil)
 GROUP_COLORS = {
-    'OFFENSIV': '#4A90E2',   # Blæk-blå / blå
-    'OPBYGNING': '#50E3C2',  # Mint / turkis
+    'OFFENSIV': '#4A90E2',   # Blå
+    'OPBYGNING': '#50E3C2',  # Mint / Turkis
     'DEFENSIV': '#DA291C'    # Hvidovre rød
 }
 
@@ -182,7 +182,7 @@ def vis_side(*args, **kwargs):
         # --- FIGUR SETUP ---
         fig, ax = plt.subplots(figsize=(9, 9), subplot_kw=dict(polar=True))
         
-        fig.patch.set_facecolor('#F9F6F0')  # Lidt varm/off-white baggrund ligesom The Athletic
+        fig.patch.set_facecolor('#F9F6F0')  # Athletic off-white baggrund
         ax.set_facecolor('#F9F6F0')
         
         plt.subplots_adjust(left=0.05, right=0.95, top=0.95, bottom=0.05)
@@ -190,12 +190,12 @@ def vis_side(*args, **kwargs):
         LIMIT_Y = 100 
         ax.set_ylim(0, LIMIT_Y)
         
-        plot_labels, values, slice_colors, display_values, boundary_angles = [], [], [], [], []
+        plot_labels, heights, slice_colors, display_values, boundary_angles = [], [], [], [], []
 
-        current_angle_index = 0
         total_vars = sum(len(pairs) for pairs in METRIC_PAIRS.values())
         width = (2 * np.pi) / total_vars
-
+        
+        current_idx = 0
         for group_name, pairs in METRIC_PAIRS.items():
             group_color = GROUP_COLORS.get(group_name, '#DA291C')
             for display_label, data_col in pairs:
@@ -205,12 +205,15 @@ def vis_side(*args, **kwargs):
                     pctile_col = f"{data_col}_PCTILE"
                     rank_col = f"{data_col}_RANK"
                 
+                # Percentil styrer selve kilens højde (radius 0 til 100)
                 p_val = float(target_team[pctile_col]) if pctile_col in target_team and not pd.isna(target_team[pctile_col]) else 50.0
                 r_val = int(target_team[rank_col]) if rank_col in target_team and not pd.isna(target_team[rank_col]) else 1
+                
+                # Rå værdi der skal vises inde i feltet
                 raw_val = float(target_team[data_col]) if data_col in target_team and not pd.isna(target_team[data_col]) else 0.0
                 
                 plot_labels.append(f"{display_label}\n(Rank: {r_val})")
-                values.append(p_val)
+                heights.append(p_val)
                 slice_colors.append(group_color)
                 
                 if data_col in ['CONVERSION_RATE', 'POSSESSIONPERCENT', 'PASSING_FACTOR_AVGVAL']:
@@ -218,10 +221,10 @@ def vis_side(*args, **kwargs):
                 else:
                     display_values.append(f"{int(raw_val)}")
 
-            # Gem vinklen for gruppe-skift (til tykke adskillelseslinjer mellem grupper)
-            boundary_angle = current_angle_index * width
+            current_idx += len(pairs)
+            # Beregn vinkel for grænsen mellem grupper (forskudt med halvdelen af en kile / rotation)
+            boundary_angle = (current_idx * width) - (width / 2)
             boundary_angles.append(boundary_angle)
-            current_angle_index += len(pairs)
 
         angles = np.linspace(0, 2 * np.pi, total_vars, endpoint=False)
 
@@ -229,30 +232,30 @@ def vis_side(*args, **kwargs):
         ax.set_yticks([20, 40, 60, 80, 100])
         ax.grid(True, color='#D3D3D3', linewidth=0.8, linestyle='--', alpha=0.6, zorder=2)
         
-        # Tegn slices med gennemsigtighed (alpha=0.35) for The Athletic-look
-        ax.bar(angles, values, width=width, bottom=0, color=slice_colors, alpha=0.35, edgecolor='#2C3E50', linewidth=1.0, zorder=3)
+        # Rotér startretning så toppen er mod klokken 12 (som i eksemplet)
+        rotation_offset = np.pi / 2 + (width / 2)
+        ax.set_theta_offset(rotation_offset)
+        ax.set_theta_direction(-1)
 
-        # Tykke sorte grænselinjer mellem grupperne (præcis som i eksemplet)
+        # Tegn slices ud fra percentil-højderne
+        ax.bar(angles, heights, width=width, bottom=0, color=slice_colors, alpha=0.35, edgecolor='#2C3E50', linewidth=1.0, zorder=3)
+
+        # Tykke mørke grænselinjer mellem grupperne
         for b_angle in boundary_angles:
-            ax.plot([b_angle, b_angle], [0, LIMIT_Y], color='#111111', linewidth=2.5, zorder=5)
+            # Da theta_offset er justeret, tilpasses stregernes vinkler
+            ax.plot([b_angle - rotation_offset, b_angle - rotation_offset], [0, LIMIT_Y], color='#111111', linewidth=2.5, zorder=5)
 
-        # Hvid cirkel i midten til logoet (maskerer midten af pizzaen)
-        centre_circle = plt.Circle((0, 0), 18, transform=ax.transData._b, color='#F9F6F0', zorder=6, ec='#111111', lw=1.5)
-        # Alternativt kan et hvidt 'patch' eller blot zorder bruges, her lægger vi logoet ovenpå med høj zorder
-        
         logo_img = get_logo(logo_url)
         if logo_img:
             ax.add_artist(AnnotationBbox(OffsetImage(logo_img, zoom=0.40), (0, 0), frameon=True, 
                                           bboxprops=dict(facecolor='white', edgecolor='#111111', linewidth=1.5, boxstyle='circle'), 
                                           zorder=10))
 
-        ax.set_theta_offset(np.pi / 2)
-        ax.set_theta_direction(-1)
         ax.axis('off')
 
-        # Placering af værdier inde i felterne og labels yderst
+        # Placering af de rå værdier inde i felterne og labels yderst
         for angle, label, disp in zip(angles, plot_labels, display_values):
-            # Værdi-boks
+            # Værdi-boks (viser den rå værdi)
             ax.text(angle, 55, disp, ha='center', va='center', 
                     fontsize=9, fontweight='bold', color='#111111', zorder=8,
                     bbox=dict(facecolor='#F9F6F0', edgecolor='none', boxstyle='round,pad=0.2'))
