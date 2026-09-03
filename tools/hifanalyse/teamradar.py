@@ -78,12 +78,7 @@ def fetch_data():
             ROW_NUMBER() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.POSSESSIONPERCENT DESC) AS POSSESSION_RANK,
             ROW_NUMBER() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.CONCEDEDGOALS ASC) AS CONCEDEDGOALS_RANK,
             ROW_NUMBER() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.ATTACKING_ACTIONS DESC) AS ATTACKING_RANK,
-            ROW_NUMBER() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.DEFENSIVE_ACTIONS DESC) AS DEFENSIVE_RANK,
-
-            ROW_NUMBER() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.PASSES DESC) AS PASSES_RANK,
-            ROW_NUMBER() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.SUCCESSFUL_PASSES DESC) AS SUCCESSFUL_PASSES_RANK,
-            ROW_NUMBER() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.SUCCESSFUL_FORWARD_PASSES DESC) AS SUCCESSFUL_FORWARD_PASSES_RANK,
-            ROW_NUMBER() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.PASS_LENGTH DESC) AS PASS_LENGTH_RANK
+            ROW_NUMBER() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.DEFENSIVE_ACTIONS DESC) AS DEFENSIVE_RANK
         FROM deduped_team_stats dt
     ),
     team_combined_passing AS (
@@ -213,11 +208,11 @@ def vis_side(*args, **kwargs):
                 zorder=1, linewidth=0.8
             ),
             kwargs_params=dict(
-                color="#111111", fontsize=16, zorder=5,
+                color="#111111", fontsize=12, zorder=5,
                 va="center", fontweight="bold"
             ),
             kwargs_values=dict(
-                color="#FFFFFF", fontsize=10,
+                color="#FFFFFF", fontsize=12,
                 zorder=3,
                 bbox=dict(
                     edgecolor="#222222", facecolor="#111111",
@@ -254,94 +249,82 @@ def vis_side(*args, **kwargs):
                 mime="image/png"
             )
 
-        # --- UDBYTET DATATABEL (Med Total, Pr. 90, Rank og Percentile samt Pasningsfaktor-underkategorier) ---
+        # --- DATATABEL UDEN RANK, MED TOTAL, PR. 90 OG PERCENTILE ---
         st.markdown("### Detaljerede statistikker")
         
-        def safe_val(col, is_rate=False):
+        def safe_val(col):
             val = float(target_team[col]) if col in target_team and not pd.isna(target_team[col]) else 0.0
             return val
 
         table_rows = [
             {
                 "Kategori": "Mål",
-                "Rank": int(target_team['GOALS_RANK']),
                 "Total": f"{safe_val('GOALS'):.0f}",
                 "Pr. 90 min.": f"{safe_val('GOALS') / matches:.2f}",
                 "Percentile (%)": f"{safe_val('GOALS_PCTILE'):.1f}%"
             },
             {
                 "Kategori": "Skud",
-                "Rank": int(target_team['SHOTS_RANK']),
                 "Total": f"{safe_val('SHOTS'):.0f}",
                 "Pr. 90 min.": f"{safe_val('SHOTS') / matches:.2f}",
                 "Percentile (%)": f"{safe_val('SHOTS_PCTILE'):.1f}%"
             },
             {
                 "Kategori": "Konvertering",
-                "Rank": int(target_team['CONVERSION_RANK']),
                 "Total": f"{safe_val('CONVERSION_RATE'):.1f}%",
                 "Pr. 90 min.": "-",
                 "Percentile (%)": f"{safe_val('CONVERSION_PCTILE'):.1f}%"
             },
             {
                 "Kategori": "Possession",
-                "Rank": int(target_team['POSSESSION_RANK']),
                 "Total": f"{safe_val('POSSESSIONPERCENT'):.1f}%",
                 "Pr. 90 min.": "-",
                 "Percentile (%)": f"{safe_val('POSSESSION_PCTILE'):.1f}%"
             },
             {
                 "Kategori": "Pasningsfaktor (Samlet)",
-                "Rank": int(target_team['PASSING_FACTOR_RANK']),
                 "Total": f"{safe_val('PASSING_FACTOR_AVGVAL'):.1f}",
                 "Pr. 90 min.": "-",
                 "Percentile (%)": f"{safe_val('PASSING_FACTOR_PCTILE'):.1f}%"
             },
             {
                 "Kategori": "  ↳ Afleveringer",
-                "Rank": int(target_team['PASSES_RANK']),
                 "Total": f"{safe_val('PASSES'):.1f}",
                 "Pr. 90 min.": f"{safe_val('PASSES') / matches:.2f}",
                 "Percentile (%)": f"{safe_val('PASSES_PCTILE'):.1f}%"
             },
             {
                 "Kategori": "  ↳ Succesfulde afleveringer",
-                "Rank": int(target_team['SUCCESSFUL_PASSES_RANK']),
                 "Total": f"{safe_val('SUCCESSFUL_PASSES'):.1f}",
                 "Pr. 90 min.": f"{safe_val('SUCCESSFUL_PASSES') / matches:.2f}",
                 "Percentile (%)": f"{safe_val('SUCCESSFUL_PASSES_PCTILE'):.1f}%"
             },
             {
                 "Kategori": "  ↳ Fremadrettede afleveringer",
-                "Rank": int(target_team['SUCCESSFUL_FORWARD_PASSES_RANK']),
                 "Total": f"{safe_val('SUCCESSFUL_FORWARD_PASSES'):.1f}",
                 "Pr. 90 min.": f"{safe_val('SUCCESSFUL_FORWARD_PASSES') / matches:.2f}",
                 "Percentile (%)": f"{safe_val('SUCCESSFUL_FORWARD_PASSES_PCTILE'):.1f}%"
             },
             {
                 "Kategori": "  ↳ Afleveringslængde",
-                "Rank": int(target_team['PASS_LENGTH_RANK']),
                 "Total": f"{safe_val('PASS_LENGTH'):.1f} m",
                 "Pr. 90 min.": "-",
                 "Percentile (%)": f"{safe_val('PASS_LENGTH_PCTILE'):.1f}%"
             },
             {
                 "Kategori": "Offensiv Akt.",
-                "Rank": int(target_team['ATTACKING_RANK']),
                 "Total": f"{safe_val('ATTACKING_ACTIONS'):.0f}",
                 "Pr. 90 min.": f"{safe_val('ATTACKING_ACTIONS') / matches:.2f}",
                 "Percentile (%)": f"{safe_val('ATTACKING_PCTILE'):.1f}%"
             },
             {
                 "Kategori": "Mål Imod",
-                "Rank": int(target_team['CONCEDEDGOALS_RANK']),
                 "Total": f"{safe_val('CONCEDEDGOALS'):.0f}",
                 "Pr. 90 min.": f"{safe_val('CONCEDEDGOALS') / matches:.2f}",
                 "Percentile (%)": f"{safe_val('CONCEDEDGOALS_PCTILE'):.1f}%"
             },
             {
                 "Kategori": "Defensiv Akt.",
-                "Rank": int(target_team['DEFENSIVE_RANK']),
                 "Total": f"{safe_val('DEFENSIVE_ACTIONS'):.0f}",
                 "Pr. 90 min.": f"{safe_val('DEFENSIVE_ACTIONS') / matches:.2f}",
                 "Percentile (%)": f"{safe_val('DEFENSIVE_PCTILE'):.1f}%"
