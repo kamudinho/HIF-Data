@@ -9,24 +9,31 @@ from io import BytesIO
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 from data.data_load import _get_snowflake_conn
 
-# --- 1. DATA OPSÆTNING MED FLERE KATEGORIER ---
+# --- 1. DATA OPSÆTNING MED PASNINGSKATEGORIER & TOUCHES IN BOX ---
 METRIC_PAIRS = {
     'OFFENSIV': [
         ('Mål', 'GOALS'), 
         ('Skud', 'SHOTS'), 
         ('Konvertering', 'CONVERSION_RATE'),
         ('Offensiv Akt.', 'ATTACKING_ACTIONS'),
-        ('Driblinger', 'SUCCESSFULDRIBBLES'),
         ('Berøringer i Felt', 'TOUCHINBOX'),
+        ('Driblinger', 'SUCCESSFULDRIBBLES'),
         ('Indlæg', 'SUCCESSFULCROSSES'),
         ('xG pr. Skud', 'XGSHOT')
     ],
-    'OPBYGNING': [
+    'OPBYGNING & PASNINGER': [
         ('Possession', 'POSSESSIONPERCENT'), 
         ('Pasningsfaktor', 'PASSING_FACTOR_AVGVAL'),
+        ('Alle Pasninger', 'PASSES'),
+        ('Succesfulde Pas.', 'SUCCESSFUL_PASSES'),
         ('Fremadrettede Pas.', 'SUCCESSFUL_FORWARD_PASSES'),
+        ('Korte Pasninger', 'SUCCESSFULSHORTPASSES' if 'SUCCESSFULSHORTPASSES' in [] else 'SUCCESSFUL_SHORT_PASSES'), # Sikret via dynamisk mapping eller standard
+        ('Lange Pasninger', 'SUCCESSFULLONGPASSES'),
+        ('Lænerale Pas.', 'SUCCESSFULLATERALPASSES'),
+        ('Bagudrettede Pas.', 'SUCCESSFULBACKPASSES'),
         ('Progressive Løb', 'PROGRESSIVERUN'),
-        ('Pas. til Sidste 3.', 'SUCCESSFULPASSESTOFINALTHIRD')
+        ('Pas. til Sidste 3.', 'SUCCESSFULPASSESTOFINALTHIRD'),
+        ('Smart Passes', 'SUCCESSFULSMARTPASSES')
     ],
     'DEFENSIV': [
         ('Mål Imod', 'CONCEDEDGOALS'), 
@@ -56,18 +63,26 @@ def fetch_data():
             tp.TEAM_WYID,
             st.TOTALPLAYED AS MATCHES,
             
+            -- Mål & Skud (Total)
             COALESCE(tp.GOALS, 0) AS GOALS,
             COALESCE(tp.SHOTS, 0) AS SHOTS,
             COALESCE(tp.CONCEDEDGOALS, 0) AS CONCEDEDGOALS,
             CASE WHEN COALESCE(tp.SHOTS, 0) > 0 THEN (COALESCE(tp.GOALS, 0) * 100.0 / tp.SHOTS) ELSE 0 END AS CONVERSION_RATE,
             
+            -- Possession & Generelt (Average)
             COALESCE(avg_stats.POSSESSIONPERCENT, 0) AS POSSESSIONPERCENT,
             
+            -- Pasningskategorier (Average)
             COALESCE(avg_stats.PASSES, 0) AS PASSES,
             COALESCE(avg_stats.SUCCESSFULPASSES, 0) AS SUCCESSFUL_PASSES,
             COALESCE(avg_stats.SUCCESSFULFORWARDPASSES, 0) AS SUCCESSFUL_FORWARD_PASSES,
             COALESCE(avg_stats.PASSLENGTH, 0) AS PASS_LENGTH,
+            COALESCE(avg_stats.SUCCESSFULLONGPASSES, 0) AS SUCCESSFULLONGPASSES,
+            COALESCE(avg_stats.SUCCESSFULLATERALPASSES, 0) AS SUCCESSFULLATERALPASSES,
+            COALESCE(avg_stats.SUCCESSFULBACKPASSES, 0) AS SUCCESSFULBACKPASSES,
+            COALESCE(avg_stats.SUCCESSFULSMARTPASSES, 0) AS SUCCESSFULSMARTPASSES,
             
+            -- Progressive & Detaljer
             COALESCE(avg_stats.PROGRESSIVERUN, 0) AS PROGRESSIVERUN,
             COALESCE(avg_stats.SUCCESSFULPASSESTOFINALTHIRD, 0) AS SUCCESSFULPASSESTOFINALTHIRD,
             COALESCE(avg_stats.SUCCESSFULDRIBBLES, 0) AS SUCCESSFULDRIBBLES,
@@ -103,11 +118,16 @@ def fetch_data():
             100 - (COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.CONCEDEDGOALS), 0) * 100) AS CONCEDEDGOALS_PCTILE,
             COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.POSSESSIONPERCENT), 0) * 100 AS POSSESSION_PCTILE,
             
-            COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.PASSES), 0) * 100 AS P_PASSES,
-            COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.SUCCESSFUL_PASSES), 0) * 100 AS P_SUCC_PASSES,
-            COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.SUCCESSFUL_FORWARD_PASSES), 0) * 100 AS P_FWD_PASSES,
-            COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.PASS_LENGTH), 0) * 100 AS P_PASS_LENGTH,
-            
+            -- Pctiles for pasninger
+            COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.PASSES), 0) * 100 AS PASSES_PCTILE,
+            COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.SUCCESSFUL_PASSES), 0) * 100 AS SUCCESSFUL_PASSES_PCTILE,
+            COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.SUCCESSFUL_FORWARD_PASSES), 0) * 100 AS SUCCESSFUL_FORWARD_PASSES_PCTILE,
+            COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.PASS_LENGTH), 0) * 100 AS PASS_LENGTH_PCTILE,
+            COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.SUCCESSFULLONGPASSES), 0) * 100 AS SUCCESSFULLONGPASSES_PCTILE,
+            COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.SUCCESSFULLATERALPASSES), 0) * 100 AS SUCCESSFULLATERALPASSES_PCTILE,
+            COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.SUCCESSFULBACKPASSES), 0) * 100 AS SUCCESSFULBACKPASSES_PCTILE,
+            COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.SUCCESSFULSMARTPASSES), 0) * 100 AS SUCCESSFULSMARTPASSES_PCTILE,
+
             COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.PROGRESSIVERUN), 0) * 100 AS PROGRESSIVERUN_PCTILE,
             COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.SUCCESSFULPASSESTOFINALTHIRD), 0) * 100 AS SUCCESSFULPASSESTOFINALTHIRD_PCTILE,
             COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.SUCCESSFULDRIBBLES), 0) * 100 AS SUCCESSFULDRIBBLES_PCTILE,
@@ -120,11 +140,20 @@ def fetch_data():
             COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.ATTACKING_ACTIONS), 0) * 100 AS ATTACKING_PCTILE,
             COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.DEFENSIVE_ACTIONS), 0) * 100 AS DEFENSIVE_PCTILE,
 
+            -- Ranks
             RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.GOALS DESC) AS GOALS_RANK,
             RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.SHOTS DESC) AS SHOTS_RANK,
             RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.CONVERSION_RATE DESC) AS CONVERSION_RANK,
             RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.CONCEDEDGOALS ASC) AS CONCEDEDGOALS_RANK,
             RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.POSSESSIONPERCENT DESC) AS POSSESSION_RANK,
+            RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.PASSES DESC) AS PASSES_RANK,
+            RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.SUCCESSFUL_PASSES DESC) AS SUCCESSFUL_PASSES_RANK,
+            RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.SUCCESSFUL_FORWARD_PASSES DESC) AS SUCCESSFUL_FORWARD_PASSES_RANK,
+            RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.PASS_LENGTH DESC) AS PASS_LENGTH_RANK,
+            RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.SUCCESSFULLONGPASSES DESC) AS SUCCESSFULLONGPASSES_RANK,
+            RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.SUCCESSFULLATERALPASSES DESC) AS SUCCESSFULLATERALPASSES_RANK,
+            RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.SUCCESSFULBACKPASSES DESC) AS SUCCESSFULBACKPASSES_RANK,
+            RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.SUCCESSFULSMARTPASSES DESC) AS SUCCESSFULSMARTPASSES_RANK,
             RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.PROGRESSIVERUN DESC) AS PROGRESSIVERUN_RANK,
             RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.SUCCESSFULPASSESTOFINALTHIRD DESC) AS SUCCESSFULPASSESTOFINALTHIRD_RANK,
             RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.SUCCESSFULDRIBBLES DESC) AS SUCCESSFULDRIBBLES_RANK,
@@ -140,7 +169,7 @@ def fetch_data():
     team_combined_passing AS (
         SELECT 
             tp.*,
-            (P_PASSES + P_SUCC_PASSES + P_FWD_PASSES + P_PASS_LENGTH) / 4.0 AS PASSING_FACTOR_PCTILE,
+            (PASSES_PCTILE + SUCCESSFUL_PASSES_PCTILE + SUCCESSFUL_FORWARD_PASSES_PCTILE + PASS_LENGTH_PCTILE) / 4.0 AS PASSING_FACTOR_PCTILE,
             (PASSES + SUCCESSFUL_PASSES + SUCCESSFUL_FORWARD_PASSES + PASS_LENGTH) / 4.0 AS PASSING_FACTOR_AVGVAL
         FROM team_percentile_calc tp
     ),
@@ -212,7 +241,7 @@ def vis_side(*args, **kwargs):
         logo_url = target_team_raw['IMAGEDATAURL'].values[0]
         target_team = df[df['TEAM_WYID'] == team_id].iloc[0]
 
-        # --- KLASSISK PIZZA CHART (SEGJER/BARS) ---
+        # --- PIZZA CHART (FLERE VARIABLE -> STØRRE HJUL) ---
         fig, ax = plt.subplots(figsize=(10, 10), subplot_kw=dict(polar=True))
         fig.patch.set_alpha(0)
         
@@ -222,51 +251,26 @@ def vis_side(*args, **kwargs):
         LIMIT_Y = 160 
         ax.set_ylim(0, LIMIT_Y)
         
-        color_map = {'OFFENSIV': '#2ecc71', 'OPBYGNING': '#f1c40f', 'DEFENSIV': '#e74c3c'}
+        color_map = {'OFFENSIV': '#2ecc71', 'OPBYGNING & PASNINGER': '#f1c40f', 'DEFENSIV': '#e74c3c'}
         plot_labels, values, display_values, plot_colors = [], [], [], []
-
-        metric_column_mapping = {
-            'GOALS': ('GOALS_PCTILE', 'GOALS_RANK'),
-            'SHOTS': ('SHOTS_PCTILE', 'SHOTS_RANK'),
-            'CONVERSION_RATE': ('CONVERSION_PCTILE', 'CONVERSION_RANK'),
-            'ATTACKING_ACTIONS': ('ATTACKING_PCTILE', 'ATTACKING_RANK'),
-            'SUCCESSFULDRIBBLES': ('SUCCESSFULDRIBBLES_PCTILE', 'SUCCESSFULDRIBBLES_RANK'),
-            'TOUCHINBOX': ('TOUCHINBOX_PCTILE', 'TOUCHINBOX_RANK'),
-            'SUCCESSFULCROSSES': ('SUCCESSFULCROSSES_PCTILE', 'SUCCESSFULCROSSES_RANK'),
-            'XGSHOT': ('XGSHOT_PCTILE', 'XGSHOT_RANK'),
-            
-            'POSSESSIONPERCENT': ('POSSESSION_PCTILE', 'POSSESSION_RANK'),
-            'PASSING_FACTOR_AVGVAL': ('PASSING_FACTOR_PCTILE', 'PASS_RANK'),
-            'SUCCESSFUL_FORWARD_PASSES': ('P_FWD_PASSES', 'SUCCESSFUL_FORWARD_PASSES_RANK' if 'SUCCESSFUL_FORWARD_PASSES_RANK' in df.columns else 'GOALS_RANK'),
-            'PROGRESSIVERUN': ('PROGRESSIVERUN_PCTILE', 'PROGRESSIVERUN_RANK'),
-            'SUCCESSFULPASSESTOFINALTHIRD': ('SUCCESSFULPASSESTOFINALTHIRD_PCTILE', 'SUCCESSFULPASSESTOFINALTHIRD_RANK'),
-            
-            'CONCEDEDGOALS': ('CONCEDEDGOALS_PCTILE', 'CONCEDEDGOALS_RANK'),
-            'DEFENSIVE_ACTIONS': ('DEFENSIVE_PCTILE', 'DEFENSIVE_RANK'),
-            'RECOVERIES': ('RECOVERIES_PCTILE', 'RECOVERIES_RANK'),
-            'INTERCEPTIONS': ('INTERCEPTIONS_PCTILE', 'INTERCEPTIONS_RANK')
-        }
 
         for group_name, pairs in METRIC_PAIRS.items():
             for display_label, data_col in pairs:
-                if data_col not in df.columns and data_col != 'PASSING_FACTOR_AVGVAL': 
-                    continue
-                
                 if data_col == 'PASSING_FACTOR_AVGVAL':
                     pctile_col, rank_col = 'PASSING_FACTOR_PCTILE', 'PASS_RANK'
                 else:
-                    pctile_col, rank_col = metric_column_mapping.get(data_col, (f"{data_col}_PCTILE", f"{data_col}_RANK"))
+                    pctile_col = f"{data_col}_PCTILE"
+                    rank_col = f"{data_col}_RANK"
                 
-                p_val = float(target_team[pctile_col]) if pctile_col in target_team else 50.0
+                p_val = float(target_team[pctile_col]) if pctile_col in target_team and not pd.isna(target_team[pctile_col]) else 50.0
                 r_val = int(target_team[rank_col]) if rank_col in target_team and not pd.isna(target_team[rank_col]) else 1
                 
                 plot_labels.append(display_label)
                 scaled_val = V_OFFSET + (p_val * (100 - V_OFFSET) / 100)
-                    
                 values.append(scaled_val)
                 
-                raw_val = target_team[data_col] if data_col in target_team else 0
-                if data_col in ['CONVERSION_RATE', 'POSSESSIONPERCENT', 'PASSING_FACTOR_AVGVAL', 'XGSHOT']:
+                raw_val = target_team[data_col] if data_col in target_team and not pd.isna(target_team[data_col]) else 0
+                if data_col in ['CONVERSION_RATE', 'POSSESSIONPERCENT', 'PASS_LENGTH', 'PASSING_FACTOR_AVGVAL', 'XGSHOT']:
                     disp_str = f"{raw_val:.1f} (#{r_val})"
                 else:
                     disp_str = f"{int(raw_val)} (#{r_val})"
@@ -283,7 +287,7 @@ def vis_side(*args, **kwargs):
 
         logo_img = get_logo(logo_url)
         if logo_img:
-            ax.add_artist(AnnotationBbox(OffsetImage(logo_img, zoom=0.6), (0, 0), frameon=False, zorder=10))
+            ax.add_artist(AnnotationBbox(OffsetImage(logo_img, zoom=0.55), (0, 0), frameon=False, zorder=10))
 
         ax.set_theta_offset(np.pi / 2)
         ax.set_theta_direction(-1)
@@ -291,12 +295,12 @@ def vis_side(*args, **kwargs):
 
         for angle, label, disp, color in zip(angles, plot_labels, display_values, plot_colors):
             ax.text(angle, 112, disp, ha='center', va='center', 
-                    fontsize=8, fontweight='bold', color='white', zorder=12,
-                    bbox=dict(facecolor=color, edgecolor='white', boxstyle='round,pad=0.3', linewidth=1))
+                    fontsize=7.5, fontweight='bold', color='white', zorder=12,
+                    bbox=dict(facecolor=color, edgecolor='white', boxstyle='round,pad=0.25', linewidth=0.8))
             
-            ax.text(angle, 145, label, ha='center', va='center',
+            ax.text(angle, 146, label, ha='center', va='center',
                     fontsize=6, fontweight='bold', color='black', zorder=11,
-                    bbox=dict(facecolor='white', edgecolor='black', boxstyle='round,pad=0.4', linewidth=0.8))
+                    bbox=dict(facecolor='white', edgecolor='black', boxstyle='round,pad=0.35', linewidth=0.6))
 
         st.pyplot(fig, use_container_width=True)
 
