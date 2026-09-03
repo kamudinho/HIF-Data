@@ -12,19 +12,14 @@ from data.data_load import _get_snowflake_conn
 # --- 1. DATA OPSÆTNING ---
 METRIC_PAIRS = {
     'OFFENSIV': [
-        ('GOALS', 'GOALS'), ('SHOTS', 'SHOTS'), ('DRIBBLES', 'SUCCESSFULDRIBBLES'),
-        ('ATTACKING ACTIONS', 'SUCCESSFULATTACKINGACTIONS'), ('TOUCH IN BOX', 'TOUCHINBOX'),
-        ('CROSSES', 'SUCCESSFULCROSSES'), ('XGSHOT', 'XGSHOT')
+        ('Mål', 'GOALS'), ('Skud', 'SHOTS'), ('Konvertering', 'CONVERSION_RATE'),
+        ('Offensiv Akt.', 'ATTACKING_ACTIONS')
     ],
     'OPBYGNING': [
-        ('FORWARD PASSES', 'SUCCESSFULFORWARDPASSES'),
-        ('PROGRESSIVE RUN', 'PROGRESSIVERUN'), ('PASSES', 'SUCCESSFULPASSES'),
-        ('PASSES TO FINAL THIRD', 'SUCCESSFULPASSESTOFINALTHIRD')
+        ('Possession', 'POSSESSIONPERCENT'), ('Pasningsfaktor', 'PASSING_FACTOR_AVGVAL')
     ],
     'DEFENSIV': [
-        ('DEFENSIVEDUELS', 'DEFENSIVEDUELSWON'), ('AERIALDUELS', 'AERIALDUELSWON'),
-        ('PPDA', 'PPDA'), ('INTERCEPTIONS', 'INTERCEPTIONS'),
-        ('CONCEDEDGOALS', 'CONCEDEDGOALS'), ('RECOVERIES', 'RECOVERIES')
+        ('Mål Imod', 'CONCEDEDGOALS'), ('Defensiv Akt.', 'DEFENSIVE_ACTIONS')
     ]
 }
 
@@ -38,20 +33,98 @@ def get_logo(url):
 def fetch_data():
     conn = _get_snowflake_conn()
     query = """
-    SELECT 
-        tm.TEAMNAME, tm.IMAGEDATAURL, t.TEAM_WYID, st.TOTALPLAYED AS MATCHES,
-        t.GOALS, t.SHOTS, t.SUCCESSFULDRIBBLES, t.SUCCESSFULATTACKINGACTIONS, 
-        t.TOUCHINBOX, t.SUCCESSFULCROSSES, t.XGSHOT, t.SUCCESSFULFORWARDPASSES, 
-        t.PROGRESSIVERUN, t.SUCCESSFULPASSES, t.SUCCESSFULPASSESTOFINALTHIRD,
-        t.DEFENSIVEDUELSWON, t.AERIALDUELSWON, t.PPDA, t.INTERCEPTIONS, 
-        t.CONCEDEDGOALS, t.RECOVERIES
-    FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_TEAMSADVANCEDSTATS_TOTAL AS t
-    JOIN KLUB_HVIDOVREIF.AXIS.WYSCOUT_SEASONS AS s ON t.SEASON_WYID = s.SEASON_WYID
-    JOIN KLUB_HVIDOVREIF.AXIS.WYSCOUT_TEAMS AS tm ON t.TEAM_WYID = tm.TEAM_WYID
-    JOIN KLUB_HVIDOVREIF.AXIS.WYSCOUT_SEASONS_STANDINGS AS st 
-        ON t.TEAM_WYID = st.TEAM_WYID AND t.SEASON_WYID = st.SEASON_WYID
-    WHERE t.COMPETITION_WYID = 328
-    AND s.SEASONNAME = '2025/2026'
+    WITH team_base AS (
+        SELECT 
+            t.TEAMNAME,
+            tm.IMAGEDATAURL,
+            s.SEASONNAME,
+            tp.COMPETITION_WYID,
+            s.SEASON_WYID,
+            tp.TEAM_WYID,
+            st.TOTALPLAYED AS MATCHES,
+            
+            COALESCE(tp.GOALS, 0) AS GOALS,
+            COALESCE(tp.SHOTS, 0) AS SHOTS,
+            COALESCE(tp.CONCEDEDGOALS, 0) AS CONCEDEDGOALS,
+            CASE WHEN COALESCE(tp.SHOTS, 0) > 0 THEN (COALESCE(tp.GOALS, 0) * 100.0 / tp.SHOTS) ELSE 0 END AS CONVERSION_RATE,
+            
+            COALESCE(avg_stats.POSSESSIONPERCENT, 0) AS POSSESSIONPERCENT,
+            
+            COALESCE(avg_stats.PASSES, 0) AS PASSES,
+            COALESCE(avg_stats.SUCCESSFULPASSES, 0) AS SUCCESSFUL_PASSES,
+            COALESCE(avg_stats.SUCCESSFULFORWARDPASSES, 0) AS SUCCESSFUL_FORWARD_PASSES,
+            COALESCE(avg_stats.PASSLENGTH, 0) AS PASS_LENGTH,
+            
+            COALESCE(tp.ATTACKINGACTIONS, 0) AS ATTACKING_ACTIONS,
+            COALESCE(tp.DEFENSIVEACTIONS, 0) AS DEFENSIVE_ACTIONS,
+
+            ROW_NUMBER() OVER (PARTITION BY tp.TEAM_WYID, tp.SEASON_WYID, tp.COMPETITION_WYID ORDER BY tp.TEAM_WYID) as rn
+        FROM KLUB_HVIDOVREIF.AXIS.WYSCOUT_TEAMSADVANCEDSTATS_TOTAL tp
+        JOIN KLUB_HVIDOVREIF.AXIS.WYSCOUT_SEASONS s ON tp.SEASON_WYID = s.SEASON_WYID
+        JOIN KLUB_HVIDOVREIF.AXIS.WYSCOUT_TEAMS t ON tp.TEAM_WYID = t.TEAM_WYID
+        JOIN KLUB_HVIDOVREIF.AXIS.WYSCOUT_SEASONS_STANDINGS st 
+            ON tp.TEAM_WYID = st.TEAM_WYID AND tp.SEASON_WYID = st.SEASON_WYID
+        LEFT JOIN KLUB_HVIDOVREIF.AXIS.WYSCOUT_TEAMS t_logo ON tp.TEAM_WYID = t_logo.TEAM_WYID
+        LEFT JOIN KLUB_HVIDOVREIF.AXIS.WYSCOUT_TEAMSADVANCEDSTATS_AVERAGE avg_stats 
+            ON tp.TEAM_WYID = avg_stats.TEAM_WYID 
+            AND tp.SEASON_WYID = avg_stats.SEASON_WYID 
+        WHERE tp.MATCHES >= 1 AND tp.COMPETITION_WYID = 328 AND s.SEASONNAME = '2025/2026'
+    ),
+    deduped_team_stats AS (
+        SELECT * FROM team_base WHERE rn = 1
+    ),
+    team_percentile_calc AS (
+        SELECT 
+            dt.*,
+            COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.GOALS), 0) * 100 AS GOALS_PCTILE,
+            COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.SHOTS), 0) * 100 AS SHOTS_PCTILE,
+            COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.CONVERSION_RATE), 0) * 100 AS CONVERSION_PCTILE,
+            100 - (COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.CONCEDEDGOALS), 0) * 100) AS CONCEDEDGOALS_PCTILE,
+            COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.POSSESSIONPERCENT), 0) * 100 AS POSSESSION_PCTILE,
+            
+            COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.PASSES), 0) * 100 AS P_PASSES,
+            COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.SUCCESSFUL_PASSES), 0) * 100 AS P_SUCC_PASSES,
+            COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.SUCCESSFUL_FORWARD_PASSES), 0) * 100 AS P_FWD_PASSES,
+            COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.PASS_LENGTH), 0) * 100 AS P_PASS_LENGTH,
+            
+            COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.ATTACKING_ACTIONS), 0) * 100 AS ATTACKING_PCTILE,
+            COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.DEFENSIVE_ACTIONS), 0) * 100 AS DEFENSIVE_PCTILE,
+
+            RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.GOALS DESC) AS GOALS_RANK,
+            RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.SHOTS DESC) AS SHOTS_RANK,
+            RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.CONVERSION_RATE DESC) AS CONVERSION_RANK,
+            RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.CONCEDEDGOALS ASC) AS CONCEDEDGOALS_RANK,
+            RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.POSSESSIONPERCENT DESC) AS POSSESSION_RANK,
+            RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.ATTACKING_ACTIONS DESC) AS ATTACKING_RANK,
+            RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.DEFENSIVE_ACTIONS DESC) AS DEFENSIVE_RANK
+        FROM deduped_team_stats dt
+    ),
+    team_combined_passing AS (
+        SELECT 
+            tp.*,
+            (P_PASSES + P_SUCC_PASSES + P_FWD_PASSES + P_PASS_LENGTH) / 4.0 AS PASSING_FACTOR_PCTILE,
+            (PASSES + SUCCESSFUL_PASSES + SUCCESSFUL_FORWARD_PASSES + PASS_LENGTH) / 4.0 AS PASSING_FACTOR_AVGVAL
+        FROM team_percentile_calc tp
+    ),
+    team_passing_rank AS (
+        SELECT 
+            cp.*,
+            RANK() OVER (PARTITION BY cp.COMPETITION_WYID, cp.SEASON_WYID ORDER BY cp.PASSING_FACTOR_PCTILE DESC) AS PASS_RANK
+        FROM team_combined_passing cp
+    ),
+    team_overall_score AS (
+        SELECT 
+            pr.*,
+            (GOALS_PCTILE + SHOTS_PCTILE + CONVERSION_PCTILE + CONCEDEDGOALS_PCTILE + POSSESSION_PCTILE + PASSING_FACTOR_PCTILE + ATTACKING_PCTILE + DEFENSIVE_PCTILE) / 8.0 AS TOTAL_SCORE_PCTILE
+        FROM team_passing_rank pr
+    ),
+    team_final_rank AS (
+        SELECT 
+            os.*,
+            RANK() OVER (PARTITION BY os.COMPETITION_WYID, os.SEASON_WYID ORDER BY os.TOTAL_SCORE_PCTILE DESC) AS TOTAL_RANK_VAL
+        FROM team_overall_score os
+    )
+    SELECT * FROM team_final_rank
     """
     df = pd.DataFrame(conn.query(query))
     df.columns = [c.upper() for c in df.columns]
@@ -68,7 +141,6 @@ def vis_side(*args, **kwargs):
     # --- CSS: TVING INDHOLDET SAMMEN ---
     st.markdown("""
         <style>
-            /* Fjerner alt standard-mellemrum i Streamlits layout */
             [data-testid="column"] {
                 padding: 0rem !important;
                 margin: 0rem !important;
@@ -76,7 +148,6 @@ def vis_side(*args, **kwargs):
             [data-testid="stHorizontalBlock"] {
                 gap: 0rem !important;
             }
-            /* Gør download-knappen lidt mere kompakt så den passer under listen */
             div.stDownloadButton > button {
                 width: auto !important;
                 min-width: 100px;
@@ -85,13 +156,12 @@ def vis_side(*args, **kwargs):
         </style>
     """, unsafe_allow_html=True)
 
-    # Vi bruger et meget skævt forhold (1 til 5) for at trække chart_col mod venstre
     menu_col, chart_col = st.columns([1, 5])
 
     with menu_col:
         st.caption("Vælg Hold")
         valgt_hold_navn = st.radio("Hold", hold_navne, label_visibility="collapsed", key="team_radio_select")
-        st.write("") # Lille afstand før knap
+        st.write("") 
         download_placeholder = st.empty()
 
     with chart_col:
@@ -99,19 +169,12 @@ def vis_side(*args, **kwargs):
         team_id = target_team_raw['TEAM_WYID'].values[0]
         logo_url = target_team_raw['IMAGEDATAURL'].values[0]
 
-        # Data-beregning (uændret)
-        all_metrics_cols = [pair[1] for group in METRIC_PAIRS.values() for pair in group]
-        for col in list(set(all_metrics_cols)):
-            if col in df.columns and col != 'PPDA':
-                df[col] = pd.to_numeric(df[col], errors='coerce') / df['MATCHES']
-        
-        target_team = df[df['TEAM_WYID'] == team_id]
+        target_team = df[df['TEAM_WYID'] == team_id].iloc[0]
 
         # --- PIZZA CHART POSITIONERING ---
         fig, ax = plt.subplots(figsize=(10, 10), subplot_kw=dict(polar=True))
         fig.patch.set_alpha(0)
         
-        # Vi bruger en aggressiv 'left' her for at flytte selve cirklen helt mod kanten af kolonnen
         plt.subplots_adjust(left=-0.1, right=0.9, top=0.95, bottom=0.05)
         
         V_OFFSET = 25
@@ -121,16 +184,38 @@ def vis_side(*args, **kwargs):
         color_map = {'OFFENSIV': '#2ecc71', 'OPBYGNING': '#f1c40f', 'DEFENSIV': '#e74c3c'}
         plot_labels, values, display_values, plot_colors = [], [], [], []
 
+        # Mapping fra dine SQL-kolonner til visning og ranks
+        metric_column_mapping = {
+            'GOALS': ('GOALS_PCTILE', 'GOALS_RANK'),
+            'SHOTS': ('SHOTS_PCTILE', 'SHOTS_RANK'),
+            'CONVERSION_RATE': ('CONVERSION_PCTILE', 'CONVERSION_RANK'),
+            'ATTACKING_ACTIONS': ('ATTACKING_PCTILE', 'ATTACKING_RANK'),
+            'POSSESSIONPERCENT': ('POSSESSION_PCTILE', 'POSSESSION_RANK'),
+            'PASSING_FACTOR_AVGVAL': ('PASSING_FACTOR_PCTILE', 'PASS_RANK'),
+            'CONCEDEDGOALS': ('CONCEDEDGOALS_PCTILE', 'CONCEDEDGOALS_RANK'),
+            'DEFENSIVE_ACTIONS': ('DEFENSIVE_PCTILE', 'DEFENSIVE_RANK')
+        }
+
         for group_name, pairs in METRIC_PAIRS.items():
             for display_label, data_col in pairs:
                 if data_col not in df.columns: continue
-                p_val = stats.percentileofscore(df[data_col].dropna(), target_team[data_col].values[0])
-                if data_col in ['CONCEDEDGOALS', 'PPDA']: p_val = 100 - p_val
+                
+                pctile_col, rank_col = metric_column_mapping[data_col]
+                p_val = float(target_team[pctile_col])
+                r_val = int(target_team[rank_col])
                 
                 plot_labels.append(display_label)
                 scaled_val = V_OFFSET + (p_val * (100 - V_OFFSET) / 100)
                 values.append(scaled_val)
-                display_values.append(f"{target_team[data_col].values[0]:.1f}")
+                
+                # Viser både rå værdi/snit og rank (#1, #2 osv.)
+                raw_val = target_team[data_col]
+                if data_col == 'CONVERSION_RATE' or data_col == 'POSSESSIONPERCENT' or data_col == 'PASSING_FACTOR_AVGVAL':
+                    disp_str = f"{raw_val:.1f} (#{r_val})"
+                else:
+                    disp_str = f"{int(raw_val)} (#{r_val})"
+                    
+                display_values.append(disp_str)
                 plot_colors.append(color_map[group_name])
 
         num_vars = len(plot_labels)
