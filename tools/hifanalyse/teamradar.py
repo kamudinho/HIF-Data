@@ -207,11 +207,11 @@ def vis_side(*args, **kwargs):
                 zorder=1, linewidth=0.8
             ),
             kwargs_params=dict(
-                color="#111111", fontsize=16, zorder=5,
+                color="#111111", fontsize=12, zorder=5,
                 va="center", fontweight="bold"
             ),
             kwargs_values=dict(
-                color="#FFFFFF", fontsize=12,
+                color="#FFFFFF", fontsize=10,
                 zorder=3,
                 bbox=dict(
                     edgecolor="#222222", facecolor="#111111",
