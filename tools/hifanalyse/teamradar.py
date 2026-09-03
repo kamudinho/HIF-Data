@@ -129,16 +129,32 @@ def vis_side(*args, **kwargs):
             "Mål Imod", "Defensiv Akt."
         ]
         
+        # Bruges til at beregne størrelsen på slice (0-100 percentil)
         percentile_cols = [
             'GOALS_PCTILE', 'SHOTS_PCTILE', 'CONVERSION_PCTILE',
             'POSSESSION_PCTILE', 'PASSING_FACTOR_PCTILE', 'ATTACKING_PCTILE',
             'CONCEDEDGOALS_PCTILE', 'DEFENSIVE_PCTILE'
         ]
 
-        values = []
+        # Bruges til selve teksten, der vises i boksen (rå værdier)
+        raw_cols = [
+            'GOALS', 'SHOTS', 'CONVERSION_RATE',
+            'POSSESSIONPERCENT', 'PASSING_FACTOR_AVGVAL', 'ATTACKING_ACTIONS',
+            'CONCEDEDGOALS', 'DEFENSIVE_ACTIONS'
+        ]
+
+        pizza_values = []
         for p_col in percentile_cols:
             val = float(target_team[p_col]) if p_col in target_team and not pd.isna(target_team[p_col]) else 50.0
-            values.append(round(val))
+            pizza_values.append(val)
+
+        display_values = []
+        for r_col in raw_cols:
+            val = float(target_team[r_col]) if r_col in target_team and not pd.isna(target_team[r_col]) else 0.0
+            if r_col in ['CONVERSION_RATE', 'PASSING_FACTOR_AVGVAL', 'POSSESSIONPERCENT']:
+                display_values.append(f"{val:.1f}")
+            else:
+                display_values.append(str(int(val)))
 
         slice_colors = (
             ["#D32F2F"] * 3 +  
@@ -154,13 +170,14 @@ def vis_side(*args, **kwargs):
             straight_line_color="#222222",
             last_circle_color="#222222",
             last_circle_lw=1.5,
-            other_circle_lw=0,  # Sat til 0 for at fjerne de indre stiplede/gitterlinjer
+            other_circle_lw=0,  
             other_circle_color="#DDDDDD",
             inner_circle_size=8,
         )
 
+        # Sender percentilerne ind, så størrelserne beregnes korrekt ud fra 0-100 skalaen
         fig, ax = baker.make_pizza(
-            values,
+            pizza_values,
             figsize=(10, 10),
             color_blank_space="same",
             blank_alpha=0.4,
@@ -186,11 +203,12 @@ def vis_side(*args, **kwargs):
         ax.set_aspect('equal')
         fig.patch.set_facecolor('#FFFFFF')
 
+        # Overskriver tekstboksene med de faktiske rå værdier i stedet for percentilerne
         val_idx = 0
         for txt in ax.texts:
             pos = txt.get_position()
-            if pos[1] < 100 and val_idx < len(values):
-                txt.set_text(str(int(values[val_idx])))
+            if pos[1] < 100 and val_idx < len(display_values):
+                txt.set_text(display_values[val_idx])
                 val_idx += 1
 
         logo_img = get_logo(logo_url)
