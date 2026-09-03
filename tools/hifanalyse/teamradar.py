@@ -156,11 +156,11 @@ def vis_side(*args, **kwargs):
             'CONCEDEDGOALS_RANK', 'DEFENSIVE_RANK'
         ]
 
-        # Byg parametre med rangering under kategorinavnet
+        # Byg parametre med "Rank: x" under kategorinavnet
         params = []
         for bp, r_col in zip(base_params, rank_cols):
             rank = int(target_team[r_col]) if r_col in target_team and not pd.isna(target_team[r_col]) else 0
-            params.append(f"{bp}\n({rank}.)")
+            params.append(f"{bp}\nRank: {rank}")
 
         pizza_values = []
         for p_col in percentile_cols:
@@ -224,10 +224,11 @@ def vis_side(*args, **kwargs):
         ax.set_aspect('equal')
         fig.patch.set_facecolor('#FFFFFF')
 
+        # Justeret logo-størrelse (mindre) og centreret
         logo_img = get_logo(logo_url)
         if logo_img:
             ax_image = add_image(
-                logo_img, fig, left=0.4478, bottom=0.4315, width=0.13, height=0.127
+                logo_img, fig, left=0.455, bottom=0.436, width=0.09, height=0.088
             )
 
         st.pyplot(fig, use_container_width=True)
