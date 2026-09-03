@@ -181,8 +181,8 @@ def vis_side(*args, **kwargs):
                 display_values.append(str(int(val)))
 
         slice_colors = (
-            ["#D32F2F"] * 3 +  
-            ["#E57373"] * 3 +  
+            ["#D32F2F"] * 2 +  
+            ["#E57373"] * 2 +  
             ["#8E0000"] * 2    
         )
 
@@ -211,7 +211,7 @@ def vis_side(*args, **kwargs):
                 zorder=1, linewidth=0.8
             ),
             kwargs_params=dict(
-                color="#111111", fontsize=9, zorder=5,
+                color="#111111", fontsize=12, zorder=5,
                 va="center", fontweight="bold"
             ),
             kwargs_values=dict(
