@@ -124,45 +124,45 @@ def vis_side(*args, **kwargs):
         logo_url = target_team_raw['IMAGEDATAURL'].values[0]
         target_team = target_team_raw.iloc[0]
 
+        # 1. Opsæt parametre opdelt i 3 grupper (ligesom eksemplet)
         params = [
-            "Mål", "Skud", "Konvertering", "Offensiv Akt.",
-            "Possession", "Pasningsfaktor",
+            # Offensiv (3 parametre)
+            "Mål", "Skud", "Konvertering",
+            # Possession / Opbygning (3 parametre)
+            "Possession", "Pasningsfaktor", "Offensiv Akt.",
+            # Defensiv (2 parametre)
             "Mål Imod", "Defensiv Akt."
         ]
         
-        raw_cols = [
-            'GOALS', 'SHOTS', 'CONVERSION_RATE', 'ATTACKING_ACTIONS',
-            'POSSESSIONPERCENT', 'PASSING_FACTOR_AVGVAL',
-            'CONCEDEDGOALS', 'DEFENSIVE_ACTIONS'
+        percentile_cols = [
+            'GOALS_PCTILE', 'SHOTS_PCTILE', 'CONVERSION_PCTILE',
+            'POSSESSION_PCTILE', 'PASSING_FACTOR_PCTILE', 'ATTACKING_PCTILE',
+            'CONCEDEDGOALS_PCTILE', 'DEFENSIVE_PCTILE'
         ]
 
+        # Hent percentil-værdier (0-100) for det valgte hold
         values = []
-        for r_col in raw_cols:
-            val = float(target_team[r_col]) if r_col in target_team and not pd.isna(target_team[r_col]) else 0.0
-            values.append(val)
+        for p_col in percentile_cols:
+            val = float(target_team[p_col]) if p_col in target_team and not pd.isna(target_team[p_col]) else 50.0
+            values.append(round(val))
 
-        min_range = []
-        max_range = []
-        for r_col in raw_cols:
-            col_min = float(df[r_col].min())
-            col_max = float(df[r_col].max())
-            if col_min == col_max:
-                col_min = 0.0
-                col_max = max(col_max, 1.0)
-            
-            min_range.append(col_min * 0.9 if col_min > 0 else 0)
-            max_range.append(col_max * 1.1 if col_max > 0 else 10.0)
+        # Definer farver i røde nuancer til de 3 kategorier (3 Offensiv, 3 Possession, 2 Defensiv)
+        slice_colors = (
+            ["#1E88E5".replace("#1E88E5", "#D32F2F")] * 3 +  # Offensiv: Dyb rød
+            ["#FF9800".replace("#FF9800", "#E57373")] * 3 +  # Possession: Lidt lysere rød / coral
+            ["#D32F2F".replace("#D32F2F", "#8E0000")] * 2    # Defensiv: Mørk bordeaux / vinrød
+        )
 
         baker = PyPizza(
             params=params,
-            min_range=min_range,
-            max_range=max_range,
-            background_color="#FFFFFF",
-            straight_line_color="#111111",
-            last_circle_color="#111111",
+            min_range=[0]*len(params),
+            max_range=[100]*len(params),
+            background_color="#F2F2F2",
+            straight_line_color="#222222",
+            last_circle_color="#222222",
             last_circle_lw=1.5,
-            other_circle_lw=0.8,
-            other_circle_color="#E0E0E0",
+            other_circle_lw=0.5,
+            other_circle_color="#DDDDDD",
             inner_circle_size=18,
         )
 
@@ -170,10 +170,10 @@ def vis_side(*args, **kwargs):
             values,
             figsize=(9, 9),
             color_blank_space="same",
-            blank_alpha=0.2,
+            blank_alpha=0.4,
             param_location=110,
             kwargs_slices=dict(
-                facecolor="#DA291C", edgecolor="#111111",
+                facecolor=slice_colors, edgecolor="#222222",
                 zorder=1, linewidth=0.8
             ),
             kwargs_params=dict(
@@ -181,33 +181,38 @@ def vis_side(*args, **kwargs):
                 va="center", fontweight="bold"
             ),
             kwargs_values=dict(
-                color="#111111", fontsize=9,
+                color="#FFFFFF", fontsize=9,
                 zorder=3,
                 bbox=dict(
-                    edgecolor="#111111", facecolor="#FFFFFF",
-                    boxstyle="round,pad=0.2", lw=0.6
+                    edgecolor="#222222", facecolor="#111111",
+                    boxstyle="round,pad=0.2", lw=0.8
                 )
             )
         )
 
-        # Formater værdierne sikkert ved at matche tekstobjekterne i midten
+        # Sæt de faktiske percentil-tal ind i boksene
         val_idx = 0
         for txt in ax.texts:
             pos = txt.get_position()
-            # Værdierne i PyPizza placeres tæt på kilerne (typisk radius < 100)
             if pos[1] < 100 and val_idx < len(values):
-                val = values[val_idx]
-                if raw_cols[val_idx] in ['CONVERSION_RATE', 'POSSESSIONPERCENT', 'PASSING_FACTOR_AVGVAL']:
-                    txt.set_text(f"{val:.1f}")
-                else:
-                    txt.set_text(str(int(val)))
+                txt.set_text(str(int(values[val_idx])))
                 val_idx += 1
 
-        # Indsæt holdets logo i midten
+        # 2. Tilføj titel, undertitel og farve-legende i toppen (præcis som i eksemplet)
+        fig.text(0.5, 0.96, f"{valgt_hold_navn}", size=18,
+                 ha="center", fontweight="bold", color="#111111")
+        fig.text(0.5, 0.93, "Percentil Rank vs Ligaens Hold | Sæson 2026/2027", size=13,
+                 ha="center", fontweight="bold", color="#333333")
+
+        # Legende i toppen
+        fig.text(0.5, 0.89, "■ Offensiv      ■ Opbygning      ■ Defensiv", size=11,
+                 ha="center", fontweight="bold", color="#555555")
+
+        # 3. Indsæt holdets logo i midten
         logo_img = get_logo(logo_url)
         if logo_img:
             ax.add_artist(AnnotationBbox(OffsetImage(logo_img, zoom=0.30), (0, 0), frameon=True, 
-                                          bboxprops=dict(facecolor='white', edgecolor='#111111', linewidth=1.2, boxstyle='circle'), 
+                                          bboxprops=dict(facecolor='white', edgecolor='#222222', linewidth=1.5, boxstyle='circle'), 
                                           zorder=10))
 
         st.pyplot(fig, use_container_width=True)
