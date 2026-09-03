@@ -10,11 +10,15 @@ from mplsoccer import PyPizza
 from data.data_load import _get_snowflake_conn
 
 def get_logo(url):
+    if not url:
+        return None
     try:
         response = requests.get(url, timeout=5)
-        return Image.open(BytesIO(response.content)).convert("RGBA")
-    except:
-        return None
+        if response.status_code == 200:
+            return Image.open(BytesIO(response.content)).convert("RGBA")
+    except Exception:
+        pass
+    return None
 
 def fetch_data():
     conn = _get_snowflake_conn()
@@ -210,9 +214,12 @@ def vis_side(*args, **kwargs):
 
         logo_img = get_logo(logo_url)
         if logo_img:
-            ax.add_artist(AnnotationBbox(OffsetImage(logo_img, zoom=0.50), (0, 0), frameon=True, 
-                                          bboxprops=dict(facecolor='white', edgecolor='#222222', linewidth=1.5, boxstyle='circle'), 
-                                          zorder=10))
+            try:
+                ax.add_artist(AnnotationBbox(OffsetImage(logo_img, zoom=0.50), (0, 0), frameon=True, 
+                                              bboxprops=dict(facecolor='white', edgecolor='#222222', linewidth=1.5, boxstyle='circle'), 
+                                              zorder=10))
+            except Exception:
+                pass
 
         st.pyplot(fig, use_container_width=True)
 
