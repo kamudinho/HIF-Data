@@ -103,7 +103,7 @@ def fetch_data():
         LEFT JOIN KLUB_HVIDOVREIF.AXIS.WYSCOUT_TEAMSADVANCEDSTATS_AVERAGE avg_stats 
             ON tp.TEAM_WYID = avg_stats.TEAM_WYID 
             AND tp.SEASON_WYID = avg_stats.SEASON_WYID 
-        WHERE tp.MATCHES >= 1 AND tp.COMPETITION_WYID = 328 AND s.SEASONNAME = '2025/2026'
+        WHERE tp.MATCHES >= 1 AND tp.COMPETITION_WYID = 328 AND s.SEASONNAME = '2026/2027'
     ),
     deduped_team_stats AS (
         SELECT * FROM team_base WHERE rn = 1
