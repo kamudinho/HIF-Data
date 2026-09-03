@@ -11,20 +11,7 @@ from data.data_load import _get_snowflake_conn
 def get_logo(url):
     try:
         response = requests.get(url, timeout=5)
-        img = Image.open(BytesIO(response.content)).convert("RGBA")
-        
-        # 1. Skær tæt ind om selve logoet (fjern gennemsigtig "luft")
-        bbox = img.getbbox()
-        if bbox:
-            img = img.crop(bbox)
-            
-        # 2. Gør billedet kvadratisk med en hvid baggrund, så det centrerer perfekt
-        size = max(img.size)
-        background = Image.new("RGBA", (size, size), (255, 255, 255, 255))
-        offset = ((size - img.width) // 2, (size - img.height) // 2)
-        background.paste(img, offset, img)
-        
-        return background.convert("RGBA")
+        return Image.open(BytesIO(response.content)).convert("RGBA")
     except:
         return None
 
@@ -241,7 +228,7 @@ def vis_side(*args, **kwargs):
         logo_img = get_logo(logo_url)
         if logo_img:
             ax_image = add_image(
-                logo_img, fig, left=0.4478, bottom=0.4315, width=0.13, height=0.127
+                logo_img, fig, left=0.455, bottom=0.436, width=0.09, height=0.088
             )
 
         st.pyplot(fig, use_container_width=True)
