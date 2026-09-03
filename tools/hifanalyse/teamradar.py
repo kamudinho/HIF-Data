@@ -5,32 +5,8 @@ import matplotlib.pyplot as plt
 from PIL import Image
 import requests
 from io import BytesIO
-from matplotlib.offsetbox import OffsetImage, AnnotationBbox
+from mplsoccer import PyPizza
 from data.data_load import _get_snowflake_conn
-
-# --- 1. KERNEMETRIKKER OG GRUPPER ---
-METRIC_PAIRS = {
-    'OFFENSIV': [
-        ('Mål', 'GOALS'), 
-        ('Skud', 'SHOTS'), 
-        ('Konvertering', 'CONVERSION_RATE'),
-        ('Offensiv Akt.', 'ATTACKING_ACTIONS')
-    ],
-    'OPBYGNING': [
-        ('Possession', 'POSSESSIONPERCENT'), 
-        ('Pasningsfaktor', 'PASSING_FACTOR_AVGVAL')
-    ],
-    'DEFENSIV': [
-        ('Mål Imod', 'CONCEDEDGOALS'), 
-        ('Defensiv Akt.', 'DEFENSIVE_ACTIONS')
-    ]
-}
-
-GROUP_COLORS = {
-    'OFFENSIV': '#4A90E2',   # Blå
-    'OPBYGNING': '#50E3C2',  # Mint / Turkis
-    'DEFENSIV': '#DA291C'    # Hvidovre rød
-}
 
 def get_logo(url):
     try:
@@ -94,19 +70,7 @@ def fetch_data():
             COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.PASS_LENGTH), 0) * 100 AS PASS_LENGTH_PCTILE,
 
             COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.ATTACKING_ACTIONS), 0) * 100 AS ATTACKING_PCTILE,
-            COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.DEFENSIVE_ACTIONS), 0) * 100 AS DEFENSIVE_PCTILE,
-
-            RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.GOALS DESC) AS GOALS_RANK,
-            RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.SHOTS DESC) AS SHOTS_RANK,
-            RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.CONVERSION_RATE DESC) AS CONVERSION_RANK,
-            RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.CONCEDEDGOALS ASC) AS CONCEDEDGOALS_RANK,
-            RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.POSSESSIONPERCENT DESC) AS POSSESSION_RANK,
-            RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.PASSES DESC) AS PASSES_RANK,
-            RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.SUCCESSFUL_PASSES DESC) AS SUCCESSFUL_PASSES_RANK,
-            RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.SUCCESSFUL_FORWARD_PASSES DESC) AS SUCCESSFUL_FORWARD_PASSES_RANK,
-            RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.PASS_LENGTH DESC) AS PASS_LENGTH_RANK,
-            RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.ATTACKING_ACTIONS DESC) AS ATTACKING_RANK,
-            RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.DEFENSIVE_ACTIONS DESC) AS DEFENSIVE_RANK
+            COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.DEFENSIVE_ACTIONS), 0) * 100 AS DEFENSIVE_PCTILE
         FROM deduped_team_stats dt
     ),
     team_combined_passing AS (
@@ -115,26 +79,8 @@ def fetch_data():
             (PASSES_PCTILE + SUCCESSFUL_PASSES_PCTILE + SUCCESSFUL_FORWARD_PASSES_PCTILE + PASS_LENGTH_PCTILE) / 4.0 AS PASSING_FACTOR_PCTILE,
             (PASSES + SUCCESSFUL_PASSES + SUCCESSFUL_FORWARD_PASSES + PASS_LENGTH) / 4.0 AS PASSING_FACTOR_AVGVAL
         FROM team_percentile_calc tp
-    ),
-    team_passing_rank AS (
-        SELECT 
-            cp.*,
-            RANK() OVER (PARTITION BY cp.COMPETITION_WYID, cp.SEASON_WYID ORDER BY cp.PASSING_FACTOR_PCTILE DESC) AS PASS_RANK
-        FROM team_combined_passing cp
-    ),
-    team_overall_score AS (
-        SELECT 
-            pr.*,
-            (GOALS_PCTILE + SHOTS_PCTILE + CONVERSION_PCTILE + CONCEDEDGOALS_PCTILE + POSSESSION_PCTILE + PASSING_FACTOR_PCTILE + ATTACKING_PCTILE + DEFENSIVE_PCTILE) / 8.0 AS TOTAL_SCORE_PCTILE
-        FROM team_passing_rank pr
-    ),
-    team_final_rank AS (
-        SELECT 
-            os.*,
-            RANK() OVER (PARTITION BY os.COMPETITION_WYID, os.SEASON_WYID ORDER BY os.TOTAL_SCORE_PCTILE DESC) AS TOTAL_RANK_VAL
-        FROM team_overall_score os
     )
-    SELECT * FROM team_final_rank
+    SELECT * FROM team_combined_passing
     """
     df = pd.DataFrame(conn.query(query))
     df.columns = [c.upper() for c in df.columns]
@@ -174,104 +120,95 @@ def vis_side(*args, **kwargs):
             st.warning("Kunne ikke finde data for det valgte hold.")
             return
 
-        team_id = target_team_raw['TEAM_WYID'].values[0]
         logo_url = target_team_raw['IMAGEDATAURL'].values[0]
-        target_team = df[df['TEAM_WYID'] == team_id].iloc[0]
+        target_team = target_team_raw.iloc[0]
 
-        # --- FIGUR SETUP ---
-        fig, ax = plt.subplots(figsize=(9, 9), subplot_kw=dict(polar=True))
+        # 1. Opsæt parametre og tilhørende datakilder
+        params = [
+            "Mål", "Skud", "Konvertering", "Offensiv Akt.",
+            "Possession", "Pasningsfaktor",
+            "Mål Imod", "Defensiv Akt."
+        ]
         
-        fig.patch.set_facecolor('#F9F6F0')  # Athletic off-white baggrund
-        ax.set_facecolor('#F9F6F0')
+        # Hent percentiler (bruges til at styre hvor langt kilerne rækker ud fra 0-100)
+        percentile_cols = [
+            'GOALS_PCTILE', 'SHOTS_PCTILE', 'CONVERSION_PCTILE', 'ATTACKING_PCTILE',
+            'POSSESSION_PERCENT_PCTILE' if 'POSSESSION_PERCENT_PCTILE' in target_team else 'POSSESSION_PCTILE',
+            'PASSING_FACTOR_PCTILE',
+            'CONCEDEDGOALS_PCTILE', 'DEFENSIVE_PCTILE'
+        ]
         
-        plt.subplots_adjust(left=0.05, right=0.95, top=0.95, bottom=0.05)
-        
-        LIMIT_Y = 100 
-        ax.set_ylim(0, LIMIT_Y)
-        
-        total_vars = sum(len(pairs) for pairs in METRIC_PAIRS.values())
-        width = (2 * np.pi) / total_vars
-        angles = np.linspace(0, 2 * np.pi, total_vars, endpoint=False)
+        # Hent de rå værdier (vises inde i kilerne)
+        raw_cols = [
+            'GOALS', 'SHOTS', 'CONVERSION_RATE', 'ATTACKING_ACTIONS',
+            'POSSESSIONPERCENT', 'PASSING_FACTOR_AVGVAL',
+            'CONCEDEDGOALS', 'DEFENSIVE_ACTIONS'
+        ]
 
-        # Rotér startretning så toppen er mod klokken 12
-        rotation_offset = np.pi / 2 + (width / 2)
-        ax.set_theta_offset(rotation_offset)
-        ax.set_theta_direction(-1)
+        values = []
+        for p_col, r_col in zip(percentile_cols, raw_cols):
+            p_val = float(target_team[p_col]) if p_col in target_team and not pd.isna(target_team[p_col]) else 50.0
+            values.append(p_val)
 
-        # 1. TRIN: Tegn baggrundskilerne (100% højde, helt lyse/hvide med tynde rammer)
-        ax.bar(angles, [100] * total_vars, width=width, bottom=0, 
-               color='#FFFFFF', alpha=0.9, edgecolor='#CCCCCC', linewidth=0.8, zorder=2)
+        raw_display_values = []
+        for r_col in raw_cols:
+            val = float(target_team[r_col]) if r_col in target_team and not pd.isna(target_team[r_col]) else 0.0
+            if r_col in ['CONVERSION_RATE', 'POSSESSIONPERCENT', 'PASSING_FACTOR_AVGVAL']:
+                raw_display_values.append(f"{val:.1f}")
+            else:
+                raw_display_values.append(str(int(val)))
 
-        # 2. TRIN: Saml data og tegn de faktiske percentiler ovenpå i holdets farver
-        plot_labels, heights, slice_colors, display_values = [], [], [], []
-        group_boundaries = []
-        current_idx = 0
+        # 2. Initialiser PyPizza fra mplsoccer
+        baker = PyPizza(
+            params=params,
+            min_range=[0]*len(params),
+            max_range=[100]*len(params),
+            background_color="#F9F6F0",
+            straight_line_color="#111111",
+            last_circle_color="#111111",
+            last_circle_lw=1.5,
+            other_circle_lw=0.8,
+            other_circle_color="#D3D3D3",
+            inner_circle_size=18,
+        )
 
-        for group_name, pairs in METRIC_PAIRS.items():
-            group_color = GROUP_COLORS.get(group_name, '#DA291C')
-            for display_label, data_col in pairs:
-                if data_col == 'PASSING_FACTOR_AVGVAL':
-                    pctile_col, rank_col = 'PASSING_FACTOR_PCTILE', 'PASS_RANK'
-                else:
-                    pctile_col = f"{data_col}_PCTILE"
-                    rank_col = f"{data_col}_RANK"
-                
-                p_val = float(target_team[pctile_col]) if pctile_col in target_team and not pd.isna(target_team[pctile_col]) else 50.0
-                r_val = int(target_team[rank_col]) if rank_col in target_team and not pd.isna(target_team[rank_col]) else 1
-                raw_val = float(target_team[data_col]) if data_col in target_team and not pd.isna(target_team[data_col]) else 0.0
-                
-                plot_labels.append(f"{display_label}\n(Rank: {r_val})")
-                heights.append(p_val)
-                slice_colors.append(group_color)
-                
-                if data_col in ['CONVERSION_RATE', 'POSSESSIONPERCENT', 'PASSING_FACTOR_AVGVAL']:
-                    display_values.append(f"{raw_val:.1f}")
-                else:
-                    display_values.append(f"{int(raw_val)}")
+        # 3. Byg selve pizza-diagrammet i Hvidovre-rød (#DA291C)
+        fig, ax = baker.make_pizza(
+            values,
+            figsize=(9, 9),
+            color_blank_space="same",
+            blank_alpha=0.3,
+            param_location=110,
+            kwargs_slices=dict(
+                facecolor="#DA291C", edgecolor="#111111",
+                zorder=1, linewidth=0.8
+            ),
+            kwargs_params=dict(
+                color="#111111", fontsize=10, zorder=5,
+                va="center", fontweight="bold"
+            ),
+            kwargs_values=dict(
+                color="#111111", fontsize=9,
+                zorder=3,
+                bbox=dict(
+                    edgecolor="none", facecolor="#F9F6F0",
+                    boxstyle="round,pad=0.2", lw=0
+                )
+            )
+        )
 
-            current_idx += len(pairs)
-            # Beregn vinkel for tykke skillelinjer mellem grupperne
-            b_angle = (current_idx * width) - (width / 2)
-            group_boundaries.append(b_angle)
+        # Tilpas værdierne indeni til at vise de RÅ værdier i stedet for percentilerne
+        for txt, raw_val in zip(ax.texts, raw_display_values):
+            # Tjek om teksten er en af værdiboksene (og ikke et parameter-navn)
+            if txt.get_position()[1] < 100 and txt.get_text().replace('.', '', 1).isdigit():
+                txt.set_text(raw_val)
 
-        # Tegn selve percentil-kilerne ovenpå baggrunden
-        ax.bar(angles, heights, width=width, bottom=0, 
-               color=slice_colors, alpha=0.85, edgecolor='#111111', linewidth=0.8, zorder=3)
-
-        # Cirkel-gitter (stiplede ringe)
-        ax.set_yticks([20, 40, 60, 80, 100])
-        ax.grid(True, color='#D3D3D3', linewidth=0.8, linestyle='--', alpha=0.6, zorder=4)
-
-        # 3. TRIN: Tykke sorte skillelinjer mellem hovedgrupperne (præcis som i Athletic)
-        for b_angle in group_boundaries:
-            ax.plot([b_angle - rotation_offset, b_angle - rotation_offset], [0, LIMIT_Y], 
-                    color='#111111', linewidth=2.2, zorder=6)
-
-        # Yderste cirkel-kant
-        ax.spines['polar'].set_visible(True)
-        ax.spines['polar'].set_color('#111111')
-        ax.spines['polar'].set_linewidth(1.5)
-
-        # Holdets logo i midten
+        # 4. Indsæt holdets logo i midten
         logo_img = get_logo(logo_url)
         if logo_img:
-            ax.add_artist(AnnotationBbox(OffsetImage(logo_img, zoom=0.40), (0, 0), frameon=True, 
+            ax.add_artist(AnnotationBbox(OffsetImage(logo_img, zoom=0.35), (0, 0), frameon=True, 
                                           bboxprops=dict(facecolor='white', edgecolor='#111111', linewidth=1.5, boxstyle='circle'), 
                                           zorder=10))
-
-        ax.axis('off')
-
-        # 4. TRIN: Værdier og labels
-        for angle, label, disp in zip(angles, plot_labels, display_values):
-            # Rå værdi placeret inde i kilen
-            ax.text(angle, 55, disp, ha='center', va='center', 
-                    fontsize=9, fontweight='bold', color='#111111', zorder=8,
-                    bbox=dict(facecolor='#F9F6F0', edgecolor='none', boxstyle='round,pad=0.2'))
-            
-            # Metrik-navn yderst i kanten
-            ax.text(angle, 114, label, ha='center', va='center',
-                    fontsize=8.5, fontweight='bold', color='#111111', zorder=7,
-                    rotation=0)
 
         st.pyplot(fig, use_container_width=True)
 
