@@ -11,7 +11,20 @@ from data.data_load import _get_snowflake_conn
 def get_logo(url):
     try:
         response = requests.get(url, timeout=5)
-        return Image.open(BytesIO(response.content)).convert("RGBA")
+        img = Image.open(BytesIO(response.content)).convert("RGBA")
+        
+        # 1. Skær tæt ind om selve logoet (fjern gennemsigtig "luft")
+        bbox = img.getbbox()
+        if bbox:
+            img = img.crop(bbox)
+            
+        # 2. Gør billedet kvadratisk med en hvid baggrund, så det centrerer perfekt
+        size = max(img.size)
+        background = Image.new("RGBA", (size, size), (255, 255, 255, 255))
+        offset = ((size - img.width) // 2, (size - img.height) // 2)
+        background.paste(img, offset, img)
+        
+        return background.convert("RGBA")
     except:
         return None
 
