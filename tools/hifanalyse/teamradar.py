@@ -249,24 +249,34 @@ def vis_side(*args, **kwargs):
                 mime="image/png"
             )
 
-        # --- DATATABEL UDEN RANK, MED TOTAL, PR. 90 OG PERCENTILE ---
+        # --- KORREKT DATATABEL MED MATCHES-BEREGNING ---
         st.markdown("### Detaljerede statistikker")
         
         def safe_val(col):
             val = float(target_team[col]) if col in target_team and not pd.isna(target_team[col]) else 0.0
             return val
 
+        # Hjælpefunktion til at vise total (hvis kolonnen er fra average, ganger vi med matches for at få total, ellers bruger vi den direkte)
+        def get_total_val(col, is_avg_source=False):
+            val = safe_val(col)
+            return val * matches if is_avg_source else val
+
+        # Hjælpefunktion til at vise pr. 90 (hvis kolonnen er fra total, dividerer vi med matches, ellers bruger vi den direkte som gennemsnit)
+        def get_per90_val(col, is_avg_source=False):
+            val = safe_val(col)
+            return val if is_avg_source else (val / matches if matches > 0 else 0)
+
         table_rows = [
             {
                 "Kategori": "Mål",
-                "Total": f"{safe_val('GOALS'):.0f}",
-                "Pr. 90 min.": f"{safe_val('GOALS') / matches:.2f}",
+                "Total": f"{get_total_val('GOALS'):.0f}",
+                "Pr. 90 min.": f"{get_per90_val('GOALS'):.2f}",
                 "Percentile (%)": f"{safe_val('GOALS_PCTILE'):.1f}%"
             },
             {
                 "Kategori": "Skud",
-                "Total": f"{safe_val('SHOTS'):.0f}",
-                "Pr. 90 min.": f"{safe_val('SHOTS') / matches:.2f}",
+                "Total": f"{get_total_val('SHOTS'):.0f}",
+                "Pr. 90 min.": f"{get_per90_val('SHOTS'):.2f}",
                 "Percentile (%)": f"{safe_val('SHOTS_PCTILE'):.1f}%"
             },
             {
@@ -289,20 +299,20 @@ def vis_side(*args, **kwargs):
             },
             {
                 "Kategori": "  ↳ Afleveringer",
-                "Total": f"{safe_val('PASSES'):.1f}",
-                "Pr. 90 min.": f"{safe_val('PASSES') / matches:.2f}",
+                "Total": f"{get_total_val('PASSES', True):.1f}",
+                "Pr. 90 min.": f"{get_per90_val('PASSES', True):.2f}",
                 "Percentile (%)": f"{safe_val('PASSES_PCTILE'):.1f}%"
             },
             {
                 "Kategori": "  ↳ Succesfulde afleveringer",
-                "Total": f"{safe_val('SUCCESSFUL_PASSES'):.1f}",
-                "Pr. 90 min.": f"{safe_val('SUCCESSFUL_PASSES') / matches:.2f}",
+                "Total": f"{get_total_val('SUCCESSFUL_PASSES', True):.1f}",
+                "Pr. 90 min.": f"{get_per90_val('SUCCESSFUL_PASSES', True):.2f}",
                 "Percentile (%)": f"{safe_val('SUCCESSFUL_PASSES_PCTILE'):.1f}%"
             },
             {
                 "Kategori": "  ↳ Fremadrettede afleveringer",
-                "Total": f"{safe_val('SUCCESSFUL_FORWARD_PASSES'):.1f}",
-                "Pr. 90 min.": f"{safe_val('SUCCESSFUL_FORWARD_PASSES') / matches:.2f}",
+                "Total": f"{get_total_val('SUCCESSFUL_FORWARD_PASSES', True):.1f}",
+                "Pr. 90 min.": f"{get_per90_val('SUCCESSFUL_FORWARD_PASSES', True):.2f}",
                 "Percentile (%)": f"{safe_val('SUCCESSFUL_FORWARD_PASSES_PCTILE'):.1f}%"
             },
             {
@@ -313,20 +323,20 @@ def vis_side(*args, **kwargs):
             },
             {
                 "Kategori": "Offensiv Akt.",
-                "Total": f"{safe_val('ATTACKING_ACTIONS'):.0f}",
-                "Pr. 90 min.": f"{safe_val('ATTACKING_ACTIONS') / matches:.2f}",
+                "Total": f"{get_total_val('ATTACKING_ACTIONS'):.0f}",
+                "Pr. 90 min.": f"{get_per90_val('ATTACKING_ACTIONS'):.2f}",
                 "Percentile (%)": f"{safe_val('ATTACKING_PCTILE'):.1f}%"
             },
             {
                 "Kategori": "Mål Imod",
-                "Total": f"{safe_val('CONCEDEDGOALS'):.0f}",
-                "Pr. 90 min.": f"{safe_val('CONCEDEDGOALS') / matches:.2f}",
+                "Total": f"{get_total_val('CONCEDEDGOALS'):.0f}",
+                "Pr. 90 min.": f"{get_per90_val('CONCEDEDGOALS'):.2f}",
                 "Percentile (%)": f"{safe_val('CONCEDEDGOALS_PCTILE'):.1f}%"
             },
             {
                 "Kategori": "Defensiv Akt.",
-                "Total": f"{safe_val('DEFENSIVE_ACTIONS'):.0f}",
-                "Pr. 90 min.": f"{safe_val('DEFENSIVE_ACTIONS') / matches:.2f}",
+                "Total": f"{get_total_val('DEFENSIVE_ACTIONS'):.0f}",
+                "Pr. 90 min.": f"{get_per90_val('DEFENSIVE_ACTIONS'):.2f}",
                 "Percentile (%)": f"{safe_val('DEFENSIVE_PCTILE'):.1f}%"
             }
         ]
