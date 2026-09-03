@@ -168,12 +168,12 @@ def vis_side(*args, **kwargs):
         logo_url = target_team_raw['IMAGEDATAURL'].values[0]
         target_team = df[df['TEAM_WYID'] == team_id].iloc[0]
 
-        # --- FIGUR SETUP (MØRK TEMA SOM HAALAND-EKSEMPLET) ---
+        # --- FIGUR SETUP (MED HVID BAGGRUND) ---
         fig, ax = plt.subplots(figsize=(9, 9), subplot_kw=dict(polar=True))
         
-        # Sæt mørk baggrundsfarve på både figur og axes
-        fig.patch.set_facecolor('#121212')
-        ax.set_facecolor('#121212')
+        # Sæt hvid baggrundsfarve på både figur og axes
+        fig.patch.set_facecolor('white')
+        ax.set_facecolor('white')
         
         plt.subplots_adjust(left=0.05, right=0.95, top=0.9, bottom=0.05)
         
@@ -191,33 +191,23 @@ def vis_side(*args, **kwargs):
                     rank_col = f"{data_col}_RANK"
                 
                 p_val = float(target_team[pctile_col]) if pctile_col in target_team and not pd.isna(target_team[pctile_col]) else 50.0
-                r_val = int(target_team[rank_col]) if rank_col in target_team and not pd.isna(target_team[rank_col]) else 1
                 
                 plot_labels.append(display_label)
                 values.append(p_val)
-                
-                raw_val = target_team[data_col] if data_col in target_team and not pd.isna(target_team[data_col]) else 0
-                mean_val = df[data_col].mean() if data_col in df else 0
-
-                if data_col in ['CONVERSION_RATE', 'POSSESSIONPERCENT', 'PASSING_FACTOR_AVGVAL']:
-                    disp_str = f"{int(p_val)}" # Viser percentilen i boksen som på referencen
-                else:
-                    disp_str = f"{int(p_val)}"
-                    
-                display_values.append(disp_str)
+                display_values.append(f"{int(p_val)}")
 
         num_vars = len(plot_labels)
         angles = np.linspace(0, 2 * np.pi, num_vars, endpoint=False)
         width = (2 * np.pi) / num_vars
 
-        # Hvide gitterlinjer og cirkler
-        ax.grid(True, color='white', linewidth=0.6, alpha=0.3)
+        # Mørke/grå gitterlinjer for kontrast mod hvid baggrund
+        ax.grid(True, color='#2C3E50', linewidth=0.6, alpha=0.3)
         
-        # Tegn sektor-blokkene i ensartet lyseblå farve (#5DADE2)
-        ax.bar(angles, values, width=width, bottom=0, color='#5DADE2', alpha=0.95, edgecolor='#121212', linewidth=1.5, zorder=3)
+        # Tegn sektor-blokkene i lyseblå farve med mørk kant
+        ax.bar(angles, values, width=width, bottom=0, color='#5DADE2', alpha=0.9, edgecolor='#2C3E50', linewidth=1.2, zorder=3)
 
-        # Overskrift (Holdnavn i toppen)
-        plt.suptitle(valgt_hold_navn, color='white', fontsize=18, fontweight='bold', y=0.94, fontfamily='sans-serif')
+        # Overskrift (Holdnavn i toppen med mørk tekst)
+        plt.suptitle(valgt_hold_navn, color='#2C3E50', fontsize=18, fontweight='bold', y=0.94, fontfamily='sans-serif')
 
         logo_img = get_logo(logo_url)
         if logo_img:
@@ -227,22 +217,16 @@ def vis_side(*args, **kwargs):
         ax.set_theta_direction(-1)
         ax.axis('off')
 
-        # Placering af værdier og labels magen til referencen
+        # Placering af værdier og labels
         for angle, label, disp in zip(angles, plot_labels, display_values):
-            # Beregn rotationsvinkel for tekst i kanten, så den følger hjulet
-            angle_deg = np.degrees(angle)
-            rotation = angle_deg - 90
-            if angle_deg > 180:
-                rotation = angle_deg + 90
-
             # Værdi-boks inde på baren
             ax.text(angle, 55, disp, ha='center', va='center', 
                     fontsize=8, fontweight='bold', color='white', zorder=12,
-                    bbox=dict(facecolor='#2980B9', edgecolor='white', boxstyle='round,pad=0.3', linewidth=0.8))
+                    bbox=dict(facecolor='#2980B9', edgecolor='#2C3E50', boxstyle='round,pad=0.3', linewidth=0.8))
             
-            # Metrik-navn yderst i kanten (roteret pænt ligesom eksemplet)
+            # Metrik-navn yderst i kanten med mørk tekst
             ax.text(angle, 112, label, ha='center', va='center',
-                    fontsize=9, fontweight='bold', color='white', zorder=11,
+                    fontsize=9, fontweight='bold', color='#2C3E50', zorder=11,
                     rotation=0)
 
         st.pyplot(fig, use_container_width=True)
