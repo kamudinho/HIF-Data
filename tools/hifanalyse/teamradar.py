@@ -98,10 +98,8 @@ def fetch_data():
             
             COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.DEFENSIVEDUELSWON), 0) * 100 AS DEFENSIVEDUELSWON_PCTILE,
             COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.AERIALDUELSWON), 0) * 100 AS AERIALDUELSWON_PCTILE,
-            -- Omvendt for PPDA (lavest er bedst)
             100 - (COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.PPDA), 0) * 100) AS PPDA_PCTILE,
             COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.INTERCEPTIONS), 0) * 100 AS INTERCEPTIONS_PCTILE,
-            -- Omvendt for Conceded Goals (færrest mål imod er bedst)
             100 - (COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.CONCEDEDGOALS), 0) * 100) AS CONCEDEDGOALS_PCTILE,
             COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.RECOVERIES), 0) * 100 AS RECOVERIES_PCTILE,
 
@@ -167,6 +165,9 @@ def vis_side(*args, **kwargs):
         download_placeholder = st.empty()
 
     with chart_col:
+        # --- FEJLFINDING: VIS KOLONNERNE DIREKTE PÅ SKÆRMEN ---
+        st.write("Faktiske kolonner i DataFrame:", list(df.columns))
+
         target_team_raw = df[df['TEAMNAME'] == valgt_hold_navn]
         if target_team_raw.empty:
             st.warning("Kunne ikke finde data for det valgte hold.")
@@ -175,7 +176,6 @@ def vis_side(*args, **kwargs):
         team_id = target_team_raw['TEAM_WYID'].values[0]
         logo_url = target_team_raw['IMAGEDATAURL'].values[0]
 
-        # Beregn per kamp for værdierne (undtagen PPDA)
         all_metrics_cols = [pair[1] for group in METRIC_PAIRS.values() for pair in group]
         for col in list(set(all_metrics_cols)):
             if col in df.columns and col != 'PPDA':
@@ -198,7 +198,8 @@ def vis_side(*args, **kwargs):
 
         for group_name, pairs in METRIC_PAIRS.items():
             for display_label, data_col in pairs:
-                if data_col not in df.columns: continue
+                if data_col not in df.columns: 
+                    continue
                 
                 pctile_col = f"{data_col}_PCTILE"
                 rank_col = f"{data_col}_RANK"
