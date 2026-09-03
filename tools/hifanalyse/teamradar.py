@@ -9,17 +9,21 @@ from io import BytesIO
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 from data.data_load import _get_snowflake_conn
 
-# --- 1. DATA OPSÆTNING ---
+# --- 1. DATA OPSÆTNING MED FLERE KATEGORIER ---
 METRIC_PAIRS = {
     'OFFENSIV': [
-        ('Mål', 'GOALS'), ('Skud', 'SHOTS'), ('Konvertering', 'CONVERSION_RATE'),
+        ('Mål', 'GOALS'), 
+        ('Skud', 'SHOTS'), 
+        ('Konvertering', 'CONVERSION_RATE'),
         ('Offensiv Akt.', 'ATTACKING_ACTIONS')
     ],
     'OPBYGNING': [
-        ('Possession', 'POSSESSIONPERCENT'), ('Pasningsfaktor', 'PASSING_FACTOR_AVGVAL')
+        ('Possession', 'POSSESSIONPERCENT'), 
+        ('Pasningsfaktor', 'PASSING_FACTOR_AVGVAL')
     ],
     'DEFENSIV': [
-        ('Mål Imod', 'CONCEDEDGOALS'), ('Defensiv Akt.', 'DEFENSIVE_ACTIONS')
+        ('Mål Imod', 'CONCEDEDGOALS'), 
+        ('Defensiv Akt.', 'DEFENSIVE_ACTIONS')
     ]
 }
 
@@ -78,6 +82,7 @@ def fetch_data():
             COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.GOALS), 0) * 100 AS GOALS_PCTILE,
             COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.SHOTS), 0) * 100 AS SHOTS_PCTILE,
             COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.CONVERSION_RATE), 0) * 100 AS CONVERSION_PCTILE,
+            -- Omvendt percentil for Mål Imod (færrest mål = 100% / bedst)
             100 - (COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.CONCEDEDGOALS), 0) * 100) AS CONCEDEDGOALS_PCTILE,
             COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.POSSESSIONPERCENT), 0) * 100 AS POSSESSION_PCTILE,
             
@@ -92,6 +97,7 @@ def fetch_data():
             RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.GOALS DESC) AS GOALS_RANK,
             RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.SHOTS DESC) AS SHOTS_RANK,
             RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.CONVERSION_RATE DESC) AS CONVERSION_RANK,
+            -- Omvendt rank for Mål Imod (færrest mål = #1)
             RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.CONCEDEDGOALS ASC) AS CONCEDEDGOALS_RANK,
             RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.POSSESSIONPERCENT DESC) AS POSSESSION_RANK,
             RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.ATTACKING_ACTIONS DESC) AS ATTACKING_RANK,
@@ -165,12 +171,15 @@ def vis_side(*args, **kwargs):
 
     with chart_col:
         target_team_raw = df[df['TEAMNAME'] == valgt_hold_navn]
+        if target_team_raw.empty:
+            st.warning("Kunne ikke finde data for det valgte hold.")
+            return
+
         team_id = target_team_raw['TEAM_WYID'].values[0]
         logo_url = target_team_raw['IMAGEDATAURL'].values[0]
-
         target_team = df[df['TEAM_WYID'] == team_id].iloc[0]
 
-        # --- PIZZA CHART POSITIONERING ---
+        # --- KANTET RADAR / PIZZA CHART (POLAR PLOT) ---
         fig, ax = plt.subplots(figsize=(10, 10), subplot_kw=dict(polar=True))
         fig.patch.set_alpha(0)
         
@@ -207,7 +216,7 @@ def vis_side(*args, **kwargs):
                 values.append(scaled_val)
                 
                 raw_val = target_team[data_col]
-                if data_col == 'CONVERSION_RATE' or data_col == 'POSSESSIONPERCENT' or data_col == 'PASSING_FACTOR_AVGVAL':
+                if data_col in ['CONVERSION_RATE', 'POSSESSIONPERCENT', 'PASSING_FACTOR_AVGVAL']:
                     disp_str = f"{raw_val:.1f} (#{r_val})"
                 else:
                     disp_str = f"{int(raw_val)} (#{r_val})"
@@ -216,11 +225,19 @@ def vis_side(*args, **kwargs):
                 plot_colors.append(color_map[group_name])
 
         num_vars = len(plot_labels)
-        angles = np.linspace(0, 2 * np.pi, num_vars, endpoint=False)
+        angles = np.linspace(0, 2 * np.pi, num_vars, endpoint=False).tolist()
         width = (2 * np.pi) / num_vars
 
+        # Gør den kantet ved at lukke polygonen (tilføj første element til sidst)
+        angles_plot = angles + angles[:1]
+        values_plot = values + values[:1]
+
+        # Baggrundscirkler/-linjer
         ax.bar(angles, [100] * num_vars, width=width, color='none', edgecolor='white', linewidth=0.6, alpha=0.2, zorder=1)
-        ax.bar(angles, values, width=width, bottom=0, color=plot_colors, alpha=0.9, edgecolor='white', linewidth=1.2, zorder=3)
+        
+        # Tegn den kantede polygon (radar/pizza fill)
+        ax.plot(angles_plot, values_plot, color="#df003b", linewidth=2, linestyle="solid", marker="o", markersize=5, zorder=2)
+        ax.fill(angles_plot, values_plot, color="#df003b", alpha=0.25, zorder=2)
 
         logo_img = get_logo(logo_url)
         if logo_img:
