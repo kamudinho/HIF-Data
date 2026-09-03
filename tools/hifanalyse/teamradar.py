@@ -15,7 +15,8 @@ def get_logo(url):
     try:
         response = requests.get(url, timeout=5)
         if response.status_code == 200:
-            return Image.open(BytesIO(response.content)).convert("RGBA")
+            img = Image.open(BytesIO(response.content))
+            return img.convert("RGBA")
     except Exception:
         pass
     return None
@@ -214,12 +215,18 @@ def vis_side(*args, **kwargs):
 
         logo_img = get_logo(logo_url)
         if logo_img:
-            try:
-                ax.add_artist(AnnotationBbox(OffsetImage(logo_img, zoom=0.50), (0, 0), frameon=True, 
-                                              bboxprops=dict(facecolor='white', edgecolor='#222222', linewidth=1.5, boxstyle='circle'), 
-                                              zorder=10))
-            except Exception:
-                pass
+            # Brug OffsetImage med 'zoom' tilpasset plottets koordinatsystem (typisk ~0.15 - 0.25 afhængigt af billedstørrelse)
+            imagebox = OffsetImage(logo_img, zoom=0.18)
+            imagebox.image.axes = ax
+            ab = AnnotationBbox(
+                imagebox, 
+                (0, 0), 
+                frameon=True,
+                pad=0.3,
+                bboxprops=dict(facecolor='white', edgecolor='#222222', linewidth=1.5, boxstyle='circle'),
+                zorder=10
+            )
+            ax.add_artist(ab)
 
         st.pyplot(fig, use_container_width=True)
 
