@@ -189,11 +189,24 @@ def vis_side(*args, **kwargs):
         LIMIT_Y = 100 
         ax.set_ylim(0, LIMIT_Y)
         
-        plot_labels, heights, slice_colors, display_values = [], [], [], []
-
         total_vars = sum(len(pairs) for pairs in METRIC_PAIRS.values())
         width = (2 * np.pi) / total_vars
-        
+        angles = np.linspace(0, 2 * np.pi, total_vars, endpoint=False)
+
+        # Rotér startretning så toppen er mod klokken 12
+        rotation_offset = np.pi / 2 + (width / 2)
+        ax.set_theta_offset(rotation_offset)
+        ax.set_theta_direction(-1)
+
+        # 1. TRIN: Tegn baggrundskilerne (100% højde, helt lyse/hvide med tynde rammer)
+        ax.bar(angles, [100] * total_vars, width=width, bottom=0, 
+               color='#FFFFFF', alpha=0.9, edgecolor='#CCCCCC', linewidth=0.8, zorder=2)
+
+        # 2. TRIN: Saml data og tegn de faktiske percentiler ovenpå i holdets farver
+        plot_labels, heights, slice_colors, display_values = [], [], [], []
+        group_boundaries = []
+        current_idx = 0
+
         for group_name, pairs in METRIC_PAIRS.items():
             group_color = GROUP_COLORS.get(group_name, '#DA291C')
             for display_label, data_col in pairs:
@@ -203,11 +216,8 @@ def vis_side(*args, **kwargs):
                     pctile_col = f"{data_col}_PCTILE"
                     rank_col = f"{data_col}_RANK"
                 
-                # Percentil styrer kilens højde (radius 0 til 100)
                 p_val = float(target_team[pctile_col]) if pctile_col in target_team and not pd.isna(target_team[pctile_col]) else 50.0
                 r_val = int(target_team[rank_col]) if rank_col in target_team and not pd.isna(target_team[rank_col]) else 1
-                
-                # Rå værdi der vises inde i feltet
                 raw_val = float(target_team[data_col]) if data_col in target_team and not pd.isna(target_team[data_col]) else 0.0
                 
                 plot_labels.append(f"{display_label}\n(Rank: {r_val})")
@@ -219,25 +229,30 @@ def vis_side(*args, **kwargs):
                 else:
                     display_values.append(f"{int(raw_val)}")
 
-        angles = np.linspace(0, 2 * np.pi, total_vars, endpoint=False)
+            current_idx += len(pairs)
+            # Beregn vinkel for tykke skillelinjer mellem grupperne
+            b_angle = (current_idx * width) - (width / 2)
+            group_boundaries.append(b_angle)
 
-        # Cirkel-gitter (diskret ringmønster inkl. den yderste 100%-ring)
+        # Tegn selve percentil-kilerne ovenpå baggrunden
+        ax.bar(angles, heights, width=width, bottom=0, 
+               color=slice_colors, alpha=0.85, edgecolor='#111111', linewidth=0.8, zorder=3)
+
+        # Cirkel-gitter (stiplede ringe)
         ax.set_yticks([20, 40, 60, 80, 100])
-        ax.grid(True, color='#D3D3D3', linewidth=0.8, linestyle='--', alpha=0.6, zorder=2)
-        
-        # Sørg for at den yderste kant (100%) tegnes som en komplet, fast cirkel
+        ax.grid(True, color='#D3D3D3', linewidth=0.8, linestyle='--', alpha=0.6, zorder=4)
+
+        # 3. TRIN: Tykke sorte skillelinjer mellem hovedgrupperne (præcis som i Athletic)
+        for b_angle in group_boundaries:
+            ax.plot([b_angle - rotation_offset, b_angle - rotation_offset], [0, LIMIT_Y], 
+                    color='#111111', linewidth=2.2, zorder=6)
+
+        # Yderste cirkel-kant
         ax.spines['polar'].set_visible(True)
         ax.spines['polar'].set_color('#111111')
         ax.spines['polar'].set_linewidth(1.5)
 
-        # Rotér startretning så toppen er mod klokken 12
-        rotation_offset = np.pi / 2 + (width / 2)
-        ax.set_theta_offset(rotation_offset)
-        ax.set_theta_direction(-1)
-
-        # Tegn slices ud fra percentil-højderne (uden tykke gruppe-skillelinjer)
-        ax.bar(angles, heights, width=width, bottom=0, color=slice_colors, alpha=0.35, edgecolor='#111111', linewidth=0.8, zorder=3)
-
+        # Holdets logo i midten
         logo_img = get_logo(logo_url)
         if logo_img:
             ax.add_artist(AnnotationBbox(OffsetImage(logo_img, zoom=0.40), (0, 0), frameon=True, 
@@ -246,9 +261,9 @@ def vis_side(*args, **kwargs):
 
         ax.axis('off')
 
-        # Placering af de rå værdier inde i felterne og labels yderst
+        # 4. TRIN: Værdier og labels
         for angle, label, disp in zip(angles, plot_labels, display_values):
-            # Værdi-boks (viser den rå værdi)
+            # Rå værdi placeret inde i kilen
             ax.text(angle, 55, disp, ha='center', va='center', 
                     fontsize=9, fontweight='bold', color='#111111', zorder=8,
                     bbox=dict(facecolor='#F9F6F0', edgecolor='none', boxstyle='round,pad=0.2'))
