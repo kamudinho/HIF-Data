@@ -6,7 +6,7 @@ from data.data_load import _get_snowflake_conn
 
 def vis_side():
     st.markdown("### Holdoversigt & Team Radar Dashboard")
-    st.markdown("Dette dashboard viser samlede holdpræstationer, historiske percentiler samt en radargraf baseret på nøglefaktorer fra Snowflake.")
+    st.markdown("Dette dashboard viser samlede holdpræstationer, historiske percentiler samt en kantet radargraf baseret på nøglefaktorer fra Snowflake.")
 
     try:
         conn = _get_snowflake_conn()
@@ -56,7 +56,8 @@ def vis_side():
             COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.GOALS), 0) * 100 AS GOALS_PCTILE,
             COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.SHOTS), 0) * 100 AS SHOTS_PCTILE,
             COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.CONVERSION_RATE), 0) * 100 AS CONVERSION_PCTILE,
-            COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.CONCEDEDGOALS DESC), 0) * 100 AS CONCEDEDGOALS_PCTILE,
+            -- Omvendt percentil for Mål Imod (færrest mål = 100% / bedst)
+            100 - (COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.CONCEDEDGOALS), 0) * 100) AS CONCEDEDGOALS_PCTILE,
             COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.POSSESSIONPERCENT), 0) * 100 AS POSSESSION_PCTILE,
             
             COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.PASSES), 0) * 100 AS P_PASSES,
@@ -150,7 +151,7 @@ def vis_side():
         st.metric("Pasningsfaktor", f"{round(team_data['PASSING_FACTOR_AVGVAL'], 1)}")
 
     st.markdown("---")
-    st.markdown("#### Holdets Radar Chart & Percentil-ranking")
+    st.markdown("#### Holdets Kantede Radar Chart & Percentil-ranking")
 
     metrics = [
         "Mål",
@@ -174,25 +175,41 @@ def vis_side():
         float(team_data["DEFENSIVE_PCTILE"])
     ]
 
+    ranks = [
+        f"#{int(team_data['GOALS_RANK'])}",
+        f"#{int(team_data['SHOTS_RANK'])}",
+        f"#{int(team_data['CONVERSION_RANK'])}",
+        f"#{int(team_data['CONCEDEDGOALS_RANK'])}",
+        f"#{int(team_data['POSSESSION_RANK'])}",
+        f"#{int(team_data['PASS_RANK'])}",
+        f"#{int(team_data['ATTACKING_RANK'])}",
+        f"#{int(team_data['DEFENSIVE_RANK'])}"
+    ]
+
+    # Labels med både kategori, værdi og rank
+    labels = [f"{m}\n{p:.1f}% ({r})" for m, p, r in zip(metrics, percentiles, ranks)]
+
     angles = np.linspace(0, 2 * np.pi, len(metrics), endpoint=False).tolist()
     percentiles_plot = percentiles + percentiles[:1]
     angles_plot = angles + angles[:1]
 
     fig, ax = plt.subplots(figsize=(6, 6), subplot_kw=dict(polar=True))
-    ax.plot(angles_plot, percentiles_plot, color="#df003b", linewidth=2.5, linestyle="solid", label=f"{selected_team} ({selected_season})")
+    
+    # Tegn kantet polygon med markører på knækpunkterne
+    ax.plot(angles_plot, percentiles_plot, color="#df003b", linewidth=2, linestyle="solid", marker="o", markersize=5, label=f"{selected_team} ({selected_season})")
     ax.fill(angles_plot, percentiles_plot, color="#df003b", alpha=0.25)
 
     ax.set_theta_offset(np.pi / 2)
     ax.set_theta_direction(-1)
     ax.set_xticks(angles)
-    ax.set_xticklabels(metrics, fontsize=9, fontweight="bold")
+    ax.set_xticklabels(labels, fontsize=8, fontweight="bold")
 
     ax.set_rlim(0, 100)
     ax.set_rticks([20, 40, 60, 80, 100])
     ax.set_rlabel_position(0)
     ax.tick_params(axis="y", labelsize=8)
 
-    plt.title(f"Holdets Percentil-oversigt vs. Ligaen ({selected_season})", size=12, fontweight="bold", pad=15)
+    plt.title(f"Holdets Percentil-oversigt vs. Ligaen ({selected_season})", size=12, fontweight="bold", pad=20)
     st.pyplot(fig)
 
     st.markdown("#### Detaljerede målinger (Percentil & Ranks)")
@@ -200,16 +217,7 @@ def vis_side():
     detail_df = pd.DataFrame({
         "Kategori": metrics,
         "Percentil (%)": [round(p, 1) for p in percentiles],
-        "Rank": [
-            f"#{int(team_data['GOALS_RANK'])}",
-            f"#{int(team_data['SHOTS_RANK'])}",
-            f"#{int(team_data['CONVERSION_RANK'])}",
-            f"#{int(team_data['CONCEDEDGOALS_RANK'])}",
-            f"#{int(team_data['POSSESSION_RANK'])}",
-            f"#{int(team_data['PASS_RANK'])}",
-            f"#{int(team_data['ATTACKING_RANK'])}",
-            f"#{int(team_data['DEFENSIVE_RANK'])}"
-        ]
+        "Rank": ranks
     })
     
     st.dataframe(detail_df, use_container_width=True, hide_index=True)
