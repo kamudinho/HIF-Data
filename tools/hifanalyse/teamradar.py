@@ -241,7 +241,7 @@ def vis_side(*args, **kwargs):
         logo_img = get_logo(logo_url)
         if logo_img:
             ax_image = add_image(
-                logo_img, fig, left=0.455, bottom=0.436, width=0.09, height=0.088
+                logo_img, fig, left=0.4478, bottom=0.4315, width=0.13, height=0.127
             )
 
         st.pyplot(fig, use_container_width=True)
