@@ -8,7 +8,7 @@ from io import BytesIO
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 from data.data_load import _get_snowflake_conn
 
-# --- 1. KERNEMETRIKKER ---
+# --- 1. KERNEMETRIKKER OG GRUPPER ---
 METRIC_PAIRS = {
     'OFFENSIV': [
         ('Mål', 'GOALS'), 
@@ -21,9 +21,16 @@ METRIC_PAIRS = {
         ('Pasningsfaktor', 'PASSING_FACTOR_AVGVAL')
     ],
     'DEFENSIV': [
-        ('Mål Imod', 'CONCEDEDGOALS'), 
+        ('Mål Imiteret / Imod', 'CONCEDEDGOALS'), 
         ('Defensiv Akt.', 'DEFENSIVE_ACTIONS')
     ]
+}
+
+# Farver til de forskellige grupper (inspireret af The Athletic-stilen)
+GROUP_COLORS = {
+    'OFFENSIV': '#4A90E2',   # Blæk-blå / blå
+    'OPBYGNING': '#50E3C2',  # Mint / turkis
+    'DEFENSIV': '#DA291C'    # Hvidovre rød
 }
 
 def get_logo(url):
@@ -175,17 +182,22 @@ def vis_side(*args, **kwargs):
         # --- FIGUR SETUP ---
         fig, ax = plt.subplots(figsize=(9, 9), subplot_kw=dict(polar=True))
         
-        fig.patch.set_facecolor('white')
-        ax.set_facecolor('white')
+        fig.patch.set_facecolor('#F9F6F0')  # Lidt varm/off-white baggrund ligesom The Athletic
+        ax.set_facecolor('#F9F6F0')
         
         plt.subplots_adjust(left=0.05, right=0.95, top=0.95, bottom=0.05)
         
         LIMIT_Y = 100 
         ax.set_ylim(0, LIMIT_Y)
         
-        plot_labels, values, display_values = [], [], []
+        plot_labels, values, slice_colors, display_values, boundary_angles = [], [], [], [], []
+
+        current_angle_index = 0
+        total_vars = sum(len(pairs) for pairs in METRIC_PAIRS.values())
+        width = (2 * np.pi) / total_vars
 
         for group_name, pairs in METRIC_PAIRS.items():
+            group_color = GROUP_COLORS.get(group_name, '#DA291C')
             for display_label, data_col in pairs:
                 if data_col == 'PASSING_FACTOR_AVGVAL':
                     pctile_col, rank_col = 'PASSING_FACTOR_PCTILE', 'PASS_RANK'
@@ -199,39 +211,55 @@ def vis_side(*args, **kwargs):
                 
                 plot_labels.append(f"{display_label}\n(Rank: {r_val})")
                 values.append(p_val)
+                slice_colors.append(group_color)
                 
                 if data_col in ['CONVERSION_RATE', 'POSSESSIONPERCENT', 'PASSING_FACTOR_AVGVAL']:
                     display_values.append(f"{raw_val:.1f}")
                 else:
                     display_values.append(f"{int(raw_val)}")
 
-        num_vars = len(plot_labels)
-        angles = np.linspace(0, 2 * np.pi, num_vars, endpoint=False)
-        width = (2 * np.pi) / num_vars
+            # Gem vinklen for gruppe-skift (til tykke adskillelseslinjer mellem grupper)
+            boundary_angle = current_angle_index * width
+            boundary_angles.append(boundary_angle)
+            current_angle_index += len(pairs)
 
-        # Sætter yticks, så den yderste ring (100%) tegnes fuldt ud som en cirkelkant
+        angles = np.linspace(0, 2 * np.pi, total_vars, endpoint=False)
+
+        # Cirkel-gitter (diskret ringmønster)
         ax.set_yticks([20, 40, 60, 80, 100])
-        ax.grid(True, color='#2C3E50', linewidth=0.8, alpha=0.4, zorder=4)
+        ax.grid(True, color='#D3D3D3', linewidth=0.8, linestyle='--', alpha=0.6, zorder=2)
         
-        # Slices med hvidovre-rød, opacitet og tydeligt omrids der går ud til 100%
-        ax.bar(angles, values, width=width, bottom=0, color='#DA291C', alpha=0.4, edgecolor='#DA291C', linewidth=1.5, zorder=3)
+        # Tegn slices med gennemsigtighed (alpha=0.35) for The Athletic-look
+        ax.bar(angles, values, width=width, bottom=0, color=slice_colors, alpha=0.35, edgecolor='#2C3E50', linewidth=1.0, zorder=3)
 
+        # Tykke sorte grænselinjer mellem grupperne (præcis som i eksemplet)
+        for b_angle in boundary_angles:
+            ax.plot([b_angle, b_angle], [0, LIMIT_Y], color='#111111', linewidth=2.5, zorder=5)
+
+        # Hvid cirkel i midten til logoet (maskerer midten af pizzaen)
+        centre_circle = plt.Circle((0, 0), 18, transform=ax.transData._b, color='#F9F6F0', zorder=6, ec='#111111', lw=1.5)
+        # Alternativt kan et hvidt 'patch' eller blot zorder bruges, her lægger vi logoet ovenpå med høj zorder
+        
         logo_img = get_logo(logo_url)
         if logo_img:
-            ax.add_artist(AnnotationBbox(OffsetImage(logo_img, zoom=0.45), (0, 0), frameon=False, zorder=10))
+            ax.add_artist(AnnotationBbox(OffsetImage(logo_img, zoom=0.40), (0, 0), frameon=True, 
+                                          bboxprops=dict(facecolor='white', edgecolor='#111111', linewidth=1.5, boxstyle='circle'), 
+                                          zorder=10))
 
         ax.set_theta_offset(np.pi / 2)
         ax.set_theta_direction(-1)
         ax.axis('off')
 
-        # Placering af værdier og labels
+        # Placering af værdier inde i felterne og labels yderst
         for angle, label, disp in zip(angles, plot_labels, display_values):
+            # Værdi-boks
             ax.text(angle, 55, disp, ha='center', va='center', 
-                    fontsize=8, fontweight='bold', color='white', zorder=12,
-                    bbox=dict(facecolor='#DA291C', edgecolor='#2C3E50', boxstyle='round,pad=0.3', linewidth=0.8))
+                    fontsize=9, fontweight='bold', color='#111111', zorder=8,
+                    bbox=dict(facecolor='#F9F6F0', edgecolor='none', boxstyle='round,pad=0.2'))
             
-            ax.text(angle, 112, label, ha='center', va='center',
-                    fontsize=8.5, fontweight='bold', color='#2C3E50', zorder=11,
+            # Metrik-navn yderst i kanten
+            ax.text(angle, 114, label, ha='center', va='center',
+                    fontsize=8.5, fontweight='bold', color='#111111', zorder=7,
                     rotation=0)
 
         st.pyplot(fig, use_container_width=True)
