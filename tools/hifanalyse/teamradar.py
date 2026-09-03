@@ -139,6 +139,10 @@ def vis_side(*args, **kwargs):
         st.session_state["df_pizza"] = fetch_data()
     
     df = st.session_state["df_pizza"].copy()
+    if df.empty:
+        st.warning("Ingen data fundet for sæsonen.")
+        return
+
     hold_data = df[['TEAMNAME', 'IMAGEDATAURL', 'TEAM_WYID']].drop_duplicates().sort_values('TEAMNAME')
     hold_navne = hold_data['TEAMNAME'].tolist()
 
@@ -190,7 +194,7 @@ def vis_side(*args, **kwargs):
                     rank_col = f"{data_col}_RANK"
                 
                 p_val = float(target_team[pctile_col]) if pctile_col in target_team and not pd.isna(target_team[pctile_col]) else 50.0
-                r_val = int(target_team[rank_col]) if target_team in target_team and not pd.isna(target_team[rank_col]) else 1
+                r_val = int(target_team[rank_col]) if rank_col in target_team and not pd.isna(target_team[rank_col]) else 1
                 raw_val = float(target_team[data_col]) if data_col in target_team and not pd.isna(target_team[data_col]) else 0.0
                 
                 plot_labels.append(f"{display_label}\n(Rank: {r_val})")
@@ -205,10 +209,10 @@ def vis_side(*args, **kwargs):
         angles = np.linspace(0, 2 * np.pi, num_vars, endpoint=False)
         width = (2 * np.pi) / num_vars
 
-        # Tydelige gitterlinjer og omrids (streger på pizzaen)
+        # Gitterlinjer og omrids
         ax.grid(True, color='#2C3E50', linewidth=0.8, alpha=0.4, zorder=4)
         
-        # Slices i Hvidovre-rød (#DA291C) med lavere opacitet (alpha=0.4) og synlige kanter/omrids
+        # Slices med hvidovre-rød og fin opacitet
         ax.bar(angles, values, width=width, bottom=0, color='#DA291C', alpha=0.4, edgecolor='#DA291C', linewidth=1.5, zorder=3)
 
         logo_img = get_logo(logo_url)
