@@ -168,14 +168,14 @@ def vis_side(*args, **kwargs):
         logo_url = target_team_raw['IMAGEDATAURL'].values[0]
         target_team = df[df['TEAM_WYID'] == team_id].iloc[0]
 
-        # --- FIGUR SETUP (MED HVID BAGGRUND) ---
+        # --- FIGUR SETUP ---
         fig, ax = plt.subplots(figsize=(9, 9), subplot_kw=dict(polar=True))
         
-        # Sæt hvid baggrundsfarve på både figur og axes
         fig.patch.set_facecolor('white')
         ax.set_facecolor('white')
         
-        plt.subplots_adjust(left=0.05, right=0.95, top=0.9, bottom=0.05)
+        # Tættere layout da overskriften er fjernet
+        plt.subplots_adjust(left=0.05, right=0.95, top=0.95, bottom=0.05)
         
         LIMIT_Y = 100 
         ax.set_ylim(0, LIMIT_Y)
@@ -191,23 +191,27 @@ def vis_side(*args, **kwargs):
                     rank_col = f"{data_col}_RANK"
                 
                 p_val = float(target_team[pctile_col]) if pctile_col in target_team and not pd.isna(target_team[pctile_col]) else 50.0
+                r_val = int(target_team[rank_col]) if rank_col in target_team and not pd.isna(target_team[rank_col]) else 1
+                raw_val = float(target_team[data_col]) if data_col in target_team and not pd.isna(target_team[data_col]) else 0.0
                 
-                plot_labels.append(display_label)
+                plot_labels.append(f"{display_label}\n(Rank: {r_val})")
                 values.append(p_val)
-                display_values.append(f"{int(p_val)}")
+                
+                # Formatér den faktiske værdi pænt
+                if data_col in ['CONVERSION_RATE', 'POSSESSIONPERCENT', 'PASSING_FACTOR_AVGVAL']:
+                    display_values.append(f"{raw_val:.1f}")
+                else:
+                    display_values.append(f"{int(raw_val)}")
 
         num_vars = len(plot_labels)
         angles = np.linspace(0, 2 * np.pi, num_vars, endpoint=False)
         width = (2 * np.pi) / num_vars
 
-        # Mørke/grå gitterlinjer for kontrast mod hvid baggrund
+        # Gitterlinjer
         ax.grid(True, color='#2C3E50', linewidth=0.6, alpha=0.3)
         
-        # Tegn sektor-blokkene i lyseblå farve med mørk kant
-        ax.bar(angles, values, width=width, bottom=0, color='#5DADE2', alpha=0.9, edgecolor='#2C3E50', linewidth=1.2, zorder=3)
-
-        # Overskrift (Holdnavn i toppen med mørk tekst)
-        plt.suptitle(valgt_hold_navn, color='#2C3E50', fontsize=18, fontweight='bold', y=0.94, fontfamily='sans-serif')
+        # Slices i Hvidovre-rød (#DA291C) med opacitet (alpha=0.85)
+        ax.bar(angles, values, width=width, bottom=0, color='#DA291C', alpha=0.85, edgecolor='#2C3E50', linewidth=1.2, zorder=3)
 
         logo_img = get_logo(logo_url)
         if logo_img:
@@ -217,16 +221,16 @@ def vis_side(*args, **kwargs):
         ax.set_theta_direction(-1)
         ax.axis('off')
 
-        # Placering af værdier og labels
+        # Placering af faktiske værdier og navne med rank under
         for angle, label, disp in zip(angles, plot_labels, display_values):
-            # Værdi-boks inde på baren
+            # Værdi-boks inde på baren (mørkere rød/rødlig baggrund)
             ax.text(angle, 55, disp, ha='center', va='center', 
                     fontsize=8, fontweight='bold', color='white', zorder=12,
-                    bbox=dict(facecolor='#2980B9', edgecolor='#2C3E50', boxstyle='round,pad=0.3', linewidth=0.8))
+                    bbox=dict(facecolor='#B51D12', edgecolor='#2C3E50', boxstyle='round,pad=0.3', linewidth=0.8))
             
-            # Metrik-navn yderst i kanten med mørk tekst
+            # Metrik-navn + Rank yderst i kanten
             ax.text(angle, 112, label, ha='center', va='center',
-                    fontsize=9, fontweight='bold', color='#2C3E50', zorder=11,
+                    fontsize=8.5, fontweight='bold', color='#2C3E50', zorder=11,
                     rotation=0)
 
         st.pyplot(fig, use_container_width=True)
