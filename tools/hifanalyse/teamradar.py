@@ -5,8 +5,7 @@ import matplotlib.pyplot as plt
 from PIL import Image
 import requests
 from io import BytesIO
-from matplotlib.offsetbox import OffsetImage, AnnotationBbox
-from mplsoccer import PyPizza
+from mplsoccer import PyPizza, add_image
 from data.data_load import _get_snowflake_conn
 
 def get_logo(url):
@@ -196,9 +195,10 @@ def vis_side(*args, **kwargs):
 
         logo_img = get_logo(logo_url)
         if logo_img:
-            ax.add_artist(AnnotationBbox(OffsetImage(logo_img, zoom=0.50), (0, 0), frameon=True, 
-                                          bboxprops=dict(facecolor='white', edgecolor='#222222', linewidth=1.5, boxstyle='circle'), 
-                                          zorder=10))
+            # Bruger add_image i stedet for AnnotationBbox med tilpassede proportioner til midten
+            ax_image = add_image(
+                logo_img, fig, left=0.4478, bottom=0.4315, width=0.13, height=0.127
+            )
 
         st.pyplot(fig, use_container_width=True)
 
