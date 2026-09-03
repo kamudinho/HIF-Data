@@ -124,13 +124,9 @@ def vis_side(*args, **kwargs):
         logo_url = target_team_raw['IMAGEDATAURL'].values[0]
         target_team = target_team_raw.iloc[0]
 
-        # 1. Opsæt parametre opdelt i 3 grupper (ligesom eksemplet)
         params = [
-            # Offensiv (3 parametre)
             "Mål", "Skud", "Konvertering",
-            # Possession / Opbygning (3 parametre)
             "Possession", "Pasningsfaktor", "Offensiv Akt.",
-            # Defensiv (2 parametre)
             "Mål Imod", "Defensiv Akt."
         ]
         
@@ -140,24 +136,22 @@ def vis_side(*args, **kwargs):
             'CONCEDEDGOALS_PCTILE', 'DEFENSIVE_PCTILE'
         ]
 
-        # Hent percentil-værdier (0-100) for det valgte hold
         values = []
         for p_col in percentile_cols:
             val = float(target_team[p_col]) if p_col in target_team and not pd.isna(target_team[p_col]) else 50.0
             values.append(round(val))
 
-        # Definer farver i røde nuancer til de 3 kategorier (3 Offensiv, 3 Possession, 2 Defensiv)
         slice_colors = (
-            ["#1E88E5".replace("#1E88E5", "#D32F2F")] * 3 +  # Offensiv: Dyb rød
-            ["#FF9800".replace("#FF9800", "#E57373")] * 3 +  # Possession: Lidt lysere rød / coral
-            ["#D32F2F".replace("#D32F2F", "#8E0000")] * 2    # Defensiv: Mørk bordeaux / vinrød
+            ["#D32F2F"] * 3 +  
+            ["#E57373"] * 3 +  
+            ["#8E0000"] * 2    
         )
 
         baker = PyPizza(
             params=params,
             min_range=[0]*len(params),
             max_range=[100]*len(params),
-            background_color="#F2F2F2",
+            background_color="#FFFFFF",
             straight_line_color="#222222",
             last_circle_color="#222222",
             last_circle_lw=1.5,
@@ -190,7 +184,8 @@ def vis_side(*args, **kwargs):
             )
         )
 
-        # Sæt de faktiske percentil-tal ind i boksene
+        fig.patch.set_facecolor('#FFFFFF')
+
         val_idx = 0
         for txt in ax.texts:
             pos = txt.get_position()
@@ -198,17 +193,12 @@ def vis_side(*args, **kwargs):
                 txt.set_text(str(int(values[val_idx])))
                 val_idx += 1
 
-        # 2. Tilføj titel, undertitel og farve-legende i toppen (præcis som i eksemplet)
-        fig.text(0.5, 0.96, f"{valgt_hold_navn}", size=18,
+        # Kun titel (ingen legende)
+        fig.text(0.5, 0.94, f"{valgt_hold_navn}", size=16,
                  ha="center", fontweight="bold", color="#111111")
-        fig.text(0.5, 0.93, "Percentil Rank vs Ligaens Hold | Sæson 2026/2027", size=13,
-                 ha="center", fontweight="bold", color="#333333")
-
-        # Legende i toppen
-        fig.text(0.5, 0.89, "■ Offensiv      ■ Opbygning      ■ Defensiv", size=11,
+        fig.text(0.5, 0.91, "Percentil Rank vs Ligaens Hold | Sæson 2026/2027", size=11,
                  ha="center", fontweight="bold", color="#555555")
 
-        # 3. Indsæt holdets logo i midten
         logo_img = get_logo(logo_url)
         if logo_img:
             ax.add_artist(AnnotationBbox(OffsetImage(logo_img, zoom=0.30), (0, 0), frameon=True, 
@@ -218,7 +208,7 @@ def vis_side(*args, **kwargs):
         st.pyplot(fig, use_container_width=True)
 
         buf = BytesIO()
-        fig.savefig(buf, format="png", facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight', pad_inches=0.1, dpi=300)
+        fig.savefig(buf, format="png", facecolor="#FFFFFF", edgecolor='none', bbox_inches='tight', pad_inches=0.1, dpi=300)
         
         with download_placeholder:
             st.download_button(
