@@ -196,7 +196,7 @@ def vis_side(*args, **kwargs):
             last_circle_lw=1.5,
             other_circle_lw=1,
             other_circle_color="#DDDDDD",
-            inner_circle_size=20,
+            inner_circle_size=35,
         )
 
         fig, ax = baker.make_pizza(
