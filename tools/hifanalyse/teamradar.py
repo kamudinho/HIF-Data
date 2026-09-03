@@ -156,7 +156,6 @@ def vis_side(*args, **kwargs):
             'CONCEDEDGOALS_RANK', 'DEFENSIVE_RANK'
         ]
 
-        # Byg parametre med "Rank: x" under kategorinavnet
         params = []
         for bp, r_col in zip(base_params, rank_cols):
             rank = int(target_team[r_col]) if r_col in target_team and not pd.isna(target_team[r_col]) else 0
@@ -224,11 +223,10 @@ def vis_side(*args, **kwargs):
         ax.set_aspect('equal')
         fig.patch.set_facecolor('#FFFFFF')
 
-        # Justeret logo-størrelse (mindre) og centreret
         logo_img = get_logo(logo_url)
         if logo_img:
             ax_image = add_image(
-                logo_img, fig, left=0.458, bottom=0.456, width=0.085, height=0.083
+                logo_img, fig, left=0.463, bottom=0.456, width=0.085, height=0.083
             )
 
         st.pyplot(fig, use_container_width=True)
