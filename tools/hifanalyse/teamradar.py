@@ -162,7 +162,7 @@ def vis_side(*args, **kwargs):
 
         fig, ax = baker.make_pizza(
             values,
-            figsize=(9, 9),
+            figsize=(10, 10),
             color_blank_space="same",
             blank_alpha=0.4,
             param_location=110,
@@ -196,14 +196,14 @@ def vis_side(*args, **kwargs):
 
         logo_img = get_logo(logo_url)
         if logo_img:
-            ax.add_artist(AnnotationBbox(OffsetImage(logo_img, zoom=0.28), (0, 0), frameon=True, 
+            ax.add_artist(AnnotationBbox(OffsetImage(logo_img, zoom=0.22), (0, 0), frameon=True, 
                                           bboxprops=dict(facecolor='white', edgecolor='#222222', linewidth=1.5, boxstyle='circle'), 
                                           zorder=10))
 
         st.pyplot(fig, use_container_width=True)
 
         buf = BytesIO()
-        fig.savefig(buf, format="png", facecolor="#FFFFFF", edgecolor='none', bbox_inches='tight', pad_inches=0.1, dpi=300)
+        fig.savefig(buf, format="png", facecolor="#FFFFFF", edgecolor='none', bbox_inches=None, dpi=300)
         
         with download_placeholder:
             st.download_button(
