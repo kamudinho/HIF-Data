@@ -70,14 +70,24 @@ def fetch_data():
             COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.PASS_LENGTH), 0) * 100 AS PASS_LENGTH_PCTILE,
 
             COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.ATTACKING_ACTIONS), 0) * 100 AS ATTACKING_PCTILE,
-            COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.DEFENSIVE_ACTIONS), 0) * 100 AS DEFENSIVE_PCTILE
+            COALESCE(PERCENT_RANK() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.DEFENSIVE_ACTIONS), 0) * 100 AS DEFENSIVE_PCTILE,
+
+            -- Ranks (1 er bedst for flest undtagen conceded goals hvor lavest er bedst, eller omvendt afhængigt af præference - her sorteres standard stigende/faldende)
+            ROW_NUMBER() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.GOALS DESC) AS GOALS_RANK,
+            ROW_NUMBER() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.SHOTS DESC) AS SHOTS_RANK,
+            ROW_NUMBER() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.CONVERSION_RATE DESC) AS CONVERSION_RANK,
+            ROW_NUMBER() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.POSSESSIONPERCENT DESC) AS POSSESSION_RANK,
+            ROW_NUMBER() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.CONCEDEDGOALS ASC) AS CONCEDEDGOALS_RANK,
+            ROW_NUMBER() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.ATTACKING_ACTIONS DESC) AS ATTACKING_RANK,
+            ROW_NUMBER() OVER (PARTITION BY dt.COMPETITION_WYID, dt.SEASON_WYID ORDER BY dt.DEFENSIVE_ACTIONS DESC) AS DEFENSIVE_RANK
         FROM deduped_team_stats dt
     ),
     team_combined_passing AS (
         SELECT 
             tp.*,
             (PASSES_PCTILE + SUCCESSFUL_PASSES_PCTILE + SUCCESSFUL_FORWARD_PASSES_PCTILE + PASS_LENGTH_PCTILE) / 4.0 AS PASSING_FACTOR_PCTILE,
-            (PASSES + SUCCESSFUL_PASSES + SUCCESSFUL_FORWARD_PASSES + PASS_LENGTH) / 4.0 AS PASSING_FACTOR_AVGVAL
+            (PASSES + SUCCESSFUL_PASSES + SUCCESSFUL_FORWARD_PASSES + PASS_LENGTH) / 4.0 AS PASSING_FACTOR_AVGVAL,
+            ROW_NUMBER() OVER (PARTITION BY tp.COMPETITION_WYID, tp.SEASON_WYID ORDER BY (tp.PASSES + tp.SUCCESSFUL_PASSES + tp.SUCCESSFUL_FORWARD_PASSES + tp.PASS_LENGTH) DESC) AS PASSING_FACTOR_RANK
         FROM team_percentile_calc tp
     )
     SELECT * FROM team_combined_passing
@@ -141,18 +151,28 @@ def vis_side(*args, **kwargs):
             'CONCEDEDGOALS', 'DEFENSIVE_ACTIONS'
         ]
 
+        rank_cols = [
+            'GOALS_RANK', 'SHOTS_RANK', 'CONVERSION_RANK',
+            'POSSESSION_RANK', 'PASSING_FACTOR_RANK', 'ATTACKING_RANK',
+            'CONCEDEDGOALS_RANK', 'DEFENSIVE_RANK'
+        ]
+
         pizza_values = []
         for p_col in percentile_cols:
             val = float(target_team[p_col]) if p_col in target_team and not pd.isna(target_team[p_col]) else 50.0
             pizza_values.append(val)
 
         display_values = []
-        for r_col in raw_cols:
+        for r_col, rank_col in zip(raw_cols, rank_cols):
             val = float(target_team[r_col]) if r_col in target_team and not pd.isna(target_team[r_col]) else 0.0
-            if r_col in ['CONVERSION_RATE', 'PASSING_FACTOR_AVGVAL', 'POSSESSIONPERCENT']:
-                display_values.append(f"{val:.1f}")
+            rank = int(target_team[rank_col]) if rank_col in target_team and not pd.isna(target_team[rank_col]) else 0
+            
+            if r_col == 'CONVERSION_RATE':
+                display_values.append(f"{val:.1f}% ({rank}.)")
+            elif r_col in ['PASSING_FACTOR_AVGVAL', 'POSSESSIONPERCENT']:
+                display_values.append(f"{val:.1f} ({rank}.)")
             else:
-                display_values.append(str(int(val)))
+                display_values.append(f"{int(val)} ({rank}.)")
 
         slice_colors = (
             ["#D32F2F"] * 3 +  
@@ -189,7 +209,7 @@ def vis_side(*args, **kwargs):
                 va="center", fontweight="bold"
             ),
             kwargs_values=dict(
-                color="#FFFFFF", fontsize=9,
+                color="#FFFFFF", fontsize=8,
                 zorder=3,
                 bbox=dict(
                     edgecolor="#222222", facecolor="#111111",
