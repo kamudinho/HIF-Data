@@ -211,7 +211,7 @@ def process_display_df(df):
     if 'KONTRAKT' in df_display.columns:
         df_display['KONTRAKT_DT'] = df_display['KONTRAKT'].apply(robust_date_parser)
 
-    for c in ['ER_EMNE', 'SKYGGEHOLD', 'START_11_26_27', 'ER_AKADEMI']:
+    for c in ['ER_EMNE', 'SKYGGEHOLD', 'START_11_26_27']:
         df_display[c] = df_display[c].map({True:True, False:False, 'True':True, 'False':False, 1:True, 0:False, '1':True, '0':False}).fillna(False)
 
     # --- RETTET: IS_HIF beregnes nu udelukkende ud fra HIF_WYIDS (PLAYER_MAPPING) ---
@@ -325,7 +325,7 @@ def vis_side():
             # viser kun og udelukkende spillere derfra.
             source_t2 = df_display[df_display['IS_HIF']].copy().reset_index(drop=True)
             st.data_editor(
-                source_t2[['NAVN', 'KLUB', 'POS', 'KONTRAKT_DT', 'ER_AKADEMI', 'ER_EMNE', 'SKYGGEHOLD', 'PLAYER_WYID']],
+                source_t2[['NAVN', 'KLUB', 'POS', 'KONTRAKT_DT', 'ER_EMNE', 'SKYGGEHOLD', 'PLAYER_WYID']],
                 column_config=cfg, use_container_width=True, height=600, key="editable_t2", on_change=handle_auto_save, args=("t2", df_display, source_t2)
             )
 
