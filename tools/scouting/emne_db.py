@@ -19,7 +19,6 @@ HIF_BLA = "#0057b7"
 GRON_NY = "#ccffcc"
 GUL_ADVARSEL = "#ffff99"
 ROD_ADVARSEL = "#ffcccc"
-AKADEMI_FARVE = "#d1d1ff"
 
 # Initialiser PlayerMapping for Hvidovre IF
 player_mapper = PlayerMapping(PLAYER_MAPPING)
@@ -257,7 +256,6 @@ def process_display_df(df):
                 'IS_HIF': True,
                 'ER_EMNE': False,
                 'SKYGGEHOLD': False,
-                'ER_AKADEMI': False
             }
             mapping_rows.append(new_row)
 
@@ -299,7 +297,6 @@ def vis_side():
         "KONTRAKT_DT": st.column_config.DateColumn("Kontrakt", format="DD/MM/YYYY"),
         "TRANSFER_VINDUE": st.column_config.SelectboxColumn("Vindue", options=VINDUE_ORDEN),
         "ER_EMNE": st.column_config.CheckboxColumn("Emne"),
-        "ER_AKADEMI": st.column_config.CheckboxColumn("Akademi"),
         "SKYGGEHOLD": st.column_config.CheckboxColumn("Skygge"),
         "START_11_26_27": st.column_config.CheckboxColumn("Start 11 (26/27)"),
         "POS_PRIORITET": st.column_config.SelectboxColumn("Prioritet", options=["A - Start-11", "B - Trupspiller", "C - Udviklingsspiller"]),
@@ -375,7 +372,6 @@ def vis_side():
                 ax.text(10.7, 3, " 6-12 mdr ", size=6, weight='bold', bbox=dict(facecolor=GUL_ADVARSEL, boxstyle='round,pad=0.5'))
                 ax.text(19, 3, " Transferfri ", size=6, weight='bold', bbox=dict(facecolor=GRON_NY, boxstyle='round,pad=0.5'))
                 ax.text(28, 3, " Transferkøb ", size=6, weight='bold', color='white', bbox=dict(facecolor=HIF_BLA, boxstyle='round,pad=0.5'))
-                ax.text(38, 3, " Akademi ", size=6, weight='bold', color='black', bbox=dict(facecolor=AKADEMI_FARVE, boxstyle='round,pad=0.5'))
                 if is_startopstilling:
                     ax.text(46, 3, " Erstatning ", size=6, weight='bold', style='italic', color='black',
                             bbox=dict(facecolor='white', edgecolor='#666666', linestyle='dashed', boxstyle='round,pad=0.5'))
