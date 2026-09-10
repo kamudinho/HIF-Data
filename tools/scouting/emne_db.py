@@ -71,7 +71,7 @@ def save_to_github(df):
             'AGGRESIVITET', 'ATTITUDE', 'UDHOLDENHED', 'LEDEREGENSKABER', 'TEKNIK',
             'SPILINTELLIGENS', 'SCOUT', 'KONTRAKT', 'PRIORITET', 'FORVENTNING',
             'POS_PRIORITET', 'POS', 'LON', 'SKYGGEHOLD', 'KOMMENTAR', 'ER_EMNE',
-            'ER_AKADEMI', 'TRANSFER_VINDUE', 'POS_343', 'POS_433', 'POS_352',
+            'TRANSFER_VINDUE', 'POS_343', 'POS_433', 'POS_352',
             'BIRTHDATE', 'START_11_26_27'
         ]
         _, sha = get_github_file(SCOUT_DB_PATH)
@@ -126,9 +126,6 @@ def handle_auto_save(key, df_display, source_df):
                             val = ""
                     full_db.at[idx_in_full, col_upper] = val
             else:
-                # NYT: Spilleren findes endnu ikke i scouting_db.csv - typisk en spiller
-                # der kun stammer fra player_mapping.py og aldrig er blevet gemt før.
-                # Opret en ny række i stedet for at droppe ændringen stille.
                 new_row = {col: "" for col in full_db.columns}
                 for col in source_row.index:
                     if col in full_db.columns and col != 'KONTRAKT_DT':
@@ -153,10 +150,6 @@ def handle_auto_save(key, df_display, source_df):
         st.session_state['full_db'] = full_db
         save_to_github(full_db)
         st.session_state[state_key]["edited_rows"] = {}
-        # BEMÆRK: st.rerun() er bevidst fjernet her - Streamlit reruner automatisk
-        # siden efter en on_change-callback er færdig. At kalde st.rerun() inde i
-        # selve callbacken er et no-op (og gav advarslen "Calling st.rerun() within
-        # a callback is a no-op"), som forhindrede UI'et i at opdatere sig korrekt.
 
 def clean_pos_val(val):
     if pd.isna(val) or val == "" or str(val).lower() == "nan": return ""
@@ -191,7 +184,7 @@ def prepare_df(content):
     if not content: return pd.DataFrame()
     df = pd.read_csv(StringIO(content))
     df.columns = [str(c).upper().strip() for c in df.columns]
-    needed = ['POS_343', 'POS_433', 'POS_352', 'START_11_26_27', 'SKYGGEHOLD', 'ER_EMNE', 'ER_AKADEMI', 'PLAYER_WYID', 'DATO', 'POS_PRIORITET']
+    needed = ['POS_343', 'POS_433', 'POS_352', 'START_11_26_27', 'SKYGGEHOLD', 'ER_EMNE', 'PLAYER_WYID', 'DATO', 'POS_PRIORITET']
     for col in needed:
         if col not in df.columns: df[col] = ""
     df['DATO_DT'] = pd.to_datetime(df['DATO'], errors='coerce')
@@ -214,12 +207,8 @@ def process_display_df(df):
     for c in ['ER_EMNE', 'SKYGGEHOLD', 'START_11_26_27']:
         df_display[c] = df_display[c].map({True:True, False:False, 'True':True, 'False':False, 1:True, 0:False, '1':True, '0':False}).fillna(False)
 
-    # --- RETTET: IS_HIF beregnes nu udelukkende ud fra HIF_WYIDS (PLAYER_MAPPING) ---
-    # Dette er den eneste sandhedskilde for "Hvidovre IF"-fanen: en spiller er kun HIF,
-    # hvis hans PLAYER_WYID rent faktisk står i player_mapping.py.
     df_display['IS_HIF'] = df_display['PLAYER_WYID'].astype(str).str.replace(r'\.0$', '', regex=True).isin(HIF_WYIDS)
 
-    # PLAYER_MAPPING SKAL OVERSKRIVE ALT ANDET FOR DISSE SPILLERERE
     existing_wyids = set(df_display['PLAYER_WYID'].astype(str).str.replace(r'\.0$', '', regex=True))
     mapping_rows = []
 
@@ -307,9 +296,6 @@ def vis_side():
 
     if "Emneliste" in tab_map:
         with tabs_obj[tab_map["Emneliste"]]:
-            # --- RETTET: Emnelisten udelukker nu ALTID Hvidovre IF-spillere ---
-            # Både via IS_HIF (den autoritative kilde) og som ekstra sikkerhed via KLUB-teksten,
-            # så gamle/fejlindtastede rækker med "Hvidovre" i KLUB heller ikke kan snige sig med.
             source_t1 = df_display[
                 (~df_display['IS_HIF']) &
                 (~df_display['KLUB'].astype(str).str.contains('hvidovre', case=False, na=False))
@@ -321,8 +307,6 @@ def vis_side():
 
     if "Hvidovre IF" in tab_map:
         with tabs_obj[tab_map["Hvidovre IF"]]:
-            # IS_HIF er nu strengt bundet til player_mapping.py, så denne fane
-            # viser kun og udelukkende spillere derfra.
             source_t2 = df_display[df_display['IS_HIF']].copy().reset_index(drop=True)
             st.data_editor(
                 source_t2[['NAVN', 'KLUB', 'POS', 'KONTRAKT_DT', 'ER_EMNE', 'SKYGGEHOLD', 'PLAYER_WYID']],
@@ -392,16 +376,6 @@ def vis_side():
                     plist = plist.sort_values(by='POS_PRIORITET', ascending=True)
 
                     if is_startopstilling:
-                        # --- Skyggespiller-logik ---
-                        # Hovedspiller = den nuværende Hvidovre-spiller på positionen (hvis der er en).
-                        # Er der derudover en ekstern kandidat (ikke IS_HIF) også markeret til Start-11
-                        # på samme position, vises han som "skyggespiller" under hovedspilleren -
-                        # klar til at overtage pladsen, hvis hovedspilleren bliver solgt.
-                        # Findes der ingen nuværende HIF-spiller på positionen, bliver den første
-                        # eksterne kandidat i stedet hovedspiller (ingen skygge-styling).
-                        # Pakket i try/except: fejler beregningen for én position, falder den
-                        # tilbage til den simple "kun første spiller"-visning i stedet for at
-                        # vælte hele siden.
                         try:
                             hif_candidates = plist[plist['IS_HIF'] == True]
                             other_candidates = plist[plist['IS_HIF'] == False]
@@ -425,9 +399,7 @@ def vis_side():
                         drawn_players.append(r['PLAYER_WYID'])
                         is_shadow = is_startopstilling and bool(r.get('IS_SHADOW_DRAW', False))
 
-                        if r['ER_AKADEMI']:
-                            txt_c, bg = "black", AKADEMI_FARVE
-                        elif not r['IS_HIF']:
+                        if not r['IS_HIF']:
                             if pd.notna(r['KONTRAKT_DT']) and r['KONTRAKT_DT'] <= ref_dt:
                                 txt_c, bg = "black", GRON_NY
                             else:
@@ -444,7 +416,6 @@ def vis_side():
                                 txt_c = "black"
 
                         if is_shadow:
-                            # Skyggespiller vises mindre, kursiveret og med stiplet kant lige under hovedspilleren
                             ax.text(px, py + 4.5, f"{r['NAVN']}", size=7.5, ha='center', weight='bold',
                                     color=txt_c, bbox=dict(facecolor=bg, edgecolor="#333333", linestyle='dashed', alpha=0.9))
                         else:
