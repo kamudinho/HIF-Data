@@ -246,6 +246,8 @@ PLAYER_MAPPING = [
     {"klub": "#Hillerød Fodbold", "navn": "Kasper Enghardt Pedersen", "position": "Defender", "player_optauuid": "khqldwfq14b7giakss24l9t5", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
     {"klub": "#Hillerød Fodbold", "navn": "Nicklas Bjerre Schmidt", "position": "Midfielder", "player_optauuid": "5dlh0fa9yo6z283w9p58xmnoq", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
     {"klub": "#Hillerød Fodbold", "navn": "Berzan Kücükylidiz", "position": "Midfielder", "player_optauuid": "bpldj4qdzfdm1n739atcadbmc", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
+    {"klub": "#Hillerød Fodbold", "navn": "Frederik Høgh Jensen", "position": "Attacker", "player_optauuid": "9tt9eo9bsff7dp7aqjal1obo4", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
+
 
     # --- Hvidovre IF ---
     {"player_wyid": "471964", "klub": "Hvidovre IF", "navn": "Filip Đukić", "position": "Goalkeeper", "pos": "1", "pos_prioritet": "A - Start-11", "kontrakt": "2028-06-30", "player_optauuid": "d9hh01mit4geyadol3gmzco9", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
@@ -256,10 +258,8 @@ PLAYER_MAPPING = [
     {"player_wyid": "56017", "klub": "Hvidovre IF", "navn": "Daniel Stenderup", "position": "Defender", "pos": "3", "pos_prioritet": "A - Start-11", "kontrakt": "2027-06-30", "player_optauuid": "a30gduuv9d1s4pkthgu2jhyol", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
     {"player_wyid": "607033", "klub": "Hvidovre IF", "navn": "Donavan Bagou", "position": "Attacker", "pos": "9", "pos_prioritet": "B - Trupspiller", "kontrakt": "2029-06-30", "player_optauuid": "1hlx5mvl8th7y82gocnuxacd0", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
     {"player_wyid": "748624", "klub": "Hvidovre IF", "navn": "Emmanuel Aby", "position": "Attacker", "pos": "9", "pos_prioritet": "B - Trupspiller", "kontrakt": "2029-06-30", "player_optauuid": "907vtkod58b7986k7u1619gr8", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
-    {"player_wyid": "462085", "klub": "Hvidovre IF", "navn": "Frederik Rask Høgh Jensen", "position": "Attacker", "pos": "9", "pos_prioritet": "A - Start-11", "kontrakt": "2026-12-31", "player_optauuid": "9tt9eo9bsff7dp7aqjal1obo4", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
     {"player_wyid": "562503", "klub": "Hvidovre IF", "navn": "Louka Prip", "position": "Attacker", "pos": "7", "pos_prioritet": "A - Start-11", "kontrakt": "2028-06-30", "player_optauuid": "9dnceiwcpsatrdrj2m1uz6pnu", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
     {"player_wyid": "370269", "klub": "Hvidovre IF", "navn": "Malte Kiilerich", "position": "Defender", "pos": "3.5", "pos_prioritet": "A - Start-11", "kontrakt": "2028-06-30", "player_optauuid": "630daj1ef34rczbhng0eoncvd", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
-    {"player_wyid": "505392", "klub": "Hvidovre IF", "navn": "Marius Elvius", "position": "Defender", "pos": "2", "pos_prioritet": "A - Start-11", "kontrakt": "2028-06-30", "player_optauuid": "6c2isptqoy4cq5c8rlr9s1roq", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
     {"player_wyid": "417657", "klub": "Hvidovre IF", "navn": "Nicolai Clausen", "position": "Defender", "pos": "4", "pos_prioritet": "B - Trupspiller", "kontrakt": "2028-06-30", "player_optauuid": "6dzg820946z4848whaa6ny2nd", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
     {"player_wyid": "579393", "klub": "Hvidovre IF", "navn": "Nicolaj Jungvig", "position": "Defender", "pos": "3", "pos_prioritet": "B - Trupspiller", "kontrakt": "2027-12-31", "player_optauuid": "3pk6hii2s8tbv2zux8mvbapec", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
     {"player_wyid": "525614", "klub": "Hvidovre IF", "navn": "Oliver Bjerrum Jensen", "position": "Midfielder", "pos": "8", "pos_prioritet": "B - Trupspiller", "kontrakt": "2029-06-30", "player_optauuid": "4e7sicg0km2z5jq80ptgaxo4q", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
