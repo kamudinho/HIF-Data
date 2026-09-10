@@ -266,6 +266,9 @@ PLAYER_MAPPING = [
     {"player_wyid": "519715", "klub": "Hvidovre IF", "navn": "Oliver Juul", "position": "Defender", "pos": "5", "pos_prioritet": "B - Trupspiller", "kontrakt": "2029-06-30", "player_optauuid": "aejgqvdw1jftxaa538kaa15w4", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
     {"player_wyid": "435879", "klub": "Hvidovre IF", "navn": "Oliver Kjærgaard", "position": "Midfielder", "pos": "6", "pos_prioritet": "A - Start-11", "kontrakt": "2027-06-30", "player_optauuid": "cl4xl80n4gew1ox03r3ooshrd", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
     {"player_wyid": "620821", "klub": "Hvidovre IF", "navn": "Zamir Aliji", "position": "Midfielder", "pos": "8", "pos_prioritet": "B - Trupspiller", "kontrakt": "2027-12-31", "player_optauuid": "aajgld24isoem1ycoysyxxp1w", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
+    {"player_wyid": "576657", "klub": "Hvidovre IF", "navn": "Abdoulie Njai", "position": "Midfielder", "pos": "2", "pos_prioritet": "B - Trupspiller", "kontrakt": "2027-12-31", "player_optauuid": "f1ba9g771s0zeel0titcj3omi", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
+    {"player_wyid": "837806", "klub": "Hvidovre IF", "navn": "Nathan Huygevelde", "position": "Midfielder", "pos": "8", "pos_prioritet": "B - Trupspiller", "kontrakt": "2027-12-31", "player_optauuid": "5dg8cfor1x4s1cqej9on4oys4", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
+
     
     # Kolding
     {"klub": "#Kolding IF", "navn": "Nicolai Bossen", "position": "Midfielder", "player_optauuid": "dvnd5025v01tme7xzayw6jhn8", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
