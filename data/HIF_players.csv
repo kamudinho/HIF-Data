@@ -3,7 +3,6 @@ PLAYER_WYID,FIRSTNAME,LASTNAME,NAVN,ROLECODE3,BIRTHDATE,TEAMNAME,HEIGHT,FOD,CONT
 224185,Ayo Simon,Okosun,Ayo Simon Okosun,DEF,21.07.1993,Hvidovre IF,198,Højre,,6,B
 269701,Marvin,Egho,Marvin Egho,FWD,09.05.1994,Hvidovre IF,188,Venstre,,9,A
 135115,Morten,Knudsen Brander,Morten Brander,MID,28.04.1995,Hvidovre IF,178,Højre,,6,C
-462085,Frederik,Høgh,Frederik Høgh,FWD,05.05.1995,Hvidovre IF,193,Venstre,31.12.2026,9,B
 417657,Nicolai,Clausen,Nicolai Clausen,DEF,10.06.1995,Hvidovre IF,,Venstre,,5,C
 370269,Malte,Kiilerich,Malte Kiilerich,DEF,16.10.1995,Hvidovre IF,188,Højre,,4,A
 562489,Marco,Brylov,Marco Brylov,GKP,21.11.1995,Hvidovre IF,191,Venstre,,1,B
@@ -12,7 +11,6 @@ PLAYER_WYID,FIRSTNAME,LASTNAME,NAVN,ROLECODE3,BIRTHDATE,TEAMNAME,HEIGHT,FOD,CONT
 483429,Ahmed,Iljazovski,Ahmed Iljazovski,DEF,31.07.1997,Hvidovre IF,188,,31.12.2026,2,B
 435879,Oliver,Kjærgaard,Oliver Kjærgaard,MID,11.07.1998,Hvidovre IF,184,Højre,,8,A
 449795,Mehmet,Coskun,Mehmet Coskun,DEF,06.11.1998,Hvidovre IF,175,Venstre,31.12.2026,5,L
-505392,Marius,Elvius,Marius Elvius,MID,01.06.2002,Hvidovre IF,185,Højre,30.06.2028,2,A
 579393,Nicolaj,Jungvig,Nicolaj Jungvig,DEF,26.10.2003,Hvidovre IF,,Venstre,,3,B
 620821,Zamir,Aliji,Zamir Aliji,MID,08.04.2004,Hvidovre IF,166,Venstre,,10,C
 680719,Anders,Ravn Olsen,Anders Ravn,GKP,02.04.2005,Hvidovre IF,193,Højre,30.06.2027,1,A
