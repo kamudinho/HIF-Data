@@ -141,8 +141,8 @@ def get_opta_queries(calendar_uuid, hif_uuid):
         s1.XG AS HOME_XG, s1.SHOTS AS HOME_SHOTS, s1.TOUCHES_IN_BOX AS HOME_TOUCHES, s1.POSSESSION AS HOME_POSSESSION, s1.PASSES AS HOME_PASSES, s1.CORNERS_TAKEN AS HOME_CORNERS_TAKEN, s1.CORNERS_WON AS HOME_CORNERS_WON, s1.CORNERS_LOST AS HOME_CORNERS_LOST, s1.OFF_TARGET AS HOME_OFF_TARGET, s1.THROWS AS HOME_THROWS, s1.FOULS_WON AS HOME_FOULS_WON, s1.FOULS_LOST AS HOME_FOULS_LOST, s1.AERIAL_WON AS HOME_AERIAL_WON, s1.TACKLES AS HOME_TACKLES, s1.WON_TACKLES AS HOME_WON_TACKLES, s1.CLEARANCES AS HOME_CLEARANCES, s1.BLOCKS AS HOME_BLOCKS, s1.YELLOW_CARDS AS HOME_YELLOW_CARDS, s1.RED_CARDS AS HOME_RED_CARDS,
         s2.XG AS AWAY_XG, s2.SHOTS AS AWAY_SHOTS, s2.TOUCHES_IN_BOX AS AWAY_TOUCHES, s2.POSSESSION AS AWAY_POSSESSION, s2.PASSES AS AWAY_PASSES, s2.CORNERS_TAKEN AS AWAY_CORNERS_TAKEN, s2.CORNERS_WON AS AWAY_CORNERS_WON, s2.CORNERS_LOST AS AWAY_CORNERS_LOST, s2.OFF_TARGET AS AWAY_OFF_TARGET, s2.THROWS AS AWAY_THROWS, s2.FOULS_WON AS AWAY_FOULS_WON, s2.FOULS_LOST AS AWAY_FOULS_LOST, s2.AERIAL_WON AS AWAY_AERIAL_WON, s2.TACKLES AS AWAY_TACKLES, s2.WON_TACKLES AS AWAY_WON_TACKLES, s2.CLEARANCES AS AWAY_CLEARANCES, s2.BLOCKS AS AWAY_BLOCKS, s2.YELLOW_CARDS AS AWAY_YELLOW_CARDS, s2.RED_CARDS AS AWAY_RED_CARDS
         FROM MatchBase b
-        LEFT JOIN PivotStats s1 ON b.MATCH_OPTAUUID = s1.MATCH_OPTAUUID AND b.CONTESTANTHOME_OPTAUUID = s1.CONTESTANT_OPTAUUID
-        LEFT JOIN PivotStats s2 ON b.MATCH_OPTAUUID = s2.MATCH_OPTAUUID AND b.CONTESTANTAWAY_OPTAUUID = s2.CONTESTANT_OPTAUUID
+        LEFT JOIN PivotStats s1 ON b.MATCH_OPTAUUID = s1.MATCH_OPTAUUID AND UPPER(TRIM(b.CONTESTANTHOME_OPTAUUID)) = UPPER(TRIM(s1.CONTESTANT_OPTAUUID))
+        LEFT JOIN PivotStats s2 ON b.MATCH_OPTAUUID = s2.MATCH_OPTAUUID AND UPPER(TRIM(b.CONTESTANTAWAY_OPTAUUID)) = UPPER(TRIM(s2.CONTESTANT_OPTAUUID))
         ORDER BY b.MATCH_DATE_FULL DESC"""}
 
 def beregn_kategori_indices(row, hif_uuid):
@@ -172,10 +172,19 @@ def beregn_per_90(df_stats, team_uuid):
     played = df_stats[df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].copy()
     if played.empty: return None
 
-    numeric_cols = ['TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE', 'HOME_XG', 'AWAY_XG', 'HOME_POSSESSION', 'AWAY_POSSESSION', 'HOME_OFF_TARGET', 'AWAY_OFF_TARGET', 'HOME_THROWS', 'AWAY_THROWS', 'HOME_FOULS_WON', 'AWAY_FOULS_WON', 'HOME_CORNERS_WON', 'AWAY_CORNERS_WON', 'HOME_TACKLES', 'AWAY_TACKLES', 'HOME_CLEARANCES', 'AWAY_CLEARANCES', 'HOME_PASSES', 'AWAY_PASSES']
-    for col in numeric_cols:
+    # OBS: Possession er IKKE med i denne liste. Possession er en procent-stat,
+    # og manglende data (NaN) skal IKKE tolkes som "0% possession" - det ville
+    # trække gennemsnittet forkert nedad for kampe uden gyldig possession-værdi.
+    zero_fill_cols = ['TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE', 'HOME_XG', 'AWAY_XG', 'HOME_OFF_TARGET', 'AWAY_OFF_TARGET', 'HOME_THROWS', 'AWAY_THROWS', 'HOME_FOULS_WON', 'AWAY_FOULS_WON', 'HOME_CORNERS_WON', 'AWAY_CORNERS_WON', 'HOME_TACKLES', 'AWAY_TACKLES', 'HOME_CLEARANCES', 'AWAY_CLEARANCES', 'HOME_PASSES', 'AWAY_PASSES']
+    for col in zero_fill_cols:
         if col in played.columns:
             played[col] = pd.to_numeric(played[col], errors='coerce').fillna(0)
+
+    # Possession castes til numerisk, men NaN bevares (ikke fillna(0)),
+    # så .mean() (skipna=True som default) korrekt ignorerer kampe uden data.
+    for col in ['HOME_POSSESSION', 'AWAY_POSSESSION']:
+        if col in played.columns:
+            played[col] = pd.to_numeric(played[col], errors='coerce')
 
     hif_matches = played[((played['CONTESTANTHOME_OPTAUUID'].str.upper() == team_uuid.upper()) | (played['CONTESTANTAWAY_OPTAUUID'].str.upper() == team_uuid.upper()))].sort_values('MATCH_DATE_FULL')
     if len(hif_matches) == 0: return None
