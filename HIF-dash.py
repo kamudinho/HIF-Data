@@ -269,8 +269,8 @@ try:
             import tools.ligaen.leagueshots as ls
             ls.vis_side()
         elif s == "Modstanderanalyse":
-            import tools.ligaen.modstanderanalyse as ma
-            ma.vis_side()
+            import tools.hifanalyse.modstander_oversigt as mo
+            mo.vis_side()
         elif s == "Grafer":
             import tools.ligaen.dataviz as dviz
             dviz.vis_side()
