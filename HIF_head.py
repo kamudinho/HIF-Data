@@ -153,19 +153,25 @@ def beregn_kategori_indices(row, hif_uuid):
     
     xg, shots, touches = get_val('HOME_XG', 'AWAY_XG'), get_val('HOME_SHOTS', 'AWAY_SHOTS'), get_val('HOME_TOUCHES', 'AWAY_TOUCHES')
     tackles, goals_con = get_val('HOME_TACKLES', 'AWAY_TACKLES'), get_val('TOTAL_AWAY_SCORE', 'TOTAL_HOME_SCORE')
-    
+    goals_for = get_val('TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE')
+    xg_against = get_val('AWAY_XG', 'HOME_XG')
+
     corners_for = get_val('HOME_CORNERS_WON', 'AWAY_CORNERS_WON')
     corners_against = get_val('AWAY_CORNERS_WON', 'HOME_CORNERS_WON')
     fouls_won = get_val('HOME_FOULS_WON', 'AWAY_FOULS_WON')
     fouls_lost = get_val('AWAY_FOULS_LOST', 'HOME_FOULS_LOST')
-    aerial_off = get_val('HOME_AERIAL_WON', 'AWAY_AERIAL_WON')
-    aerial_def = get_val('AWAY_AERIAL_WON', 'HOME_AERIAL_WON')
-    
+
     off_idx = (xg * 1.5) + (shots * 0.3) + (touches * 0.05)
     def_idx = -(goals_con * 2.0) + (tackles * 0.2)
-    off_std = (corners_for * 0.4) + (fouls_won * 0.3) + (aerial_off * 0.3)
-    def_std = -(corners_against * 0.4) - (fouls_lost * 0.3) - (aerial_def * 0.3)
-    
+
+    # Off_Std / Def_Std: standardsituationer (hjørner/frispark vundet) som volumen-mål,
+    # vægtet tungest af faktiske mål og xG - dvs. hvor godt standarderne reelt blev udnyttet.
+    # OBS: vi har ingen stat-type for "skud der stammer fra hjørne/frispark" (shot-origin/
+    # qualifier-data findes ikke i OPTA_MATCHSTATS-forespørgslen), så mål/xG er den bedste
+    # tilgængelige proxy for konvertering, i stedet for et decideret "fører til afslutning"-tal.
+    off_std = (goals_for * 3.0) + (xg * 1.0) + (corners_for * 0.3) + (fouls_won * 0.2)
+    def_std = -(goals_con * 3.0) - (xg_against * 1.0) - (corners_against * 0.3) - (fouls_lost * 0.2)
+
     return pd.Series({'Offensiv': off_idx, 'Defensiv': def_idx, 'Off_Std': off_std, 'Def_Std': def_std})
 
 def beregn_per_90(df_stats, team_uuid):
@@ -488,8 +494,8 @@ def vis_side():
             categories = [
                 ("OFFENSIV", "Offensiv", "xG, Skud, Touches i modstanderens felt", r1_c1), 
                 ("DEFENSIV", "Defensiv", "Mål imod, defensive tacklinger", r1_c2), 
-                ("OFF. STD", "Off_Std", "Hjørner for, vundne frispark & luftdueller", r2_c1), 
-                ("DEF. STD", "Def_Std", "Modstanderens hjørner & luftdueller", r2_c2)
+                ("OFF. STD", "Off_Std", "Mål, xG og standarder (hjørner/frispark) for", r2_c1), 
+                ("DEF. STD", "Def_Std", "Mål, xG og standarder (hjørner/frispark) imod", r2_c2)
             ]
             
             for title, col, desc, target in categories:
