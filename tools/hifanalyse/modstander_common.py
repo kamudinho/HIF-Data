@@ -106,17 +106,61 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None)
     return fig
 
 
-def map_spiller_navn(row, conn):
-    """Slår spillernavn op - først via PLAYER_OPTAUUID/player_mapping, ellers navnet fra DB-joinet."""
-    p_uuid = row.get('PLAYER_OPTAUUID')
-    if pd.notna(p_uuid) and str(p_uuid).strip() not in ["", "None", "nan"]:
-        mapped_name = player_mapping.get_name_by_opta_uuid(p_uuid, conn=conn, db_name=DB)
-        if mapped_name and str(mapped_name).strip() not in ["", "Ukendt", "None", "nan"]:
-            return str(mapped_name).strip()
-    db_name = row.get('PLAYER_NAME')
-    if pd.notna(db_name) and str(db_name).strip() not in ["", "None", "nan"]:
-        return str(db_name).strip()
-    return 'Ukendt'
+def resolve_player_names(df, conn):
+    """Slår spillernavne op for en hel event-dataframe ad gangen.
+
+    Erstatter den tidligere row-wise `.apply(map_spiller_navn, ...)`, som for
+    hver eneste event-række lavede et separat funktionskald - og for hver
+    UKENDT spiller (ikke i den statiske PLAYER_MAPPING-liste) sit eget
+    enkeltstående databasekald. Med mange ukendte spillere (typisk
+    modstanderhold der ikke er fuldt dækket af listen) betød det N separate
+    netværksrundeture i streng rækkefølge.
+
+    Her laves i stedet: (1) ét vektoriseret dict-opslag mod den eksisterende
+    cache, og (2) højst ÉT samlet databasekald for alle UNIKKE UUID'er der
+    stadig mangler et navn - uanset hvor mange rækker de optræder i.
+    """
+    if df.empty or 'PLAYER_OPTAUUID' not in df.columns:
+        return df['PLAYER_NAME'] if 'PLAYER_NAME' in df.columns else pd.Series(dtype=object, index=df.index)
+
+    uuid_col = df['PLAYER_OPTAUUID'].astype(str).str.strip()
+    valid_uuid = df['PLAYER_OPTAUUID'].notna() & ~uuid_col.isin(["", "None", "nan"])
+
+    # 1. Vektoriseret opslag i den eksisterende cache - ingen DB, ingen row-wise apply.
+    resolved = uuid_col.where(valid_uuid).map(player_mapping.optauuid_to_name)
+
+    # 2. De unikke UUID'er der stadig mangler et navn efter cache-opslaget.
+    missing_uuids = sorted(set(uuid_col[valid_uuid & resolved.isna()]))
+
+    # 3. Ét samlet databasekald for alle manglende UUID'er (i stedet for ét pr. spiller).
+    if missing_uuids and conn is not None:
+        uuids_sql = "(" + ",".join(f"'{u}'" for u in missing_uuids) + ")"
+        sql = f"""
+            SELECT PLAYER_OPTAUUID, PLAYER_NAME
+            FROM {DB}.OPTA_PLAYERMAPPING
+            WHERE PLAYER_OPTAUUID IN {uuids_sql}
+        """
+        try:
+            res = conn.query(sql, ttl=0)
+        except Exception:
+            res = None
+
+        if res is not None and not res.empty:
+            for _, r in res.iterrows():
+                u = str(r['PLAYER_OPTAUUID']).strip()
+                navn = str(r['PLAYER_NAME']).strip()
+                if navn:
+                    # Skriver til den samme cache som get_name_by_opta_uuid gjorde,
+                    # så andre steder i appen der bruger player_mapping også får glæde af det.
+                    player_mapping.optauuid_to_name[u] = navn
+
+        resolved = uuid_col.where(valid_uuid).map(player_mapping.optauuid_to_name)
+
+    # 4. Fald tilbage til navnet fra DB-joinet (PLAYER_NAME), og til sidst 'Ukendt'.
+    if 'PLAYER_NAME' in df.columns:
+        resolved = resolved.fillna(df['PLAYER_NAME'])
+    resolved = resolved.fillna('Ukendt').replace(["", "None", "nan"], "Ukendt")
+    return resolved
 
 
 # ---------------------------------------------------------------------------
@@ -200,7 +244,10 @@ def fetch_recent_match_ids(valgt_uuid, liga_ids_sql, limit=10):
         AND (MATCH_STATUS ILIKE '%Played%' OR MATCH_STATUS ILIKE '%Full%' OR MATCH_STATUS ILIKE '%Finish%')
         ORDER BY MATCH_LOCALDATE DESC LIMIT {limit}
     """
-    return conn.query(sql)
+    # ttl=0: conn.query() cacher ellers for evigt (indtil app-genstart) uafhængigt
+    # af vores egen @st.cache_data(ttl=...) herover. Uden ttl=0 her ville vores
+    # ttl aldrig reelt give friske data efter første load.
+    return conn.query(sql, ttl=0)
 
 
 @st.cache_data(ttl=900, show_spinner=False)
@@ -217,7 +264,7 @@ def fetch_full_match_history(valgt_uuid, liga_ids_sql, valgt_saeson):
         AND TOURNAMENTCALENDAR_NAME = '{valgt_saeson}'
         ORDER BY COALESCE(MATCH_DATE_FULL, MATCH_LOCALDATE) ASC
     """
-    return conn.query(sql)
+    return conn.query(sql, ttl=0)
 
 
 @st.cache_data(ttl=900, show_spinner=False)
@@ -248,11 +295,11 @@ def fetch_event_data(valgt_uuid, match_ids):
         AND e.MATCH_OPTAUUID IN {m_ids_str}
         GROUP BY 1, 2, 3, 4, 5, 6, 7, 8
     """
-    df_all_h = conn.query(sql)
+    df_all_h = conn.query(sql, ttl=0)
     if df_all_h is None or df_all_h.empty:
         return pd.DataFrame()
 
-    df_all_h['PLAYER_NAME'] = df_all_h.apply(lambda r: map_spiller_navn(r, conn), axis=1)
+    df_all_h['PLAYER_NAME'] = resolve_player_names(df_all_h, conn)
     df_all_h['qual_list'] = df_all_h['QUALIFIERS'].fillna('').str.split(',')
     df_all_h['Action_Label'] = df_all_h.apply(get_action_label, axis=1)
     df_all_h = df_all_h.dropna(subset=['Action_Label'])
@@ -301,13 +348,13 @@ def fetch_goal_sequences(valgt_uuid, liga_ids_sql):
         GROUP BY 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16
     """
     try:
-        df_all_events = conn.query(sql)
+        df_all_events = conn.query(sql, ttl=0)
     except Exception:
         return pd.DataFrame()
 
     if df_all_events is None or df_all_events.empty:
         return pd.DataFrame()
 
-    df_all_events['PLAYER_NAME'] = df_all_events.apply(lambda r: map_spiller_navn(r, conn), axis=1)
+    df_all_events['PLAYER_NAME'] = resolve_player_names(df_all_events, conn)
     df_all_events['qual_list'] = df_all_events['QUALIFIERS'].fillna('').str.split(',')
     return df_all_events
