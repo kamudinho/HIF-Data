@@ -193,7 +193,21 @@ def prepare_df(content):
     return process_display_df(df)
 
 def process_display_df(df):
+    # 1. Standardiser PLAYER_WYID konsekvent for at undgå .0 og formateringsfejl
+    df['PLAYER_WYID'] = df['PLAYER_WYID'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
+    df.loc[df['PLAYER_WYID'].isin(['nan', 'None', '', 'NaT', 'nat']), 'PLAYER_WYID'] = ""
+
+    # Sorter efter dato (nyeste først) og behold kun den nyeste rapport pr. spiller-ID
     df_display = df.drop_duplicates(subset=['PLAYER_WYID'], keep='first').copy()
+    
+    # Håndter rækker hvor WYID er tomt (sikkerhed mod dubletter baseret på navn)
+    if "" in df_display['PLAYER_WYID'].values:
+        # Fjern rækker med tomt WYID hvis navnet allerede findes med et gyldigt WYID
+        valid_names = set(df_display[df_display['PLAYER_WYID'] != '']['NAVN'].dropna().str.lower().str.strip())
+        df_display = df_display[
+            ~( (df_display['PLAYER_WYID'] == '') & (df_display['NAVN'].str.lower().str.strip().isin(valid_names)) )
+        ]
+
     df_display['POS_PRIORITET'] = df_display['POS_PRIORITET'].astype(str).replace('nan', 'Z')
 
     for c in ['POS', 'POS_343', 'POS_433', 'POS_352']:
@@ -207,9 +221,9 @@ def process_display_df(df):
     for c in ['ER_EMNE', 'SKYGGEHOLD', 'START_11_26_27']:
         df_display[c] = df_display[c].map({True:True, False:False, 'True':True, 'False':False, 1:True, 0:False, '1':True, '0':False}).fillna(False)
 
-    df_display['IS_HIF'] = df_display['PLAYER_WYID'].astype(str).str.replace(r'\.0$', '', regex=True).isin(HIF_WYIDS)
+    df_display['IS_HIF'] = df_display['PLAYER_WYID'].isin(HIF_WYIDS)
 
-    existing_wyids = set(df_display['PLAYER_WYID'].astype(str).str.replace(r'\.0$', '', regex=True))
+    existing_wyids = set(df_display['PLAYER_WYID'])
     mapping_rows = []
 
     for p_data in PLAYER_MAPPING:
@@ -229,7 +243,7 @@ def process_display_df(df):
         m_updates = {k: v for k, v in m_updates.items() if v is not None}
 
         if clean_wyid in existing_wyids:
-            mask = df_display['PLAYER_WYID'].astype(str).str.replace(r'\.0$', '', regex=True) == clean_wyid
+            mask = df_display['PLAYER_WYID'] == clean_wyid
             for col, val in m_updates.items():
                 if col in df_display.columns:
                     df_display.loc[mask, col] = val
