@@ -234,6 +234,9 @@ try:
         elif s == "Top10-scouting":
             import tools.scouting.top10_scouting as t10
             t10.vis_side(dp.get("advanced_stats"), dp.get("primaer_positioner"))
+        elif s == "Opgaver":  # <--- TILFØJ DENNE
+            import tools.admin_page.opgaver as opg
+            opg.vis_side()
 
     elif m == "SPILLERANALYSE":
         if s == "Spillerprofil":
