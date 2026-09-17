@@ -27,10 +27,10 @@ def vis_side():
     
     df_opgaver = indlaes_opgaver()
     
-    # Opret tabs til de forskellige områder
-    tab_oversigt, tab_opret = st.tabs(["Opgaveoversigt", "Opret opgave"])
+    # 3 tabs som ønsket
+    tab_tildel, tab_oversigt, tab_tidligere = st.tabs(["Tildel opgave", "Opgaveoversigt", "Tidligere opgaver"])
     
-    with tab_opret:
+    with tab_tildel:
         st.markdown("### Opret ny opgave")
         with st.form("opret_opgave_form", clear_on_submit=True):
             titel = st.text_input("Opgavetitel")
@@ -61,60 +61,58 @@ def vis_side():
                 else:
                     st.error("Opgaven skal som minimum have en titel.")
 
-    with tab_oversigt:
-        st.markdown("### Oversigt over opgaver")
-        
-        if df_opgaver.empty:
-            st.info("Ingen opgaver oprettet endnu.")
+    # Hjælpefunktion til at vise en liste af opgaver sikkert
+    def vis_opgave_liste(df_vis, fuldt_df):
+        if df_vis.empty:
+            st.info("Ingen opgaver at vise her.")
             return
 
-        # Under-tabs til filtrering i opgaveoversigten
-        sub_tab1, sub_tab2, sub_tab3 = st.tabs(["Alle opgaver", "Tildelt til mig", "Oprettet af mig"])
-        
-        def vis_opgave_liste(df_vis):
-            if df_vis.empty:
-                st.info("Ingen opgaver at vise her.")
-                return
-
-            for idx, row in df_vis.iterrows():
-                with st.container(border=True):
-                    col1, col2, col3, col4, col5 = st.columns([2, 3, 1, 1, 1])
+        for idx, row in df_vis.iterrows():
+            with st.container(border=True):
+                col1, col2, col3, col4, col5 = st.columns([2, 3, 1, 1, 1])
+                
+                with col1:
+                    st.write(f"**{row['titel']}**")
+                    st.caption(f"Af: {row['oprettet_af']} | Dato: {row['dato']}")
+                with col2:
+                    st.write(row['beskrivelse'])
+                with col3:
+                    st.write(f"Til: `{row['tildelt_til']}`")
+                with col4:
+                    nuværende_status = row['status']
                     
-                    with col1:
-                        st.write(f"**{row['titel']}**")
-                        st.caption(f"Af: {row['oprettet_af']} | Dato: {row['dato']}")
-                    with col2:
-                        st.write(row['beskrivelse'])
-                    with col3:
-                        st.write(f"Til: `{row['tildelt_til']}`")
-                    with col4:
-                        nuværende_status = row['status']
-                        
-                        ny_status = st.selectbox(
-                            "Status", 
-                            ["Afventer", "I gang", "Færdig"], 
-                            index=["Afventer", "I gang", "Færdig"].index(nuværende_status) if nuværende_status in ["Afventer", "I gang", "Færdig"] else 0,
-                            key=f"status_select_{row['id']}",
-                            label_visibility="collapsed"
-                        )
-                        
-                        if ny_status != nuværende_status:
-                            df_opgaver.loc[df_opgaver["id"] == row['id'], "status"] = ny_status
-                            gem_opgaver(df_opgaver)
-                            st.rerun()
-                    with col5:
-                        if st.button("Slet", key=f"slet_{row['id']}"):
-                            df_opgaver = df_opgaver[df_opgaver["id"] != row['id']]
-                            gem_opgaver(df_opgaver)
-                            st.rerun()
+                    ny_status = st.selectbox(
+                        "Status", 
+                        ["Afventer", "I gang", "Færdig"], 
+                        index=["Afventer", "I gang", "Færdig"].index(nuværende_status) if nuværende_status in ["Afventer", "I gang", "Færdig"] else 0,
+                        key=f"status_select_{row['id']}",
+                        label_visibility="collapsed"
+                    )
+                    
+                    if ny_status != nuværende_status:
+                        fuldt_df.loc[fuldt_df["id"] == row['id'], "status"] = ny_status
+                        gem_opgaver(fuldt_df)
+                        st.rerun()
+                with col5:
+                    if st.button("Slet", key=f"slet_{row['id']}"):
+                        opdateret_df = fuldt_df[fuldt_df["id"] != row['id']]
+                        gem_opgaver(opdateret_df)
+                        st.rerun()
 
-        with sub_tab1:
-            vis_opgave_liste(df_opgaver)
-            
-        with sub_tab2:
-            df_til_mig = df_opgaver[df_opgaver["tildelt_til"] == aktuel_bruger]
-            vis_opgave_liste(df_til_mig)
-            
-        with sub_tab3:
-            df_af_mig = df_opgaver[df_opgaver["oprettet_af"] == aktuel_bruger]
-            vis_opgave_liste(df_af_mig)
+    with tab_oversigt:
+        st.markdown("### Aktuelle opgaver")
+        if df_opgaver.empty:
+            st.info("Ingen opgaver oprettet endnu.")
+        else:
+            # Viser opgaver der IKKE er færdige
+            df_aktuelle = df_opgaver[df_opgaver["status"] != "Færdig"]
+            vis_opgave_liste(df_aktuelle, df_opgaver)
+
+    with tab_tidligere:
+        st.markdown("### Tidligere (færdigmelder) opgaver")
+        if df_opgaver.empty:
+            st.info("Ingen opgaver oprettet endnu.")
+        else:
+            # Viser KUN opgaver der har status "Færdig"
+            df_faerdige = df_opgaver[df_opgaver["status"] == "Færdig"]
+            vis_opgave_liste(df_faerdige, df_opgaver)
