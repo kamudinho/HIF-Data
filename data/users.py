@@ -1,55 +1,68 @@
+def get_role_permissions():
+    """Definerer hvad hver rolle som standard har adgang til."""
+    return {
+        "admin": "ALL",  # Admin har adgang til alt
+        
+        "Analytiker": [
+            "HVIDOVRE IF", "HOLDANALYSE", "SPILLERANALYSE", "TRUPPEN", 
+            "HIF ANALYSE", "BETINIA LIGAEN", "SCOUTING", "Opgaver", 
+            "Scoutrapport", "Database", "Emnedatabase", "Sammenligning", 
+            "Top10-scouting", "Opret emne"
+        ],
+        
+        "manager": [
+            "HVIDOVRE IF", "HOLDANALYSE", "SPILLERANALYSE", "TRUPPEN", 
+            "HIF ANALYSE", "BETINIA LIGAEN", "SCOUTING", "Opgaver", 
+            "Scoutrapport", "Database", "Emnedatabase", "Sammenligning", 
+            "Top10-scouting", "Opret emne"
+        ],
+        
+        "coach": [
+            "HVIDOVRE IF", "HOLDANALYSE", "SPILLERANALYSE", "TRUPPEN", 
+            "HIF ANALYSE", "BETINIA LIGAEN", "SCOUTING", "Opgaver", 
+            "Scoutrapport", "Database", "Sammenligning", "Top10-scouting"
+            # Bemærk: "Emnedatabase" og "Opret emne" er fjernet her
+        ],
+        
+        "chefscout": [
+            "SCOUTING", "Opgaver", "Scoutrapport", "Database", 
+            "Emnedatabase", "Sammenligning", "Top10-scouting", "Opret emne"
+        ],
+        
+        "scout": [
+            "SCOUTING", "Opgaver", "Scoutrapport", "Top10-scouting"
+            # Kun det mest nødvendige for almindelige scouts
+        ]
+    }
+
 def get_users():
     return {
         "kasper": {
             "pass": "kasper1234", 
-            "role": "admin",
-            "restricted": []  # Admin ser ALT
+            "role": "admin"
         },
         "ceo": {
             "pass": "ceo1234", 
-            "role": "Analytiker",
-            "restricted": ["TESTSIDE", "ADMIN"] # Alt undtagen admin-panelet
+            "role": "Analytiker"
         },
         "TA": {
             "pass": "TA5270", 
-            "role": "Analytiker",
-            "restricted": ["TILPASNING", "TESTSIDE", "ADMIN"] # Alt undtagen admin-panelet
+            "role": "Analytiker"
         },
         "mr": {
             "pass": "Retov2650", 
-            "role": "manager",
-            "restricted": ["TESTSIDE", "TILPASNING", "ADMIN"] # Alt undtagen admin-panelet
+            "role": "manager"
         },
         "kd": {
             "pass": "Daugaard2650", 
-            "role": "coach",
-            "restricted": ["TESTSIDE", "TILPASNING", "ADMIN", "Opret emne", "Emnedatabase"] # Ingen adgang til emner
+            "role": "coach"
         },
         "kasper-scout": {
             "pass": "Scout1234", 
-            "role": "scout",
-            "restricted": [
-                "HVIDOVRE IF",
-                "HOLDANALYSE", 
-                "SPILLERANALYSE", 
-                "TESTSIDE", 
-                "TILPASNING", 
-                "ADMIN", 
-                "ADMIN_SCOUTING", 
-                "TRUPPEN", 
-                "HIF ANALYSE", 
-                "BETINIA LIGAEN", 
-                "Sammenligning", 
-                "Opret emne",
-                "Database",         # <--- LUKKERT FOR SCOUT
-                "Emnedatabase"      # <--- LUKKERT FOR SCOUT
-            ] 
+            "role": "scout"
         },
         "mn": {
             "pass": "MN1234", 
-            "role": "scout",
-            "restricted": [
-                "TESTSIDE", "TILPASNING", "ADMIN", "TRUPPEN", "HIF ANALYSE", "BETINIA LIGAEN", "Sammenligning", "Opret emne"
-            ] 
+            "role": "scout"
         }
     }
