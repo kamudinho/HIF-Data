@@ -109,7 +109,7 @@ def vis_side():
             vis_opgave_liste(df_aktuelle, df_opgaver)
 
     with tab_tidligere:
-        st.markdown("### Tidligere (færdigmelder) opgaver")
+        st.markdown("### Tidligere opgaver")
         if df_opgaver.empty:
             st.info("Ingen opgaver oprettet endnu.")
         else:
