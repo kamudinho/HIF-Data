@@ -123,7 +123,7 @@ with st.sidebar:
     }
 
     # HOVEDMENU
-    alle_omraader = ["HVIDOVRE IF", "HOLDANALYSE", "SPILLERANALYSE", "SCOUTING", "TILPASNING", "TESTSIDE", "ADMIN"]
+    alle_omraader = ["HVIDOVRE IF", "HOLDANALYSE", "SPILLERANALYSE", "SCOUTING", "TILPASNING", "TESTSIDE", "ADMIN", "ADMIN_SCOUTING"]
     user_info = USER_DB.get(st.session_state["user"], {})
     restriktioner = [r.lower().strip() for r in user_info.get("restricted", [])]
     synlige_hoved_options = [o for o in alle_omraader if o.lower().strip() not in restriktioner]
@@ -151,8 +151,13 @@ with st.sidebar:
         "SPILLERANALYSE": ["Spiller-stats", "Spilleraktioner", "Spiller-profil", "Spilleroversigt", "Spillerprofil"],
         "SCOUTING": ["Scoutrapport", "Database", "Emnedatabase", "Sammenligning", "Top10-scouting"],
         "TILPASNING": ["Spillerdata", "Spiller-score", "Standardsituationer"],
-        "TESTSIDE": ["Performance", "Winning Performance", "1. Div-tilpasning", "Charts", "Oversigt", "Forecast", "Model",  "Transfers"],
-        "ADMIN": ["System Log", "Profil", "Opgaver", "Datakatalog", "Konklusion", "Teamradar", "Spillerradar", "Fysisk profil", "Hold: Fysisk profil", "Intern analyse", "Top 5: Spillere", "Ordbog"]
+        "TESTSIDE": ["Performance", "Winning Performance", "1. Div-tilpasning", "Charts", "Oversigt", "Forecast", "Model", "Transfers"],
+        
+        # Den rigtige admin-menu (kun for admin)
+        "ADMIN": ["System Log", "Profil", "Opgaver", "Datakatalog", "Konklusion", "Teamradar", "Spillerradar", "Fysisk profil", "Hold: Fysisk profil", "Intern analyse", "Top 5: Spillere", "Ordbog"],
+        
+        # NY: Kun Opgaver for scouts
+        "ADMIN_SCOUTING": ["Opgaver"]
     }
     
     aktuel_undermenu = [o for o in menu_map.get(hoved_omraade, ["Forside"]) if o.lower().strip() not in restriktioner]
@@ -337,6 +342,11 @@ try:
             import tools.hifanalyse.teamradar as tr
             tr.vis_side()
         elif s == "Opgaver":
+            import tools.admin_page.opgaver as opg
+            opg.vis_side()
+
+    elif m == "ADMIN_SCOUTING":
+        if s == "Opgaver":
             import tools.admin_page.opgaver as opg
             opg.vis_side()
 
