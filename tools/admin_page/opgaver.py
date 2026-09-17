@@ -4,15 +4,23 @@ from datetime import datetime, timedelta
 import os
 from data.users import get_users
 
-OPGAVE_FIL = "data/admin/opgaver.csv"
+# Sikr en stabil sti til CSV-filen i projektet
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# Hvis filen ligger i tools/admin_page/, går vi et par niveauer op eller bruger standardmappen
+OPGAVE_FIL = os.path.join("data", "admin", "opgaver.csv")
 
 def indlaes_opgaver():
+    # Sørg for mappen eksisterer
+    os.makedirs(os.path.dirname(OPGAVE_FIL), exist_ok=True)
+    
     if os.path.exists(OPGAVE_FIL):
         try:
-            return pd.read_csv(OPGAVE_FIL)
-        except Exception:
-            pass
-    
+            df = pd.read_csv(OPGAVE_FIL)
+            if not df.empty:
+                return df
+        except Exception as e:
+            st.error(f> "Fejl ved indlæsning af opgaver: {e}")
+            
     return pd.DataFrame(columns=["id", "titel", "beskrivelse", "tildelt_til", "oprettet_af", "status", "dato"])
 
 def gem_opgaver(df):
@@ -52,11 +60,20 @@ def vis_side():
                 submit = st.form_submit_button("Gem opgave")
                 if submit:
                     if titel:
-                        nyt_id = int(df_opgaver["id"].max() + 1) if not df_opgaver.empty and "id" in df_opgaver.columns and pd.notna(df_opgaver["id"].max()) else 1
+                        # Beregn nyt ID sikkert
+                        if not df_opgaver.empty and "id" in df_opgaver.columns:
+                            try:
+                                max_id = int(df_opgaver["id"].max())
+                                nyt_id = max_id + 1 if pd.notna(max_id) else 1
+                            except:
+                                nyt_id = len(df_opgaver) + 1
+                        else:
+                            nyt_id = 1
+                            
                         ny_raekke = {
                             "id": nyt_id,
                             "titel": titel,
-                            "beskrivelse": beskrivelse,
+                            "beskrivelse": beskrivelse if beskrivelse else "",
                             "tildelt_til": tildelt_til,
                             "oprettet_af": aktuel_bruger,
                             "status": "Afventer",
@@ -85,7 +102,7 @@ def vis_side():
                     st.write(f"**{row['titel']}**")
                     st.caption(f"Af: {row['oprettet_af']} | Dato: {row['dato']}")
                 with col2:
-                    st.write(row['beskrivelse'])
+                    st.write(row['beskrivelse'] if pd.notna(row['beskrivelse']) else "")
                 with col3:
                     st.write(f"Til: `{row['tildelt_til']}`")
                 with col4:
@@ -150,17 +167,14 @@ def vis_side():
                 df_kalender["dato_dt"] = pd.to_datetime(df_kalender["dato"], errors="coerce")
                 df_kalender = df_kalender.dropna(subset=["dato_dt"])
                 
-                # Vælg visningstype
                 kalender_visning = st.radio("Vælg visning", ["Ugeoversigt (Gitter)", "Månedsoversigt (Liste)"], horizontal=True)
                 
                 if kalender_visning == "Ugeoversigt (Gitter)":
                     st.markdown("#### Ugeplan (Mandag - Søndag)")
                     
-                    # Find start på ugen baseret på idag ellervalgt dato
                     valgt_uge_dato = st.date_input("Vælg uge ud fra dato", value=datetime.today(), key="uge_valg")
-                    start_af_uge = valgt_uge_dato - timedelta(days=valgt_uge_dato.weekday()) # Mandag
+                    start_af_uge = valgt_uge_dato - timedelta(days=valgt_uge_dato.weekday())
                     
-                    # Lav 7 kolonner til ugens dage
                     dage_navne = ["Mandag", "Tirsdag", "Onsdag", "Torsdag", "Fredag", "Lørdag", "Søndag"]
                     cols = st.columns(7)
                     
@@ -170,7 +184,6 @@ def vis_side():
                             st.markdown(f"**{dage_navne[i]}**")
                             st.caption(f"{dag_dato.strftime('%d/%m')}")
                             
-                            # Find opgaver på denne eksakte dag
                             dag_opgaver = df_kalender[df_kalender["dato_dt"].dt.date == dag_dato]
                             
                             if not dag_opgaver.empty:
@@ -185,17 +198,14 @@ def vis_side():
                                 
                 else:
                     st.markdown("#### Månedsoversigt")
-                    # Sorter efter dato
                     df_kalender = df_kalender.sort_values(by="dato_dt")
-                    
-                    # Grupper per måned/år eller vis kronologisk liste med overskrifter pr. dato
                     unike_datoer = sorted(df_kalender["dato_dt"].dt.date.unique())
                     
                     for d in unike_datoer:
-                        d_str = d.strftime("%A d. %d. %B %Y")
-                        with st.expander(f"📅 {d.strftime('%Y-%m-%d')} — {len(df_kalender[df_kalender['dato_dt'].dt.date == d])} opgave(r)"):
-                            dag_opg = df_kalender[df_kalender["dato_dt"].dt.date == d]
+                        antal_paa_dag = len(df_kalender[df_kalender['dato_dt'].dt.date == d])
+                        with st.expander(f"📅 {d.strftime('%Y-%m-%d')} — {antal_paa_dag} opgave(r)"):
+                            dag_opg = df_kalender[df_kalender['dato_dt'].dt.date == d]
                             for _, row in dag_opg.iterrows():
                                 st.write(f"- **{row['titel']}** (Tildelt til: `{row['tildelt_til']}` | Status: *{row['status']}*)")
-                                if row['beskrivelse']:
+                                if pd.notna(row['beskrivelse']) and row['beskrivelse']:
                                     st.caption(f"Beskrivelse: {row['beskrivelse']}")
