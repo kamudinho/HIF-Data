@@ -128,12 +128,15 @@ with st.sidebar:
     restriktioner = [r.lower().strip() for r in user_info.get("restricted", [])]
     synlige_hoved_options = [o for o in alle_omraader if o.lower().strip() not in restriktioner]
     
-    if "main_menu_selection" not in st.session_state:
-        st.session_state["main_menu_selection"] = synlige_hoved_options[0]
-
+    # Tjek om det sidst valgte menupunkt er tilgængeligt for den bruger, der er logget ind nu
+    if "main_menu_selection" not in st.session_state or st.session_state["main_menu_selection"] not in synlige_hoved_options:
+        if synlige_hoved_options:
+            st.session_state["main_menu_selection"] = synlige_hoved_options[0]
+    
+    # Her er din eksisterende option_menu (omkring linje 134-139):
     hoved_omraade = option_menu(
-        None, options=synlige_hoved_options, 
-        icons=["play-fill"] * len(synlige_hoved_options), 
+        None, options=synlige_hoved_options,
+        icons=["play-fill"] * len(synlige_hoved_options),
         default_index=synlige_hoved_options.index(st.session_state["main_menu_selection"]),
         key="main_menu_widget", styles=menu_style
     )
