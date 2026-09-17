@@ -21,7 +21,7 @@ def gem_opgaver(df):
     df.to_csv(OPGAVE_FIL, index=False)
 
 def vis_side():
-    st.subheader("Opgavestyring")
+    st.caption("Opgavestyring")
     
     user_db = get_users()
     aktuel_bruger = st.session_state.get("user", "ukendt")
@@ -62,7 +62,7 @@ def vis_side():
     st.markdown("---")
 
     # --- 2. VIS OG ADMINISTRER OPGAVER ---
-    st.markdown("### Oversigt over opgaver")
+    st.caption("Oversigt over opgaver")
     
     if df_opgaver.empty:
         st.info("Ingen opgaver oprettet endnu.")
