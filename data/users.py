@@ -30,6 +30,7 @@ def get_users():
             "role": "scout",
             "restricted": [
                 "TESTSIDE", "TILPASNING", "ADMIN", "TRUPPEN", "HIF ANALYSE", "BETINIA LIGAEN", "Sammenligning", "Opret emne"
+                # "ADMIN_SCOUTING" udelades herfra, så de har adgang til den
             ] 
         },
         "mn": {
