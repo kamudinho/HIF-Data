@@ -122,18 +122,41 @@ with st.sidebar:
         "nav-link-selected": {"background-color": HIF_ROD, "color": "white"}
     }
 
+    # Hent bruger og tilladelser baseret på rolle
+    from data.users import get_role_permissions
+    user_info = USER_DB.get(st.session_state["user"], {})
+    bruger_rolle = user_info.get("role", "scout")
+    tilladelser = get_role_permissions().get(bruger_rolle, [])
+
     # HOVEDMENU
     alle_omraader = ["HVIDOVRE IF", "HOLDANALYSE", "SPILLERANALYSE", "SCOUTING", "TILPASNING", "TESTSIDE", "ADMIN", "ADMIN_SCOUTING"]
-    user_info = USER_DB.get(st.session_state["user"], {})
-    restriktioner = [r.lower().strip() for r in user_info.get("restricted", [])]
-    synlige_hoved_options = [o for o in alle_omraader if o.lower().strip() not in restriktioner]
     
-    # Tjek om det sidst valgte menupunkt er tilgængeligt for den bruger, der er logget ind nu
+    if tilladelser == "ALL":
+        synlige_hoved_options = alle_omraader
+    else:
+        # Vis kun hovedmenuer, hvor brugeren har mindst én tilladelse eller hvor hovedmenuen er direkte nævnt
+        menu_map_checker = {
+            "HVIDOVRE IF": ["HVIDOVRE IF", "Forside"],
+            "HOLDANALYSE": ["HOLDANALYSE", "Modstanderanalyse", "Kampoversigt", "Kampudvikling", "Afslutninger", "Målsekvenser", "Grafer"],
+            "SPILLERANALYSE": ["SPILLERANALYSE", "Spiller-stats", "Spilleraktioner", "Spiller-profil", "Spilleroversigt", "Spillerprofil"],
+            "SCOUTING": ["SCOUTING", "Scoutrapport", "Database", "Emnedatabase", "Sammenligning", "Top10-scouting", "Opgaver"],
+            "TILPASNING": ["TILPASNING", "Spillerdata", "Spiller-score", "Standardsituationer"],
+            "TESTSIDE": ["TESTSIDE", "Performance", "Winning Performance", "1. Div-tilpasning", "Charts", "Oversigt", "Forecast", "Model", "Transfers"],
+            "ADMIN": ["ADMIN", "System Log", "Profil", "Datakatalog", "Konklusion", "Teamradar", "Spillerradar", "Fysisk profil", "Hold: Fysisk profil", "Intern analyse", "Top 5: Spillere", "Ordbog"],
+            "ADMIN_SCOUTING": ["ADMIN_SCOUTING", "Opgaver"]
+        }
+        synlige_hoved_options = [
+            hm for hm in alle_omraader 
+            if any(item in tilladelser for item in menu_map_checker.get(hm, [hm]))
+        ]
+    
+    if not synlige_hoved_options:
+        synlige_hoved_options = ["SCOUTING"] # Sikkerhedsnet
+
+    # Tjek om det sidst valgte menupunkt er tilgængeligt
     if "main_menu_selection" not in st.session_state or st.session_state["main_menu_selection"] not in synlige_hoved_options:
-        if synlige_hoved_options:
-            st.session_state["main_menu_selection"] = synlige_hoved_options[0]
+        st.session_state["main_menu_selection"] = synlige_hoved_options[0]
     
-    # Her er din eksisterende option_menu (omkring linje 134-139):
     hoved_omraade = option_menu(
         None, options=synlige_hoved_options,
         icons=["play-fill"] * len(synlige_hoved_options),
@@ -149,20 +172,21 @@ with st.sidebar:
         "HVIDOVRE IF": ["Forside"],
         "HOLDANALYSE": ["Modstanderanalyse", "Kampoversigt", "Kampudvikling", "Afslutninger", "Målsekvenser", "Grafer"],
         "SPILLERANALYSE": ["Spiller-stats", "Spilleraktioner", "Spiller-profil", "Spilleroversigt", "Spillerprofil"],
-        
-        # Tilføj "Opgaver" her, så almindelige scouts kan se den under Scouting:
         "SCOUTING": ["Scoutrapport", "Database", "Emnedatabase", "Sammenligning", "Top10-scouting", "Opgaver"],
-        
         "TILPASNING": ["Spillerdata", "Spiller-score", "Standardsituationer"],
         "TESTSIDE": ["Performance", "Winning Performance", "1. Div-tilpasning", "Charts", "Oversigt", "Forecast", "Model", "Transfers"],
-        
         "ADMIN": ["System Log", "Profil", "Datakatalog", "Konklusion", "Teamradar", "Spillerradar", "Fysisk profil", "Hold: Fysisk profil", "Intern analyse", "Top 5: Spillere", "Ordbog"],
-        
-        # Super-scout menuen, hvor man kan administrere alt omkring opgaver osv.
         "ADMIN_SCOUTING": ["Opgaver"]
     }
     
-    aktuel_undermenu = [o for o in menu_map.get(hoved_omraade, ["Forside"]) if o.lower().strip() not in restriktioner]
+    mulige_under = menu_map.get(hoved_omraade, ["Forside"])
+    if tilladelser == "ALL":
+        aktuel_undermenu = mulige_under
+    else:
+        aktuel_undermenu = [u for u in mulige_under if u in tilladelser]
+        
+    if not aktuel_undermenu:
+        aktuel_undermenu = [mulige_under[0]]
     
     # SIKKERHEDSTJEK: Undgå ValueError ved skift af hovedmenu
     if "sub_menu_selection" not in st.session_state or st.session_state["sub_menu_selection"] not in aktuel_undermenu:
