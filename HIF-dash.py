@@ -149,7 +149,7 @@ with st.sidebar:
         "SCOUTING": ["Scoutrapport", "Database", "Emnedatabase", "Sammenligning", "Top10-scouting"],
         "TILPASNING": ["Spillerdata", "Spiller-score", "Standardsituationer"],
         "TESTSIDE": ["Performance", "Winning Performance", "1. Div-tilpasning", "Charts", "Oversigt", "Forecast", "Model",  "Transfers"],
-        "ADMIN": ["System Log", "Profil", "Datakatalog", "Konklusion", "Teamradar", "Spillerradar", "Fysisk profil", "Hold: Fysisk profil", "Intern analyse", "Top 5: Spillere", "Ordbog"]
+        "ADMIN": ["System Log", "Profil", "Opgaver", "Datakatalog", "Konklusion", "Teamradar", "Spillerradar", "Fysisk profil", "Hold: Fysisk profil", "Intern analyse", "Top 5: Spillere", "Ordbog"]
     }
     
     aktuel_undermenu = [o for o in menu_map.get(hoved_omraade, ["Forside"]) if o.lower().strip() not in restriktioner]
@@ -333,6 +333,9 @@ try:
         elif s == "Teamradar":
             import tools.hifanalyse.teamradar as tr
             tr.vis_side()
+        elif s == "Opgaver":
+            import tools.admin_page.opgaver as opg
+            opg.vis_side()
 
 except Exception as e:
     st.error(f"Fejl ved indlæsning: {e}")
