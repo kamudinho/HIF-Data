@@ -193,16 +193,14 @@ def prepare_df(content):
     return process_display_df(df)
 
 def process_display_df(df):
-    # 1. Standardiser PLAYER_WYID konsekvent for at undgå .0 og formateringsfejl
+    # 1. Standardiser PLAYER_WYID konsekvent
     df['PLAYER_WYID'] = df['PLAYER_WYID'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
     df.loc[df['PLAYER_WYID'].isin(['nan', 'None', '', 'NaT', 'nat']), 'PLAYER_WYID'] = ""
 
-    # Sorter efter dato (nyeste først) og behold kun den nyeste rapport pr. spiller-ID
     df_display = df.drop_duplicates(subset=['PLAYER_WYID'], keep='first').copy()
     
-    # Håndter rækker hvor WYID er tomt (sikkerhed mod dubletter baseret på navn)
+    # Håndter rækker hvor WYID er tomt
     if "" in df_display['PLAYER_WYID'].values:
-        # Fjern rækker med tomt WYID hvis navnet allerede findes med et gyldigt WYID
         valid_names = set(df_display[df_display['PLAYER_WYID'] != '']['NAVN'].dropna().str.lower().str.strip())
         df_display = df_display[
             ~( (df_display['PLAYER_WYID'] == '') & (df_display['NAVN'].str.lower().str.strip().isin(valid_names)) )
@@ -268,8 +266,17 @@ def process_display_df(df):
     if 'KONTRAKT' in df_display.columns:
         df_display['KONTRAKT_DT'] = df_display['KONTRAKT'].apply(robust_date_parser)
 
-    return df_display
+    # --- NY SIKKERHED: Fjern dubletter baseret på navn, og prioriter IS_HIF ---
+    if 'DATO_DT' not in df_display.columns:
+        df_display['DATO_DT'] = pd.to_datetime(df_display.get('DATO', ''), errors='coerce')
+        
+    df_display['NAVN_CLEAN'] = df_display['NAVN'].astype(str).str.lower().str.strip()
+    # Sorter så Hvidovre-spillere og nyeste datoer kommer øverst, og fjern navnedubletter
+    df_display = df_display.sort_values(by=['IS_HIF', 'DATO_DT'], ascending=[False, False])
+    df_display = df_display.drop_duplicates(subset=['NAVN_CLEAN'], keep='first')
+    df_display = df_display.drop(columns=['NAVN_CLEAN'])
 
+    return df_display
 # --- 4. UI ---
 def vis_side():
     current_user = st.session_state.get("user", "default")
