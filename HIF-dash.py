@@ -123,7 +123,7 @@ with st.sidebar:
     }
 
     # HOVEDMENU
-    alle_omraader = ["HVIDOVRE IF", "HOLDANALYSE", "SPILLERANALYSE", "FYSISK DATA", "SCOUTING", "TILPASNING", "TESTSIDE", "ADMIN"]
+    alle_omraader = ["HVIDOVRE IF", "HOLDANALYSE", "SPILLERANALYSE", "SCOUTING", "TILPASNING", "TESTSIDE", "ADMIN"]
     user_info = USER_DB.get(st.session_state["user"], {})
     restriktioner = [r.lower().strip() for r in user_info.get("restricted", [])]
     synlige_hoved_options = [o for o in alle_omraader if o.lower().strip() not in restriktioner]
