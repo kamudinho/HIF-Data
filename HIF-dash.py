@@ -137,9 +137,10 @@ with st.sidebar:
         # Vis kun hovedmenuer, hvor brugeren har mindst én tilladelse eller hvor hovedmenuen er direkte nævnt
         menu_map_checker = {
             "HVIDOVRE IF": ["HVIDOVRE IF", "Forside"],
-            "HOLDANALYSE": ["HOLDANALYSE", "Modstanderanalyse", "Kampoversigt", "Kampudvikling", "Afslutninger", "Målsekvenser", "Grafer"],
+            "HOLDANALYSE": ["HOLDANALYSE", "Modstanderanalyse", "Kampoversigt", "Kampudvikling", "Afslutninger", "Målsekvenser", "Grafer", "BETINIA LIGAEN"],
             "SPILLERANALYSE": ["SPILLERANALYSE", "Spiller-stats", "Spilleraktioner", "Spiller-profil", "Spilleroversigt", "Spillerprofil"],
-            "SCOUTING": ["SCOUTING", "Scoutrapport", "Database", "Emnedatabase", "Sammenligning", "Top10-scouting", "Opgaver"],
+            "TRUPPEN": ["TRUPPEN", "Oversigt", "Forecast"], # Tilføjet hvis TRUPPEN bruges som hovedmenu
+            "SCOUTING": ["SCOUTING", "Scoutrapport", "Database", "Emnedatabase", "Sammenligning", "Top10-scouting", "Opgaver", "Opret emne"],
             "TILPASNING": ["TILPASNING", "Spillerdata", "Spiller-score", "Standardsituationer"],
             "TESTSIDE": ["TESTSIDE", "Performance", "Winning Performance", "1. Div-tilpasning", "Charts", "Oversigt", "Forecast", "Model", "Transfers"],
             "ADMIN": ["ADMIN", "System Log", "Profil", "Datakatalog", "Konklusion", "Teamradar", "Spillerradar", "Fysisk profil", "Hold: Fysisk profil", "Intern analyse", "Top 5: Spillere", "Ordbog"],
