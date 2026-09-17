@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
 import os
 from data.users import get_users
 
@@ -33,10 +33,8 @@ def vis_side():
     
     # Opsætning af tabs afhængigt af hvem der er logget ind
     if er_scout:
-        # Scouts ser kun "Mine opgaver" og "Kalender"
         tab_oversigt, tab_kalender = st.tabs(["Mine opgaver", "Kalender"])
     else:
-        # Admins/andre ser det fulde system
         tab_tildel, tab_oversigt, tab_tidligere, tab_kalender = st.tabs(["Tildel opgave", "Opgaveoversigt", "Tidligere opgaver", "Kalender"])
     
     # --- 1. TILDEL OPGAVE (Kun for ikke-scouts) ---
@@ -46,8 +44,6 @@ def vis_side():
             with st.form("opret_opgave_form", clear_on_submit=True):
                 titel = st.text_input("Opgavetitel")
                 beskrivelse = st.text_area("Beskrivelse")
-                
-                # Hvis det er en scout-relateret opgave, kan man evt. vælge dato for opgaven
                 opgave_dato = st.date_input("Dato for opgave / deadline", value=datetime.today())
                 
                 mulige_brugere = list(user_db.keys())
@@ -108,20 +104,18 @@ def vis_side():
                         gem_opgaver(fuldt_df)
                         st.rerun()
                 with col5:
-                    # Kun admin/opretter eller hvis man vil tillade sletning
                     if not er_scout:
                         if st.button("Slet", key=f"slet_{row['id']}"):
                             opdateret_df = fuldt_df[fuldt_df["id"] != row['id']]
                             gem_opgaver(opdateret_df)
                             st.rerun()
                     else:
-                        st.write("") # Pladsholder for scouts
+                        st.write("")
 
-    # --- 2. OPGAVEOVERSIGT (Aktuelle opgaver) ---
+    # --- 2. OPGAVEOVERSIGT ---
     with tab_oversigt:
         if er_scout:
             st.markdown("### Dine aktuelle opgaver")
-            # Scouts ser KUN opgaver tildelt til dem selv, og som ikke er færdige
             df_aktuelle = df_opgaver[(df_opgaver["tildelt_til"] == aktuel_bruger) & (df_opgaver["status"] != "Færdig")]
         else:
             st.markdown("### Aktuelle opgaver")
@@ -129,7 +123,7 @@ def vis_side():
             
         vis_opgave_liste(df_aktuelle, df_opgaver)
 
-    # --- 3. TIDLIGERE OPGAVER (Kun for ikke-scouts) ---
+    # --- 3. TIDLIGERE OPGAVER ---
     if not er_scout:
         with tab_tidligere:
             st.markdown("### Tidligere (færdigmelder) opgaver")
@@ -139,14 +133,13 @@ def vis_side():
                 df_faerdige = df_opgaver[df_opgaver["status"] == "Færdig"]
                 vis_opgave_liste(df_faerdige, df_opgaver)
 
-    # --- 4. KALENDER VISNING ---
+    # --- 4. SKARP KALENDERVISNING ---
     with tab_kalender:
-        st.markdown("### Kalender over opgaver")
+        st.markdown("### Kalenderoverblik")
         
         if df_opgaver.empty:
             st.info("Ingen opgaver at vise i kalenderen.")
         else:
-            # Filtrer til kun egne opgaver, hvis det er en scout
             df_kalender = df_opgaver.copy()
             if er_scout:
                 df_kalender = df_kalender[df_kalender["tildelt_til"] == aktuel_bruger]
@@ -154,24 +147,55 @@ def vis_side():
             if df_kalender.empty:
                 st.info("Du har ingen tildelte opgaver i kalenderen.")
             else:
-                # Sørg for at dato-kolonner sorteres pænt
-                df_kalender["dato"] = pd.to_datetime(df_kalender["dato"], errors="coerce")
-                df_kalender = df_kalender.sort_values(by="dato")
+                df_kalender["dato_dt"] = pd.to_datetime(df_kalender["dato"], errors="coerce")
+                df_kalender = df_kalender.dropna(subset=["dato_dt"])
                 
-                # Vælg en specifik dato eller vis månedsoversigt
-                unike_datoer = df_kalender["dato"].dt.date.dropna().unique()
+                # Vælg visningstype
+                kalender_visning = st.radio("Vælg visning", ["Ugeoversigt (Gitter)", "Månedsoversigt (Liste)"], horizontal=True)
                 
-                if len(unike_datoer) > 0:
-                    valgt_dato = st.selectbox("Vælg dato for at se opgaver", unike_datoer)
+                if kalender_visning == "Ugeoversigt (Gitter)":
+                    st.markdown("#### Ugeplan (Mandag - Søndag)")
                     
-                    # Filtrer opgaver på den valgte dato
-                    df_valgt_dag = df_kalender[df_kalender["dato"].dt.date == valgt_dato]
+                    # Find start på ugen baseret på idag ellervalgt dato
+                    valgt_uge_dato = st.date_input("Vælg uge ud fra dato", value=datetime.today(), key="uge_valg")
+                    start_af_uge = valgt_uge_dato - timedelta(days=valgt_uge_dato.weekday()) # Mandag
                     
-                    st.markdown(f"#### Opgaver d. {valgt_dato}")
-                    for _, row in df_valgt_dag.iterrows():
-                        with st.container(border=True):
-                            st.write(f"**{row['titel']}** (Tildelt til: `{row['tildelt_til']}`)")
-                            st.text(f"Beskrivelse: {row['beskrivelse']}")
-                            st.caption(f"Status: {row['status']}")
+                    # Lav 7 kolonner til ugens dage
+                    dage_navne = ["Mandag", "Tirsdag", "Onsdag", "Torsdag", "Fredag", "Lørdag", "Søndag"]
+                    cols = st.columns(7)
+                    
+                    for i, col in enumerate(cols):
+                        dag_dato = start_af_uge + timedelta(days=i)
+                        with col:
+                            st.markdown(f"**{dage_navne[i]}**")
+                            st.caption(f"{dag_dato.strftime('%d/%m')}")
+                            
+                            # Find opgaver på denne eksakte dag
+                            dag_opgaver = df_kalender[df_kalender["dato_dt"].dt.date == dag_dato]
+                            
+                            if not dag_opgaver.empty:
+                                for _, row in dag_opgaver.iterrows():
+                                    status_farve = "🟢" if row['status'] == "Færdig" else ("🟡" if row['status'] == "I gang" else "⚪")
+                                    with st.container(border=True):
+                                        st.markdown(f"**{row['titel']}**")
+                                        st.caption(f"Til: {row['tildelt_til']}")
+                                        st.text(f"{status_farve} {row['status']}")
+                            else:
+                                st.markdown("<small style='color: gray;'>Ingen opgaver</small>", unsafe_allow_html=True)
+                                
                 else:
-                    st.info("Ingen gyldige datoer fundet på opgaverne.")
+                    st.markdown("#### Månedsoversigt")
+                    # Sorter efter dato
+                    df_kalender = df_kalender.sort_values(by="dato_dt")
+                    
+                    # Grupper per måned/år eller vis kronologisk liste med overskrifter pr. dato
+                    unike_datoer = sorted(df_kalender["dato_dt"].dt.date.unique())
+                    
+                    for d in unike_datoer:
+                        d_str = d.strftime("%A d. %d. %B %Y")
+                        with st.expander(f"📅 {d.strftime('%Y-%m-%d')} — {len(df_kalender[df_kalender['dato_dt'].dt.date == d])} opgave(r)"):
+                            dag_opg = df_kalender[df_kalender["dato_dt"].dt.date == d]
+                            for _, row in dag_opg.iterrows():
+                                st.write(f"- **{row['titel']}** (Tildelt til: `{row['tildelt_til']}` | Status: *{row['status']}*)")
+                                if row['beskrivelse']:
+                                    st.caption(f"Beskrivelse: {row['beskrivelse']}")
