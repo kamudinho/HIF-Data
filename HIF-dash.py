@@ -149,14 +149,16 @@ with st.sidebar:
         "HVIDOVRE IF": ["Forside"],
         "HOLDANALYSE": ["Modstanderanalyse", "Kampoversigt", "Kampudvikling", "Afslutninger", "Målsekvenser", "Grafer"],
         "SPILLERANALYSE": ["Spiller-stats", "Spilleraktioner", "Spiller-profil", "Spilleroversigt", "Spillerprofil"],
-        "SCOUTING": ["Scoutrapport", "Database", "Emnedatabase", "Sammenligning", "Top10-scouting"],
+        
+        # Tilføj "Opgaver" her, så almindelige scouts kan se den under Scouting:
+        "SCOUTING": ["Scoutrapport", "Database", "Emnedatabase", "Sammenligning", "Top10-scouting", "Opgaver"],
+        
         "TILPASNING": ["Spillerdata", "Spiller-score", "Standardsituationer"],
         "TESTSIDE": ["Performance", "Winning Performance", "1. Div-tilpasning", "Charts", "Oversigt", "Forecast", "Model", "Transfers"],
         
-        # Den rigtige admin-menu (kun for admin)
-        "ADMIN": ["System Log", "Profil", "Opgaver", "Datakatalog", "Konklusion", "Teamradar", "Spillerradar", "Fysisk profil", "Hold: Fysisk profil", "Intern analyse", "Top 5: Spillere", "Ordbog"],
+        "ADMIN": ["System Log", "Profil", "Datakatalog", "Konklusion", "Teamradar", "Spillerradar", "Fysisk profil", "Hold: Fysisk profil", "Intern analyse", "Top 5: Spillere", "Ordbog"],
         
-        # NY: Kun Opgaver for scouts
+        # Super-scout menuen, hvor man kan administrere alt omkring opgaver osv.
         "ADMIN_SCOUTING": ["Opgaver"]
     }
     
