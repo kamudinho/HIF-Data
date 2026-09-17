@@ -20,7 +20,7 @@ def gem_opgaver(df):
     df.to_csv(OPGAVE_FIL, index=False)
 
 def vis_side():
-    st.caption("Opgavestyring")
+    st.caption("Her kan du oprette scoutingopgaver, se tidligere opgaver og færdigmelde opgaver.")
     
     user_db = get_users()
     aktuel_bruger = st.session_state.get("user", "ukendt")
