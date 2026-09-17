@@ -20,7 +20,7 @@ def gem_opgaver(df):
     df.to_csv(OPGAVE_FIL, index=False)
 
 def vis_side():
-    st.subheader("Opgavestyring")
+    st.caption("Opgavestyring")
     
     user_db = get_users()
     aktuel_bruger = st.session_state.get("user", "ukendt")
@@ -31,7 +31,7 @@ def vis_side():
     tab_tildel, tab_oversigt, tab_tidligere = st.tabs(["Tildel opgave", "Opgaveoversigt", "Tidligere opgaver"])
     
     with tab_tildel:
-        st.markdown("### Opret ny opgave")
+        st.markdown("##### Opret ny opgave")
         with st.form("opret_opgave_form", clear_on_submit=True):
             titel = st.text_input("Opgavetitel")
             beskrivelse = st.text_area("Beskrivelse")
