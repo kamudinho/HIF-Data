@@ -40,7 +40,9 @@ def get_users():
                 "HIF ANALYSE", 
                 "BETINIA LIGAEN", 
                 "Sammenligning", 
-                "Opret emne"
+                "Opret emne",
+                "Database",         # <--- LUKKERT FOR SCOUT
+                "Emnedatabase"      # <--- LUKKERT FOR SCOUT
             ] 
         },
         "mn": {
