@@ -67,16 +67,21 @@ def get_github_file(path):
 
 
 def push_to_github(path, message, content, sha=None):
-  url = f"https://api.github.com/repos/{REPO}/contents/{path}"
-  headers = {"Authorization": f"token {GITHUB_TOKEN}"}
-  payload = {
-      "message": message,
-      "content": base64.b64encode(content.encode("utf-8")).decode("utf-8"),
-  }
-  if sha:
-    payload["sha"] = sha
-  r = requests.put(url, headers=headers, json=payload)
-  return r.status_code
+    url = f"https://api.github.com/repos/{REPO}/contents/{path}"
+    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+    payload = {
+        "message": message,
+        "content": base64.b64encode(content.encode("utf-8")).decode("utf-8"),
+    }
+    if sha:
+        payload["sha"] = sha
+    r = requests.put(url, headers=headers, json=payload)
+    
+    # Sørg for at rydde cachen, så appen henter frisk data efter en gemning
+    if r.status_code in [200, 201]:
+        st.cache_data.clear()
+        
+    return r.status_code
 
 
 def rens_id(val):
