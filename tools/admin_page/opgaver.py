@@ -4,13 +4,11 @@ from datetime import datetime, timedelta
 import os
 from data.users import get_users
 
-# Sikr en stabil sti til CSV-filen i projektet
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-# Hvis filen ligger i tools/admin_page/, går vi et par niveauer op eller bruger standardmappen
-OPGAVE_FIL = os.path.join("data", "admin", "opgaver.csv")
+# Find den absolutte sti til projektets rodmappe (2 niveauer op fra tools/admin_page/)
+ROD_MAPPE = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+OPGAVE_FIL = os.path.join(ROD_MAPPE, "data", "admin", "opgaver.csv")
 
 def indlaes_opgaver():
-    # Sørg for mappen eksisterer
     os.makedirs(os.path.dirname(OPGAVE_FIL), exist_ok=True)
     
     if os.path.exists(OPGAVE_FIL):
@@ -19,7 +17,7 @@ def indlaes_opgaver():
             if not df.empty:
                 return df
         except Exception as e:
-            st.error(f> "Fejl ved indlæsning af opgaver: {e}")
+            st.error(f"Fejl ved indlæsning af opgaver: {e}")
             
     return pd.DataFrame(columns=["id", "titel", "beskrivelse", "tildelt_til", "oprettet_af", "status", "dato"])
 
