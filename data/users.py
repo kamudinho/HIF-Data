@@ -29,7 +29,18 @@ def get_users():
             "pass": "Scout1234", 
             "role": "scout",
             "restricted": [
-                "TESTSIDE", "TILPASNING", "ADMIN", "ADMIN_SCOUTING", "TRUPPEN", "HIF ANALYSE", "BETINIA LIGAEN", "Sammenligning", "Opret emne"
+                "HVIDOVRE IF",
+                "HOLDANALYSE", 
+                "SPILLERANALYSE", 
+                "TESTSIDE", 
+                "TILPASNING", 
+                "ADMIN", 
+                "ADMIN_SCOUTING", 
+                "TRUPPEN", 
+                "HIF ANALYSE", 
+                "BETINIA LIGAEN", 
+                "Sammenligning", 
+                "Opret emne"
             ] 
         },
         "mn": {
