@@ -144,11 +144,11 @@ with st.sidebar:
     # UNDERMENU LOGIK
     menu_map = {
         "HVIDOVRE IF": ["Forside"],
-        "HOLDANALYSE": ["Modstanderanalyse", "Ligaoversigt", "Kampoversigt", "Kampudvikling", "Afslutninger", "Målsekvenser", "Grafer"],
-        "SPILLERANALYSE": ["Spilleraktioner", "Spiller-stats", "Spiller-profil", "Spilleroversigt", "Spillerprofil"],
+        "HOLDANALYSE": ["Modstanderanalyse", "Kampoversigt", "Kampudvikling", "Afslutninger", "Målsekvenser", "Grafer"],
+        "SPILLERANALYSE": ["Spiller-stats", "Spilleraktioner", "Spiller-profil", "Spilleroversigt", "Spillerprofil"],
         "SCOUTING": ["Scoutrapport", "Database", "Emnedatabase", "Sammenligning", "Transfers", "Top10-scouting"],
-        "TILPASNING": ["Spillerdata", "Spiller-score", "Standardsituationer", "Model"],
-        "TESTSIDE": ["Performance", "Winning Performance", "1. Div-tilpasning", "Charts", "Oversigt", "Forecast"],
+        "TILPASNING": ["Spillerdata", "Spiller-score", "Standardsituationer"],
+        "TESTSIDE": ["Performance", "Winning Performance", "1. Div-tilpasning", "Charts", "Oversigt", "Forecast", "Model"],
         "ADMIN": ["System Log", "Profil", "Datakatalog", "Konklusion", "Teamradar", "Spillerradar", "Fysisk profil", "Hold: Fysisk profil", "Intern analyse", "Top 5: Spillere", "Ordbog"]
     }
     
