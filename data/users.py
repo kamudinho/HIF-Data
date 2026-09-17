@@ -29,8 +29,7 @@ def get_users():
             "pass": "Scout1234", 
             "role": "scout",
             "restricted": [
-                "TESTSIDE", "TILPASNING", "ADMIN", "TRUPPEN", "HIF ANALYSE", "BETINIA LIGAEN", "Sammenligning", "Opret emne"
-                # "ADMIN_SCOUTING" udelades herfra, så de har adgang til den
+                "TESTSIDE", "TILPASNING", "ADMIN", "ADMIN_SCOUTING", "TRUPPEN", "HIF ANALYSE", "BETINIA LIGAEN", "Sammenligning", "Opret emne"
             ] 
         },
         "mn": {
