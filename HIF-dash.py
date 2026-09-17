@@ -218,26 +218,28 @@ try:
                 sq.vis_side(dp_quick["players"])
 
     elif m == "SCOUTING":
-        dp = hif_load.get_scouting_package()
-        if s == "Scoutrapport":
-            import tools.scouting.scout_input as si
-            si.vis_side(dp)
-        elif s == "Database":
-            import tools.scouting.scout_db as sdb
-            sdb.vis_side(dp["scout_reports"], dp["players"], dp["sql_players"], dp["career"])
-        elif s == "Emnedatabase":
-            import tools.scouting.emne_db as edb
-            edb.vis_side()
-        elif s == "Sammenligning":
-            import tools.scouting.sammenligning as comp
-            comp.vis_side(dp["players"], None, dp["wyscout_players"], dp["career"], dp["sql_players"], dp["advanced_stats"], dp.get("primaer_positioner"))
-        elif s == "Top10-scouting":
-            import tools.scouting.top10_scouting as t10
-            t10.vis_side(dp.get("advanced_stats"), dp.get("primaer_positioner"))
-        elif s == "Opgaver":  # <--- TILFØJ DENNE
+        # Flyt "Opgaver" ØVERST, så den ikke behøver at hente den tunge scouting-pakke først
+        if s == "Opgaver":
             import tools.admin_page.opgaver as opg
             opg.vis_side()
-
+        else:
+            dp = hif_load.get_scouting_package()
+            if s == "Scoutrapport":
+                import tools.scouting.scout_input as si
+                si.vis_side(dp)
+            elif s == "Database":
+                import tools.scouting.scout_db as sdb
+                sdb.vis_side(dp["scout_reports"], dp["players"], dp["sql_players"], dp["career"])
+            elif s == "Emnedatabase":
+                import tools.scouting.emne_db as edb
+                edb.vis_side()
+            elif s == "Sammenligning":
+                import tools.scouting.sammenligning as comp
+                comp.vis_side(dp["players"], None, dp["wyscout_players"], dp["career"], dp["sql_players"], dp["advanced_stats"], dp.get("primaer_positioner"))
+            elif s == "Top10-scouting":
+                import tools.scouting.top10_scouting as t10
+                t10.vis_side(dp.get("advanced_stats"), dp.get("primaer_positioner"))
+                
     elif m == "SPILLERANALYSE":
         if s == "Spillerprofil":
             import tools.players.player_profile as pp
