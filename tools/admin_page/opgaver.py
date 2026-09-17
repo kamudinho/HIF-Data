@@ -88,7 +88,7 @@ def vis_side():
                 with col1:
                     st.write(f"**{row['titel']}**")
                     st.caption(f"Af: {row['oprettet_af']} | Dato: {row['dato']}")
-                with val_col2 := col2:
+                with col2:
                     st.write(row['beskrivelse'])
                 with col3:
                     st.write(f"Til: `{row['tildelt_til']}`")
