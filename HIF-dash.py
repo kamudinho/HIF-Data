@@ -224,9 +224,6 @@ try:
         elif s == "Top10-scouting":
             import tools.scouting.top10_scouting as t10
             t10.vis_side(dp.get("advanced_stats"), dp.get("primaer_positioner"))
-        elif s == "Transfers":
-            import tools.scouting.transfer_input as t_input
-            t_input.vis_side()
 
     elif m == "SPILLERANALYSE":
         if s == "Spillerprofil":
@@ -298,6 +295,9 @@ try:
         elif s == "Model":
             import tools.ligaen.model as xg
             xg.vis_side()
+        elif s == "Transfers":
+            import tools.scouting.transfer_input as t_input
+            t_input.vis_side()
 
     elif m == "ADMIN":
         if s == "System Log":
