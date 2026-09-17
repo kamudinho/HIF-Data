@@ -149,7 +149,10 @@ def handle_auto_save(key, df_display, source_df):
 
         st.session_state['full_db'] = full_db
         save_to_github(full_db)
-        st.session_state[state_key]["edited_rows"] = {}
+        
+        # Fjerner linjen med st.session_state[state_key]["edited_rows"] = {} 
+        # og tvinger en genindlæsning i stedet:
+        st.rerun()
 
 def clean_pos_val(val):
     if pd.isna(val) or val == "" or str(val).lower() == "nan": return ""
