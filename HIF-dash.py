@@ -146,7 +146,6 @@ with st.sidebar:
         "HVIDOVRE IF": ["Forside"],
         "HOLDANALYSE": ["Modstanderanalyse", "Ligaoversigt", "Kampoversigt", "Kampudvikling", "Afslutninger", "Målsekvenser", "Grafer"],
         "SPILLERANALYSE": ["Spilleraktioner", "Spiller-stats", "Spiller-profil", "Spilleroversigt", "Spillerprofil"],
-        "FYSISK DATA": ["Fysisk data"],
         "SCOUTING": ["Scoutrapport", "Database", "Emnedatabase", "Sammenligning", "Transfers", "Top10-scouting"],
         "TILPASNING": ["Spillerdata", "Spiller-score", "Standardsituationer", "Model"],
         "TESTSIDE": ["Performance", "Winning Performance", "1. Div-tilpasning", "Charts", "Oversigt", "Forecast"],
@@ -248,15 +247,6 @@ try:
         elif s == "Spiller-profil":
             import tools.players.player_profile2 as pp2
             pp2.vis_side()
-
-    elif m == "FYSISK DATA":
-        if s == "Charts":
-            import tools.ligaen.chart as pc
-            pc.vis_side()
-        elif s == "Fysisk data":
-            import tools.ligaen.fysisk as fd_page
-            fd_page.vis_side(_get_snowflake_conn())
-
 
     elif m == "HOLDANALYSE":
         if s == "Ligaoversigt":
