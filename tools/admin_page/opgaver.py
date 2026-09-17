@@ -37,7 +37,7 @@ def vis_side():
             beskrivelse = st.text_area("Beskrivelse")
             
             mulige_brugere = list(user_db.keys())
-            tildelt_til = st.selectbox("Tildel til bruger", mulige_brugere)
+            tildelt_til = st.selectbox("Tildel til scout", mulige_brugere)
             
             submit = st.form_submit_button("Gem opgave")
             if submit:
