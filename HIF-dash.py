@@ -47,7 +47,7 @@ def render_hif_header(titel):
 
 
 # --- 1.5. OPGAVE DIALOG VED LOGIN ---
-@st.dialog("⚠️ Ny opgave kræver handling")
+@st.dialog("Ny opgave kræver handling")
 def vis_opgave_popup(opgave_id, opgave_titel, opgave_beskrivelse, fuldt_df):
     st.write("Du er blevet tildelt følgende aktive opgave:")
     st.info(f"**{opgave_titel}**\n\n{opgave_beskrivelse}")
@@ -56,7 +56,7 @@ def vis_opgave_popup(opgave_id, opgave_titel, opgave_beskrivelse, fuldt_df):
     
     col1, col2, col3 = st.columns(3)
     
-    if col1.button("✅ Godkend (I gang)", use_container_width=True):
+    if col1.button("Godkend", use_container_width=True):
         fuldt_df.loc[fuldt_df["id"] == opgave_id, "status"] = "I gang"
         import tools.admin_page.opgaver as opg
         opg.gem_opgaver(fuldt_df)
@@ -64,13 +64,13 @@ def vis_opgave_popup(opgave_id, opgave_titel, opgave_beskrivelse, fuldt_df):
         st.session_state["task_handled"] = True
         st.rerun()
         
-    if col2.button("⏳ Udskyd", use_container_width=True):
+    if col2.button("Ny deadline", use_container_width=True):
         # Lader den forblive "Afventer", men lukker popuppen for denne session
         st.warning("Opgave udskudt til senere.")
         st.session_state["task_handled"] = True
         st.rerun()
         
-    if col3.button("❌ Færdigmeld", use_container_width=True):
+    if col3.button("Afvis", use_container_width=True):
         fuldt_df.loc[fuldt_df["id"] == opgave_id, "status"] = "Færdig"
         import tools.admin_page.opgaver as opg
         opg.gem_opgaver(fuldt_df)
