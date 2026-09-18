@@ -30,7 +30,6 @@ def get_squad_only():
         scout_df = pd.DataFrame()
     return {"players": df_local, "scout_reports": scout_df}
 
-# Cachen tager uge_id med, så data genbruges ugen ud og kun opdateres automatisk 1 gang om ugen
 @st.cache_data
 def get_scouting_package(uge_id):
     """DEN TUNGE PAKKE: Snowflake, karriere, stats og profilbilleder (Hentes 1 gang ugentligt)."""
@@ -51,7 +50,7 @@ def get_scouting_package(uge_id):
     except:
         scout_df = pd.DataFrame()
         
-    # ID Opsamling med sikker rensning mod bogstaver ('M'-fejlen)
+    # ID Opsamling med sikker rensning mod bogstaver
     all_relevant_ids = []
     
     if not df_local.empty:
