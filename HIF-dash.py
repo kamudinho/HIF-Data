@@ -45,6 +45,40 @@ def render_hif_header(titel):
         </div>
     ''', unsafe_allow_html=True)
 
+
+# --- 1.5. OPGAVE DIALOG VED LOGIN ---
+@st.dialog("⚠️ Ny opgave kræver handling")
+def vis_opgave_popup(opgave_id, opgave_titel, opgave_beskrivelse, fuldt_df):
+    st.write("Du er blevet tildelt følgende aktive opgave:")
+    st.info(f"**{opgave_titel}**\n\n{opgave_beskrivelse}")
+    
+    st.write("Du skal tage stilling til opgaven, før du kan fortsætte i systemet:")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    if col1.button("✅ Godkend (I gang)", use_container_width=True):
+        fuldt_df.loc[fuldt_df["id"] == opgave_id, "status"] = "I gang"
+        import tools.admin_page.opgaver as opg
+        opg.gem_opgaver(fuldt_df)
+        st.success("Opgave sat i gang!")
+        st.session_state["task_handled"] = True
+        st.rerun()
+        
+    if col2.button("⏳ Udskyd", use_container_width=True):
+        # Lader den forblive "Afventer", men lukker popuppen for denne session
+        st.warning("Opgave udskudt til senere.")
+        st.session_state["task_handled"] = True
+        st.rerun()
+        
+    if col3.button("❌ Færdigmeld", use_container_width=True):
+        fuldt_df.loc[fuldt_df["id"] == opgave_id, "status"] = "Færdig"
+        import tools.admin_page.opgaver as opg
+        opg.gem_opgaver(fuldt_df)
+        st.error("Opgave markeret som færdig.")
+        st.session_state["task_handled"] = True
+        st.rerun()
+
+
 # --- 2. LOGIN SYSTEM ---
 USER_DB = get_users()
 if "logged_in" not in st.session_state:
@@ -80,6 +114,8 @@ if not st.session_state["logged_in"]:
                     if u in USER_DB and USER_DB[u]["pass"] == p:
                         st.session_state["logged_in"] = True
                         st.session_state["user"] = u
+                        # Nulstil task_handled ved nyt login, så pop-uppen vises igen
+                        st.session_state["task_handled"] = False
 
                         # --- LOGNING: login ---
                         try:
@@ -91,6 +127,35 @@ if not st.session_state["logged_in"]:
                         st.rerun()
                     else: st.error("Ugyldig login")
     st.stop()
+
+
+# --- 2.5. TJEK FOR UAFSLUTTEDE OPGAVER VED LOGIN ---
+if st.session_state.get("logged_in") and not st.session_state.get("task_handled", False):
+    aktuel_bruger = st.session_state["user"]
+    try:
+        import tools.admin_page.opgaver as opg
+        df_alle_opgaver = opg.indlaes_opgaver()
+        
+        # Find første ubehandlede opgave til denne bruger (f.eks. status "Afventer")
+        mine_aktive = df_alle_opgaver[
+            (df_alle_opgaver["tildelt_til"] == aktuel_bruger) & 
+            (df_alle_opgaver["status"] == "Afventer")
+        ]
+        
+        if not mine_aktive.empty:
+            foerste_opgave = mine_aktive.iloc[0]
+            vis_opgave_popup(
+                foerste_opgave["id"], 
+                foerste_opgave["titel"], 
+                foerste_opgave["beskrivelse"], 
+                df_alle_opgaver
+            )
+        else:
+            # Hvis der ikke er nogen ventende opgaver, sætter vi flaget
+            st.session_state["task_handled"] = True
+    except Exception:
+        st.session_state["task_handled"] = True
+
 
 # --- 3. SIDEBAR NAVIGATION ---
 with st.sidebar:
@@ -134,7 +199,6 @@ with st.sidebar:
     if tilladelser == "ALL":
         synlige_hoved_options = alle_omraader
     else:
-        # Vis kun hovedmenuer, hvor brugeren har mindst én tilladelse eller hvor hovedmenuen er direkte nævnt
         menu_map_checker = {
             "HVIDOVRE IF": ["HVIDOVRE IF", "Forside"],
             "HOLDANALYSE": ["HOLDANALYSE", "Modstanderanalyse", "Kampoversigt", "Kampudvikling", "Afslutninger", "Målsekvenser", "Grafer", "BETINIA LIGAEN", "HIF ANALYSE"],
@@ -144,7 +208,7 @@ with st.sidebar:
             "TILPASNING": ["TILPASNING", "Spillerdata", "Spiller-score", "Standardsituationer"],
             "TESTSIDE": ["TESTSIDE", "Performance", "Winning Performance", "1. Div-tilpasning", "Charts", "Oversigt", "Forecast", "Model", "Transfers"],
             "ADMIN": ["ADMIN", "System Log", "Profil", "Datakatalog", "Konklusion", "Teamradar", "Spillerradar", "Fysisk profil", "Hold: Fysisk profil", "Intern analyse", "Top 5: Spillere", "Ordbog"],
-            "ADMIN_SCOUTING": ["ADMIN_SCOUTING"] # Fjern "Opgaver" herfra, så den kun åbnes hvis rollen explicit har "ADMIN_SCOUTING"
+            "ADMIN_SCOUTING": ["ADMIN_SCOUTING"]
         }
         synlige_hoved_options = [
             hm for hm in alle_omraader 
@@ -152,9 +216,8 @@ with st.sidebar:
         ]
     
     if not synlige_hoved_options:
-        synlige_hoved_options = ["SCOUTING"] # Sikkerhedsnet
+        synlige_hoved_options = ["SCOUTING"]
 
-    # Tjek om det sidst valgte menupunkt er tilgængeligt
     if "main_menu_selection" not in st.session_state or st.session_state["main_menu_selection"] not in synlige_hoved_options:
         st.session_state["main_menu_selection"] = synlige_hoved_options[0]
     
@@ -189,7 +252,6 @@ with st.sidebar:
     if not aktuel_undermenu:
         aktuel_undermenu = [mulige_under[0]]
     
-    # SIKKERHEDSTJEK: Undgå ValueError ved skift af hovedmenu
     if "sub_menu_selection" not in st.session_state or st.session_state["sub_menu_selection"] not in aktuel_undermenu:
         u_index = 0
     else:
@@ -243,7 +305,6 @@ try:
                 sq.vis_side(dp_quick["players"])
 
     elif m == "SCOUTING":
-        # Flyt "Opgaver" ØVERST, så den ikke behøver at hente den tunge scouting-pakke først
         if s == "Opgaver":
             import tools.admin_page.opgaver as opg
             opg.vis_side()
@@ -365,7 +426,7 @@ try:
             import tools.players.top_players as tp
             tp.vis_side()
         elif s == "Ordbog":
-            import utils.ordbog as ob
+            utils.ordbog as ob
             ob.vis_side()
         elif s == "Spillerradar":
             import tools.players.spillerradar as sr
