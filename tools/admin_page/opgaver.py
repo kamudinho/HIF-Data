@@ -4,13 +4,11 @@ from datetime import datetime, timedelta
 import os
 from data.users import get_users
 
-# Find den absolutte sti til projektets rodmappe (2 niveauer op fra tools/admin_page/)
 ROD_MAPPE = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
 OPGAVE_FIL = os.path.join(ROD_MAPPE, "data", "admin", "opgaver.csv")
 
 def indlaes_opgaver():
     os.makedirs(os.path.dirname(OPGAVE_FIL), exist_ok=True)
-    
     if os.path.exists(OPGAVE_FIL):
         try:
             df = pd.read_csv(OPGAVE_FIL)
@@ -19,10 +17,13 @@ def indlaes_opgaver():
         except Exception as e:
             st.error(f"Fejl ved indlæsning af opgaver: {e}")
             
-    return pd.DataFrame(columns=["id", "titel", "beskrivelse", "tildelt_til", "oprettet_af", "status", "dato"])
+    return pd.DataFrame(columns=["scout_status", "id", "titel", "beskrivelse", "tildelt_til", "oprettet_af", "status", "dato"])
 
 def gem_opgaver(df):
     os.makedirs(os.path.dirname(OPGAVE_FIL), exist_ok=True)
+    if "scout_status" in df.columns:
+        cols = ["scout_status"] + [c for c in df.columns if c != "scout_status"]
+        df = df[cols]
     df.to_csv(OPGAVE_FIL, index=False)
 
 def vis_side():
@@ -37,13 +38,11 @@ def vis_side():
     
     df_opgaver = indlaes_opgaver()
     
-    # Opsætning af tabs afhængigt af hvem der er logget ind
     if er_scout:
         tab_oversigt, tab_kalender = st.tabs(["Mine opgaver", "Kalender"])
     else:
         tab_tildel, tab_oversigt, tab_tidligere, tab_kalender = st.tabs(["Tildel opgave", "Opgaveoversigt", "Tidligere opgaver", "Kalender"])
     
-    # --- 1. TILDEL OPGAVE (Kun for ikke-scouts) ---
     if not er_scout:
         with tab_tildel:
             st.markdown("### Opret ny opgave")
@@ -58,10 +57,9 @@ def vis_side():
                 submit = st.form_submit_button("Gem opgave")
                 if submit:
                     if titel:
-                        # Beregn nyt ID sikkert
                         if not df_opgaver.empty and "id" in df_opgaver.columns:
                             try:
-                                max_id = int(df_opgaver["id"].max())
+                                max_id = int(pd.to_numeric(df_opgaver["id"], errors="coerce").max())
                                 nyt_id = max_id + 1 if pd.notna(max_id) else 1
                             except:
                                 nyt_id = len(df_opgaver) + 1
@@ -69,6 +67,7 @@ def vis_side():
                             nyt_id = 1
                             
                         ny_raekke = {
+                            "scout_status": "Ikke påbegyndt",
                             "id": nyt_id,
                             "titel": titel,
                             "beskrivelse": beskrivelse if beskrivelse else "",
@@ -86,7 +85,6 @@ def vis_side():
                     else:
                         st.error("Opgaven skal som minimum have en titel.")
 
-    # Hjælpefunktion til at vise lister sikkert
     def vis_opgave_liste(df_vis, fuldt_df):
         if df_vis.empty:
             st.info("Ingen opgaver at vise her.")
@@ -105,7 +103,6 @@ def vis_side():
                     st.write(f"Til: `{row['tildelt_til']}`")
                 with col4:
                     nuværende_status = row['status']
-                    
                     ny_status = st.selectbox(
                         "Status", 
                         ["Afventer", "I gang", "Færdig"], 
@@ -127,7 +124,6 @@ def vis_side():
                     else:
                         st.write("")
 
-    # --- 2. OPGAVEOVERSIGT ---
     with tab_oversigt:
         if er_scout:
             st.markdown("### Dine aktuelle opgaver")
@@ -138,7 +134,6 @@ def vis_side():
             
         vis_opgave_liste(df_aktuelle, df_opgaver)
 
-    # --- 3. TIDLIGERE OPGAVER ---
     if not er_scout:
         with tab_tidligere:
             st.markdown("### Tidligere (færdigmelder) opgaver")
@@ -148,10 +143,8 @@ def vis_side():
                 df_faerdige = df_opgaver[df_opgaver["status"] == "Færdig"]
                 vis_opgave_liste(df_faerdige, df_opgaver)
 
-    # --- 4. SKARP KALENDERVISNING ---
     with tab_kalender:
         st.markdown("### Kalenderoverblik")
-        
         if df_opgaver.empty:
             st.info("Ingen opgaver at vise i kalenderen.")
         else:
@@ -169,7 +162,6 @@ def vis_side():
                 
                 if kalender_visning == "Ugeoversigt (Gitter)":
                     st.markdown("#### Ugeplan (Mandag - Søndag)")
-                    
                     valgt_uge_dato = st.date_input("Vælg uge ud fra dato", value=datetime.today(), key="uge_valg")
                     start_af_uge = valgt_uge_dato - timedelta(days=valgt_uge_dato.weekday())
                     
@@ -183,7 +175,6 @@ def vis_side():
                             st.caption(f"{dag_dato.strftime('%d/%m')}")
                             
                             dag_opgaver = df_kalender[df_kalender["dato_dt"].dt.date == dag_dato]
-                            
                             if not dag_opgaver.empty:
                                 for _, row in dag_opgaver.iterrows():
                                     status_farve = "🟢" if row['status'] == "Færdig" else ("🟡" if row['status'] == "I gang" else "⚪")
@@ -193,7 +184,6 @@ def vis_side():
                                         st.text(f"{status_farve} {row['status']}")
                             else:
                                 st.markdown("<small style='color: gray;'>Ingen opgaver</small>", unsafe_allow_html=True)
-                                
                 else:
                     st.markdown("#### Månedsoversigt")
                     df_kalender = df_kalender.sort_values(by="dato_dt")
