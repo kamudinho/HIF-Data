@@ -96,7 +96,6 @@ def vis_opgave_popup(opgave_id, opgave_titel, opgave_beskrivelse):
         st.error("Opgave afvist.")
         st.session_state["task_handled"] = True
         st.rerun()
-
 # --- 2. LOGIN SYSTEM ---
 USER_DB = get_users()
 if "logged_in" not in st.session_state:
