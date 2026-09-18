@@ -426,7 +426,7 @@ try:
             import tools.players.top_players as tp
             tp.vis_side()
         elif s == "Ordbog":
-            utils.ordbog as ob
+            import utils.ordbog as ob
             ob.vis_side()
         elif s == "Spillerradar":
             import tools.players.spillerradar as sr
