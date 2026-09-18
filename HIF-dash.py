@@ -49,79 +49,53 @@ def render_hif_header(titel):
 def vis_opgave_popup(opgave_id, opgave_titel, opgave_beskrivelse):
     st.write("Du er blevet tildelt følgende aktive opgave:")
     st.info(f"**{opgave_titel}**\n\n{opgave_beskrivelse}")
-    
+
     st.write("Du skal tage stilling til opgaven, før du kan fortsætte i systemet:")
-    
+
     col1, col2, col3 = st.columns(3)
     aktuel_bruger = st.session_state.get("user", "ukendt")
     import tools.admin_page.opgaver as opg
-    
+
+    clean_id = int(opgave_id)
+
     if col1.button("Godkend", use_container_width=True):
-        df_disk = opg.indlaes_opgaver()
-        if not df_disk.empty and "id" in df_disk.columns:
-            df_disk["id"] = pd.to_numeric(df_disk["id"], errors="coerce")
-            clean_id = int(opgave_id)
-            
-            df_disk.loc[df_disk["id"] == clean_id, "status"] = "I gang"
-            if "scout_status" in df_disk.columns:
-                df_disk.loc[df_disk["id"] == clean_id, "scout_status"] = "Igangsat"
-                
-            opg.gem_opgaver(df_disk)
-        
+        opg._opdater_raekke_sikkert(clean_id, {"status": "I gang", "scout_status": "Igangsat"})
+
         try:
             import tools.admin_page.admin as admin
             admin.save_action_log(aktuel_bruger, "Godkendte opgave", f"ID {opgave_id}: {opgave_titel}")
         except Exception:
             pass
-            
+
         st.success("Opgave sat i gang!")
         st.session_state["task_handled"] = True
         st.rerun()
-        
+
     if col2.button("Udskyd", use_container_width=True):
-        df_disk = opg.indlaes_opgaver()
-        if not df_disk.empty and "id" in df_disk.columns:
-            df_disk["id"] = pd.to_numeric(df_disk["id"], errors="coerce")
-            clean_id = int(opgave_id)
-            
-            df_disk.loc[df_disk["id"] == clean_id, "status"] = "Udskudt"
-            if "scout_status" in df_disk.columns:
-                df_disk.loc[df_disk["id"] == clean_id, "scout_status"] = "Afventer"
-                
-            opg.gem_opgaver(df_disk)
-        
+        opg._opdater_raekke_sikkert(clean_id, {"status": "Udskudt", "scout_status": "Afventer"})
+
         try:
             import tools.admin_page.admin as admin
             admin.save_action_log(aktuel_bruger, "Udskød opgave", f"ID {opgave_id}: {opgave_titel}")
         except Exception:
             pass
-            
+
         st.warning("Opgave udskudt til senere.")
         st.session_state["task_handled"] = True
         st.rerun()
-        
+
     if col3.button("Afvis", use_container_width=True):
-        df_disk = opg.indlaes_opgaver()
-        if not df_disk.empty and "id" in df_disk.columns:
-            df_disk["id"] = pd.to_numeric(df_disk["id"], errors="coerce")
-            clean_id = int(opgave_id)
-            
-            df_disk.loc[df_disk["id"] == clean_id, "status"] = "Færdig"
-            if "scout_status" in df_disk.columns:
-                df_disk.loc[df_disk["id"] == clean_id, "scout_status"] = "Afvist"
-                
-            opg.gem_opgaver(df_disk)
-        
+        opg._opdater_raekke_sikkert(clean_id, {"status": "Færdig", "scout_status": "Afvist"})
+
         try:
             import tools.admin_page.admin as admin
             admin.save_action_log(aktuel_bruger, "Afviste opgave", f"ID {opgave_id}: {opgave_titel}")
         except Exception:
             pass
-            
+
         st.error("Opgave afvist.")
         st.session_state["task_handled"] = True
         st.rerun()
-
 
 # --- 2. LOGIN SYSTEM ---
 USER_DB = get_users()
