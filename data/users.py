@@ -7,62 +7,30 @@ def get_role_permissions():
             "HVIDOVRE IF", "HOLDANALYSE", "SPILLERANALYSE", "TRUPPEN", 
             "HIF ANALYSE", "BETINIA LIGAEN", "SCOUTING", "Opgaver", 
             "Scoutrapport", "Database", "Emnedatabase", "Sammenligning", 
-            "Top10-scouting", "Opret emne"
+            "Top10-scouting", "Opret emne", "Profil"
         ],
         
         "manager": [
             "HVIDOVRE IF", "HOLDANALYSE", "SPILLERANALYSE", "TRUPPEN", 
             "HIF ANALYSE", "BETINIA LIGAEN", "SCOUTING", "Opgaver", 
             "Scoutrapport", "Database", "Emnedatabase", "Sammenligning", 
-            "Top10-scouting", "Opret emne"
+            "Top10-scouting", "Opret emne", "Profil"
         ],
         
         "coach": [
             "HVIDOVRE IF", "HOLDANALYSE", "SPILLERANALYSE", "TRUPPEN", 
             "HIF ANALYSE", "BETINIA LIGAEN", "SCOUTING", "Opgaver", 
-            "Scoutrapport", "Database", "Sammenligning", "Top10-scouting"
+            "Scoutrapport", "Database", "Sammenligning", "Top10-scouting", "Profil"
             # Bemærk: "Emnedatabase" og "Opret emne" er fjernet her
         ],
         
         "chefscout": [
             "SCOUTING", "Opgaver", "Scoutrapport", "Database", 
-            "Emnedatabase", "Sammenligning", "Top10-scouting", "Opret emne"
+            "Emnedatabase", "Sammenligning", "Top10-scouting", "Opret emne", "Profil"
         ],
         
         "scout": [
-            "SCOUTING", "Opgaver", "Scoutrapport", "Top10-scouting"
+            "SCOUTING", "Opgaver", "Scoutrapport", "Top10-scouting", "Profil"
             # Kun det mest nødvendige for almindelige scouts
         ]
-    }
-
-def get_users():
-    return {
-        "kasper": {
-            "pass": "kasper1234", 
-            "role": "admin"
-        },
-        "ceo": {
-            "pass": "ceo1234", 
-            "role": "Analytiker"
-        },
-        "TA": {
-            "pass": "TA5270", 
-            "role": "Analytiker"
-        },
-        "mr": {
-            "pass": "Retov2650", 
-            "role": "manager"
-        },
-        "kd": {
-            "pass": "Daugaard2650", 
-            "role": "coach"
-        },
-        "kasper-scout": {
-            "pass": "Scout1234", 
-            "role": "scout"
-        },
-        "mn": {
-            "pass": "MN1234", 
-            "role": "scout"
-        }
     }
