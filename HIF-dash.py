@@ -27,7 +27,7 @@ st.set_page_config(
 st.markdown(f"""
     <style>
         #MainMenu {{visibility: hidden;}}
-        footer {{visibility: hidden;}}
+        <footer> {{visibility: hidden;}}
         
         /* Gør headeren synlig så sidebarknappen dukker op, men gør den helt transparent */
         header {{visibility: visible !important; background: transparent !important;}}
@@ -65,7 +65,6 @@ def vis_opgave_popup(opgave_id, opgave_titel, opgave_beskrivelse, fuldt_df):
         st.rerun()
         
     if col2.button("Ny deadline", use_container_width=True):
-        # Lader den forblive "Afventer", men lukker popuppen for denne session
         st.warning("Opgave udskudt til senere.")
         st.session_state["task_handled"] = True
         st.rerun()
@@ -114,10 +113,8 @@ if not st.session_state["logged_in"]:
                     if u in USER_DB and USER_DB[u]["pass"] == p:
                         st.session_state["logged_in"] = True
                         st.session_state["user"] = u
-                        # Nulstil task_handled ved nyt login, så pop-uppen vises igen
                         st.session_state["task_handled"] = False
 
-                        # --- LOGNING: login ---
                         try:
                             import tools.admin_page.admin as admin
                             admin.save_action_log(u, "Login", "HIF Data Hub")
@@ -136,7 +133,6 @@ if st.session_state.get("logged_in") and not st.session_state.get("task_handled"
         import tools.admin_page.opgaver as opg
         df_alle_opgaver = opg.indlaes_opgaver()
         
-        # Find første ubehandlede opgave til denne bruger (f.eks. status "Afventer")
         mine_aktive = df_alle_opgaver[
             (df_alle_opgaver["tildelt_til"] == aktuel_bruger) & 
             (df_alle_opgaver["status"] == "Afventer")
@@ -151,7 +147,6 @@ if st.session_state.get("logged_in") and not st.session_state.get("task_handled"
                 df_alle_opgaver
             )
         else:
-            # Hvis der ikke er nogen ventende opgaver, sætter vi flaget
             st.session_state["task_handled"] = True
     except Exception:
         st.session_state["task_handled"] = True
@@ -161,7 +156,6 @@ if st.session_state.get("logged_in") and not st.session_state.get("task_handled"
 with st.sidebar:
     st.markdown("""
         <style>
-            /* Fjerner scrollbar og tvinger layout */
             [data-testid="stSidebarUserContent"] {
                 padding-top: 1rem !important;
                 overflow: hidden !important; 
@@ -187,15 +181,13 @@ with st.sidebar:
         "nav-link-selected": {"background-color": HIF_ROD, "color": "white"}
     }
 
-    # Hent bruger og tilladelser baseret på rolle
     from data.users import get_role_permissions
     user_info = USER_DB.get(st.session_state["user"], {})
     bruger_rolle = user_info.get("role", "scout")
     tilladelser = get_role_permissions().get(bruger_rolle, [])
 
-    # HOVEDMENU
-    alle_omraader = ["HVIDOVRE IF", "HOLDANALYSE", "SPILLERANALYSE", "SCOUTING", "TILPASNING", "TESTSIDE", "ADMIN", "ADMIN_SCOUTING"]
-    
+    alle_omraader = ["HVIDOVRE IF", "HOLDANALYSE", "SPILLERANALYSE", "SCOUTING", "TILPASNING", "TESTSIDE", "ADMIN", "ADMIN_SCOUTING", "PROFIL"]
+
     if tilladelser == "ALL":
         synlige_hoved_options = alle_omraader
     else:
@@ -208,7 +200,8 @@ with st.sidebar:
             "TILPASNING": ["TILPASNING", "Spillerdata", "Spiller-score", "Standardsituationer"],
             "TESTSIDE": ["TESTSIDE", "Performance", "Winning Performance", "1. Div-tilpasning", "Charts", "Oversigt", "Forecast", "Model", "Transfers"],
             "ADMIN": ["ADMIN", "System Log", "Profil", "Datakatalog", "Konklusion", "Teamradar", "Spillerradar", "Fysisk profil", "Hold: Fysisk profil", "Intern analyse", "Top 5: Spillere", "Ordbog"],
-            "ADMIN_SCOUTING": ["ADMIN_SCOUTING"]
+            "ADMIN_SCOUTING": ["ADMIN_SCOUTING"],
+            "PROFIL": ["PROFIL", "Profil"]
         }
         synlige_hoved_options = [
             hm for hm in alle_omraader 
@@ -231,43 +224,46 @@ with st.sidebar:
 
     st.markdown('<hr class="custom-hr">', unsafe_allow_html=True)
 
-    # UNDERMENU LOGIK
-    menu_map = {
-        "HVIDOVRE IF": ["Forside"],
-        "HOLDANALYSE": ["Modstanderanalyse", "Kampoversigt", "Kampudvikling", "Afslutninger", "Målsekvenser", "Grafer"],
-        "SPILLERANALYSE": ["Spiller-stats", "Spilleraktioner", "Spiller-profil", "Spilleroversigt", "Spillerprofil"],
-        "SCOUTING": ["Scoutrapport", "Database", "Emnedatabase", "Sammenligning", "Top10-scouting", "Opgaver"],
-        "TILPASNING": ["Spillerdata", "Spiller-score", "Standardsituationer"],
-        "TESTSIDE": ["Performance", "Winning Performance", "1. Div-tilpasning", "Charts", "Oversigt", "Forecast", "Model", "Transfers"],
-        "ADMIN": ["System Log", "Profil", "Datakatalog", "Konklusion", "Teamradar", "Spillerradar", "Fysisk profil", "Hold: Fysisk profil", "Intern analyse", "Top 5: Spillere", "Ordbog"],
-        "ADMIN_SCOUTING": ["Opgaver"]
-    }
-    
-    mulige_under = menu_map.get(hoved_omraade, ["Forside"])
-    if tilladelser == "ALL":
-        aktuel_undermenu = mulige_under
+    # UNDERMENU LOGIK (Springes over hvis PROFIL er valgt)
+    if hoved_omraade == "PROFIL":
+        st.session_state["sub_menu_selection"] = "Profil"
     else:
-        aktuel_undermenu = [u for u in mulige_under if u in tilladelser]
+        menu_map = {
+            "HVIDOVRE IF": ["Forside"],
+            "HOLDANALYSE": ["Modstanderanalyse", "Kampoversigt", "Kampudvikling", "Afslutninger", "Målsekvenser", "Grafer"],
+            "SPILLERANALYSE": ["Spiller-stats", "Spilleraktioner", "Spiller-profil", "Spilleroversigt", "Spillerprofil"],
+            "SCOUTING": ["Scoutrapport", "Database", "Emnedatabase", "Sammenligning", "Top10-scouting", "Opgaver"],
+            "TILPASNING": ["Spillerdata", "Spiller-score", "Standardsituationer"],
+            "TESTSIDE": ["Performance", "Winning Performance", "1. Div-tilpasning", "Charts", "Oversigt", "Forecast", "Model", "Transfers"],
+            "ADMIN": ["System Log", "Profil", "Datakatalog", "Konklusion", "Teamradar", "Spillerradar", "Fysisk profil", "Hold: Fysisk profil", "Intern analyse", "Top 5: Spillere", "Ordbog"],
+            "ADMIN_SCOUTING": ["Opgaver"]
+        }
         
-    if not aktuel_undermenu:
-        aktuel_undermenu = [mulige_under[0]]
-    
-    if "sub_menu_selection" not in st.session_state or st.session_state["sub_menu_selection"] not in aktuel_undermenu:
-        u_index = 0
-    else:
-        u_index = aktuel_undermenu.index(st.session_state["sub_menu_selection"])
+        mulige_under = menu_map.get(hoved_omraade, ["Forside"])
+        if tilladelser == "ALL":
+            aktuel_undermenu = mulige_under
+        else:
+            aktuel_undermenu = [u for u in mulige_under if u in tilladelser]
+            
+        if not aktuel_undermenu:
+            aktuel_undermenu = [mulige_under[0]]
+        
+        if "sub_menu_selection" not in st.session_state or st.session_state["sub_menu_selection"] not in aktuel_undermenu:
+            u_index = 0
+        else:
+            u_index = aktuel_undermenu.index(st.session_state["sub_menu_selection"])
 
-    sel = option_menu(
-        None, options=aktuel_undermenu,
-        icons=["play-fill"] * len(aktuel_undermenu),
-        default_index=u_index,
-        key=f"sub_menu_{hoved_omraade}", 
-        styles=menu_style
-    )
-    st.session_state["sub_menu_selection"] = sel
+        sel = option_menu(
+            None, options=aktuel_undermenu,
+            icons=["play-fill"] * len(aktuel_undermenu),
+            default_index=u_index,
+            key=f"sub_menu_{hoved_omraade}", 
+            styles=menu_style
+        )
+        st.session_state["sub_menu_selection"] = sel
 
     # --- LOGNING: faneskift ---
-    _nuvaerende_fane = f"{hoved_omraade} -> {sel}"
+    _nuvaerende_fane = f"{hoved_omraade} -> {st.session_state.get('sub_menu_selection', '')}"
     if st.session_state.get("_forrige_fane") != _nuvaerende_fane:
         try:
             import tools.admin_page.admin as admin
@@ -285,13 +281,20 @@ with st.sidebar:
         st.rerun()
 
 # --- 4. DATA LOADING & RENDERING ---
-render_hif_header(f"{st.session_state['main_menu_selection']}  |  {st.session_state['sub_menu_selection'].upper()}")
+if st.session_state['main_menu_selection'] == "PROFIL":
+    render_hif_header("PROFIL")
+else:
+    render_hif_header(f"{st.session_state['main_menu_selection']}  |  {st.session_state['sub_menu_selection'].upper()}")
 
 try:
     s = st.session_state["sub_menu_selection"]
     m = st.session_state["main_menu_selection"]
 
-    if m == "HVIDOVRE IF":
+    if m == "PROFIL":
+        import tools.admin_page.profil as profil
+        profil.vis_side({})
+
+    elif m == "HVIDOVRE IF":
         if s == "Forside":
             import HIF_head as fh
             fh.vis_side()
