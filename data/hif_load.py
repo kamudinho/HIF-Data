@@ -32,7 +32,38 @@ def get_squad_only():
 
 @st.cache_data
 def get_scouting_package(uge_id):
-    """DEN TUNGE PAKKE: Snowflake, karriere, stats og profilbilleder (Hentes 1 gang ugentligt)."""
+    """DEN TUNGE PAKKE: Snowflake, karriere, stats og profilbilleder (Med 4-ugers disk-cache)."""
+    fil_sti = f"data/cache_uge_{uge_id}.pkl"
+    
+    # 1. Hvis filen for denne uge allerede findes lokalt, læs den med det samme! (Lynende hurtigt og uafhængig af servergenstart)
+    if os.path.exists(fil_sti):
+        try:
+            return pd.read_pickle(fil_sti)
+        except Exception:
+            pass # Hvis filen mod forventning er korrupt, hentes den blot på ny
+    
+    # 2. Ryd op: Behold kun de seneste 4 uger og slet ældre filer i data-mappen
+    try:
+        mappe = "data"
+        if os.path.exists(mappe):
+            cache_filer = [
+                os.path.join(mappe, f) 
+                for f in os.listdir(mappe) 
+                if f.startswith("cache_uge_") and f.endswith(".pkl")
+            ]
+            cache_filer.sort(key=os.path.getmtime, reverse=True)
+            
+            # Slet alt udover de 4 nyeste filer
+            if len(cache_filer) >= 4:
+                for gammel_fil in cache_filer[4:]:
+                    try:
+                        os.remove(gammel_fil)
+                    except:
+                        pass
+    except Exception:
+        pass
+
+    # 3. Hent fra Snowflake (Da det er en ny uge, eller filen ikke findes endnu)
     conn = _get_snowflake_conn()
     if not conn:
         st.error("Kunne ikke oprette forbindelse til Snowflake.")
@@ -41,7 +72,7 @@ def get_scouting_package(uge_id):
     DB = "KLUB_HVIDOVREIF.AXIS"
     queries = get_wy_queries("", "")
     
-    # 1. Hent grundlæggende data (Lokale filer)
+    # Hent grundlæggende data (Lokale filer)
     df_local = load_local_players()
     try:
         path = os.path.join(os.getcwd(), 'data', 'scouting_db.csv')
@@ -117,7 +148,7 @@ def get_scouting_package(uge_id):
     except Exception as e:
         st.error(f"SQL Fejl i Scouting Load: {e}")
         
-    return {
+    data_pakke = {
         "scout_reports": scout_df,
         "wyscout_players": df_wyscout_search,
         "players": df_wyscout_search,
@@ -127,3 +158,12 @@ def get_scouting_package(uge_id):
         "advanced_stats": df_adv,
         "primaer_positioner": df_primaer_positioner,
     }
+    
+    # 4. Gem den nye uges pakke ned på disken, så den overlever servergenstart
+    try:
+        os.makedirs("data", exist_ok=True)
+        pd.to_pickle(data_pakke, fil_sti)
+    except Exception:
+        pass
+        
+    return data_pakke
