@@ -9,7 +9,6 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 # IMPORTS
 import data.hif_load as hif_load
-from data.data_load import _get_snowflake_conn
 from data.users import get_users
 
 # --- 1. KONFIGURATION & BRANDING ---
@@ -28,12 +27,9 @@ st.markdown(f"""
     <style>
         #MainMenu {{visibility: hidden;}}
         <footer> {{visibility: hidden;}}
-        
-        /* Gør headeren synlig så sidebarknappen dukker op, men gør den helt transparent */
         header {{visibility: visible !important; background: transparent !important;}}
         [data-testid="stHeader"] {{background-color: transparent !important;}}
         [data-testid="stDecoration"] {{display: none;}}
-        
         .block-container {{ padding-top: 1.5rem !important; }}
     </style>
 """, unsafe_allow_html=True)
@@ -48,7 +44,7 @@ def render_hif_header(titel):
 
 # --- 1.5. OPGAVE DIALOG VED LOGIN ---
 @st.dialog("Ny opgave kræver handling")
-def vis_opgave_popup(opgave_id, opgave_titel, opgave_beskrivelse, fuldt_df):
+def vis_opgave_popup(opgave_id, opgave_titel, opgave_beskrivelse):
     st.write("Du er blevet tildelt følgende aktive opgave:")
     st.info(f"**{opgave_titel}**\n\n{opgave_beskrivelse}")
     
@@ -56,14 +52,12 @@ def vis_opgave_popup(opgave_id, opgave_titel, opgave_beskrivelse, fuldt_df):
     
     col1, col2, col3 = st.columns(3)
     aktuel_bruger = st.session_state.get("user", "ukendt")
-    
     import tools.admin_page.opgaver as opg
     
     if col1.button("Godkend", use_container_width=True):
         df_disk = opg.indlaes_opgaver()
         if not df_disk.empty and "id" in df_disk.columns:
-            # Sikr at ID'er sammenlignes som heltal (int)
-            df_disk["id"] = df_disk["id"].astype(int)
+            df_disk["id"] = pd.to_numeric(df_disk["id"], errors="coerce")
             clean_id = int(opgave_id)
             
             df_disk.loc[df_disk["id"] == clean_id, "status"] = "I gang"
@@ -85,7 +79,7 @@ def vis_opgave_popup(opgave_id, opgave_titel, opgave_beskrivelse, fuldt_df):
     if col2.button("Udskyd", use_container_width=True):
         df_disk = opg.indlaes_opgaver()
         if not df_disk.empty and "id" in df_disk.columns:
-            df_disk["id"] = df_disk["id"].astype(int)
+            df_disk["id"] = pd.to_numeric(df_disk["id"], errors="coerce")
             clean_id = int(opgave_id)
             
             df_disk.loc[df_disk["id"] == clean_id, "status"] = "Udskudt"
@@ -107,7 +101,7 @@ def vis_opgave_popup(opgave_id, opgave_titel, opgave_beskrivelse, fuldt_df):
     if col3.button("Afvis", use_container_width=True):
         df_disk = opg.indlaes_opgaver()
         if not df_disk.empty and "id" in df_disk.columns:
-            df_disk["id"] = df_disk["id"].astype(int)
+            df_disk["id"] = pd.to_numeric(df_disk["id"], errors="coerce")
             clean_id = int(opgave_id)
             
             df_disk.loc[df_disk["id"] == clean_id, "status"] = "Færdig"
@@ -150,7 +144,6 @@ if not st.session_state["logged_in"]:
     
     with col_left:
         st.markdown("<br><br><br><br><br>", unsafe_allow_html=True)
-        
         _, center, _ = st.columns([0.8, 2.4, 0.8])
         with center:
             st.markdown(f'<div style="display: flex; justify-content: center;"><img src="{HIF_LOGO_URL}" style="width: 70px;"></div>', unsafe_allow_html=True)
@@ -192,8 +185,7 @@ if st.session_state.get("logged_in") and not st.session_state.get("task_handled"
             vis_opgave_popup(
                 foerste_opgave["id"], 
                 foerste_opgave["titel"], 
-                foerste_opgave["beskrivelse"], 
-                df_alle_opgaver
+                foerste_opgave["beskrivelse"]
             )
         else:
             st.session_state["task_handled"] = True
@@ -273,7 +265,6 @@ with st.sidebar:
 
     st.markdown('<hr class="custom-hr">', unsafe_allow_html=True)
 
-    # UNDERMENU LOGIK (Springes over hvis PROFIL er valgt)
     if hoved_omraade == "PROFIL":
         st.session_state["sub_menu_selection"] = "Profil"
     else:
@@ -311,7 +302,6 @@ with st.sidebar:
         )
         st.session_state["sub_menu_selection"] = sel
 
-    # --- LOGNING: faneskift ---
     _nuvaerende_fane = f"{hoved_omraade} -> {st.session_state.get('sub_menu_selection', '')}"
     if st.session_state.get("_forrige_fane") != _nuvaerende_fane:
         try:
@@ -323,7 +313,6 @@ with st.sidebar:
 
     st.markdown('</div>', unsafe_allow_html=True) 
 
-    # BUND-SEKTION
     st.markdown('<hr class="custom-hr">', unsafe_allow_html=True)
     if st.button("Ryd cache", use_container_width=True):
         st.cache_data.clear()
