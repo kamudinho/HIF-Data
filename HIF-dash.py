@@ -350,7 +350,12 @@ try:
             import tools.admin_page.opgaver as opg
             opg.vis_side()
         else:
-            dp = hif_load.get_scouting_package()
+            # Hent ugenummeret, så den kun henter nye data fra Snowflake én gang om ugen
+            aktuel_uge = datetime.now().isocalendar()[1]
+            
+            with st.spinner("Henter scouting-data... (Henter automatisk kun 1 gang ugentligt)"):
+                dp = hif_load.get_scouting_package(aktuel_uge)
+                
             if s == "Scoutrapport":
                 import tools.scouting.scout_input as si
                 si.vis_side(dp)
