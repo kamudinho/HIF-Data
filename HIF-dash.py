@@ -55,25 +55,55 @@ def vis_opgave_popup(opgave_id, opgave_titel, opgave_beskrivelse, fuldt_df):
     st.write("Du skal tage stilling til opgaven, før du kan fortsætte i systemet:")
     
     col1, col2, col3 = st.columns(3)
+    aktuel_bruger = st.session_state.get("user", "ukendt")
+    import tools.admin_page.opgaver as opg
+    
+    # Tjek om 'scout_status' kolonnen findes i DataFrame, ellers tilføj den
+    if "scout_status" not in fuldt_df.columns:
+        fuldt_df["scout_status"] = "Ikke påbegyndt"
     
     if col1.button("Godkend", use_container_width=True):
         fuldt_df.loc[fuldt_df["id"] == opgave_id, "status"] = "I gang"
-        import tools.admin_page.opgaver as opg
+        fuldt_df.loc[fuldt_df["id"] == opgave_id, "scout_status"] = "Igangsat"
         opg.gem_opgaver(fuldt_df)
+        
+        try:
+            import tools.admin_page.admin as admin
+            admin.save_action_log(aktuel_bruger, "Godkendte opgave", f"ID {opgave_id}: {opgave_titel}")
+        except Exception:
+            pass
+            
         st.success("Opgave sat i gang!")
         st.session_state["task_handled"] = True
         st.rerun()
         
-    if col2.button("Ny deadline", use_container_width=True):
+    if col2.button("Udskyd", use_container_width=True):
+        fuldt_df.loc[fuldt_df["id"] == opgave_id, "status"] = "Udskudt"
+        fuldt_df.loc[fuldt_df["id"] == opgave_id, "scout_status"] = "Afventer"
+        opg.gem_opgaver(fuldt_df)
+        
+        try:
+            import tools.admin_page.admin as admin
+            admin.save_action_log(aktuel_bruger, "Udskød opgave", f"ID {opgave_id}: {opgave_titel}")
+        except Exception:
+            pass
+            
         st.warning("Opgave udskudt til senere.")
         st.session_state["task_handled"] = True
         st.rerun()
         
     if col3.button("Afvis", use_container_width=True):
         fuldt_df.loc[fuldt_df["id"] == opgave_id, "status"] = "Færdig"
-        import tools.admin_page.opgaver as opg
+        fuldt_df.loc[fuldt_df["id"] == opgave_id, "scout_status"] = "Afvist"
         opg.gem_opgaver(fuldt_df)
-        st.error("Opgave markeret som færdig.")
+        
+        try:
+            import tools.admin_page.admin as admin
+            admin.save_action_log(aktuel_bruger, "Afviste opgave", f"ID {opgave_id}: {opgave_titel}")
+        except Exception:
+            pass
+            
+        st.error("Opgave afvist.")
         st.session_state["task_handled"] = True
         st.rerun()
 
