@@ -1,8 +1,7 @@
-#data/hif_load.py
-
 import streamlit as st
 import pandas as pd
 import os
+from datetime import datetime
 from data.data_load import _get_snowflake_conn, load_local_players
 from data.sql.wy_queries import get_wy_queries
 from utils.positional_helper import beregn_primaere_positioner, berig_med_spillernavne
@@ -31,16 +30,10 @@ def get_squad_only():
         scout_df = pd.DataFrame()
     return {"players": df_local, "scout_reports": scout_df}
 
-@st.cache_data(ttl=600)
-def get_scouting_package():
-    """DEN TUNGE PAKKE: Snowflake, karriere, stats og profilbilleder.
-
-    BEMÆRK: Henter IKKE top10-data (alle spillere i ligaerne) - det gør
-    tools/scouting/top10_scouting.py selv, i sin egen cachede funktion,
-    og kun når brugeren rent faktisk åbner Top10-siden. At hente det her
-    ville køre en tung, ufiltreret query for alle spillere ved ethvert
-    besøg på en hvilken som helst scouting-underside.
-    """
+# Cachen tager uge_id med, så data genbruges ugen ud og kun opdateres automatisk 1 gang om ugen
+@st.cache_data
+def get_scouting_package(uge_id):
+    """DEN TUNGE PAKKE: Snowflake, karriere, stats og profilbilleder (Hentes 1 gang ugentligt)."""
     conn = _get_snowflake_conn()
     if not conn:
         st.error("Kunne ikke oprette forbindelse til Snowflake.")
@@ -79,13 +72,11 @@ def get_scouting_package():
     df_primaer_positioner = pd.DataFrame()
     
     try:
-        # A. HENT LIGA-DATA (alle spillere i de konfigurerede ligaer - bruges til
-        # dropdown/søgning, ikke kun jeres egne scoutede spillere)
+        # A. HENT LIGA-DATA
         df_wyscout_search = conn.query(queries["players"])
         
         # B. HENT SPECIFIK DATA (Hvis IDs findes)
         if all_relevant_ids:
-            # Byg en sikker numerisk tuplet til SQL IN-clause
             if len(all_relevant_ids) == 1:
                 id_str = f"({all_relevant_ids[0]})"
             else:
@@ -104,7 +95,7 @@ def get_scouting_package():
             adv_q += f" AND pt.PLAYER_WYID IN {id_str}" if "WHERE" in adv_q else f" WHERE pt.PLAYER_WYID IN {id_str}"
             df_adv = conn.query(adv_q)
 
-            # --- PRIMÆR POSITION (kun for jeres relevante spillere, ikke alle 711) ---
+            # --- PRIMÆR POSITION ---
             try:
                 pos_q = queries["position_base"].format(id_list=id_str)
                 df_position_base = conn.query(pos_q)
