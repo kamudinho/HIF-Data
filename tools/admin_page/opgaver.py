@@ -67,7 +67,7 @@ def _opret_opgave_sikkert(titel, beskrivelse, tildelt_til, oprettet_af, dato_str
     frisk_df = indlaes_opgaver()
     nyt_id = _naest_ledige_id(frisk_df)
 
-    ny_række = {
+    ny_raekke = {
         "scout_status": "Ikke påbegyndt",
         "id": nyt_id,
         "titel": titel,
@@ -77,12 +77,12 @@ def _opret_opgave_sikkert(titel, beskrivelse, tildelt_til, oprettet_af, dato_str
         "status": "Afventer",
         "dato": dato_str,
     }
-    frisk_df = pd.concat([frisk_df, pd.DataFrame([ny_række])], ignore_index=True)
+    frisk_df = pd.concat([frisk_df, pd.DataFrame([ny_raekke])], ignore_index=True)
     gem_opgaver(frisk_df)
     return nyt_id
 
 
-def _opdater_række_sikkert(task_id, felt_vaerdier: dict):
+def _opdater_raekke_sikkert(task_id, felt_vaerdier: dict):
     """
     Samme princip: genindlæser filen lige før ændringen skrives, i stedet
     for at genbruge den kopi der blev loadet da siden først rendrede.
@@ -97,7 +97,7 @@ def _opdater_række_sikkert(task_id, felt_vaerdier: dict):
     gem_opgaver(frisk_df)
 
 
-def _slet_række_sikkert(task_id):
+def _slet_raekke_sikkert(task_id):
     frisk_df = indlaes_opgaver()
     if frisk_df.empty or "id" not in frisk_df.columns:
         return
@@ -178,12 +178,12 @@ def vis_side():
                     )
 
                     if ny_status != nuvaerende_status:
-                        _opdater_række_sikkert(row['id'], {"status": ny_status})
+                        _opdater_raekke_sikkert(row['id'], {"status": ny_status})
                         st.rerun()
                 with col5:
                     if not er_scout:
                         if st.button("Slet", key=f"slet_{row['id']}"):
-                            _slet_række_sikkert(row['id'])
+                            _slet_raekke_sikkert(row['id'])
                             st.rerun()
                     else:
                         st.write("")
