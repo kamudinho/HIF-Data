@@ -56,16 +56,21 @@ def vis_opgave_popup(opgave_id, opgave_titel, opgave_beskrivelse, fuldt_df):
     
     col1, col2, col3 = st.columns(3)
     aktuel_bruger = st.session_state.get("user", "ukendt")
+    
     import tools.admin_page.opgaver as opg
     
-    # Tjek om 'scout_status' kolonnen findes i DataFrame, ellers tilføj den
-    if "scout_status" not in fuldt_df.columns:
-        fuldt_df["scout_status"] = "Ikke påbegyndt"
-    
     if col1.button("Godkend", use_container_width=True):
-        fuldt_df.loc[fuldt_df["id"] == opgave_id, "status"] = "I gang"
-        fuldt_df.loc[fuldt_df["id"] == opgave_id, "scout_status"] = "Igangsat"
-        opg.gem_opgaver(fuldt_df)
+        df_disk = opg.indlaes_opgaver()
+        if not df_disk.empty and "id" in df_disk.columns:
+            # Sikr at ID'er sammenlignes som heltal (int)
+            df_disk["id"] = df_disk["id"].astype(int)
+            clean_id = int(opgave_id)
+            
+            df_disk.loc[df_disk["id"] == clean_id, "status"] = "I gang"
+            if "scout_status" in df_disk.columns:
+                df_disk.loc[df_disk["id"] == clean_id, "scout_status"] = "Igangsat"
+                
+            opg.gem_opgaver(df_disk)
         
         try:
             import tools.admin_page.admin as admin
@@ -78,9 +83,16 @@ def vis_opgave_popup(opgave_id, opgave_titel, opgave_beskrivelse, fuldt_df):
         st.rerun()
         
     if col2.button("Udskyd", use_container_width=True):
-        fuldt_df.loc[fuldt_df["id"] == opgave_id, "status"] = "Udskudt"
-        fuldt_df.loc[fuldt_df["id"] == opgave_id, "scout_status"] = "Afventer"
-        opg.gem_opgaver(fuldt_df)
+        df_disk = opg.indlaes_opgaver()
+        if not df_disk.empty and "id" in df_disk.columns:
+            df_disk["id"] = df_disk["id"].astype(int)
+            clean_id = int(opgave_id)
+            
+            df_disk.loc[df_disk["id"] == clean_id, "status"] = "Udskudt"
+            if "scout_status" in df_disk.columns:
+                df_disk.loc[df_disk["id"] == clean_id, "scout_status"] = "Afventer"
+                
+            opg.gem_opgaver(df_disk)
         
         try:
             import tools.admin_page.admin as admin
@@ -93,9 +105,16 @@ def vis_opgave_popup(opgave_id, opgave_titel, opgave_beskrivelse, fuldt_df):
         st.rerun()
         
     if col3.button("Afvis", use_container_width=True):
-        fuldt_df.loc[fuldt_df["id"] == opgave_id, "status"] = "Færdig"
-        fuldt_df.loc[fuldt_df["id"] == opgave_id, "scout_status"] = "Afvist"
-        opg.gem_opgaver(fuldt_df)
+        df_disk = opg.indlaes_opgaver()
+        if not df_disk.empty and "id" in df_disk.columns:
+            df_disk["id"] = df_disk["id"].astype(int)
+            clean_id = int(opgave_id)
+            
+            df_disk.loc[df_disk["id"] == clean_id, "status"] = "Færdig"
+            if "scout_status" in df_disk.columns:
+                df_disk.loc[df_disk["id"] == clean_id, "scout_status"] = "Afvist"
+                
+            opg.gem_opgaver(df_disk)
         
         try:
             import tools.admin_page.admin as admin
