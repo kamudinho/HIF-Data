@@ -34,3 +34,35 @@ def get_role_permissions():
             # Kun det mest nødvendige for almindelige scouts
         ]
     }
+
+def get_users():
+    return {
+        "kasper": {
+            "pass": "kasper1234", 
+            "role": "admin"
+        },
+        "ceo": {
+            "pass": "ceo1234", 
+            "role": "Analytiker"
+        },
+        "TA": {
+            "pass": "TA5270", 
+            "role": "Analytiker"
+        },
+        "mr": {
+            "pass": "Retov2650", 
+            "role": "manager"
+        },
+        "kd": {
+            "pass": "Daugaard2650", 
+            "role": "coach"
+        },
+        "kasper-scout": {
+            "pass": "Scout1234", 
+            "role": "scout"
+        },
+        "mn": {
+            "pass": "MN1234", 
+            "role": "scout"
+        }
+    }
