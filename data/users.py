@@ -4,10 +4,12 @@ def get_role_permissions():
         "admin": "ALL",  # Admin har adgang til alt
         
         "Analytiker": [
-            "HVIDOVRE IF", "HOLDANALYSE", "SPILLERANALYSE", "TRUPPEN",  
-            "HIF ANALYSE", "BETINIA LIGAEN", "TILPASNING", "Standardsituationer", "SCOUTING", "Opgaver",  
-            "Scoutrapport", "Database", "Emnedatabase", "Sammenligning",  
-            "Top10-scouting", "Opret emne", "PROFIL"
+            "HVIDOVRE IF", "Forside",
+            "HOLDANALYSE", "Modstanderanalyse", "Kampoversigt", "Kampudvikling", "Afslutninger", "Målsekvenser", "Grafer",
+            "SPILLERANALYSE": ["SPILLERANALYSE", "Spiller-stats", "Spilleraktioner", "Spiller-profil", "Spilleroversigt", "Spillerprofil"],
+            "SCOUTING", "Scoutrapport", "Database", "Emnedatabase", "Sammenligning", "Top10-scouting", "Opret emne",
+            "TILPASNING", "Spillerdata", "Spiller-score", "Standardsituationer",
+            "PROFIL" 
         ],
         
         "manager": [
