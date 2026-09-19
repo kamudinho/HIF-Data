@@ -5,7 +5,7 @@ def get_role_permissions():
         
         "Analytiker": [
             "HVIDOVRE IF", "HOLDANALYSE", "SPILLERANALYSE", "TRUPPEN",  
-            "HIF ANALYSE", "BETINIA LIGAEN", "TILPASNING", "SCOUTING", "Opgaver",  
+            "HIF ANALYSE", "BETINIA LIGAEN", "TILPASNING", "Standardsituationer", "SCOUTING", "Opgaver",  
             "Scoutrapport", "Database", "Emnedatabase", "Sammenligning",  
             "Top10-scouting", "Opret emne", "PROFIL"
         ],
