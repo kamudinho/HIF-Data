@@ -1,10 +1,14 @@
+# data/sql/head.py
 import pandas as pd
 import streamlit as st
 
+DB = "KLUB_HVIDOVREIF.AXIS"
+
 @st.cache_data(ttl=600, show_spinner="Henter holddata og stats fra Snowflake...")
-def hent_hoved_stats(_conn, db_name: str, calendar_uuid: str) -> pd.DataFrame:
+def hent_hoved_stats(_conn, calendar_uuid: str) -> pd.DataFrame:
     """
-    Henter samlede hold- og match-statistikker direkte fra Snowflake i én effektiv forespørgsel.
+    Henter samlede hold- og match-statistikker direkte fra Snowflake i én effektiv forespørgsel
+    baseret på det fremsendte turnering/sæson-UUID (calendar_uuid).
     """
     if not _conn or not calendar_uuid:
         return pd.DataFrame()
@@ -12,17 +16,17 @@ def hent_hoved_stats(_conn, db_name: str, calendar_uuid: str) -> pd.DataFrame:
     query = f"""
         WITH CombinedStats AS (
             SELECT MATCH_OPTAUUID, CONTESTANT_OPTAUUID, STAT_TYPE, TRY_CAST(STAT_TOTAL AS FLOAT) AS STAT_VALUE
-            FROM {db_name}.OPTA_MATCHSTATS
+            FROM {DB}.OPTA_MATCHSTATS
             UNION ALL
             SELECT MATCH_ID, CONTESTANT_OPTAUUID, STAT_TYPE, TRY_CAST(STAT_VALUE AS FLOAT)
-            FROM {db_name}.OPTA_MATCHEXPECTEDGOALS
+            FROM {DB}.OPTA_MATCHEXPECTEDGOALS
         ),
         MatchBase AS (
             SELECT MATCH_OPTAUUID, MATCH_DATE_FULL, WEEK, MATCH_STATUS, 
                    CONTESTANTHOME_OPTAUUID, CONTESTANTHOME_NAME, 
                    CONTESTANTAWAY_OPTAUUID, CONTESTANTAWAY_NAME, 
                    TOTAL_HOME_SCORE, TOTAL_AWAY_SCORE 
-            FROM {db_name}.OPTA_MATCHINFO 
+            FROM {DB}.OPTA_MATCHINFO 
             WHERE TOURNAMENTCALENDAR_OPTAUUID = '{calendar_uuid}'
         ),
         PivotStats AS (
