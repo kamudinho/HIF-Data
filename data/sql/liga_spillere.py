@@ -83,7 +83,7 @@ def _anvend_player_mapping(df, navne_map):
 def hent_match_og_haendelsesdata(
     conn, db_navn, valgt_uuid_hold, liga_ids, navne_map
 ):
-    """Henter events, forventede mål og database-stats med navne fra player_mapping."""
+    """Henter events, forventede mål og database-stats med navne fra player_mapping (Den gamle/detaljerede tilgang)."""
     liga_ids_sql = _forbered_liga_ids(liga_ids)
 
     sql_events = (
@@ -216,7 +216,7 @@ def hent_match_og_haendelsesdata(
 
 
 def hent_samlet_spiller_statistik(conn, db_navn, liga_ids, navne_map=None):
-    """Henter fuldt aggregerede spillerstatistikker med navne direkte fra player_mapping."""
+    """Henter fuldt aggregerede spillerstatistikker med navne direkte fra player_mapping (Den nye/hurtige tilgang)."""
     if navne_map is None:
         navne_map = {}
 
