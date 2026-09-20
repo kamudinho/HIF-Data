@@ -137,6 +137,7 @@ def count_kamp_qual(df_group, eid, qids):
 
 
 def _byg_event_stats(df_events: pd.DataFrame) -> pd.DataFrame:
+    # Vi laver et opslag for at tjekke næste hændelse eller om målet er knyttet korrekt
     return df_events.groupby(['player_optauuid', 'visningsnavn']).apply(lambda x: pd.Series({
         'Kampe': x['match_optauuid'].nunique() if 'match_optauuid' in x.columns else 1,
         'Aktioner': len(x),
@@ -163,9 +164,9 @@ def _byg_event_stats(df_events: pd.DataFrame) -> pd.DataFrame:
         'Clearinger': (x['event_typeid'] == 12).sum(),
         'Blokeringer': (x['event_typeid'] == 55).sum(),
         'Interceptioner': (x['event_typeid'] == 5).sum(),
-        'Frispark_imod': (x['event_typeid'] == 4).sum()
+        'Frispark_imod': (x['event_typeid'] == 4).sum(),
+        'Assists': x.apply(lambda r: 1 if ('210' in _get_quals(r) and (r.get('event_typeid') == 1 or r.get('outcome') == 1)) else 0, axis=1).sum() 
     })).reset_index().drop_duplicates(subset=['player_optauuid']).set_index('player_optauuid')
-
 
 def _agger_expected(df_expected: pd.DataFrame, hold_optauuid: str = None) -> pd.DataFrame:
     if df_expected is None or df_expected.empty:
