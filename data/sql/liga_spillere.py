@@ -1,3 +1,4 @@
+#HIF-Data/data/sql/liga_spillere.py
 import numpy as np
 import pandas as pd
 
@@ -295,6 +296,190 @@ def hent_samlet_spiller_statistik(conn, db_navn, liga_ids, navne_map=None):
     if df is not None and not df.empty:
         df.columns = df.columns.str.lower()
         df = _anvend_player_mapping(df, navne_map)
+    else:
+        df = pd.DataFrame()
+
+    return df
+
+
+def hent_spiller_event_stats(conn, db_navn, liga_ids, hold_optauuid=None,
+                              match_optauuid=None, fra_dato="2026-07-01",
+                              navne_map=None):
+    """
+    ERSTATTER _byg_event_stats() + de to Assist-genberegninger i
+    Truppen.py's vis_side() (én i byg_spiller_og_holdstats for liga/hold,
+    én i kamp-fanen med kommentaren "RETTELSE FORETAGET HER"). Al taelling,
+    procentregning og assist-detektion sker i selve SQL'en - ingen pandas
+    groupby/apply.
+
+    Kvalifikatorer samles i et ARRAY (ARRAY_AGG) i stedet for en
+    komma-separeret tekststreng (LISTAGG, som de to andre funktioner
+    ovenfor bruger) - ARRAY_CONTAINS() er sikrere end LIKE-matching paa
+    tekst, hvor "21" i teorien kunne matche inde i "210".
+
+    Assist beregnes med LEAD() PARTITION BY MATCH_OPTAUUID, hvilket
+    automatisk forhindrer at en assist "laekker" ind i naeste kamp - samme
+    garanti som match_optauuid-tjekket gav i pandas-udgaven.
+
+    Ét kald daekker alle tre visninger i Truppen.py:
+        hold_optauuid=None, match_optauuid=None -> hele ligaen (Ukendt-side)
+        hold_optauuid sat, match_optauuid=None   -> ét hold, hele sæsonen (Holdoversigt-fanen)
+        match_optauuid sat                       -> én kamp (Kampoversigt-fanen)
+
+    navne_map anvendes efter hentning, paa samme maade som de to andre
+    funktioner i denne fil - det er et opslag, ikke en beregning, saa det
+    er ikke flyttet til SQL.
+    """
+    liga_ids_sql = _forbered_liga_ids(liga_ids)
+
+    team_filter = f"AND e.EVENT_CONTESTANT_OPTAUUID = '{hold_optauuid}'" if hold_optauuid else ""
+    match_filter = f"AND e.MATCH_OPTAUUID = '{match_optauuid}'" if match_optauuid else ""
+    date_filter = f"AND e.EVENT_TIMESTAMP >= '{fra_dato}'" if fra_dato and not match_optauuid else ""
+
+    expected_team_filter = f"AND CONTESTANT_OPTAUUID = '{hold_optauuid}'" if hold_optauuid else ""
+    expected_match_filter = f"AND MATCH_OPTAUUID = '{match_optauuid}'" if match_optauuid else ""
+
+    sql_query = (
+        """
+        WITH events_med_qualifiers AS (
+            SELECT
+                e.EVENT_OPTAUUID,
+                e.PLAYER_OPTAUUID,
+                e.EVENT_TYPEID,
+                e.EVENT_TIMESTAMP,
+                e.MATCH_OPTAUUID,
+                e.EVENT_CONTESTANT_OPTAUUID AS HOLD_OPTAUUID,
+                e.EVENT_OUTCOME AS OUTCOME,
+                e.EVENT_X,
+                MAX(CASE WHEN q.QUALIFIER_QID = 140 THEN TRY_CAST(q.QUALIFIER_VALUE AS FLOAT) END) AS END_X,
+                ARRAY_AGG(DISTINCT q.QUALIFIER_QID) AS QUALIFIER_ARR
+            FROM {db_navn}.OPTA_EVENTS e
+            JOIN {db_navn}.OPTA_MATCHINFO m ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
+            LEFT JOIN {db_navn}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
+            WHERE m.TOURNAMENTCALENDAR_OPTAUUID IN {liga_ids_sql}
+              {team_filter}
+              {match_filter}
+              {date_filter}
+            GROUP BY
+                e.EVENT_OPTAUUID, e.PLAYER_OPTAUUID, e.EVENT_TYPEID, e.EVENT_TIMESTAMP,
+                e.MATCH_OPTAUUID, e.EVENT_CONTESTANT_OPTAUUID, e.EVENT_OUTCOME, e.EVENT_X
+        ),
+        med_naeste_haendelse AS (
+            SELECT
+                *,
+                LEAD(EVENT_TYPEID) OVER (PARTITION BY MATCH_OPTAUUID ORDER BY EVENT_TIMESTAMP) AS NAESTE_EVENT_TYPEID
+            FROM events_med_qualifiers
+        ),
+        pr_spiller AS (
+            SELECT
+                PLAYER_OPTAUUID,
+                ANY_VALUE(HOLD_OPTAUUID) AS HOLD_OPTAUUID,
+                COUNT(DISTINCT MATCH_OPTAUUID) AS KAMPE,
+                COUNT(*) AS AKTIONER,
+
+                SUM(CASE WHEN EVENT_TYPEID = 17 AND ARRAY_CONTAINS(31::VARIANT, QUALIFIER_ARR) THEN 1 ELSE 0 END) AS GULE_KORT,
+                SUM(CASE WHEN EVENT_TYPEID = 17 AND ARRAY_CONTAINS(33::VARIANT, QUALIFIER_ARR) THEN 1 ELSE 0 END) AS ROEDE_KORT,
+                SUM(CASE WHEN EVENT_TYPEID = 19 THEN 1 ELSE 0 END) AS INDSKIFTET,
+                SUM(CASE WHEN EVENT_TYPEID = 18 THEN 1 ELSE 0 END) AS UDSKIFTET,
+
+                SUM(CASE WHEN EVENT_TYPEID = 1 THEN 1 ELSE 0 END) AS PASNINGER,
+                SUM(CASE WHEN EVENT_TYPEID = 1 AND OUTCOME = 1 THEN 1 ELSE 0 END) AS PASNINGER_SUCCES,
+                SUM(CASE WHEN EVENT_TYPEID = 1 AND END_X IS NOT NULL AND END_X > EVENT_X THEN 1 ELSE 0 END) AS FREMADRETTEDE_PASNINGER,
+                SUM(CASE WHEN EVENT_TYPEID = 1 AND ARRAY_CONTAINS(4::VARIANT, QUALIFIER_ARR) THEN 1 ELSE 0 END) AS STIKNINGER,
+                SUM(CASE WHEN EVENT_TYPEID = 1 AND (ARRAY_CONTAINS(2::VARIANT, QUALIFIER_ARR) OR ARRAY_CONTAINS(155::VARIANT, QUALIFIER_ARR)) THEN 1 ELSE 0 END) AS INDLAEG,
+
+                SUM(CASE WHEN EVENT_TYPEID IN (13,14,15,16) THEN 1 ELSE 0 END) AS AFSLUTNINGER,
+                SUM(CASE WHEN EVENT_TYPEID = 16 THEN 1 ELSE 0 END) AS MAAL,
+
+                SUM(CASE WHEN EVENT_TYPEID IN (7,8,12,49) THEN 1 ELSE 0 END) AS EROBRINGER,
+                SUM(CASE WHEN EVENT_TYPEID = 7 THEN 1 ELSE 0 END) AS TACKLINGER,
+                SUM(CASE WHEN EVENT_TYPEID = 12 THEN 1 ELSE 0 END) AS CLEARINGER,
+                SUM(CASE WHEN EVENT_TYPEID = 55 THEN 1 ELSE 0 END) AS BLOKERINGER,
+                SUM(CASE WHEN EVENT_TYPEID = 5 THEN 1 ELSE 0 END) AS INTERCEPTIONER,
+                SUM(CASE WHEN EVENT_TYPEID = 4 THEN 1 ELSE 0 END) AS FRISPARK_IMOD,
+
+                SUM(CASE WHEN EVENT_TYPEID = 3 THEN 1 ELSE 0 END) AS DRIBLINGER,
+                SUM(CASE WHEN EVENT_TYPEID = 3 AND NOT ARRAY_CONTAINS(211::VARIANT, QUALIFIER_ARR) THEN 1 ELSE 0 END) AS DRIBLINGER_SUCCES,
+                SUM(CASE WHEN EVENT_TYPEID = 3 AND ARRAY_CONTAINS(465::VARIANT, QUALIFIER_ARR) THEN 1 ELSE 0 END) AS GENNEMBRUD_OVERTAKE,
+                SUM(CASE WHEN EVENT_TYPEID = 3 AND ARRAY_CONTAINS(464::VARIANT, QUALIFIER_ARR) THEN 1 ELSE 0 END) AS RUM_DRIBLINGER_SPACE,
+
+                SUM(CASE WHEN ARRAY_CONTAINS(286::VARIANT, QUALIFIER_ARR) THEN 1 ELSE 0 END) AS OFFENSIVE_DUELLER,
+                SUM(CASE WHEN ARRAY_CONTAINS(285::VARIANT, QUALIFIER_ARR) THEN 1 ELSE 0 END) AS DEFENSIVE_DUELLER,
+                SUM(CASE WHEN ARRAY_CONTAINS(467::VARIANT, QUALIFIER_ARR) THEN 1 ELSE 0 END) AS DEFENSIVE_1V1_STOPPET,
+
+                SUM(CASE WHEN ARRAY_CONTAINS(210::VARIANT, QUALIFIER_ARR) THEN 1 ELSE 0 END) AS CHANCER_SKABT,
+                SUM(CASE WHEN ARRAY_CONTAINS(210::VARIANT, QUALIFIER_ARR) THEN 1 ELSE 0 END) AS KEY_PASSES,
+                SUM(CASE WHEN ARRAY_CONTAINS(210::VARIANT, QUALIFIER_ARR) AND NAESTE_EVENT_TYPEID = 16 THEN 1 ELSE 0 END) AS ASSISTS
+            FROM med_naeste_haendelse
+            GROUP BY PLAYER_OPTAUUID
+        ),
+        expected_agg AS (
+            SELECT
+                PLAYER_OPTAUUID,
+                CONTESTANT_OPTAUUID AS HOLD_OPTAUUID,
+                SUM(CASE WHEN STAT_TYPE = 'expectedGoals'   THEN TRY_CAST(STAT_VALUE AS FLOAT) ELSE 0 END) AS XG,
+                SUM(CASE WHEN STAT_TYPE = 'expectedAssists' THEN TRY_CAST(STAT_VALUE AS FLOAT) ELSE 0 END) AS XA,
+                SUM(CASE WHEN STAT_TYPE = 'minsPlayed'      THEN TRY_CAST(STAT_VALUE AS FLOAT) ELSE 0 END) AS MINUTTER
+            FROM {db_navn}.OPTA_MATCHEXPECTEDGOALS
+            WHERE TOURNAMENTCALENDAR_OPTAUUID IN {liga_ids_sql}
+              AND MATCH_STATUS = 'Played'
+              {expected_team_filter}
+              {expected_match_filter}
+            GROUP BY PLAYER_OPTAUUID, CONTESTANT_OPTAUUID
+        ),
+        navne AS (
+            SELECT DISTINCT PLAYER_OPTAUUID, FIRST_NAME, LAST_NAME, SHORT_LAST_NAME, MATCH_NAME
+            FROM {db_navn}.OPTA_MATCH_LINEUPS
+            WHERE FIRST_NAME IS NOT NULL
+        )
+        SELECT
+            n.MATCH_NAME,
+            n.FIRST_NAME,
+            n.SHORT_LAST_NAME,
+            p.PLAYER_OPTAUUID as player_optauuid,
+            p.HOLD_OPTAUUID as hold_optauuid,
+            p.KAMPE AS Kampe,
+            COALESCE(ea.MINUTTER, 0) AS Minutter,
+            p.AKTIONER AS Aktioner,
+            p.GULE_KORT AS Gule_kort, p.ROEDE_KORT AS Roede_kort,
+            p.INDSKIFTET AS Indskiftet, p.UDSKIFTET AS Udskiftet,
+            p.PASNINGER AS Pasninger, p.PASNINGER_SUCCES AS Pasninger_Succes,
+            ROUND(DIV0(p.PASNINGER_SUCCES, p.PASNINGER) * 100, 1) AS Pasningsprocent,
+            p.FREMADRETTEDE_PASNINGER AS fremadrettede_pasninger,
+            p.STIKNINGER AS Stikninger, p.INDLAEG AS "Indlæg",
+            p.AFSLUTNINGER AS Afslutninger, p.MAAL AS "Mål",
+            COALESCE(ea.XG, 0) AS xG,
+            COALESCE(ea.XA, 0) AS xA,
+            p.EROBRINGER AS Erobringer, p.TACKLINGER AS Tacklinger,
+            p.CLEARINGER AS Clearinger, p.BLOKERINGER AS Blokeringer,
+            p.INTERCEPTIONER AS Interceptioner, p.FRISPARK_IMOD AS Frispark_imod,
+            p.DRIBLINGER AS Driblinger, p.DRIBLINGER_SUCCES AS Driblinger_Succes,
+            p.GENNEMBRUD_OVERTAKE AS Gennembrud_Overtake, p.RUM_DRIBLINGER_SPACE AS Rum_Driblinger_Space,
+            p.OFFENSIVE_DUELLER AS Offensive_Dueller, p.DEFENSIVE_DUELLER AS Defensive_Dueller,
+            p.DEFENSIVE_1V1_STOPPET AS Defensive_1v1_Stoppet,
+            p.CHANCER_SKABT AS Chancer_skabt, p.KEY_PASSES AS Key_Passes, p.ASSISTS AS Assists
+        FROM pr_spiller p
+        LEFT JOIN expected_agg ea ON p.PLAYER_OPTAUUID = ea.PLAYER_OPTAUUID AND p.HOLD_OPTAUUID = ea.HOLD_OPTAUUID
+        LEFT JOIN navne n ON p.PLAYER_OPTAUUID = n.PLAYER_OPTAUUID
+        ORDER BY p.AKTIONER DESC
+    """
+        .replace("{db_navn}", str(db_navn))
+        .replace("{liga_ids_sql}", str(liga_ids_sql))
+        .replace("{team_filter}", team_filter)
+        .replace("{match_filter}", match_filter)
+        .replace("{date_filter}", date_filter)
+        .replace("{expected_team_filter}", expected_team_filter)
+        .replace("{expected_match_filter}", expected_match_filter)
+    )
+
+    df = conn.query(sql_query)
+    if df is not None and not df.empty:
+        df.columns = df.columns.str.lower()
+        df = df.set_index("player_optauuid")
+        if navne_map:
+            df_reset = df.reset_index()
+            df_reset = _anvend_player_mapping(df_reset, navne_map)
+            df = df_reset.set_index("player_optauuid")
     else:
         df = pd.DataFrame()
 
