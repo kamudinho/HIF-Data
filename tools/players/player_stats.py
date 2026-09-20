@@ -21,7 +21,7 @@ from data.utils.spiller_qualifiers import ACTION_CATEGORIES, POSITION_ACTIONS
 from utils.helpers import get_logo_img, get_team_color, get_ordinal, draw_player_info_box
 
 # --- IMPORT AF SPILLERE OG SQL ---
-from data.sql.liga_spillere import hent_match_og_haendelsesdata
+from data.sql.liga_spillere import hent_spiller_event_stats
 
 try:
     from data.players import player_mapping
@@ -105,11 +105,18 @@ def hent_holdliste(_conn) -> dict:
 
 
 @st.cache_data(ttl=300, show_spinner="Henter data fra Snowflake...")
-def hent_data_fra_sql(_conn, valgt_uuid_hold: str, navne_map: dict):
-    df_events, df_stats_hold, df_stats_liga = hent_match_og_haendelsesdata(
-        _conn, DB, valgt_uuid_hold, LIGA_IDS, navne_map
+def hent_trup_data_fra_sql(_conn, valgt_uuid_hold: str, navne_map: dict):
+    # Bruger den nye, effektive SQL-funktion fra liga_spillere.py til hele holdets sæson
+    df_stats = hent_spiller_event_stats(
+        _conn, DB, LIGA_IDS, hold_optauuid=valgt_uuid_hold, navne_map=navne_map
     )
-    return df_events, df_stats_hold, df_stats_liga
+    if df_stats is not None and not df_stats.empty:
+        if 'player_optauuid' not in df_stats.columns:
+            df_stats = df_stats.reset_index()
+        df_stats.columns = df_stats.columns.str.lower()
+    else:
+        df_stats = pd.DataFrame()
+    return df_stats
 
 
 def vis_side(dp=None):
@@ -145,55 +152,58 @@ def vis_side(dp=None):
     primær_farve = get_team_color(valgt_hold, "primary", "#df003b")
 
     with st.spinner("Henter spillere og statistik..."):
-        df_events, truppen_stats, truppen_stats_liga = hent_data_fra_sql(conn, valgt_uuid_hold, navne_map)
+        truppen_stats = hent_trup_data_fra_sql(conn, valgt_uuid_hold, navne_map)
 
-    if df_events is None or df_events.empty:
-        st.warning("Ingen hændelsesdata fundet.")
+    if truppen_stats is None or truppen_stats.empty:
+        st.warning("Ingen hændelsesdata fundet for dette hold.")
         st.stop()
 
-    df_spillere_unikke = df_events[['visningsnavn', 'player_optauuid']].drop_duplicates()
-
+    # Udled spillere direkte fra truppen_stats
     spiller_options = {}
-    for _, r in df_spillere_unikke.iterrows():
-        navn = r['visningsnavn']
-        uuid = r['player_optauuid']
-        eng_pos = POSITION_MAP.get(str(uuid).strip(), 'Ukendt')
-        da_pos = POSITION_DA.get(eng_pos, eng_pos)
-        visnings_label = f"{navn} ({da_pos})"
-        spiller_options[visnings_label] = uuid
+    for _, r in truppen_stats.iterrows():
+        navn = r.get('match_name') or r.get('visningsnavn') or "Ukendt"
+        uuid = r.get('player_optauuid')
+        if uuid:
+            eng_pos = POSITION_MAP.get(str(uuid).strip(), 'Ukendt')
+            da_pos = POSITION_DA.get(eng_pos, eng_pos)
+            visnings_label = f"{navn} ({da_pos})"
+            spiller_options[visnings_label] = uuid
 
     spiller_liste = sorted(list(spiller_options.keys()))
     valgt_label = col_h_spiller.selectbox("Spiller", spiller_liste if spiller_liste else [""], label_visibility="collapsed")
 
     valgt_player_uuid = spiller_options.get(valgt_label, None)
-    valgt_spiller = valgt_label.split(" (")[0] if valgt_label else ""
-    df_spiller = df_events[df_events['player_optauuid'] == valgt_player_uuid].copy() if valgt_player_uuid else pd.DataFrame()
+    df_spiller = truppen_stats[truppen_stats['player_optauuid'] == valgt_player_uuid].copy() if valgt_player_uuid else pd.DataFrame()
 
     t_team, t_matches = st.tabs(["Holdoversigt", "Kampoversigt"])
 
     # Fælleskolonner til visning
-    gen_kolonner = ['visningsnavn', 'Kampe', 'Minutter', 'Aktioner', 'Pasninger', 'Pasningsprocent', 'Mål', 'Assists', 'Udskiftet', 'Indskiftet', 'Gule_kort', 'Roede_kort']
-    opb_kolonner = ['visningsnavn', 'Aktioner', 'Pasninger', 'Pasningsprocent', 'Key_Passes', 'fremadrettede_pasninger', 'Stikninger', 'Driblinger', 'Driblinger_Succes', 'Rum_Driblinger_Space']
-    off_kolonner = ['visningsnavn', 'Aktioner', 'Afslutninger', 'xG', 'Chancer_skabt', 'Indlæg', 'xA', 'Offensive_Dueller', 'Gennembrud_Overtake', 'Driblinger_Succes']
-    def_kolonner = ['visningsnavn', 'Aktioner', 'Erobringer', 'Tacklinger', 'Clearinger', 'Blokeringer', 'Interceptioner', 'Defensive_Dueller', 'Defensive_1v1_Stoppet', 'Frispark_imod']
+    gen_kolonner = ['visningsnavn', 'kampe', 'minutter', 'aktioner', 'pasninger', 'pasningsprocent', 'mål', 'assists', 'udskiftet', 'indskiftet', 'gule_kort', 'roede_kort']
+    opb_kolonner = ['visningsnavn', 'aktioner', 'pasninger', 'pasningsprocent', 'key_passes', 'fremadrettede_pasninger', 'stikninger', 'driblinger', 'driblinger_succes', 'rum_driblinger_space']
+    off_kolonner = ['visningsnavn', 'aktioner', 'afslutninger', 'xg', 'chancer_skabt', 'indlæg', 'xa', 'offensive_dueller', 'gennembrud_overtake', 'driblinger_succes']
+    def_kolonner = ['visningsnavn', 'aktioner', 'erobringer', 'tacklinger', 'clearinger', 'blokeringer', 'interceptioner', 'defensive_dueller', 'defensive_1v1_stoppet', 'frispark_imod']
 
     renaming_dict = {
         'visningsnavn': 'Spiller',
-        'Pasningsprocent': 'Pasning (%)',
-        'Gule_kort': 'Gule kort',
-        'Roede_kort': 'Røde kort',
-        'Chancer_skabt': 'Chancer skabt',
-        'Key_Passes': 'Key Passes',
-        'Frispark_imod': 'Frispark',
+        'pasningsprocent': 'Pasning (%)',
+        'gule_kort': 'Gule kort',
+        'roede_kort': 'Røde kort',
+        'chancer_skabt': 'Chancer skabt',
+        'key_passes': 'Key Passes',
+        'frispark_imod': 'Frispark',
         'fremadrettede_pasninger': 'Fremad. pasninger',
-        'Driblinger_Ialt': 'Driblinger, ialt', 
-        'Driblinger_Succes': 'Driblinger (Succes)', 
-        'Gennembrud_Overtake': 'Gennembrud, 1v1', 
-        'Rum_Driblinger_Space': 'Driblinger, 1v1', 
-        'Offensive_Dueller': 'Off. dueller',
-        'Defensive_Dueller': 'Def. dueller', 
-        'Defensive_1v1_Stoppet': 'Def. 1v1'
+        'driblinger_ialt': 'Driblinger, ialt', 
+        'driblinger_succes': 'Driblinger (Succes)', 
+        'gennembrud_overtake': 'Gennembrud, 1v1', 
+        'rum_driblinger_space': 'Driblinger, 1v1', 
+        'offensive_dueller': 'Off. dueller',
+        'defensive_dueller': 'Def. dueller', 
+        'defensive_1v1_stoppet': 'Def. 1v1'
     }
+
+    # Sørg for at 'visningsnavn' findes i datasættet ved at falde tilbage på match_name hvis nødvendigt
+    if 'visningsnavn' not in truppen_stats.columns and 'match_name' in truppen_stats.columns:
+        truppen_stats['visningsnavn'] = truppen_stats['match_name']
 
     # --- HOLDOVERSIGT ---
     with t_team:
@@ -219,22 +229,20 @@ def vis_side(dp=None):
             st.markdown('</div>', unsafe_allow_html=True)
 
         if not truppen_stats.empty:
-            df_vis_truppen = truppen_stats.reset_index() if 'player_optauuid' in truppen_stats.index.names or truppen_stats.index.name == 'player_optauuid' else truppen_stats
-            
             if kategori_valg == "Generelt":
-                eksisterende_kolonner = [k for k in gen_kolonner if k in df_vis_truppen.columns]
+                eksisterende_kolonner = [k for k in gen_kolonner if k in truppen_stats.columns]
             elif kategori_valg == "Opbygning":
-                eksisterende_kolonner = [k for k in opb_kolonner if k in df_vis_truppen.columns]
+                eksisterende_kolonner = [k for k in opb_kolonner if k in truppen_stats.columns]
             elif kategori_valg == "Offensiv":
-                eksisterende_kolonner = [k for k in off_kolonner if k in df_vis_truppen.columns]
+                eksisterende_kolonner = [k for k in off_kolonner if k in truppen_stats.columns]
             elif kategori_valg == "Defensiv":
-                eksisterende_kolonner = [k for k in def_kolonner if k in df_vis_truppen.columns]
+                eksisterende_kolonner = [k for k in def_kolonner if k in truppen_stats.columns]
             else:  
-                eksisterende_kolonner = [k for k in df_vis_truppen.columns if k != 'player_optauuid']
+                eksisterende_kolonner = [k for k in truppen_stats.columns if k != 'player_optauuid']
 
-            df_visning = df_vis_truppen[eksisterende_kolonner].copy()
-            if 'Aktioner' in df_visning.columns:
-                df_visning = df_visning.sort_values(by='Aktioner', ascending=False)
+            df_visning = truppen_stats[eksisterende_kolonner].copy()
+            if 'aktioner' in df_visning.columns:
+                df_visning = df_visning.sort_values(by='aktioner', ascending=False)
 
             df_visning = df_visning.rename(columns=renaming_dict)
 
@@ -307,14 +315,41 @@ def vis_side(dp=None):
         st.markdown("<div style='margin-bottom: 10px;'></div>", unsafe_allow_html=True)
             
         if not df_matches.empty and valgt_kamp_uuid:
-            match_col_in_all = next((col for col in ['match_optauuid', 'match_id'] if col in df_events.columns), None)
-            df_kamp_events = df_events[df_events[match_col_in_all].astype(str) == valgt_kamp_uuid].copy() if match_col_in_all else pd.DataFrame()
-            
-            if not df_kamp_events.empty:
-                # Filtrér eller genberegn kampstatistik direkte fra de indlæste events for den valgte kamp
-                # Alternativt kan du udvide liga_spillere.py til at returnere per-kamp-statistik på samme måde som hold-statistikken.
-                # Her filtrerer vi blot events for den valgte kamp.
-                st.info(f"Viser kampdata forvalgt kamp. (Hændelser fundet: {len(df_kamp_events)})")
+            # Hent specifik kampstatistik lynhurtigt ved at genbruge hent_spiller_event_stats med match_optauuid
+            df_kamp_stats = hent_spiller_event_stats(
+                conn, DB, LIGA_IDS, hold_optauuid=valgt_uuid_hold, match_optauuid=valgt_kamp_uuid, navne_map=navne_map
+            )
+            if df_kamp_stats is not None and not df_kamp_stats.empty:
+                if 'player_optauuid' not in df_kamp_stats.columns:
+                    df_kamp_stats = df_kamp_stats.reset_index()
+                df_kamp_stats.columns = df_kamp_stats.columns.str.lower()
+                if 'visningsnavn' not in df_kamp_stats.columns and 'match_name' in df_kamp_stats.columns:
+                    df_kamp_stats['visningsnavn'] = df_kamp_stats['match_name']
+
+                if kategori_valg_kamp == "Generelt":
+                    eks_kol_kamp = [k for k in gen_kolonner if k in df_kamp_stats.columns]
+                elif kategori_valg_kamp == "Opbygning":
+                    eks_kol_kamp = [k for k in opb_kolonner if k in df_kamp_stats.columns]
+                elif kategori_valg_kamp == "Offensiv":
+                    eks_kol_kamp = [k for k in off_kolonner if k in df_kamp_stats.columns]
+                elif kategori_valg_kamp == "Defensiv":
+                    eks_kol_kamp = [k for k in def_kolonner if k in df_kamp_stats.columns]
+                else:
+                    eks_kol_kamp = [k for k in df_kamp_stats.columns if k != 'player_optauuid']
+
+                df_visning_kamp = df_kamp_stats[eks_kol_kamp].copy()
+                if 'aktioner' in df_visning_kamp.columns:
+                    df_visning_kamp = df_visning_kamp.sort_values(by='aktioner', ascending=False)
+                df_visning_kamp = df_visning_kamp.rename(columns=renaming_dict)
+
+                beregnet_hoejde_kamp = int(len(df_visning_kamp) * 38 + 45)
+                st.dataframe(
+                    df_visning_kamp, 
+                    use_container_width=True, 
+                    hide_index=True,
+                    height=beregnet_hoejde_kamp,
+                    column_config={"Pasning (%)": st.column_config.NumberColumn("Pasning (%)", format="%.1f%%")}
+                )
             else:
                 st.warning("Ingen hændelsesdata for denne kamp.")
         else:
