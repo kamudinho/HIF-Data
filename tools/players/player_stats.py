@@ -170,9 +170,16 @@ def vis_side(dp=None):
         ]
         truppen_stats = truppen_stats.drop_duplicates(subset=['player_optauuid'], keep='first')
 
-    # Sikr at visningsnavn altid har en gyldig værdi (prioriter match_name hvis visningsnavn mangler)
+    # Sikr at visningsnavn ikke er "fejlspiller", men bruger match_name
     if 'match_name' in truppen_stats.columns:
-        truppen_stats['visningsnavn'] = truppen_stats['visningsnavn'].fillna(truppen_stats['match_name'])
+        if 'visningsnavn' not in truppen_stats.columns:
+            truppen_stats['visningsnavn'] = truppen_stats['match_name']
+        else:
+            mask_fejl = (
+                truppen_stats['visningsnavn'].isna() | 
+                truppen_stats['visningsnavn'].astype(str).str.lower().isin(['fejlspiller', 'nan', 'none', ''])
+            )
+            truppen_stats.loc[mask_fejl, 'visningsnavn'] = truppen_stats.loc[mask_fejl, 'match_name']
     
     df_spillere_unikke = truppen_stats.copy()
 
@@ -191,7 +198,7 @@ def vis_side(dp=None):
             or f"{r.get('first_name', '')} {r.get('short_last_name', '')}".strip()
         )
         
-        if not navn or str(navn).lower() in ["nan", "none", ""]:
+        if not navn or str(navn).lower() in ["nan", "none", "", "fejlspiller"]:
             navn = r.get('match_name') or "Ukendt spiller"
 
         eng_pos = POSITION_MAP.get(uuid_str, 'Ukendt')
@@ -235,7 +242,8 @@ def vis_side(dp=None):
     if 'visningsnavn' not in truppen_stats.columns and 'match_name' in truppen_stats.columns:
         truppen_stats['visningsnavn'] = truppen_stats['match_name']
     elif 'visningsnavn' in truppen_stats.columns and 'match_name' in truppen_stats.columns:
-        truppen_stats['visningsnavn'] = truppen_stats['visningsnavn'].fillna(truppen_stats['match_name'])
+        mask_f = truppen_stats['visningsnavn'].astype(str).str.lower().isin(['fejlspiller', 'nan', 'none', '']) | truppen_stats['visningsnavn'].isna()
+        truppen_stats.loc[mask_f, 'visningsnavn'] = truppen_stats.loc[mask_f, 'match_name']
 
     # --- HOLDOVERSIGT ---
     with t_team:
@@ -358,11 +366,16 @@ def vis_side(dp=None):
                 if 'player_optauuid' in df_kamp_stats.columns:
                     df_kamp_stats = df_kamp_stats.drop_duplicates(subset=['player_optauuid'], keep='first')
 
+                # Erstat "Fejlspiller" med match_name for kampoversigten
                 if 'match_name' in df_kamp_stats.columns:
-                    df_kamp_stats['visningsnavn'] = df_kamp_stats['visningsnavn'].fillna(df_kamp_stats['match_name'])
-
-                if 'visningsnavn' not in df_kamp_stats.columns and 'match_name' in df_kamp_stats.columns:
-                    df_kamp_stats['visningsnavn'] = df_kamp_stats['match_name']
+                    if 'visningsnavn' not in df_kamp_stats.columns:
+                        df_kamp_stats['visningsnavn'] = df_kamp_stats['match_name']
+                    else:
+                        mask_kamp_fejl = (
+                            df_kamp_stats['visningsnavn'].isna() | 
+                            df_kamp_stats['visningsnavn'].astype(str).str.lower().isin(['fejlspiller', 'nan', 'none', ''])
+                        )
+                        df_kamp_stats.loc[mask_kamp_fejl, 'visningsnavn'] = df_kamp_stats.loc[mask_kamp_fejl, 'match_name']
 
                 if kategori_valg_kamp == "Generelt":
                     eks_kol_kamp = [k for k in gen_kolonner if k in df_kamp_stats.columns]
