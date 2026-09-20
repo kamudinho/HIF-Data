@@ -199,7 +199,7 @@ def vis_side(dp=None):
         )
         
         if not navn or str(navn).lower() in ["nan", "none", "", "fejlspiller"]:
-            navn = r.get('match_name') or "Ukendt spiller"
+            navn = r.get('match_name') or f"Ukendt ({uuid_str})"
 
         eng_pos = POSITION_MAP.get(uuid_str, 'Ukendt')
         da_pos = POSITION_DA.get(eng_pos, eng_pos)
@@ -215,14 +215,15 @@ def vis_side(dp=None):
     
     t_team, t_matches = st.tabs(["Holdoversigt", "Kampoversigt"])
 
-    # Fælleskolonner til visning
-    gen_kolonner = ['visningsnavn', 'kampe', 'minutter', 'aktioner', 'pasninger', 'pasningsprocent', 'mål', 'assists', 'udskiftet', 'indskiftet', 'gule_kort', 'roede_kort']
-    opb_kolonner = ['visningsnavn', 'aktioner', 'pasninger', 'pasningsprocent', 'key_passes', 'fremadrettede_pasninger', 'stikninger', 'driblinger', 'driblinger_succes', 'rum_driblinger_space']
-    off_kolonner = ['visningsnavn', 'aktioner', 'afslutninger', 'xg', 'chancer_skabt', 'indlæg', 'xa', 'offensive_dueller', 'gennembrud_overtake', 'driblinger_succes']
-    def_kolonner = ['visningsnavn', 'aktioner', 'erobringer', 'tacklinger', 'clearinger', 'blokeringer', 'interceptioner', 'defensive_dueller', 'defensive_1v1_stoppet', 'frispark_imod']
+    # Fælleskolonner til visning (player_optauuid er nu tilføjet her)
+    gen_kolonner = ['visningsnavn', 'player_optauuid', 'kampe', 'minutter', 'aktioner', 'pasninger', 'pasningsprocent', 'mål', 'assists', 'udskiftet', 'indskiftet', 'gule_kort', 'roede_kort']
+    opb_kolonner = ['visningsnavn', 'player_optauuid', 'aktioner', 'pasninger', 'pasningsprocent', 'key_passes', 'fremadrettede_pasninger', 'stikninger', 'driblinger', 'driblinger_succes', 'rum_driblinger_space']
+    off_kolonner = ['visningsnavn', 'player_optauuid', 'aktioner', 'afslutninger', 'xg', 'chancer_skabt', 'indlæg', 'xa', 'offensive_dueller', 'gennembrud_overtake', 'driblinger_succes']
+    def_kolonner = ['visningsnavn', 'player_optauuid', 'aktioner', 'erobringer', 'tacklinger', 'clearinger', 'blokeringer', 'interceptioner', 'defensive_dueller', 'defensive_1v1_stoppet', 'frispark_imod']
 
     renaming_dict = {
         'visningsnavn': 'Spiller',
+        'player_optauuid': 'Player UUID',
         'pasningsprocent': 'Pasning (%)',
         'gule_kort': 'Gule kort',
         'roede_kort': 'Røde kort',
@@ -278,7 +279,7 @@ def vis_side(dp=None):
             elif kategori_valg == "Defensiv":
                 eksisterende_kolonner = [k for k in def_kolonner if k in truppen_stats.columns]
             else:  
-                eksisterende_kolonner = [k for k in truppen_stats.columns if k != 'player_optauuid']
+                eksisterende_kolonner = [k for k in truppen_stats.columns]
 
             df_visning = truppen_stats[eksisterende_kolonner].copy()
             if 'aktioner' in df_visning.columns:
@@ -366,7 +367,6 @@ def vis_side(dp=None):
                 if 'player_optauuid' in df_kamp_stats.columns:
                     df_kamp_stats = df_kamp_stats.drop_duplicates(subset=['player_optauuid'], keep='first')
 
-                # Erstat "Fejlspiller" med match_name for kampoversigten
                 if 'match_name' in df_kamp_stats.columns:
                     if 'visningsnavn' not in df_kamp_stats.columns:
                         df_kamp_stats['visningsnavn'] = df_kamp_stats['match_name']
@@ -386,7 +386,7 @@ def vis_side(dp=None):
                 elif kategori_valg_kamp == "Defensiv":
                     eks_kol_kamp = [k for k in def_kolonner if k in df_kamp_stats.columns]
                 else:
-                    eks_kol_kamp = [k for k in df_kamp_stats.columns if k != 'player_optauuid']
+                    eks_kol_kamp = [k for k in df_kamp_stats.columns]
 
                 df_visning_kamp = df_kamp_stats[eks_kol_kamp].copy()
                 if 'aktioner' in df_visning_kamp.columns:
