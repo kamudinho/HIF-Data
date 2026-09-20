@@ -161,7 +161,6 @@ def vis_side(dp=None):
     # --- RENGØRING OG FJERNELSE AF DUBLEREDE RÆKKER ---
     truppen_stats.columns = truppen_stats.columns.str.lower()
 
-    # Fjern rækker hvor spiller-id mangler eller er ugyldigt
     if 'player_optauuid' in truppen_stats.columns:
         truppen_stats = truppen_stats[
             truppen_stats['player_optauuid'].notna() & 
@@ -169,9 +168,12 @@ def vis_side(dp=None):
             (truppen_stats['player_optauuid'].astype(str).str.lower() != "none") &
             (truppen_stats['player_optauuid'].astype(str).str.lower() != "nan")
         ]
-        # Fjern overflødige dubletter ved at beholde den første forekomst pr. unikke spiller-id
         truppen_stats = truppen_stats.drop_duplicates(subset=['player_optauuid'], keep='first')
 
+    # Sikr at visningsnavn altid har en gyldig værdi (prioriter match_name hvis visningsnavn mangler)
+    if 'match_name' in truppen_stats.columns:
+        truppen_stats['visningsnavn'] = truppen_stats['visningsnavn'].fillna(truppen_stats['match_name'])
+    
     df_spillere_unikke = truppen_stats.copy()
 
     spiller_options = {}
@@ -184,14 +186,13 @@ def vis_side(dp=None):
 
         navn = (
             navne_map.get(uuid_str)
-            or r.get('visningsnavn')
             or r.get('match_name')
+            or r.get('visningsnavn')
             or f"{r.get('first_name', '')} {r.get('short_last_name', '')}".strip()
-            or "Ukendt"
         )
         
-        if not navn or navn.lower() in ["nan", "none", ""]:
-            navn = "Ukendt"
+        if not navn or str(navn).lower() in ["nan", "none", ""]:
+            navn = r.get('match_name') or "Ukendt spiller"
 
         eng_pos = POSITION_MAP.get(uuid_str, 'Ukendt')
         da_pos = POSITION_DA.get(eng_pos, eng_pos)
@@ -233,6 +234,8 @@ def vis_side(dp=None):
 
     if 'visningsnavn' not in truppen_stats.columns and 'match_name' in truppen_stats.columns:
         truppen_stats['visningsnavn'] = truppen_stats['match_name']
+    elif 'visningsnavn' in truppen_stats.columns and 'match_name' in truppen_stats.columns:
+        truppen_stats['visningsnavn'] = truppen_stats['visningsnavn'].fillna(truppen_stats['match_name'])
 
     # --- HOLDOVERSIGT ---
     with t_team:
@@ -352,9 +355,11 @@ def vis_side(dp=None):
                     df_kamp_stats = df_kamp_stats.reset_index()
                 df_kamp_stats.columns = df_kamp_stats.columns.str.lower()
                 
-                # Fjern eventuelle dubletter for den enkelte kamp også
                 if 'player_optauuid' in df_kamp_stats.columns:
                     df_kamp_stats = df_kamp_stats.drop_duplicates(subset=['player_optauuid'], keep='first')
+
+                if 'match_name' in df_kamp_stats.columns:
+                    df_kamp_stats['visningsnavn'] = df_kamp_stats['visningsnavn'].fillna(df_kamp_stats['match_name'])
 
                 if 'visningsnavn' not in df_kamp_stats.columns and 'match_name' in df_kamp_stats.columns:
                     df_kamp_stats['visningsnavn'] = df_kamp_stats['match_name']
