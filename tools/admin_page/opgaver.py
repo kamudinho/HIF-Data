@@ -24,13 +24,6 @@ def indlaes_opgaver():
 
 
 def gem_opgaver(df):
-    """
-    Skriver ATOMISK: først til en temp-fil i samme mappe, derefter et
-    os.replace() der bytter filerne om i EN filsystem-operation. Det
-    forhindrer at en fejl midt i skrivningen (appen genstartes, disk fuld)
-    kan efterlade en halvskrevet opgaver.csv - filen er altid enten den
-    gamle eller den nye version, aldrig noget midt imellem.
-    """
     mappe = os.path.dirname(OPGAVE_FIL)
     os.makedirs(mappe, exist_ok=True)
 
@@ -42,7 +35,7 @@ def gem_opgaver(df):
     try:
         with os.fdopen(fd, "w", newline="") as tmp_fil:
             df.to_csv(tmp_fil, index=False)
-        os.replace(tmp_sti, OPGAVE_FIL)  # atomisk - kan ikke efterlade en halv fil
+        os.replace(tmp_sti, OPGAVE_FIL)
     except Exception:
         if os.path.exists(tmp_sti):
             os.remove(tmp_sti)
@@ -57,13 +50,6 @@ def _naest_ledige_id(df):
 
 
 def _opret_opgave_sikkert(titel, beskrivelse, tildelt_til, oprettet_af, dato_str):
-    """
-    Genindlæser filen HELT FRISK, lige før id og ny række beregnes og
-    skrives. Det er vigtigt, fordi id'et afhænger af hvad der allerede
-    ligger i filen - genindlæsning lige før skrivning gør vinduet hvor to
-    samtidige oprettelser kan kollidere saa kort som muligt (millisekunder,
-    ikke hele sidevisningen).
-    """
     frisk_df = indlaes_opgaver()
     nyt_id = _naest_ledige_id(frisk_df)
 
@@ -83,11 +69,6 @@ def _opret_opgave_sikkert(titel, beskrivelse, tildelt_til, oprettet_af, dato_str
 
 
 def _opdater_raekke_sikkert(task_id, felt_vaerdier: dict):
-    """
-    Samme princip: genindlæser filen lige før ændringen skrives, i stedet
-    for at genbruge den kopi der blev loadet da siden først rendrede.
-    Bruges til statusændring, sletning, og godkend/udskyd/afvis-dialogen.
-    """
     frisk_df = indlaes_opgaver()
     if frisk_df.empty or "id" not in frisk_df.columns:
         return
@@ -114,7 +95,6 @@ def vis_side():
     bruger_rolle = bruger_info.get("role", "")
 
     er_scout = (bruger_rolle == "scout")
-
     df_opgaver = indlaes_opgaver()
 
     if er_scout:
@@ -124,6 +104,7 @@ def vis_side():
             ["Tildel opgave", "Opgaveoversigt", "Tidligere opgaver", "Kalender"]
         )
 
+    # --- TILDEL OPGAVE ---
     if not er_scout:
         with tab_tildel:
             st.markdown("### Opret ny opgave")
@@ -157,16 +138,12 @@ def vis_side():
 
         for _, row in df_vis.iterrows():
             with st.container(border=True):
-                col1, col2, col3, col4, col5 = st.columns([2, 3, 1, 1, 1])
-
-                with col1:
-                    st.write(f"**{row['titel']}**")
-                    st.caption(f"Af: {row['oprettet_af']} | Dato: {row['dato']}")
-                with col2:
-                    st.write(row['beskrivelse'] if pd.notna(row['beskrivelse']) else "")
-                with col3:
-                    st.write(f"Til: `{row['tildelt_til']}`")
-                with col4:
+                top_col1, top_col2, top_col3 = st.columns([3, 1, 1])
+                with top_col1:
+                    st.markdown(f"#### {row['titel']}")
+                    st.caption(f"Oprettet af: **{row['oprettet_af']}** | Dato: **{row['dato']}** | Tildelt til: `{row['tildelt_til']}`")
+                
+                with top_col2:
                     nuvaerende_status = row['status']
                     valgmuligheder = ["Afventer", "I gang", "Færdig"]
                     ny_status = st.selectbox(
@@ -176,18 +153,20 @@ def vis_side():
                         key=f"status_select_{row['id']}",
                         label_visibility="collapsed",
                     )
-
                     if ny_status != nuvaerende_status:
                         _opdater_raekke_sikkert(row['id'], {"status": ny_status})
                         st.rerun()
-                with col5:
+
+                with top_col3:
                     if not er_scout:
-                        if st.button("Slet", key=f"slet_{row['id']}"):
+                        if st.button("Slet opgave", key=f"slet_{row['id']}", use_container_width=True):
                             _slet_raekke_sikkert(row['id'])
                             st.rerun()
-                    else:
-                        st.write("")
 
+                if pd.notna(row['beskrivelse']) and row['beskrivelse']:
+                    st.markdown(f"<p style='color: #444; font-size: 13px; margin-top: 4px;'>{row['beskrivelse']}</p>", unsafe_allow_html=True)
+
+    # --- OPGAVEOVERSIGT ---
     with tab_oversigt:
         if er_scout:
             st.markdown("### Dine aktuelle opgaver")
@@ -200,6 +179,7 @@ def vis_side():
 
         vis_opgave_liste(df_aktuelle)
 
+    # --- TIDLIGERE OPGAVER ---
     if not er_scout:
         with tab_tidligere:
             st.markdown("### Tidligere (færdigmeldte) opgaver")
@@ -209,6 +189,7 @@ def vis_side():
                 df_faerdige = df_opgaver[df_opgaver["status"] == "Færdig"]
                 vis_opgave_liste(df_faerdige)
 
+    # --- KALENDER ---
     with tab_kalender:
         st.markdown("### Kalenderoverblik")
         if df_opgaver.empty:
@@ -225,36 +206,31 @@ def vis_side():
                 df_kalender = df_kalender.dropna(subset=["dato_dt"])
 
                 kalender_visning = st.radio(
-                    "Vælg visning", ["Ugeoversigt (Gitter)", "Månedsoversigt (Liste)"], horizontal=True
+                    "Vælg visning", ["Ugeoversigt (Kompakt)", "Månedsoversigt (Liste)"], horizontal=True
                 )
 
-                if kalender_visning == "Ugeoversigt (Gitter)":
+                if "Ugeoversigt" in kalender_visning:
                     st.markdown("#### Ugeplan (Mandag - Søndag)")
                     valgt_uge_dato = st.date_input("Vælg uge ud fra dato", value=datetime.today(), key="uge_valg")
                     start_af_uge = valgt_uge_dato - timedelta(days=valgt_uge_dato.weekday())
 
                     dage_navne = ["Mandag", "Tirsdag", "Onsdag", "Torsdag", "Fredag", "Lørdag", "Søndag"]
-                    cols = st.columns(7)
-
-                    for i, col in enumerate(cols):
+                    
+                    # Vis som en renere listebaseret ugeoversigt i stedet for 7 klemte kolonner ved siden af hinanden
+                    for i in range(7):
                         dag_dato = start_af_uge + timedelta(days=i)
-                        with col:
-                            st.markdown(f"**{dage_navne[i]}**")
-                            st.caption(f"{dag_dato.strftime('%d/%m')}")
-
-                            dag_opgaver = df_kalender[df_kalender["dato_dt"].dt.date == dag_dato]
+                        dag_opgaver = df_kalender[df_kalender["dato_dt"].dt.date == dag_dato]
+                        
+                        dato_str = dag_dato.strftime('%d/%m/%Y')
+                        with st.expander(f"{dage_navne[i]} d. {dato_str} ({len(dag_opgaver)} opgaver)", expanded=(i == 0)):
                             if not dag_opgaver.empty:
                                 for _, row in dag_opgaver.iterrows():
-                                    status_farve = (
-                                        "🟢" if row['status'] == "Færdig"
-                                        else ("🟡" if row['status'] == "I gang" else "⚪")
-                                    )
-                                    with st.container(border=True):
-                                        st.markdown(f"**{row['titel']}**")
-                                        st.caption(f"Til: {row['tildelt_til']}")
-                                        st.text(f"{status_farve} {row['status']}")
+                                    status_farve = "🟢" if row['status'] == "Færdig" else ("🟡" if row['status'] == "I gang" else "⚪")
+                                    st.markdown(f"- {status_farve} **{row['titel']}** (Tildelt til: `{row['tildelt_til']}` — Status: *{row['status']}*)")
+                                    if pd.notna(row['beskrivelse']) and row['beskrivelse']:
+                                        st.caption(f"  *{row['beskrivelse']}*")
                             else:
-                                st.markdown("<small style='color: gray;'>Ingen opgaver</small>", unsafe_allow_html=True)
+                                st.caption("Ingen opgaver denne dag.")
                 else:
                     st.markdown("#### Månedsoversigt")
                     df_kalender = df_kalender.sort_values(by="dato_dt")
