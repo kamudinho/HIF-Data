@@ -58,7 +58,8 @@ def vis_opgave_popup(opgave_id, opgave_titel, opgave_beskrivelse):
 
     clean_id = int(opgave_id)
 
-    if col1.button("Godkend", use_container_width=True):
+    # Tilføjet unikke nøgler (key) til alle tre knapper
+    if col1.button("Godkend", key=f"btn_godkend_{clean_id}", use_container_width=True):
         opg._opdater_raekke_sikkert(clean_id, {"status": "I gang", "scout_status": "Igangsat"})
 
         try:
@@ -71,7 +72,7 @@ def vis_opgave_popup(opgave_id, opgave_titel, opgave_beskrivelse):
         st.session_state["task_handled"] = True
         st.rerun()
 
-    if col2.button("Udskyd", use_container_width=True):
+    if col2.button("Udskyd", key=f"btn_udskyd_{clean_id}", use_container_width=True):
         opg._opdater_raekke_sikkert(clean_id, {"status": "Udskudt", "scout_status": "Afventer"})
 
         try:
@@ -84,7 +85,7 @@ def vis_opgave_popup(opgave_id, opgave_titel, opgave_beskrivelse):
         st.session_state["task_handled"] = True
         st.rerun()
 
-    if col3.button("Afvis", use_container_width=True):
+    if col3.button("Afvis", key=f"btn_afvis_{clean_id}", use_container_width=True):
         opg._opdater_raekke_sikkert(clean_id, {"status": "Færdig", "scout_status": "Afvist"})
 
         try:
@@ -96,6 +97,7 @@ def vis_opgave_popup(opgave_id, opgave_titel, opgave_beskrivelse):
         st.error("Opgave afvist.")
         st.session_state["task_handled"] = True
         st.rerun()
+        
 # --- 2. LOGIN SYSTEM ---
 USER_DB = get_users()
 if "logged_in" not in st.session_state:
