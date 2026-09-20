@@ -1,3 +1,4 @@
+# HIF-head.py
 import streamlit as st
 import pandas as pd
 import altair as alt
@@ -12,6 +13,7 @@ from data.utils.team_mapping import (
 )
 from data.data_load import _get_snowflake_conn
 from data.utils.stattype_map import STAT_TYPE_MAP
+from data.sql.head import hent_hoved_stats  # <-- Henter den hurtige, cachede SQL-funktion
 
 def apply_custom_style():
     st.markdown("""
@@ -19,22 +21,18 @@ def apply_custom_style():
             [data-testid="stHeaderBlockContainer"] h1 { display: none; }
             .stApp { background-color: #FFFFFF; }
             
-            /* CSS specifikt til topsektionens kolonne-layout via en unik klasse */
             div.top-section-container [data-testid="stHorizontalBlock"] {
                 display: flex;
                 align-items: stretch;
             }
             div.top-section-container [data-testid="stHorizontalBlock"] > div:nth-child(1) {
-                flex: 1 1 24% !important;
-                max-width: 24% !important;
+                flex: 1 1 24% !important; max-width: 24% !important;
             }
             div.top-section-container [data-testid="stHorizontalBlock"] > div:nth-child(2) {
-                flex: 1 1 52% !important;
-                max-width: 52% !important;
+                flex: 1 1 52% !important; max-width: 52% !important;
             }
             div.top-section-container [data-testid="stHorizontalBlock"] > div:nth-child(3) {
-                flex: 1 1 24% !important;
-                max-width: 24% !important;
+                flex: 1 1 24% !important; max-width: 24% !important;
             }
 
             .stats-table { width: 100%; font-size: 11px; border-collapse: collapse; table-layout: auto; }
@@ -43,107 +41,38 @@ def apply_custom_style():
             .stats-value { text-align: center !important; font-weight: 700; color: #111; padding: 4px 2px; min-width: 20px; }
             .card-title { color: #1a1a1a; font-size: 11px; font-weight: 700; margin-bottom: 8px; text-transform: uppercase; border-bottom: 1px solid #f0f0f0; padding-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
             
-            /* Stilling-tabel styling */
             .table-standings { width: 100%; font-size: 11px; border-collapse: collapse; }
             .table-standings th { text-align: center; padding: 4px 2px; color: #888; border-bottom: 1px solid #eee; font-weight: 600; }
             .table-standings td { padding: 4px 2px; text-align: center; color: #333; font-weight: 600; }
             .table-standings .team-cell { text-align: left; font-weight: 700; color: #111; }
             .table-standings .hif-row { background-color: #ffebe8; }
 
-            /* Hover-container logik til info-ikoner */
             .hover-parent { position: relative; display: inline-block; cursor: help; }
             .hover-child {
-                visibility: hidden;
-                width: 220px;
-                background-color: #333;
-                color: #fff;
-                text-align: left;
-                padding: 8px 10px;
-                border-radius: 4px;
-                position: absolute;
-                z-index: 1000;
-                bottom: 125%;
-                left: 50%;
-                margin-left: -110px;
-                opacity: 0;
-                transition: opacity 0.2s ease-in-out;
-                font-size: 11px;
-                font-weight: normal;
+                visibility: hidden; width: 220px; background-color: #333; color: #fff;
+                text-align: left; padding: 8px 10px; border-radius: 4px; position: absolute;
+                z-index: 1000; bottom: 125%; left: 50%; margin-left: -110px; opacity: 0;
+                transition: opacity 0.2s ease-in-out; font-size: 11px; font-weight: normal;
                 box-shadow: 0px 4px 6px rgba(0,0,0,0.1);
             }
-            .hover-parent:hover .hover-child {
-                visibility: visible;
-                opacity: 1;
-            }
+            .hover-parent:hover .hover-child { visibility: visible; opacity: 1; }
         </style>
     """, unsafe_allow_html=True)
 
 def resolve_team_name(uuid_str, raw_name=""):
-    """Sikker opslag af holdnavn uanset casing og sprogvariationer."""
     if not uuid_str:
         return raw_name
     uuid_clean = str(uuid_str).strip().upper()
-    
     for t_name, t_info in TEAMS.items():
         if str(t_info.get('opta_uuid', '')).strip().upper() == uuid_clean:
             return t_name
-            
     if raw_name:
         clean_raw = raw_name.replace("FF", "").replace("IF", "").strip()
         for t_name in TEAMS.keys():
             if clean_raw.lower() in t_name.lower() or t_name.lower() in clean_raw.lower():
                 return t_name
         return raw_name
-        
     return "Ukendt"
-
-def get_opta_queries(calendar_uuid, hif_uuid):
-    DB = "KLUB_HVIDOVREIF.AXIS"
-    calendar_filter = f"WHERE TOURNAMENTCALENDAR_OPTAUUID = '{calendar_uuid}'" if calendar_uuid else ""
-
-    return {"opta_team_stats": f"""
-        WITH CombinedStats AS (
-            SELECT MATCH_OPTAUUID, CONTESTANT_OPTAUUID, STAT_TYPE, TRY_CAST(STAT_TOTAL AS FLOAT) AS STAT_VALUE
-            FROM {DB}.OPTA_MATCHSTATS
-            UNION ALL
-            SELECT MATCH_ID, CONTESTANT_OPTAUUID, STAT_TYPE, TRY_CAST(STAT_VALUE AS FLOAT)
-            FROM {DB}.OPTA_MATCHEXPECTEDGOALS
-        ),
-        MatchBase AS (
-            SELECT MATCH_OPTAUUID, MATCH_DATE_FULL, WEEK, MATCH_STATUS, CONTESTANTHOME_OPTAUUID, CONTESTANTHOME_NAME, CONTESTANTAWAY_OPTAUUID, CONTESTANTAWAY_NAME, TOTAL_HOME_SCORE, TOTAL_AWAY_SCORE 
-            FROM {DB}.OPTA_MATCHINFO {calendar_filter}
-        ),
-        PivotStats AS (
-            SELECT MATCH_OPTAUUID, CONTESTANT_OPTAUUID,
-            SUM(CASE WHEN STAT_TYPE = 'expectedGoals' THEN STAT_VALUE ELSE 0 END) AS XG,
-            SUM(CASE WHEN STAT_TYPE = 'totalScoringAtt' THEN STAT_VALUE ELSE 0 END) AS SHOTS,
-            SUM(CASE WHEN STAT_TYPE = 'touchesInOppBox' THEN STAT_VALUE ELSE 0 END) AS TOUCHES_IN_BOX,
-            MAX(CASE WHEN STAT_TYPE = 'possessionPercentage' THEN STAT_VALUE END) AS POSSESSION,
-            SUM(CASE WHEN STAT_TYPE = 'totalPass' THEN STAT_VALUE ELSE 0 END) AS PASSES,
-            SUM(CASE WHEN STAT_TYPE = 'cornerTaken' THEN STAT_VALUE ELSE 0 END) AS CORNERS_TAKEN,
-            SUM(CASE WHEN STAT_TYPE = 'wonCorners' THEN STAT_VALUE ELSE 0 END) AS CORNERS_WON,
-            SUM(CASE WHEN STAT_TYPE = 'lostCorners' THEN STAT_VALUE ELSE 0 END) AS CORNERS_LOST,
-            SUM(CASE WHEN STAT_TYPE = 'shotOffTarget' THEN STAT_VALUE ELSE 0 END) AS OFF_TARGET,
-            SUM(CASE WHEN STAT_TYPE = 'totalThrows' THEN STAT_VALUE ELSE 0 END) AS THROWS,
-            SUM(CASE WHEN STAT_TYPE = 'fkFoulWon' THEN STAT_VALUE ELSE 0 END) AS FOULS_WON,
-            SUM(CASE WHEN STAT_TYPE = 'fkFoulLost' THEN STAT_VALUE ELSE 0 END) AS FOULS_LOST,
-            SUM(CASE WHEN STAT_TYPE = 'duelAerialWon' THEN STAT_VALUE ELSE 0 END) AS AERIAL_WON,
-            SUM(CASE WHEN STAT_TYPE = 'totalTackle' THEN STAT_VALUE ELSE 0 END) AS TACKLES,
-            SUM(CASE WHEN STAT_TYPE = 'wonTackle' THEN STAT_VALUE ELSE 0 END) AS WON_TACKLES,
-            SUM(CASE WHEN STAT_TYPE = 'totalClearance' THEN STAT_VALUE ELSE 0 END) AS CLEARANCES,
-            SUM(CASE WHEN STAT_TYPE = 'outfielderBlock' THEN STAT_VALUE ELSE 0 END) AS BLOCKS,
-            SUM(CASE WHEN STAT_TYPE = 'totalYellowCard' THEN STAT_VALUE ELSE 0 END) AS YELLOW_CARDS,
-            SUM(CASE WHEN STAT_TYPE = 'totalRedCard' THEN STAT_VALUE ELSE 0 END) AS RED_CARDS
-            FROM CombinedStats
-            GROUP BY 1, 2
-        )
-        SELECT b.*, 
-        s1.XG AS HOME_XG, s1.SHOTS AS HOME_SHOTS, s1.TOUCHES_IN_BOX AS HOME_TOUCHES, s1.POSSESSION AS HOME_POSSESSION, s1.PASSES AS HOME_PASSES, s1.CORNERS_TAKEN AS HOME_CORNERS_TAKEN, s1.CORNERS_WON AS HOME_CORNERS_WON, s1.CORNERS_LOST AS HOME_CORNERS_LOST, s1.OFF_TARGET AS HOME_OFF_TARGET, s1.THROWS AS HOME_THROWS, s1.FOULS_WON AS HOME_FOULS_WON, s1.FOULS_LOST AS HOME_FOULS_LOST, s1.AERIAL_WON AS HOME_AERIAL_WON, s1.TACKLES AS HOME_TACKLES, s1.WON_TACKLES AS HOME_WON_TACKLES, s1.CLEARANCES AS HOME_CLEARANCES, s1.BLOCKS AS HOME_BLOCKS, s1.YELLOW_CARDS AS HOME_YELLOW_CARDS, s1.RED_CARDS AS HOME_RED_CARDS,
-        s2.XG AS AWAY_XG, s2.SHOTS AS AWAY_SHOTS, s2.TOUCHES_IN_BOX AS AWAY_TOUCHES, s2.POSSESSION AS AWAY_POSSESSION, s2.PASSES AS AWAY_PASSES, s2.CORNERS_TAKEN AS AWAY_CORNERS_TAKEN, s2.CORNERS_WON AS AWAY_CORNERS_WON, s2.CORNERS_LOST AS AWAY_CORNERS_LOST, s2.OFF_TARGET AS AWAY_OFF_TARGET, s2.THROWS AS AWAY_THROWS, s2.FOULS_WON AS AWAY_FOULS_WON, s2.FOULS_LOST AS AWAY_FOULS_LOST, s2.AERIAL_WON AS AWAY_AERIAL_WON, s2.TACKLES AS AWAY_TACKLES, s2.WON_TACKLES AS AWAY_WON_TACKLES, s2.CLEARANCES AS AWAY_CLEARANCES, s2.BLOCKS AS AWAY_BLOCKS, s2.YELLOW_CARDS AS AWAY_YELLOW_CARDS, s2.RED_CARDS AS AWAY_RED_CARDS
-        FROM MatchBase b
-        LEFT JOIN PivotStats s1 ON b.MATCH_OPTAUUID = s1.MATCH_OPTAUUID AND UPPER(TRIM(b.CONTESTANTHOME_OPTAUUID)) = UPPER(TRIM(s1.CONTESTANT_OPTAUUID))
-        LEFT JOIN PivotStats s2 ON b.MATCH_OPTAUUID = s2.MATCH_OPTAUUID AND UPPER(TRIM(b.CONTESTANTAWAY_OPTAUUID)) = UPPER(TRIM(s2.CONTESTANT_OPTAUUID))
-        ORDER BY b.MATCH_DATE_FULL DESC"""}
 
 def beregn_kategori_indices(row, hif_uuid):
     is_home = str(row['CONTESTANTHOME_OPTAUUID']).strip().upper() == hif_uuid.strip().upper()
@@ -163,31 +92,21 @@ def beregn_kategori_indices(row, hif_uuid):
 
     off_idx = (xg * 1.5) + (shots * 0.3) + (touches * 0.05)
     def_idx = -(goals_con * 2.0) + (tackles * 0.2)
-
-    # Off_Std / Def_Std: standardsituationer (hjørner/frispark vundet) som volumen-mål,
-    # vægtet tungest af faktiske mål og xG - dvs. hvor godt standarderne reelt blev udnyttet.
-    # OBS: vi har ingen stat-type for "skud der stammer fra hjørne/frispark" (shot-origin/
-    # qualifier-data findes ikke i OPTA_MATCHSTATS-forespørgslen), så mål/xG er den bedste
-    # tilgængelige proxy for konvertering, i stedet for et decideret "fører til afslutning"-tal.
     off_std = (goals_for * 3.0) + (xg * 1.0) + (corners_for * 0.3) + (fouls_won * 0.2)
     def_std = -(goals_con * 3.0) - (xg_against * 1.0) - (corners_against * 0.3) - (fouls_lost * 0.2)
 
     return pd.Series({'Offensiv': off_idx, 'Defensiv': def_idx, 'Off_Std': off_std, 'Def_Std': def_std})
 
 def beregn_per_90(df_stats, team_uuid):
+    if df_stats is None or df_stats.empty: return None
     played = df_stats[df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].copy()
     if played.empty: return None
 
-    # OBS: Possession er IKKE med i denne liste. Possession er en procent-stat,
-    # og manglende data (NaN) skal IKKE tolkes som "0% possession" - det ville
-    # trække gennemsnittet forkert nedad for kampe uden gyldig possession-værdi.
     zero_fill_cols = ['TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE', 'HOME_XG', 'AWAY_XG', 'HOME_OFF_TARGET', 'AWAY_OFF_TARGET', 'HOME_THROWS', 'AWAY_THROWS', 'HOME_FOULS_WON', 'AWAY_FOULS_WON', 'HOME_CORNERS_WON', 'AWAY_CORNERS_WON', 'HOME_TACKLES', 'AWAY_TACKLES', 'HOME_CLEARANCES', 'AWAY_CLEARANCES', 'HOME_PASSES', 'AWAY_PASSES']
     for col in zero_fill_cols:
         if col in played.columns:
             played[col] = pd.to_numeric(played[col], errors='coerce').fillna(0)
 
-    # Possession castes til numerisk, men NaN bevares (ikke fillna(0)),
-    # så .mean() (skipna=True som default) korrekt ignorerer kampe uden data.
     for col in ['HOME_POSSESSION', 'AWAY_POSSESSION']:
         if col in played.columns:
             played[col] = pd.to_numeric(played[col], errors='coerce')
@@ -223,17 +142,14 @@ def beregn_per_90(df_stats, team_uuid):
         diff_vs_hif = last_val - hif_val
         
         results.append({
-            "Stat": display_name, 
-            "HIF": hif_val, 
-            "Liga": liga_val, 
-            "Diff_Liga": diff_vs_liga, 
-            "Seneste": last_val, 
-            "Diff_vs_Hif": diff_vs_hif,
-            "Opponent": opp_name
+            "Stat": display_name, "HIF": hif_val, "Liga": liga_val, 
+            "Diff_Liga": diff_vs_liga, "Seneste": last_val, 
+            "Diff_vs_Hif": diff_vs_hif, "Opponent": opp_name
         })
     return pd.DataFrame(results)
 
 def beregn_hold_stats(df_stats, team_uuid):
+    if df_stats is None or df_stats.empty: return {"gf": "0.0", "ga": "0.0", "xgf": "0.00", "xga": "0.00", "poss": "0.00%"}
     played = df_stats[df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].copy()
     cols_to_numeric = ['TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE', 'HOME_XG', 'AWAY_XG', 'HOME_POSSESSION', 'AWAY_POSSESSION']
     for col in cols_to_numeric:
@@ -246,25 +162,20 @@ def beregn_hold_stats(df_stats, team_uuid):
     
     gf = home['TOTAL_HOME_SCORE'].sum() + away['TOTAL_AWAY_SCORE'].sum()
     ga = home['TOTAL_AWAY_SCORE'].sum() + away['TOTAL_HOME_SCORE'].sum()
-    
-    # Rettet xG summering, så den tager højde for hjenme/ude og dividerer korrekt med antal kampe
     xgf = home['HOME_XG'].sum() + away['AWAY_XG'].sum()
     xga = home['AWAY_XG'].sum() + away['HOME_XG'].sum()
-    
     poss_all = pd.concat([home['HOME_POSSESSION'], away['AWAY_POSSESSION']]).dropna().mean()
+    
     return {
-        "gf": f"{gf / total_matches:.1f}", 
-        "ga": f"{ga / total_matches:.1f}", 
-        "xgf": f"{xgf / total_matches:.2f}", 
-        "xga": f"{xga / total_matches:.2f}", 
+        "gf": f"{gf / total_matches:.1f}", "ga": f"{ga / total_matches:.1f}", 
+        "xgf": f"{xgf / total_matches:.2f}", "xga": f"{xga / total_matches:.2f}", 
         "poss": f"{poss_all:.2f}%" if pd.notnull(poss_all) else "0.00%"
     }
 
 def beregn_stilling(df_matches, valgt_saeson, valgt_turnering):
     stats = {}
     saesons_hold = SEASON_LEAGUE_MAPPER.get(valgt_saeson, {}).get(valgt_turnering, [])
-    if not saesons_hold:
-        saesons_hold = sorted(TEAMS.keys())
+    if not saesons_hold: saesons_hold = sorted(TEAMS.keys())
 
     for name in saesons_hold:
         stats[name] = {'K': 0, 'V': 0, 'U': 0, 'T': 0, 'MF': 0, 'GF': 0, 'P': 0}
@@ -274,7 +185,6 @@ def beregn_stilling(df_matches, valgt_saeson, valgt_turnering):
         for _, row in played.iterrows():
             h_uuid = str(row['CONTESTANTHOME_OPTAUUID']).upper()
             a_uuid = str(row['CONTESTANTAWAY_OPTAUUID']).upper()
-            
             h_name = resolve_team_name(h_uuid, row.get('CONTESTANTHOME_NAME', ''))
             a_name = resolve_team_name(a_uuid, row.get('CONTESTANTAWAY_NAME', ''))
             
@@ -287,12 +197,9 @@ def beregn_stilling(df_matches, valgt_saeson, valgt_turnering):
             except:
                 continue
 
-            stats[h_name]['K'] += 1
-            stats[a_name]['K'] += 1
-            stats[h_name]['MF'] += (h_g - a_g)
-            stats[a_name]['MF'] += (a_g - h_g)
-            stats[h_name]['GF'] += h_g
-            stats[a_name]['GF'] += a_g
+            stats[h_name]['K'] += 1; stats[a_name]['K'] += 1
+            stats[h_name]['MF'] += (h_g - a_g); stats[a_name]['MF'] += (a_g - h_g)
+            stats[h_name]['GF'] += h_g; stats[a_name]['GF'] += a_g
 
             if h_g > a_g:
                 stats[h_name]['V'] += 1; stats[h_name]['P'] += 3; stats[a_name]['T'] += 1
@@ -313,32 +220,17 @@ def vis_side():
     conn = _get_snowflake_conn()
     if not conn: return
     
-    DB = "KLUB_HVIDOVREIF.AXIS"
     HIF_UUID = TEAMS.get("Hvidovre", {}).get("opta_uuid", "8gxd9ry2580pu1b1dd5ny9ymy").upper()
     
     active_season = DEFAULT_SEASON
     active_comp = DEFAULT_COMP
     calendar_uuid = SEASONS.get(active_season, {}).get(active_comp)
 
-    # 1. Hent kampprogram
-    df_matches = pd.DataFrame()
-    if calendar_uuid:
-        df_matches = conn.query(f"SELECT * FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = '{calendar_uuid}'")
-        df_matches.columns = [str(c).upper() for c in df_matches.columns]
-        if 'MATCH_DATE_FULL' in df_matches.columns:
-            df_matches['MATCH_DATE_FULL'] = pd.to_datetime(df_matches['MATCH_DATE_FULL'], errors='coerce').dt.tz_localize(None)
+    # Henter alt samlet og cachet via head.py
+    df_stats = hent_hoved_stats(conn, calendar_uuid)
+    df_matches = df_stats.copy()
 
-    # 2. Hent stats
-    queries = get_opta_queries(calendar_uuid, HIF_UUID)
-    df_stats = conn.query(queries["opta_team_stats"])
-    df_stats.columns = [str(c).upper() for c in df_stats.columns]
-
-    if df_stats.empty or len(df_stats[df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)]) == 0:
-        fallback_queries = get_opta_queries(None, HIF_UUID)
-        df_stats = conn.query(fallback_queries["opta_team_stats"])
-        df_stats.columns = [str(c).upper() for c in df_stats.columns]
-
-    # --- TOPSEKTION: ÉN STOR BOKS OMKRING ALLE 3 KOLONNER MED UNIK KLASSE ---
+    # --- TOPSEKTION ---
     st.markdown('<div class="top-section-container">', unsafe_allow_html=True)
     with st.container(border=True):
         col1, col2, col3 = st.columns([1, 2.2, 1])
@@ -394,7 +286,7 @@ def vis_side():
             else:
                 st.caption(f"Afventer næste kamp for sæson {active_season}")
                 
-        # KOLONNE 2: HVIDOVRE IF vs. LIGA (Med lille info-ikon med ren hover-effekt)
+        # KOLONNE 2: HVIDOVRE IF vs. LIGA
         with col2:
             c_title, c_icon = st.columns([12, 1])
             with c_title:
@@ -424,19 +316,12 @@ def vis_side():
                     diff_liga_color = "#28a745" if r['Diff_Liga'] > 0 else "#dc3545"
                     diff_hif_color = "#28a745" if r['Diff_vs_Hif'] > 0 else "#dc3545"
                     
-                    # Sikrer korrekt decimalformatering for henholdsvis besiddelse, xG og mål/andre stats
                     if "besiddelse" in r['Stat'].lower():
-                        hif_str = f"{r['HIF']:.2f}%"
-                        liga_str = f"{r['Liga']:.2f}%"
-                        last_str = f"{r['Seneste']:.2f}%"
+                        hif_str = f"{r['HIF']:.2f}%"; liga_str = f"{r['Liga']:.2f}%"; last_str = f"{r['Seneste']:.2f}%"
                     elif "goals" in r['Stat'].lower() or "xg" in r['Stat'].lower():
-                        hif_str = f"{r['HIF']:.2f}"
-                        liga_str = f"{r['Liga']:.2f}"
-                        last_str = f"{r['Seneste']:.2f}"
+                        hif_str = f"{r['HIF']:.2f}"; liga_str = f"{r['Liga']:.2f}"; last_str = f"{r['Seneste']:.2f}"
                     else:
-                        hif_str = f"{r['HIF']:.2f}"
-                        liga_str = f"{r['Liga']:.2f}"
-                        last_str = f"{r['Seneste']:.0f}"
+                        hif_str = f"{r['HIF']:.2f}"; liga_str = f"{r['Liga']:.2f}"; last_str = f"{r['Seneste']:.0f}"
 
                     html += f"""<tr>
                         <td class='stats-label'>{r['Stat']}</td>
