@@ -158,23 +158,46 @@ def vis_side(dp=None):
         st.warning("Ingen hændelsesdata fundet for dette hold.")
         st.stop()
 
-    # Udled spillere direkte fra truppen_stats
+    # Sørg for at fjerne eventuelle dubletter baseret på det unike player_optauuid
+    df_spillere_unikke = truppen_stats.reset_index().drop_duplicates(subset=['player_optauuid'])
+
     spiller_options = {}
-    for _, r in truppen_stats.iterrows():
-        navn = r.get('match_name') or r.get('visningsnavn') or "Ukendt"
+    for _, r in df_spillere_unikke.iterrows():
         uuid = r.get('player_optauuid')
-        if uuid:
-            eng_pos = POSITION_MAP.get(str(uuid).strip(), 'Ukendt')
-            da_pos = POSITION_DA.get(eng_pos, eng_pos)
-            visnings_label = f"{navn} ({da_pos})"
-            spiller_options[visnings_label] = uuid
+        if not uuid:
+            continue
+            
+        uuid_str = str(uuid).strip()
+
+        # Prioritetsrekkefølge for navn:
+        # 1. navne_map (player_mapping / overskrivning)
+        # 2. visningsnavn / match_name fra SQL-dataframe
+        # 3. Første navn + efternavn fra SQL
+        # 4. Fallback til "Ukendt"
+        navn = (
+            navne_map.get(uuid_str)
+            or r.get('visningsnavn')
+            or r.get('match_name')
+            or f"{r.get('first_name', '')} {r.get('short_last_name', '')}".strip()
+            or "Ukendt"
+        )
+        
+        # Hvis navnet stadig peger på en tom streng eller NaN
+        if not navn or navn.lower() in ["nan", "none", ""]:
+            navn = "Ukendt"
+
+        eng_pos = POSITION_MAP.get(uuid_str, 'Ukendt')
+        da_pos = POSITION_DA.get(eng_pos, eng_pos)
+        
+        visnings_label = f"{navn} ({da_pos})"
+        spiller_options[visnings_label] = uuid_str
 
     spiller_liste = sorted(list(spiller_options.keys()))
     valgt_label = col_h_spiller.selectbox("Spiller", spiller_liste if spiller_liste else [""], label_visibility="collapsed")
 
     valgt_player_uuid = spiller_options.get(valgt_label, None)
-    df_spiller = truppen_stats[truppen_stats['player_optauuid'] == valgt_player_uuid].copy() if valgt_player_uuid else pd.DataFrame()
-
+    df_spiller = truppen_stats[truppen_stats['player_optauuid'].astype(str).str.strip() == str(valgt_player_uuid)].copy() if valgt_player_uuid else pd.DataFrame()
+    
     t_team, t_matches = st.tabs(["Holdoversigt", "Kampoversigt"])
 
     # Fælleskolonner til visning
