@@ -1,3 +1,4 @@
+#tools/players/player_stats.py
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
@@ -106,7 +107,6 @@ def hent_holdliste(_conn) -> dict:
 
 @st.cache_data(ttl=300, show_spinner="Henter data fra Snowflake...")
 def hent_trup_data_fra_sql(_conn, valgt_uuid_hold: str, navne_map: dict):
-    # Bruger den nye, effektive SQL-funktion fra liga_spillere.py til hele holdets sæson
     df_stats = hent_spiller_event_stats(
         _conn, DB, LIGA_IDS, hold_optauuid=valgt_uuid_hold, navne_map=navne_map
     )
@@ -158,8 +158,31 @@ def vis_side(dp=None):
         st.warning("Ingen hændelsesdata fundet for dette hold.")
         st.stop()
 
-    # Sørg for at fjerne eventuelle dubletter baseret på det unike player_optauuid
-    df_spillere_unikke = truppen_stats.reset_index().drop_duplicates(subset=['player_optauuid'])
+    # --- RENGØRING OG AGGREGERING AF TRUP-DATA ---
+    truppen_stats.columns = truppen_stats.columns.str.lower()
+
+    # Fjern rækker hvor spiller-id mangler eller er ugyldigt
+    if 'player_optauuid' in truppen_stats.columns:
+        truppen_stats = truppen_stats[
+            truppen_stats['player_optauuid'].notna() & 
+            (truppen_stats['player_optauuid'].astype(str).str.strip() != "") & 
+            (truppen_stats['player_optauuid'].astype(str).str.lower() != "none") &
+            (truppen_stats['player_optauuid'].astype(str).str.lower() != "nan")
+        ]
+
+    # Hvis der er flere rækker pr. spiller, summeres numeriske kolonner, og tekstkolonner beholdes
+    if not truppen_stats.empty and 'player_optauuid' in truppen_stats.columns:
+        numeric_cols = truppen_stats.select_dtypes(include=['number']).columns.tolist()
+        agg_dict = {col: 'sum' for col in numeric_cols}
+        
+        for col in truppen_stats.columns:
+            if col not in numeric_cols and col != 'player_optauuid':
+                agg_dict[col] = 'first'
+
+        truppen_stats = truppen_stats.groupby('player_optauuid', as_index=False).agg(agg_dict)
+
+    # Sørg for at fjerne eventuelle dubletter baseret på det unikke player_optauuid
+    df_spillere_unikke = truppen_stats.drop_duplicates(subset=['player_optauuid'])
 
     spiller_options = {}
     for _, r in df_spillere_unikke.iterrows():
@@ -169,11 +192,6 @@ def vis_side(dp=None):
             
         uuid_str = str(uuid).strip()
 
-        # Prioritetsrekkefølge for navn:
-        # 1. navne_map (player_mapping / overskrivning)
-        # 2. visningsnavn / match_name fra SQL-dataframe
-        # 3. Første navn + efternavn fra SQL
-        # 4. Fallback til "Ukendt"
         navn = (
             navne_map.get(uuid_str)
             or r.get('visningsnavn')
@@ -182,7 +200,6 @@ def vis_side(dp=None):
             or "Ukendt"
         )
         
-        # Hvis navnet stadig peger på en tom streng eller NaN
         if not navn or navn.lower() in ["nan", "none", ""]:
             navn = "Ukendt"
 
@@ -224,7 +241,6 @@ def vis_side(dp=None):
         'defensive_1v1_stoppet': 'Def. 1v1'
     }
 
-    # Sørg for at 'visningsnavn' findes i datasættet ved at falde tilbage på match_name hvis nødvendigt
     if 'visningsnavn' not in truppen_stats.columns and 'match_name' in truppen_stats.columns:
         truppen_stats['visningsnavn'] = truppen_stats['match_name']
 
@@ -338,7 +354,6 @@ def vis_side(dp=None):
         st.markdown("<div style='margin-bottom: 10px;'></div>", unsafe_allow_html=True)
             
         if not df_matches.empty and valgt_kamp_uuid:
-            # Hent specifik kampstatistik lynhurtigt ved at genbruge hent_spiller_event_stats med match_optauuid
             df_kamp_stats = hent_spiller_event_stats(
                 conn, DB, LIGA_IDS, hold_optauuid=valgt_uuid_hold, match_optauuid=valgt_kamp_uuid, navne_map=navne_map
             )
