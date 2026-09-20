@@ -158,7 +158,7 @@ def vis_side(dp=None):
         st.warning("Ingen hændelsesdata fundet for dette hold.")
         st.stop()
 
-    # --- RENGØRING OG AGGREGERING AF TRUP-DATA ---
+    # --- RENGØRING OG FJERNELSE AF DUBLEREDE RÆKKER ---
     truppen_stats.columns = truppen_stats.columns.str.lower()
 
     # Fjern rækker hvor spiller-id mangler eller er ugyldigt
@@ -169,20 +169,10 @@ def vis_side(dp=None):
             (truppen_stats['player_optauuid'].astype(str).str.lower() != "none") &
             (truppen_stats['player_optauuid'].astype(str).str.lower() != "nan")
         ]
+        # Fjern overflødige dubletter ved at beholde den første forekomst pr. unikke spiller-id
+        truppen_stats = truppen_stats.drop_duplicates(subset=['player_optauuid'], keep='first')
 
-    # Hvis der er flere rækker pr. spiller, summeres numeriske kolonner, og tekstkolonner beholdes
-    if not truppen_stats.empty and 'player_optauuid' in truppen_stats.columns:
-        numeric_cols = truppen_stats.select_dtypes(include=['number']).columns.tolist()
-        agg_dict = {col: 'sum' for col in numeric_cols}
-        
-        for col in truppen_stats.columns:
-            if col not in numeric_cols and col != 'player_optauuid':
-                agg_dict[col] = 'first'
-
-        truppen_stats = truppen_stats.groupby('player_optauuid', as_index=False).agg(agg_dict)
-
-    # Sørg for at fjerne eventuelle dubletter baseret på det unikke player_optauuid
-    df_spillere_unikke = truppen_stats.drop_duplicates(subset=['player_optauuid'])
+    df_spillere_unikke = truppen_stats.copy()
 
     spiller_options = {}
     for _, r in df_spillere_unikke.iterrows():
@@ -361,6 +351,11 @@ def vis_side(dp=None):
                 if 'player_optauuid' not in df_kamp_stats.columns:
                     df_kamp_stats = df_kamp_stats.reset_index()
                 df_kamp_stats.columns = df_kamp_stats.columns.str.lower()
+                
+                # Fjern eventuelle dubletter for den enkelte kamp også
+                if 'player_optauuid' in df_kamp_stats.columns:
+                    df_kamp_stats = df_kamp_stats.drop_duplicates(subset=['player_optauuid'], keep='first')
+
                 if 'visningsnavn' not in df_kamp_stats.columns and 'match_name' in df_kamp_stats.columns:
                     df_kamp_stats['visningsnavn'] = df_kamp_stats['match_name']
 
