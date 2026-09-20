@@ -137,7 +137,6 @@ def count_kamp_qual(df_group, eid, qids):
 
 
 def _byg_event_stats(df_events: pd.DataFrame) -> pd.DataFrame:
-    # Sørg for at hændelserne er sorteret kronologisk pr. kamp for korrekt tjek af næste hændelse
     df_work = df_events.copy()
     if 'match_optauuid' in df_work.columns and 'minut' in df_work.columns:
         sort_cols = ['match_optauuid', 'minut', 'sekund'] if 'sekund' in df_work.columns else ['match_optauuid', 'minut']
@@ -204,7 +203,6 @@ def _forbered_events(df: pd.DataFrame) -> pd.DataFrame:
 @st.cache_data(ttl=600, show_spinner="Indlæser spillerliste...")
 def hent_navne_map() -> dict:
     navne_map = {}
-    # 1. Hent fra player_mapping hvis tilgængelig
     try:
         for p in _STATIC_PLAYERS:
             uuid = str(p.get('player_optauuid', '')).strip()
@@ -214,7 +212,6 @@ def hent_navne_map() -> dict:
     except Exception:
         pass
 
-    # 2. Suppler eller overskriv med CSV hvis den findes
     try:
         csv_path = os.path.join(os.getcwd(), 'data', 'players', '1div_overskrivning.csv')
         if os.path.exists(csv_path):
@@ -262,7 +259,6 @@ def byg_spiller_og_holdstats(_conn, valgt_uuid_hold: str, navne_map: dict):
         tom = pd.DataFrame()
         return tom, tom, tom, tom, tom
 
-    # Overstyr visningsnavn med navne_map (fra player_mapping / CSV) hvis muligt
     if 'player_optauuid' in df_all_raw.columns and navne_map:
         df_all_raw['visningsnavn'] = df_all_raw['player_optauuid'].astype(str).str.strip().map(navne_map).fillna(df_all_raw['visningsnavn'])
 
@@ -291,7 +287,6 @@ def byg_spiller_og_holdstats(_conn, valgt_uuid_hold: str, navne_map: dict):
     truppen_stats_liga['xA'] = expected_liga['xa'].reindex(truppen_stats_liga.index, fill_value=0).round(2)
     truppen_stats_liga['Mål'] = df_liga_total[df_liga_total['event_typeid'] == 16].groupby('player_optauuid').size().reindex(truppen_stats_liga.index, fill_value=0).astype('Int64')
     
-    # Beregn assists via den opdaterede kronologiske metode
     df_liga_sorted = df_liga_total.sort_values(by=['match_optauuid', 'minut', 'sekund']) if 'sekund' in df_liga_total.columns else df_liga_total.sort_values(by=['match_optauuid', 'minut'])
     df_liga_sorted['next_event_typeid'] = df_liga_sorted.groupby('match_optauuid')['event_typeid'].shift(-1)
     df_liga_sorted['next_match'] = df_liga_sorted.groupby('match_optauuid')['match_optauuid'].shift(-1)
@@ -393,7 +388,6 @@ def vis_side(dp=None):
     valgt_spiller = valgt_label.split(" (")[0] if valgt_label else ""
     df_spiller = df_all[df_all['player_optauuid'] == valgt_player_uuid].copy() if valgt_player_uuid else pd.DataFrame()
 
-    # Kun Holdoversigt og Kampoversigt
     t_team, t_matches = st.tabs(["Holdoversigt", "Kampoversigt"])
 
     with t_team:
@@ -554,7 +548,7 @@ def vis_side(dp=None):
                 df_kamp_sorted = df_kamp_events.sort_values(by=['minut', 'sekund']) if 'sekund' in df_kamp_events.columns else df_kamp_events.sort_values(by=['minut'])
                 df_kamp_sorted['next_event_typeid'] = df_kamp_sorted['event_typeid'].shift(-1)
                 df_kamp_sorted['next_match'] = df_kamp_sorted['match_optauuid'].shift(-1) if 'match_optauuid' in df_kamp_sorted.columns else None
-                truppen_stats_kamp_raw['Assists'] = df_kamp_sorted.apply(lambda r: 1 if ('210' in _get_quals(r) and r.get('next_event_typeid') == 16) else 0, axis=1).groupby(df_kamp_sorted['player_optauuid']).sum().reindex(truppen_stats_kamp_raw.index, fill_value=0).astype('Int64')
+                truppen_stats_kamp_raw['Assists'] = df_kamp_sorted.apply(lambda r: 1 if ('210' in _get_quals(r) and r.get('next_event_typeid'] == 16) else 0, axis=1).groupby(df_kamp_sorted['player_optauuid']).sum().reindex(truppen_stats_kamp_raw.index, fill_value=0).astype('Int64')
      
                 truppen_stats_kamp_kamp = truppen_stats_kamp_raw.copy()
                 truppen_stats_kamp_kamp['Pasningsprocent'] = (
