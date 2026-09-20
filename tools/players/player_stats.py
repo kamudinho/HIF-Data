@@ -548,7 +548,9 @@ def vis_side(dp=None):
                 df_kamp_sorted = df_kamp_events.sort_values(by=['minut', 'sekund']) if 'sekund' in df_kamp_events.columns else df_kamp_events.sort_values(by=['minut'])
                 df_kamp_sorted['next_event_typeid'] = df_kamp_sorted['event_typeid'].shift(-1)
                 df_kamp_sorted['next_match'] = df_kamp_sorted['match_optauuid'].shift(-1) if 'match_optauuid' in df_kamp_sorted.columns else None
-                truppen_stats_kamp_raw['Assists'] = df_kamp_sorted.apply(lambda r: 1 if ('210' in _get_quals(r) and r.get('next_event_typeid'] == 16) else 0, axis=1).groupby(df_kamp_sorted['player_optauuid']).sum().reindex(truppen_stats_kamp_raw.index, fill_value=0).astype('Int64')
+                
+                # RETTELSE FORETAGET HER:
+                truppen_stats_kamp_raw['Assists'] = df_kamp_sorted.apply(lambda r: 1 if ('210' in _get_quals(r) and r.get('next_event_typeid') == 16) else 0, axis=1).groupby(df_kamp_sorted['player_optauuid']).sum().reindex(truppen_stats_kamp_raw.index, fill_value=0).astype('Int64')
      
                 truppen_stats_kamp_kamp = truppen_stats_kamp_raw.copy()
                 truppen_stats_kamp_kamp['Pasningsprocent'] = (
