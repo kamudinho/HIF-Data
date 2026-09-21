@@ -1,4 +1,4 @@
-#tools/ligaen/kampudvikling.py
+# tools/ligaen/kampudvikling.py
 import base64
 import numpy as np
 import pandas as pd
@@ -109,11 +109,24 @@ def draw_match_trend_chart(df_matches, metric, label, team_name, valgt_saeson):
     opp_logos = []
     hover_texts = []
 
+    # Hent det valgte holds Opta UUID dynamisk fra TEAMS baseret på team_name
+    current_team_info = TEAMS.get(team_name, {})
+    current_team_uuid = current_team_info.get("opta_uuid", "")
+
     for _, row in df_matches.iterrows():
         home_uuid = row.get("CONTESTANTHOME_OPTAUUID")
         away_uuid = row.get("CONTESTANTAWAY_OPTAUUID")
-        current_team_uuid = row.get("TEAM_OPTAUUID")
-        opp_uuid = away_uuid if current_team_uuid == home_uuid else home_uuid
+        row_team_uuid = row.get("TEAM_OPTAUUID")
+
+        # Bestem modstanderens UUID ved at bruge CONTESTANTHOME og CONTESTANTAWAY
+        if current_team_uuid:
+            if current_team_uuid == home_uuid:
+                opp_uuid = away_uuid
+            else:
+                opp_uuid = home_uuid
+        else:
+            # Fallback hvis holdets eget UUID ikke findes direkte
+            opp_uuid = away_uuid if row_team_uuid == home_uuid else home_uuid
 
         o_name, o_logo = "Modstander", ""
         for name, info in TEAMS.items():
@@ -338,10 +351,10 @@ def vis_side():
         season_start_year=season_start_year,
     )
 
-    # Tegner grafen med de hentede data
+    # Tegner grafen med de hentede data (og sender valgt_hold med)
     draw_match_trend_chart(
         df_matches, metric_map[sel_metric], sel_metric, valgt_hold, valgt_saeson
     )
 
 if __name__ == "__main__":
-    main()
+    vis_side()
