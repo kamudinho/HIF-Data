@@ -259,10 +259,15 @@ def hent_samlet_spiller_statistik(conn, db_navn, liga_ids, navne_map=None):
         GROUP BY PLAYER_OPTAUUID, CONTESTANT_OPTAUUID
     ),
     PlayerNames AS (
-        SELECT DISTINCT PLAYER_OPTAUUID, FIRST_NAME, SHORT_LAST_NAME, MATCH_NAME
-        FROM {db_navn}.OPTA_MATCH_LINEUPS
-        WHERE FIRST_NAME IS NOT NULL
-    )
+            SELECT PLAYER_OPTAUUID, 
+                   MAX(FIRST_NAME) as FIRST_NAME, 
+                   MAX(LAST_NAME) as LAST_NAME, 
+                   MAX(SHORT_LAST_NAME) as SHORT_LAST_NAME,
+                   MAX(MATCH_NAME) as MATCH_NAME
+            FROM {db_navn}.OPTA_MATCH_LINEUPS
+            WHERE FIRST_NAME IS NOT NULL
+            GROUP BY PLAYER_OPTAUUID
+        )
     SELECT 
         pn.FIRST_NAME,
         pn.SHORT_LAST_NAME,
@@ -302,6 +307,13 @@ def hent_samlet_spiller_statistik(conn, db_navn, liga_ids, navne_map=None):
     return df
 
 
+# load_league_data() og resolve_player_names() er flyttet til
+# data/sql/skud_data.py - de handlede om skud-/xG-data til leagueshots.py,
+# ikke om spillerstatistik, og laa dubleret i to filer med hver sin kopi.
+# Importer i stedet:
+#     from data.sql.skud_data import load_league_data, resolve_player_names
+
+
 def hent_spiller_event_stats(conn, db_navn, liga_ids, hold_optauuid=None,
                               match_optauuid=None, fra_dato="2026-07-01",
                               navne_map=None):
@@ -320,6 +332,10 @@ def hent_spiller_event_stats(conn, db_navn, liga_ids, hold_optauuid=None,
     Assist beregnes med LEAD() PARTITION BY MATCH_OPTAUUID, hvilket
     automatisk forhindrer at en assist "laekker" ind i naeste kamp - samme
     garanti som match_optauuid-tjekket gav i pandas-udgaven.
+
+    navne-CTE'en bruger MAX(...) GROUP BY PLAYER_OPTAUUID i stedet for
+    SELECT DISTINCT over flere tekstkolonner - se skud_data.py for
+    forklaring af hvorfor DISTINCT der gav duplikerede spillere.
 
     Ét kald daekker alle tre visninger i Truppen.py:
         hold_optauuid=None, match_optauuid=None -> hele ligaen (Ukendt-side)
@@ -388,8 +404,17 @@ def hent_spiller_event_stats(conn, db_navn, liga_ids, hold_optauuid=None,
                 SUM(CASE WHEN EVENT_TYPEID = 1 AND ARRAY_CONTAINS(4::VARIANT, QUALIFIER_ARR) THEN 1 ELSE 0 END) AS STIKNINGER,
                 SUM(CASE WHEN EVENT_TYPEID = 1 AND (ARRAY_CONTAINS(2::VARIANT, QUALIFIER_ARR) OR ARRAY_CONTAINS(155::VARIANT, QUALIFIER_ARR)) THEN 1 ELSE 0 END) AS INDLAEG,
 
-                SUM(CASE WHEN EVENT_TYPEID IN (13,14,15,16) THEN 1 ELSE 0 END) AS AFSLUTNINGER,
-                SUM(CASE WHEN EVENT_TYPEID = 16 THEN 1 ELSE 0 END) AS MAAL,
+                -- Qualifier 28 = Own Goal (selvmål). Bekræftet ved at sammenligne
+                -- qualifier-listen paa en kendt selvmaalshaendelse mod almindelige
+                -- scoringer - selvmaal mangler alle skud-qualifiers (bl.a. 321,
+                -- som er xG-vaerdien, da Opta ikke tildeler xG til et selvmaal).
+                SUM(CASE
+                        WHEN EVENT_TYPEID IN (13,14,15) THEN 1
+                        WHEN EVENT_TYPEID = 16 AND NOT ARRAY_CONTAINS(28::VARIANT, QUALIFIER_ARR) THEN 1
+                        ELSE 0
+                    END) AS AFSLUTNINGER,
+                SUM(CASE WHEN EVENT_TYPEID = 16 AND NOT ARRAY_CONTAINS(28::VARIANT, QUALIFIER_ARR) THEN 1 ELSE 0 END) AS MAAL,
+                SUM(CASE WHEN EVENT_TYPEID = 16 AND ARRAY_CONTAINS(28::VARIANT, QUALIFIER_ARR) THEN 1 ELSE 0 END) AS SELVMAAL,
 
                 SUM(CASE WHEN EVENT_TYPEID IN (7,8,12,49) THEN 1 ELSE 0 END) AS EROBRINGER,
                 SUM(CASE WHEN EVENT_TYPEID = 7 THEN 1 ELSE 0 END) AS TACKLINGER,
@@ -428,9 +453,14 @@ def hent_spiller_event_stats(conn, db_navn, liga_ids, hold_optauuid=None,
             GROUP BY PLAYER_OPTAUUID, CONTESTANT_OPTAUUID
         ),
         navne AS (
-            SELECT DISTINCT PLAYER_OPTAUUID, FIRST_NAME, LAST_NAME, SHORT_LAST_NAME, MATCH_NAME
+            SELECT PLAYER_OPTAUUID, 
+                   MAX(FIRST_NAME) as FIRST_NAME, 
+                   MAX(LAST_NAME) as LAST_NAME, 
+                   MAX(SHORT_LAST_NAME) as SHORT_LAST_NAME,
+                   MAX(MATCH_NAME) as MATCH_NAME
             FROM {db_navn}.OPTA_MATCH_LINEUPS
             WHERE FIRST_NAME IS NOT NULL
+            GROUP BY PLAYER_OPTAUUID
         )
         SELECT
             n.MATCH_NAME,
@@ -447,7 +477,7 @@ def hent_spiller_event_stats(conn, db_navn, liga_ids, hold_optauuid=None,
             ROUND(DIV0(p.PASNINGER_SUCCES, p.PASNINGER) * 100, 1) AS Pasningsprocent,
             p.FREMADRETTEDE_PASNINGER AS fremadrettede_pasninger,
             p.STIKNINGER AS Stikninger, p.INDLAEG AS "Indlæg",
-            p.AFSLUTNINGER AS Afslutninger, p.MAAL AS "Mål",
+            p.AFSLUTNINGER AS Afslutninger, p.MAAL AS "Mål", p.SELVMAAL AS "Selvmål",
             COALESCE(ea.XG, 0) AS xG,
             COALESCE(ea.XA, 0) AS xA,
             p.EROBRINGER AS Erobringer, p.TACKLINGER AS Tacklinger,
