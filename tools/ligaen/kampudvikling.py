@@ -247,7 +247,7 @@ def draw_match_trend_chart(df_matches, metric, label, team_name, valgt_saeson):
 
 # --- 2. HOVEDFUNKTION FOR SIDEN ---
 
-def main():
+def vis_side():
     valgt_saeson = DEFAULT_SEASON
     tilgængelige_hold = SEASON_LEAGUE_MAPPER.get(valgt_saeson, {}).get(DEFAULT_COMP, list(TEAMS.keys()))
 
