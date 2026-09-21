@@ -28,7 +28,7 @@ def load_match_level_data(
             FROM {db}.OPTA_MATCHINFO
             WHERE TOURNAMENTCALENDAR_OPTAUUID = '{tournament_opta_uuid}'
               AND MATCH_STATUS = 'Played'
-              AND MATCH_DATE_FULL <= CURRENT_TIMESTAMP()
+              AND CAST(MATCH_DATE_FULL AS DATE) <= CURRENT_DATE()
         ),
         MatchStatsPivot AS (
             SELECT 
@@ -151,12 +151,10 @@ def load_match_level_data(
     except Exception as e:
         st.info(f"Bruger lokal CSV-fallback, da forbindelsen til databasen fejlede: {e}")
 
-    # Fallback: Hvis databasen ikke returnerede noget, prøv at indlæse CSV-filen
     fallback_file = "data/csv/kampe_fallback.csv"
     if df.empty and os.path.exists(fallback_file):
         try:
             df = pd.read_csv(fallback_file)
-            # Filtrer for det valgte hold hvis kolonnen findes
             if "TEAM_OPTAUUID" in df.columns:
                 df = df[df["TEAM_OPTAUUID"] == team_opta_uuid]
         except Exception as csv_error:
@@ -164,6 +162,14 @@ def load_match_level_data(
 
     if not df.empty:
         df.columns = [c.upper() for c in df.columns]
+        
+        # Ekstra sikkerhed i Python: Sørg for at sortere og fjerne eventuelle rækker der glippede i SQL
+        if "MATCH_DATE" in df.columns:
+            df["MATCH_DATE"] = pd.to_datetime(df["MATCH_DATE"], errors="coerce")
+            df = df.sort_values("MATCH_DATE")
+            # Konverter dato tilbage til string til visning hvis nødvendigt, eller behold som datetime
+            df["MATCH_DATE"] = df["MATCH_DATE"].dt.strftime('%Y-%m-%d')
+
         numeric_cols = df.select_dtypes(include=[np.number]).columns
         df[numeric_cols] = df[numeric_cols].fillna(0)
 
