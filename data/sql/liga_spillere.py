@@ -320,9 +320,13 @@ def hent_liga_afslutninger(conn, db_navn, liga_ids, navne_map=None):
             GROUP BY EVENT_OPTAUUID
         ),
         PlayerNames AS (
-            SELECT DISTINCT PLAYER_OPTAUUID, FIRST_NAME, LAST_NAME, SHORT_LAST_NAME, MATCH_NAME
-            FROM {db_navn}.OPTA_MATCH_LINEUPS
+            SELECT PLAYER_OPTAUUID, 
+                   MAX(FIRST_NAME) as FIRST_NAME, 
+                   MAX(LAST_NAME) as LAST_NAME, 
+                   MAX(SHORT_LAST_NAME) as SHORT_LAST_NAME
+            FROM {DB}.OPTA_MATCH_LINEUPS
             WHERE FIRST_NAME IS NOT NULL
+            GROUP BY PLAYER_OPTAUUID
         )
         SELECT 
             e.EVENT_OPTAUUID as event_optauuid,
