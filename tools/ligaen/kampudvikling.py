@@ -1,3 +1,4 @@
+#tools/ligaen/kampudvikling.py
 import base64
 import numpy as np
 import pandas as pd
@@ -5,8 +6,8 @@ import plotly.graph_objects as go
 import requests
 import streamlit as st
 
-# --- IMPORT DYNAMISKE KONSTANTER OG MAPPINGS ---
-from data.data_load import _get_snowflake_conn
+# Importér det delte SQL-udtræk
+from data.sql.kampe import load_match_level_data
 from data.utils.team_mapping import (
     COMPETITION_NAME as DEFAULT_COMP,
     TOURNAMENTCALENDAR_NAME as DEFAULT_SEASON,
@@ -16,7 +17,7 @@ from data.utils.team_mapping import (
     TEAMS,
 )
 
-# --- 1. HJÆLPEFUNKTIONER ---
+# --- 1. HJÆLPEFUNKTIONER TIL UI ---
 
 
 @st.cache_data(ttl=86400)
@@ -41,169 +42,6 @@ def safe_int(val):
     return int(float(val))
   except:
     return 0
-
-
-@st.cache_data(ttl=3600)
-def load_match_level_data(
-    tournament_opta_uuid,
-    team_opta_uuid,
-    team_wyid,
-    comp_wyid,
-    season_start_year=2026,
-):
-  conn = _get_snowflake_conn()
-  db = "KLUB_HVIDOVREIF.AXIS"
-
-  query = f"""
-        With MatchBase AS (
-            SELECT 
-                MATCH_OPTAUUID, 
-                TO_CHAR(MATCH_DATE_FULL, 'YYYY-MM-DD') AS MATCH_DATE,
-                CONTESTANTHOME_OPTAUUID, 
-                CONTESTANTAWAY_OPTAUUID,
-                TOTAL_HOME_SCORE, 
-                TOTAL_AWAY_SCORE
-            FROM {db}.OPTA_MATCHINFO
-            WHERE TOURNAMENTCALENDAR_OPTAUUID = '{tournament_opta_uuid}'
-        ),
-        MatchStatsPivot AS (
-            SELECT 
-                MATCH_OPTAUUID, CONTESTANT_OPTAUUID,
-                MAX(CASE WHEN STAT_TYPE = 'totalScoringAtt' THEN CAST(STAT_TOTAL AS FLOAT) END) AS TOTALSCORINGATT,
-                MAX(CASE WHEN STAT_TYPE = 'ontargetScoringAtt' THEN CAST(STAT_TOTAL AS FLOAT) END) AS ONTARGETSCORINGATT,
-                MAX(CASE WHEN STAT_TYPE = 'shotOffTarget' THEN CAST(STAT_TOTAL AS FLOAT) END) AS SHOTOFFTARGET,
-                MAX(CASE WHEN STAT_TYPE = 'blockedScoringAtt' THEN CAST(STAT_TOTAL AS FLOAT) END) AS BLOCKEDSCORINGATT,
-                MAX(CASE WHEN STAT_TYPE = 'subsGoals' THEN CAST(STAT_TOTAL AS FLOAT) END) AS SUBSGOALS,
-                MAX(CASE WHEN STAT_TYPE = 'totalPass' THEN CAST(STAT_TOTAL AS FLOAT) END) AS TOTALPASS,
-                MAX(CASE WHEN STAT_TYPE = 'accuratePass' THEN CAST(STAT_TOTAL AS FLOAT) END) AS ACCURATEPASS,
-                MAX(CASE WHEN STAT_TYPE = 'possessionPercentage' THEN CAST(STAT_TOTAL AS FLOAT) END) AS POSSESSIONPERCENTAGE,
-                MAX(CASE WHEN STAT_TYPE = 'wonCorners' THEN CAST(STAT_TOTAL AS FLOAT) END) AS WONCORNERS,
-                MAX(CASE WHEN STAT_TYPE = 'lostCorners' THEN CAST(STAT_TOTAL AS FLOAT) END) AS LOSTCORNERS,
-                MAX(CASE WHEN STAT_TYPE = 'totalTackle' THEN CAST(STAT_TOTAL AS FLOAT) END) AS TOTALTACKLE,
-                MAX(CASE WHEN STAT_TYPE = 'wonTackle' THEN CAST(STAT_TOTAL AS FLOAT) END) AS WONTACKLE,
-                MAX(CASE WHEN STAT_TYPE = 'totalClearance' THEN CAST(STAT_TOTAL AS FLOAT) END) AS TOTALCLEARANCE,
-                MAX(CASE WHEN STAT_TYPE = 'outfielderBlock' THEN CAST(STAT_TOTAL AS FLOAT) END) AS OUTFIELDERBLOCK,
-                MAX(CASE WHEN STAT_TYPE = 'fkFoulWon' THEN CAST(STAT_TOTAL AS FLOAT) END) AS FKFOULWON,
-                MAX(CASE WHEN STAT_TYPE = 'fkFoulLost' THEN CAST(STAT_TOTAL AS FLOAT) END) AS FKFOULLOST,
-                MAX(CASE WHEN STAT_TYPE = 'saves' THEN CAST(STAT_TOTAL AS FLOAT) END) AS SAVES,
-                MAX(CASE WHEN STAT_TYPE = 'goalsConceded' THEN CAST(STAT_TOTAL AS FLOAT) END) AS GOALSCONCEDED,
-                MAX(CASE WHEN STAT_TYPE = 'cleanSheet' THEN CAST(STAT_TOTAL AS FLOAT) END) AS CLEANSHEET
-            FROM {db}.OPTA_MATCHSTATS
-            WHERE MATCH_OPTAUUID IN (SELECT MATCH_OPTAUUID FROM MatchBase)
-            GROUP BY 1, 2
-        ),
-        ExpectedGoalsPivot AS (
-            SELECT 
-                MATCH_ID AS MATCH_OPTAUUID, CONTESTANT_OPTAUUID,
-                SUM(CASE WHEN STAT_TYPE = 'expectedGoals' THEN CAST(STAT_VALUE AS FLOAT) ELSE 0 END) AS EXPECTEDGOALS
-            FROM {db}.OPTA_MATCHEXPECTEDGOALS
-            WHERE MATCH_ID IN (SELECT MATCH_OPTAUUID FROM MatchBase)
-            GROUP BY 1, 2
-        ),
-        WyscoutDefense AS (
-            SELECT 
-                TO_CHAR(tm.DATE, 'YYYY-MM-DD') AS MATCH_DATE,
-                md.PPDA
-            FROM {db}.WYSCOUT_TEAMMATCHES tm
-            LEFT JOIN {db}.WYSCOUT_MATCHADVANCEDSTATS_DEFENCE md 
-                ON tm.MATCH_WYID = md.MATCH_WYID AND tm.TEAM_WYID = md.TEAM_WYID
-            WHERE tm.COMPETITION_WYID = {comp_wyid} AND tm.TEAM_WYID = {team_wyid}
-        ),
-        FullTournamentData AS (
-            SELECT 
-                mb.MATCH_OPTAUUID,
-                mb.MATCH_DATE,
-                sp.CONTESTANT_OPTAUUID AS TEAM_OPTAUUID,
-
-                CASE WHEN sp.CONTESTANT_OPTAUUID = mb.CONTESTANTHOME_OPTAUUID THEN mb.TOTAL_HOME_SCORE ELSE mb.TOTAL_AWAY_SCORE END AS GOALS,
-                CASE WHEN sp.CONTESTANT_OPTAUUID = mb.CONTESTANTHOME_OPTAUUID THEN mb.TOTAL_AWAY_SCORE ELSE mb.TOTAL_HOME_SCORE END AS GOALS_AGAINST,
-
-                mb.CONTESTANTHOME_OPTAUUID,
-                mb.CONTESTANTAWAY_OPTAUUID,
-
-                sp.TOTALSCORINGATT,
-                sp.ONTARGETSCORINGATT,
-                sp.SHOTOFFTARGET,
-                sp.BLOCKEDSCORINGATT,
-                sp.SUBSGOALS,
-                sp.TOTALPASS,
-                sp.ACCURATEPASS,
-                sp.POSSESSIONPERCENTAGE,
-                sp.WONCORNERS,
-                sp.LOSTCORNERS,
-                sp.TOTALTACKLE,
-                sp.WONTACKLE,
-                sp.TOTALCLEARANCE,
-                sp.OUTFIELDERBLOCK,
-                sp.FKFOULWON,
-                sp.FKFOULLOST,
-                sp.SAVES,
-                sp.GOALSCONCEDED,
-                sp.CLEANSHEET,
-                xg.EXPECTEDGOALS,
-                wd.PPDA,
-
-                -- Dynamiske ligagennemsnit
-                AVG(xg.EXPECTEDGOALS) OVER() AS LIGA_AVG_EXPECTEDGOALS,
-                AVG(CASE WHEN sp.CONTESTANT_OPTAUUID = mb.CONTESTANTHOME_OPTAUUID THEN mb.TOTAL_HOME_SCORE ELSE mb.TOTAL_AWAY_SCORE END) OVER() AS LIGA_AVG_GOALS,
-                AVG(CASE WHEN sp.CONTESTANT_OPTAUUID = mb.CONTESTANTHOME_OPTAUUID THEN mb.TOTAL_AWAY_SCORE ELSE mb.TOTAL_HOME_SCORE END) OVER() AS LIGA_AVG_GOALS_AGAINST,
-                AVG(sp.TOTALSCORINGATT) OVER() AS LIGA_AVG_TOTALSCORINGATT,
-                AVG(sp.ONTARGETSCORINGATT) OVER() AS LIGA_AVG_ONTARGETSCORINGATT,
-                AVG(sp.SHOTOFFTARGET) OVER() AS LIGA_AVG_SHOTOFFTARGET,
-                AVG(sp.BLOCKEDSCORINGATT) OVER() AS LIGA_AVG_BLOCKEDSCORINGATT,
-                AVG(sp.SUBSGOALS) OVER() AS LIGA_AVG_SUBSGOALS,
-                AVG(sp.TOTALPASS) OVER() AS LIGA_AVG_TOTALPASS,
-                AVG(sp.ACCURATEPASS) OVER() AS LIGA_AVG_ACCURATEPASS,
-                AVG(sp.POSSESSIONPERCENTAGE) OVER() AS LIGA_AVG_POSSESSIONPERCENTAGE,
-                AVG(sp.WONCORNERS) OVER() AS LIGA_AVG_WONCORNERS,
-                AVG(sp.LOSTCORNERS) OVER() AS LIGA_AVG_LOSTCORNERS,
-                AVG(sp.TOTALTACKLE) OVER() AS LIGA_AVG_TOTALTACKLE,
-                AVG(sp.WONTACKLE) OVER() AS LIGA_AVG_WONTACKLE,
-                AVG(sp.TOTALCLEARANCE) OVER() AS LIGA_AVG_TOTALCLEARANCE,
-                AVG(sp.OUTFIELDERBLOCK) OVER() AS LIGA_AVG_OUTFIELDERBLOCK,
-                AVG(sp.FKFOULWON) OVER() AS LIGA_AVG_FKFOULWON,
-                AVG(sp.FKFOULLOST) OVER() AS LIGA_AVG_FKFOULLOST,
-                AVG(sp.SAVES) OVER() AS LIGA_AVG_SAVES,
-                AVG(sp.GOALSCONCEDED) OVER() AS LIGA_AVG_GOALSCONCEDED,
-                AVG(sp.CLEANSHEET) OVER() AS LIGA_AVG_CLEANSHEET,
-                AVG(wd.PPDA) OVER() AS LIGA_AVG_PPDA
-
-            FROM MatchBase mb
-            JOIN MatchStatsPivot sp ON mb.MATCH_OPTAUUID = sp.MATCH_OPTAUUID
-            LEFT JOIN ExpectedGoalsPivot xg ON sp.MATCH_OPTAUUID = xg.MATCH_OPTAUUID AND sp.CONTESTANT_OPTAUUID = xg.CONTESTANT_OPTAUUID
-            LEFT JOIN WyscoutDefense wd ON mb.MATCH_DATE = wd.MATCH_DATE 
-        )
-        SELECT * 
-        FROM FullTournamentData
-        WHERE TEAM_OPTAUUID = '{team_opta_uuid}'
-        ORDER BY MATCH_DATE ASC
-    """
-  df = conn.query(query)
-
-  if not df.empty:
-    df.columns = [c.upper() for c in df.columns]
-    numeric_cols = df.select_dtypes(include=[np.number]).columns
-    df[numeric_cols] = df[numeric_cols].fillna(0)
-
-    df["OFFENSIV_INDEX"] = (
-        df.get("EXPECTEDGOALS", 0) * 2.0
-        + df.get("GOALS", 0) * 3.0
-        + df.get("ONTARGETSCORINGATT", 0) * 1.0
-        + df.get("TOTALSCORINGATT", 0) * 0.2
-    )
-
-    df["DEFENSIV_INDEX"] = (
-        df.get("WONTACKLE", 0) * 1.0
-        + df.get("TOTALCLEARANCE", 0) * 0.5
-        + df.get("OUTFIELDERBLOCK", 0) * 1.0
-        + df.get("CLEANSHEET", 0) * 3.0
-        - df.get("GOALS_AGAINST", 0) * 2.0
-    )
-
-    df["LIGA_AVG_OFFENSIV_INDEX"] = df["OFFENSIV_INDEX"].mean()
-    df["LIGA_AVG_DEFENSIV_INDEX"] = df["DEFENSIV_INDEX"].mean()
-
-  return df
 
 
 def draw_match_trend_chart(df_matches, metric, label, team_name, valgt_saeson):
@@ -315,7 +153,6 @@ def draw_match_trend_chart(df_matches, metric, label, team_name, valgt_saeson):
     dato = str(row.get("MATCH_DATE", ""))[:10]
     val_metric = row.get(metric, 0)
 
-    # Tjek om den valgte parameter relaterer sig til skud
     is_shot_metric = label in [
         "Skud total",
         "Skud på mål",
@@ -329,7 +166,6 @@ def draw_match_trend_chart(df_matches, metric, label, team_name, valgt_saeson):
       off_target = safe_int(row.get("SHOTOFFTARGET", 0))
       blocked = safe_int(row.get("BLOCKEDSCORINGATT", 0))
 
-      # Marker den valgte metric med fed
       tot_str = (
           f"<b>Skud total: {tot_shots}</b>"
           if label == "Skud total"
@@ -485,11 +321,11 @@ def draw_match_trend_chart(df_matches, metric, label, team_name, valgt_saeson):
   )
   st.plotly_chart(fig, use_container_width=True)
 
-# --- 3. HOVEDFUNKTION ---
+# --- 2. HOVEDFUNKTION FOR SIDEN ---
 
 
 def vis_side():
-  valgt_saeson = "2026/2027"
+  valgt_saeson = DEFAULT_SEASON  # Benytter standard sæson (f.eks. 2025/2026)
   tilgængelige_hold = SEASON_LEAGUE_MAPPER.get(valgt_saeson, {}).get(
       DEFAULT_COMP, list(TEAMS.keys())
   )
@@ -515,7 +351,7 @@ def vis_side():
   try:
     season_start_year = int(valgt_saeson.split("/")[0])
   except:
-    season_start_year = 2026
+    season_start_year = 2025
 
   col_title, col_t, col_m = st.columns([1.8, 1.2, 1.0])
 
@@ -584,6 +420,7 @@ def vis_side():
     st.subheader(f"{valgt_hold} – Kampoversigt")
     st.caption(f"Udvikling i {DEFAULT_COMP} ({valgt_saeson})")
 
+  # Henter data via den delte funktion fra data/sql/kampe.py
   df_matches = load_match_level_data(
       tournament_opta_uuid=current_opta_uuid,
       team_opta_uuid=valgt_team_opta_uuid,
@@ -591,6 +428,8 @@ def vis_side():
       comp_wyid=comp_wyid,
       season_start_year=season_start_year,
   )
+
+  # Tegner grafen med de hentede data
   draw_match_trend_chart(
       df_matches, metric_map[sel_metric], sel_metric, valgt_hold, valgt_saeson
   )
