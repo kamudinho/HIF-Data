@@ -29,6 +29,8 @@ def load_match_level_data(
             WHERE TOURNAMENTCALENDAR_OPTAUUID = '{tournament_opta_uuid}'
               AND MATCH_STATUS = 'Played'
               AND CAST(MATCH_DATE_FULL AS DATE) <= CURRENT_DATE()
+              -- KUN Hvidovres kampe (hvor holdet er enten hjemme- eller udehold)
+              AND (CONTESTANTHOME_OPTAUUID = '{team_opta_uuid}' OR CONTESTANTAWAY_OPTAUUID = '{team_opta_uuid}')
         ),
         MatchStatsPivot AS (
             SELECT 
@@ -54,6 +56,7 @@ def load_match_level_data(
                 MAX(CASE WHEN STAT_TYPE = 'cleanSheet' THEN CAST(STAT_TOTAL AS FLOAT) END) AS CLEANSHEET
             FROM {db}.OPTA_MATCHSTATS
             WHERE MATCH_OPTAUUID IN (SELECT MATCH_OPTAUUID FROM MatchBase)
+              AND CONTESTANT_OPTAUUID = '{team_opta_uuid}'
             GROUP BY 1, 2
         ),
         ExpectedGoalsPivot AS (
@@ -62,6 +65,7 @@ def load_match_level_data(
                 SUM(CASE WHEN STAT_TYPE = 'expectedGoals' THEN CAST(STAT_VALUE AS FLOAT) ELSE 0 END) AS EXPECTEDGOALS
             FROM {db}.OPTA_MATCHEXPECTEDGOALS
             WHERE MATCH_ID IN (SELECT MATCH_OPTAUUID FROM MatchBase)
+              AND CONTESTANT_OPTAUUID = '{team_opta_uuid}'
             GROUP BY 1, 2
         ),
         WyscoutDefense AS (
@@ -77,9 +81,9 @@ def load_match_level_data(
             SELECT 
                 mb.MATCH_OPTAUUID,
                 mb.MATCH_DATE,
-                COALESCE(sp.CONTESTANT_OPTAUUID, '{team_opta_uuid}') AS TEAM_OPTAUUID,
-                COALESCE(CASE WHEN sp.CONTESTANT_OPTAUUID = mb.CONTESTANTHOME_OPTAUUID THEN mb.TOTAL_HOME_SCORE ELSE mb.TOTAL_AWAY_SCORE END, 0) AS GOALS,
-                COALESCE(CASE WHEN sp.CONTESTANT_OPTAUUID = mb.CONTESTANTHOME_OPTAUUID THEN mb.TOTAL_AWAY_SCORE ELSE mb.TOTAL_HOME_SCORE END, 0) AS GOALS_AGAINST,
+                '{team_opta_uuid}' AS TEAM_OPTAUUID,
+                COALESCE(CASE WHEN '{team_opta_uuid}' = mb.CONTESTANTHOME_OPTAUUID THEN mb.TOTAL_HOME_SCORE ELSE mb.TOTAL_AWAY_SCORE END, 0) AS GOALS,
+                COALESCE(CASE WHEN '{team_opta_uuid}' = mb.CONTESTANTHOME_OPTAUUID THEN mb.TOTAL_AWAY_SCORE ELSE mb.TOTAL_HOME_SCORE END, 0) AS GOALS_AGAINST,
                 mb.CONTESTANTHOME_OPTAUUID,
                 mb.CONTESTANTAWAY_OPTAUUID,
                 COALESCE(sp.TOTALSCORINGATT, 0) AS TOTALSCORINGATT,
@@ -103,11 +107,12 @@ def load_match_level_data(
                 COALESCE(sp.CLEANSHEET, 0) AS CLEANSHEET,
                 COALESCE(xg.EXPECTEDGOALS, 0) AS EXPECTEDGOALS,
                 wd.PPDA,
-                (COALESCE(xg.EXPECTEDGOALS, 0) * 2.0 + COALESCE(CASE WHEN sp.CONTESTANT_OPTAUUID = mb.CONTESTANTHOME_OPTAUUID THEN mb.TOTAL_HOME_SCORE ELSE mb.TOTAL_AWAY_SCORE END, 0) * 3.0 + COALESCE(sp.ONTARGETSCORINGATT, 0) * 1.0 + COALESCE(sp.TOTALSCORINGATT, 0) * 0.2) AS OFFENSIV_INDEX,
-                (COALESCE(sp.WONTACKLE, 0) * 1.0 + COALESCE(sp.TOTALCLEARANCE, 0) * 0.5 + COALESCE(sp.OUTFIELDERBLOCK, 0) * 1.0 + COALESCE(sp.CLEANSHEET, 0) * 3.0 - COALESCE(CASE WHEN sp.CONTESTANT_OPTAUUID = mb.CONTESTANTHOME_OPTAUUID THEN mb.TOTAL_AWAY_SCORE ELSE mb.TOTAL_HOME_SCORE END, 0) * 2.0) AS DEFENSIV_INDEX,
+                (COALESCE(xg.EXPECTEDGOALS, 0) * 2.0 + COALESCE(CASE WHEN '{team_opta_uuid}' = mb.CONTESTANTHOME_OPTAUUID THEN mb.TOTAL_HOME_SCORE ELSE mb.TOTAL_AWAY_SCORE END, 0) * 3.0 + COALESCE(sp.ONTARGETSCORINGATT, 0) * 1.0 + COALESCE(sp.TOTALSCORINGATT, 0) * 0.2) AS OFFENSIV_INDEX,
+                (COALESCE(sp.WONTACKLE, 0) * 1.0 + COALESCE(sp.TOTALCLEARANCE, 0) * 0.5 + COALESCE(sp.OUTFIELDERBLOCK, 0) * 1.0 + COALESCE(sp.CLEANSHEET, 0) * 3.0 - COALESCE(CASE WHEN '{team_opta_uuid}' = mb.CONTESTANTHOME_OPTAUUID THEN mb.TOTAL_AWAY_SCORE ELSE mb.TOTAL_HOME_SCORE END, 0) * 2.0) AS DEFENSIV_INDEX,
+                -- Bemærk: Liga-gennemsnit beregnes stadig på tværs af hele datasættet (eller kan beholdes hvis du vil sammenligne med snittet)
                 AVG(xg.EXPECTEDGOALS) OVER() AS LIGA_AVG_EXPECTEDGOALS,
-                AVG(CASE WHEN sp.CONTESTANT_OPTAUUID = mb.CONTESTANTHOME_OPTAUUID THEN mb.TOTAL_HOME_SCORE ELSE mb.TOTAL_AWAY_SCORE END) OVER() AS LIGA_AVG_GOALS,
-                AVG(CASE WHEN sp.CONTESTANT_OPTAUUID = mb.CONTESTANTHOME_OPTAUUID THEN mb.TOTAL_AWAY_SCORE ELSE mb.TOTAL_HOME_SCORE END) OVER() AS LIGA_AVG_GOALS_AGAINST,
+                AVG(CASE WHEN '{team_opta_uuid}' = mb.CONTESTANTHOME_OPTAUUID THEN mb.TOTAL_HOME_SCORE ELSE mb.TOTAL_AWAY_SCORE END) OVER() AS LIGA_AVG_GOALS,
+                AVG(CASE WHEN '{team_opta_uuid}' = mb.CONTESTANTHOME_OPTAUUID THEN mb.TOTAL_AWAY_SCORE ELSE mb.TOTAL_HOME_SCORE END) OVER() AS LIGA_AVG_GOALS_AGAINST,
                 AVG(sp.TOTALSCORINGATT) OVER() AS LIGA_AVG_TOTALSCORINGATT,
                 AVG(sp.ONTARGETSCORINGATT) OVER() AS LIGA_AVG_ONTARGETSCORINGATT,
                 AVG(sp.SHOTOFFTARGET) OVER() AS LIGA_AVG_SHOTOFFTARGET,
@@ -129,8 +134,8 @@ def load_match_level_data(
                 AVG(sp.CLEANSHEET) OVER() AS LIGA_AVG_CLEANSHEET,
                 AVG(wd.PPDA) OVER() AS LIGA_AVG_PPDA
             FROM MatchBase mb
-            LEFT JOIN MatchStatsPivot sp ON mb.MATCH_OPTAUUID = sp.MATCH_OPTAUUID AND (sp.CONTESTANT_OPTAUUID = '{team_opta_uuid}')
-            LEFT JOIN ExpectedGoalsPivot xg ON sp.MATCH_OPTAUUID = xg.MATCH_OPTAUUID AND sp.CONTESTANT_OPTAUUID = xg.CONTESTANT_OPTAUUID
+            LEFT JOIN MatchStatsPivot sp ON mb.MATCH_OPTAUUID = sp.MATCH_OPTAUUID
+            LEFT JOIN ExpectedGoalsPivot xg ON mb.MATCH_OPTAUUID = xg.MATCH_OPTAUUID
             LEFT JOIN WyscoutDefense wd ON mb.MATCH_DATE = wd.MATCH_DATE 
         ),
         FinalCalculations AS (
@@ -141,7 +146,6 @@ def load_match_level_data(
         )
         SELECT * 
         FROM FinalCalculations
-        WHERE TEAM_OPTAUUID = '{team_opta_uuid}'
         ORDER BY MATCH_DATE ASC
     """
 
@@ -162,12 +166,9 @@ def load_match_level_data(
 
     if not df.empty:
         df.columns = [c.upper() for c in df.columns]
-        
-        # Ekstra sikkerhed i Python: Sørg for at sortere og fjerne eventuelle rækker der glippede i SQL
         if "MATCH_DATE" in df.columns:
             df["MATCH_DATE"] = pd.to_datetime(df["MATCH_DATE"], errors="coerce")
             df = df.sort_values("MATCH_DATE")
-            # Konverter dato tilbage til string til visning hvis nødvendigt, eller behold som datetime
             df["MATCH_DATE"] = df["MATCH_DATE"].dt.strftime('%Y-%m-%d')
 
         numeric_cols = df.select_dtypes(include=[np.number]).columns
