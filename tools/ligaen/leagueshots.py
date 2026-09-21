@@ -1,3 +1,4 @@
+#tools/ligaen/leagueshots.py
 from io import BytesIO
 import matplotlib.patches as patches
 import matplotlib.pyplot as plt
@@ -6,15 +7,11 @@ import pandas as pd
 import requests
 from PIL import Image
 import streamlit as st
-from data.data_load import _get_snowflake_conn
-from data.players.player_mapping import player_mapping
-from data.utils.team_mapping import COMPETITIONS, SEASONS, TEAM_COLORS, TEAMS
-from utils.pitches import get_boundaries, get_pitch
 
 # Importér eksisterende moduler og funktioner
 from data.data_load import _get_snowflake_conn
 from data.players.player_mapping import player_mapping
-from data.utils.team_mapping import COMPETITIONS, SEASONS, TEAM_COLORS, TEAMS
+from data.utils.team_mapping import COMPETITIONS, SEASONS, TEAM_COLORS, TEAMS, SEASON_LEAGUE_MAPPER
 from utils.pitches import get_boundaries, get_pitch
 
 # --- KONFIGURATION (Hvidovre-app værdier) ---
@@ -31,32 +28,50 @@ def load_league_data(liga_uuid):
     if not conn or not liga_uuid:
         return pd.DataFrame()
 
-    match_sql = f"SELECT DISTINCT MATCH_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = '{liga_uuid}'"
-
     sql = f"""
+        WITH CleanQualifiers AS (
+            -- Henter xG (QID 321) og sikrer én værdi pr event uden duplikering
+            SELECT EVENT_OPTAUUID, MAX(TRY_CAST(QUALIFIER_VALUE AS FLOAT)) as XG_VAL
+            FROM {DB}.OPTA_QUALIFIERS
+            WHERE QUALIFIER_QID = 321
+            GROUP BY EVENT_OPTAUUID
+        ),
+        PlayerNames AS (
+            SELECT DISTINCT PLAYER_OPTAUUID, FIRST_NAME, LAST_NAME, SHORT_LAST_NAME, MATCH_NAME
+            FROM {DB}.OPTA_MATCH_LINEUPS
+            WHERE FIRST_NAME IS NOT NULL
+        )
         SELECT 
-            e.*, 
-            TRIM(l.FIRST_NAME) || ' ' || TRIM(l.LAST_NAME) as FULL_PLAYER_NAME,
-            q.QUALIFIER_VALUE as XG_RAW 
-        FROM {DB}.OPTA_EVENTS e 
-        LEFT JOIN (
-            SELECT DISTINCT MATCH_OPTAUUID, PLAYER_OPTAUUID, FIRST_NAME, LAST_NAME 
-            FROM {DB}.OPTA_MATCH_LINEUPS 
-            WHERE FIRST_NAME IS NOT NULL AND LAST_NAME IS NOT NULL
-        ) l 
-            ON e.MATCH_OPTAUUID = l.MATCH_OPTAUUID AND e.PLAYER_OPTAUUID = l.PLAYER_OPTAUUID
-        LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID AND q.QUALIFIER_QID = 321
-        WHERE e.EVENT_TYPEID IN (13,14,15,16) 
-        AND e.MATCH_OPTAUUID IN ({match_sql})
+            e.EVENT_OPTAUUID as event_optauuid,
+            e.MATCH_OPTAUUID as match_optauuid,
+            e.PLAYER_OPTAUUID as player_optauuid,
+            e.EVENT_CONTESTANT_OPTAUUID as event_contestant_optauuid,
+            e.EVENT_TYPEID as event_typeid,
+            e.EVENT_X as event_x,
+            e.EVENT_Y as event_y,
+            e.EVENT_OUTCOME as event_outcome,
+            e.EVENT_TIMESTAMP as event_timestamp,
+            COALESCE(q.XG_VAL, 0.05) as xg_raw,
+            pn.FIRST_NAME as first_name,
+            pn.LAST_NAME as last_name,
+            pn.SHORT_LAST_NAME as short_last_name,
+            pn.MATCH_NAME as match_name,
+            TRIM(COALESCE(pn.FIRST_NAME, '')) || ' ' || TRIM(COALESCE(pn.LAST_NAME, '')) as full_player_name
+        FROM {DB}.OPTA_EVENTS e
+        JOIN {DB}.OPTA_MATCHINFO m ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
+        LEFT JOIN CleanQualifiers q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
+        LEFT JOIN PlayerNames pn ON e.PLAYER_OPTAUUID = pn.PLAYER_OPTAUUID
+        WHERE m.TOURNAMENTCALENDAR_OPTAUUID = '{liga_uuid}'
+          AND e.EVENT_TYPEID IN (13, 14, 15, 16)
     """
 
     try:
         df = conn.query(sql) if hasattr(conn, "query") else pd.read_sql(sql, conn)
-        df.columns = [c.upper() for c in df.columns]
-
-        df = resolve_player_names(df, conn)
-
-        return df
+        if df is not None and not df.empty:
+            df.columns = [c.upper() for c in df.columns]
+            df = resolve_player_names(df, conn)
+            return df
+        return pd.DataFrame()
     except Exception as e:
         st.error(f"Fejl ved indlæsning af data fra Snowflake: {e}")
         return pd.DataFrame()
@@ -180,8 +195,6 @@ def vis_side(dp=None):
         if not tilgængelige_turneringer:
             tilgængelige_turneringer = list(SEASONS[sæson_sel].keys())
         turnering_sel = st.selectbox("Turnering", tilgængelige_turneringer, index=0)
-
-    from data.utils.team_mapping import SEASON_LEAGUE_MAPPER
 
     teams = SEASON_LEAGUE_MAPPER.get(sæson_sel, {}).get(
         turnering_sel, sorted(list(TEAMS.keys()))
@@ -320,13 +333,10 @@ def vis_side(dp=None):
         with c2:
             st.markdown("##### Filtre")
             
-            # 1. Kamp-filter
-            # Hent kampe hvor holdet har deltaget for at lave en pæn dropdown
             match_options = {"Alle kampe": None}
             if "MATCH_OPTAUUID" in df_team.columns:
                 unique_matches = df_team["MATCH_OPTAUUID"].unique()
                 for m_id in unique_matches:
-                    # Prøv at finde modstander / info hvis muligt, ellers brug ID'et
                     sub_df = df_all[(df_all["MATCH_OPTAUUID"] == m_id) & (df_all["KLUB_NAVN"] != t_sel)]
                     opp_name = sub_df["KLUB_NAVN"].iloc[0] if not sub_df.empty and "KLUB_NAVN" in sub_df.columns and sub_df["KLUB_NAVN"].notna().any() else "Modstander"
                     match_options[f"Kamp mod {opp_name} ({m_id[:6]}...)"] = m_id
@@ -334,10 +344,8 @@ def vis_side(dp=None):
             kamp_sel_label = st.selectbox("Vælg kamp", list(match_options.keys()))
             valgt_kamp_uuid = match_options[kamp_sel_label]
 
-            # Filtrer df_team baseret på valgt kamp
             d_filtered = df_team if valgt_kamp_uuid is None else df_team[df_team["MATCH_OPTAUUID"] == valgt_kamp_uuid]
 
-            # 2. Spiller-filter
             spiller_liste = ["Alle spillere"] + sorted(d_filtered["PLAYER_NAME"].unique()) if not d_filtered.empty else ["Alle spillere"]
             p_sel = st.selectbox("Filtrer spiller", spiller_liste)
             
@@ -346,7 +354,6 @@ def vis_side(dp=None):
             else:
                 d_v = d_filtered
 
-            # 3. Visningstype (Antal vs xG)
             vis_mode_afsl = st.radio("Vælg visning:", ["Antal", "xG"], index=0, key="afsl_mode")
 
             s, m = len(d_v), len(d_v[d_v["EVENT_TYPEID"] == 16])
