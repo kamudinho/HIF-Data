@@ -29,8 +29,28 @@ def load_match_level_data(
             WHERE TOURNAMENTCALENDAR_OPTAUUID = '{tournament_opta_uuid}'
               AND MATCH_STATUS = 'Played'
               AND CAST(MATCH_DATE_FULL AS DATE) <= CURRENT_DATE()
-              -- KUN Hvidovres kampe (hvor holdet er enten hjemme- eller udehold)
               AND (CONTESTANTHOME_OPTAUUID = '{team_opta_uuid}' OR CONTESTANTAWAY_OPTAUUID = '{team_opta_uuid}')
+        ),
+        PlayerSubs AS (
+            -- Finder tidspunktet for hvornår en spiller evt. blev skiftet ind i en kamp
+            SELECT MATCH_OPTAUUID, PLAYER_OPTAUUID, MIN(EVENT_TIMESTAMP) AS SUB_TIME
+            FROM {db}.OPTA_EVENTS
+            WHERE EVENT_TYPEID = 19 -- Indskiftning
+            GROUP BY MATCH_OPTAUUID, PLAYER_OPTAUUID
+        ),
+        CalculatedSubGoals AS (
+            -- Tæller mål scoret af spillere, som er skiftet ind FØR målet faldt (og ikke er selvmål QID 28)
+            SELECT 
+                e.MATCH_OPTAUUID,
+                e.EVENT_CONTESTANT_OPTAUUID AS CONTESTANT_OPTAUUID,
+                COUNT(DISTINCT e.EVENT_OPTAUUID) AS SUBSGOALS
+            FROM {db}.OPTA_EVENTS e
+            JOIN PlayerSubs s ON e.MATCH_OPTAUUID = s.MATCH_OPTAUUID AND e.PLAYER_OPTAUUID = s.PLAYER_OPTAUUID
+            LEFT JOIN {db}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID AND q.QUALIFIER_QID = 28
+            WHERE e.EVENT_TYPEID = 16 -- Mål
+              AND e.EVENT_TIMESTAMP > s.SUB_TIME -- Målet faldt EFTER indskiftning
+              AND q.EVENT_OPTAUUID IS NULL -- Ikke selvmål
+            GROUP BY e.MATCH_OPTAUUID, e.EVENT_CONTESTANT_OPTAUUID
         ),
         MatchStatsPivot AS (
             SELECT 
@@ -39,7 +59,6 @@ def load_match_level_data(
                 MAX(CASE WHEN STAT_TYPE = 'ontargetScoringAtt' THEN CAST(STAT_TOTAL AS FLOAT) END) AS ONTARGETSCORINGATT,
                 MAX(CASE WHEN STAT_TYPE = 'shotOffTarget' THEN CAST(STAT_TOTAL AS FLOAT) END) AS SHOTOFFTARGET,
                 MAX(CASE WHEN STAT_TYPE = 'blockedScoringAtt' THEN CAST(STAT_TOTAL AS FLOAT) END) AS BLOCKEDSCORINGATT,
-                MAX(CASE WHEN STAT_TYPE = 'subsGoals' THEN CAST(STAT_TOTAL AS FLOAT) END) AS SUBSGOALS,
                 MAX(CASE WHEN STAT_TYPE = 'totalPass' THEN CAST(STAT_TOTAL AS FLOAT) END) AS TOTALPASS,
                 MAX(CASE WHEN STAT_TYPE = 'accuratePass' THEN CAST(STAT_TOTAL AS FLOAT) END) AS ACCURATEPASS,
                 MAX(CASE WHEN STAT_TYPE = 'possessionPercentage' THEN CAST(STAT_TOTAL AS FLOAT) END) AS POSSESSIONPERCENTAGE,
@@ -90,7 +109,7 @@ def load_match_level_data(
                 COALESCE(sp.ONTARGETSCORINGATT, 0) AS ONTARGETSCORINGATT,
                 COALESCE(sp.SHOTOFFTARGET, 0) AS SHOTOFFTARGET,
                 COALESCE(sp.BLOCKEDSCORINGATT, 0) AS BLOCKEDSCORINGATT,
-                COALESCE(sp.SUBSGOALS, 0) AS SUBSGOALS,
+                COALESCE(csg.SUBSGOALS, 0) AS SUBSGOALS, -- Bruger vores nye sikre beregning her
                 COALESCE(sp.TOTALPASS, 0) AS TOTALPASS,
                 COALESCE(sp.ACCURATEPASS, 0) AS ACCURATEPASS,
                 COALESCE(sp.POSSESSIONPERCENTAGE, 0) AS POSSESSIONPERCENTAGE,
@@ -109,7 +128,6 @@ def load_match_level_data(
                 wd.PPDA,
                 (COALESCE(xg.EXPECTEDGOALS, 0) * 2.0 + COALESCE(CASE WHEN '{team_opta_uuid}' = mb.CONTESTANTHOME_OPTAUUID THEN mb.TOTAL_HOME_SCORE ELSE mb.TOTAL_AWAY_SCORE END, 0) * 3.0 + COALESCE(sp.ONTARGETSCORINGATT, 0) * 1.0 + COALESCE(sp.TOTALSCORINGATT, 0) * 0.2) AS OFFENSIV_INDEX,
                 (COALESCE(sp.WONTACKLE, 0) * 1.0 + COALESCE(sp.TOTALCLEARANCE, 0) * 0.5 + COALESCE(sp.OUTFIELDERBLOCK, 0) * 1.0 + COALESCE(sp.CLEANSHEET, 0) * 3.0 - COALESCE(CASE WHEN '{team_opta_uuid}' = mb.CONTESTANTHOME_OPTAUUID THEN mb.TOTAL_AWAY_SCORE ELSE mb.TOTAL_HOME_SCORE END, 0) * 2.0) AS DEFENSIV_INDEX,
-                -- Bemærk: Liga-gennemsnit beregnes stadig på tværs af hele datasættet (eller kan beholdes hvis du vil sammenligne med snittet)
                 AVG(xg.EXPECTEDGOALS) OVER() AS LIGA_AVG_EXPECTEDGOALS,
                 AVG(CASE WHEN '{team_opta_uuid}' = mb.CONTESTANTHOME_OPTAUUID THEN mb.TOTAL_HOME_SCORE ELSE mb.TOTAL_AWAY_SCORE END) OVER() AS LIGA_AVG_GOALS,
                 AVG(CASE WHEN '{team_opta_uuid}' = mb.CONTESTANTHOME_OPTAUUID THEN mb.TOTAL_AWAY_SCORE ELSE mb.TOTAL_HOME_SCORE END) OVER() AS LIGA_AVG_GOALS_AGAINST,
@@ -117,7 +135,7 @@ def load_match_level_data(
                 AVG(sp.ONTARGETSCORINGATT) OVER() AS LIGA_AVG_ONTARGETSCORINGATT,
                 AVG(sp.SHOTOFFTARGET) OVER() AS LIGA_AVG_SHOTOFFTARGET,
                 AVG(sp.BLOCKEDSCORINGATT) OVER() AS LIGA_AVG_BLOCKEDSCORINGATT,
-                AVG(sp.SUBSGOALS) OVER() AS LIGA_AVG_SUBSGOALS,
+                AVG(csg.SUBSGOALS) OVER() AS LIGA_AVG_SUBSGOALS,
                 AVG(sp.TOTALPASS) OVER() AS LIGA_AVG_TOTALPASS,
                 AVG(sp.ACCURATEPASS) OVER() AS LIGA_AVG_ACCURATEPASS,
                 AVG(sp.POSSESSIONPERCENTAGE) OVER() AS LIGA_AVG_POSSESSIONPERCENTAGE,
@@ -135,6 +153,7 @@ def load_match_level_data(
                 AVG(wd.PPDA) OVER() AS LIGA_AVG_PPDA
             FROM MatchBase mb
             LEFT JOIN MatchStatsPivot sp ON mb.MATCH_OPTAUUID = sp.MATCH_OPTAUUID
+            LEFT JOIN CalculatedSubGoals csg ON mb.MATCH_OPTAUUID = csg.MATCH_OPTAUUID AND csg.CONTESTANT_OPTAUUID = '{team_opta_uuid}'
             LEFT JOIN ExpectedGoalsPivot xg ON mb.MATCH_OPTAUUID = xg.MATCH_OPTAUUID
             LEFT JOIN WyscoutDefense wd ON mb.MATCH_DATE = wd.MATCH_DATE 
         ),
