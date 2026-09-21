@@ -1,4 +1,5 @@
 #tools/ligaen/leagueshots.py
+#tools/ligaen/leagueshots.py
 from io import BytesIO
 import matplotlib.patches as patches
 import matplotlib.pyplot as plt
@@ -8,111 +9,15 @@ import requests
 from PIL import Image
 import streamlit as st
 
-# Importér eksisterende moduler og funktioner
-from data.data_load import _get_snowflake_conn
-from data.players.player_mapping import player_mapping
 from data.utils.team_mapping import COMPETITIONS, SEASONS, TEAM_COLORS, TEAMS, SEASON_LEAGUE_MAPPER
 from utils.pitches import get_boundaries, get_pitch
 
-# --- KONFIGURATION (Hvidovre-app værdier) ---
+from data.sql.skud_data import load_league_data, resolve_player_names
+
 HIF_RED = "#cc0000"
-DB = "KLUB_HVIDOVREIF.AXIS"
 
 # --- ZONE DEFINITIONER ---
 ZONE_BOUNDARIES = get_boundaries()
-
-
-@st.cache_data(ttl=3600)
-def load_league_data(liga_uuid):
-    conn = _get_snowflake_conn()
-    if not conn or not liga_uuid:
-        return pd.DataFrame()
-
-    sql = f"""
-        WITH CleanQualifiers AS (
-            -- Henter xG (QID 321) og sikrer én værdi pr event uden duplikering
-            SELECT EVENT_OPTAUUID, MAX(TRY_CAST(QUALIFIER_VALUE AS FLOAT)) as XG_VAL
-            FROM {DB}.OPTA_QUALIFIERS
-            WHERE QUALIFIER_QID = 321
-            GROUP BY EVENT_OPTAUUID
-        ),
-        PlayerNames AS (
-            SELECT DISTINCT PLAYER_OPTAUUID, FIRST_NAME, LAST_NAME, SHORT_LAST_NAME, MATCH_NAME
-            FROM {DB}.OPTA_MATCH_LINEUPS
-            WHERE FIRST_NAME IS NOT NULL
-        )
-        SELECT 
-            e.EVENT_OPTAUUID as event_optauuid,
-            e.MATCH_OPTAUUID as match_optauuid,
-            e.PLAYER_OPTAUUID as player_optauuid,
-            e.EVENT_CONTESTANT_OPTAUUID as event_contestant_optauuid,
-            e.EVENT_TYPEID as event_typeid,
-            e.EVENT_X as event_x,
-            e.EVENT_Y as event_y,
-            e.EVENT_OUTCOME as event_outcome,
-            e.EVENT_TIMESTAMP as event_timestamp,
-            COALESCE(q.XG_VAL, 0.05) as xg_raw,
-            pn.FIRST_NAME as first_name,
-            pn.LAST_NAME as last_name,
-            pn.SHORT_LAST_NAME as short_last_name,
-            pn.MATCH_NAME as match_name,
-            TRIM(COALESCE(pn.FIRST_NAME, '')) || ' ' || TRIM(COALESCE(pn.LAST_NAME, '')) as full_player_name
-        FROM {DB}.OPTA_EVENTS e
-        JOIN {DB}.OPTA_MATCHINFO m ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
-        LEFT JOIN CleanQualifiers q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
-        LEFT JOIN PlayerNames pn ON e.PLAYER_OPTAUUID = pn.PLAYER_OPTAUUID
-        WHERE m.TOURNAMENTCALENDAR_OPTAUUID = '{liga_uuid}'
-          AND e.EVENT_TYPEID IN (13, 14, 15, 16)
-    """
-
-    try:
-        df = conn.query(sql) if hasattr(conn, "query") else pd.read_sql(sql, conn)
-        if df is not None and not df.empty:
-            df.columns = [c.upper() for c in df.columns]
-            df = resolve_player_names(df, conn)
-            return df
-        return pd.DataFrame()
-    except Exception as e:
-        st.error(f"Fejl ved indlæsning af data fra Snowflake: {e}")
-        return pd.DataFrame()
-
-
-def resolve_player_names(df, conn=None):
-    if df.empty or "PLAYER_OPTAUUID" not in df.columns:
-        if "PLAYER_NAME" not in df.columns:
-            df["PLAYER_NAME"] = "Ukendt"
-        else:
-            df["PLAYER_NAME"] = df["PLAYER_NAME"].fillna("Ukendt")
-        return df
-
-    resolved = df["PLAYER_OPTAUUID"].map(player_mapping.optauuid_to_name)
-
-    if "FULL_PLAYER_NAME" in df.columns:
-        resolved = resolved.fillna(df["FULL_PLAYER_NAME"])
-
-    df["PLAYER_NAME"] = resolved
-
-    missing_mask = df["PLAYER_NAME"].isna() | (
-        df["PLAYER_NAME"].astype(str).str.strip() == ""
-    )
-    missing_uuids = df.loc[missing_mask, "PLAYER_OPTAUUID"].dropna().unique()
-
-    if len(missing_uuids) > 0 and conn is not None:
-        for uuid in missing_uuids:
-            navn = player_mapping.get_name_by_opta_uuid(uuid, conn=conn, db_name=DB)
-            if navn and navn != "Ukendt":
-                df.loc[df["PLAYER_OPTAUUID"] == uuid, "PLAYER_NAME"] = navn
-
-    df["PLAYER_NAME"] = df["PLAYER_NAME"].fillna("Ukendt")
-    df.loc[df["PLAYER_NAME"].astype(str).str.strip() == "", "PLAYER_NAME"] = (
-        "Ukendt"
-    )
-
-    player_mapping.register_players_from_df(
-        df, uuid_col="PLAYER_OPTAUUID", name_col="PLAYER_NAME"
-    )
-
-    return df
 
 
 @st.cache_data(ttl=3600)
