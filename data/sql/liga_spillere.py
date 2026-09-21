@@ -301,6 +301,62 @@ def hent_samlet_spiller_statistik(conn, db_navn, liga_ids, navne_map=None):
 
     return df
 
+def hent_liga_afslutninger(conn, db_navn, liga_ids, navne_map=None):
+    """
+    Henter et rent, unikt datasæt over alle afslutninger i ligaen direkte fra SQL.
+    Undgår duplikerede rækker fra qualifiers og mapper navne med det samme.
+    """
+    if navne_map is None:
+        navne_map = {}
+
+    liga_ids_sql = _forbered_liga_ids(liga_ids)
+
+    sql_query = f"""
+        WITH CleanQualifiers AS (
+            -- Henter xG (QID 321) og sikrer én værdi pr event uden duplikering
+            SELECT EVENT_OPTAUUID, MAX(TRY_CAST(QUALIFIER_VALUE AS FLOAT)) as XG_VAL
+            FROM {db_navn}.OPTA_QUALIFIERS
+            WHERE QUALIFIER_QID = 321
+            GROUP BY EVENT_OPTAUUID
+        ),
+        PlayerNames AS (
+            SELECT DISTINCT PLAYER_OPTAUUID, FIRST_NAME, LAST_NAME, SHORT_LAST_NAME, MATCH_NAME
+            FROM {db_navn}.OPTA_MATCH_LINEUPS
+            WHERE FIRST_NAME IS NOT NULL
+        )
+        SELECT 
+            e.EVENT_OPTAUUID as event_optauuid,
+            e.MATCH_OPTAUUID as match_optauuid,
+            e.PLAYER_OPTAUUID as player_optauuid,
+            e.EVENT_CONTESTANT_OPTAUUID as hold_optauuid,
+            e.EVENT_TYPEID as event_typeid,
+            e.EVENT_X as event_x,
+            e.EVENT_Y as event_y,
+            e.EVENT_OUTCOME as event_outcome,
+            e.EVENT_TIMESTAMP as event_timestamp,
+            COALESCE(q.XG_VAL, 0) as xg,
+            pn.FIRST_NAME as first_name,
+            pn.SHORT_LAST_NAME as short_last_name,
+            pn.MATCH_NAME as match_name
+        FROM {db_navn}.OPTA_EVENTS e
+        JOIN {db_navn}.OPTA_MATCHINFO m ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
+        LEFT JOIN CleanQualifiers q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
+        LEFT JOIN PlayerNames pn ON e.PLAYER_OPTAUUID = pn.PLAYER_OPTAUUID
+        WHERE m.TOURNAMENTCALENDAR_OPTAUUID IN {liga_ids_sql}
+          AND e.EVENT_TYPEID IN (13, 14, 15, 16)
+          AND e.EVENT_TIMESTAMP >= '2026-07-01'
+    """
+
+    df = conn.query(sql_query)
+    if df is not None and not df.empty:
+        df.columns = df.columns.str.lower()
+        if navne_map:
+            df = _anvend_player_mapping(df, navne_map)
+    else:
+        df = pd.DataFrame()
+
+    return df
+
 
 def hent_spiller_event_stats(conn, db_navn, liga_ids, hold_optauuid=None,
                               match_optauuid=None, fra_dato="2026-07-01",
