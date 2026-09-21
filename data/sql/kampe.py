@@ -1,4 +1,3 @@
-#data/sql/kampe.py
 import os
 import numpy as np
 import pandas as pd
@@ -14,11 +13,11 @@ def load_match_level_data(
     comp_wyid,
     season_start_year=2026,
 ):
-  conn = _get_snowflake_conn()
-  db = "KLUB_HVIDOVREIF.AXIS"
+    conn = _get_snowflake_conn()
+    db = "KLUB_HVIDOVREIF.AXIS"
 
-  query = f"""
-        MatchBase AS (
+    query = f"""
+        WITH MatchBase AS (
             SELECT 
                 MATCH_OPTAUUID, 
                 TO_CHAR(MATCH_DATE_FULL, 'YYYY-MM-DD') AS MATCH_DATE,
@@ -29,6 +28,7 @@ def load_match_level_data(
             FROM {db}.OPTA_MATCHINFO
             WHERE TOURNAMENTCALENDAR_OPTAUUID = '{tournament_opta_uuid}'
               AND MATCH_STATUS = 'Played'
+              AND MATCH_DATE_FULL <= CURRENT_TIMESTAMP()
         ),
         MatchStatsPivot AS (
             SELECT 
@@ -145,26 +145,26 @@ def load_match_level_data(
         ORDER BY MATCH_DATE ASC
     """
 
-  df = pd.DataFrame()
-  try:
-    df = conn.query(query)
-  except Exception as e:
-    st.info(f"Bruger lokal CSV-fallback, da forbindelsen til databasen fejlede: {e}")
-
-  # Fallback: Hvis databasen ikke returnerede noget, prøv at indlæse CSV-filen
-  fallback_file = "data/csv/kampe_fallback.csv"
-  if df.empty and os.path.exists(fallback_file):
+    df = pd.DataFrame()
     try:
-      df = pd.read_csv(fallback_file)
-      # Filtrer for det valgte hold hvis kolonnen findes
-      if "TEAM_OPTAUUID" in df.columns:
-        df = df[df["TEAM_OPTAUUID"] == team_opta_uuid]
-    except Exception as csv_error:
-      st.error(f"Fejl ved indlæsning af fallback CSV-fil: {csv_error}")
+        df = conn.query(query)
+    except Exception as e:
+        st.info(f"Bruger lokal CSV-fallback, da forbindelsen til databasen fejlede: {e}")
 
-  if not df.empty:
-    df.columns = [c.upper() for c in df.columns]
-    numeric_cols = df.select_dtypes(include=[np.number]).columns
-    df[numeric_cols] = df[numeric_cols].fillna(0)
+    # Fallback: Hvis databasen ikke returnerede noget, prøv at indlæse CSV-filen
+    fallback_file = "data/csv/kampe_fallback.csv"
+    if df.empty and os.path.exists(fallback_file):
+        try:
+            df = pd.read_csv(fallback_file)
+            # Filtrer for det valgte hold hvis kolonnen findes
+            if "TEAM_OPTAUUID" in df.columns:
+                df = df[df["TEAM_OPTAUUID"] == team_opta_uuid]
+        except Exception as csv_error:
+            st.error(f"Fejl ved indlæsning af fallback CSV-fil: {csv_error}")
 
-  return df
+    if not df.empty:
+        df.columns = [c.upper() for c in df.columns]
+        numeric_cols = df.select_dtypes(include=[np.number]).columns
+        df[numeric_cols] = df[numeric_cols].fillna(0)
+
+    return df
