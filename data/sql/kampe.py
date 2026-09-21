@@ -1,4 +1,5 @@
 # data/sql/kampe.py
+import os
 import numpy as np
 import pandas as pd
 from data.data_load import _get_snowflake_conn
@@ -142,7 +143,23 @@ def load_match_level_data(
         WHERE TEAM_OPTAUUID = '{team_opta_uuid}'
         ORDER BY MATCH_DATE ASC
     """
-  df = conn.query(query)
+
+  df = pd.DataFrame()
+  try:
+    df = conn.query(query)
+  except Exception as e:
+    st.info(f"Bruger lokal CSV-fallback, da forbindelsen til databasen fejlede: {e}")
+
+  # Fallback: Hvis databasen ikke returnerede noget, prøv at indlæse CSV-filen
+  fallback_file = "data/csv/kampe_fallback.csv"
+  if df.empty and os.path.exists(fallback_file):
+    try:
+      df = pd.read_csv(fallback_file)
+      # Filtrer for det valgte hold hvis kolonnen findes
+      if "TEAM_OPTAUUID" in df.columns:
+        df = df[df["TEAM_OPTAUUID"] == team_opta_uuid]
+    except Exception as csv_error:
+      st.error(f"Fejl ved indlæsning af fallback CSV-fil: {csv_error}")
 
   if not df.empty:
     df.columns = [c.upper() for c in df.columns]
