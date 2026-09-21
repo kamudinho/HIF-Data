@@ -280,13 +280,14 @@ def vis_side(dp=None):
     with tabs[0]:
         st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
         p_stats = []
-        for p, d in df_team.groupby("PLAYER_NAME"):
+        # Gruppér på både UUID og Navn for at undgå navne-kollisioner eller duplikering
+        for (p_uuid, p_name), d in df_team.groupby(["PLAYER_OPTAUUID", "PLAYER_NAME"]):
             s, m = len(d), len(d[d["EVENT_TYPEID"] == 16])
             dz_d = d[d["IS_DZ"]]
             dz_s, dz_m = len(dz_d), len(dz_d[dz_d["EVENT_TYPEID"] == 16])
 
             p_stats.append({
-                "Spiller": p,
+                "Spiller": p_name,
                 "Skud": s,
                 "Mål": m,
                 "Konv.%": (m / s * 100 if s > 0 else 0),
