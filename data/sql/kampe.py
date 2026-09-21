@@ -18,7 +18,7 @@ def load_match_level_data(
   db = "KLUB_HVIDOVREIF.AXIS"
 
   query = f"""
-        With MatchBase AS (
+        MatchBase AS (
             SELECT 
                 MATCH_OPTAUUID, 
                 TO_CHAR(MATCH_DATE_FULL, 'YYYY-MM-DD') AS MATCH_DATE,
@@ -28,6 +28,7 @@ def load_match_level_data(
                 TOTAL_AWAY_SCORE
             FROM {db}.OPTA_MATCHINFO
             WHERE TOURNAMENTCALENDAR_OPTAUUID = '{tournament_opta_uuid}'
+              AND MATCH_STATUS = 'Played'
         ),
         MatchStatsPivot AS (
             SELECT 
