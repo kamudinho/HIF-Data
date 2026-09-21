@@ -76,7 +76,7 @@ def load_match_level_data(
             SELECT 
                 mb.MATCH_OPTAUUID,
                 mb.MATCH_DATE,
-                sp.CONTESTANT_OPTAUUID AS TEAM_OPTAUUID,
+                COALESCE(sp.CONTESTANT_OPTAUUID, '{team_opta_uuid}') AS TEAM_OPTAUUID,
                 COALESCE(CASE WHEN sp.CONTESTANT_OPTAUUID = mb.CONTESTANTHOME_OPTAUUID THEN mb.TOTAL_HOME_SCORE ELSE mb.TOTAL_AWAY_SCORE END, 0) AS GOALS,
                 COALESCE(CASE WHEN sp.CONTESTANT_OPTAUUID = mb.CONTESTANTHOME_OPTAUUID THEN mb.TOTAL_AWAY_SCORE ELSE mb.TOTAL_HOME_SCORE END, 0) AS GOALS_AGAINST,
                 mb.CONTESTANTHOME_OPTAUUID,
@@ -128,7 +128,7 @@ def load_match_level_data(
                 AVG(sp.CLEANSHEET) OVER() AS LIGA_AVG_CLEANSHEET,
                 AVG(wd.PPDA) OVER() AS LIGA_AVG_PPDA
             FROM MatchBase mb
-            JOIN MatchStatsPivot sp ON mb.MATCH_OPTAUUID = sp.MATCH_OPTAUUID
+            LEFT JOIN MatchStatsPivot sp ON mb.MATCH_OPTAUUID = sp.MATCH_OPTAUUID AND (sp.CONTESTANT_OPTAUUID = '{team_opta_uuid}')
             LEFT JOIN ExpectedGoalsPivot xg ON sp.MATCH_OPTAUUID = xg.MATCH_OPTAUUID AND sp.CONTESTANT_OPTAUUID = xg.CONTESTANT_OPTAUUID
             LEFT JOIN WyscoutDefense wd ON mb.MATCH_DATE = wd.MATCH_DATE 
         ),
