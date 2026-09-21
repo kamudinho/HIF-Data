@@ -259,10 +259,15 @@ def hent_samlet_spiller_statistik(conn, db_navn, liga_ids, navne_map=None):
         GROUP BY PLAYER_OPTAUUID, CONTESTANT_OPTAUUID
     ),
     PlayerNames AS (
-        SELECT DISTINCT PLAYER_OPTAUUID, FIRST_NAME, SHORT_LAST_NAME, MATCH_NAME
-        FROM {db_navn}.OPTA_MATCH_LINEUPS
-        WHERE FIRST_NAME IS NOT NULL
-    )
+            SELECT PLAYER_OPTAUUID, 
+                   MAX(FIRST_NAME) as FIRST_NAME, 
+                   MAX(LAST_NAME) as LAST_NAME, 
+                   MAX(SHORT_LAST_NAME) as SHORT_LAST_NAME,
+                   MAX(MATCH_NAME) as MATCH_NAME
+            FROM {DB}.OPTA_MATCH_LINEUPS
+            WHERE FIRST_NAME IS NOT NULL
+            GROUP BY PLAYER_OPTAUUID
+        )
     SELECT 
         pn.FIRST_NAME,
         pn.SHORT_LAST_NAME,
@@ -528,9 +533,14 @@ def hent_spiller_event_stats(conn, db_navn, liga_ids, hold_optauuid=None,
             GROUP BY PLAYER_OPTAUUID, CONTESTANT_OPTAUUID
         ),
         navne AS (
-            SELECT DISTINCT PLAYER_OPTAUUID, FIRST_NAME, LAST_NAME, SHORT_LAST_NAME, MATCH_NAME
-            FROM {db_navn}.OPTA_MATCH_LINEUPS
+            SELECT PLAYER_OPTAUUID, 
+                   MAX(FIRST_NAME) as FIRST_NAME, 
+                   MAX(LAST_NAME) as LAST_NAME, 
+                   MAX(SHORT_LAST_NAME) as SHORT_LAST_NAME,
+                   MAX(MATCH_NAME) as MATCH_NAME
+            FROM {DB}.OPTA_MATCH_LINEUPS
             WHERE FIRST_NAME IS NOT NULL
+            GROUP BY PLAYER_OPTAUUID
         )
         SELECT
             n.MATCH_NAME,
