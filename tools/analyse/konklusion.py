@@ -494,9 +494,9 @@ def vis_side(dp=None):
         st.markdown(f"""
         <div class="analysis-card">
             <div class="section-title">Defensivt spil</div>
-            <div class="stat-line">• Tackling-succes: {safe_val(row['TACKLE_SUCCESS'], suffix='%')} ({int(row['TACKLES_WON'])}/{int(row['TACKLES_TOTAL'])})</div>
-            <div class="stat-line">• {get_rank('CLEARANCES')} flest klareringer ({int(row['CLEARANCES'])})</div>
-            <div class="stat-line">• {get_rank('OFFSIDES_WON')} flest offsides fanget ({int(row['OFFSIDES_WON'])})</div>
+            <div class="stat-line">• Tacklinger, succes: {safe_val(row['TACKLE_SUCCESS'], suffix='%')} ({int(row['TACKLES_WON'])}/{int(row['TACKLES_TOTAL'])})</div>
+            <div class="stat-line">• {get_rank('CLEARANCES')} flest clearinger ({int(row['CLEARANCES'])})</div>
+            <div class="stat-line">• {get_rank('OFFSIDES_WON')} flest offsides ({int(row['OFFSIDES_WON'])})</div>
             <div class="stat-line">• {get_rank('PPDA', ascending=True)} laveste PPDA ({safe_val(row['PPDA'], decimals=2)})</div>
             <div class="stat-line">• {get_rank('XG_AGAINST', ascending=True)} laveste xG imod ({safe_val(row['XG_AGAINST'], decimals=2)})</div>
             <div class="stat-line">• Frispark: {int(row['FOULS_WON'])} vundet / {int(row['FOULS_CONCEDED'])} begået</div>
@@ -511,8 +511,8 @@ def vis_side(dp=None):
             <div class="stat-line">• {get_rank('SAVES')} flest redninger ({int(row['SAVES'])})</div>
             <div class="stat-line">• {get_rank('CLEAN_SHEETS')} flest clean sheets ({int(row['CLEAN_SHEETS'])})</div>
             <div class="stat-line">• {get_rank('GOALS_CONCEDED', ascending=True)} færrest mål imod ({int(row['GOALS_CONCEDED'])})</div>
-            <div class="stat-line">• Straffe: {int(row['PENALTIES_WON'])} vundet / {int(row['PENALTIES_CONCEDED'])} imod ({int(row['PENALTY_SAVES'])} reddet)</div>
-            <div class="stat-line">• Hjørnespark: {int(row['CORNERS_TAKEN'])} taget / {int(row['CORNERS_CONCEDED'])} imod</div>
+            <div class="stat-line">• Straffe: {int(row['PENALTIES_WON'])} for / {int(row['PENALTIES_CONCEDED'])} imod ({int(row['PENALTY_SAVES'])} reddet)</div>
+            <div class="stat-line">• Hjørnespark: {int(row['CORNERS_TAKEN'])} for / {int(row['CORNERS_CONCEDED'])} imod</div>
             <div class="stat-line">• Selvmål: {int(row['OWN_GOALS'])}</div>
             <div class="conclusion-text">Konklusion – {int(row['CLEAN_SHEETS'])} clean sheets og {int(row['GOALS_CONCEDED'])} mål imod.</div>
         </div>
