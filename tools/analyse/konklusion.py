@@ -63,13 +63,13 @@ def vis_side(dp=None):
         return
 
     # --- 2. SQL: OPTA_MATCHSTATS & CORNERS (Optimeret med Conditional Aggregation) ---
+    # --- 2. SQL: OPTA_MATCHSTATS (uden GOALS) & EXPECTEDSTATS (med GOALS) ---
     sql = f'''
     WITH MatchStats AS (
         SELECT 
             UPPER(TRIM(CONTESTANT_OPTAUUID)) as TEAM_ID,
 
-            -- Afslutningsspil
-            SUM(CASE WHEN STAT_TYPE = 'goals' THEN STAT_TOTAL ELSE 0 END) as GOALS,
+            -- Bemærk: GOALS er fjernet herfra, da den tælles mere præcist i xG-tabellen
             SUM(CASE WHEN STAT_TYPE = 'totalScoringAtt' THEN STAT_TOTAL ELSE 0 END) as SHOTS_TOTAL,
             SUM(CASE WHEN STAT_TYPE = 'ontargetScoringAtt' THEN STAT_TOTAL ELSE 0 END) as SHOTS_ON_TARGET,
             SUM(CASE WHEN STAT_TYPE = 'blockedScoringAtt' THEN STAT_TOTAL ELSE 0 END) as SHOTS_BLOCKED,
@@ -112,6 +112,8 @@ def vis_side(dp=None):
     ExpectedStats AS (
         SELECT 
             UPPER(TRIM(CONTESTANT_OPTAUUID)) as TEAM_ID,
+            -- Henter mål herfra, hvor alle underkategorier (fx iBoxGoal, penGoal osv.) er inkluderet via LIKE '%Goal' eller 'goals'
+            SUM(CASE WHEN STAT_TYPE = 'goals' OR STAT_TYPE LIKE '%Goal' THEN STAT_VALUE ELSE 0 END) as GOALS,
             SUM(CASE WHEN STAT_TYPE = 'expectedGoals' THEN STAT_VALUE ELSE 0 END) as XG,
             SUM(CASE WHEN STAT_TYPE = 'expectedGoalsConceded' THEN STAT_VALUE ELSE 0 END) as XG_AGAINST,
             SUM(CASE WHEN STAT_TYPE = 'expectedAssists' THEN STAT_VALUE ELSE 0 END) as XA,
@@ -120,12 +122,11 @@ def vis_side(dp=None):
             SUM(CASE WHEN STAT_TYPE = 'touchesInOppBox' THEN STAT_VALUE ELSE 0 END) as BOX_TOUCHES,
             SUM(CASE WHEN STAT_TYPE = 'hitWoodwork' THEN STAT_VALUE ELSE 0 END) as WOODWORK,
             SUM(CASE WHEN STAT_TYPE = 'touches' THEN STAT_VALUE ELSE 0 END) as TOUCHES
-        FROM {DB}.OPTA_MATCHEXPECTEDGOALS
+        FROM {DB}.OPTA_MATCHEXPECTEDGOALS_TEAM
         WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
         GROUP BY 1
     ),
     MatchCorners AS (
-        -- Hent hjørnespark pr kamp for at undgå tung self-join på store tabeller
         SELECT MATCH_OPTAUUID, UPPER(TRIM(CONTESTANT_OPTAUUID)) as TEAM_ID, STAT_TOTAL as CORNERS
         FROM {DB}.OPTA_MATCHSTATS
         WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}' AND STAT_TYPE = 'cornerTaken'
@@ -139,6 +140,7 @@ def vis_side(dp=None):
         GROUP BY 1
     )
     SELECT m.*, 
+        COALESCE(e.GOALS, 0) as GOALS,
         COALESCE(e.XG, 0) as XG, 
         COALESCE(e.XG_AGAINST, 0) as XG_AGAINST,
         COALESCE(e.XA, 0) as XA,
