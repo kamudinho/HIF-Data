@@ -1,17 +1,7 @@
 #HIF-Data/data/sql/skud_data.py
 """
-Skud-/xG-data til leagueshots.py. Flyttet ud af liga_spillere.py, hvor den
-ved en fejl var blevet duplikeret - liga_spillere.py handler om
-spillerstatistik, ikke skudkort. Nu er der ét sted at rette, ikke to.
-
-RETTET: PlayerNames-opslaget brugte "SELECT DISTINCT" over FIRST_NAME,
-LAST_NAME, SHORT_LAST_NAME og MATCH_NAME samtidig. DISTINCT virker paa alle
-kolonner tilsammen - har Opta registreret et navn en anelse forskelligt i to
-kampe (mellemrum, stavevariant), gav det TO raekker for samme spiller i
-stedet for én, hvilket duplikerede hver haendelse for spilleren efter
-joinet. Fix: MAX(...) GROUP BY PLAYER_OPTAUUID garanterer altid præcis én
-raekke pr. spiller foer joinet overhovedet sker - samme princip som
-rettelsen af player_career.sql.
+Skud-/xG-data til leagueshots.py. Optimeret til at matche 
+officielle Opta-matchstats og undgå divergens.
 """
 
 import streamlit as st
@@ -47,7 +37,7 @@ def load_league_data(liga_uuid):
             WHERE FIRST_NAME IS NOT NULL
             GROUP BY PLAYER_OPTAUUID
         )
-        SELECT 
+        SELECT DISTINCT
             e.EVENT_OPTAUUID as event_optauuid,
             e.MATCH_OPTAUUID as match_optauuid,
             e.PLAYER_OPTAUUID as player_optauuid,
@@ -68,13 +58,18 @@ def load_league_data(liga_uuid):
         LEFT JOIN CleanQualifiers q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
         LEFT JOIN PlayerNames pn ON e.PLAYER_OPTAUUID = pn.PLAYER_OPTAUUID
         WHERE m.TOURNAMENTCALENDAR_OPTAUUID = '{liga_uuid}'
+          -- Præcis afgrænsning af skud (13=Miss, 14=Post, 15=Saved, 16=Goal) 
+          -- og frasortering af eventuelle duplikerede hændelses-id'er
           AND e.EVENT_TYPEID IN (13, 14, 15, 16)
+          AND e.EVENT_OPTAUUID IS NOT NULL
     """
 
     try:
         df = conn.query(sql) if hasattr(conn, "query") else pd.read_sql(sql, conn)
         if df is not None and not df.empty:
             df.columns = [c.upper() for c in df.columns]
+            # Fjern evt. dubletter på selve event-uuid'et for en sikkerheds skyld
+            df = df.drop_duplicates(subset=["EVENT_OPTAUUID"])
             df = resolve_player_names(df, conn)
             return df
         return pd.DataFrame()
