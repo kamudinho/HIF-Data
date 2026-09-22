@@ -493,7 +493,7 @@ def vis_side(dp=None):
     with col3:
         st.markdown(f"""
         <div class="analysis-card">
-            <div class="section-title">Defensivt spil</div>
+            <div class="section-title">Forsvarsspil</div>
             <div class="stat-line">• Tacklinger, succes: {safe_val(row['TACKLE_SUCCESS'], suffix='%')} ({int(row['TACKLES_WON'])}/{int(row['TACKLES_TOTAL'])})</div>
             <div class="stat-line">• {get_rank('CLEARANCES')} flest clearinger ({int(row['CLEARANCES'])})</div>
             <div class="stat-line">• {get_rank('OFFSIDES_WON')} flest offsides ({int(row['OFFSIDES_WON'])})</div>
@@ -507,7 +507,7 @@ def vis_side(dp=None):
     with col4:
         st.markdown(f"""
         <div class="analysis-card">
-            <div class="section-title">Målmand & dødbolde</div>
+            <div class="section-title">Målmand & standarder</div>
             <div class="stat-line">• {get_rank('SAVES')} flest redninger ({int(row['SAVES'])})</div>
             <div class="stat-line">• {get_rank('CLEAN_SHEETS')} flest clean sheets ({int(row['CLEAN_SHEETS'])})</div>
             <div class="stat-line">• {get_rank('GOALS_CONCEDED', ascending=True)} færrest mål imod ({int(row['GOALS_CONCEDED'])})</div>
