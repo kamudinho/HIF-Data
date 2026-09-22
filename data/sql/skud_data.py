@@ -1,15 +1,22 @@
 #HIF-Data/data/sql/skud_data.py
 """
-Skud-/xG-data til leagueshots.py. Optimeret til at matche 
+Skud-/xG-data til leagueshots.py. Optimeret til at matche
 officielle Opta-matchstats og undgå divergens.
+
+RETTET: EVENT_TYPEID = 16 (Goal) udelukkede tidligere ikke selvmål
+(qualifier 28) - se den samme fejl i liga_spillere.py for forklaring.
+Et selvmål har ingen reel skudposition eller xG i Optas data (derfor
+faldt den altid tilbage til xg_raw = 0.05), saa den udelukkes nu helt
+fra skudkortet i stedet for at staa som spillerens eget skud/maal.
+Mønsteret (LEFT JOIN paa qualifier 28, WHERE ... IS NULL) er det samme
+som allerede brugt korrekt i kampe.py's CalculatedSubGoals.
 """
 
 import streamlit as st
 import pandas as pd
 from data.data_load import _get_snowflake_conn
 from data.players.player_mapping import player_mapping
-
-DB = "KLUB_HVIDOVREIF.AXIS"
+from data.sql.db_config import DB
 
 
 @st.cache_data(ttl=3600)
@@ -25,6 +32,13 @@ def load_league_data(liga_uuid):
             FROM {DB}.OPTA_QUALIFIERS
             WHERE QUALIFIER_QID = 321
             GROUP BY EVENT_OPTAUUID
+        ),
+        OwnGoals AS (
+            -- Selvmål (qualifier 28) - udelukkes fra skudkortet, da de ikke
+            -- er et reelt skudforsøg fra spilleren og aldrig har en xG-værdi.
+            SELECT DISTINCT EVENT_OPTAUUID
+            FROM {DB}.OPTA_QUALIFIERS
+            WHERE QUALIFIER_QID = 28
         ),
         PlayerNames AS (
             SELECT
@@ -56,12 +70,14 @@ def load_league_data(liga_uuid):
         FROM {DB}.OPTA_EVENTS e
         JOIN {DB}.OPTA_MATCHINFO m ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
         LEFT JOIN CleanQualifiers q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
+        LEFT JOIN OwnGoals og ON e.EVENT_OPTAUUID = og.EVENT_OPTAUUID
         LEFT JOIN PlayerNames pn ON e.PLAYER_OPTAUUID = pn.PLAYER_OPTAUUID
         WHERE m.TOURNAMENTCALENDAR_OPTAUUID = '{liga_uuid}'
-          -- Præcis afgrænsning af skud (13=Miss, 14=Post, 15=Saved, 16=Goal) 
+          -- Præcis afgrænsning af skud (13=Miss, 14=Post, 15=Saved, 16=Goal)
           -- og frasortering af eventuelle duplikerede hændelses-id'er
           AND e.EVENT_TYPEID IN (13, 14, 15, 16)
           AND e.EVENT_OPTAUUID IS NOT NULL
+          AND og.EVENT_OPTAUUID IS NULL
     """
 
     try:
