@@ -1,6 +1,4 @@
 #HIF-Data/tools/analyse/konklusion.py
-#HIF-Data/tools/analyse/konklusion.py
-
 import streamlit as st
 import pandas as pd
 from data.utils.team_mapping import (
@@ -62,14 +60,12 @@ def vis_side(dp=None):
         st.warning(f"Ingen turnerings-UUID fundet for '{COMPETITION_NAME}' i sæsonen '{SAESON_NAVN}'. Tjek SEASONS-mappingen i team_mapping.py.")
         return
 
-    # --- 2. SQL: OPTA_MATCHSTATS & CORNERS (Optimeret med Conditional Aggregation) ---
-    # --- 2. SQL: OPTA_MATCHSTATS (uden GOALS) & EXPECTEDSTATS (med GOALS) ---
+    # --- 2. SQL: OPTA_MATCHSTATS & EXPECTEDSTATS ---
     sql = f'''
     WITH MatchStats AS (
         SELECT 
             UPPER(TRIM(CONTESTANT_OPTAUUID)) as TEAM_ID,
 
-            -- Bemærk: GOALS er fjernet herfra, da den tælles mere præcist i xG-tabellen
             SUM(CASE WHEN STAT_TYPE = 'totalScoringAtt' THEN STAT_TOTAL ELSE 0 END) as SHOTS_TOTAL,
             SUM(CASE WHEN STAT_TYPE = 'ontargetScoringAtt' THEN STAT_TOTAL ELSE 0 END) as SHOTS_ON_TARGET,
             SUM(CASE WHEN STAT_TYPE = 'blockedScoringAtt' THEN STAT_TOTAL ELSE 0 END) as SHOTS_BLOCKED,
@@ -112,7 +108,6 @@ def vis_side(dp=None):
     ExpectedStats AS (
         SELECT 
             UPPER(TRIM(CONTESTANT_OPTAUUID)) as TEAM_ID,
-            -- Hent kun de overordnede mål, så de ikke ganges op af de andre stat-typer
             SUM(CASE WHEN STAT_TYPE = 'goals' THEN STAT_VALUE ELSE 0 END) as GOALS,
             SUM(CASE WHEN STAT_TYPE = 'expectedGoals' THEN STAT_VALUE ELSE 0 END) as XG,
             SUM(CASE WHEN STAT_TYPE = 'expectedGoalsConceded' THEN STAT_VALUE ELSE 0 END) as XG_AGAINST,
@@ -299,7 +294,9 @@ def vis_side(dp=None):
 
     # --- 5. FILTRERING ---
     hold_navne = SEASON_LEAGUE_MAPPER.get(SAESON_NAVN, {}).get(COMPETITION_NAME, [])
-    hold_options = {n: TEAMS[n].get("opta_uuid") for n in hold_navne if n in TEAMS}
+    # Sorterer hold-navne alfabetisk (så A, AA, B, C osv. følger korrekt rekkefølge)
+    sorterede_hold_navne = sorted([n for n in hold_navne if n in TEAMS])
+    hold_options = {n: TEAMS[n].get("opta_uuid") for n in sorterede_hold_navne}
 
     if not hold_options:
         st.warning(f"Ingen hold fundet for '{COMPETITION_NAME}' i sæsonen '{SAESON_NAVN}'. Tjek SEASON_LEAGUE_MAPPER og TEAMS i team_mapping.py.")
@@ -313,7 +310,8 @@ def vis_side(dp=None):
     col_top1, col_top2 = st.columns([1, 1])
 
     with col_top1:
-        valgt_navn = st.selectbox("Vælg hold", sorted(hold_options.keys()))
+        # Brug den sorterede liste her
+        valgt_navn = st.selectbox("Vælg hold", sorterede_hold_navne)
 
     with col_top2:
         visning = st.segmented_control(
@@ -392,7 +390,8 @@ def vis_side(dp=None):
                     row_disp[label] = safe_val(val, decimals, suffix)
                 display_rows.append(row_disp)
             
-            df_cat = pd.DataFrame(display_rows).set_index("Hold")
+            # Sorter rækkerne alfabetisk efter "Hold" (A, AA, B, C osv.)
+            df_cat = pd.DataFrame(display_rows).sort_values("Hold").set_index("Hold")
             
             def style_cells(data):
                 styled = pd.DataFrame('', index=data.index, columns=data.columns)
