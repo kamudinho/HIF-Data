@@ -72,23 +72,7 @@ def load_data(periode, start, split, slut, calendar_uuid, wyid):
             GROUP BY tm.TEAM_WYID
         """)
     
-    df_ss = conn.query(f"""
-        WITH BASE AS (
-            SELECT m.HOME_OPTAID as TEAM_ID, ps.DISTANCE, ps."HIGH SPEED RUNNING" as HSR
-            FROM {db}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS ps
-            JOIN {db}.SECONDSPECTRUM_GAME_METADATA m ON ps.MATCH_SSIID = m.MATCH_SSIID
-            WHERE ps.MATCH_DATE {filter_sql}
-            UNION ALL
-            SELECT m.AWAY_OPTAID as TEAM_ID, ps.DISTANCE, ps."HIGH SPEED RUNNING" as HSR
-            FROM {db}.SECONDSPECTRUM_PHYSICAL_SUMMARY_PLAYERS ps
-            JOIN {db}.SECONDSPECTRUM_GAME_METADATA m ON ps.MATCH_SSIID = m.MATCH_SSIID
-            WHERE ps.MATCH_DATE {filter_sql}
-        )
-        SELECT TEAM_ID, AVG(DISTANCE) / 1000 as DIST_KM, AVG(HSR) as HSR
-        FROM BASE GROUP BY TEAM_ID
-    """)
-    
-    return df_opta, df_wy, df_ss
+    return df_opta, df_wy
 
 def calculate_split_table(df_opta, valgt_saeson, valgt_turnering):
     # Sorteringsrækkefølge for tabellen: point -> måldifference -> scorede mål -> navn.
@@ -238,8 +222,7 @@ def vis_side():
     with col_m:
         metric_map = {
             "xG": "XG", "Mål": "GOALS", "Mål imod": "GOALS_AGAINST", "Skud": "SHOTS", 
-            "Afleveringer": "PASSES", "PPDA": "PPDA", 
-            "Distance": "DIST", "High Speed Running": "HSR"
+            "Afleveringer": "PASSES", "PPDA": "PPDA"
         }
         sel_metric = st.selectbox("Parameter:", list(metric_map.keys()))
 
@@ -261,7 +244,7 @@ def vis_side():
         st.subheader(DEFAULT_COMP)
         st.caption("Placering vs. Performance")
 
-    df_opta, df_wy, df_ss = load_data(periode, start_dato, split_dato, slut_dato, calendar_uuid, wyid)
+    df_opta, df_wy = load_data(periode, start_dato, split_dato, slut_dato, calendar_uuid, wyid)
     
     if df_opta is not None and not df_opta.empty:
         df_opta.columns = [c.upper() for c in df_opta.columns]
@@ -278,12 +261,6 @@ def vis_side():
         if team_info:
             perf = df_wy[df_wy['TEAM_WYID'] == team_info.get('team_wyid')] if df_wy is not None and not df_wy.empty else pd.DataFrame()
             
-            try:
-                m_id = str(team_info.get('opta_id'))
-                fysisk = df_ss[df_ss['TEAM_ID'].astype(str) == m_id] if df_ss is not None and not df_ss.empty else pd.DataFrame()
-            except:
-                fysisk = pd.DataFrame()
-            
             final_data.append({
                 '#': row['#'],
                 'HOLD_NAVN': team_name,
@@ -293,9 +270,7 @@ def vis_side():
                 'GOALS': perf['GOALS'].iloc[0] if not perf.empty and 'GOALS' in perf.columns else np.nan,
                 'GOALS_AGAINST': perf['GOALS_AGAINST'].iloc[0] if not perf.empty and 'GOALS_AGAINST' in perf.columns else np.nan,
                 'PASSES': perf['PASSES'].iloc[0] if not perf.empty and 'PASSES' in perf.columns else np.nan,
-                'PPDA': perf['PPDA'].iloc[0] if not perf.empty and 'PPDA' in perf.columns else np.nan,
-                'DIST': fysisk['DIST_KM'].iloc[0] if not fysisk.empty and 'DIST_KM' in fysisk.columns else np.nan,
-                'HSR': fysisk['HSR'].iloc[0] if not fysisk.empty and 'HSR' in fysisk.columns else np.nan
+                'PPDA': perf['PPDA'].iloc[0] if not perf.empty and 'PPDA' in perf.columns else np.nan
             })
 
     df_final = pd.DataFrame(final_data)
