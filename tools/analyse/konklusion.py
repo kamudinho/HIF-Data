@@ -112,8 +112,8 @@ def vis_side(dp=None):
     ExpectedStats AS (
         SELECT 
             UPPER(TRIM(CONTESTANT_OPTAUUID)) as TEAM_ID,
-            -- Henter mål herfra, hvor alle underkategorier (fx iBoxGoal, penGoal osv.) er inkluderet via LIKE '%Goal' eller 'goals'
-            SUM(CASE WHEN STAT_TYPE = 'goals' OR STAT_TYPE LIKE '%Goal' THEN STAT_VALUE ELSE 0 END) as GOALS,
+            -- Hent kun de overordnede mål, så de ikke ganges op af de andre stat-typer
+            SUM(CASE WHEN STAT_TYPE = 'goals' THEN STAT_VALUE ELSE 0 END) as GOALS,
             SUM(CASE WHEN STAT_TYPE = 'expectedGoals' THEN STAT_VALUE ELSE 0 END) as XG,
             SUM(CASE WHEN STAT_TYPE = 'expectedGoalsConceded' THEN STAT_VALUE ELSE 0 END) as XG_AGAINST,
             SUM(CASE WHEN STAT_TYPE = 'expectedAssists' THEN STAT_VALUE ELSE 0 END) as XA,
