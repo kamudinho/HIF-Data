@@ -1,4 +1,5 @@
 #HIF-Data/tools/analyse/konklusion.py
+#HIF-Data/tools/analyse/konklusion.py
 
 import streamlit as st
 import pandas as pd
@@ -13,7 +14,6 @@ from data.utils.team_mapping import (
 from data.data_load import _get_snowflake_conn
 
 # Metric-definitioner brugt i "Alle hold"-leaderboardet.
-# (label, kolonne, ascending=True hvis LAVEST er bedst, decimaler, suffix, kategori)
 METRIC_DEFS = [
     ("Mål scoret", "GOALS", False, 0, "", "Afslutningsspil"),
     ("Expected Goals (xG)", "XG", False, 1, "", "Afslutningsspil"),
@@ -51,7 +51,6 @@ METRIC_DEFS = [
 def vis_side(dp=None):
     # --- 1. SETUP ---
     DB = "KLUB_HVIDOVREIF.AXIS"
-
     LIGA_UUID = SEASONS.get(SAESON_NAVN, {}).get(COMPETITION_NAME)
 
     conn = _get_snowflake_conn()
@@ -63,7 +62,7 @@ def vis_side(dp=None):
         st.warning(f"Ingen turnerings-UUID fundet for '{COMPETITION_NAME}' i sæsonen '{SAESON_NAVN}'. Tjek SEASONS-mappingen i team_mapping.py.")
         return
 
-    # --- 2. SQL: OPTA_MATCHSTATS (hovedstatistik) ---
+    # --- 2. SQL: OPTA_MATCHSTATS & CORNERS (Optimeret med Conditional Aggregation) ---
     sql = f'''
     WITH MatchStats AS (
         SELECT 
@@ -125,16 +124,18 @@ def vis_side(dp=None):
         WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
         GROUP BY 1
     ),
+    MatchCorners AS (
+        -- Hent hjørnespark pr kamp for at undgå tung self-join på store tabeller
+        SELECT MATCH_OPTAUUID, UPPER(TRIM(CONTESTANT_OPTAUUID)) as TEAM_ID, STAT_TOTAL as CORNERS
+        FROM {DB}.OPTA_MATCHSTATS
+        WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}' AND STAT_TYPE = 'cornerTaken'
+    ),
     CornersAgainst AS (
         SELECT 
-            UPPER(TRIM(s1.CONTESTANT_OPTAUUID)) as TEAM_ID,
-            SUM(CASE WHEN s2.STAT_TYPE = 'cornerTaken' THEN s2.STAT_TOTAL ELSE 0 END) as CORNERS_CONCEDED
-        FROM {DB}.OPTA_MATCHSTATS s1
-        JOIN {DB}.OPTA_MATCHSTATS s2 
-            ON s1.MATCH_OPTAUUID = s2.MATCH_OPTAUUID 
-            AND UPPER(TRIM(s1.CONTESTANT_OPTAUUID)) <> UPPER(TRIM(s2.CONTESTANT_OPTAUUID))
-        WHERE s1.TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
-          AND s2.TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
+            m1.TEAM_ID,
+            SUM(m2.CORNERS) as CORNERS_CONCEDED
+        FROM MatchCorners m1
+        JOIN MatchCorners m2 ON m1.MATCH_OPTAUUID = m2.MATCH_OPTAUUID AND m1.TEAM_ID <> m2.TEAM_ID
         GROUP BY 1
     )
     SELECT m.*, 
@@ -238,7 +239,6 @@ def vis_side(dp=None):
         table { text-align: center !important; }
         th { text-align: center !important; }
         td { text-align: center !important; }
-        /* Gør Hold-kolonnen bredere og sikrer at den gælder på tværs af tabeller */
         [data-testid="stDataFrame"] th:nth-child(1), 
         [data-testid="stDataFrame"] td:nth-child(1) {
             min-width: 180px !important;
