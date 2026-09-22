@@ -1,3 +1,4 @@
+#tools/hifanalyse/modstander_common.py
 import streamlit as st
 import pandas as pd
 from PIL import Image
@@ -18,8 +19,6 @@ from data.players.player_mapping import player_mapping, PLAYER_MAPPING
 DB = "KLUB_HVIDOVREIF.AXIS"
 
 # Sørg for at den statiske spillerliste kun indlæses én gang pr. proces
-# (modulet importeres af alle 3 sider, men Python cacher modul-objektet,
-# så dette tjek reelt kun kører første gang).
 if not player_mapping.optauuid_to_name:
     player_mapping._load_data(PLAYER_MAPPING)
 
@@ -80,8 +79,7 @@ def draw_match_info_box(ax, scoring_team_logo, opp_team_logo, date_str, score_st
 
 
 def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None):
-    """Genererer baneplot (KDE/Heatmap) med fastlåst stregtykkelse.
-    mplsoccer importeres lokalt, så den kun loades på de sider der reelt tegner baner."""
+    """Genererer baneplot (KDE/Heatmap) med fastlåst stregtykkelse."""
     from mplsoccer import VerticalPitch
     plot_data = df[df['EVENT_TYPEID'].astype(str).isin([str(i) for i in event_ids])].copy()
     pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
@@ -107,32 +105,16 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None)
 
 
 def resolve_player_names(df, conn):
-    """Slår spillernavne op for en hel event-dataframe ad gangen.
-
-    Erstatter den tidligere row-wise `.apply(map_spiller_navn, ...)`, som for
-    hver eneste event-række lavede et separat funktionskald - og for hver
-    UKENDT spiller (ikke i den statiske PLAYER_MAPPING-liste) sit eget
-    enkeltstående databasekald. Med mange ukendte spillere (typisk
-    modstanderhold der ikke er fuldt dækket af listen) betød det N separate
-    netværksrundeture i streng rækkefølge.
-
-    Her laves i stedet: (1) ét vektoriseret dict-opslag mod den eksisterende
-    cache, og (2) højst ÉT samlet databasekald for alle UNIKKE UUID'er der
-    stadig mangler et navn - uanset hvor mange rækker de optræder i.
-    """
+    """Slår spillernavne op for en hel event-dataframe ad gangen."""
     if df.empty or 'PLAYER_OPTAUUID' not in df.columns:
         return df['PLAYER_NAME'] if 'PLAYER_NAME' in df.columns else pd.Series(dtype=object, index=df.index)
 
     uuid_col = df['PLAYER_OPTAUUID'].astype(str).str.strip()
     valid_uuid = df['PLAYER_OPTAUUID'].notna() & ~uuid_col.isin(["", "None", "nan"])
 
-    # 1. Vektoriseret opslag i den eksisterende cache - ingen DB, ingen row-wise apply.
     resolved = uuid_col.where(valid_uuid).map(player_mapping.optauuid_to_name)
-
-    # 2. De unikke UUID'er der stadig mangler et navn efter cache-opslaget.
     missing_uuids = sorted(set(uuid_col[valid_uuid & resolved.isna()]))
 
-    # 3. Ét samlet databasekald for alle manglende UUID'er (i stedet for ét pr. spiller).
     if missing_uuids and conn is not None:
         uuids_sql = "(" + ",".join(f"'{u}'" for u in missing_uuids) + ")"
         sql = f"""
@@ -150,13 +132,10 @@ def resolve_player_names(df, conn):
                 u = str(r['PLAYER_OPTAUUID']).strip()
                 navn = str(r['PLAYER_NAME']).strip()
                 if navn:
-                    # Skriver til den samme cache som get_name_by_opta_uuid gjorde,
-                    # så andre steder i appen der bruger player_mapping også får glæde af det.
                     player_mapping.optauuid_to_name[u] = navn
 
         resolved = uuid_col.where(valid_uuid).map(player_mapping.optauuid_to_name)
 
-    # 4. Fald tilbage til navnet fra DB-joinet (PLAYER_NAME), og til sidst 'Ukendt'.
     if 'PLAYER_NAME' in df.columns:
         resolved = resolved.fillna(df['PLAYER_NAME'])
     resolved = resolved.fillna('Ukendt').replace(["", "None", "nan"], "Ukendt")
@@ -165,9 +144,6 @@ def resolve_player_names(df, conn):
 
 # ---------------------------------------------------------------------------
 # SÆSON/HOLD-VÆLGER
-# Bruger samme widget-keys ("saeson_select"/"hold_select") på alle 3 sider,
-# så valget forbliver synkroniseret via st.session_state når man navigerer
-# mellem siderne.
 # ---------------------------------------------------------------------------
 
 def render_hold_saeson_selector():
@@ -224,15 +200,11 @@ def render_hold_saeson_selector():
 
 
 # ---------------------------------------------------------------------------
-# DATAHENTNING (cachet pr. hold+sæson - undgår at ramme Snowflake igen når
-# man skifter side eller trigger en rerun med samme valg. Justér ttl efter
-# hvor "live" data skal være).
+# DATAHENTNING
 # ---------------------------------------------------------------------------
 
 @st.cache_data(ttl=900, show_spinner=False)
 def fetch_recent_match_ids(valgt_uuid, liga_ids_sql, limit=10):
-    """Let forespørgsel: kun de seneste spillede kampe. Bruges til at afgrænse
-    event-forespørgslen (fetch_event_data) - både her og på Oversigt-siden."""
     conn = _get_snowflake_conn()
     sql = f"""
         SELECT MATCH_LOCALDATE, CONTESTANTHOME_NAME, CONTESTANTAWAY_NAME,
@@ -244,15 +216,11 @@ def fetch_recent_match_ids(valgt_uuid, liga_ids_sql, limit=10):
         AND (MATCH_STATUS ILIKE '%Played%' OR MATCH_STATUS ILIKE '%Full%' OR MATCH_STATUS ILIKE '%Finish%')
         ORDER BY MATCH_LOCALDATE DESC LIMIT {limit}
     """
-    # ttl=0: conn.query() cacher ellers for evigt (indtil app-genstart) uafhængigt
-    # af vores egen @st.cache_data(ttl=...) herover. Uden ttl=0 her ville vores
-    # ttl aldrig reelt give friske data efter første load.
     return conn.query(sql, ttl=0)
 
 
 @st.cache_data(ttl=900, show_spinner=False)
 def fetch_full_match_history(valgt_uuid, liga_ids_sql, valgt_saeson):
-    """Fuld sæsonhistorik (spillede + kommende kampe) - kun brugt af Oversigt-siden."""
     conn = _get_snowflake_conn()
     sql = f"""
         SELECT MATCH_LOCALDATE, MATCH_DATE_FULL, CONTESTANTHOME_NAME, CONTESTANTAWAY_NAME,
@@ -269,8 +237,6 @@ def fetch_full_match_history(valgt_uuid, liga_ids_sql, valgt_saeson):
 
 @st.cache_data(ttl=900, show_spinner=False)
 def fetch_event_data(valgt_uuid, match_ids):
-    """Tung event-forespørgsel (alle handlinger + qualifiers) for de givne kampe.
-    Bruges af Oversigt (trend-graferne) og Heatmaps-siden. match_ids skal være en tuple."""
     if not match_ids:
         return pd.DataFrame()
 
@@ -308,7 +274,6 @@ def fetch_event_data(valgt_uuid, match_ids):
 
 @st.cache_data(ttl=900, show_spinner=False)
 def fetch_goal_sequences(valgt_uuid, liga_ids_sql):
-    """Events i de 20 sekunder op til hvert mål, for hele sæsonen - kun brugt af Sekvenser-siden."""
     conn = _get_snowflake_conn()
     sql = f"""
         WITH SeasonMatches AS (
