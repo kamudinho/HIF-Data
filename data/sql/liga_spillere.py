@@ -234,8 +234,16 @@ def hent_samlet_spiller_statistik(conn, db_navn, liga_ids, navne_map=None):
             SUM(CASE WHEN e.EVENT_TYPEID = 1 THEN 1 ELSE 0 END) AS Pasninger,
             SUM(CASE WHEN e.EVENT_TYPEID = 1 AND e.EVENT_OUTCOME = 1 THEN 1 ELSE 0 END) AS Pasninger_Succes,
             SUM(CASE WHEN e.EVENT_TYPEID = 1 AND TRY_CAST(q_endx.QUALIFIER_VALUE AS FLOAT) > e.EVENT_X THEN 1 ELSE 0 END) AS Fremadrettede_Pasninger,
-            SUM(CASE WHEN e.EVENT_TYPEID IN (13, 14, 15, 16) THEN 1 ELSE 0 END) AS Afslutninger,
-            SUM(CASE WHEN e.EVENT_TYPEID = 16 THEN 1 ELSE 0 END) AS Maal,
+            -- RETTET: Qualifier 28 = Own Goal (selvmål) - samme fix som i
+            -- hent_spiller_event_stats() nedenfor. Denne funktion talte
+            -- tidligere selvmål med som almindelige maal/afslutninger.
+            SUM(CASE
+                    WHEN e.EVENT_TYPEID IN (13, 14, 15) THEN 1
+                    WHEN e.EVENT_TYPEID = 16 AND q_og.EVENT_OPTAUUID IS NULL THEN 1
+                    ELSE 0
+                END) AS Afslutninger,
+            SUM(CASE WHEN e.EVENT_TYPEID = 16 AND q_og.EVENT_OPTAUUID IS NULL THEN 1 ELSE 0 END) AS Maal,
+            SUM(CASE WHEN e.EVENT_TYPEID = 16 AND q_og.EVENT_OPTAUUID IS NOT NULL THEN 1 ELSE 0 END) AS Selvmaal,
             SUM(CASE WHEN e.EVENT_TYPEID = 7 THEN 1 ELSE 0 END) AS Tacklinger,
             SUM(CASE WHEN e.EVENT_TYPEID IN (7, 8, 12, 49) THEN 1 ELSE 0 END) AS Erobringer,
             SUM(CASE WHEN e.EVENT_TYPEID = 12 THEN 1 ELSE 0 END) AS Clearinger,
@@ -243,6 +251,7 @@ def hent_samlet_spiller_statistik(conn, db_navn, liga_ids, navne_map=None):
         FROM {db_navn}.OPTA_EVENTS e
         JOIN {db_navn}.OPTA_MATCHINFO m ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
         LEFT JOIN {db_navn}.OPTA_QUALIFIERS q_endx ON e.EVENT_OPTAUUID = q_endx.EVENT_OPTAUUID AND q_endx.QUALIFIER_QID = 140
+        LEFT JOIN {db_navn}.OPTA_QUALIFIERS q_og ON e.EVENT_OPTAUUID = q_og.EVENT_OPTAUUID AND q_og.QUALIFIER_QID = 28
         WHERE m.TOURNAMENTCALENDAR_OPTAUUID IN {liga_ids_sql}
         GROUP BY e.PLAYER_OPTAUUID, e.EVENT_CONTESTANT_OPTAUUID
     ),
@@ -282,6 +291,7 @@ def hent_samlet_spiller_statistik(conn, db_navn, liga_ids, navne_map=None):
         ea.Fremadrettede_Pasninger,
         ea.Afslutninger,
         ea.Maal,
+        ea.Selvmaal,
         COALESCE(xa.xG, 0) AS xG,
         COALESCE(xa.xA, 0) AS xA,
         ea.Tacklinger,
