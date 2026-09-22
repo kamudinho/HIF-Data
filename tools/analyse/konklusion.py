@@ -28,8 +28,8 @@ METRIC_DEFS = [
     ("Afleveringspræcision", "PASS_ACCURACY", False, 1, "%", "Opbygningsspil"),
     ("Berøringer i modst. felt", "BOX_TOUCHES", False, 0, "", "Opbygningsspil"),
 
-    ("Tackling-succes", "TACKLE_SUCCESS", False, 1, "%", "Defensivt spil"),
-    ("Klareringer", "CLEARANCES", False, 0, "", "Defensivt spil"),
+    ("Tackling, succes", "TACKLE_SUCCESS", False, 1, "%", "Defensivt spil"),
+    ("Clearinnger", "CLEARANCES", False, 0, "", "Defensivt spil"),
     ("Offsides fanget", "OFFSIDES_WON", False, 0, "", "Defensivt spil"),
     ("PPDA (lavest = mest pres)", "PPDA", True, 2, "", "Defensivt spil"),
     ("xG imod (lavest = bedst)", "XG_AGAINST", True, 2, "", "Defensivt spil"),
