@@ -74,28 +74,27 @@ def resolve_team_name(uuid_str, raw_name=""):
         return raw_name
     return "Ukendt"
 
-def beregn_kategori_indices(row, hif_uuid):
+def beregn_kamp_metrics(row, hif_uuid):
+    """
+    Rene, selvforklarende per-kamp-tal for HIF (ingen vægtede composite-indekser,
+    ingen frispark/indkast) - bruges til trendgraferne.
+    """
     is_home = str(row['CONTESTANTHOME_OPTAUUID']).strip().upper() == hif_uuid.strip().upper()
     def get_val(col_h, col_a):
         val = row[col_h] if is_home else row[col_a]
         return float(val) if pd.notnull(val) else 0.0
-    
-    xg, shots, touches = get_val('HOME_XG', 'AWAY_XG'), get_val('HOME_SHOTS', 'AWAY_SHOTS'), get_val('HOME_TOUCHES', 'AWAY_TOUCHES')
-    tackles, goals_con = get_val('HOME_TACKLES', 'AWAY_TACKLES'), get_val('TOTAL_AWAY_SCORE', 'TOTAL_HOME_SCORE')
-    goals_for = get_val('TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE')
+
+    xg_for = get_val('HOME_XG', 'AWAY_XG')
     xg_against = get_val('AWAY_XG', 'HOME_XG')
+    skud = get_val('HOME_SHOTS', 'AWAY_SHOTS')
+    besiddelse = get_val('HOME_POSSESSION', 'AWAY_POSSESSION')
 
-    corners_for = get_val('HOME_CORNERS_WON', 'AWAY_CORNERS_WON')
-    corners_against = get_val('AWAY_CORNERS_WON', 'HOME_CORNERS_WON')
-    fouls_won = get_val('HOME_FOULS_WON', 'AWAY_FOULS_WON')
-    fouls_lost = get_val('AWAY_FOULS_LOST', 'HOME_FOULS_LOST')
-
-    off_idx = (xg * 1.5) + (shots * 0.3) + (touches * 0.05)
-    def_idx = -(goals_con * 2.0) + (tackles * 0.2)
-    off_std = (goals_for * 3.0) + (xg * 1.0) + (corners_for * 0.3) + (fouls_won * 0.2)
-    def_std = -(goals_con * 3.0) - (xg_against * 1.0) - (corners_against * 0.3) - (fouls_lost * 0.2)
-
-    return pd.Series({'Offensiv': off_idx, 'Defensiv': def_idx, 'Off_Std': off_std, 'Def_Std': def_std})
+    return pd.Series({
+        'XG_FOR': xg_for,
+        'XG_IMOD': xg_against,
+        'SKUD': skud,
+        'BESIDDELSE': besiddelse
+    })
 
 def beregn_per_90(df_stats, team_uuid):
     if df_stats is None or df_stats.empty: return None, ""
@@ -126,18 +125,18 @@ def beregn_per_90(df_stats, team_uuid):
     opp_raw = last_match['CONTESTANTAWAY_NAME'] if is_home else last_match['CONTESTANTHOME_NAME']
     opp_name = resolve_team_name(opp_uuid, opp_raw)
 
-    # Konfiguration hvor succesfulde afleveringer erstatter indkast
+    # Kun stats der er let genkendelige og faktisk hentes fra Snowflake (se data/sql/teams.py)
     stats_config = [
         ("Besiddelse", ('HOME_POSSESSION', 'AWAY_POSSESSION')),
         ("Afleveringer", ('HOME_PASSES', 'AWAY_PASSES')),
+        ("Succesfulde afleveringer", ('HOME_ACCURATE_PASSES', 'AWAY_ACCURATE_PASSES')),
         ("Skud ved siden", ('HOME_OFF_TARGET', 'AWAY_OFF_TARGET')),
         ("Mål", ('TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE')),
         ("xG", ('HOME_XG', 'AWAY_XG')),
         ("xG mod", ('AWAY_XG', 'HOME_XG')),
         ("Tacklinger", ('HOME_TACKLES', 'AWAY_TACKLES')),
-        ("Frisparkeringer / Clearances", ('HOME_CLEARANCES', 'AWAY_CLEARANCES')),
-        ("Hjørnespark", ('HOME_CORNERS_WON', 'AWAY_CORNERS_WON')),
-        ("Succesfulde afleveringer", ('HOME_ACCURATE_PASSES', 'AWAY_ACCURATE_PASSES'))
+        ("Clearances", ('HOME_CLEARANCES', 'AWAY_CLEARANCES')),
+        ("Hjørnespark", ('HOME_CORNERS_WON', 'AWAY_CORNERS_WON'))
     ]
     
     results = []
@@ -403,30 +402,30 @@ def vis_side():
         hif_recent = df_stats[((df_stats['CONTESTANTHOME_OPTAUUID'].str.upper() == HIF_UUID) | (df_stats['CONTESTANTAWAY_OPTAUUID'].str.upper() == HIF_UUID)) & (df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False))].sort_values('MATCH_DATE_FULL', ascending=True).tail(10).copy()
         
         if not hif_recent.empty:
-            num_cols = ['HOME_XG', 'AWAY_XG', 'HOME_SHOTS', 'AWAY_SHOTS', 'HOME_TOUCHES', 'AWAY_TOUCHES', 'TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE', 'HOME_CORNERS_WON', 'AWAY_CORNERS_WON', 'HOME_FOULS_WON', 'AWAY_FOULS_WON', 'HOME_AERIAL_WON', 'AWAY_AERIAL_WON', 'HOME_TACKLES', 'AWAY_TACKLES']
+            num_cols = ['HOME_XG', 'AWAY_XG', 'HOME_SHOTS', 'AWAY_SHOTS', 'TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE', 'HOME_POSSESSION', 'AWAY_POSSESSION']
             for col in num_cols: 
                 hif_recent[col] = pd.to_numeric(hif_recent[col], errors='coerce').fillna(0)
             
             hif_recent['OPPONENT_NAME'] = hif_recent.apply(lambda r: resolve_team_name(r['CONTESTANTAWAY_OPTAUUID'] if str(r['CONTESTANTHOME_OPTAUUID']).strip().upper() == HIF_UUID else r['CONTESTANTHOME_OPTAUUID'], r['CONTESTANTAWAY_NAME'] if str(r['CONTESTANTHOME_OPTAUUID']).strip().upper() == HIF_UUID else r['CONTESTANTHOME_NAME']), axis=1)
             hif_recent['HOME_OR_AWAY'] = hif_recent.apply(lambda r: "H" if str(r['CONTESTANTHOME_OPTAUUID']).strip().upper() == HIF_UUID else "U", axis=1)
             
-            indices = hif_recent.apply(lambda row: beregn_kategori_indices(row, HIF_UUID), axis=1)
-            hif_recent = pd.concat([hif_recent, indices], axis=1)
+            metrics = hif_recent.apply(lambda row: beregn_kamp_metrics(row, HIF_UUID), axis=1)
+            hif_recent = pd.concat([hif_recent, metrics], axis=1)
             hif_recent['index'] = range(1, len(hif_recent) + 1)
             
             played = df_stats[df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].copy()
             for col in num_cols: 
                 played[col] = pd.to_numeric(played[col], errors='coerce').fillna(0)
             
-            liga_indices = played.apply(lambda row: beregn_kategori_indices(row, "DUMMY_UUID"), axis=1)
-            liga_means = liga_indices.mean()
+            liga_metrics = played.apply(lambda row: beregn_kamp_metrics(row, "DUMMY_UUID"), axis=1)
+            liga_means = liga_metrics.mean()
             
             r1_c1, r1_c2, r2_c1, r2_c2 = st.columns(4)
             categories = [
-                ("OFFENSIV", "Offensiv", "xG, Skud, Touches i modstanderens felt", r1_c1), 
-                ("DEFENSIV", "Defensiv", "Mål imod, defensive tacklinger", r1_c2), 
-                ("OFF. STD", "Off_Std", "Mål, xG og standarder (hjørner/frispark) for", r2_c1), 
-                ("DEF. STD", "Def_Std", "Mål, xG og standarder (hjørner/frispark) imod", r2_c2)
+                ("xG FOR", "XG_FOR", "Forventede mål skabt (xG) pr. kamp", r1_c1),
+                ("xG IMOD", "XG_IMOD", "Forventede mål tilladt (xG mod) pr. kamp", r1_c2),
+                ("SKUD", "SKUD", "Samlede skudforsøg pr. kamp", r2_c1),
+                ("BESIDDELSE", "BESIDDELSE", "Boldbesiddelse i procent pr. kamp", r2_c2)
             ]
             
             for title, col, desc, target in categories:
@@ -454,7 +453,7 @@ def vis_side():
                     line = alt.Chart(hif_recent).mark_line(color='#AAAAAA', point=alt.MarkConfig(color='#C41E3A', filled=True)).encode(
                         x=alt.X('index:O', axis=None), 
                         y=alt.Y(f'{col}:Q', axis=None, scale=alt.Scale(zero=False)), 
-                        tooltip=[alt.Tooltip('tooltip_header', title='Kamp'), alt.Tooltip(f'{col}', title='Score', format='.2f'), alt.Tooltip('diff_label', title='Diff vs Snit')]
+                        tooltip=[alt.Tooltip('tooltip_header', title='Kamp'), alt.Tooltip(f'{col}', title='Værdi', format='.2f'), alt.Tooltip('diff_label', title='Diff vs Snit')]
                     ).properties(height=120)
                     
                     st.altair_chart(line + alt.Chart(pd.DataFrame({'y': [hif_avg]})).mark_rule(color='#C41E3A', strokeDash=[3,3]).encode(y='y:Q') + alt.Chart(pd.DataFrame({'y': [liga_means[col]]})).mark_rule(color='#000000', strokeDash=[2,2], opacity=0.4).encode(y='y:Q'), use_container_width=True)
