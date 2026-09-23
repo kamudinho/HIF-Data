@@ -102,7 +102,13 @@ def beregn_per_90(df_stats, team_uuid):
     played = df_stats[df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].copy()
     if played.empty: return None, ""
 
-    zero_fill_cols = ['TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE', 'HOME_XG', 'AWAY_XG', 'HOME_OFF_TARGET', 'AWAY_OFF_TARGET', 'HOME_THROWS', 'AWAY_THROWS', 'HOME_FOULS_WON', 'AWAY_FOULS_WON', 'HOME_CORNERS_WON', 'AWAY_CORNERS_WON', 'HOME_TACKLES', 'AWAY_TACKLES', 'HOME_CLEARANCES', 'AWAY_CLEARANCES', 'HOME_PASSES', 'AWAY_PASSES']
+    zero_fill_cols = [
+        'TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE', 'HOME_XG', 'AWAY_XG', 
+        'HOME_OFF_TARGET', 'AWAY_OFF_TARGET', 'HOME_FORWARD_PASSES', 'AWAY_FORWARD_PASSES', 
+        'HOME_FOULS_WON', 'AWAY_FOULS_WON', 'HOME_CORNERS_WON', 'AWAY_CORNERS_WON', 
+        'HOME_TACKLES', 'AWAY_TACKLES', 'HOME_CLEARANCES', 'AWAY_CLEARANCES', 
+        'HOME_PASSES', 'AWAY_PASSES'
+    ]
     for col in zero_fill_cols:
         if col in played.columns:
             played[col] = pd.to_numeric(played[col], errors='coerce').fillna(0)
@@ -120,18 +126,18 @@ def beregn_per_90(df_stats, team_uuid):
     opp_raw = last_match['CONTESTANTAWAY_NAME'] if is_home else last_match['CONTESTANTHOME_NAME']
     opp_name = resolve_team_name(opp_uuid, opp_raw)
 
-    # Definerer rækkefølgen med xG og xG mod lige efter hinanden, og uden frispark vundet
+    # Konfiguration hvor "Indkast" er skiftet ud med "Fremadrettede pasninger"
     stats_config = [
         ("Besiddelse", ('HOME_POSSESSION', 'AWAY_POSSESSION')),
         ("Afleveringer", ('HOME_PASSES', 'AWAY_PASSES')),
         ("Skud ved siden", ('HOME_OFF_TARGET', 'AWAY_OFF_TARGET')),
         ("Mål", ('TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE')),
         ("xG", ('HOME_XG', 'AWAY_XG')),
-        ("xG mod", ('AWAY_XG', 'HOME_XG')),  # xG mod indsat lige under xG
+        ("xG mod", ('AWAY_XG', 'HOME_XG')),
         ("Tacklinger", ('HOME_TACKLES', 'AWAY_TACKLES')),
         ("Frisparkeringer / Clearances", ('HOME_CLEARANCES', 'AWAY_CLEARANCES')),
         ("Hjørnespark", ('HOME_CORNERS_WON', 'AWAY_CORNERS_WON')),
-        ("Indkast", ('HOME_THROWS', 'AWAY_THROWS'))
+        ("Fremadrettede pasninger", ('HOME_FORWARD_PASSES', 'AWAY_FORWARD_PASSES'))
     ]
     
     results = []
