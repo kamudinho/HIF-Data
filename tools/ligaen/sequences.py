@@ -3,14 +3,11 @@ import pandas as pd
 from mplsoccer import Pitch
 
 # --- CENTRAL DATA & MAPPING ---
-from data.data_load import _get_snowflake_conn
+from data.sql.sequences import load_goal_sequences_data
 from data.utils.team_mapping import TEAMS, SEASON_LEAGUE_MAPPER, SEASONS, COMPETITIONS, COMPETITION_NAME
-from data.utils.mapping import OPTA_EVENT_TYPES, OPTA_QUALIFIERS, get_action_label, har_qualifier
+from data.utils.mapping import OPTA_EVENT_TYPES, OPTA_QUALIFIERS, get_action_label
 from data.players.player_mapping import player_mapping  
 from utils.helpers import get_logo_img
-
-# Snowflake database sti
-DB = "KLUB_HVIDOVREIF.AXIS"
 
 def oversæt_qualifiers(qual_str):
     if not qual_str or pd.isna(qual_str):
@@ -37,11 +34,6 @@ def draw_match_info_box(ax, scoring_team_logo, opp_team_logo, date_str, score_st
     ax.text(0.03, 0.07, f"{date_str} | Stilling: {score_str} ({min_str}. min)", transform=ax.transAxes, fontsize=6, color='#444444', va='top')
 
 def vis_side(dp=None):
-    conn = _get_snowflake_conn()
-    if not conn:
-        st.warning("Kunne ikke oprette forbindelse til databasen.")
-        st.stop()
-
     # --- SÆSON- OG HOLDVÆLGER I TOPPEN ---
     available_seasons = sorted(list(SEASONS.keys()), reverse=True)
     
@@ -67,7 +59,6 @@ def vis_side(dp=None):
                 LIGA_IDS_LIST.append(str(uuid_val))
 
     LIGA_IDS = tuple(LIGA_IDS_LIST)
-    liga_ids_sql = str(LIGA_IDS)
 
     allowed_team_names = SEASON_LEAGUE_MAPPER.get(valgt_saeson, {}).get(COMPETITION_NAME, [])
     
@@ -95,142 +86,8 @@ def vis_side(dp=None):
 
     st.caption("Gennemgang af holdets målsekvenser (startende efter clearing eller interception).")
 
-    # --- SQL HENTNING AF MÅLSEKVENSER (KUN EFTER CLEARING (12) ELLER INTERCEPTION (7)) ---
-    sql_seq = f"""
-        WITH SeasonMatches AS (
-            SELECT MATCH_OPTAUUID, CONTESTANTHOME_NAME, CONTESTANTAWAY_NAME, 
-                   MATCH_LOCALDATE, CONTESTANTHOME_OPTAUUID, CONTESTANTAWAY_OPTAUUID,
-                   TOTAL_HOME_SCORE, TOTAL_AWAY_SCORE
-            FROM {DB}.OPTA_MATCHINFO 
-            WHERE TOURNAMENTCALENDAR_OPTAUUID IN {liga_ids_sql}
-        ),
-        TargetGoals AS (
-            SELECT MATCH_OPTAUUID, EVENT_TIMESTAMP as G_TIME, EVENT_TIMEMIN as G_MIN, SEQUENCEID, EVENT_OPTAUUID as G_EVENT_UUID
-            FROM {DB}.OPTA_EVENTS 
-            WHERE EVENT_TYPEID = 16 AND EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}'
-            AND MATCH_OPTAUUID IN (SELECT MATCH_OPTAUUID FROM SeasonMatches)
-        ),
-        BaseMatchEvents AS (
-            SELECT 
-                e.*,
-                tg.G_TIME as GOAL_TIMESTAMP,
-                tg.SEQUENCEID as TARGET_SEQUENCEID,
-                tg.G_MIN as GOAL_MIN,
-                tg.G_EVENT_UUID,
-                m.MATCH_LOCALDATE,
-                m.CONTESTANTHOME_NAME,
-                m.CONTESTANTAWAY_NAME,
-                m.CONTESTANTHOME_OPTAUUID,
-                m.CONTESTANTAWAY_OPTAUUID,
-                m.TOTAL_HOME_SCORE,
-                m.TOTAL_AWAY_SCORE
-            FROM {DB}.OPTA_EVENTS e
-            JOIN TargetGoals tg 
-                ON e.MATCH_OPTAUUID = tg.MATCH_OPTAUUID
-            JOIN SeasonMatches m 
-                ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
-            WHERE e.EVENT_TIMESTAMP <= tg.G_TIME
-              AND e.EVENT_TIMESTAMP >= DATEADD('millisecond', -45000, tg.G_TIME)
-        ),
-        RecoveryCheck AS (
-            SELECT MATCH_OPTAUUID, GOAL_TIMESTAMP, MIN(EVENT_TIMESTAMP) AS MIN_RECOVERY_TIME
-            FROM BaseMatchEvents
-            WHERE EVENT_TYPEID IN (7, 12)  -- 7 = Interception, 12 = Clearance
-              AND EVENT_TIMESTAMP >= DATEADD('millisecond', -40000, GOAL_TIMESTAMP)
-            GROUP BY MATCH_OPTAUUID, GOAL_TIMESTAMP
-        ),
-        DynamicWindowEvents AS (
-            SELECT 
-                b.*,
-                COALESCE(r.MIN_RECOVERY_TIME, DATEADD('millisecond', -15000, b.GOAL_TIMESTAMP)) AS EFFECTIVE_START_TIME
-            FROM BaseMatchEvents b
-            LEFT JOIN RecoveryCheck r 
-                ON b.MATCH_OPTAUUID = r.MATCH_OPTAUUID AND b.GOAL_TIMESTAMP = r.GOAL_TIMESTAMP
-        ),
-        FilteredTimeEvents AS (
-            SELECT *
-            FROM DynamicWindowEvents
-            WHERE EVENT_TIMESTAMP >= EFFECTIVE_START_TIME
-        ),
-        RankedMatchEvents AS (
-            SELECT 
-                *,
-                ROW_NUMBER() OVER (
-                    PARTITION BY MATCH_OPTAUUID, GOAL_TIMESTAMP 
-                    ORDER BY EVENT_TIMESTAMP DESC
-                ) as rn
-            FROM FilteredTimeEvents
-        ),
-        FinalSelectedEvents AS (
-            SELECT *
-            FROM RankedMatchEvents
-            WHERE rn <= 12
-        ),
-        EventQualifiers AS (
-            SELECT 
-                EVENT_OPTAUUID,
-                LISTAGG(QUALIFIER_QID, ',') AS QUALIFIER_LIST
-            FROM {DB}.OPTA_QUALIFIERS
-            GROUP BY EVENT_OPTAUUID
-        ),
-        MatchRunningScores AS (
-            SELECT 
-                e.MATCH_OPTAUUID,
-                e.EVENT_OPTAUUID as GOAL_EVENT_OPTAUUID,
-                SUM(CASE WHEN e.EVENT_CONTESTANT_OPTAUUID = m.CONTESTANTHOME_OPTAUUID THEN 1 ELSE 0 END) 
-                    OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_TIMESTAMP ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS CURRENT_HOME_SCORE,
-                SUM(CASE WHEN e.EVENT_CONTESTANT_OPTAUUID = m.CONTESTANTAWAY_OPTAUUID THEN 1 ELSE 0 END) 
-                    OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_TIMESTAMP ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS CURRENT_AWAY_SCORE
-            FROM {DB}.OPTA_EVENTS e
-            JOIN {DB}.OPTA_MATCHINFO m ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
-            WHERE e.EVENT_TYPEID = 16
-        )
-        SELECT 
-            e.MATCH_OPTAUUID,
-            e.SEQUENCEID,
-            e.EVENT_TIMESTAMP,
-            e.EVENT_TIMEMIN AS EVENT_MINUTE,
-            e.PLAYER_OPTAUUID,
-            e.PLAYER_NAME,
-            e.EVENT_CONTESTANT_OPTAUUID,
-            e.EVENT_TYPEID,
-            CASE 
-                WHEN e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' THEN e.EVENT_X 
-                ELSE (100.0 - e.EVENT_X) 
-            END as RAW_X,
-            CASE 
-                WHEN e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' THEN e.EVENT_Y 
-                ELSE (100.0 - e.EVENT_Y) 
-            END as RAW_Y,
-            e.GOAL_TIMESTAMP,
-            e.G_EVENT_UUID AS GOAL_EVENT_OPTAUUID,
-            e.GOAL_MIN,
-            q.QUALIFIER_LIST,
-            m.CONTESTANTHOME_NAME,
-            m.CONTESTANTAWAY_NAME,
-            m.CONTESTANTHOME_OPTAUUID,
-            m.CONTESTANTAWAY_OPTAUUID,
-            m.MATCH_LOCALDATE,
-            m.TOTAL_HOME_SCORE AS FINAL_HOME_SCORE,
-            m.TOTAL_AWAY_SCORE AS FINAL_AWAY_SCORE,
-            COALESCE(rs.CURRENT_HOME_SCORE, 0) AS GOAL_HOME_SCORE,
-            COALESCE(rs.CURRENT_AWAY_SCORE, 0) AS GOAL_AWAY_SCORE
-        FROM FinalSelectedEvents e
-        LEFT JOIN EventQualifiers q 
-            ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
-        LEFT JOIN {DB}.OPTA_MATCHINFO m 
-            ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
-        LEFT JOIN MatchRunningScores rs 
-            ON e.G_EVENT_UUID = rs.GOAL_EVENT_OPTAUUID
-        ORDER BY e.EVENT_TIMESTAMP ASC;
-    """
-
-    with st.spinner("Henter målsekvenser fra Snowflake..."):
-        try:
-            df_all = conn.query(sql_seq)
-        except Exception as e:
-            st.error(f"Fejl ved udførsel af SQL: {e}")
-            st.stop()
+    # Hent data via det nye SQL-modul med indbygget caching
+    df_all = load_goal_sequences_data(valgt_uuid, LIGA_IDS)
 
     if df_all is None or df_all.empty:
         st.warning(f"Ingen målsekvenser fundet for {valgt_hold_navn} i sæson {valgt_saeson} baseret på clearing/interception.")
@@ -309,7 +166,6 @@ def vis_side(dp=None):
         (df_all['GOAL_TIMESTAMP'] == sd['goal_ts'])
     ].sort_values('EVENT_TIMESTAMP').copy()
 
-    # NAVNGIVNING AF FØRSTE HÆNDELSE HVIS DET ER CLEARING (12) ELLER INTERCEPTION (7):
     if not tge.empty:
         first_row = tge.iloc[0]
         ev_type = str(first_row['EVENT_TYPEID'])
