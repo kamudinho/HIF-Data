@@ -171,33 +171,29 @@ def hent_hold_kort_stats(df_hold_stats, team_name):
     if df_hold_stats is None or df_hold_stats.empty:
         return {"gf": "0.0", "ga": "0.0", "xgf": "0.00", "xga": "0.00", "poss": "0.00%"}
     
-    match = df_hold_stats[df_hold_stats['TEAM_NAME'].str.contains(team_name, case=False, na=False)]
+    # Prøv først et præcist match på holdnavn, ellers brug .str.contains
+    match = df_hold_stats[df_hold_stats['TEAM_NAME'].str.strip().str.lower() == team_name.strip().lower()]
+    if match.empty:
+        match = df_hold_stats[df_hold_stats['TEAM_NAME'].str.contains(team_name, case=False, na=False)]
+    
     if match.empty:
         return {"gf": "0.0", "ga": "0.0", "xgf": "0.00", "xga": "0.00", "poss": "0.00%"}
     
     row = match.iloc[0]
     
-    # Udled faktiske mål for og imod pr. kamp (hvis data er tilgængelig i master-tabellen)
-    total_goals = row.get('TOTAL_GOALS', 0.0)
-    actual_matches = row.get('ACTUAL_MATCHES', 1)
     goals_p90 = row.get('GOALS_P90', 0.0)
-    
     xg_p90 = row.get('XG_P90', 0.0)
     xgc_p90 = row.get('XGC_P90', 0.0)
     poss = row.get('AVG_POSSESSION_PCT', 0.0)
 
-    # Vi finder målene imod fra stillingen eller modstanderens data, 
-    # men som minimum sikrer vi at 'ga' ikke længere viser xGC, men faktiske mål imod hvis muligt.
-    # Her bruger vi xgc_p90 som et estimat hvis faktiske mål imod ikke er direkte i row, 
-    # ellers kan vi lade den trække det fra tabellen.
-    
     return {
         "gf": f"{goals_p90:.1f}",
-        "ga": f"{xgc_p90:.1f}", # Ændre evt. denne hvis du vil have rigtige mål imod fra tabellen
+        "ga": f"{xgc_p90:.1f}",
         "xgf": f"{xg_p90:.2f}",
         "xga": f"{xgc_p90:.2f}",
         "poss": f"{poss:.1f}%"
     }
+    
 def beregn_stilling(df_matches, valgt_saeson, valgt_turnering):
     stats = {}
     saesons_hold = SEASON_LEAGUE_MAPPER.get(valgt_saeson, {}).get(valgt_turnering, [])
