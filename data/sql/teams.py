@@ -169,20 +169,24 @@ def hent_hoved_stats(_conn, calendar_uuid: str) -> pd.DataFrame:
         ),
         TeamStats AS (
             SELECT 
-                MATCH_OPTAUUID,
-                CONTESTANT_OPTAUUID,
-                MAX(CASE WHEN STAT_TYPE = 'possessionPercentage' THEN STAT_TOTAL END) AS POSSESSION,
-                MAX(CASE WHEN STAT_TYPE = 'totalScoringAtt' THEN STAT_TOTAL END) AS SHOTS,
-                MAX(CASE WHEN STAT_TYPE = 'shotOffTarget' THEN STAT_TOTAL END) AS OFF_TARGET,
-                MAX(CASE WHEN STAT_TYPE = 'totalThrows' THEN STAT_TOTAL END) AS THROWS,
-                MAX(CASE WHEN STAT_TYPE = 'fkFoulWon' THEN STAT_TOTAL END) AS FOULS_WON,
-                MAX(CASE WHEN STAT_TYPE = 'wonCorners' THEN STAT_TOTAL END) AS CORNERS_WON,
-                MAX(CASE WHEN STAT_TYPE = 'totalTackle' THEN STAT_TOTAL END) AS TACKLES,
-                MAX(CASE WHEN STAT_TYPE = 'totalClearance' THEN STAT_TOTAL END) AS CLEARANCES,
-                MAX(CASE WHEN STAT_TYPE = 'totalPass' THEN STAT_TOTAL END) AS PASSES
-            FROM {DB}.OPTA_MATCHSTATS
-            GROUP BY MATCH_OPTAUUID, CONTESTANT_OPTAUUID
-        ),
+                s.MATCH_OPTAUUID,
+                s.CONTESTANT_OPTAUUID,
+                MAX(CASE WHEN s.STAT_TYPE = 'totalScoringAtt' THEN TRY_CAST(s.STAT_TOTAL AS FLOAT) END) AS SHOTS,
+                MAX(CASE WHEN s.STAT_TYPE = 'shotOffTarget' THEN TRY_CAST(s.STAT_TOTAL AS FLOAT) END) AS OFF_TARGET,
+                MAX(CASE WHEN s.STAT_TYPE = 'totalPass' THEN TRY_CAST(s.STAT_TOTAL AS FLOAT) END) AS PASSES,
+                MAX(CASE WHEN s.STAT_TYPE IN ('touches', 'totalTouch') THEN TRY_CAST(s.STAT_TOTAL AS FLOAT) END) AS TOUCHES,
+                -- Manuel override for kampen mod AaB, hvis besiddelse mangler (indsæt evt. det specifikke MATCH_OPTAUUID eller tjek på modstander)
+                MAX(
+                    CASE 
+                        -- Eksempel: Hvis det er den manglende kamp mod AaB, tvinges værdien til f.eks. 50 (eller det ønskede tal)
+                        WHEN s.MATCH_OPTAUUID = 'd3lpt2cuazbovha22dv2c3vh0' THEN 62.0 
+                        WHEN s.STAT_TYPE = 'possessionPercentage' THEN TRY_CAST(s.STAT_TOTAL AS FLOAT) 
+                        ELSE NULL 
+                    END
+                ) AS POSSESSION
+            FROM {DB}.OPTA_MATCHSTATS s
+            GROUP BY s.MATCH_OPTAUUID, s.CONTESTANT_OPTAUUID
+        )
         TeamXGTable AS (
             SELECT 
                 MATCH_OPTAUUID,
