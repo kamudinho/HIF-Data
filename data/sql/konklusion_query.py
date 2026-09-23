@@ -8,7 +8,7 @@ DB = "KLUB_HVIDOVREIF.AXIS"
 @st.cache_data(ttl=600, show_spinner="Henter konklusionsdata fra Snowflake...")
 def hent_konklusion_data(_conn, calendar_uuid: str) -> pd.DataFrame:
     """
-    Henter samlet holdstatistik inkl. offensive og defensive hjørnespark.
+    Henter samlet holdstatistik inkl. hjørnespark og afslutninger efter hjørnespark for/imod.
     """
     if not _conn or not calendar_uuid:
         return pd.DataFrame()
@@ -51,7 +51,8 @@ def hent_konklusion_data(_conn, calendar_uuid: str) -> pd.DataFrame:
             SUM(CASE WHEN STAT_TYPE = 'bigChanceMissed' THEN CAST(STAT_VALUE AS FLOAT) ELSE 0 END) as BIG_CHANCES_MISSED,
             SUM(CASE WHEN STAT_TYPE = 'hitWoodwork' THEN CAST(STAT_VALUE AS FLOAT) ELSE 0 END) as WOODWORK,
             SUM(CASE WHEN STAT_TYPE = 'touches' THEN CAST(STAT_VALUE AS FLOAT) ELSE 0 END) as TOUCHES,
-            SUM(CASE WHEN STAT_TYPE = 'touchesInOppBox' THEN CAST(STAT_VALUE AS FLOAT) ELSE 0 END) as BOX_TOUCHES
+            SUM(CASE WHEN STAT_TYPE = 'touchesInOppBox' THEN CAST(STAT_VALUE AS FLOAT) ELSE 0 END) as BOX_TOUCHES,
+            SUM(CASE WHEN STAT_TYPE = 'attCorner' THEN CAST(STAT_VALUE AS FLOAT) ELSE 0 END) as ATT_CORNER
         FROM {DB}.OPTA_MATCHEXPECTEDGOALS_TEAM
         WHERE TOURNAMENTCALENDAR_OPTAUUID = '{calendar_uuid}'
         GROUP BY CONTESTANT_OPTAUUID
@@ -80,6 +81,32 @@ def hent_konklusion_data(_conn, calendar_uuid: str) -> pd.DataFrame:
     AggregatedOppBox AS (
         SELECT TEAM_ID, SUM(OPP_BOX_TOUCHES) as OPP_BOX_TOUCHES
         FROM OpponentBoxTouches
+        GROUP BY TEAM_ID
+    ),
+    OpponentCornerAtt AS (
+        SELECT 
+            m.HOME_ID as TEAM_ID,
+            CAST(x_away.STAT_VALUE AS FLOAT) as OPP_ATT_CORNER
+        FROM MatchResults m
+        JOIN {DB}.OPTA_MATCHEXPECTEDGOALS_TEAM x_away 
+          ON m.MATCH_OPTAUUID = x_away.MATCH_OPTAUUID 
+          AND m.AWAY_ID = x_away.CONTESTANT_OPTAUUID
+        WHERE x_away.STAT_TYPE = 'attCorner'
+        
+        UNION ALL
+        
+        SELECT 
+            m.AWAY_ID as TEAM_ID,
+            CAST(x_home.STAT_VALUE AS FLOAT) as OPP_ATT_CORNER
+        FROM MatchResults m
+        JOIN {DB}.OPTA_MATCHEXPECTEDGOALS_TEAM x_home 
+          ON m.MATCH_OPTAUUID = x_home.MATCH_OPTAUUID 
+          AND m.HOME_ID = x_home.CONTESTANT_OPTAUUID
+        WHERE x_home.STAT_TYPE = 'attCorner'
+    ),
+    AggregatedOppCornerAtt AS (
+        SELECT TEAM_ID, SUM(OPP_ATT_CORNER) as OPP_ATT_CORNER
+        FROM OpponentCornerAtt
         GROUP BY TEAM_ID
     ),
     OpponentCorners AS (
@@ -147,8 +174,10 @@ def hent_konklusion_data(_conn, calendar_uuid: str) -> pd.DataFrame:
         COALESCE(x.TOUCHES, 0) as TOUCHES,
         COALESCE(x.BOX_TOUCHES, 0) as BOX_TOUCHES,
         COALESCE(o.OPP_BOX_TOUCHES, 0) as OPP_BOX_TOUCHES,
+        COALESCE(x.ATT_CORNER, 0) as ATT_CORNER,
         COALESCE(s.CORNERS_TAKEN, 0) as CORNERS_TAKEN,
         COALESCE(oc.OPP_CORNERS_TAKEN, 0) as OPP_CORNERS_TAKEN,
+        COALESCE(oca.OPP_ATT_CORNER, 0) as OPP_ATT_CORNER,
         COALESCE(s.SHOTS_TOTAL, 0) as SHOTS_TOTAL,
         COALESCE(s.SHOTS_ON_TARGET, 0) as SHOTS_ON_TARGET,
         COALESCE(s.ASSISTS, 0) as ASSISTS,
@@ -172,6 +201,7 @@ def hent_konklusion_data(_conn, calendar_uuid: str) -> pd.DataFrame:
     LEFT JOIN TeamXG x ON t.TEAM_ID = x.TEAM_ID
     LEFT JOIN AggregatedOppBox o ON t.TEAM_ID = o.TEAM_ID
     LEFT JOIN AggregatedOppCorners oc ON t.TEAM_ID = oc.TEAM_ID
+    LEFT JOIN AggregatedOppCornerAtt oca ON t.TEAM_ID = oca.TEAM_ID
     LEFT JOIN TeamStats s ON t.TEAM_ID = s.TEAM_ID
     """
     
