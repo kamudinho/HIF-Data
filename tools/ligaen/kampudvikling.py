@@ -197,11 +197,11 @@ def draw_match_trend_chart(df_matches, metric, label, team_name, valgt_saeson):
                 )
             )
 
-    # 2. Tilføj usynlige punkter til hover-funktionalitet
+    # 2. Usynlige punkter for hover-funktionalitet
     fig.add_trace(
         go.Scatter(
             x=df_matches["MATCH_NUM"], y=df_matches[metric], mode="markers",
-            marker=dict(size=35, opacity=0),
+            marker=dict(size=40, opacity=0),
             hovertext=df_matches["HOVER_TEXT"], hoverinfo="text",
             showlegend=False,
         )
@@ -217,7 +217,6 @@ def draw_match_trend_chart(df_matches, metric, label, team_name, valgt_saeson):
     padding = y_span * 0.15 if y_span > 0 else 1.0
     y_range = [y_max + padding, y_min - padding] if is_reversed else [y_min - padding, y_max + padding]
 
-    # 3. Layout og gennemsnitslinjer
     fig.update_layout(
         height=550,
         margin=dict(t=70, b=60, l=60, r=40),
@@ -230,35 +229,24 @@ def draw_match_trend_chart(df_matches, metric, label, team_name, valgt_saeson):
             linecolor="black", autorange="reversed" if is_reversed else True,
             range=y_range,
         ),
-        shapes=[
-            dict(
-                type="line", xref="paper", yref="y",
-                x0=0, x1=1, y0=snit_vaerdi, y1=snit_vaerdi,
-                line=dict(color="black", width=1.5, dash="solid")
-            ),
-            dict(
-                type="line", xref="paper", yref="y",
-                x0=0, x1=1, y0=ligasnit, y1=ligasnit,
-                line=dict(color="gray", width=1.5, dash="dash")
-            )
-        ],
         plot_bgcolor="white", showlegend=False,
     )
 
-    fig.add_annotation(
-        xref="paper", yref="y", x=0.99, y=snit_vaerdi,
-        text=f"(Gennemsnit: {team_name})", showarrow=False,
-        xanchor="right", yanchor="bottom" if team_pos == "top right" else "top",
-        font=dict(size=10, color="black")
+    # 3. Sararota giddu-galeessaa (add_hline) kan darbu, garuu amma isaan booda add_layout_image ni fe'ama
+    fig.add_hline(
+        y=snit_vaerdi, line_dash="solid", line_color="black", line_width=1.5,
+        annotation_text=f"(Gennemsnit: {team_name})", annotation_position=team_pos,
     )
-    fig.add_annotation(
-        xref="paper", yref="y", x=0.99, y=ligasnit,
-        text=f"(Gennemsnit: {DEFAULT_COMP})", showarrow=False,
-        xanchor="right", yanchor="bottom" if liga_pos == "top right" else "top",
-        font=dict(size=10, color="gray")
+    fig.add_hline(
+        y=ligasnit, line_dash="dash", line_color="gray", line_width=1.5,
+        annotation_text=f"(Gennemsnit: {DEFAULT_COMP})", annotation_position=liga_pos,
     )
 
-    # 4. Tilføj logoer som absolut øverste lag via add_layout_image SIDST
+    # 4. LOGOOWWAN: Erga sararri fi hundi dhumanii booda, isaan kana dabalna akkasumas layer="below" geedsisuudhaan
+    # Ykn akka sararri jala ta'uuf, nuti add_layout_image duraan dursineetiin ala amma kanaan 
+    # sararoota fi waan hunda dura akka kaayamu (underneath) gochuuf 'layer="below"' fayyadamuu dandeenya, 
+    # garuu logoowwan olkaasuuf `layer="above"` fi koodii armaan gadii fayyadamna.
+    
     logo_size_x = 0.65
     logo_size_y = y_span * 0.20 if y_span > 0.5 else 0.25
 
