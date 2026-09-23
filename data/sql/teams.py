@@ -237,8 +237,8 @@ def hent_hoved_stats(_conn, calendar_uuid: str) -> pd.DataFrame:
         MANUAL_OVERRIDES = {
             # Eksempel: Indsæt Match UUID for den kamp der mangler data, og de ønskede værdier:
             "c8vwlgepriydcay2kp412acyc": {
-            "HOME_POSSESSION": 48.5,
-            "AWAY_POSSESSION": 51.5,
+            "HOME_POSSESSION": 65.5,
+            "AWAY_POSSESSION": 45.5,
             "HOME_PASSES": 350,
             "AWAY_PASSES": 410
             }
