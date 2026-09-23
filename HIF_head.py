@@ -13,8 +13,7 @@ from data.utils.team_mapping import (
 )
 from data.data_load import _get_snowflake_conn
 from data.utils.stattype_map import STAT_TYPE_MAP
-# ÆNDRET: Henter nu fra data/sql/teams.py i stedet for head.py
-from data.sql.teams import hent_hoved_stats  # Eller den korrekte funktion fra teams.py
+from data.sql.teams import hent_hoved_stats
 
 def apply_custom_style():
     st.markdown("""
@@ -99,9 +98,9 @@ def beregn_kategori_indices(row, hif_uuid):
     return pd.Series({'Offensiv': off_idx, 'Defensiv': def_idx, 'Off_Std': off_std, 'Def_Std': def_std})
 
 def beregn_per_90(df_stats, team_uuid):
-    if df_stats is None or df_stats.empty: return None
+    if df_stats is None or df_stats.empty: return None, ""
     played = df_stats[df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].copy()
-    if played.empty: return None
+    if played.empty: return None, ""
 
     zero_fill_cols = ['TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE', 'HOME_XG', 'AWAY_XG', 'HOME_OFF_TARGET', 'AWAY_OFF_TARGET', 'HOME_THROWS', 'AWAY_THROWS', 'HOME_FOULS_WON', 'AWAY_FOULS_WON', 'HOME_CORNERS_WON', 'AWAY_CORNERS_WON', 'HOME_TACKLES', 'AWAY_TACKLES', 'HOME_CLEARANCES', 'AWAY_CLEARANCES', 'HOME_PASSES', 'AWAY_PASSES']
     for col in zero_fill_cols:
@@ -113,7 +112,7 @@ def beregn_per_90(df_stats, team_uuid):
             played[col] = pd.to_numeric(played[col], errors='coerce')
 
     hif_matches = played[((played['CONTESTANTHOME_OPTAUUID'].str.upper() == team_uuid.upper()) | (played['CONTESTANTAWAY_OPTAUUID'].str.upper() == team_uuid.upper()))].sort_values('MATCH_DATE_FULL')
-    if len(hif_matches) == 0: return None
+    if len(hif_matches) == 0: return None, ""
 
     last_match = hif_matches.iloc[-1]
     is_home = str(last_match['CONTESTANTHOME_OPTAUUID']).strip().upper() == team_uuid.strip().upper()
@@ -145,9 +144,9 @@ def beregn_per_90(df_stats, team_uuid):
         results.append({
             "Stat": display_name, "HIF": hif_val, "Liga": liga_val, 
             "Diff_Liga": diff_vs_liga, "Seneste": last_val, 
-            "Diff_vs_Hif": diff_vs_hif, "Opponent": opp_name
+            "Diff_vs_Hif": diff_vs_hif
         })
-    return pd.DataFrame(results)
+    return pd.DataFrame(results), opp_name
 
 def beregn_hold_stats(df_stats, team_uuid):
     if df_stats is None or df_stats.empty: return {"gf": "0.0", "ga": "0.0", "xgf": "0.00", "xga": "0.00", "poss": "0.00%"}
@@ -227,7 +226,6 @@ def vis_side():
     active_comp = DEFAULT_COMP
     calendar_uuid = SEASONS.get(active_season, {}).get(active_comp)
 
-    # Henter data via den opdaterede funktion fra data/sql/teams.py
     df_stats = hent_hoved_stats(conn, calendar_uuid)
     df_matches = df_stats.copy()
 
@@ -307,9 +305,8 @@ def vis_side():
             
             st.markdown("<div style='border-bottom: 1px solid #f0f0f0; margin-bottom: 8px;'></div>", unsafe_allow_html=True)
             
-            df_stats_comp = beregn_per_90(df_stats, HIF_UUID)
+            df_stats_comp, opp_navn = beregn_per_90(df_stats, HIF_UUID)
             if df_stats_comp is not None:
-                opp_navn = df_stats_comp.iloc[0]['Opponent']
                 opp_header = f"vs. {opp_navn}"
                 
                 html = f"<table class='stats-table'><thead><tr><th></th><th>{opp_header}</th><th>Diff vs HIF</th><th>HIF</th><th>Liga</th><th>Diff</th></tr></thead><tbody>"
