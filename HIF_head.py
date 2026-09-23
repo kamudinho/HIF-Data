@@ -250,7 +250,7 @@ def vis_side():
 
     # Hent både hoved-stats (til kampe/trends) og samlet holdstatistik (til overblik)
     df_stats = hent_hoved_stats(conn, calendar_uuid)
-    df_hold_stats = hent_hold_statistik(conn, calendar_uuid)
+    df_hold_stats = hent_samlet_hold_statistik(conn, calendar_uuid)
     df_matches = df_stats.copy()
 
     # --- TOPSEKTION ---
