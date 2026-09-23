@@ -5,159 +5,119 @@ from data.utils.team_mapping import TEAMS
 
 DB = "KLUB_HVIDOVREIF.AXIS"
 
-@st.cache_data(ttl=600, show_spinner="Henter konklusions- og holdstatistik...")
+@st.cache_data(ttl=600, show_spinner="Henter konklusionsdata fra Snowflake...")
 def hent_konklusion_data(_conn, calendar_uuid: str) -> pd.DataFrame:
     """
-    Henter samlet statistik fra Opta fordelt på dine specifikke kategorier:
-    - Afslutningsspil
-    - Opbygningsspil
-    - Forsvarsspil
-    - Målmand & standarder
+    Henter samlet holdstatistik baseret på en stabil CTE-struktur 
+    og de præcise statistiltyper fra Opta-tabellerne.
     """
     if not _conn or not calendar_uuid:
         return pd.DataFrame()
 
     query = f"""
-    WITH MatchStats AS (
+    WITH MatchResults AS (
         SELECT 
             MATCH_OPTAUUID,
-            UPPER(TRIM(CONTESTANT_OPTAUUID)) AS TEAM_ID,
-            
-            -- Afslutningsspil
-            MAX(CASE WHEN STAT_TYPE = 'goals' THEN CAST(STAT_TOTAL AS FLOAT) END) AS GOALS,
-            MAX(CASE WHEN STAT_TYPE = 'totalScoringAtt' THEN CAST(STAT_TOTAL AS FLOAT) END) AS SHOTS_TOTAL,
-            MAX(CASE WHEN STAT_TYPE = 'ontargetScoringAtt' THEN CAST(STAT_TOTAL AS FLOAT) END) AS SHOTS_ON_TARGET,
-            MAX(CASE WHEN STAT_TYPE = 'shotOffTarget' THEN CAST(STAT_TOTAL AS FLOAT) END) AS SHOT_OFF_TARGET,
-            MAX(CASE WHEN STAT_TYPE = 'hitWoodwork' THEN CAST(STAT_TOTAL AS FLOAT) END) AS WOODWORK,
-            MAX(CASE WHEN STAT_TYPE = 'goalAssist' THEN CAST(STAT_TOTAL AS FLOAT) END) AS ASSISTS,
-
-            -- Opbygningsspil
-            AVG(CASE WHEN STAT_TYPE = 'possessionPercentage' THEN TRY_CAST(REPLACE(STAT_TOTAL, '%', '') AS FLOAT) END) AS POSS,
-            MAX(CASE WHEN STAT_TYPE = 'touches' THEN CAST(STAT_TOTAL AS FLOAT) END) AS TOUCHES,
-            MAX(CASE WHEN STAT_TYPE = 'totalPass' THEN CAST(STAT_TOTAL AS FLOAT) END) AS PASSES_TOTAL,
-            MAX(CASE WHEN STAT_TYPE = 'accuratePass' THEN CAST(STAT_TOTAL AS FLOAT) END) AS PASSES_ACCURATE,
-            MAX(CASE WHEN STAT_TYPE = 'touchesInOppBox' THEN CAST(STAT_TOTAL AS FLOAT) END) AS BOX_TOUCHES,
-            MAX(CASE WHEN STAT_TYPE = 'formationUsed' THEN STAT_TOTAL END) AS FORMATION,
-
-            -- Forsvarsspil
-            MAX(CASE WHEN STAT_TYPE = 'totalTackle' THEN CAST(STAT_TOTAL AS FLOAT) END) AS TACKLES_TOTAL,
-            MAX(CASE WHEN STAT_TYPE = 'wonTackle' THEN CAST(STAT_TOTAL AS FLOAT) END) AS TACKLES_WON,
-            MAX(CASE WHEN STAT_TYPE = 'totalClearance' THEN CAST(STAT_TOTAL AS FLOAT) END) AS CLEARANCES,
-            MAX(CASE WHEN STAT_TYPE = 'totalOffside' THEN CAST(STAT_TOTAL AS FLOAT) END) AS OFFSIDES_WON,
-            MAX(CASE WHEN STAT_TYPE = 'fkFoulWon' THEN CAST(STAT_TOTAL AS FLOAT) END) AS FOULS_WON,
-            MAX(CASE WHEN STAT_TYPE = 'fkFoulLost' THEN CAST(STAT_TOTAL AS FLOAT) END) AS FOULS_CONCEDED,
-
-            -- Målmand & standarder
-            MAX(CASE WHEN STAT_TYPE = 'saves' THEN CAST(STAT_TOTAL AS FLOAT) END) AS SAVES,
-            MAX(CASE WHEN STAT_TYPE = 'cleanSheet' THEN CAST(STAT_TOTAL AS FLOAT) END) AS CLEAN_SHEETS,
-            MAX(CASE WHEN STAT_TYPE = 'goalsConceded' THEN CAST(STAT_TOTAL AS FLOAT) END) AS GOALS_CONCEDED,
-            MAX(CASE WHEN STAT_TYPE = 'penaltySave' THEN CAST(STAT_TOTAL AS FLOAT) END) AS PENALTY_SAVES,
-            MAX(CASE WHEN STAT_TYPE = 'penaltyWon' THEN CAST(STAT_TOTAL AS FLOAT) END) AS PENALTIES_WON,
-            MAX(CASE WHEN STAT_TYPE = 'penaltyConceded' THEN CAST(STAT_TOTAL AS FLOAT) END) AS PENALTIES_CONCEDED,
-            MAX(CASE WHEN STAT_TYPE = 'ownGoals' THEN CAST(STAT_TOTAL AS FLOAT) END) AS OWN_GOALS,
-            MAX(CASE WHEN STAT_TYPE = 'cornerTaken' THEN CAST(STAT_TOTAL AS FLOAT) END) AS CORNERS_TAKEN,
-            MAX(CASE WHEN STAT_TYPE = 'totalYellowCard' THEN CAST(STAT_TOTAL AS FLOAT) END) AS YELLOW_CARDS,
-            MAX(CASE WHEN STAT_TYPE = 'secondYellow' THEN CAST(STAT_TOTAL AS FLOAT) END) AS SECOND_YELLOWS,
-            MAX(CASE WHEN STAT_TYPE = 'totalRedCard' THEN CAST(STAT_TOTAL AS FLOAT) END) AS RED_CARDS
-
+            CONTESTANTHOME_OPTAUUID as HOME_ID,
+            CONTESTANTHOME_NAME as HOME_NAME,
+            CONTESTANTAWAY_OPTAUUID as AWAY_ID,
+            CONTESTANTAWAY_NAME as AWAY_NAME,
+            FT_HOME_SCORE,
+            FT_AWAY_SCORE
+        FROM {DB}.OPTA_MATCHINFO
+        WHERE TOURNAMENTCALENDAR_OPTAUUID = '{calendar_uuid}'
+          AND MATCH_STATUS = 'Played'
+    ),
+    TeamLookup AS (
+        SELECT HOME_ID as TEAM_ID, HOME_NAME as TEAM_NAME FROM MatchResults
+        UNION
+        SELECT AWAY_ID as TEAM_ID, AWAY_NAME as TEAM_NAME FROM MatchResults
+    ),
+    TeamGoals AS (
+        SELECT HOME_ID as TEAM_ID, FT_HOME_SCORE as TOTAL_GOALS, 1 as MATCH_COUNT FROM MatchResults
+        UNION ALL
+        SELECT AWAY_ID as TEAM_ID, FT_AWAY_SCORE as TOTAL_GOALS, 1 as MATCH_COUNT FROM MatchResults
+    ),
+    FinalGoals AS (
+        SELECT TEAM_ID, SUM(TOTAL_GOALS) as GOALS, SUM(MATCH_COUNT) as ACTUAL_MATCHES
+        FROM TeamGoals GROUP BY TEAM_ID
+    ),
+    TeamXG AS (
+        SELECT 
+            CONTESTANT_OPTAUUID as TEAM_ID,
+            SUM(CASE WHEN STAT_TYPE = 'expectedGoals' THEN CAST(STAT_VALUE AS FLOAT) ELSE 0 END) as XG,
+            SUM(CASE WHEN STAT_TYPE = 'expectedGoalsConceded' THEN CAST(STAT_VALUE AS FLOAT) ELSE 0 END) as XG_AGAINST,
+            SUM(CASE WHEN STAT_TYPE = 'expectedAssists' THEN CAST(STAT_VALUE AS FLOAT) ELSE 0 END) as XA,
+            SUM(CASE WHEN STAT_TYPE = 'bigChanceCreated' THEN CAST(STAT_VALUE AS FLOAT) ELSE 0 END) as BIG_CHANCES_CREATED,
+            SUM(CASE WHEN STAT_TYPE = 'bigChanceMissed' THEN CAST(STAT_VALUE AS FLOAT) ELSE 0 END) as BIG_CHANCES_MISSED,
+            SUM(CASE WHEN STAT_TYPE = 'hitWoodwork' THEN CAST(STAT_VALUE AS FLOAT) ELSE 0 END) as WOODWORK,
+            SUM(CASE WHEN STAT_TYPE = 'touches' THEN CAST(STAT_VALUE AS FLOAT) ELSE 0 END) as TOUCHES,
+            SUM(CASE WHEN STAT_TYPE = 'touchesInOppBox' THEN CAST(STAT_VALUE AS FLOAT) ELSE 0 END) as BOX_TOUCHES
+        FROM {DB}.OPTA_MATCHEXPECTEDGOALS_TEAM
+        WHERE TOURNAMENTCALENDAR_OPTAUUID = '{calendar_uuid}'
+        GROUP BY CONTESTANT_OPTAUUID
+    ),
+    TeamStats AS (
+        SELECT 
+            CONTESTANT_OPTAUUID as TEAM_ID,
+            SUM(CASE WHEN STAT_TYPE = 'totalScoringAtt' THEN CAST(STAT_TOTAL AS FLOAT) ELSE 0 END) as SHOTS_TOTAL,
+            SUM(CASE WHEN STAT_TYPE = 'ontargetScoringAtt' THEN CAST(STAT_TOTAL AS FLOAT) ELSE 0 END) as SHOTS_ON_TARGET,
+            SUM(CASE WHEN STAT_TYPE = 'goalAssist' THEN CAST(STAT_TOTAL AS FLOAT) ELSE 0 END) as ASSISTS,
+            AVG(CASE WHEN STAT_TYPE = 'possessionPercentage' THEN TRY_CAST(REPLACE(STAT_TOTAL, '%', '') AS FLOAT) END) as POSS,
+            SUM(CASE WHEN STAT_TYPE = 'totalPass' THEN CAST(STAT_TOTAL AS FLOAT) ELSE 0 END) as PASSES_TOTAL,
+            SUM(CASE WHEN STAT_TYPE = 'accuratePass' THEN CAST(STAT_TOTAL AS FLOAT) ELSE 0 END) as PASSES_ACCURATE,
+            SUM(CASE WHEN STAT_TYPE = 'cornerTaken' THEN CAST(STAT_TOTAL AS FLOAT) ELSE 0 END) as CORNERS_TAKEN,
+            SUM(CASE WHEN STAT_TYPE = 'totalTackle' THEN CAST(STAT_TOTAL AS FLOAT) ELSE 0 END) as TACKLES_TOTAL,
+            SUM(CASE WHEN STAT_TYPE = 'wonTackle' THEN CAST(STAT_TOTAL AS FLOAT) ELSE 0 END) as TACKLES_WON,
+            SUM(CASE WHEN STAT_TYPE = 'totalClearance' THEN CAST(STAT_TOTAL AS FLOAT) ELSE 0 END) as CLEARANCES,
+            SUM(CASE WHEN STAT_TYPE = 'totalOffside' THEN CAST(STAT_TOTAL AS FLOAT) ELSE 0 END) as OFFSIDES_WON,
+            SUM(CASE WHEN STAT_TYPE = 'fkFoulLost' THEN CAST(STAT_TOTAL AS FLOAT) ELSE 0 END) as FOULS_CONCEDED,
+            SUM(CASE WHEN STAT_TYPE = 'saves' THEN CAST(STAT_TOTAL AS FLOAT) ELSE 0 END) as SAVES,
+            SUM(CASE WHEN STAT_TYPE = 'cleanSheet' THEN CAST(STAT_TOTAL AS FLOAT) ELSE 0 END) as CLEAN_SHEETS,
+            SUM(CASE WHEN STAT_TYPE = 'goalsConceded' THEN CAST(STAT_TOTAL AS FLOAT) ELSE 0 END) as GOALS_CONCEDED,
+            SUM(CASE WHEN STAT_TYPE = 'penaltySave' THEN CAST(STAT_TOTAL AS FLOAT) ELSE 0 END) as PENALTY_SAVES,
+            SUM(CASE WHEN STAT_TYPE = 'totalYellowCard' THEN CAST(STAT_TOTAL AS FLOAT) ELSE 0 END) as YELLOW_CARDS,
+            SUM(CASE WHEN STAT_TYPE = 'totalRedCard' THEN CAST(STAT_TOTAL AS FLOAT) ELSE 0 END) as RED_CARDS,
+            MAX(CASE WHEN STAT_TYPE = 'formationUsed' THEN STAT_TOTAL ELSE NULL END) as FORMATION
         FROM {DB}.OPTA_MATCHSTATS
         WHERE TOURNAMENTCALENDAR_OPTAUUID = '{calendar_uuid}'
-        GROUP BY MATCH_OPTAUUID, CONTESTANT_OPTAUUID
-    ),
-    TeamExpectedStats AS (
-        SELECT 
-            MATCH_ID AS MATCH_OPTAUUID,
-            UPPER(TRIM(CONTESTANT_OPTAUUID)) AS TEAM_ID,
-            SUM(CASE WHEN STAT_TYPE = 'expectedGoals' THEN CAST(STAT_VALUE AS FLOAT) ELSE 0 END) AS XG,
-            SUM(CASE WHEN STAT_TYPE = 'expectedGoalsConceded' THEN CAST(STAT_VALUE AS FLOAT) ELSE 0 END) AS XG_AGAINST,
-            SUM(CASE WHEN STAT_TYPE = 'expectedAssists' THEN CAST(STAT_VALUE AS FLOAT) ELSE 0 END) AS XA,
-            SUM(CASE WHEN STAT_TYPE = 'bigChanceCreated' THEN CAST(STAT_VALUE AS FLOAT) ELSE 0 END) AS BIG_CHANCES_CREATED,
-            SUM(CASE WHEN STAT_TYPE = 'bigChanceMissed' THEN CAST(STAT_VALUE AS FLOAT) ELSE 0 END) AS BIG_CHANCES_MISSED
-        FROM {DB}.OPTA_MATCHEXPECTEDGOALS
-        WHERE MATCH_ID IN (
-            SELECT MATCH_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE TOURNAMENTCALENDAR_OPTAUUID = '{calendar_uuid}'
-        )
-        GROUP BY MATCH_ID, CONTESTANT_OPTAUUID
-    ),
-    CombinedMatchData AS (
-        SELECT 
-            m.TEAM_ID,
-            m.GOALS,
-            m.SHOTS_TOTAL,
-            m.SHOTS_ON_TARGET,
-            m.SHOT_OFF_TARGET,
-            m.WOODWORK,
-            m.ASSISTS,
-            m.POSS,
-            m.TOUCHES,
-            m.PASSES_TOTAL,
-            m.PASSES_ACCURATE,
-            m.BOX_TOUCHES,
-            m.FORMATION,
-            m.TACKLES_TOTAL,
-            m.TACKLES_WON,
-            m.CLEARANCES,
-            m.OFFSIDES_WON,
-            m.FOULS_WON,
-            m.FOULS_CONCEDED,
-            m.SAVES,
-            m.CLEAN_SHEETS,
-            m.GOALS_CONCEDED,
-            m.PENALTY_SAVES,
-            m.PENALTIES_WON,
-            m.PENALTIES_CONCEDED,
-            m.OWN_GOALS,
-            m.CORNERS_TAKEN,
-            m.YELLOW_CARDS,
-            m.SECOND_YELLOWS,
-            m.RED_CARDS,
-            COALESCE(e.XG, 0) AS XG,
-            COALESCE(e.XG_AGAINST, 0) AS XG_AGAINST,
-            COALESCE(e.XA, 0) AS XA,
-            COALESCE(e.BIG_CHANCES_CREATED, 0) AS BIG_CHANCES_CREATED,
-            COALESCE(e.BIG_CHANCES_MISSED, 0) AS BIG_CHANCES_MISSED
-        FROM MatchStats m
-        LEFT JOIN TeamExpectedStats e ON m.MATCH_OPTAUUID = e.MATCH_OPTAUUID AND m.TEAM_ID = e.TEAM_ID
-    ),
-    TeamAverages AS (
-        SELECT 
-            TEAM_ID,
-            AVG(GOALS) AS GOALS,
-            AVG(XG) AS XG,
-            AVG(SHOTS_TOTAL) AS SHOTS_TOTAL,
-            AVG(SHOTS_ON_TARGET) AS SHOTS_ON_TARGET,
-            AVG(WOODWORK) AS WOODWORK,
-            AVG(ASSISTS) AS ASSISTS,
-            AVG(POSS) AS POSS,
-            AVG(TOUCHES) AS TOUCHES,
-            AVG(PASSES_TOTAL) AS PASSES_TOTAL,
-            AVG(PASSES_ACCURATE) AS PASSES_ACCURATE,
-            AVG(BOX_TOUCHES) AS BOX_TOUCHES,
-            MAX(FORMATION) AS FORMATION, -- Foretrukken/seneste formation
-            AVG(TACKLES_TOTAL) AS TACKLES_TOTAL,
-            AVG(TACKLES_WON) AS TACKLES_WON,
-            AVG(CLEARANCES) AS CLEARANCES,
-            AVG(OFFSIDES_WON) AS OFFSIDES_WON,
-            AVG(FOULS_WON) AS FOULS_WON,
-            AVG(FOULS_CONCEDED) AS FOULS_CONCEDED,
-            AVG(SAVES) AS SAVES,
-            SUM(CLEAN_SHEETS) AS CLEAN_SHEETS, -- Total antal clean sheets
-            SUM(GOALS_CONCEDED) AS GOALS_CONCEDED,
-            AVG(PENALTY_SAVES) AS PENALTY_SAVES,
-            AVG(PENALTIES_WON) AS PENALTIES_WON,
-            AVG(PENALTIES_CONCEDED) AS PENALTIES_CONCEDED,
-            AVG(OWN_GOALS) AS OWN_GOALS,
-            AVG(CORNERS_TAKEN) AS CORNERS_TAKEN,
-            AVG(XG_AGAINST) AS XG_AGAINST,
-            AVG(XA) AS XA,
-            AVG(BIG_CHANCES_CREATED) AS BIG_CHANCES_CREATED,
-            AVG(BIG_CHANCES_MISSED) AS BIG_CHANCES_MISSED,
-            SUM(YELLOW_CARDS) AS YELLOW_CARDS,
-            SUM(RED_CARDS) AS RED_CARDS
-        FROM CombinedMatchData
-        GROUP BY TEAM_ID
+        GROUP BY CONTESTANT_OPTAUUID
     )
-    SELECT * FROM TeamAverages;
+    SELECT 
+        t.TEAM_ID,
+        t.TEAM_NAME,
+        COALESCE(f.GOALS, 0) as GOALS,
+        COALESCE(x.XG, 0) as XG,
+        COALESCE(x.XG_AGAINST, 0) as XG_AGAINST,
+        COALESCE(x.XA, 0) as XA,
+        COALESCE(x.BIG_CHANCES_CREATED, 0) as BIG_CHANCES_CREATED,
+        COALESCE(x.BIG_CHANCES_MISSED, 0) as BIG_CHANCES_MISSED,
+        COALESCE(x.WOODWORK, 0) as WOODWORK,
+        COALESCE(x.TOUCHES, 0) as TOUCHES,
+        COALESCE(x.BOX_TOUCHES, 0) as BOX_TOUCHES,
+        COALESCE(s.SHOTS_TOTAL, 0) as SHOTS_TOTAL,
+        COALESCE(s.SHOTS_ON_TARGET, 0) as SHOTS_ON_TARGET,
+        COALESCE(s.ASSISTS, 0) as ASSISTS,
+        COALESCE(s.POSS, 0) as POSS,
+        COALESCE(s.PASSES_TOTAL, 0) as PASSES_TOTAL,
+        COALESCE(s.PASSES_ACCURATE, 0) as PASSES_ACCURATE,
+        COALESCE(s.CORNERS_TAKEN, 0) as CORNERS_TAKEN,
+        COALESCE(s.TACKLES_TOTAL, 0) as TACKLES_TOTAL,
+        COALESCE(s.TACKLES_WON, 0) as TACKLES_WON,
+        COALESCE(s.CLEARANCES, 0) as CLEARANCES,
+        COALESCE(s.OFFSIDES_WON, 0) as OFFSIDES_WON,
+        COALESCE(s.FOULS_CONCEDED, 0) as FOULS_CONCEDED,
+        COALESCE(s.SAVES, 0) as SAVES,
+        COALESCE(s.CLEAN_SHEETS, 0) as CLEAN_SHEETS,
+        COALESCE(s.GOALS_CONCEDED, 0) as GOALS_CONCEDED,
+        COALESCE(s.PENALTY_SAVES, 0) as PENALTY_SAVES,
+        COALESCE(s.YELLOW_CARDS, 0) as YELLOW_CARDS,
+        COALESCE(s.RED_CARDS, 0) as RED_CARDS,
+        s.FORMATION
+    FROM TeamLookup t
+    LEFT JOIN FinalGoals f ON t.TEAM_ID = f.TEAM_ID
+    LEFT JOIN TeamXG x ON t.TEAM_ID = x.TEAM_ID
+    LEFT JOIN TeamStats s ON t.TEAM_ID = s.TEAM_ID
     """
     
     df = _conn.query(query)
@@ -165,14 +125,14 @@ def hent_konklusion_data(_conn, calendar_uuid: str) -> pd.DataFrame:
         df.columns = [str(c).upper() for c in df.columns]
         df['TEAM_ID'] = df['TEAM_ID'].astype(str).str.strip().str.upper()
         
-        # Mappe Opta UUIDs direkte til holdnavne fra TEAMS i team_mapping.py
+        # Sikre holdnavn via TEAMS mapping, hvis navnet i databasen afviger
         uuid_to_name = {
             str(info.get('opta_uuid')).strip().upper(): name
             for name, info in TEAMS.items() if info.get('opta_uuid')
         }
-        df['TEAM_NAME'] = df['TEAM_ID'].map(uuid_to_name).fillna(df['TEAM_ID'])
+        df['TEAM_NAME'] = df['TEAM_ID'].map(uuid_to_name).fillna(df['TEAM_NAME'])
 
-        # Beregn udledte nøgler (såsom skudpræcision og afleveringspræcision)
+        # Beregnede procenter
         df['SHOT_ACCURACY'] = (df['SHOTS_ON_TARGET'] / df['SHOTS_TOTAL'].replace(0, pd.NA)) * 100
         df['PASS_ACCURACY'] = (df['PASSES_ACCURATE'] / df['PASSES_TOTAL'].replace(0, pd.NA)) * 100
         df['TACKLE_SUCCESS'] = (df['TACKLES_WON'] / df['TACKLES_TOTAL'].replace(0, pd.NA)) * 100
