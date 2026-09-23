@@ -120,21 +120,22 @@ def beregn_per_90(df_stats, team_uuid):
     opp_raw = last_match['CONTESTANTAWAY_NAME'] if is_home else last_match['CONTESTANTHOME_NAME']
     opp_name = resolve_team_name(opp_uuid, opp_raw)
 
-    stats_map = {
-        STAT_TYPE_MAP["possessionPercentage"]: ('HOME_POSSESSION', 'AWAY_POSSESSION'),
-        STAT_TYPE_MAP["totalPass"]: ('HOME_PASSES', 'AWAY_PASSES'),
-        STAT_TYPE_MAP["shotOffTarget"]: ('HOME_OFF_TARGET', 'AWAY_OFF_TARGET'),
-        STAT_TYPE_MAP["goals"]: ('TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE'),
-        STAT_TYPE_MAP["expectedGoals"]: ('HOME_XG', 'AWAY_XG'),
-        STAT_TYPE_MAP["totalTackle"]: ('HOME_TACKLES', 'AWAY_TACKLES'),
-        STAT_TYPE_MAP["totalClearance"]: ('HOME_CLEARANCES', 'AWAY_CLEARANCES'),
-        STAT_TYPE_MAP["wonCorners"]: ('HOME_CORNERS_WON', 'AWAY_CORNERS_WON'),
-        STAT_TYPE_MAP["totalThrows"]: ('HOME_THROWS', 'AWAY_THROWS'),
-        STAT_TYPE_MAP["fkFoulWon"]: ('HOME_FOULS_WON', 'AWAY_FOULS_WON')
-    }
+    # Definerer rækkefølgen med xG og xG mod lige efter hinanden, og uden frispark vundet
+    stats_config = [
+        ("Besiddelse", ('HOME_POSSESSION', 'AWAY_POSSESSION')),
+        ("Afleveringer", ('HOME_PASSES', 'AWAY_PASSES')),
+        ("Skud ved siden", ('HOME_OFF_TARGET', 'AWAY_OFF_TARGET')),
+        ("Mål", ('TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE')),
+        ("xG", ('HOME_XG', 'AWAY_XG')),
+        ("xG mod", ('AWAY_XG', 'HOME_XG')),  # xG mod indsat lige under xG
+        ("Tacklinger", ('HOME_TACKLES', 'AWAY_TACKLES')),
+        ("Frisparkeringer / Clearances", ('HOME_CLEARANCES', 'AWAY_CLEARANCES')),
+        ("Hjørnespark", ('HOME_CORNERS_WON', 'AWAY_CORNERS_WON')),
+        ("Indkast", ('HOME_THROWS', 'AWAY_THROWS'))
+    ]
     
     results = []
-    for display_name, (h_col, a_col) in stats_map.items():
+    for display_name, (h_col, a_col) in stats_config:
         hif_vals = []
         for _, r in hif_matches.iterrows():
             if str(r['CONTESTANTHOME_OPTAUUID']).strip().upper() == team_uuid.strip().upper():
@@ -164,7 +165,6 @@ def beregn_per_90(df_stats, team_uuid):
     return pd.DataFrame(results), opp_name
 
 def beregn_hold_per_90_stats(df_stats, team_uuid):
-    """Beregner præcis de samme per-90 gennemsnit direkte fra df_stats til brug i næste modstander-kortet."""
     if df_stats is None or df_stats.empty: 
         return {"poss": "0.0%", "gf": "0.00", "ga": "0.00", "xgf": "0.00", "xga": "0.00"}
     
@@ -307,7 +307,6 @@ def vis_side():
                 """
                 st.markdown(meta_html, unsafe_allow_html=True)
                 
-                # Brug præcis samme per-90 beregningslogik til næste modstander-kortet
                 hif_stats = beregn_hold_per_90_stats(df_stats, HIF_UUID)
                 opp_stats = beregn_hold_per_90_stats(df_stats, opp_id)
                 
