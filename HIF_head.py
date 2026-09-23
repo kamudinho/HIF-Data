@@ -336,7 +336,7 @@ def vis_side():
                     diff_hif_color = "#28a745" if r['Diff_vs_Hif'] > 0 else "#dc3545"
                     
                     if "besiddelse" in r['Stat'].lower():
-                        hif_str = f"{r['HIF']:.2f}%"; liga_str = f"{r['Liga']:.2f}%"; last_str = f"{r['Seneste']:.2f}%"
+                        hif_str = f"{r['HIF']:.1f}%"; liga_str = f"{r['Liga']:.1f}%"; last_str = f"{r['Seneste']:.1f}%"
                     elif "goals" in r['Stat'].lower() or "xg" in r['Stat'].lower():
                         hif_str = f"{r['HIF']:.2f}"; liga_str = f"{r['Liga']:.2f}"; last_str = f"{r['Seneste']:.2f}"
                     else:
