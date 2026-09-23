@@ -153,7 +153,6 @@ def vis_side(dp=None):
         raw_min = r['GOAL_MIN']
         minuttal = 1 if pd.isna(raw_min) else int(raw_min) + 1
 
-        # Tilføj en mærkat, hvis det er et selvmål
         maal_type_tekst = " (Selvmål)" if er_selvmål else ""
         label_tekst = f"{dato_str}: {mål_stilling} ({minuttal}. min) vs. {opp_navn} ({kamp_res}){maal_type_tekst}"
 
@@ -214,11 +213,19 @@ def vis_side(dp=None):
                 r_x = row['RAW_X']
                 r_y = row['RAW_Y']
                 nr_str = str(row['sekvens_nr'])
-                er_maal = (str(row['EVENT_TYPEID']) == '16')
+                
+                q_list = str(row.get('QUALIFIER_LIST', ''))
+                er_selvmål = (str(row['EVENT_TYPEID']) == '16' and "28" in [q.strip() for q in q_list.split(",")])
+                er_maal = (str(row['EVENT_TYPEID']) == '16' and not er_selvmål)
                 er_modstander = (str(row['EVENT_CONTESTANT_OPTAUUID']) != str(valgt_uuid))
 
                 if er_maal:
                     prik_farve = '#df003b'
+                    prik_str = 70
+                    tekst_farve = '#333333'
+                elif er_selvmål:
+                    # Selvmål markeres tydeligt (f.eks. med orange/mørkegul eller en særskilt farve)
+                    prik_farve = '#d68910'
                     prik_str = 70
                     tekst_farve = '#333333'
                 elif er_modstander:
@@ -239,8 +246,10 @@ def vis_side(dp=None):
 
                 navn = str(row.get('PLAYER_NAME', ''))
                 if navn and navn != 'nan' and navn != 'Ukendt':
+                    # Tilføj evt. (SM) eller lignende hvis det er selvmål, så det fremgår i figuren
+                    vis_navn = f"{navn} (SM)" if er_selvmål else navn
                     ax.text(
-                        r_x, r_y - 2.5, navn,
+                        r_x, r_y - 2.5, vis_navn,
                         fontsize=6, ha='center', va='top', color=tekst_farve, zorder=5
                     )
 
@@ -252,12 +261,6 @@ def vis_side(dp=None):
     with col_tabel:
         st.markdown("##### Aktioner i sekvensen")
         
-        def get_final_label_t4(row):
-            if 'AKTION' in row and pd.notna(row['AKTION']) and row['AKTION'] != "":
-                return row['AKTION']
-            label = get_action_label(row)
-            return label if label else "Opbygning"
-
         tge['Aktion'] = tge.apply(get_final_label_t4, axis=1)
         
         vis_cols = ['sekvens_nr', 'PLAYER_NAME', 'Aktion']
