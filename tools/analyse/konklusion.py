@@ -61,7 +61,7 @@ def vis_side(dp=None):
         return
 
     # --- 2. SQL: OPTA_MATCHSTATS & EXPECTEDSTATS ---
-    sql = '''
+    sql = f"""
     WITH MatchStats AS (
         SELECT 
             UPPER(TRIM(CONTESTANT_OPTAUUID)) as TEAM_ID,
@@ -148,7 +148,7 @@ def vis_side(dp=None):
     FROM MatchStats m
     LEFT JOIN ExpectedStats e ON m.TEAM_ID = e.TEAM_ID
     LEFT JOIN CornersAgainst c ON m.TEAM_ID = c.TEAM_ID
-    '''.format(DB=DB, LIGA_UUID=LIGA_UUID)
+    """
 
     NUMERIC_COLS = [
         'GOALS', 'SHOTS_TOTAL', 'SHOTS_ON_TARGET', 'SHOTS_BLOCKED', 'ASSISTS',
@@ -193,7 +193,7 @@ def vis_side(dp=None):
 
     if wyid:
         try:
-            ppda_sql = '''
+            ppda_sql = f"""
                 SELECT tm.TEAM_WYID, AVG(md.PPDA) as PPDA
                 FROM {DB}.WYSCOUT_TEAMMATCHES tm
                 LEFT JOIN {DB}.WYSCOUT_MATCHADVANCEDSTATS_DEFENCE md 
@@ -201,8 +201,7 @@ def vis_side(dp=None):
                 WHERE tm.COMPETITION_WYID = {wyid}
                 AND tm.DATE BETWEEN '{saeson_start}' AND '{saeson_slut}'
                 GROUP BY tm.TEAM_WYID
-            '''.format(DB=DB, wyid=wyid, saeson_start=saeson_start, saeson_slut=saeson_slut)
-            
+            """
             df_ppda = conn.query(ppda_sql) if hasattr(conn, 'query') else pd.read_sql(ppda_sql, conn)
             df_ppda.columns = [str(c).upper() for c in df_ppda.columns]
 
@@ -515,8 +514,8 @@ def vis_side(dp=None):
         <div class="analysis-card">
             <div class="section-title">Disciplin</div>
             <div class="stat-line">• {get_rank('YELLOW_CARDS', ascending=True)} færrest gule kort ({int(row['YELLOW_CARDS'])})</div>
-            <div class="stat-line">• Direkte røde kort: {int(row['RED_CARDS'])}</div>
-            <div class="stat-line">• Udvisninger efter 2. gule: {int(row['SECOND_YELLOWS'])}</div>
+            <div class="stat-line">• Direkte røde kort: {int(row['RED_CARDS'])})</div>
+            <div class="stat-line">• Udvisninger efter 2. gule: {int(row['SECOND_YELLOWS'])})</div>
             <div class="stat-line">• {get_rank('FOULS_CONCEDED', ascending=True)} færrest frispark begået ({int(row['FOULS_CONCEDED'])})</div>
             <div class="conclusion-text">Konklusion – {total_kort} kort i alt denne sæson.</div>
         </div>
