@@ -188,9 +188,9 @@ def hent_hold_kort_stats(df_hold_stats, team_name):
 
     return {
         "gf": f"{goals_p90:.1f}",
-        "ga": f"{xgc_p90:.1f}",
-        "xgf": f"{xg_p90:.1f}",
-        "xga": f"{xgc_p90:.1f}",
+        "ga": f"{xgc_p90:.2f}",
+        "xgf": f"{xg_p90:.2f}",
+        "xga": f"{xgc_p90:.2f}",
         "poss": f"{poss:.1f}%"
     }
     
