@@ -266,3 +266,98 @@ def hent_hoved_stats(_conn, calendar_uuid: str) -> pd.DataFrame:
                 )
 
     return df if df is not None else pd.DataFrame()
+
+@st.cache_data(ttl=600, show_spinner="Henter opdateret holdstatistik fra Snowflake...")
+def hent_samlet_hold_statistik(_conn, calendar_uuid: str) -> pd.DataFrame:
+    """
+    Henter en komplet, synkroniseret oversigt over holdenes mål, xG og statistikker
+    baseret på en samlet master-forespørgsel for at undgå uoverensstemmelser.
+    """
+    if not _conn or not calendar_uuid:
+        return pd.DataFrame()
+
+    query = f"""
+    WITH MatchResults AS (
+        SELECT 
+            MATCH_OPTAUUID,
+            CONTESTANTHOME_OPTAUUID as HOME_ID,
+            CONTESTANTHOME_NAME as HOME_NAME,
+            CONTESTANTAWAY_OPTAUUID as AWAY_ID,
+            CONTESTANTAWAY_NAME as AWAY_NAME,
+            FT_HOME_SCORE,
+            FT_AWAY_SCORE
+        FROM {DB}.OPTA_MATCHINFO
+        WHERE TOURNAMENTCALENDAR_OPTAUUID = '{calendar_uuid}'
+          AND MATCH_STATUS = 'Played'
+    ),
+    TeamLookup AS (
+        SELECT HOME_ID as TEAM_ID, HOME_NAME as TEAM_NAME FROM MatchResults
+        UNION
+        SELECT AWAY_ID as TEAM_ID, AWAY_NAME as TEAM_NAME FROM MatchResults
+    ),
+    TeamGoals AS (
+        SELECT HOME_ID as TEAM_ID, FT_HOME_SCORE as TOTAL_GOALS, 1 as MATCH_COUNT FROM MatchResults
+        UNION ALL
+        SELECT AWAY_ID as TEAM_ID, FT_AWAY_SCORE as TOTAL_GOALS, 1 as MATCH_COUNT FROM MatchResults
+    ),
+    FinalGoals AS (
+        SELECT TEAM_ID, SUM(TOTAL_GOALS) as TOTAL_GOALS, SUM(MATCH_COUNT) as ACTUAL_MATCHES
+        FROM TeamGoals GROUP BY TEAM_ID
+    ),
+    TeamXG AS (
+        SELECT 
+            CONTESTANT_OPTAUUID,
+            SUM(CASE WHEN STAT_TYPE = 'expectedGoals' THEN STAT_VALUE ELSE 0 END) as TOTAL_XG,
+            SUM(CASE WHEN STAT_TYPE = 'expectedGoalsConceded' THEN STAT_VALUE ELSE 0 END) as TOTAL_XGC
+        FROM {DB}.OPTA_MATCHEXPECTEDGOALS_TEAM
+        WHERE TOURNAMENTCALENDAR_OPTAUUID = '{calendar_uuid}'
+        GROUP BY CONTESTANT_OPTAUUID
+    ),
+    AggregatedStats AS (
+        SELECT 
+            CONTESTANT_OPTAUUID,
+            SUM(CASE WHEN STAT_TYPE = 'totalScoringAtt' THEN STAT_TOTAL ELSE 0 END) as TOTAL_SHOTS,
+            SUM(CASE WHEN STAT_TYPE = 'ontargetScoringAtt' THEN STAT_TOTAL ELSE 0 END) as ON_TARGET_SHOTS,
+            SUM(CASE WHEN STAT_TYPE = 'shotOffTarget' THEN STAT_TOTAL ELSE 0 END) as SHOTS_OFF_TARGET,
+            SUM(CASE WHEN STAT_TYPE = 'blockedScoringAtt' THEN STAT_TOTAL ELSE 0 END) as BLOCKED_SHOTS,
+            SUM(CASE WHEN STAT_TYPE = 'totalPass' THEN STAT_TOTAL ELSE 0 END) as TOTAL_PASSES,
+            SUM(CASE WHEN STAT_TYPE = 'accuratePass' THEN STAT_TOTAL ELSE 0 END) as TOTAL_ACCURATE_PASSES,
+            SUM(CASE WHEN STAT_TYPE = 'totalTackle' THEN STAT_TOTAL ELSE 0 END) as TOTAL_TACKLES,
+            SUM(CASE WHEN STAT_TYPE = 'wonTackle' THEN STAT_TOTAL ELSE 0 END) as WON_TACKLES,
+            SUM(CASE WHEN STAT_TYPE = 'totalClearance' THEN STAT_TOTAL ELSE 0 END) as CLEARANCES,
+            SUM(CASE WHEN STAT_TYPE = 'cornerTaken' THEN STAT_TOTAL ELSE 0 END) as CORNERS,
+            SUM(CASE WHEN STAT_TYPE = 'totalYellowCard' THEN STAT_TOTAL ELSE 0 END) as YELLOW_CARDS,
+            SUM(CASE WHEN STAT_TYPE = 'fkFoulLost' THEN STAT_TOTAL ELSE 0 END) as FOULS_CONCEDED,
+            AVG(CASE WHEN STAT_TYPE = 'possessionPercentage' THEN TRY_CAST(REPLACE(STAT_TOTAL, '%', '') AS FLOAT) END) as AVG_POSSESSION_PCT
+        FROM {DB}.OPTA_MATCHSTATS
+        WHERE TOURNAMENTCALENDAR_OPTAUUID = '{calendar_uuid}'
+        GROUP BY CONTESTANT_OPTAUUID
+    )
+    SELECT 
+        t.TEAM_NAME,
+        f.ACTUAL_MATCHES,
+        f.TOTAL_GOALS,
+        ROUND(f.TOTAL_GOALS / NULLIF(f.ACTUAL_MATCHES, 0), 2) as GOALS_P90,
+        ROUND(COALESCE(x.TOTAL_XG, 0), 2) as TOTAL_XG,
+        ROUND(COALESCE(x.TOTAL_XG, 0) / NULLIF(f.ACTUAL_MATCHES, 0), 2) as XG_P90,
+        ROUND(f.TOTAL_GOALS - COALESCE(x.TOTAL_XG, 0), 2) as XG_DIFF,
+        ROUND(COALESCE(x.TOTAL_XGC, 0), 2) as TOTAL_XGC,
+        ROUND(COALESCE(x.TOTAL_XGC, 0) / NULLIF(f.ACTUAL_MATCHES, 0), 2) as XGC_P90,
+        ROUND(COALESCE(s.TOTAL_SHOTS, 0) / NULLIF(f.ACTUAL_MATCHES, 0), 2) as SHOTS_P90,
+        ROUND(COALESCE(s.TOTAL_PASSES, 0) / NULLIF(f.ACTUAL_MATCHES, 0), 1) as PASSES_P90,
+        ROUND(COALESCE(s.AVG_POSSESSION_PCT, 0), 1) as AVG_POSSESSION_PCT,
+        ROUND(COALESCE(s.CORNERS, 0) / NULLIF(f.ACTUAL_MATCHES, 0), 2) as CORNERS_P90,
+        ROUND(COALESCE(s.TOTAL_TACKLES, 0) / NULLIF(f.ACTUAL_MATCHES, 0), 2) as TACKLES_P90,
+        ROUND(COALESCE(s.YELLOW_CARDS, 0) / NULLIF(f.ACTUAL_MATCHES, 0), 2) as YELLOW_CARDS_P90
+    FROM FinalGoals f
+    JOIN TeamLookup t ON f.TEAM_ID = t.TEAM_ID
+    LEFT JOIN TeamXG x ON f.TEAM_ID = x.CONTESTANT_OPTAUUID
+    LEFT JOIN AggregatedStats s ON f.TEAM_ID = s.CONTESTANT_OPTAUUID
+    WHERE f.ACTUAL_MATCHES > 0
+    ORDER BY f.TOTAL_GOALS DESC;
+    """
+    
+    df = _conn.query(query)
+    if df is not None and not df.empty:
+        df.columns = [str(c).upper() for c in df.columns]
+    return df if df is not None else pd.DataFrame()
