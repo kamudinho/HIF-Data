@@ -13,7 +13,8 @@ from data.utils.team_mapping import (
 )
 from data.data_load import _get_snowflake_conn
 from data.utils.stattype_map import STAT_TYPE_MAP
-from data.sql.head import hent_hoved_stats  # <-- Henter den hurtige, cachede SQL-funktion
+# ÆNDRET: Henter nu fra data/sql/teams.py i stedet for head.py
+from data.sql.teams import hent_hoved_stats  # Eller den korrekte funktion fra teams.py
 
 def apply_custom_style():
     st.markdown("""
@@ -226,7 +227,7 @@ def vis_side():
     active_comp = DEFAULT_COMP
     calendar_uuid = SEASONS.get(active_season, {}).get(active_comp)
 
-    # Henter alt samlet og cachet via head.py
+    # Henter data via den opdaterede funktion fra data/sql/teams.py
     df_stats = hent_hoved_stats(conn, calendar_uuid)
     df_matches = df_stats.copy()
 
@@ -340,7 +341,7 @@ def vis_side():
             
             df_stilling = beregn_stilling(df_matches, active_season, active_comp)
             if not df_stilling.empty:
-                table_html = "<table class='table-standings'><thead><tr><th>#</th><th style='text-align:left;'>Hold</th><th>K</th><th>MF</th><th>P</th></tr></thead><tbody>"
+                table_html = "<table class='table-standings'><thead><tr>#<th style='text-align:left;'>Hold</th><th>K</th><th>MF</th><th>P</th></tr></thead><tbody>"
                 for idx, row in df_stilling.head(12).iterrows():
                     row_class = "hif-row" if "Hvidovre" in row['Hold'] else ""
                     mf_sign = f"+{row['MF']}" if row['MF'] > 0 else str(row['MF'])
