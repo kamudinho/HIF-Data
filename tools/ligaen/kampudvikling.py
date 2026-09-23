@@ -212,20 +212,10 @@ def draw_match_trend_chart(df_matches, metric, label, team_name, valgt_saeson):
         team_pos = "top right" if snit_vaerdi >= ligasnit else "bottom right"
         liga_pos = "bottom right" if snit_vaerdi >= ligasnit else "top right"
 
-    # Tilføj gennemsnitslinjer først
-    fig.add_hline(
-        y=snit_vaerdi, line_dash="solid", line_color="black", line_width=1.5,
-        annotation_text=f"(Gennemsnit: {team_name})", annotation_position=team_pos,
-    )
-    fig.add_hline(
-        y=ligasnit, line_dash="dash", line_color="gray", line_width=1.5,
-        annotation_text=f"(Gennemsnit: {DEFAULT_COMP})", annotation_position=liga_pos,
-    )
-
+    # Tilføj logoer via add_layout_image
     logo_size_x = 0.65
     logo_size_y = y_span * 0.20 if y_span > 0.5 else 0.25
 
-    # Tilføj logoer sidst og sørg for at de tvinges øverst ved at tilføje dem i et eget loop efter alt andet
     for _, row in df_matches.iterrows():
         if row.get("OPP_LOGO"):
             b64_logo = get_base64_image(row["OPP_LOGO"])
@@ -241,6 +231,7 @@ def draw_match_trend_chart(df_matches, metric, label, team_name, valgt_saeson):
     padding = y_span * 0.15 if y_span > 0 else 1.0
     y_range = [y_max + padding, y_min - padding] if is_reversed else [y_min - padding, y_max + padding]
 
+    # Brug shapes i stedet for add_hline, så linjerne automatisk ligger bagved alt andet (under lag og logoer)
     fig.update_layout(
         height=550,
         margin=dict(t=70, b=60, l=60, r=40),
@@ -253,8 +244,37 @@ def draw_match_trend_chart(df_matches, metric, label, team_name, valgt_saeson):
             linecolor="black", autorange="reversed" if is_reversed else True,
             range=y_range,
         ),
+        shapes=[
+            # Gennemsnit for holdet (solid sort linje)
+            dict(
+                type="line", xref="paper", yref="y",
+                x0=0, x1=1, y0=snit_vaerdi, y1=snit_vaerdi,
+                line=dict(color="black", width=1.5, dash="solid")
+            ),
+            # Gennemsnit for ligaen (stiplet grå linje)
+            dict(
+                type="line", xref="paper", yref="y",
+                x0=0, x1=1, y0=ligasnit, y1=ligasnit,
+                line=dict(color="gray", width=1.5, dash="dash")
+            )
+        ],
         plot_bgcolor="white", showlegend=False,
     )
+
+    # Tilføj anmærkninger for gennemsnitslinjer separat for at bevare placeringen
+    fig.add_annotation(
+        xref="paper", yref="y", x=0.99, y=snit_vaerdi,
+        text=f"(Gennemsnit: {team_name})", showarrow=False,
+        xanchor="right", yanchor="bottom" if team_pos == "top right" else "top",
+        font=dict(size=10, color="black")
+    )
+    fig.add_annotation(
+        xref="paper", yref="y", x=0.99, y=ligasnit,
+        text=f"(Gennemsnit: {DEFAULT_COMP})", showarrow=False,
+        xanchor="right", yanchor="bottom" if liga_pos == "top right" else "top",
+        font=dict(size=10, color="gray")
+    )
+
     st.plotly_chart(fig, use_container_width=True)
 
 # --- 2. HOVEDFUNKTION FOR SIDEN ---
@@ -318,7 +338,6 @@ def vis_side():
         }
         sel_metric = st.selectbox("Parameter:", list(metric_map.keys()))
 
-    # Tilføjet white-space: nowrap og overflow-x: auto for at sikre, at teksten tvinges på én linje
     if sel_metric == "Offensiv Index":
         st.markdown(
             """
