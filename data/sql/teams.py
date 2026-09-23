@@ -252,7 +252,6 @@ def hent_hoved_stats(_conn, calendar_uuid: str) -> pd.DataFrame:
                             is_home = False
                             is_away = False
                             
-                            # Tjek om holdet er hjemme- eller udehold i den aktuelle kamp fra Snowflake-df
                             h_id = df.loc[mask, 'CONTESTANTHOME_OPTAUUID'].values[0]
                             a_id = df.loc[mask, 'CONTESTANTAWAY_OPTAUUID'].values[0]
                             
@@ -261,7 +260,6 @@ def hent_hoved_stats(_conn, calendar_uuid: str) -> pd.DataFrame:
                             elif team_uuid == a_id:
                                 is_away = True
                                 
-                            # Mappings mellem CSV-kolonner og Snowflake dataframe kolonner
                             col_mapping = {
                                 'POSSESSIONPERCENTAGE': ('HOME_POSSESSION' if is_home else 'AWAY_POSSESSION'),
                                 'TOTALPASS': ('HOME_PASSES' if is_home else 'AWAY_PASSES'),
@@ -273,23 +271,20 @@ def hent_hoved_stats(_conn, calendar_uuid: str) -> pd.DataFrame:
                                 'EXPECTEDGOALS': ('HOME_XG' if is_home else 'AWAY_XG')
                             }
                             
-                            # Overstyr værdier hvis kolonnen findes i både CSV og DF, og data mangler i DF
                             for csv_col, df_col in col_mapping.items():
                                 if csv_col in fb_row and df_col in df.columns:
                                     val = fb_row[csv_col]
                                     if pd.notna(val):
-                                        # Hvis værdien i Snowflake mangler (eller hvis man ønsker at gennemtvinge fallback)
                                         current_val = df.loc[mask, df_col].values[0]
                                         if pd.isna(current_val):
                                             df.loc[mask, df_col] = pd.to_numeric(val, errors='coerce')
             except Exception as e:
                 st.warning(f"Kunne ikke indlæse kampe_fallback.csv: {e}")
 
-        # --- 2. KUN ADVARSEL (Sletter IKKE rækker fra df) ---
+        # --- 2. KUN ADVARSEL (Tjekket kører EFTER fallback er flettet ind) ---
         if 'HOME_POSSESSION' in df.columns and 'MATCH_STATUS' in df.columns:
             played_matches = df[df['MATCH_STATUS'].str.lower() == 'played']
             
-            # Isolér kun Hvidovres kampe til selve tjekket
             hvidovre_played = played_matches[
                 played_matches['CONTESTANTHOME_NAME'].str.contains('Hvidovre', case=False, na=False) | 
                 played_matches['CONTESTANTAWAY_NAME'].str.contains('Hvidovre', case=False, na=False)
@@ -302,7 +297,7 @@ def hent_hoved_stats(_conn, calendar_uuid: str) -> pd.DataFrame:
             if not missing_hvidovre_stats.empty:
                 uuids_str = ", ".join(missing_hvidovre_stats['MATCH_OPTAUUID'].unique())
                 st.warning(
-                    f"**OPTA-data mangler for {len(missing_hvidovre_stats)} af Hvidovres spillede kampe!** "
+                    f"**Opta-statistik mangler for {len(missing_hvidovre_stats)} af Hvidovres spillede kampe!** "
                     f"Berørte Match UUID'er: `{uuids_str}`"
                 )
 
