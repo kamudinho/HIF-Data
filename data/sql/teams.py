@@ -1,4 +1,3 @@
-#data/sql/teams.py
 import pandas as pd
 import streamlit as st
 
@@ -137,8 +136,9 @@ def hent_hold_formkurve(_conn, calendar_uuid: str, team_optauuid: str, limit: in
             df['MATCH_DATE_FULL'] = pd.to_datetime(df['MATCH_DATE_FULL'], errors='coerce').dt.tz_localize(None)
     return df if df is not None else pd.DataFrame()
 
+
 @st.cache_data(ttl=600, show_spinner="Henter kampdata og statistik fra Snowflake...")
-def hent_hoved_stats(_conn, calendar_uuid: str) -> pd.DataFrame:
+def stat_hoved_stats(_conn, calendar_uuid: str) -> pd.DataFrame:
     """
     Henter kampdata på kamp-niveau inkl. hold-ID'er, xG og holdstatistikker per kamp.
     """
