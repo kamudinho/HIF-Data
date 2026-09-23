@@ -5,7 +5,6 @@ import pandas as pd
 from data.data_load import _get_snowflake_conn
 import streamlit as st
 
-
 @st.cache_data(ttl=3600)
 def load_match_level_data(
     tournament_opta_uuid,
@@ -14,9 +13,11 @@ def load_match_level_data(
     comp_wyid,
     season_start_year=2026,
 ):
+    # Opret forbindelse til databasen
     conn = _get_snowflake_conn()
     db = "KLUB_HVIDOVREIF.AXIS"
 
+    # SQL-spørringen
     query = f"""
         WITH MatchBase AS (
             SELECT 
@@ -33,14 +34,12 @@ def load_match_level_data(
               AND (CONTESTANTHOME_OPTAUUID = '{team_opta_uuid}' OR CONTESTANTAWAY_OPTAUUID = '{team_opta_uuid}')
         ),
         PlayerSubs AS (
-            -- Finder tidspunktet for hvornår en spiller evt. blev skiftet ind i en kamp
             SELECT MATCH_OPTAUUID, PLAYER_OPTAUUID, MIN(EVENT_TIMESTAMP) AS SUB_TIME
             FROM {db}.OPTA_EVENTS
-            WHERE EVENT_TYPEID = 19 -- Indskiftning
+            WHERE EVENT_TYPEID = 19
             GROUP BY MATCH_OPTAUUID, PLAYER_OPTAUUID
         ),
         CalculatedSubGoals AS (
-            -- Tæller mål scoret af spillere, som er skiftet ind FØR målet faldt (og ikke er selvmål QID 28)
             SELECT 
                 e.MATCH_OPTAUUID,
                 e.EVENT_CONTESTANT_OPTAUUID AS CONTESTANT_OPTAUUID,
@@ -48,9 +47,9 @@ def load_match_level_data(
             FROM {db}.OPTA_EVENTS e
             JOIN PlayerSubs s ON e.MATCH_OPTAUUID = s.MATCH_OPTAUUID AND e.PLAYER_OPTAUUID = s.PLAYER_OPTAUUID
             LEFT JOIN {db}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID AND q.QUALIFIER_QID = 28
-            WHERE e.EVENT_TYPEID = 16 -- Mål
-              AND e.EVENT_TIMESTAMP > s.SUB_TIME -- Målet faldt EFTER indskiftning
-              AND q.EVENT_OPTAUUID IS NULL -- Ikke selvmål
+            WHERE e.EVENT_TYPEID = 16
+              AND e.EVENT_TIMESTAMP > s.SUB_TIME
+              AND q.EVENT_OPTAUUID IS NULL
             GROUP BY e.MATCH_OPTAUUID, e.EVENT_CONTESTANT_OPTAUUID
         ),
         MatchStatsPivot AS (
@@ -110,7 +109,7 @@ def load_match_level_data(
                 COALESCE(sp.ONTARGETSCORINGATT, 0) AS ONTARGETSCORINGATT,
                 COALESCE(sp.SHOTOFFTARGET, 0) AS SHOTOFFTARGET,
                 COALESCE(sp.BLOCKEDSCORINGATT, 0) AS BLOCKEDSCORINGATT,
-                COALESCE(csg.SUBSGOALS, 0) AS SUBSGOALS, -- Bruger vores nye sikre beregning her
+                COALESCE(csg.SUBSGOALS, 0) AS SUBSGOALS,
                 COALESCE(sp.TOTALPASS, 0) AS TOTALPASS,
                 COALESCE(sp.ACCURATEPASS, 0) AS ACCURATEPASS,
                 COALESCE(sp.POSSESSIONPERCENTAGE, 0) AS POSSESSIONPERCENTAGE,
@@ -190,7 +189,6 @@ def load_match_level_data(
             df["MATCH_DATE"] = pd.to_datetime(df["MATCH_DATE"], errors="coerce")
             df = df.sort_values("MATCH_DATE")
             df["MATCH_DATE"] = df["MATCH_DATE"].dt.strftime('%Y-%m-%d')
-
         numeric_cols = df.select_dtypes(include=[np.number]).columns
         df[numeric_cols] = df[numeric_cols].fillna(0)
 
