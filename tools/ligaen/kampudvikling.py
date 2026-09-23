@@ -132,7 +132,7 @@ def draw_match_trend_chart(df_matches, metric, label, team_name, valgt_saeson):
                 break
 
         opp_names.append(o_name)
-        opp_logos.append(get_base64_image(o_logo) if o_logo else "")
+        opp_logos.append(o_logo)
 
         g_for = safe_int(row.get("GOALS"))
         g_imod = safe_int(row.get("GOALS_AGAINST"))
@@ -174,7 +174,7 @@ def draw_match_trend_chart(df_matches, metric, label, team_name, valgt_saeson):
 
     is_reversed = "PPDA" in label.upper() or "IMOD" in label.upper()
 
-    # 1. Tegn stiplede linjer mellem punkterne FØST
+    # 1. Tegn linjer mellem punkterne
     if len(df_matches) > 1:
         for i in range(len(df_matches) - 1):
             y0 = df_matches[metric].iloc[i]
@@ -197,6 +197,16 @@ def draw_match_trend_chart(df_matches, metric, label, team_name, valgt_saeson):
                 )
             )
 
+    # 2. Tilføj usynlige punkter til hover-funktionalitet
+    fig.add_trace(
+        go.Scatter(
+            x=df_matches["MATCH_NUM"], y=df_matches[metric], mode="markers",
+            marker=dict(size=35, opacity=0),
+            hovertext=df_matches["HOVER_TEXT"], hoverinfo="text",
+            showlegend=False,
+        )
+    )
+
     if is_reversed:
         team_pos = "top right" if snit_vaerdi < ligasnit else "bottom right"
         liga_pos = "bottom right" if snit_vaerdi < ligasnit else "top right"
@@ -207,7 +217,7 @@ def draw_match_trend_chart(df_matches, metric, label, team_name, valgt_saeson):
     padding = y_span * 0.15 if y_span > 0 else 1.0
     y_range = [y_max + padding, y_min - padding] if is_reversed else [y_min - padding, y_max + padding]
 
-    # 2. Layout med gennemsnitslinjer (bagved alt andet)
+    # 3. Layout og gennemsnitslinjer
     fig.update_layout(
         height=550,
         margin=dict(t=70, b=60, l=60, r=40),
@@ -248,21 +258,21 @@ def draw_match_trend_chart(df_matches, metric, label, team_name, valgt_saeson):
         font=dict(size=10, color="gray")
     )
 
-    # 3. Tilføj logoer som Scatter-markører (med source-billeder), hvilket sikrer, at de ligger som det absolut øverste lag
-    fig.add_trace(
-        go.Scatter(
-            x=df_matches["MATCH_NUM"],
-            y=df_matches[metric],
-            mode="markers",
-            marker=dict(
-                size=38,
-                symbol=[f"url({logo})" if logo else "circle" for logo in df_matches["OPP_LOGO"]],
-            ),
-            hovertext=df_matches["HOVER_TEXT"],
-            hoverinfo="text",
-            showlegend=False,
-        )
-    )
+    # 4. Tilføj logoer som absolut øverste lag via add_layout_image SIDST
+    logo_size_x = 0.65
+    logo_size_y = y_span * 0.20 if y_span > 0.5 else 0.25
+
+    for _, row in df_matches.iterrows():
+        if row.get("OPP_LOGO"):
+            b64_logo = get_base64_image(row["OPP_LOGO"])
+            fig.add_layout_image(
+                dict(
+                    source=b64_logo, xref="x", yref="y",
+                    x=row["MATCH_NUM"], y=row[metric],
+                    sizex=logo_size_x, sizey=logo_size_y,
+                    xanchor="center", yanchor="middle", layer="above",
+                )
+            )
 
     st.plotly_chart(fig, use_container_width=True)
 
