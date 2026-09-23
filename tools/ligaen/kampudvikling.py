@@ -109,7 +109,6 @@ def draw_match_trend_chart(df_matches, metric, label, team_name, valgt_saeson):
     opp_logos = []
     hover_texts = []
 
-    # Hent det valgte holds Opta UUID dynamisk fra TEAMS baseret på team_name
     current_team_info = TEAMS.get(team_name, {})
     current_team_uuid = current_team_info.get("opta_uuid", "")
 
@@ -118,14 +117,12 @@ def draw_match_trend_chart(df_matches, metric, label, team_name, valgt_saeson):
         away_uuid = row.get("CONTESTANTAWAY_OPTAUUID")
         row_team_uuid = row.get("TEAM_OPTAUUID")
 
-        # Bestem modstanderens UUID ved at bruge CONTESTANTHOME og CONTESTANTAWAY
         if current_team_uuid:
             if current_team_uuid == home_uuid:
                 opp_uuid = away_uuid
             else:
                 opp_uuid = home_uuid
         else:
-            # Fallback hvis holdets eget UUID ikke findes direkte
             opp_uuid = away_uuid if row_team_uuid == home_uuid else home_uuid
 
         o_name, o_logo = "Modstander", ""
@@ -215,7 +212,7 @@ def draw_match_trend_chart(df_matches, metric, label, team_name, valgt_saeson):
         team_pos = "top right" if snit_vaerdi >= ligasnit else "bottom right"
         liga_pos = "bottom right" if snit_vaerdi >= ligasnit else "top right"
 
-    # Tilføj gennemsnitslinjer FØR logoer, så linjerne ligger under logoerne
+    # Tilføj gennemsnitslinjer først
     fig.add_hline(
         y=snit_vaerdi, line_dash="solid", line_color="black", line_width=1.5,
         annotation_text=f"(Gennemsnit: {team_name})", annotation_position=team_pos,
@@ -228,7 +225,7 @@ def draw_match_trend_chart(df_matches, metric, label, team_name, valgt_saeson):
     logo_size_x = 0.65
     logo_size_y = y_span * 0.20 if y_span > 0.5 else 0.25
 
-    # Tilføj logoer SIDST, så de placeres som det absolut øverste lag over alt andet
+    # Tilføj logoer sidst og sørg for at de tvinges øverst ved at tilføje dem i et eget loop efter alt andet
     for _, row in df_matches.iterrows():
         if row.get("OPP_LOGO"):
             b64_logo = get_base64_image(row["OPP_LOGO"])
@@ -321,10 +318,11 @@ def vis_side():
         }
         sel_metric = st.selectbox("Parameter:", list(metric_map.keys()))
 
+    # Tilføjet white-space: nowrap og overflow-x: auto for at sikre, at teksten tvinges på én linje
     if sel_metric == "Offensiv Index":
         st.markdown(
             """
-            <div style="border: 1px solid black; padding: 10px 15px; border-radius: 5px; background-color: #f9f9f9; margin-bottom: 15px;">
+            <div style="border: 1px solid black; padding: 10px 15px; border-radius: 5px; background-color: #f9f9f9; margin-bottom: 15px; white-space: nowrap; overflow-x: auto;">
                 <b>Offensivt Index:</b> Vurderer holdets samlede chanceskabelse baseret på følgende kategorier: xG, Mål, Skud på mål, Skud total og Berøringer i modstanderens felt.
             </div>
             """,
@@ -333,7 +331,7 @@ def vis_side():
     elif sel_metric == "Defensiv Index":
         st.markdown(
             """
-            <div style="border: 1px solid black; padding: 10px 15px; border-radius: 5px; background-color: #f9f9f9; margin-bottom: 15px;">
+            <div style="border: 1px solid black; padding: 10px 15px; border-radius: 5px; background-color: #f9f9f9; margin-bottom: 15px; white-space: nowrap; overflow-x: auto;">
                 <b>Defensivt Index:</b> Vurderer holdets evne til at forsvare baseret på følgende kategorier: Vundne tacklinger, Clearinger, Blokeringer, Clean sheets, Mål imod og Modstanderens berøringer i feltet.
             </div>
             """,
@@ -344,7 +342,6 @@ def vis_side():
         st.subheader(f"{valgt_hold} – Kampoversigt")
         st.caption(f"Udvikling i {DEFAULT_COMP} ({valgt_saeson})")
 
-    # Henter data via det intelligente load-script (Databasen først, fallback-CSV sekundært)
     df_matches = load_match_level_data(
         tournament_opta_uuid=current_opta_uuid,
         team_opta_uuid=valgt_team_opta_uuid,
@@ -353,7 +350,6 @@ def vis_side():
         season_start_year=season_start_year,
     )
 
-    # Tegner grafen med de hentede data (og sender valgt_hold med)
     draw_match_trend_chart(
         df_matches, metric_map[sel_metric], sel_metric, valgt_hold, valgt_saeson
     )
