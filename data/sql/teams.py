@@ -160,7 +160,7 @@ def hent_hoved_stats(_conn, calendar_uuid: str) -> pd.DataFrame:
                 MATCH_LOCALTIME,
                 MATCH_TIME,
                 VENUE_LONGNAME,
-                WEEKNUMBER AS WEEK,
+                WEEK,
                 TOURNAMENTCALENDAR_OPTAUUID
             FROM {DB}.OPTA_MATCHINFO
             WHERE TOURNAMENTCALENDAR_OPTAUUID = '{calendar_uuid}'
