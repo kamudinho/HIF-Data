@@ -316,57 +316,40 @@ def hent_samlet_spiller_statistik(conn, db_navn, liga_ids, navne_map=None):
 
     return df
 
+def hent_spiller_event_stats(
+    conn,
+    db_navn,
+    liga_ids,
+    hold_optauuid=None,
+    match_optauuid=None,
+    fra_dato="2026-07-01",
+    navne_map=None,
+):
+  liga_ids_sql = _forbered_liga_ids(liga_ids)
 
-# load_league_data() og resolve_player_names() er flyttet til
-# data/sql/skud_data.py - de handlede om skud-/xG-data til leagueshots.py,
-# ikke om spillerstatistik, og laa dubleret i to filer med hver sin kopi.
-# Importer i stedet:
-#     from data.sql.skud_data import load_league_data, resolve_player_names
+  team_filter = (
+      f"AND e.EVENT_CONTESTANT_OPTAUUID = '{hold_optauuid}'"
+      if hold_optauuid
+      else ""
+  )
+  match_filter = (
+      f"AND e.MATCH_OPTAUUID = '{match_optauuid}'" if match_optauuid else ""
+  )
+  date_filter = (
+      f"AND e.EVENT_TIMESTAMP >= '{fra_dato}'"
+      if fra_dato and not match_optauuid
+      else ""
+  )
 
+  expected_team_filter = (
+      f"AND CONTESTANT_OPTAUUID = '{hold_optauuid}'" if hold_optauuid else ""
+  )
+  expected_match_filter = (
+      f"AND MATCH_OPTAUUID = '{match_optauuid}'" if match_optauuid else ""
+  )
 
-def hent_spiller_event_stats(conn, db_navn, liga_ids, hold_optauuid=None,
-                              match_optauuid=None, fra_dato="2026-07-01",
-                              navne_map=None):
-    """
-    ERSTATTER _byg_event_stats() + de to Assist-genberegninger i
-    Truppen.py's vis_side() (én i byg_spiller_og_holdstats for liga/hold,
-    én i kamp-fanen med kommentaren "RETTELSE FORETAGET HER"). Al taelling,
-    procentregning og assist-detektion sker i selve SQL'en - ingen pandas
-    groupby/apply.
-
-    Kvalifikatorer samles i et ARRAY (ARRAY_AGG) i stedet for en
-    komma-separeret tekststreng (LISTAGG, som de to andre funktioner
-    ovenfor bruger) - ARRAY_CONTAINS() er sikrere end LIKE-matching paa
-    tekst, hvor "21" i teorien kunne matche inde i "210".
-
-    Assist beregnes med LEAD() PARTITION BY MATCH_OPTAUUID, hvilket
-    automatisk forhindrer at en assist "laekker" ind i naeste kamp - samme
-    garanti som match_optauuid-tjekket gav i pandas-udgaven.
-
-    navne-CTE'en bruger MAX(...) GROUP BY PLAYER_OPTAUUID i stedet for
-    SELECT DISTINCT over flere tekstkolonner - se skud_data.py for
-    forklaring af hvorfor DISTINCT der gav duplikerede spillere.
-
-    Ét kald daekker alle tre visninger i Truppen.py:
-        hold_optauuid=None, match_optauuid=None -> hele ligaen (Ukendt-side)
-        hold_optauuid sat, match_optauuid=None   -> ét hold, hele sæsonen (Holdoversigt-fanen)
-        match_optauuid sat                       -> én kamp (Kampoversigt-fanen)
-
-    navne_map anvendes efter hentning, paa samme maade som de to andre
-    funktioner i denne fil - det er et opslag, ikke en beregning, saa det
-    er ikke flyttet til SQL.
-    """
-    liga_ids_sql = _forbered_liga_ids(liga_ids)
-
-    team_filter = f"AND e.EVENT_CONTESTANT_OPTAUUID = '{hold_optauuid}'" if hold_optauuid else ""
-    match_filter = f"AND e.MATCH_OPTAUUID = '{match_optauuid}'" if match_optauuid else ""
-    date_filter = f"AND e.EVENT_TIMESTAMP >= '{fra_dato}'" if fra_dato and not match_optauuid else ""
-
-    expected_team_filter = f"AND CONTESTANT_OPTAUUID = '{hold_optauuid}'" if hold_optauuid else ""
-    expected_match_filter = f"AND MATCH_OPTAUUID = '{match_optauuid}'" if match_optauuid else ""
-
-    sql_query = (
-        """
+  sql_query = (
+      """
         WITH events_med_qualifiers AS (
             SELECT
                 e.EVENT_OPTAUUID,
@@ -378,7 +361,8 @@ def hent_spiller_event_stats(conn, db_navn, liga_ids, hold_optauuid=None,
                 e.EVENT_OUTCOME AS OUTCOME,
                 e.EVENT_X,
                 MAX(CASE WHEN q.QUALIFIER_QID = 140 THEN TRY_CAST(q.QUALIFIER_VALUE AS FLOAT) END) AS END_X,
-                ARRAY_AGG(DISTINCT q.QUALIFIER_QID) AS QUALIFIER_ARR
+                -- RETTET: Fjernet DISTINCT for bedre ydelse i databasen
+                ARRAY_AGG(q.QUALIFIER_QID) AS QUALIFIER_ARR
             FROM {db_navn}.OPTA_EVENTS e
             JOIN {db_navn}.OPTA_MATCHINFO m ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
             LEFT JOIN {db_navn}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
@@ -399,7 +383,7 @@ def hent_spiller_event_stats(conn, db_navn, liga_ids, hold_optauuid=None,
         pr_spiller AS (
             SELECT
                 PLAYER_OPTAUUID,
-                ANY_VALUE(HOLD_OPTAUUID) AS HOLD_OPTAUUID,
+                HOLD_OPTAUUID, -- RETTET: Inkluderet her, så det matcher expected_agg per hold/spiller
                 COUNT(DISTINCT MATCH_OPTAUUID) AS KAMPE,
                 COUNT(*) AS AKTIONER,
 
@@ -414,11 +398,7 @@ def hent_spiller_event_stats(conn, db_navn, liga_ids, hold_optauuid=None,
                 SUM(CASE WHEN EVENT_TYPEID = 1 AND ARRAY_CONTAINS(4::VARIANT, QUALIFIER_ARR) THEN 1 ELSE 0 END) AS STIKNINGER,
                 SUM(CASE WHEN EVENT_TYPEID = 1 AND (ARRAY_CONTAINS(2::VARIANT, QUALIFIER_ARR) OR ARRAY_CONTAINS(155::VARIANT, QUALIFIER_ARR)) THEN 1 ELSE 0 END) AS INDLAEG,
 
-                -- Qualifier 28 = Own Goal (selvmål). Bekræftet ved at sammenligne
-                -- qualifier-listen paa en kendt selvmaalshaendelse mod almindelige
-                -- scoringer - selvmaal mangler alle skud-qualifiers (bl.a. 321,
-                -- som er xG-vaerdien, da Opta ikke tildeler xG til et selvmaal).
-                SUM(CASE
+                SUM(CASE 
                         WHEN EVENT_TYPEID IN (13,14,15) THEN 1
                         WHEN EVENT_TYPEID = 16 AND NOT ARRAY_CONTAINS(28::VARIANT, QUALIFIER_ARR) THEN 1
                         ELSE 0
@@ -446,13 +426,13 @@ def hent_spiller_event_stats(conn, db_navn, liga_ids, hold_optauuid=None,
                 SUM(CASE WHEN ARRAY_CONTAINS(210::VARIANT, QUALIFIER_ARR) THEN 1 ELSE 0 END) AS KEY_PASSES,
                 SUM(CASE WHEN ARRAY_CONTAINS(210::VARIANT, QUALIFIER_ARR) AND NAESTE_EVENT_TYPEID = 16 THEN 1 ELSE 0 END) AS ASSISTS
             FROM med_naeste_haendelse
-            GROUP BY PLAYER_OPTAUUID
+            GROUP BY PLAYER_OPTAUUID, HOLD_OPTAUUID -- RETTET: Grupperer på begge
         ),
         expected_agg AS (
             SELECT
                 PLAYER_OPTAUUID,
                 CONTESTANT_OPTAUUID AS HOLD_OPTAUUID,
-                SUM(CASE WHEN STAT_TYPE = 'expectedGoals'   THEN TRY_CAST(STAT_VALUE AS FLOAT) ELSE 0 END) AS XG,
+                SUM(CASE WHEN STAT_TYPE = 'expectedGoals'    THEN TRY_CAST(STAT_VALUE AS FLOAT) ELSE 0 END) AS XG,
                 SUM(CASE WHEN STAT_TYPE = 'expectedAssists' THEN TRY_CAST(STAT_VALUE AS FLOAT) ELSE 0 END) AS XA,
                 SUM(CASE WHEN STAT_TYPE = 'minsPlayed'      THEN TRY_CAST(STAT_VALUE AS FLOAT) ELSE 0 END) AS MINUTTER
             FROM {db_navn}.OPTA_MATCHEXPECTEDGOALS
@@ -503,24 +483,23 @@ def hent_spiller_event_stats(conn, db_navn, liga_ids, hold_optauuid=None,
         LEFT JOIN navne n ON p.PLAYER_OPTAUUID = n.PLAYER_OPTAUUID
         ORDER BY p.AKTIONER DESC
     """
-        .replace("{db_navn}", str(db_navn))
-        .replace("{liga_ids_sql}", str(liga_ids_sql))
-        .replace("{team_filter}", team_filter)
-        .replace("{match_filter}", match_filter)
-        .replace("{date_filter}", date_filter)
-        .replace("{expected_team_filter}", expected_team_filter)
-        .replace("{expected_match_filter}", expected_match_filter)
-    )
+      .replace("{db_navn}", str(db_navn))
+      .replace("{liga_ids_sql}", str(liga_ids_sql))
+      .replace("{team_filter}", team_filter)
+      .replace("{match_filter}", match_filter)
+      .replace("{date_filter}", date_filter)
+      .replace("{expected_team_filter}", expected_team_filter)
+      .replace("{expected_match_filter}", expected_match_filter)
+  )
 
-    df = conn.query(sql_query)
-    if df is not None and not df.empty:
-        df.columns = df.columns.str.lower()
-        df = df.set_index("player_optauuid")
-        if navne_map:
-            df_reset = df.reset_index()
-            df_reset = _anvend_player_mapping(df_reset, navne_map)
-            df = df_reset.set_index("player_optauuid")
-    else:
-        df = pd.DataFrame()
+  df = conn.query(sql_query)
+  if df is not None and not df.empty:
+    df.columns = df.columns.str.lower()
+    # Beholder player_optauuid som kolonne frem for indeks for at matche resten af koden bedre,
+    # eller lad den være hvis din app forventer index. Her lader vi den være kolonne:
+    if navne_map:
+      df = _anvend_player_mapping(df, navne_map)
+  else:
+    df = pd.DataFrame()
 
-    return df
+  return df
