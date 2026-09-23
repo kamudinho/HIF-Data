@@ -174,7 +174,26 @@ def draw_match_trend_chart(df_matches, metric, label, team_name, valgt_saeson):
 
     is_reversed = "PPDA" in label.upper() or "IMOD" in label.upper()
 
-    # 1. Tegn linjer mellem punkterne
+    x_min_val = 1
+    x_max_val = len(df_matches)
+
+    # 1. Tegn gennemsnitslinjer FØST (som traces, så de ligger bagerst og ikke dækker logoer)
+    fig.add_trace(
+        go.Scatter(
+            x=[x_min_val, x_max_val], y=[snit_vaerdi, snit_vaerdi],
+            mode="lines", line=dict(color="black", width=1.5, dash="solid"),
+            showlegend=False, hoverinfo="skip"
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=[x_min_val, x_max_val], y=[ligasnit, ligasnit],
+            mode="lines", line=dict(color="gray", width=1.5, dash="dash"),
+            showlegend=False, hoverinfo="skip"
+        )
+    )
+
+    # 2. Tegn stiplede linjer mellem kampene
     if len(df_matches) > 1:
         for i in range(len(df_matches) - 1):
             y0 = df_matches[metric].iloc[i]
@@ -197,7 +216,7 @@ def draw_match_trend_chart(df_matches, metric, label, team_name, valgt_saeson):
                 )
             )
 
-    # 2. Usynlige punkter for hover-funktionalitet
+    # 3. Usynlige punkter til hover-funktionalitet
     fig.add_trace(
         go.Scatter(
             x=df_matches["MATCH_NUM"], y=df_matches[metric], mode="markers",
@@ -232,21 +251,20 @@ def draw_match_trend_chart(df_matches, metric, label, team_name, valgt_saeson):
         plot_bgcolor="white", showlegend=False,
     )
 
-    # 3. Sararota giddu-galeessaa (add_hline) kan darbu, garuu amma isaan booda add_layout_image ni fe'ama
-    fig.add_hline(
-        y=snit_vaerdi, line_dash="solid", line_color="black", line_width=1.5,
-        annotation_text=f"(Gennemsnit: {team_name})", annotation_position=team_pos,
+    fig.add_annotation(
+        xref="paper", yref="y", x=0.99, y=snit_vaerdi,
+        text=f"(Gennemsnit: {team_name})", showarrow=False,
+        xanchor="right", yanchor="bottom" if team_pos == "top right" else "top",
+        font=dict(size=10, color="black")
     )
-    fig.add_hline(
-        y=ligasnit, line_dash="dash", line_color="gray", line_width=1.5,
-        annotation_text=f"(Gennemsnit: {DEFAULT_COMP})", annotation_position=liga_pos,
+    fig.add_annotation(
+        xref="paper", yref="y", x=0.99, y=ligasnit,
+        text=f"(Gennemsnit: {DEFAULT_COMP})", showarrow=False,
+        xanchor="right", yanchor="bottom" if liga_pos == "top right" else "top",
+        font=dict(size=10, color="gray")
     )
 
-    # 4. LOGOOWWAN: Erga sararri fi hundi dhumanii booda, isaan kana dabalna akkasumas layer="below" geedsisuudhaan
-    # Ykn akka sararri jala ta'uuf, nuti add_layout_image duraan dursineetiin ala amma kanaan 
-    # sararoota fi waan hunda dura akka kaayamu (underneath) gochuuf 'layer="below"' fayyadamuu dandeenya, 
-    # garuu logoowwan olkaasuuf `layer="above"` fi koodii armaan gadii fayyadamna.
-    
+    # 4. TIL SIDST: Tilføj logoer, så de ligger som det absolut øverste lag oven på alt andet
     logo_size_x = 0.65
     logo_size_y = y_span * 0.20 if y_span > 0.5 else 0.25
 
