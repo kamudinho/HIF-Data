@@ -104,7 +104,7 @@ def beregn_per_90(df_stats, team_uuid):
 
     zero_fill_cols = [
         'TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE', 'HOME_XG', 'AWAY_XG', 
-        'HOME_OFF_TARGET', 'AWAY_OFF_TARGET', 'HOME_FORWARD_PASSES', 'AWAY_FORWARD_PASSES', 
+        'HOME_OFF_TARGET', 'AWAY_OFF_TARGET', 'HOME_ACCURATE_PASSES', 'AWAY_ACCURATE_PASSES', 
         'HOME_FOULS_WON', 'AWAY_FOULS_WON', 'HOME_CORNERS_WON', 'AWAY_CORNERS_WON', 
         'HOME_TACKLES', 'AWAY_TACKLES', 'HOME_CLEARANCES', 'AWAY_CLEARANCES', 
         'HOME_PASSES', 'AWAY_PASSES'
@@ -126,7 +126,7 @@ def beregn_per_90(df_stats, team_uuid):
     opp_raw = last_match['CONTESTANTAWAY_NAME'] if is_home else last_match['CONTESTANTHOME_NAME']
     opp_name = resolve_team_name(opp_uuid, opp_raw)
 
-    # Konfiguration hvor "Indkast" er skiftet ud med "Fremadrettede pasninger"
+    # Konfiguration hvor succesfulde afleveringer erstatter indkast
     stats_config = [
         ("Besiddelse", ('HOME_POSSESSION', 'AWAY_POSSESSION')),
         ("Afleveringer", ('HOME_PASSES', 'AWAY_PASSES')),
@@ -137,7 +137,7 @@ def beregn_per_90(df_stats, team_uuid):
         ("Tacklinger", ('HOME_TACKLES', 'AWAY_TACKLES')),
         ("Frisparkeringer / Clearances", ('HOME_CLEARANCES', 'AWAY_CLEARANCES')),
         ("Hjørnespark", ('HOME_CORNERS_WON', 'AWAY_CORNERS_WON')),
-        ("Fremadrettede pasninger", ('HOME_FORWARD_PASSES', 'AWAY_FORWARD_PASSES'))
+        ("Succesfulde afleveringer", ('HOME_ACCURATE_PASSES', 'AWAY_ACCURATE_PASSES'))
     ]
     
     results = []
