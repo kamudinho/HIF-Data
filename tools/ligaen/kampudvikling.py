@@ -347,7 +347,7 @@ def vis_side():
         st.markdown(
             """
             <div style="border: 1px solid black; padding: 10px 15px; border-radius: 5px; background-color: #f9f9f9; margin-bottom: 15px; white-space: nowrap; overflow-x: auto;">
-                <b>Offensivt Index:</b> Vurderer holdets samlede chanceskabelse baseret på følgende kategorier: xG, Mål, Skud på mål, Skud total og Berøringer i modstanderens felt.
+                <b>Offensivt Index:</b> Vurderer holdet på: xG, Mål, Skud på mål, Skud total og Berøringer i modstanderens felt.
             </div>
             """,
             unsafe_allow_html=True,
@@ -356,7 +356,7 @@ def vis_side():
         st.markdown(
             """
             <div style="border: 1px solid black; padding: 10px 15px; border-radius: 5px; background-color: #f9f9f9; margin-bottom: 15px; white-space: nowrap; overflow-x: auto;">
-                <b>Defensivt Index:</b> Vurderer holdets evne til at forsvare baseret på følgende kategorier: Vundne tacklinger, Clearinger, Blokeringer, Clean sheets, Mål imod og Modstanderens berøringer i feltet.
+                <b>Defensivt Index:</b> Vurderer holdet på: Vundne tacklinger, Clearinger, Blokeringer, Clean sheets, Mål imod og Modstanderens berøringer i feltet.
             </div>
             """,
             unsafe_allow_html=True,
