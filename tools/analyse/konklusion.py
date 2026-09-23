@@ -36,6 +36,7 @@ METRIC_DEFS = [
     ("Clearinger", "CLEARANCES", False, 0, "", "Defensivt spil"),
     ("Offsides fanget", "OFFSIDES_WON", False, 0, "", "Defensivt spil"),
     ("xG imod (lavest = bedst)", "XG_AGAINST", True, 2, "", "Defensivt spil"),
+    ("Modstanderberøringer i felt (færrest bedst)", "OPP_BOX_TOUCHES", True, 0, "", "Defensivt spil"),
     ("Frispark begået (færrest bedst)", "FOULS_CONCEDED", True, 0, "", "Defensivt spil"),
 
     ("Redninger", "SAVES", False, 0, "", "Målmand & dødbolde"),
@@ -68,7 +69,6 @@ def vis_side(dp=None):
         st.warning(f"Ingen kampstatistik fundet for turneringen '{COMPETITION_NAME}' i sæsonen '{SAESON_NAVN}'.")
         return
 
-    # Ekskluder 'Liga Gennemsnit' fra enkelt-hold ranglisterne, hvis det er medtaget
     df_teams_only = df[df['TEAM_ID'] != 'LIGA_AVG'].copy()
 
     # --- 3. UI STYLING ---
@@ -339,6 +339,7 @@ def vis_side(dp=None):
             <div class="stat-line">• {get_rank('CLEARANCES')} flest clearinger ({int(row.get('CLEARANCES', 0))})</div>
             <div class="stat-line">• {get_rank('OFFSIDES_WON')} flest offsides ({int(row.get('OFFSIDES_WON', 0))})</div>
             <div class="stat-line">• {get_rank('XG_AGAINST', ascending=True)} laveste xG imod ({safe_val(row.get('XG_AGAINST', 0), decimals=2)})</div>
+            <div class="stat-line">• {get_rank('OPP_BOX_TOUCHES', ascending=True)} færrest modstanderberøringer i felt ({int(row.get('OPP_BOX_TOUCHES', 0))})</div>
             <div class="conclusion-text">Konklusion – Defensiv statistik indlæst.</div>
         </div>
         """, unsafe_allow_html=True)
