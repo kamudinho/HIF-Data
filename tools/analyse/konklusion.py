@@ -25,6 +25,7 @@ METRIC_DEFS = [
     ("Store chancer misset", "BIG_CHANCES_MISSED", True, 0, "", "Afslutningsspil"),
     ("Ramt stolpe/overligger", "WOODWORK", False, 0, "", "Afslutningsspil"),
     ("Hjørnespark taget", "CORNERS_TAKEN", False, 0, "", "Afslutningsspil"),
+    ("Afslutninger efter hjørnespark", "ATT_CORNER", False, 0, "", "Afslutningsspil"),
 
     ("Boldbesiddelse", "POSS", False, 1, "%", "Opbygningsspil"),
     ("Berøringer i alt", "TOUCHES", False, 0, "", "Opbygningsspil"),
@@ -40,11 +41,12 @@ METRIC_DEFS = [
     ("Modstanderberøringer i felt (færrest bedst)", "OPP_BOX_TOUCHES", True, 0, "", "Defensivt spil"),
     ("Frispark begået (færrest bedst)", "FOULS_CONCEDED", True, 0, "", "Defensivt spil"),
 
-    ("Redninger", "SAVES", False, 0, "", "Målmand & dødbolde"),
-    ("Clean sheets", "CLEAN_SHEETS", False, 0, "", "Målmand & dødbolde"),
-    ("Mål imod (færrest bedst)", "GOALS_CONCEDED", True, 0, "", "Målmand & dødbolde"),
-    ("Modstander hjørnespark (færrest bedst)", "OPP_CORNERS_TAKEN", True, 0, "", "Målmand & dødbolde"),
-    ("Straffe reddet", "PENALTY_SAVES", False, 0, "", "Målmand & dødbolde"),
+    ("Redninger", "SAVES", False, 0, "", "Målmand & standarder"),
+    ("Clean sheets", "CLEAN_SHEETS", False, 0, "", "Målmand & standarder"),
+    ("Mål imod (færrest bedst)", "GOALS_CONCEDED", True, 0, "", "Målmand & standarder"),
+    ("Modstander hjørnespark (færrest bedst)", "OPP_CORNERS_TAKEN", True, 0, "", "Målmand & standarder"),
+    ("Modstander afslutninger efter hjørnespark (færrest bedst)", "OPP_ATT_CORNER", True, 0, "", "Målmand & standarder"),
+    ("Straffe reddet", "PENALTY_SAVES", False, 0, "", "Målmand & standarder"),
 
     ("Gule kort (færrest bedst)", "YELLOW_CARDS", True, 0, "", "Disciplin"),
     ("Røde kort (færrest bedst)", "RED_CARDS", True, 0, "", "Disciplin"),
@@ -233,6 +235,7 @@ def vis_side(dp=None):
             <div class="stat-line">• {get_rank('BIG_CHANCES_CREATED')} flest store chancer skabt ({int(row.get('BIG_CHANCES_CREATED', 0))})</div>
             <div class="stat-line">• Ramt stolpe/overligger: {int(row.get('WOODWORK', 0))}</div>
             <div class="stat-line">• {get_rank('CORNERS_TAKEN')} flest hjørnespark taget ({int(row.get('CORNERS_TAKEN', 0))})</div>
+            <div class="stat-line">• {get_rank('ATT_CORNER')} flest afslutninger efter hjørnespark ({int(row.get('ATT_CORNER', 0))})</div>
             <div class="conclusion-text">Konklusion – {valgt_navn} {præstation_tekst} med {goals_val:.0f} mål mod {xg_val:.1f} xG.</div>
         </div>
         """, unsafe_allow_html=True)
@@ -273,6 +276,7 @@ def vis_side(dp=None):
             <div class="stat-line">• {get_rank('CLEAN_SHEETS')} flest clean sheets ({int(row.get('CLEAN_SHEETS', 0))})</div>
             <div class="stat-line">• {get_rank('GOALS_CONCEDED', ascending=True)} færrest mål imod ({int(row.get('GOALS_CONCEDED', 0))})</div>
             <div class="stat-line">• {get_rank('OPP_CORNERS_TAKEN', ascending=True)} færrest modstander hjørnespark ({int(row.get('OPP_CORNERS_TAKEN', 0))})</div>
+            <div class="stat-line">• {get_rank('OPP_ATT_CORNER', ascending=True)} færrest modstander afslutninger efter hjørnespark ({int(row.get('OPP_ATT_CORNER', 0))})</div>
             <div class="conclusion-text">Konklusion – {int(row.get('CLEAN_SHEETS', 0))} clean sheets og {int(row.get('GOALS_CONCEDED', 0))} mål imod.</div>
         </div>
         """, unsafe_allow_html=True)
@@ -284,7 +288,7 @@ def vis_side(dp=None):
         <div class="analysis-card">
             <div class="section-title">Disciplin</div>
             <div class="stat-line">• {get_rank('YELLOW_CARDS', ascending=True)} færrest gule kort ({int(row.get('YELLOW_CARDS', 0))})</div>
-            <div class="stat-line">• Direkte røde kort: {int(row.get('RED_CARDS', 0))})</div>
+            <div class="stat-line">• Direkte røde kort: {int(row.get('RED_CARDS', 0))}</div>
             <div class="conclusion-text">Konklusion – {total_kort} kort i alt denne sæson.</div>
         </div>
         """, unsafe_allow_html=True)
