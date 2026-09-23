@@ -132,11 +132,34 @@ def beregn_per_90(df_stats, team_uuid):
         STAT_TYPE_MAP["totalThrows"]: ('HOME_THROWS', 'AWAY_THROWS'),
         STAT_TYPE_MAP["fkFoulWon"]: ('HOME_FOULS_WON', 'AWAY_FOULS_WON')
     }
+    
     results = []
     for display_name, (h_col, a_col) in stats_map.items():
-        hif_val = hif_matches.apply(lambda r: r[h_col] if str(r['CONTESTANTHOME_OPTAUUID']).strip().upper() == team_uuid.strip().upper() else r[a_col], axis=1).mean()
+        # HIF snit (beregnet konsekvent per kamp)
+        hif_vals = []
+        for _, r in hif_matches.iterrows():
+            if str(r['CONTESTANTHOME_OPTAUUID']).strip().upper() == team_uuid.strip().upper():
+                val = r[h_col]
+            else:
+                val = r[a_col]
+            if pd.notnull(val): hif_vals.append(val)
+        hif_val = sum(hif_vals) / len(hif_vals) if hif_vals else 0.0
+
+        # Modstanderens snit (samme logik som beregn_hold_stats)
+        opp_home = played[played['CONTESTANTHOME_OPTAUUID'].str.upper() == opp_uuid.str.upper() if isinstance(opp_uuid, str) else False]
+        # Sikrer sikker sammenligning af UUID
+        opp_home = played[played['CONTESTANTHOME_OPTAUUID'].str.upper() == str(opp_uuid).upper()]
+        opp_away = played[played['CONTESTANTAWAY_OPTAUUID'].str.upper() == str(opp_uuid).upper()]
+        
+        opp_vals = []
+        for _, r in opp_home.iterrows():
+            if pd.notnull(r[h_col]): opp_vals.append(r[h_col])
+        for _, r in opp_away.iterrows():
+            if pd.notnull(r[a_col]): opp_vals.append(r[a_col])
+        last_val = sum(opp_vals) / len(opp_vals) if opp_vals else 0.0
+
+        # Liga snit
         liga_val = pd.concat([played[h_col], played[a_col]]).mean()
-        last_val = last_match[h_col] if is_home else last_match[a_col]
         
         diff_vs_liga = hif_val - liga_val
         diff_vs_hif = last_val - hif_val
@@ -146,8 +169,8 @@ def beregn_per_90(df_stats, team_uuid):
             "Diff_Liga": diff_vs_liga, "Seneste": last_val, 
             "Diff_vs_Hif": diff_vs_hif
         })
+        
     return pd.DataFrame(results), opp_name
-
 def beregn_hold_stats(df_stats, team_uuid):
     if df_stats is None or df_stats.empty: return {"gf": "0.0", "ga": "0.0", "xgf": "0.00", "xga": "0.00", "poss": "0.00%"}
     played = df_stats[df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].copy()
