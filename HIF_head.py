@@ -135,7 +135,6 @@ def beregn_per_90(df_stats, team_uuid):
     
     results = []
     for display_name, (h_col, a_col) in stats_map.items():
-        # HIF snit
         hif_vals = []
         for _, r in hif_matches.iterrows():
             if str(r['CONTESTANTHOME_OPTAUUID']).strip().upper() == team_uuid.strip().upper():
@@ -145,7 +144,6 @@ def beregn_per_90(df_stats, team_uuid):
             if pd.notnull(val): hif_vals.append(val)
         hif_val = sum(hif_vals) / len(hif_vals) if hif_vals else 0.0
 
-        # Modstanderens snit (rettet string-håndtering)
         opp_uuid_clean = str(opp_uuid).strip().upper() if opp_uuid else ""
         opp_home = played[played['CONTESTANTHOME_OPTAUUID'].str.upper() == opp_uuid_clean]
         opp_away = played[played['CONTESTANTAWAY_OPTAUUID'].str.upper() == opp_uuid_clean]
@@ -157,7 +155,6 @@ def beregn_per_90(df_stats, team_uuid):
             if pd.notnull(r[a_col]): opp_vals.append(r[a_col])
         last_val = sum(opp_vals) / len(opp_vals) if opp_vals else 0.0
 
-        # Liga snit
         liga_val = pd.concat([played[h_col], played[a_col]]).mean()
         
         diff_vs_liga = hif_val - liga_val
@@ -249,6 +246,7 @@ def vis_side():
     active_comp = DEFAULT_COMP
     calendar_uuid = SEASONS.get(active_season, {}).get(active_comp)
 
+    # Korrekt dynamisk hentning via eksisterende datamotor (hent_hoved_stats)
     df_stats = hent_hoved_stats(conn, calendar_uuid)
     df_matches = df_stats.copy()
 
