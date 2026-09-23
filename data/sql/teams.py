@@ -136,12 +136,8 @@ def hent_hold_formkurve(_conn, calendar_uuid: str, team_optauuid: str, limit: in
             df['MATCH_DATE_FULL'] = pd.to_datetime(df['MATCH_DATE_FULL'], errors='coerce').dt.tz_localize(None)
     return df if df is not None else pd.DataFrame()
 
-
 @st.cache_data(ttl=600, show_spinner="Henter kampdata og statistik fra Snowflake...")
 def hent_hoved_stats(_conn, calendar_uuid: str) -> pd.DataFrame:
-    """
-    Henter kampdata på kamp-niveau inkl. hold-ID'er, xG og holdstatistikker per kamp.
-    """
     if not _conn or not calendar_uuid:
         return pd.DataFrame()
 
@@ -182,14 +178,7 @@ def hent_hoved_stats(_conn, calendar_uuid: str) -> pd.DataFrame:
                 MAX(CASE WHEN s.STAT_TYPE = 'totalPass' THEN TRY_CAST(s.STAT_TOTAL AS FLOAT) END) AS PASSES,
                 MAX(CASE WHEN s.STAT_TYPE IN ('touches', 'totalTouch') THEN TRY_CAST(s.STAT_TOTAL AS FLOAT) END) AS TOUCHES,
                 MAX(CASE WHEN s.STAT_TYPE IN ('duelAerialWon', 'aerialWon') THEN TRY_CAST(s.STAT_TOTAL AS FLOAT) END) AS AERIAL_WON,
-                -- Manuel override for kampen mod AaB, hvis besiddelse mangler
-                MAX(
-                    CASE 
-                        WHEN s.MATCH_OPTAUUID = 'c8vwlgepriydcay2kp412acyc' THEN 20.4 
-                        WHEN s.STAT_TYPE = 'possessionPercentage' THEN TRY_CAST(s.STAT_TOTAL AS FLOAT) 
-                        ELSE NULL 
-                    END
-                ) AS POSSESSION
+                MAX(CASE WHEN s.STAT_TYPE = 'possessionPercentage' THEN TRY_CAST(REPLACE(s.STAT_TOTAL, '%', '') AS FLOAT) END) AS POSSESSION
             FROM {DB}.OPTA_MATCHSTATS s
             GROUP BY s.MATCH_OPTAUUID, s.CONTESTANT_OPTAUUID
         ),
@@ -203,32 +192,32 @@ def hent_hoved_stats(_conn, calendar_uuid: str) -> pd.DataFrame:
         )
         SELECT 
             m.*,
-            COALESCE(tx_home.XG, 0) AS HOME_XG,
-            COALESCE(tx_away.XG, 0) AS AWAY_XG,
-            COALESCE(s_home.POSSESSION, 50) AS HOME_POSSESSION,
-            COALESCE(s_away.POSSESSION, 50) AS AWAY_POSSESSION,
-            COALESCE(s_home.SHOTS, 0) AS HOME_SHOTS,
-            COALESCE(s_away.SHOTS, 0) AS AWAY_SHOTS,
-            COALESCE(s_home.OFF_TARGET, 0) AS HOME_OFF_TARGET,
-            COALESCE(s_away.OFF_TARGET, 0) AS AWAY_OFF_TARGET,
-            COALESCE(s_home.THROWS, 0) AS HOME_THROWS,
-            COALESCE(s_away.THROWS, 0) AS AWAY_THROWS,
-            COALESCE(s_home.FOULS_WON, 0) AS HOME_FOULS_WON,
-            COALESCE(s_away.FOULS_WON, 0) AS AWAY_FOULS_WON,
-            COALESCE(s_home.FOULS_LOST, 0) AS HOME_FOULS_LOST,
-            COALESCE(s_away.FOULS_LOST, 0) AS AWAY_FOULS_LOST,
-            COALESCE(s_home.CORNERS_WON, 0) AS HOME_CORNERS_WON,
-            COALESCE(s_away.CORNERS_WON, 0) AS AWAY_CORNERS_WON,
-            COALESCE(s_home.TACKLES, 0) AS HOME_TACKLES,
-            COALESCE(s_away.TACKLES, 0) AS AWAY_TACKLES,
-            COALESCE(s_home.CLEARANCES, 0) AS HOME_CLEARANCES,
-            COALESCE(s_away.CLEARANCES, 0) AS AWAY_CLEARANCES,
-            COALESCE(s_home.PASSES, 0) AS HOME_PASSES,
-            COALESCE(s_away.PASSES, 0) AS AWAY_PASSES,
-            COALESCE(s_home.TOUCHES, 0) AS HOME_TOUCHES,
-            COALESCE(s_away.TOUCHES, 0) AS AWAY_TOUCHES,
-            COALESCE(s_home.AERIAL_WON, 0) AS HOME_AERIAL_WON,
-            COALESCE(s_away.AERIAL_WON, 0) AS AWAY_AERIAL_WON
+            tx_home.XG AS HOME_XG,
+            tx_away.XG AS AWAY_XG,
+            s_home.POSSESSION AS HOME_POSSESSION,
+            s_away.POSSESSION AS AWAY_POSSESSION,
+            s_home.SHOTS AS HOME_SHOTS,
+            s_away.SHOTS AS AWAY_SHOTS,
+            s_home.OFF_TARGET AS HOME_OFF_TARGET,
+            s_away.OFF_TARGET AS AWAY_OFF_TARGET,
+            s_home.THROWS AS HOME_THROWS,
+            s_away.THROWS AS AWAY_THROWS,
+            s_home.FOULS_WON AS HOME_FOULS_WON,
+            s_away.FOULS_WON AS AWAY_FOULS_WON,
+            s_home.FOULS_LOST AS HOME_FOULS_LOST,
+            s_away.FOULS_LOST AS AWAY_FOULS_LOST,
+            s_home.CORNERS_WON AS HOME_CORNERS_WON,
+            s_away.CORNERS_WON AS AWAY_CORNERS_WON,
+            s_home.TACKLES AS HOME_TACKLES,
+            s_away.TACKLES AS AWAY_TACKLES,
+            s_home.CLEARANCES AS HOME_CLEARANCES,
+            s_away.CLEARANCES AS AWAY_CLEARANCES,
+            s_home.PASSES AS HOME_PASSES,
+            s_away.PASSES AS AWAY_PASSES,
+            s_home.TOUCHES AS HOME_TOUCHES,
+            s_away.TOUCHES AS AWAY_TOUCHES,
+            s_home.AERIAL_WON AS HOME_AERIAL_WON,
+            s_away.AERIAL_WON AS AWAY_AERIAL_WON
         FROM Matches m
         LEFT JOIN TeamXGTable tx_home ON m.MATCH_OPTAUUID = tx_home.MATCH_OPTAUUID AND m.CONTESTANTHOME_OPTAUUID = tx_home.CONTESTANT_OPTAUUID
         LEFT JOIN TeamXGTable tx_away ON m.MATCH_OPTAUUID = tx_away.MATCH_OPTAUUID AND m.CONTESTANTAWAY_OPTAUUID = tx_away.CONTESTANT_OPTAUUID
@@ -243,4 +232,34 @@ def hent_hoved_stats(_conn, calendar_uuid: str) -> pd.DataFrame:
         if 'MATCH_DATE_FULL' in df.columns:
             df['MATCH_DATE_FULL'] = pd.to_datetime(df['MATCH_DATE_FULL'], errors='coerce').dt.tz_localize(None)
             
+        # --- 1. MANUEL OVERSTYRING (Fyld dine manglende kampe ind her) ---
+        MANUAL_OVERRIDES = {
+            "c8vwlgepriydcay2kp412acyc": {  # Eksempel med den kamp du fandt
+                "HOME_POSSESSION": 50.0, "AWAY_POSSESSION": 50.0,
+                "HOME_SHOTS": 0.0, "AWAY_SHOTS": 0.0,
+                "HOME_XG": 0.0, "AWAY_XG": 0.0
+            }
+        }
+        
+        for match_uuid, values in MANUAL_OVERRIDES.items():
+            mask = df['MATCH_OPTAUUID'] == match_uuid
+            if mask.any():
+                for col, val in values.items():
+                    if col in df.columns:
+                        df.loc[mask, col] = val
+
+        # --- 2. AUTOMATISK KONTROL / ADVARSEL FOR MANGLENDE DATA ---
+        # Vi tjekker afsluttede kampe (f.eks. hvor status er 'Played' eller lignende, eller bare generelt hvor besiddelse mangler)
+        if 'HOME_POSSESSION' in df.columns:
+            # Filtrer kampe der mangler besiddelse (og som måske er spillet)
+            missing_stats = df[df['HOME_POSSESSION'].isna()]
+            if not missing_stats.empty:
+                # Vis en advarsel i Streamlit med UUID'er så du nemt kan tilføje dem
+                uuids_str = ", ".join(missing_stats['MATCH_OPTAUUID'].unique())
+                st.warning(
+                    f"⚠️ **Opta-statistik mangler for {len(missing_stats)} kamp(e)!** "
+                    f"Disse mangler i `OPTA_MATCHSTATS`. "
+                    f"Berørte Match UUID'er: `{uuids_str}`"
+                )
+
     return df if df is not None else pd.DataFrame()
