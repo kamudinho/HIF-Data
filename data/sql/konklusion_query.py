@@ -9,7 +9,7 @@ DB = "KLUB_HVIDOVREIF.AXIS"
 def hent_konklusion_data(_conn, calendar_uuid: str) -> pd.DataFrame:
     """
     Henter samlet holdstatistik baseret på en stabil CTE-struktur 
-    og de præcise statistiltyper fra Opta-tabellerne.
+    inkl. modstanderens berøringer i feltet.
     """
     if not _conn or not calendar_uuid:
         return pd.DataFrame()
@@ -57,6 +57,33 @@ def hent_konklusion_data(_conn, calendar_uuid: str) -> pd.DataFrame:
         WHERE TOURNAMENTCALENDAR_OPTAUUID = '{calendar_uuid}'
         GROUP BY CONTESTANT_OPTAUUID
     ),
+    OpponentBoxTouches AS (
+        -- Hent modstanderens berøringer i feltet for hver kamp
+        SELECT 
+            m.HOME_ID as TEAM_ID,
+            CAST(x_away.STAT_VALUE AS FLOAT) as OPP_BOX_TOUCHES
+        FROM MatchResults m
+        JOIN {DB}.OPTA_MATCHEXPECTEDGOALS_TEAM x_away 
+          ON m.MATCH_OPTAUUID = x_away.MATCH_OPTAUUID 
+          AND m.AWAY_ID = x_away.CONTESTANT_OPTAUUID
+        WHERE x_away.STAT_TYPE = 'touchesInOppBox'
+        
+        UNION ALL
+        
+        SELECT 
+            m.AWAY_ID as TEAM_ID,
+            CAST(x_home.STAT_VALUE AS FLOAT) as OPP_BOX_TOUCHES
+        FROM MatchResults m
+        JOIN {DB}.OPTA_MATCHEXPECTEDGOALS_TEAM x_home 
+          ON m.MATCH_OPTAUUID = x_home.MATCH_OPTAUUID 
+          AND m.HOME_ID = x_home.CONTESTANT_OPTAUUID
+        WHERE x_home.STAT_TYPE = 'touchesInOppBox'
+    ),
+    AggregatedOppBox AS (
+        SELECT TEAM_ID, SUM(OPP_BOX_TOUCHES) as OPP_BOX_TOUCHES
+        FROM OpponentBoxTouches
+        GROUP BY TEAM_ID
+    ),
     TeamStats AS (
         SELECT 
             CONTESTANT_OPTAUUID as TEAM_ID,
@@ -95,6 +122,7 @@ def hent_konklusion_data(_conn, calendar_uuid: str) -> pd.DataFrame:
         COALESCE(x.WOODWORK, 0) as WOODWORK,
         COALESCE(x.TOUCHES, 0) as TOUCHES,
         COALESCE(x.BOX_TOUCHES, 0) as BOX_TOUCHES,
+        COALESCE(o.OPP_BOX_TOUCHES, 0) as OPP_BOX_TOUCHES,
         COALESCE(s.SHOTS_TOTAL, 0) as SHOTS_TOTAL,
         COALESCE(s.SHOTS_ON_TARGET, 0) as SHOTS_ON_TARGET,
         COALESCE(s.ASSISTS, 0) as ASSISTS,
@@ -117,6 +145,7 @@ def hent_konklusion_data(_conn, calendar_uuid: str) -> pd.DataFrame:
     FROM TeamLookup t
     LEFT JOIN FinalGoals f ON t.TEAM_ID = f.TEAM_ID
     LEFT JOIN TeamXG x ON t.TEAM_ID = x.TEAM_ID
+    LEFT JOIN AggregatedOppBox o ON t.TEAM_ID = o.TEAM_ID
     LEFT JOIN TeamStats s ON t.TEAM_ID = s.TEAM_ID
     """
     
@@ -125,14 +154,12 @@ def hent_konklusion_data(_conn, calendar_uuid: str) -> pd.DataFrame:
         df.columns = [str(c).upper() for c in df.columns]
         df['TEAM_ID'] = df['TEAM_ID'].astype(str).str.strip().str.upper()
         
-        # Sikre holdnavn via TEAMS mapping, hvis navnet i databasen afviger
         uuid_to_name = {
             str(info.get('opta_uuid')).strip().upper(): name
             for name, info in TEAMS.items() if info.get('opta_uuid')
         }
         df['TEAM_NAME'] = df['TEAM_ID'].map(uuid_to_name).fillna(df['TEAM_NAME'])
 
-        # Beregnede procenter
         df['SHOT_ACCURACY'] = (df['SHOTS_ON_TARGET'] / df['SHOTS_TOTAL'].replace(0, pd.NA)) * 100
         df['PASS_ACCURACY'] = (df['PASSES_ACCURATE'] / df['PASSES_TOTAL'].replace(0, pd.NA)) * 100
         df['TACKLE_SUCCESS'] = (df['TACKLES_WON'] / df['TACKLES_TOTAL'].replace(0, pd.NA)) * 100
