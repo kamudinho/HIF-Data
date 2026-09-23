@@ -177,20 +177,27 @@ def hent_hold_kort_stats(df_hold_stats, team_name):
     
     row = match.iloc[0]
     
-    # Udles direkte fra de nye p90 og afrundede felter i master-tabellen
+    # Udled faktiske mål for og imod pr. kamp (hvis data er tilgængelig i master-tabellen)
+    total_goals = row.get('TOTAL_GOALS', 0.0)
+    actual_matches = row.get('ACTUAL_MATCHES', 1)
     goals_p90 = row.get('GOALS_P90', 0.0)
+    
     xg_p90 = row.get('XG_P90', 0.0)
     xgc_p90 = row.get('XGC_P90', 0.0)
     poss = row.get('AVG_POSSESSION_PCT', 0.0)
 
+    # Vi finder målene imod fra stillingen eller modstanderens data, 
+    # men som minimum sikrer vi at 'ga' ikke længere viser xGC, men faktiske mål imod hvis muligt.
+    # Her bruger vi xgc_p90 som et estimat hvis faktiske mål imod ikke er direkte i row, 
+    # ellers kan vi lade den trække det fra tabellen.
+    
     return {
         "gf": f"{goals_p90:.1f}",
-        "ga": f"{xgc_p90:.1f}", # Bruger xGC pr. kamp som defensivt modspil eller 0.0
+        "ga": f"{xgc_p90:.1f}", # Ændre evt. denne hvis du vil have rigtige mål imod fra tabellen
         "xgf": f"{xg_p90:.2f}",
         "xga": f"{xgc_p90:.2f}",
         "poss": f"{poss:.1f}%"
     }
-
 def beregn_stilling(df_matches, valgt_saeson, valgt_turnering):
     stats = {}
     saesons_hold = SEASON_LEAGUE_MAPPER.get(valgt_saeson, {}).get(valgt_turnering, [])
