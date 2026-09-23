@@ -180,6 +180,7 @@ def hent_hoved_stats(_conn, calendar_uuid: str) -> pd.DataFrame:
                 MAX(CASE WHEN s.STAT_TYPE = 'totalClearance' THEN TRY_CAST(s.STAT_TOTAL AS FLOAT) END) AS CLEARANCES,
                 MAX(CASE WHEN s.STAT_TYPE = 'totalPass' THEN TRY_CAST(s.STAT_TOTAL AS FLOAT) END) AS PASSES,
                 MAX(CASE WHEN s.STAT_TYPE IN ('touches', 'totalTouch') THEN TRY_CAST(s.STAT_TOTAL AS FLOAT) END) AS TOUCHES,
+                MAX(CASE WHEN s.STAT_TYPE IN ('duelAerialWon', 'aerialWon') THEN TRY_CAST(s.STAT_TOTAL AS FLOAT) END) AS AERIAL_WON,
                 -- Manuel override for kampen mod AaB, hvis besiddelse mangler
                 MAX(
                     CASE 
@@ -222,7 +223,9 @@ def hent_hoved_stats(_conn, calendar_uuid: str) -> pd.DataFrame:
             COALESCE(s_home.PASSES, 0) AS HOME_PASSES,
             COALESCE(s_away.PASSES, 0) AS AWAY_PASSES,
             COALESCE(s_home.TOUCHES, 0) AS HOME_TOUCHES,
-            COALESCE(s_away.TOUCHES, 0) AS AWAY_TOUCHES
+            COALESCE(s_away.TOUCHES, 0) AS AWAY_TOUCHES,
+            COALESCE(s_home.AERIAL_WON, 0) AS HOME_AERIAL_WON,
+            COALESCE(s_away.AERIAL_WON, 0) AS AWAY_AERIAL_WON
         FROM Matches m
         LEFT JOIN TeamXGTable tx_home ON m.MATCH_OPTAUUID = tx_home.MATCH_OPTAUUID AND m.CONTESTANTHOME_OPTAUUID = tx_home.CONTESTANT_OPTAUUID
         LEFT JOIN TeamXGTable tx_away ON m.MATCH_OPTAUUID = tx_away.MATCH_OPTAUUID AND m.CONTESTANTAWAY_OPTAUUID = tx_away.CONTESTANT_OPTAUUID
