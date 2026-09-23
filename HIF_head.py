@@ -248,7 +248,6 @@ def vis_side():
     active_comp = DEFAULT_COMP
     calendar_uuid = SEASONS.get(active_season, {}).get(active_comp)
 
-    # Hent både hoved-stats (til kampe/trends) og samlet holdstatistik (til overblik)
     df_stats = hent_hoved_stats(conn, calendar_uuid)
     df_hold_stats = hent_samlet_hold_statistik(conn, calendar_uuid)
     df_matches = df_stats.copy()
@@ -290,6 +289,7 @@ def vis_side():
                 """
                 st.markdown(meta_html, unsafe_allow_html=True)
                 
+                # Hent stats via den fælles holdstatistik-funktion
                 hif_stats = hent_hold_kort_stats(df_hold_stats, "Hvidovre")
                 opp_stats = hent_hold_kort_stats(df_hold_stats, opp_name)
                 hif_logo = TEAMS.get("Hvidovre", {}).get("logo", "")
@@ -301,9 +301,9 @@ def vis_side():
                         <td style='text-align: center; width: 33%; border-bottom: 1px solid #eee; padding-bottom: 4px;'><img src='{hif_logo}' style='width: 22px; height: 22px; object-fit: contain;'></td>
                         <td style='text-align: center; width: 33%; border-bottom: 1px solid #eee; padding-bottom: 4px;'><img src='{opp_logo}' style='width: 22px; height: 22px; object-fit: contain;'></td>
                     </tr>
-                    <tr><td class='stats-label'>Possession</td><td class='stats-value'>{hif_stats['poss']}</td><td class='stats-value'>{opp_stats['poss']}</td></tr>
+                    <tr><td class='stats-label'>Besiddelse</td><td class='stats-value'>{hif_stats['poss']}</td><td class='stats-value'>{opp_stats['poss']}</td></tr>
                     <tr><td class='stats-label'>Mål for/imod</td><td class='stats-value'>{hif_stats['gf']}/{hif_stats['ga']}</td><td class='stats-value'>{opp_stats['gf']}/{opp_stats['ga']}</td></tr>
-                    <tr><td class='stats-label'>xG for/imod</td><td class='stats-value'>{hif_stats['xgf']}/{hif_stats['xga']}</td><td class='stats-value'>{opp_stats['xgf']}/{opp_stats['xga']}</td></tr>
+                    <tr><td class='stats-label'>xG for/imod</td><td class='stats-value'>{hif_stats['xgf']}/{hif_stats['xga']}</td><td class='stats-value'>{opp_stats['xgf']}/{opp_stats['xgpresa']}</td></tr>
                 </table>"""
                 st.markdown(stats_html, unsafe_allow_html=True)
             else:
