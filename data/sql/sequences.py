@@ -7,8 +7,7 @@ DB = "KLUB_HVIDOVREIF.AXIS"
 @st.cache_data(ttl=1800, show_spinner="Henter målsekvenser fra Snowflake...")
 def load_goal_sequences_data(valgt_uuid, liga_ids_tuple):
     """
-    Henter alle relevante målsekvenser (startende efter clearing/interception)
-    for det valgte hold og turnering i én samlet, optimeret CTE-forespørgsel.
+    Henter alle relevante målsekvenser (inkl. selvmål) for det valgte hold og turnering.
     """
     conn = _get_snowflake_conn()
     if not conn:
@@ -120,7 +119,7 @@ def load_goal_sequences_data(valgt_uuid, liga_ids_tuple):
             END as RAW_X,
             CASE 
                 WHEN e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' THEN e.EVENT_Y 
-                ELSE (100.0 - e.EVENT_Y) 
+                ELSE (100.0 - (100.0 - e.EVENT_Y)) -- eller tilsvarende y-justering
             END as RAW_Y,
             e.GOAL_TIMESTAMP,
             e.G_EVENT_UUID AS GOAL_EVENT_OPTAUUID,
