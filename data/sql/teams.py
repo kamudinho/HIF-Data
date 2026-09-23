@@ -232,13 +232,9 @@ def hent_hoved_stats(_conn, calendar_uuid: str) -> pd.DataFrame:
         if 'MATCH_DATE_FULL' in df.columns:
             df['MATCH_DATE_FULL'] = pd.to_datetime(df['MATCH_DATE_FULL'], errors='coerce').dt.tz_localize(None)
             
-        # --- 1. MANUEL OVERSTYRING (Fyld dine manglende kampe ind her) ---
+        # --- 1. MANUEL OVERSTYRING ---
         MANUAL_OVERRIDES = {
-            "c8vwlgepriydcay2kp412acyc": {  # Eksempel med den kamp du fandt
-                "HOME_POSSESSION": 50.0, "AWAY_POSSESSION": 50.0,
-                "HOME_SHOTS": 0.0, "AWAY_SHOTS": 0.0,
-                "HOME_XG": 0.0, "AWAY_XG": 0.0
-            }
+            # "c8vwlgepriydcay2kp412acyc": { ... }
         }
         
         for match_uuid, values in MANUAL_OVERRIDES.items():
@@ -248,19 +244,19 @@ def hent_hoved_stats(_conn, calendar_uuid: str) -> pd.DataFrame:
                     if col in df.columns:
                         df.loc[mask, col] = val
 
-        # --- AUTOMATISK KONTROL / ADVARSEL FOR MANGLENDE DATA ---
-        if 'HOME_POSSESSION' in df.columns:
-            # 1. Filtrer kun kampe der er spillet ('Played' eller lignende status)
-            # 2. Filtrer kun kampe hvor Hvidovre er involveret (f.eks. hvor holdnavnet matcher)
+        # --- 2. KUN ADVARSEL (Sletter IKKE rækker fra df) ---
+        if 'HOME_POSSESSION' in df.columns and 'MATCH_STATUS' in df.columns:
             played_matches = df[df['MATCH_STATUS'].str.lower() == 'played']
             
+            # Isolér kun Hvidovres kampe til selve tjekket
             hvidovre_played = played_matches[
                 played_matches['CONTESTANTHOME_NAME'].str.contains('Hvidovre', case=False, na=False) | 
                 played_matches['CONTESTANTAWAY_NAME'].str.contains('Hvidovre', case=False, na=False)
             ]
             
-            # Tjek om der mangler besiddelse i Hvidovres egne kampe
-            missing_hvidovre_stats = hvidovre_played[hvidovre_played['HOME_POSSESSION'].isna() | hvidovre_played['AWAY_POSSESSION'].isna()]
+            missing_hvidovre_stats = hvidovre_played[
+                hvidovre_played['HOME_POSSESSION'].isna() | hvidovre_played['AWAY_POSSESSION'].isna()
+            ]
             
             if not missing_hvidovre_stats.empty:
                 uuids_str = ", ".join(missing_hvidovre_stats['MATCH_OPTAUUID'].unique())
