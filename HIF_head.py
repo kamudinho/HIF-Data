@@ -135,6 +135,7 @@ def beregn_per_90(df_stats, team_uuid):
     
     results = []
     for display_name, (h_col, a_col) in stats_map.items():
+        # Hvidovres snit over sæsonen
         hif_vals = []
         for _, r in hif_matches.iterrows():
             if str(r['CONTESTANTHOME_OPTAUUID']).strip().upper() == team_uuid.strip().upper():
@@ -144,21 +145,18 @@ def beregn_per_90(df_stats, team_uuid):
             if pd.notnull(val): hif_vals.append(val)
         hif_val = sum(hif_vals) / len(hif_vals) if hif_vals else 0.0
 
-        opp_uuid_clean = str(opp_uuid).strip().upper() if opp_uuid else ""
-        opp_home = played[played['CONTESTANTHOME_OPTAUUID'].str.upper() == opp_uuid_clean]
-        opp_away = played[played['CONTESTANTAWAY_OPTAUUID'].str.upper() == opp_uuid_clean]
-        
-        opp_vals = []
-        for _, r in opp_home.iterrows():
-            if pd.notnull(r[h_col]): opp_vals.append(r[h_col])
-        for _, r in opp_away.iterrows():
-            if pd.notnull(r[a_col]): opp_vals.append(r[a_col])
-        last_val = sum(opp_vals) / len(opp_vals) if opp_vals else 0.0
+        # RETTELSE: Hent Hvidovres egne værdier i den SENESTE KAMP (i stedet for modstanderens)
+        if is_home:
+            last_val = last_match[h_col] if h_col in last_match else 0.0
+        else:
+            last_val = last_match[a_col] if a_col in last_match else 0.0
+        last_val = float(last_val) if pd.notnull(last_val) else 0.0
 
+        # Liga snit for denne statistik
         liga_val = pd.concat([played[h_col], played[a_col]]).mean()
         
         diff_vs_liga = hif_val - liga_val
-        diff_vs_hif = last_val - hif_val
+        diff_vs_hif = last_val - hif_val  # Hvor meget den seneste kamp afveg fra HIFs eget snit
         
         results.append({
             "Stat": display_name, "HIF": hif_val, "Liga": liga_val, 
