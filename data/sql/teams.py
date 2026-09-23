@@ -1,3 +1,4 @@
+#data/sql/teams.py
 import pandas as pd
 import streamlit as st
 
@@ -134,4 +135,42 @@ def hent_hold_formkurve(_conn, calendar_uuid: str, team_optauuid: str, limit: in
         df.columns = [str(c).upper() for c in df.columns]
         if 'MATCH_DATE_FULL' in df.columns:
             df['MATCH_DATE_FULL'] = pd.to_datetime(df['MATCH_DATE_FULL'], errors='coerce').dt.tz_localize(None)
+    return df if df is not None else pd.DataFrame()
+
+@st.cache_data(ttl=600, show_spinner="Henter kampdata fra Snowflake...")
+def hent_hoved_stats(_conn, calendar_uuid: str) -> pd.DataFrame:
+    """
+    Henter relevante kampdata og resultater direkte fra OPTA_MATCHINFO
+    med de præcise kolonner, der skal bruges i appen.
+    """
+    if not _conn or not calendar_uuid:
+        return pd.DataFrame()
+
+    query = f"""
+        SELECT 
+            MATCH_OPTAUUID,
+            MATCH_STATUS,
+            TOTAL_HOME_SCORE,
+            TOTAL_AWAY_SCORE,
+            CONTESTANTHOME_OPTAUUID,
+            CONTESTANTHOME_NAME,
+            CONTESTANTAWAY_OPTAUUID,
+            CONTESTANTAWAY_NAME,
+            MATCH_DATE_FULL,
+            MATCH_LOCALTIME,
+            MATCH_TIME,
+            VENUE_LONGNAME,
+            WEEK,
+            TOURNAMENTCALENDAR_OPTAUUID
+        FROM {DB}.OPTA_MATCHINFO
+        WHERE TOURNAMENTCALENDAR_OPTAUUID = '{calendar_uuid}'
+        ORDER BY MATCH_DATE_FULL ASC
+    """
+    
+    df = _conn.query(query)
+    if df is not None and not df.empty:
+        df.columns = [str(c).upper() for c in df.columns]
+        if 'MATCH_DATE_FULL' in df.columns:
+            df['MATCH_DATE_FULL'] = pd.to_datetime(df['MATCH_DATE_FULL'], errors='coerce').dt.tz_localize(None)
+            
     return df if df is not None else pd.DataFrame()
