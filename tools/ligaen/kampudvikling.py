@@ -132,7 +132,7 @@ def draw_match_trend_chart(df_matches, metric, label, team_name, valgt_saeson):
                 break
 
         opp_names.append(o_name)
-        opp_logos.append(o_logo)
+        opp_logos.append(get_base64_image(o_logo) if o_logo else "")
 
         g_for = safe_int(row.get("GOALS"))
         g_imod = safe_int(row.get("GOALS_AGAINST"))
@@ -174,6 +174,7 @@ def draw_match_trend_chart(df_matches, metric, label, team_name, valgt_saeson):
 
     is_reversed = "PPDA" in label.upper() or "IMOD" in label.upper()
 
+    # 1. Tegn stiplede linjer mellem punkterne FØST
     if len(df_matches) > 1:
         for i in range(len(df_matches) - 1):
             y0 = df_matches[metric].iloc[i]
@@ -196,15 +197,6 @@ def draw_match_trend_chart(df_matches, metric, label, team_name, valgt_saeson):
                 )
             )
 
-    fig.add_trace(
-        go.Scatter(
-            x=df_matches["MATCH_NUM"], y=df_matches[metric], mode="markers",
-            marker=dict(size=40, opacity=0),
-            hovertext=df_matches["HOVER_TEXT"], hoverinfo="text",
-            showlegend=False,
-        )
-    )
-
     if is_reversed:
         team_pos = "top right" if snit_vaerdi < ligasnit else "bottom right"
         liga_pos = "bottom right" if snit_vaerdi < ligasnit else "top right"
@@ -212,26 +204,10 @@ def draw_match_trend_chart(df_matches, metric, label, team_name, valgt_saeson):
         team_pos = "top right" if snit_vaerdi >= ligasnit else "bottom right"
         liga_pos = "bottom right" if snit_vaerdi >= ligasnit else "top right"
 
-    # Tilføj logoer via add_layout_image
-    logo_size_x = 0.65
-    logo_size_y = y_span * 0.20 if y_span > 0.5 else 0.25
-
-    for _, row in df_matches.iterrows():
-        if row.get("OPP_LOGO"):
-            b64_logo = get_base64_image(row["OPP_LOGO"])
-            fig.add_layout_image(
-                dict(
-                    source=b64_logo, xref="x", yref="y",
-                    x=row["MATCH_NUM"], y=row[metric],
-                    sizex=logo_size_x, sizey=logo_size_y,
-                    xanchor="center", yanchor="middle", layer="above",
-                )
-            )
-
     padding = y_span * 0.15 if y_span > 0 else 1.0
     y_range = [y_max + padding, y_min - padding] if is_reversed else [y_min - padding, y_max + padding]
 
-    # Brug shapes i stedet for add_hline, så linjerne automatisk ligger bagved alt andet (under lag og logoer)
+    # 2. Layout med gennemsnitslinjer (bagved alt andet)
     fig.update_layout(
         height=550,
         margin=dict(t=70, b=60, l=60, r=40),
@@ -245,13 +221,11 @@ def draw_match_trend_chart(df_matches, metric, label, team_name, valgt_saeson):
             range=y_range,
         ),
         shapes=[
-            # Gennemsnit for holdet (solid sort linje)
             dict(
                 type="line", xref="paper", yref="y",
                 x0=0, x1=1, y0=snit_vaerdi, y1=snit_vaerdi,
                 line=dict(color="black", width=1.5, dash="solid")
             ),
-            # Gennemsnit for ligaen (stiplet grå linje)
             dict(
                 type="line", xref="paper", yref="y",
                 x0=0, x1=1, y0=ligasnit, y1=ligasnit,
@@ -261,7 +235,6 @@ def draw_match_trend_chart(df_matches, metric, label, team_name, valgt_saeson):
         plot_bgcolor="white", showlegend=False,
     )
 
-    # Tilføj anmærkninger for gennemsnitslinjer separat for at bevare placeringen
     fig.add_annotation(
         xref="paper", yref="y", x=0.99, y=snit_vaerdi,
         text=f"(Gennemsnit: {team_name})", showarrow=False,
@@ -273,6 +246,22 @@ def draw_match_trend_chart(df_matches, metric, label, team_name, valgt_saeson):
         text=f"(Gennemsnit: {DEFAULT_COMP})", showarrow=False,
         xanchor="right", yanchor="bottom" if liga_pos == "top right" else "top",
         font=dict(size=10, color="gray")
+    )
+
+    # 3. Tilføj logoer som Scatter-markører (med source-billeder), hvilket sikrer, at de ligger som det absolut øverste lag
+    fig.add_trace(
+        go.Scatter(
+            x=df_matches["MATCH_NUM"],
+            y=df_matches[metric],
+            mode="markers",
+            marker=dict(
+                size=38,
+                symbol=[f"url({logo})" if logo else "circle" for logo in df_matches["OPP_LOGO"]],
+            ),
+            hovertext=df_matches["HOVER_TEXT"],
+            hoverinfo="text",
+            showlegend=False,
+        )
     )
 
     st.plotly_chart(fig, use_container_width=True)
