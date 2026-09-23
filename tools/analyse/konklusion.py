@@ -291,7 +291,7 @@ def vis_side(dp=None):
         return
     row = row_match.iloc[0]
 
-    goals_val = row.get('SCORINGER_MAAL', 0)
+    goals_val = row.get('GOALS', 0)
     xg_val = row.get('XG', 0)
     diff = goals_val - xg_val
     if diff > 2.0:
@@ -311,7 +311,7 @@ def vis_side(dp=None):
         st.markdown(f"""
         <div class="analysis-card">
             <div class="section-title">Afslutningsspil</div>
-            <div class="stat-line">• {get_rank('SCORINGER_MAAL')} flest mål scoret ({int(row.get('GOALS', 0))})</div>
+            <div class="stat-line">• {get_rank('GOALS')} flest mål scoret ({int(row.get('GOALS', 0))})</div>
             <div class="stat-line">• {get_rank('XG')} højeste expected goals ({row.get('XG', 0):.1f} xG)</div>
             <div class="stat-line">• Forskel: {row.get('GOALS', 0) - row.get('XG', 0):.1f} mål vs xG</div>
             <div class="stat-line">• {get_rank('TOTAL_SKUD')} flest skud i alt ({int(row.get('TOTAL_SKUD', 0))})</div>
