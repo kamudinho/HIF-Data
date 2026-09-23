@@ -204,18 +204,20 @@ def hent_konklusion_data(_conn, calendar_uuid: str) -> pd.DataFrame:
     LEFT JOIN AggregatedOppCornerAtt oca ON t.TEAM_ID = oca.TEAM_ID
     LEFT JOIN TeamStats s ON t.TEAM_ID = s.TEAM_ID
     """
-    
+
     df = _conn.query(query)
     if df is not None and not df.empty:
         df.columns = [str(c).upper() for c in df.columns]
         df['TEAM_ID'] = df['TEAM_ID'].astype(str).str.strip().str.upper()
-        
+
+        # Map UUID til navn
         uuid_to_name = {
             str(info.get('opta_uuid')).strip().upper(): name
             for name, info in TEAMS.items() if info.get('opta_uuid')
         }
         df['TEAM_NAME'] = df['TEAM_ID'].map(uuid_to_name).fillna(df['TEAM_NAME'])
 
+        # Beregninger af procenter
         df['SHOT_ACCURACY'] = (df['SHOTS_ON_TARGET'] / df['SHOTS_TOTAL'].replace(0, pd.NA)) * 100
         df['PASS_ACCURACY'] = (df['PASSES_ACCURATE'] / df['PASSES_TOTAL'].replace(0, pd.NA)) * 100
         df['TACKLE_SUCCESS'] = (df['TACKLES_WON'] / df['TACKLES_TOTAL'].replace(0, pd.NA)) * 100
