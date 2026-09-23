@@ -8,11 +8,13 @@ DB = "KLUB_HVIDOVREIF.AXIS"
 @st.cache_data(ttl=600, show_spinner="Henter konklusionsdata fra Snowflake...")
 def hent_konklusion_data(_conn, calendar_uuid: str) -> pd.DataFrame:
     """
-    Henter samlet holdstatistik inkl. hjørnespark og afslutninger efter hjørnespark for/imod.
+    Henter en omfattende holdstatistik inklusive mål, xG, skud, forsvar, og mere.
+    Returnerer DataFrame med data pr. hold for et givent kampprogram.
     """
     if not _conn or not calendar_uuid:
         return pd.DataFrame()
 
+    # SQL-forespørgsel med flere CTE'er for at samle data
     query = f"""
     WITH MatchResults AS (
         SELECT 
@@ -27,20 +29,23 @@ def hent_konklusion_data(_conn, calendar_uuid: str) -> pd.DataFrame:
         WHERE TOURNAMENTCALENDAR_OPTAUUID = '{calendar_uuid}'
           AND MATCH_STATUS = 'Played'
     ),
+    -- Hold-lookup for at mappe UUID til navn
     TeamLookup AS (
         SELECT HOME_ID as TEAM_ID, HOME_NAME as TEAM_NAME FROM MatchResults
         UNION
         SELECT AWAY_ID as TEAM_ID, AWAY_NAME as TEAM_NAME FROM MatchResults
     ),
+    -- Samlet mål pr. hold
     TeamGoals AS (
-        SELECT HOME_ID as TEAM_ID, FT_HOME_SCORE as TOTAL_GOALS, 1 as MATCH_COUNT FROM MatchResults
+        SELECT HOME_ID as TEAM_ID, FT_HOME_SCORE as GOALS, 1 as MATCH_COUNT FROM MatchResults
         UNION ALL
-        SELECT AWAY_ID as TEAM_ID, FT_AWAY_SCORE as TOTAL_GOALS, 1 as MATCH_COUNT FROM MatchResults
+        SELECT AWAY_ID as TEAM_ID, FT_AWAY_SCORE as GOALS, 1 as MATCH_COUNT FROM MatchResults
     ),
     FinalGoals AS (
-        SELECT TEAM_ID, SUM(TOTAL_GOALS) as GOALS, SUM(MATCH_COUNT) as ACTUAL_MATCHES
+        SELECT TEAM_ID, SUM(GOALS) as GOALS, SUM(MATCH_COUNT) as ACTUAL_MATCHES
         FROM TeamGoals GROUP BY TEAM_ID
     ),
+    -- xG og andre avancerede stats
     TeamXG AS (
         SELECT 
             CONTESTANT_OPTAUUID as TEAM_ID,
@@ -57,6 +62,7 @@ def hent_konklusion_data(_conn, calendar_uuid: str) -> pd.DataFrame:
         WHERE TOURNAMENTCALENDAR_OPTAUUID = '{calendar_uuid}'
         GROUP BY CONTESTANT_OPTAUUID
     ),
+    -- Optræning af modstanderens hjørnespark
     OpponentBoxTouches AS (
         SELECT 
             m.HOME_ID as TEAM_ID,
@@ -66,9 +72,7 @@ def hent_konklusion_data(_conn, calendar_uuid: str) -> pd.DataFrame:
           ON m.MATCH_OPTAUUID = x_away.MATCH_OPTAUUID 
           AND m.AWAY_ID = x_away.CONTESTANT_OPTAUUID
         WHERE x_away.STAT_TYPE = 'touchesInOppBox'
-        
         UNION ALL
-        
         SELECT 
             m.AWAY_ID as TEAM_ID,
             CAST(x_home.STAT_VALUE AS FLOAT) as OPP_BOX_TOUCHES
@@ -83,6 +87,7 @@ def hent_konklusion_data(_conn, calendar_uuid: str) -> pd.DataFrame:
         FROM OpponentBoxTouches
         GROUP BY TEAM_ID
     ),
+    -- Optræning af modstanderens hjørneangreb
     OpponentCornerAtt AS (
         SELECT 
             m.HOME_ID as TEAM_ID,
@@ -92,9 +97,7 @@ def hent_konklusion_data(_conn, calendar_uuid: str) -> pd.DataFrame:
           ON m.MATCH_OPTAUUID = x_away.MATCH_OPTAUUID 
           AND m.AWAY_ID = x_away.CONTESTANT_OPTAUUID
         WHERE x_away.STAT_TYPE = 'attCorner'
-        
         UNION ALL
-        
         SELECT 
             m.AWAY_ID as TEAM_ID,
             CAST(x_home.STAT_VALUE AS FLOAT) as OPP_ATT_CORNER
@@ -109,6 +112,7 @@ def hent_konklusion_data(_conn, calendar_uuid: str) -> pd.DataFrame:
         FROM OpponentCornerAtt
         GROUP BY TEAM_ID
     ),
+    -- Modstanderens hjørneskorn
     OpponentCorners AS (
         SELECT 
             m.HOME_ID as TEAM_ID,
@@ -118,9 +122,7 @@ def hent_konklusion_data(_conn, calendar_uuid: str) -> pd.DataFrame:
           ON m.MATCH_OPTAUUID = s_away.MATCH_OPTAUUID 
           AND m.AWAY_ID = s_away.CONTESTANT_OPTAUUID
         WHERE s_away.STAT_TYPE = 'cornerTaken'
-        
         UNION ALL
-        
         SELECT 
             m.AWAY_ID as TEAM_ID,
             CAST(s_home.STAT_TOTAL AS FLOAT) as OPP_CORNERS
@@ -135,6 +137,7 @@ def hent_konklusion_data(_conn, calendar_uuid: str) -> pd.DataFrame:
         FROM OpponentCorners
         GROUP BY TEAM_ID
     ),
+    -- Holdstatistikker
     TeamStats AS (
         SELECT 
             CONTESTANT_OPTAUUID as TEAM_ID,
@@ -205,19 +208,27 @@ def hent_konklusion_data(_conn, calendar_uuid: str) -> pd.DataFrame:
     LEFT JOIN TeamStats s ON t.TEAM_ID = s.TEAM_ID
     """
 
-    df = _conn.query(query)
+    # Kør forespørgsel
+    try:
+        df = _conn.query(query)
+    except Exception as e:
+        st.error(f"Fejl ved forespørgsel: {e}")
+        return pd.DataFrame()
+
+    # Efterbehandling af data
     if df is not None and not df.empty:
         df.columns = [str(c).upper() for c in df.columns]
+        # Sikre UUID er uppercase og uden mellemrum
         df['TEAM_ID'] = df['TEAM_ID'].astype(str).str.strip().str.upper()
 
-        # Map UUID til navn
+        # Map UUID til holdnavn
         uuid_to_name = {
             str(info.get('opta_uuid')).strip().upper(): name
             for name, info in TEAMS.items() if info.get('opta_uuid')
         }
         df['TEAM_NAME'] = df['TEAM_ID'].map(uuid_to_name).fillna(df['TEAM_NAME'])
 
-        # Beregninger af procenter
+        # Beregning af procenter
         df['SHOT_ACCURACY'] = (df['SHOTS_ON_TARGET'] / df['SHOTS_TOTAL'].replace(0, pd.NA)) * 100
         df['PASS_ACCURACY'] = (df['PASSES_ACCURATE'] / df['PASSES_TOTAL'].replace(0, pd.NA)) * 100
         df['TACKLE_SUCCESS'] = (df['TACKLES_WON'] / df['TACKLES_TOTAL'].replace(0, pd.NA)) * 100
