@@ -185,7 +185,7 @@ def hent_hoved_stats(_conn, calendar_uuid: str) -> pd.DataFrame:
                 -- Manuel override for kampen mod AaB, hvis besiddelse mangler
                 MAX(
                     CASE 
-                        WHEN s.MATCH_OPTAUUID = 'c8vwlgepriydcay2kp412acyc' THEN 62.0 
+                        WHEN s.MATCH_OPTAUUID = 'c8vwlgepriydcay2kp412acyc' THEN 20.4 
                         WHEN s.STAT_TYPE = 'possessionPercentage' THEN TRY_CAST(s.STAT_TOTAL AS FLOAT) 
                         ELSE NULL 
                     END
