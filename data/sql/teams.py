@@ -177,6 +177,7 @@ def hent_hoved_stats(_conn, calendar_uuid: str) -> pd.DataFrame:
                 MAX(CASE WHEN s.STAT_TYPE = 'totalTackle' THEN TRY_CAST(s.STAT_TOTAL AS FLOAT) END) AS TACKLES,
                 MAX(CASE WHEN s.STAT_TYPE = 'totalClearance' THEN TRY_CAST(s.STAT_TOTAL AS FLOAT) END) AS CLEARANCES,
                 MAX(CASE WHEN s.STAT_TYPE = 'totalPass' THEN TRY_CAST(s.STAT_TOTAL AS FLOAT) END) AS PASSES,
+                MAX(CASE WHEN s.STAT_TYPE = 'accuratePass' THEN TRY_CAST(s.STAT_TOTAL AS FLOAT) END) AS ACCURATE_PASSES,
                 MAX(CASE WHEN s.STAT_TYPE IN ('touches', 'totalTouch') THEN TRY_CAST(s.STAT_TOTAL AS FLOAT) END) AS TOUCHES,
                 MAX(CASE WHEN s.STAT_TYPE IN ('duelAerialWon', 'aerialWon') THEN TRY_CAST(s.STAT_TOTAL AS FLOAT) END) AS AERIAL_WON,
                 MAX(CASE WHEN s.STAT_TYPE = 'possessionPercentage' THEN TRY_CAST(REPLACE(s.STAT_TOTAL, '%', '') AS FLOAT) END) AS POSSESSION
@@ -215,6 +216,8 @@ def hent_hoved_stats(_conn, calendar_uuid: str) -> pd.DataFrame:
             s_away.CLEARANCES AS AWAY_CLEARANCES,
             s_home.PASSES AS HOME_PASSES,
             s_away.PASSES AS AWAY_PASSES,
+            s_home.ACCURATE_PASSES AS HOME_ACCURATE_PASSES,
+            s_away.ACCURATE_PASSES AS AWAY_ACCURATE_PASSES,
             s_home.TOUCHES AS HOME_TOUCHES,
             s_away.TOUCHES AS AWAY_TOUCHES,
             s_home.AERIAL_WON AS HOME_AERIAL_WON,
@@ -263,6 +266,7 @@ def hent_hoved_stats(_conn, calendar_uuid: str) -> pd.DataFrame:
                             col_mapping = {
                                 'POSSESSIONPERCENTAGE': ('HOME_POSSESSION' if is_home else 'AWAY_POSSESSION'),
                                 'TOTALPASS': ('HOME_PASSES' if is_home else 'AWAY_PASSES'),
+                                'ACCURATEPASS': ('HOME_ACCURATE_PASSES' if is_home else 'AWAY_ACCURATE_PASSES'),
                                 'TOTALSCORINGATT': ('HOME_SHOTS' if is_home else 'AWAY_SHOTS'),
                                 'SHOTOFFTARGET': ('HOME_OFF_TARGET' if is_home else 'AWAY_OFF_TARGET'),
                                 'WONCORNERS': ('HOME_CORNERS_WON' if is_home else 'AWAY_CORNERS_WON'),
