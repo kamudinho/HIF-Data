@@ -10,25 +10,30 @@ from data.utils.team_mapping import (
     TOURNAMENTCALENDAR_NAME as SAESON_NAVN,
 )
 from data.data_load import _get_snowflake_conn
+from data.sql.konklusion_query import hent_konklusion_data
 
 # Metric-definitioner brugt i "Alle hold"-leaderboardet.
 METRIC_DEFS = [
-    ("Mål scoret", "GOALS", False, 0, "", "Afslutningsspil"),
+    ("Mål scoret", "SCORINGER_MAAL", False, 0, "", "Afslutningsspil"),
     ("Expected Goals (xG)", "XG", False, 1, "", "Afslutningsspil"),
-    ("Skud i alt", "SHOTS_TOTAL", False, 0, "", "Afslutningsspil"),
+    ("Skud i alt", "TOTAL_SKUD", False, 0, "", "Afslutningsspil"),
     ("Skudpræcision", "SHOT_ACCURACY", False, 1, "%", "Afslutningsspil"),
+    ("Skud på mål", "SKUD_PAA_MAAL", False, 0, "", "Afslutningsspil"),
     ("Assists", "ASSISTS", False, 0, "", "Afslutningsspil"),
     ("Expected Assists (xA)", "XA", False, 2, "", "Afslutningsspil"),
     ("Store chancer skabt", "BIG_CHANCES_CREATED", False, 0, "", "Afslutningsspil"),
     ("Store chancer misset", "BIG_CHANCES_MISSED", True, 0, "", "Afslutningsspil"),
     ("Ramt stolpe/overligger", "WOODWORK", False, 0, "", "Afslutningsspil"),
 
-    ("Boldbesiddelse", "POSS", False, 1, "%", "Opbygningsspil"),
+    ("Boldbesiddelse", "BOLDBESIDDELSE_PCT", False, 1, "%", "Opbygningsspil"),
     ("Berøringer i alt", "TOUCHES", False, 0, "", "Opbygningsspil"),
     ("Afleveringspræcision", "PASS_ACCURACY", False, 1, "%", "Opbygningsspil"),
+    ("Afleveringer i alt", "TOTAL_AFLEVERINGER", False, 0, "", "Opbygningsspil"),
     ("Berøringer i modst. felt", "BOX_TOUCHES", False, 0, "", "Opbygningsspil"),
+    ("Gennemsnitlig distance", "GENNEMSNITSLIG_DISTANCE", False, 1, " km", "Opbygningsspil"),
 
     ("Tackling, succes", "TACKLE_SUCCESS", False, 1, "%", "Defensivt spil"),
+    ("Vundne tacklinger", "VUNDNE_TAKKLINGER", False, 0, "", "Defensivt spil"),
     ("Clearinger", "CLEARANCES", False, 0, "", "Defensivt spil"),
     ("Offsides fanget", "OFFSIDES_WON", False, 0, "", "Defensivt spil"),
     ("PPDA (lavest = mest pres)", "PPDA", True, 2, "", "Defensivt spil"),
@@ -37,9 +42,9 @@ METRIC_DEFS = [
 
     ("Redninger", "SAVES", False, 0, "", "Målmand & dødbolde"),
     ("Clean sheets", "CLEAN_SHEETS", False, 0, "", "Målmand & dødbolde"),
-    ("Mål imod (færrest bedst)", "GOALS_CONCEDED", True, 0, "", "Målmand & dødbolde"),
+    ("Mål imod (færrest bedst)", "MAAL_IMOD", True, 0, "", "Målmand & dødbolde"),
     ("Straffe reddet", "PENALTY_SAVES", False, 0, "", "Målmand & dødbolde"),
-    ("Hjørnespark taget", "CORNERS_TAKEN", False, 0, "", "Målmand & dødbolde"),
+    ("Hjørnespark taget", "VUNDNE_HJORNESPARK", False, 0, "", "Målmand & dødbolde"),
     ("Hjørnespark imod (færrest bedst)", "CORNERS_CONCEDED", True, 0, "", "Målmand & dødbolde"),
 
     ("Gule kort (færrest bedst)", "YELLOW_CARDS", True, 0, "", "Disciplin"),
@@ -48,7 +53,6 @@ METRIC_DEFS = [
 
 def vis_side(dp=None):
     # --- 1. SETUP ---
-    DB = "KLUB_HVIDOVREIF.AXIS"
     LIGA_UUID = SEASONS.get(SAESON_NAVN, {}).get(COMPETITION_NAME)
 
     conn = _get_snowflake_conn()
@@ -60,161 +64,23 @@ def vis_side(dp=None):
         st.warning(f"Ingen turnerings-UUID fundet for '{COMPETITION_NAME}' i sæsonen '{SAESON_NAVN}'. Tjek SEASONS-mappingen i team_mapping.py.")
         return
 
-    # --- 2. SQL: OPTA_MATCHSTATS & EXPECTEDSTATS ---
-    sql = f"""
-    WITH MatchStats AS (
-        SELECT 
-            UPPER(TRIM(CONTESTANT_OPTAUUID)) as TEAM_ID,
-
-            SUM(CASE WHEN STAT_TYPE = 'totalScoringAtt' THEN STAT_TOTAL ELSE 0 END) as SHOTS_TOTAL,
-            SUM(CASE WHEN STAT_TYPE = 'ontargetScoringAtt' THEN STAT_TOTAL ELSE 0 END) as SHOTS_ON_TARGET,
-            SUM(CASE WHEN STAT_TYPE = 'blockedScoringAtt' THEN STAT_TOTAL ELSE 0 END) as SHOTS_BLOCKED,
-            SUM(CASE WHEN STAT_TYPE = 'goalAssist' THEN STAT_TOTAL ELSE 0 END) as ASSISTS,
-
-            -- Opbygningsspil
-            AVG(CASE WHEN STAT_TYPE = 'possessionPercentage' AND TRY_CAST(REPLACE(STAT_TOTAL, '%', '') AS FLOAT) > 0 
-                     THEN TRY_CAST(REPLACE(STAT_TOTAL, '%', '') AS FLOAT) END) as POSS,
-            SUM(CASE WHEN STAT_TYPE = 'accuratePass' THEN STAT_TOTAL ELSE 0 END) as PASSES_ACCURATE,
-            SUM(CASE WHEN STAT_TYPE = 'totalPass' THEN STAT_TOTAL ELSE 0 END) as PASSES_TOTAL,
-            SUM(CASE WHEN STAT_TYPE = 'cornerTaken' THEN STAT_TOTAL ELSE 0 END) as CORNERS_TAKEN,
-            MAX(CASE WHEN STAT_TYPE = 'formationUsed' THEN STAT_TOTAL ELSE NULL END) as FORMATION,
-
-            -- Defensivt spil
-            SUM(CASE WHEN STAT_TYPE = 'wonTackle' THEN STAT_TOTAL ELSE 0 END) as TACKLES_WON,
-            SUM(CASE WHEN STAT_TYPE = 'totalTackle' THEN STAT_TOTAL ELSE 0 END) as TACKLES_TOTAL,
-            SUM(CASE WHEN STAT_TYPE = 'totalClearance' THEN STAT_TOTAL ELSE 0 END) as CLEARANCES,
-            SUM(CASE WHEN STAT_TYPE = 'totalOffside' THEN STAT_TOTAL ELSE 0 END) as OFFSIDES_WON,
-            SUM(CASE WHEN STAT_TYPE = 'fkFoulWon' THEN STAT_TOTAL ELSE 0 END) as FOULS_WON,
-            SUM(CASE WHEN STAT_TYPE = 'fkFoulLost' THEN STAT_TOTAL ELSE 0 END) as FOULS_CONCEDED,
-
-            -- Målmand & dødbolde
-            SUM(CASE WHEN STAT_TYPE = 'saves' THEN STAT_TOTAL ELSE 0 END) as SAVES,
-            SUM(CASE WHEN STAT_TYPE = 'cleanSheet' THEN STAT_TOTAL ELSE 0 END) as CLEAN_SHEETS,
-            SUM(CASE WHEN STAT_TYPE = 'goalsConceded' THEN STAT_TOTAL ELSE 0 END) as GOALS_CONCEDED,
-            SUM(CASE WHEN STAT_TYPE = 'penaltySave' THEN STAT_TOTAL ELSE 0 END) as PENALTY_SAVES,
-            SUM(CASE WHEN STAT_TYPE = 'penaltyWon' THEN STAT_TOTAL ELSE 0 END) as PENALTIES_WON,
-            SUM(CASE WHEN STAT_TYPE = 'penaltyConceded' THEN STAT_TOTAL ELSE 0 END) as PENALTIES_CONCEDED,
-            SUM(CASE WHEN STAT_TYPE = 'ownGoals' THEN STAT_TOTAL ELSE 0 END) as OWN_GOALS,
-
-            -- Disciplin
-            SUM(CASE WHEN STAT_TYPE = 'totalYellowCard' THEN STAT_TOTAL ELSE 0 END) as YELLOW_CARDS,
-            SUM(CASE WHEN STAT_TYPE = 'secondYellow' THEN STAT_TOTAL ELSE 0 END) as SECOND_YELLOWS,
-            SUM(CASE WHEN STAT_TYPE = 'totalRedCard' THEN STAT_TOTAL ELSE 0 END) as RED_CARDS
-
-        FROM {DB}.OPTA_MATCHSTATS
-        WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
-        GROUP BY 1
-    },
-    ExpectedStats AS (
-        SELECT 
-            UPPER(TRIM(CONTESTANT_OPTAUUID)) as TEAM_ID,
-            SUM(CASE WHEN STAT_TYPE = 'goals' THEN STAT_VALUE ELSE 0 END) as GOALS,
-            SUM(CASE WHEN STAT_TYPE = 'expectedGoals' THEN STAT_VALUE ELSE 0 END) as XG,
-            SUM(CASE WHEN STAT_TYPE = 'expectedGoalsConceded' THEN STAT_VALUE ELSE 0 END) as XG_AGAINST,
-            SUM(CASE WHEN STAT_TYPE = 'expectedAssists' THEN STAT_VALUE ELSE 0 END) as XA,
-            SUM(CASE WHEN STAT_TYPE = 'bigChanceCreated' THEN STAT_VALUE ELSE 0 END) as BIG_CHANCES_CREATED,
-            SUM(CASE WHEN STAT_TYPE = 'bigChanceMissed' THEN STAT_VALUE ELSE 0 END) as BIG_CHANCES_MISSED,
-            SUM(CASE WHEN STAT_TYPE = 'touchesInOppBox' THEN STAT_VALUE ELSE 0 END) as BOX_TOUCHES,
-            SUM(CASE WHEN STAT_TYPE = 'hitWoodwork' THEN STAT_VALUE ELSE 0 END) as WOODWORK,
-            SUM(CASE WHEN STAT_TYPE = 'touches' THEN STAT_VALUE ELSE 0 END) as TOUCHES
-        FROM {DB}.OPTA_MATCHEXPECTEDGOALS_TEAM
-        WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
-        GROUP BY 1
-    ),
-    MatchCorners AS (
-        SELECT MATCH_OPTAUUID, UPPER(TRIM(CONTESTANT_OPTAUUID)) as TEAM_ID, STAT_TOTAL as CORNERS
-        FROM {DB}.OPTA_MATCHSTATS
-        WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}' AND STAT_TYPE = 'cornerTaken'
-    ),
-    CornersAgainst AS (
-        SELECT 
-            m1.TEAM_ID,
-            SUM(m2.CORNERS) as CORNERS_CONCEDED
-        FROM MatchCorners m1
-        JOIN MatchCorners m2 ON m1.MATCH_OPTAUUID = m2.MATCH_OPTAUUID AND m1.TEAM_ID <> m2.TEAM_ID
-        GROUP BY 1
-    )
-    SELECT m.*, 
-        COALESCE(e.GOALS, 0) as GOALS,
-        COALESCE(e.XG, 0) as XG, 
-        COALESCE(e.XG_AGAINST, 0) as XG_AGAINST,
-        COALESCE(e.XA, 0) as XA,
-        COALESCE(e.BIG_CHANCES_CREATED, 0) as BIG_CHANCES_CREATED,
-        COALESCE(e.BIG_CHANCES_MISSED, 0) as BIG_CHANCES_MISSED,
-        COALESCE(e.BOX_TOUCHES, 0) as BOX_TOUCHES,
-        COALESCE(e.WOODWORK, 0) as WOODWORK,
-        COALESCE(e.TOUCHES, 0) as TOUCHES,
-        COALESCE(c.CORNERS_CONCEDED, 0) as CORNERS_CONCEDED
-    FROM MatchStats m
-    LEFT JOIN ExpectedStats e ON m.TEAM_ID = e.TEAM_ID
-    LEFT JOIN CornersAgainst c ON m.TEAM_ID = c.TEAM_ID
-    """
-
-    NUMERIC_COLS = [
-        'GOALS', 'SHOTS_TOTAL', 'SHOTS_ON_TARGET', 'SHOTS_BLOCKED', 'ASSISTS',
-        'POSS', 'PASSES_ACCURATE', 'PASSES_TOTAL', 'CORNERS_TAKEN', 'CORNERS_CONCEDED',
-        'TACKLES_WON', 'TACKLES_TOTAL', 'CLEARANCES', 'OFFSIDES_WON', 'FOULS_WON', 'FOULS_CONCEDED',
-        'SAVES', 'CLEAN_SHEETS', 'GOALS_CONCEDED', 'PENALTY_SAVES', 'PENALTIES_WON', 'PENALTIES_CONCEDED', 'OWN_GOALS',
-        'YELLOW_CARDS', 'SECOND_YELLOWS', 'RED_CARDS',
-        'XG', 'XG_AGAINST', 'XA', 'BIG_CHANCES_CREATED', 'BIG_CHANCES_MISSED', 'BOX_TOUCHES', 'WOODWORK', 'TOUCHES'
-    ]
-
-    try:
-        df = conn.query(sql) if hasattr(conn, 'query') else pd.read_sql(sql, conn)
-        df.columns = [str(c).upper() for c in df.columns]
-
-        for col in NUMERIC_COLS:
-            if col in df.columns:
-                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0.0)
-
-        df['SHOT_ACCURACY'] = (df['SHOTS_ON_TARGET'] / df['SHOTS_TOTAL'].replace(0, pd.NA)) * 100
-        df['PASS_ACCURACY'] = (df['PASSES_ACCURATE'] / df['PASSES_TOTAL'].replace(0, pd.NA)) * 100
-        df['TACKLE_SUCCESS'] = (df['TACKLES_WON'] / df['TACKLES_TOTAL'].replace(0, pd.NA)) * 100
-
-    except Exception as e:
-        st.error(f"SQL Fejl: {e}")
-        return
+    # --- 2. HENT DATA VIA SQL MODUL ---
+    df = hent_konklusion_data(conn, LIGA_UUID)
 
     if df.empty:
         st.warning(f"Ingen kampstatistik fundet for turneringen '{COMPETITION_NAME}' i sæsonen '{SAESON_NAVN}'.")
         return
 
-    # --- 2b. SQL: PPDA fra Wyscout ---
-    wyid = COMPETITIONS.get(COMPETITION_NAME, {}).get("wyid")
+    # Sikre grundlæggende beregnede kolonner, hvis de ikke allerede findes
+    if 'SHOT_ACCURACY' not in df.columns:
+        df['SHOT_ACCURACY'] = (df['SKUD_PAA_MAAL'] / df['TOTAL_SKUD'].replace(0, pd.NA)) * 100
+    if 'PASS_ACCURACY' not in df.columns:
+        df['PASS_ACCURACY'] = 0.0  # Kan udbygges hvis pass-accuracy kolonnen tilføjes i SQL
+    if 'TACKLE_SUCCESS' not in df.columns:
+        df['TACKLE_SUCCESS'] = 0.0
 
-    if '/' in SAESON_NAVN:
-        y_start, y_end = SAESON_NAVN.split('/')
-    else:
-        y_start, y_end = SAESON_NAVN, str(int(SAESON_NAVN) + 1)
-    saeson_start = f"{y_start}-07-01"
-    saeson_slut = f"{y_end}-06-30"
-
-    df['PPDA'] = pd.NA
-
-    if wyid:
-        try:
-            ppda_sql = f"""
-                SELECT tm.TEAM_WYID, AVG(md.PPDA) as PPDA
-                FROM {DB}.WYSCOUT_TEAMMATCHES tm
-                LEFT JOIN {DB}.WYSCOUT_MATCHADVANCEDSTATS_DEFENCE md 
-                    ON tm.MATCH_WYID = md.MATCH_WYID AND tm.TEAM_WYID = md.TEAM_WYID
-                WHERE tm.COMPETITION_WYID = {wyid}
-                AND tm.DATE BETWEEN '{saeson_start}' AND '{saeson_slut}'
-                GROUP BY tm.TEAM_WYID
-            """
-            df_ppda = conn.query(ppda_sql) if hasattr(conn, 'query') else pd.read_sql(ppda_sql, conn)
-            df_ppda.columns = [str(c).upper() for c in df_ppda.columns]
-
-            wyid_to_uuid = {
-                info.get('team_wyid'): str(info.get('opta_uuid')).strip().upper()
-                for info in TEAMS.values() if info.get('team_wyid') and info.get('opta_uuid')
-            }
-            df_ppda['TEAM_ID'] = df_ppda['TEAM_WYID'].map(wyid_to_uuid)
-            df_ppda['PPDA'] = df_ppda['PPDA'].astype(float)
-
-            df = df.drop(columns=['PPDA']).merge(df_ppda[['TEAM_ID', 'PPDA']], on='TEAM_ID', how='left')
-        except Exception as e:
-            st.caption(f"Kunne ikke hente PPDA fra Wyscout: {e}")
+    # Ekskluder 'Liga Gennemsnit' fra enkelt-hold ranglisterne, hvis det er medtaget
+    df_teams_only = df[df['TEAM_ID'] != 'LIGA_AVG'].copy()
 
     # --- 3. UI STYLING ---
     st.markdown("""
@@ -260,7 +126,7 @@ def vis_side(dp=None):
         return f"{n}{suffix}"
 
     def get_rank(col, ascending=False):
-        temp = df.dropna(subset=[col]).sort_values(col, ascending=ascending).reset_index(drop=True)
+        temp = df_teams_only.dropna(subset=[col]).sort_values(col, ascending=ascending).reset_index(drop=True)
         try:
             rank = temp[temp['TEAM_ID'] == target_uuid].index[0] + 1
             return get_ordinal(rank)
@@ -268,19 +134,19 @@ def vis_side(dp=None):
             return "**?**"
 
     def get_leader_and_worst(col, ascending=False):
-        if col not in df.columns:
+        if col not in df_teams_only.columns:
             return None, None, None, None
-        temp = df.dropna(subset=[col])
+        temp = df_teams_only.dropna(subset=[col])
         if temp.empty:
             return None, None, None, None
         
         temp_best = temp.sort_values(col, ascending=ascending)
         best = temp_best.iloc[0]
-        best_name = uuid_to_name.get(best['TEAM_ID'], best['TEAM_ID'])
+        best_name = best.get('TEAM_NAME', uuid_to_name.get(best.get('TEAM_ID'), best.get('TEAM_ID')))
         
         temp_worst = temp.sort_values(col, ascending=not ascending)
         worst = temp_worst.iloc[0]
-        worst_name = uuid_to_name.get(worst['TEAM_ID'], worst['TEAM_ID'])
+        worst_name = worst.get('TEAM_NAME', uuid_to_name.get(worst.get('TEAM_ID'), worst.get('TEAM_ID')))
         
         return best_name, best[col], worst_name, worst[col]
 
@@ -350,8 +216,8 @@ def vis_side(dp=None):
                 kategorier.append(cat)
 
         raw_team_data = []
-        for _, r in df.iterrows():
-            t_name = uuid_to_name.get(r['TEAM_ID'], r['TEAM_ID'])
+        for _, r in df_teams_only.iterrows():
+            t_name = r.get('TEAM_NAME', uuid_to_name.get(r['TEAM_ID'], r['TEAM_ID']))
             row_data = {"Hold": t_name, "TEAM_ID": r['TEAM_ID']}
             for label, col, _, _, _, _ in METRIC_DEFS:
                 if col in r:
@@ -428,7 +294,7 @@ def vis_side(dp=None):
         return
     row = row_match.iloc[0]
 
-    goals_val = row.get('GOALS', 0)
+    goals_val = row.get('SCORINGER_MAAL', 0)
     xg_val = row.get('XG', 0)
     diff = goals_val - xg_val
     if diff > 2.0:
@@ -448,31 +314,28 @@ def vis_side(dp=None):
         st.markdown(f"""
         <div class="analysis-card">
             <div class="section-title">Afslutningsspil</div>
-            <div class="stat-line">• {get_rank('GOALS')} flest mål scoret ({int(row['GOALS'])})</div>
-            <div class="stat-line">• {get_rank('XG')} højeste expected goals ({row['XG']:.1f} xG)</div>
-            <div class="stat-line">• Forskel: {row['GOALS'] - row['XG']:.1f} mål vs xG</div>
-            <div class="stat-line">• {get_rank('SHOTS_TOTAL')} flest skud i alt ({int(row['SHOTS_TOTAL'])})</div>
-            <div class="stat-line">• Skudpræcision: {safe_val(row['SHOT_ACCURACY'], suffix='%')}</div>
-            <div class="stat-line">• {get_rank('BIG_CHANCES_CREATED')} flest store chancer skabt ({int(row['BIG_CHANCES_CREATED'])})</div>
-            <div class="stat-line">• Ramt stolpe/overligger: {int(row['WOODWORK'])}</div>
+            <div class="stat-line">• {get_rank('SCORINGER_MAAL')} flest mål scoret ({int(row.get('SCORINGER_MAAL', 0))})</div>
+            <div class="stat-line">• {get_rank('XG')} højeste expected goals ({row.get('XG', 0):.1f} xG)</div>
+            <div class="stat-line">• Forskel: {row.get('SCORINGER_MAAL', 0) - row.get('XG', 0):.1f} mål vs xG</div>
+            <div class="stat-line">• {get_rank('TOTAL_SKUD')} flest skud i alt ({int(row.get('TOTAL_SKUD', 0))})</div>
+            <div class="stat-line">• Skudpræcision: {safe_val(row.get('SHOT_ACCURACY', 0), suffix='%')}</div>
+            <div class="stat-line">• {get_rank('BIG_CHANCES_CREATED')} flest store chancer skabt ({int(row.get('BIG_CHANCES_CREATED', 0))})</div>
+            <div class="stat-line">• Ramt stolpe/overligger: {int(row.get('WOODWORK', 0))}</div>
             <div class="conclusion-text">Konklusion – {valgt_navn} {præstation_tekst} med {goals_val:.0f} mål mod {xg_val:.1f} xG.</div>
         </div>
         """, unsafe_allow_html=True)
 
     with col1:
-        f_raw = str(int(row['FORMATION'])) if pd.notnull(row['FORMATION']) else "N/A"
-        f_pretty = "-".join(list(f_raw)) if f_raw != "N/A" and len(f_raw) > 2 else f_raw
-
         st.markdown(f"""
         <div class="analysis-card">
             <div class="section-title">Opbygningsspil</div>
-            <div class="stat-line">• {get_rank('POSS')} højeste boldbesiddelse ({row['POSS']:.1f}%)</div>
-            <div class="stat-line">• {get_rank('TOUCHES')} flest berøringer i alt ({int(row['TOUCHES'])})</div>
-            <div class="stat-line">• Afleveringspræcision: {safe_val(row['PASS_ACCURACY'], suffix='%')}</div>
-            <div class="stat-line">• {get_rank('XA', ascending=False)} højeste expected assists ({row['XA']:.2f} xA)</div>
-            <div class="stat-line">• {get_rank('BOX_TOUCHES')} flest berøringer i modstanderens felt ({int(row['BOX_TOUCHES'])})</div>
-            <div class="stat-line">• Foretrukken formation: {f_pretty}</div>
-            <div class="conclusion-text">Konklusion – Benytter primært en {f_pretty} struktur.</div>
+            <div class="stat-line">• {get_rank('BOLDBESIDDELSE_PCT')} højeste boldbesiddelse ({row.get('BOLDBESIDDELSE_PCT', 0):.1f}%)</div>
+            <div class="stat-line">• {get_rank('TOUCHES')} flest berøringer i alt ({int(row.get('TOUCHES', 0))})</div>
+            <div class="stat-line">• Afleveringspræcision: {safe_val(row.get('PASS_ACCURACY', 0), suffix='%')}</div>
+            <div class="stat-line">• {get_rank('XA', ascending=False)} højeste expected assists ({row.get('XA', 0):.2f} xA)</div>
+            <div class="stat-line">• {get_rank('BOX_TOUCHES')} flest berøringer i modstanderens felt ({int(row.get('BOX_TOUCHES', 0))})</div>
+            <div class="stat-line">• Gennemsnitlig distance: {safe_val(row.get('GENNEMSNITSLIG_DISTANCE', 0), suffix=' km')}</div>
+            <div class="conclusion-text">Konklusion – Opbygningsstatistikker indlæst.</div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -482,13 +345,12 @@ def vis_side(dp=None):
         st.markdown(f"""
         <div class="analysis-card">
             <div class="section-title">Forsvarsspil</div>
-            <div class="stat-line">• Tacklinger, succes: {safe_val(row['TACKLE_SUCCESS'], suffix='%')} ({int(row['TACKLES_WON'])}/{int(row['TACKLES_TOTAL'])})</div>
-            <div class="stat-line">• {get_rank('CLEARANCES')} flest clearinger ({int(row['CLEARANCES'])})</div>
-            <div class="stat-line">• {get_rank('OFFSIDES_WON')} flest offsides ({int(row['OFFSIDES_WON'])})</div>
-            <div class="stat-line">• {get_rank('PPDA', ascending=True)} laveste PPDA ({safe_val(row['PPDA'], decimals=2)})</div>
-            <div class="stat-line">• {get_rank('XG_AGAINST', ascending=True)} laveste xG imod ({safe_val(row['XG_AGAINST'], decimals=2)})</div>
-            <div class="stat-line">• Frispark: {int(row['FOULS_WON'])} vundet / {int(row['FOULS_CONCEDED'])} begået</div>
-            <div class="conclusion-text">Konklusion – Presser med en PPDA på {safe_val(row['PPDA'], decimals=2)}.</div>
+            <div class="stat-line">• Tacklinger, succes: {safe_val(row.get('TACKLE_SUCCESS', 0), suffix='%')} ({int(row.get('VUNDNE_TAKKLINGER', 0))})</div>
+            <div class="stat-line">• {get_rank('CLEARANCES')} flest clearinger ({int(row.get('CLEARANCES', 0))})</div>
+            <div class="stat-line">• {get_rank('OFFSIDES_WON')} flest offsides ({int(row.get('OFFSIDES_WON', 0))})</div>
+            <div class="stat-line">• {get_rank('PPDA', ascending=True)} laveste PPDA ({safe_val(row.get('PPDA', 0), decimals=2)})</div>
+            <div class="stat-line">• {get_rank('XG_AGAINST', ascending=True)} laveste xG imod ({safe_val(row.get('XG_AGAINST', 0), decimals=2)})</div>
+            <div class="conclusion-text">Konklusion – Presser med en PPDA på {safe_val(row.get('PPDA', 0), decimals=2)}.</div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -496,27 +358,24 @@ def vis_side(dp=None):
         st.markdown(f"""
         <div class="analysis-card">
             <div class="section-title">Målmand & standarder</div>
-            <div class="stat-line">• {get_rank('SAVES')} flest redninger ({int(row['SAVES'])})</div>
-            <div class="stat-line">• {get_rank('CLEAN_SHEETS')} flest clean sheets ({int(row['CLEAN_SHEETS'])})</div>
-            <div class="stat-line">• {get_rank('GOALS_CONCEDED', ascending=True)} færrest mål imod ({int(row['GOALS_CONCEDED'])})</div>
-            <div class="stat-line">• Straffe: {int(row['PENALTIES_WON'])} for / {int(row['PENALTIES_CONCEDED'])} imod ({int(row['PENALTY_SAVES'])} reddet)</div>
-            <div class="stat-line">• Hjørnespark: {int(row['CORNERS_TAKEN'])} for / {int(row['CORNERS_CONCEDED'])} imod</div>
-            <div class="stat-line">• Selvmål: {int(row['OWN_GOALS'])}</div>
-            <div class="conclusion-text">Konklusion – {int(row['CLEAN_SHEETS'])} clean sheets og {int(row['GOALS_CONCEDED'])} mål imod.</div>
+            <div class="stat-line">• {get_rank('SAVES')} flest redninger ({int(row.get('SAVES', 0))})</div>
+            <div class="stat-line">• {get_rank('CLEAN_SHEETS')} flest clean sheets ({int(row.get('CLEAN_SHEETS', 0))})</div>
+            <div class="stat-line">• {get_rank('MAAL_IMOD', ascending=True)} færrest mål imod ({int(row.get('MAAL_IMOD', 0))})</div>
+            <div class="stat-line">• Hjørnespark taget: {int(row.get('VUNDNE_HJORNESPARK', 0))}</div>
+            <div class="conclusion-text">Konklusion – {int(row.get('CLEAN_SHEETS', 0))} clean sheets og {int(row.get('MAAL_IMOD', 0))} mål imod.</div>
         </div>
         """, unsafe_allow_html=True)
 
     col5, _ = st.columns(2)
 
     with col5:
-        total_kort = int(row['YELLOW_CARDS'] + row['SECOND_YELLOWS'] + row['RED_CARDS'])
+        total_kort = int(row.get('YELLOW_CARDS', 0) + row.get('SECOND_YELLOWS', 0) + row.get('RED_CARDS', 0))
         st.markdown(f"""
         <div class="analysis-card">
             <div class="section-title">Disciplin</div>
-            <div class="stat-line">• {get_rank('YELLOW_CARDS', ascending=True)} færrest gule kort ({int(row['YELLOW_CARDS'])})</div>
-            <div class="stat-line">• Direkte røde kort: {int(row['RED_CARDS'])})</div>
-            <div class="stat-line">• Udvisninger efter 2. gule: {int(row['SECOND_YELLOWS'])})</div>
-            <div class="stat-line">• {get_rank('FOULS_CONCEDED', ascending=True)} færrest frispark begået ({int(row['FOULS_CONCEDED'])})</div>
+            <div class="stat-line">• {get_rank('YELLOW_CARDS', ascending=True)} færrest gule kort ({int(row.get('YELLOW_CARDS', 0))})</div>
+            <div class="stat-line">• Direkte røde kort: {int(row.get('RED_CARDS', 0))}</div>
+            <div class="stat-line">• Udvisninger efter 2. gule: {int(row.get('SECOND_YELLOWS', 0))}</div>
             <div class="conclusion-text">Konklusion – {total_kort} kort i alt denne sæson.</div>
         </div>
         """, unsafe_allow_html=True)
