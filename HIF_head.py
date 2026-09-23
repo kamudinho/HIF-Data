@@ -135,7 +135,6 @@ def beregn_per_90(df_stats, team_uuid):
     
     results = []
     for display_name, (h_col, a_col) in stats_map.items():
-        # Hvidovres snit over sæsonen
         hif_vals = []
         for _, r in hif_matches.iterrows():
             if str(r['CONTESTANTHOME_OPTAUUID']).strip().upper() == team_uuid.strip().upper():
@@ -145,18 +144,16 @@ def beregn_per_90(df_stats, team_uuid):
             if pd.notnull(val): hif_vals.append(val)
         hif_val = sum(hif_vals) / len(hif_vals) if hif_vals else 0.0
 
-        # RETTELSE: Hent Hvidovres egne værdier i den SENESTE KAMP (i stedet for modstanderens)
         if is_home:
             last_val = last_match[h_col] if h_col in last_match else 0.0
         else:
             last_val = last_match[a_col] if a_col in last_match else 0.0
         last_val = float(last_val) if pd.notnull(last_val) else 0.0
 
-        # Liga snit for denne statistik
         liga_val = pd.concat([played[h_col], played[a_col]]).mean()
         
         diff_vs_liga = hif_val - liga_val
-        diff_vs_hif = last_val - hif_val  # Hvor meget den seneste kamp afveg fra HIFs eget snit
+        diff_vs_hif = last_val - hif_val 
         
         results.append({
             "Stat": display_name, "HIF": hif_val, "Liga": liga_val, 
@@ -166,32 +163,53 @@ def beregn_per_90(df_stats, team_uuid):
         
     return pd.DataFrame(results), opp_name
 
-def hent_hold_kort_stats(df_hold_stats, team_name):
-    """Henter aggregerede overbliks-stats direkte fra den samlede holdstatistik for at matche tabellen præcist."""
-    if df_hold_stats is None or df_hold_stats.empty:
-        return {"gf": "0.0", "ga": "0.0", "xgf": "0.00", "xga": "0.00", "poss": "0.00%"}
+def beregn_hold_per_90_stats(df_stats, team_uuid):
+    """Beregner præcis de samme per-90 gennemsnit direkte fra df_stats til brug i næste modstander-kortet."""
+    if df_stats is None or df_stats.empty: 
+        return {"poss": "0.0%", "gf": "0.00", "ga": "0.00", "xgf": "0.00", "xga": "0.00"}
     
-    # Prøv først et præcist match på holdnavn, ellers brug .str.contains
-    match = df_hold_stats[df_hold_stats['TEAM_NAME'].str.strip().str.lower() == team_name.strip().lower()]
-    if match.empty:
-        match = df_hold_stats[df_hold_stats['TEAM_NAME'].str.contains(team_name, case=False, na=False)]
-    
-    if match.empty:
-        return {"gf": "0.0", "ga": "0.0", "xgf": "0.00", "xga": "0.00", "poss": "0.00%"}
-    
-    row = match.iloc[0]
-    
-    goals_p90 = row.get('GOALS_P90', 0.0)
-    xg_p90 = row.get('XG_P90', 0.0)
-    xgc_p90 = row.get('XGC_P90', 0.0)
-    poss = row.get('AVG_POSSESSION_PCT', 0.0)
+    played = df_stats[df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].copy()
+    if played.empty: 
+        return {"poss": "0.0%", "gf": "0.00", "ga": "0.00", "xgf": "0.00", "xga": "0.00"}
+
+    zero_fill_cols = ['TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE', 'HOME_XG', 'AWAY_XG', 'HOME_POSSESSION', 'AWAY_POSSESSION']
+    for col in zero_fill_cols:
+        if col in played.columns:
+            played[col] = pd.to_numeric(played[col], errors='coerce').fillna(0)
+
+    team_matches = played[((played['CONTESTANTHOME_OPTAUUID'].str.upper() == team_uuid.upper()) | (played['CONTESTANTAWAY_OPTAUUID'].str.upper() == team_uuid.upper()))]
+    if len(team_matches) == 0: 
+        return {"poss": "0.0%", "gf": "0.00", "ga": "0.00", "xgf": "0.00", "xga": "0.00"}
+
+    poss_vals, gf_vals, ga_vals, xgf_vals, xga_vals = [], [], [], [], []
+
+    for _, r in team_matches.iterrows():
+        is_home = str(r['CONTESTANTHOME_OPTAUUID']).strip().upper() == team_uuid.strip().upper()
+        
+        poss = r['HOME_POSSESSION'] if is_home else r['AWAY_POSSESSION']
+        gf = r['TOTAL_HOME_SCORE'] if is_home else r['TOTAL_AWAY_SCORE']
+        ga = r['TOTAL_AWAY_SCORE'] if is_home else r['TOTAL_HOME_SCORE']
+        xgf = r['HOME_XG'] if is_home else r['AWAY_XG']
+        xga = r['AWAY_XG'] if is_home else r['HOME_XG']
+
+        if pd.notnull(poss): poss_vals.append(poss)
+        if pd.notnull(gf): gf_vals.append(gf)
+        if pd.notnull(ga): ga_vals.append(ga)
+        if pd.notnull(xgf): xgf_vals.append(xgf)
+        if pd.notnull(xga): xga_vals.append(xga)
+
+    avg_poss = sum(poss_vals) / len(poss_vals) if poss_vals else 0.0
+    avg_gf = sum(gf_vals) / len(gf_vals) if gf_vals else 0.0
+    avg_ga = sum(ga_vals) / len(ga_vals) if ga_vals else 0.0
+    avg_xgf = sum(xgf_vals) / len(xgf_vals) if xgf_vals else 0.0
+    avg_xga = sum(xga_vals) / len(xga_vals) if xga_vals else 0.0
 
     return {
-        "gf": f"{goals_p90:.2f}",
-        "ga": f"{xgc_p90:.2f}",
-        "xgf": f"{xg_p90:.2f}",
-        "xga": f"{xgc_p90:.2f}",
-        "poss": f"{poss:.1f}%"
+        "poss": f"{avg_poss:.1f}%",
+        "gf": f"{avg_gf:.2f}",
+        "ga": f"{avg_ga:.2f}",
+        "xgf": f"{avg_xgf:.2f}",
+        "xga": f"{avg_xga:.2f}"
     }
     
 def beregn_stilling(df_matches, valgt_saeson, valgt_turnering):
@@ -289,9 +307,9 @@ def vis_side():
                 """
                 st.markdown(meta_html, unsafe_allow_html=True)
                 
-                # Hent de korrekte separate værdier for holdene fra hold-statistikken
-                hif_stats = hent_hold_kort_stats(df_hold_stats, "Hvidovre")
-                opp_stats = hent_hold_kort_stats(df_hold_stats, opp_name)
+                # Brug præcis samme per-90 beregningslogik til næste modstander-kortet
+                hif_stats = beregn_hold_per_90_stats(df_stats, HIF_UUID)
+                opp_stats = beregn_hold_per_90_stats(df_stats, opp_id)
                 
                 hif_logo = TEAMS.get("Hvidovre", {}).get("logo", "")
                 opp_logo = TEAMS.get(opp_name, {}).get("logo", "")
