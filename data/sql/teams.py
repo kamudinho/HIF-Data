@@ -233,9 +233,15 @@ def hent_hoved_stats(_conn, calendar_uuid: str) -> pd.DataFrame:
         if 'MATCH_DATE_FULL' in df.columns:
             df['MATCH_DATE_FULL'] = pd.to_datetime(df['MATCH_DATE_FULL'], errors='coerce').dt.tz_localize(None)
             
-        # --- 1. MANUEL OVERSTYRING ---
+        # --- 1. MANUEL OVERSTYRING AF MANGLENDE DATA ---
         MANUAL_OVERRIDES = {
-            # "c8vwlgepriydcay2kp412acyc": { ... }
+            # Eksempel: Indsæt Match UUID for den kamp der mangler data, og de ønskede værdier:
+            "c8vwlgepriydcay2kp412acyc": {
+            "HOME_POSSESSION": 48.5,
+            "AWAY_POSSESSION": 51.5,
+            "HOME_PASSES": 350,
+            "AWAY_PASSES": 410
+            }
         }
         
         for match_uuid, values in MANUAL_OVERRIDES.items():
