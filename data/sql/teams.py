@@ -182,11 +182,17 @@ def hent_hoved_stats(_conn, calendar_uuid: str) -> pd.DataFrame:
                 MAX(CASE WHEN s.STAT_TYPE = 'totalPass' THEN TRY_CAST(s.STAT_TOTAL AS FLOAT) END) AS PASSES,
                 MAX(CASE WHEN s.STAT_TYPE IN ('touches', 'totalTouch') THEN TRY_CAST(s.STAT_TOTAL AS FLOAT) END) AS TOUCHES,
                 MAX(CASE WHEN s.STAT_TYPE IN ('duelAerialWon', 'aerialWon') THEN TRY_CAST(s.STAT_TOTAL AS FLOAT) END) AS AERIAL_WON,
-                -- Manuel override for kampen mod AaB, hvis besiddelse mangler
+                -- Robust håndtering af besiddelse (tjekker TOTAL, VALUE og fjerner eventuelle %-tegn)
                 MAX(
                     CASE 
                         WHEN s.MATCH_OPTAUUID = 'd3lpt2cuazbovha22dv2c3vh0' THEN 62.0 
-                        WHEN s.STAT_TYPE = 'possessionPercentage' THEN TRY_CAST(s.STAT_TOTAL AS FLOAT) 
+                        WHEN s.STAT_TYPE = 'possessionPercentage' THEN 
+                            COALESCE(
+                                TRY_CAST(s.STAT_TOTAL AS FLOAT), 
+                                TRY_CAST(s.STAT_VALUE AS FLOAT),
+                                TRY_CAST(REPLACE(s.STAT_TOTAL, '%', '') AS FLOAT),
+                                TRY_CAST(REPLACE(s.STAT_VALUE, '%', '') AS FLOAT)
+                            )
                         ELSE NULL 
                     END
                 ) AS POSSESSION
