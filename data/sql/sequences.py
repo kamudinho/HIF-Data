@@ -7,7 +7,8 @@ DB = "KLUB_HVIDOVREIF.AXIS"
 @st.cache_data(ttl=1800, show_spinner="Henter målsekvenser fra Snowflake...")
 def load_goal_sequences_data(valgt_uuid, liga_ids_tuple):
     """
-    Henter alle relevante målsekvenser (inkl. selvmål) for det valgte hold og turnering.
+    Henter alle relevante målsekvenser (inkl. korrekt korrigerede selvmål for stilling)
+    for det valgte hold og turnering i én samlet, optimeret CTE-forespørgsel.
     """
     conn = _get_snowflake_conn()
     if not conn:
@@ -96,12 +97,26 @@ def load_goal_sequences_data(valgt_uuid, liga_ids_tuple):
             SELECT 
                 e.MATCH_OPTAUUID,
                 e.EVENT_OPTAUUID as GOAL_EVENT_OPTAUUID,
-                SUM(CASE WHEN e.EVENT_CONTESTANT_OPTAUUID = m.CONTESTANTHOME_OPTAUUID THEN 1 ELSE 0 END) 
-                    OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_TIMESTAMP ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS CURRENT_HOME_SCORE,
-                SUM(CASE WHEN e.EVENT_CONTESTANT_OPTAUUID = m.CONTESTANTAWAY_OPTAUUID THEN 1 ELSE 0 END) 
-                    OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_TIMESTAMP ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS CURRENT_AWAY_SCORE
+                SUM(
+                    CASE 
+                        -- Hvis det er selvmål (qualifier 28), tilfalder målet modstanderholdet i stedet
+                        WHEN q_og.EVENT_OPTAUUID IS NOT NULL THEN 
+                            CASE WHEN e.EVENT_CONTESTANT_OPTAUUID = m.CONTESTANTHOME_OPTAUUID THEN 0 ELSE 1 END
+                        ELSE 
+                            CASE WHEN e.EVENT_CONTESTANT_OPTAUUID = m.CONTESTANTHOME_OPTAUUID THEN 1 ELSE 0 END
+                    END
+                ) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_TIMESTAMP ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS CURRENT_HOME_SCORE,
+                SUM(
+                    CASE 
+                        WHEN q_og.EVENT_OPTAUUID IS NOT NULL THEN 
+                            CASE WHEN e.EVENT_CONTESTANT_OPTAUUID = m.CONTESTANTAWAY_OPTAUUID THEN 0 ELSE 1 END
+                        ELSE 
+                            CASE WHEN e.EVENT_CONTESTANT_OPTAUUID = m.CONTESTANTAWAY_OPTAUUID THEN 1 ELSE 0 END
+                    END
+                ) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_TIMESTAMP ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS CURRENT_AWAY_SCORE
             FROM {DB}.OPTA_EVENTS e
             JOIN {DB}.OPTA_MATCHINFO m ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
+            LEFT JOIN {DB}.OPTA_QUALIFIERS q_og ON e.EVENT_OPTAUUID = q_og.EVENT_OPTAUUID AND q_og.QUALIFIER_QID = 28
             WHERE e.EVENT_TYPEID = 16
         )
         SELECT 
@@ -119,7 +134,7 @@ def load_goal_sequences_data(valgt_uuid, liga_ids_tuple):
             END as RAW_X,
             CASE 
                 WHEN e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}' THEN e.EVENT_Y 
-                ELSE (100.0 - (100.0 - e.EVENT_Y)) -- eller tilsvarende y-justering
+                ELSE (100.0 - e.EVENT_Y) 
             END as RAW_Y,
             e.GOAL_TIMESTAMP,
             e.G_EVENT_UUID AS GOAL_EVENT_OPTAUUID,
