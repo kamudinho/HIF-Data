@@ -138,7 +138,7 @@ def hent_hold_formkurve(_conn, calendar_uuid: str, team_optauuid: str, limit: in
 
 
 @st.cache_data(ttl=600, show_spinner="Henter kampdata og statistik fra Snowflake...")
-def hent_hoved_stats(_conn, calendar_uuid: str) -> pd.DataFrame:
+def stat_hoved_stats(_conn, calendar_uuid: str) -> pd.DataFrame:
     """
     Henter kampdata på kamp-niveau inkl. hold-ID'er, xG og holdstatistikker per kamp.
     """
@@ -182,18 +182,7 @@ def hent_hoved_stats(_conn, calendar_uuid: str) -> pd.DataFrame:
                 MAX(CASE WHEN s.STAT_TYPE = 'totalPass' THEN TRY_CAST(s.STAT_TOTAL AS FLOAT) END) AS PASSES,
                 MAX(CASE WHEN s.STAT_TYPE IN ('touches', 'totalTouch') THEN TRY_CAST(s.STAT_TOTAL AS FLOAT) END) AS TOUCHES,
                 MAX(CASE WHEN s.STAT_TYPE IN ('duelAerialWon', 'aerialWon') THEN TRY_CAST(s.STAT_TOTAL AS FLOAT) END) AS AERIAL_WON,
-                -- Manuel override for kampen mod AaB, eller hent fra STAT_TOTAL uden %-tegn
-                MAX(
-                    CASE 
-                        WHEN s.MATCH_OPTAUUID = 'd3lpt2cuazbovha22dv2c3vh0' THEN 100.0 
-                        WHEN s.STAT_TYPE = 'possessionPercentage' THEN 
-                            COALESCE(
-                                TRY_CAST(s.STAT_TOTAL AS FLOAT), 
-                                TRY_CAST(REPLACE(s.STAT_TOTAL, '%', '') AS FLOAT)
-                            )
-                        ELSE NULL 
-                    END
-                ) AS POSSESSION
+                MAX(CASE WHEN s.STAT_TYPE = 'possessionPercentage' THEN TRY_CAST(REPLACE(s.STAT_TOTAL, '%', '') AS FLOAT) END) AS POSSESSION
             FROM {DB}.OPTA_MATCHSTATS s
             GROUP BY s.MATCH_OPTAUUID, s.CONTESTANT_OPTAUUID
         ),
@@ -247,4 +236,13 @@ def hent_hoved_stats(_conn, calendar_uuid: str) -> pd.DataFrame:
         if 'MATCH_DATE_FULL' in df.columns:
             df['MATCH_DATE_FULL'] = pd.to_datetime(df['MATCH_DATE_FULL'], errors='coerce').dt.tz_localize(None)
             
+        # --- MANUEL PANDAS OVERRIDE (Sikrer at den ændrer det uanset SQL) ---
+        if 'MATCH_OPTAUUID' in df.columns and 'HOME_POSSESSION' in df.columns:
+            mask = df['MATCH_OPTAUUID'] == 'd3lpt2cuazbovha22dv2c3vh0'
+            if mask.any():
+                df.loc[mask, 'HOME_POSSESSION'] = 62.0
+                # Hvis udeholdet skal have resten (f.eks. 38.0):
+                if 'AWAY_POSSESSION' in df.columns:
+                    df.loc[mask, 'AWAY_POSSESSION'] = 38.0
+
     return df if df is not None else pd.DataFrame()
