@@ -1,4 +1,3 @@
-#HIF-Data/tools/analyse/konklusion.py
 import streamlit as st
 import pandas as pd
 from data.utils.team_mapping import (
@@ -26,13 +25,11 @@ METRIC_DEFS = [
     ("Ramt stolpe/overligger", "WOODWORK", False, 0, "", "Afslutningsspil"),
     ("Hjørnespark taget", "CORNERS_TAKEN", False, 0, "", "Afslutningsspil"),
     ("Afslutninger efter hjørnespark", "ATT_CORNER", False, 0, "", "Afslutningsspil"),
-
     ("Boldbesiddelse", "POSS", False, 1, "%", "Opbygningsspil"),
     ("Berøringer i alt", "TOUCHES", False, 0, "", "Opbygningsspil"),
     ("Afleveringspræcision", "PASS_ACCURACY", False, 1, "%", "Opbygningsspil"),
     ("Afleveringer i alt", "PASSES_TOTAL", False, 0, "", "Opbygningsspil"),
     ("Berøringer i modst. felt", "BOX_TOUCHES", False, 0, "", "Opbygningsspil"),
-
     ("Tackling, succes", "TACKLE_SUCCESS", False, 1, "%", "Defensivt spil"),
     ("Vundne tacklinger", "TACKLES_WON", False, 0, "", "Defensivt spil"),
     ("Clearinger", "CLEARANCES", False, 0, "", "Defensivt spil"),
@@ -40,22 +37,92 @@ METRIC_DEFS = [
     ("xG imod (lavest = bedst)", "XG_AGAINST", True, 2, "", "Defensivt spil"),
     ("Modstanderberøringer i felt (færrest bedst)", "OPP_BOX_TOUCHES", True, 0, "", "Defensivt spil"),
     ("Frispark begået (færrest bedst)", "FOULS_CONCEDED", True, 0, "", "Defensivt spil"),
-
     ("Redninger", "SAVES", False, 0, "", "Målmand & standarder"),
     ("Clean sheets", "CLEAN_SHEETS", False, 0, "", "Målmand & standarder"),
     ("Mål imod (færrest bedst)", "GOALS_CONCEDED", True, 0, "", "Målmand & standarder"),
     ("Modstander hjørnespark (færrest bedst)", "OPP_CORNERS_TAKEN", True, 0, "", "Målmand & standarder"),
     ("Modstander afslutninger efter hjørnespark (færrest bedst)", "OPP_ATT_CORNER", True, 0, "", "Målmand & standarder"),
     ("Straffe reddet", "PENALTY_SAVES", False, 0, "", "Målmand & standarder"),
-
     ("Gule kort (færrest bedst)", "YELLOW_CARDS", True, 0, "", "Disciplin"),
     ("Røde kort (færrest bedst)", "RED_CARDS", True, 0, "", "Disciplin"),
 ]
 
-def vis_side(dp=None):
-    LIGA_UUID = SEASONS.get(SAESON_NAVN, {}).get(COMPETITION_NAME)
+def style_css():
+    """Returner CSS-styling til siden."""
+    return """
+        <style>
+        .analysis-card { 
+            border: 1px solid #e6e6e6; 
+            padding: 20px; 
+            border-radius: 5px; 
+            margin-bottom: 20px; 
+            background-color: white;
+            min-height: 250px;
+        }
+        .section-title { font-weight: bold; margin-bottom: 10px; font-size: 1.2rem; border-bottom: 2px solid #C8102E; padding-bottom: 5px; }
+        .conclusion-text { font-weight: bold; margin-top: 15px; text-transform: uppercase; font-size: 0.85rem; color: #C8102E; }
+        .stat-line { margin-bottom: 8px; font-size: 0.95rem; }
+        table { text-align: center !important; }
+        th { text-align: center !important; }
+        td { text-align: center !important; }
+        </style>
+    """
 
+def vis_style():
+    """Indsæt CSS styling."""
+    st.markdown(style_css(), unsafe_allow_html=True)
+
+def get_uuid_to_name():
+    """Map UUID til holdnavn."""
+    return {
+        str(info.get('opta_uuid')).strip().upper(): name
+        for name, info in TEAMS.items() if info.get('opta_uuid')
+    }
+
+def get_ordinal(n):
+    """Returner ordinals for placering."""
+    if 11 <= (n % 100) <= 13:
+        suffix = 'th'
+    else:
+        suffix = {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')
+    return f"{n}{suffix}"
+
+def get_rank(df, target_uuid, col, ascending=False):
+    """Find rang og placering for et hold."""
+    if col not in df.columns:
+        return "**?**"
+    temp = df.dropna(subset=[col]).sort_values(col, ascending=ascending).reset_index(drop=True)
+    try:
+        rank = temp[temp['TEAM_ID'] == target_uuid].index[0] + 1
+        return get_ordinal(rank)
+    except Exception:
+        return "**?**"
+
+def get_leader_and_worst(df, target_uuid, col, ascending=False):
+    """Find bedste og dårligste hold for en metric."""
+    if col not in df.columns:
+        return None, None, None, None
+    temp = df.dropna(subset=[col])
+    if temp.empty:
+        return None, None, None, None
+    best = temp.sort_values(col, ascending=ascending).iloc[0]
+    worst = temp.sort_values(col, ascending=not ascending).iloc[0]
+    uuid_to_name = get_uuid_to_name()
+    best_name = best.get('TEAM_NAME', uuid_to_name.get(best.get('TEAM_ID'), best.get('TEAM_ID')))
+    worst_name = worst.get('TEAM_NAME', uuid_to_name.get(worst.get('TEAM_ID'), worst.get('TEAM_ID')))
+    return best_name, best[col], worst_name, worst[col]
+
+def safe_val(val, decimals=1, suffix=""):
+    """Sikker visning af tal."""
+    if pd.isna(val):
+        return "N/A"
+    return f"{val:.{decimals}f}{suffix}"
+
+def vis_side():
+    """Hovedfunktion til visning af data og UI."""
+    LIGA_UUID = SEASONS.get(SAESON_NAVN, {}).get(COMPETITION_NAME)
     conn = _get_snowflake_conn()
+
     if not conn:
         st.error("Kunne ikke forbinde til Snowflake.")
         return
@@ -69,153 +136,107 @@ def vis_side(dp=None):
         st.warning(f"Ingen kampstatistik fundet for turneringen '{COMPETITION_NAME}' i sæsonen '{SAESON_NAVN}'.")
         return
 
-    df_teams_only = df[df['TEAM_ID'] != 'LIGA_AVG'].copy()
+    # Styling
+    vis_style()
 
-    st.markdown("""
-        <style>
-        .analysis-card { 
-            border: 1px solid #e6e6e6; 
-            padding: 20px; 
-            border-radius: 5px; 
-            margin-bottom: 20px; 
-            background-color: white;
-            min-height: 250px;
-        }
-        .section-title { font-weight: bold; margin-bottom: 10px; font-size: 1.2rem; border-bottom: 2px solid #C8102E; padding-bottom: 5px; }
-        .conclusion-text { color: #C8102E; font-weight: bold; margin-top: 15px; text-transform: uppercase; font-size: 0.85rem; }
-        .stat-line { margin-bottom: 8px; font-size: 0.95rem; }
-        table { text-align: center !important; }
-        th { text-align: center !important; }
-        td { text-align: center !important; }
-        </style>
-    """, unsafe_allow_html=True)
+    uuid_to_name = get_uuid_to_name()
 
-    uuid_to_name = {
-        str(info.get('opta_uuid')).strip().upper(): name
-        for name, info in TEAMS.items() if info.get('opta_uuid')
-    }
-
-    def get_ordinal(n):
-        if 11 <= (n % 100) <= 13:
-            suffix = 'th'
-        else:
-            suffix = {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')
-        return f"{n}{suffix}"
-
-    def get_rank(col, ascending=False):
-        if col not in df_teams_only.columns:
-            return "**?**"
-        temp = df_teams_only.dropna(subset=[col]).sort_values(col, ascending=ascending).reset_index(drop=True)
-        try:
-            rank = temp[temp['TEAM_ID'] == target_uuid].index[0] + 1
-            return get_ordinal(rank)
-        except Exception:
-            return "**?**"
-
-    def get_leader_and_worst(col, ascending=False):
-        if col not in df_teams_only.columns:
-            return None, None, None, None
-        temp = df_teams_only.dropna(subset=[col])
-        if temp.empty:
-            return None, None, None, None
-        
-        temp_best = temp.sort_values(col, ascending=ascending)
-        best = temp_best.iloc[0]
-        best_name = best.get('TEAM_NAME', uuid_to_name.get(best.get('TEAM_ID'), best.get('TEAM_ID')))
-        
-        temp_worst = temp.sort_values(col, ascending=not ascending)
-        worst = temp_worst.iloc[0]
-        worst_name = worst.get('TEAM_NAME', uuid_to_name.get(worst.get('TEAM_ID'), worst.get('TEAM_ID')))
-        
-        return best_name, best[col], worst_name, worst[col]
-
-    def safe_val(val, decimals=1, suffix=""):
-        if pd.isna(val):
-            return "N/A"
-        return f"{val:.{decimals}f}{suffix}"
-
-    hold_navne = SEASON_LEAGUE_MAPPER.get(SAESON_NAVN, {}).get(COMPETITION_NAME, [])
-    sorterede_hold_navne = sorted([n for n in hold_navne if n in TEAMS])
-    hold_options = {n: TEAMS[n].get("opta_uuid") for n in sorterede_hold_navne}
-
+    # UI: Vælg hold og visningsformat
+    hold_navne = sorted([n for n in SEASON_LEAGUE_MAPPER.get(SAESON_NAVN, {}).get(COMPETITION_NAME, []) if n in TEAMS])
+    hold_options = {n: TEAMS[n].get("opta_uuid") for n in hold_navne}
     if not hold_options:
         st.warning(f"Ingen hold fundet for '{COMPETITION_NAME}' i sæsonen '{SAESON_NAVN}'.")
         return
 
-    col_top1, col_top2 = st.columns([1, 1])
-    with col_top1:
-        valgt_navn = st.selectbox("Vælg hold", sorterede_hold_navne)
-    with col_top2:
-        visning = st.segmented_control(
-            " ",
-            ["Enkelt hold", "Alle hold (bedste og dårligste pr. metric)", "Holdtabel (Y-akse)"],
-            default="Enkelt hold",
-            selection_mode="single"
-        )
+    valgt_navn = st.selectbox("Vælg hold", hold_navne)
+    visning = st.segmented_control(
+        " ",
+        ["Enkelt hold", "Alle hold (bedste og dårligste pr. metric)", "Holdtabel (Y-akse)"],
+        default="Enkelt hold",
+        selection_mode="single"
+    )
 
     target_uuid = str(hold_options[valgt_navn]).strip().upper()
 
+    # Afhængig af visning, kald forskellige funktioner
     if visning == "Alle hold (bedste og dårligste pr. metric)":
-        rows = []
-        for label, col, ascending, decimals, suffix, kategori in METRIC_DEFS:
-            best_team, best_val, worst_team, worst_val = get_leader_and_worst(col, ascending=ascending)
-            if best_team is None:
-                continue
-            rows.append({
-                "Kategori": kategori,
-                "Metric": label,
-                "Bedste hold": best_team,
-                "Bedste værdi": safe_val(best_val, decimals, suffix),
-                "Dårligste hold": worst_team,
-                "Dårligste værdi": safe_val(worst_val, decimals, suffix),
-            })
-        df_leaders = pd.DataFrame(rows)
-        for kategori in df_leaders['Kategori'].unique():
-            st.markdown(f"**{kategori}**")
-            st.dataframe(
-                df_leaders[df_leaders['Kategori'] == kategori][['Metric', 'Bedste hold', 'Bedste værdi', 'Dårligste hold', 'Dårligste værdi']],
-                hide_index=True,
-                use_container_width=True,
-            )
+        vis_bedste_daarligste(df, target_uuid)
         return
-
     elif visning == "Holdtabel (Y-akse)":
-        kategorier = []
-        for _, _, _, _, _, cat in METRIC_DEFS:
-            if cat not in kategorier:
-                kategorier.append(cat)
-
-        raw_team_data = []
-        for _, r in df_teams_only.iterrows():
-            t_name = r.get('TEAM_NAME', uuid_to_name.get(r['TEAM_ID'], r['TEAM_ID']))
-            row_data = {"Hold": t_name, "TEAM_ID": r['TEAM_ID']}
-            for label, col, _, _, _, _ in METRIC_DEFS:
-                row_data[col] = r[col] if col in r else pd.NA
-            raw_team_data.append(row_data)
-
-        df_raw_teams = pd.DataFrame(raw_team_data)
-        for cat in kategorier:
-            st.markdown(f"### {cat}")
-            cat_defs = [m for m in METRIC_DEFS if m[5] == cat]
-            
-            display_rows = []
-            for _, r in df_raw_teams.iterrows():
-                row_disp = {"Hold": r["Hold"]}
-                for label, col, _, decimals, suffix, _ in cat_defs:
-                    row_disp[label] = safe_val(r[col] if col in r else pd.NA, decimals, suffix)
-                display_rows.append(row_disp)
-            
-            df_cat = pd.DataFrame(display_rows).sort_values("Hold").set_index("Hold")
-            st.dataframe(df_cat, use_container_width=True, height=470, hide_index=False)
+        vis_holdtabel(df, hold_navne)
         return
+    else:
+        vis_enkelt_hold(df, target_uuid, valgt_navn)
 
-    # --- 6. ENKELT HOLD-VISNING ---
-    row_match = df[df['TEAM_ID'] == target_uuid]
+def vis_bedste_daarligste(df, target_uuid):
+    """Vis bedste og dårligste hold pr. metric."""
+    rows = []
+    for label, col, ascending, decimals, suffix, kategori in METRIC_DEFS:
+        best_name, best_val, worst_name, worst_val = get_leader_and_worst(df, target_uuid, col, ascending=ascending)
+        if best_name is None:
+            continue
+        rows.append({
+            "Kategori": kategori,
+            "Metric": label,
+            "Bedste hold": best_name,
+            "Bedste værdi": safe_val(best_val, decimals, suffix),
+            "Dårligste hold": worst_name,
+            "Dårligste værdi": safe_val(worst_val, decimals, suffix),
+        })
+    df_leaders = pd.DataFrame(rows)
+    for kategori in df_leaders['Kategori'].unique():
+        st.markdown(f"**{kategori}**")
+        st.dataframe(
+            df_leaders[df_leaders['Kategori'] == kategori][['Metric', 'Bedste hold', 'Bedste værdi', 'Dårligste hold', 'Dårligste værdi']],
+            hide_index=True,
+            use_container_width=True,
+        )
+
+def vis_holdtabel(df, hold_navne):
+    """Vis tabel over hold med metrics."""
+    kategorier = list({m[5] for m in METRIC_DEFS})
+    raw_team_data = []
+    for _, r in df.iterrows():
+        t_name = r.get('TEAM_NAME', get_uuid_to_name().get(r['TEAM_ID'], r['TEAM_ID']))
+        row_data = {"Hold": t_name, "TEAM_ID": r['TEAM_ID']}
+        for _, _, _, _, _, _ in METRIC_DEFS:
+            for label, col, _, _, _, _ in METRIC_DEFS:
+                row_data[col] = r.get(col, pd.NA)
+        raw_team_data.append(row_data)
+    df_raw_teams = pd.DataFrame(raw_team_data)
+    for cat in kategorier:
+        st.markdown(f"### {cat}")
+        cat_defs = [m for m in METRIC_DEFS if m[5] == cat]
+        display_rows = []
+        for _, r in df_raw_teams.iterrows():
+            row_disp = {"Hold": r["Hold"]}
+            for label, col, _, decimals, suffix, _ in cat_defs:
+                row_disp[label] = safe_val(r[col], decimals, suffix)
+            display_rows.append(row_disp)
+        df_cat = pd.DataFrame(display_rows).sort_values("Hold").set_index("Hold")
+        st.dataframe(df_cat, use_container_width=True, height=470, hide_index=False)
+
+def vis_enkelt_hold(df, hold_uuid, hold_navn):
+    """Vis data for et enkelt hold."""
+    row_match = df[df['TEAM_ID'] == hold_uuid]
     if row_match.empty:
-        st.warning(f"Ingen data fundet for {valgt_navn}.")
+        st.warning(f"Ingen data fundet for {hold_navn}.")
         return
     row = row_match.iloc[0]
 
+    # Her kan du flytte logik til at generere de HTML-bokse og data, du allerede har
+    # For enkelhedens skyld kan du genbruge den store blok fra din oprindelige kode
+    # (eller kalde en funktion for det - her er det blot struktur)
+    # ... (Din eksisterende kode for at vise data for et enkelt hold)
+    # Eks:
+    # st.columns, st.markdown med HTML, osv.
+    # Her kan du flytte den eksisterende HTML-generering ind i separate funktioner for genbrug
+
+    # Eksempel på at bruge samme HTML-blok som din oprindelige kode:
+    # (Her skal du indsætte din HTML-generering som du havde i din oprindelige funktion)
+
+    # For enkelhed:
+    row = row.iloc[0]
     goals_val = row.get('GOALS', 0)
     xg_val = row.get('XG', 0)
     diff = goals_val - xg_val
