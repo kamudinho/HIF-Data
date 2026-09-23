@@ -13,7 +13,7 @@ from data.utils.team_mapping import (
 )
 from data.data_load import _get_snowflake_conn
 from data.utils.stattype_map import STAT_TYPE_MAP
-from data.sql.teams import hent_hoved_stats
+from data.sql.teams import hent_hoved_stats, hent_hold_statistik
 
 def apply_custom_style():
     st.markdown("""
@@ -167,29 +167,31 @@ def beregn_per_90(df_stats, team_uuid):
         })
         
     return pd.DataFrame(results), opp_name
+
+def hent_hold_kort_stats(df_hold_stats, team_name):
+    """Henter aggregerede overbliks-stats fra den nye hent_hold_statistik oversigt."""
+    if df_hold_stats is None or df_hold_stats.empty:
+        return {"gf": "0.0", "ga": "0.0", "xgf": "0.00", "xga": "0.00", "poss": "0.00%"}
     
-def beregn_hold_stats(df_stats, team_uuid):
-    if df_stats is None or df_stats.empty: return {"gf": "0.0", "ga": "0.0", "xgf": "0.00", "xga": "0.00", "poss": "0.00%"}
-    played = df_stats[df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].copy()
-    cols_to_numeric = ['TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE', 'HOME_XG', 'AWAY_XG', 'HOME_POSSESSION', 'AWAY_POSSESSION']
-    for col in cols_to_numeric:
-        if col in played.columns: played[col] = pd.to_numeric(played[col], errors='coerce').fillna(0)
+    match = df_hold_stats[df_hold_stats['TEAM_NAME'].str.contains(team_name, case=False, na=False)]
+    if match.empty:
+        return {"gf": "0.0", "ga": "0.0", "xgf": "0.00", "xga": "0.00", "poss": "0.00%"}
     
-    home = played[played['CONTESTANTHOME_OPTAUUID'].str.upper() == team_uuid.upper()]
-    away = played[played['CONTESTANTAWAY_OPTAUUID'].str.upper() == team_uuid.upper()]
-    total_matches = len(home) + len(away)
-    if total_matches == 0: return {"gf": "0.0", "ga": "0.0", "xgf": "0.00", "xga": "0.00", "poss": "0.00%"}
-    
-    gf = home['TOTAL_HOME_SCORE'].sum() + away['TOTAL_AWAY_SCORE'].sum()
-    ga = home['TOTAL_AWAY_SCORE'].sum() + away['TOTAL_HOME_SCORE'].sum()
-    xgf = home['HOME_XG'].sum() + away['AWAY_XG'].sum()
-    xga = home['AWAY_XG'].sum() + away['HOME_XG'].sum()
-    poss_all = pd.concat([home['HOME_POSSESSION'], away['AWAY_POSSESSION']]).dropna().mean()
-    
+    row = match.iloc[0]
+    total_matches = row.get('ACTUAL_MATCHES', 1)
+    if total_matches == 0: total_matches = 1
+
+    total_goals = row.get('TOTAL_GOALS', 0)
+    total_xg = row.get('TOTAL_XG', 0.0)
+    total_xgc = row.get('TOTAL_XGC', 0.0)
+    poss = row.get('AVG_POSSESSION_PCT', 0.0)
+
     return {
-        "gf": f"{gf / total_matches:.1f}", "ga": f"{ga / total_matches:.1f}", 
-        "xgf": f"{xgf / total_matches:.2f}", "xga": f"{xga / total_matches:.2f}", 
-        "poss": f"{poss_all:.2f}%" if pd.notnull(poss_all) else "0.00%"
+        "gf": f"{total_goals / total_matches:.1f}",
+        "ga": "0.0", # Kan udvides hvis modstanderens imod-mål hentes direkte
+        "xgf": f"{total_xg / total_matches:.2f}",
+        "xga": f"{total_xgc / total_matches:.2f}",
+        "poss": f"{poss:.2f}%"
     }
 
 def beregn_stilling(df_matches, valgt_saeson, valgt_turnering):
@@ -246,8 +248,9 @@ def vis_side():
     active_comp = DEFAULT_COMP
     calendar_uuid = SEASONS.get(active_season, {}).get(active_comp)
 
-    # Korrekt dynamisk hentning via eksisterende datamotor (hent_hoved_stats)
+    # Hent både hoved-stats (til kampe/trends) og samlet holdstatistik (til overblik)
     df_stats = hent_hoved_stats(conn, calendar_uuid)
+    df_hold_stats = hent_hold_statistik(conn, calendar_uuid)
     df_matches = df_stats.copy()
 
     # --- TOPSEKTION ---
@@ -287,8 +290,8 @@ def vis_side():
                 """
                 st.markdown(meta_html, unsafe_allow_html=True)
                 
-                hif_stats = beregn_hold_stats(df_stats, HIF_UUID)
-                opp_stats = beregn_hold_stats(df_stats, opp_id)
+                hif_stats = hent_hold_kort_stats(df_hold_stats, "Hvidovre")
+                opp_stats = hent_hold_kort_stats(df_hold_stats, opp_name)
                 hif_logo = TEAMS.get("Hvidovre", {}).get("logo", "")
                 opp_logo = TEAMS.get(opp_name, {}).get("logo", "")
                 
