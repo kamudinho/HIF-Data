@@ -233,23 +233,57 @@ def hent_hoved_stats(_conn, calendar_uuid: str) -> pd.DataFrame:
         if 'MATCH_DATE_FULL' in df.columns:
             df['MATCH_DATE_FULL'] = pd.to_datetime(df['MATCH_DATE_FULL'], errors='coerce').dt.tz_localize(None)
             
-        # --- 1. MANUEL OVERSTYRING AF MANGLENDE DATA ---
-        MANUAL_OVERRIDES = {
-            # Eksempel: Indsæt Match UUID for den kamp der mangler data, og de ønskede værdier:
-            "c8vwlgepriydcay2kp412acyc": {
-            "HOME_POSSESSION": 65.5,
-            "AWAY_POSSESSION": 45.5,
-            "HOME_PASSES": 350,
-            "AWAY_PASSES": 410
-            }
-        }
+        # --- 1. AUTOMATISK FALLBACK FRA CSV-FIL (data/csv/kampe_fallback.csv) ---
+        import os
+        fallback_file = "data/csv/kampe_fallback.csv"
         
-        for match_uuid, values in MANUAL_OVERRIDES.items():
-            mask = df['MATCH_OPTAUUID'] == match_uuid
-            if mask.any():
-                for col, val in values.items():
-                    if col in df.columns:
-                        df.loc[mask, col] = val
+        if os.path.exists(fallback_file):
+            try:
+                fallback_df = pd.read_csv(fallback_file)
+                fallback_df.columns = [str(c).upper() for c in fallback_df.columns]
+                
+                if 'MATCH_OPTAUUID' in fallback_df.columns:
+                    for _, fb_row in fallback_df.iterrows():
+                        match_uuid = str(fb_row['MATCH_OPTAUUID']).strip()
+                        mask = df['MATCH_OPTAUUID'] == match_uuid
+                        
+                        if mask.any():
+                            team_uuid = fb_row.get('TEAM_OPTAUUID')
+                            is_home = False
+                            is_away = False
+                            
+                            # Tjek om holdet er hjemme- eller udehold i den aktuelle kamp fra Snowflake-df
+                            h_id = df.loc[mask, 'CONTESTANTHOME_OPTAUUID'].values[0]
+                            a_id = df.loc[mask, 'CONTESTANTAWAY_OPTAUUID'].values[0]
+                            
+                            if team_uuid == h_id:
+                                is_home = True
+                            elif team_uuid == a_id:
+                                is_away = True
+                                
+                            # Mappings mellem CSV-kolonner og Snowflake dataframe kolonner
+                            col_mapping = {
+                                'POSSESSIONPERCENTAGE': ('HOME_POSSESSION' if is_home else 'AWAY_POSSESSION'),
+                                'TOTALPASS': ('HOME_PASSES' if is_home else 'AWAY_PASSES'),
+                                'TOTALSCORINGATT': ('HOME_SHOTS' if is_home else 'AWAY_SHOTS'),
+                                'SHOTOFFTARGET': ('HOME_OFF_TARGET' if is_home else 'AWAY_OFF_TARGET'),
+                                'WONCORNERS': ('HOME_CORNERS_WON' if is_home else 'AWAY_CORNERS_WON'),
+                                'TOTALTACKLE': ('HOME_TACKLES' if is_home else 'AWAY_TACKLES'),
+                                'TOTALCLEARANCE': ('HOME_CLEARANCES' if is_home else 'AWAY_CLEARANCES'),
+                                'EXPECTEDGOALS': ('HOME_XG' if is_home else 'AWAY_XG')
+                            }
+                            
+                            # Overstyr værdier hvis kolonnen findes i både CSV og DF, og data mangler i DF
+                            for csv_col, df_col in col_mapping.items():
+                                if csv_col in fb_row and df_col in df.columns:
+                                    val = fb_row[csv_col]
+                                    if pd.notna(val):
+                                        # Hvis værdien i Snowflake mangler (eller hvis man ønsker at gennemtvinge fallback)
+                                        current_val = df.loc[mask, df_col].values[0]
+                                        if pd.isna(current_val):
+                                            df.loc[mask, df_col] = pd.to_numeric(val, errors='coerce')
+            except Exception as e:
+                st.warning(f"Kunne ikke indlæse kampe_fallback.csv: {e}")
 
         # --- 2. KUN ADVARSEL (Sletter IKKE rækker fra df) ---
         if 'HOME_POSSESSION' in df.columns and 'MATCH_STATUS' in df.columns:
@@ -268,7 +302,7 @@ def hent_hoved_stats(_conn, calendar_uuid: str) -> pd.DataFrame:
             if not missing_hvidovre_stats.empty:
                 uuids_str = ", ".join(missing_hvidovre_stats['MATCH_OPTAUUID'].unique())
                 st.warning(
-                    f"⚠️ **Opta-statistik mangler for {len(missing_hvidovre_stats)} af Hvidovres spillede kampe!** "
+                    f"**OPTA-data mangler for {len(missing_hvidovre_stats)} af Hvidovres spillede kampe!** "
                     f"Berørte Match UUID'er: `{uuids_str}`"
                 )
 
