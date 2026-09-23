@@ -61,7 +61,7 @@ def vis_side(dp=None):
         return
 
     # --- 2. SQL: OPTA_MATCHSTATS & EXPECTEDSTATS ---
-    sql = f'''
+    sql = '''
     WITH MatchStats AS (
         SELECT 
             UPPER(TRIM(CONTESTANT_OPTAUUID)) as TEAM_ID,
@@ -71,7 +71,7 @@ def vis_side(dp=None):
             SUM(CASE WHEN STAT_TYPE = 'blockedScoringAtt' THEN STAT_TOTAL ELSE 0 END) as SHOTS_BLOCKED,
             SUM(CASE WHEN STAT_TYPE = 'goalAssist' THEN STAT_TOTAL ELSE 0 END) as ASSISTS,
 
-            -- Opbygningsspil (håndterer både procenttegn og rene tal)
+            -- Opbygningsspil
             AVG(CASE WHEN STAT_TYPE = 'possessionPercentage' AND TRY_CAST(REPLACE(STAT_TOTAL, '%', '') AS FLOAT) > 0 
                      THEN TRY_CAST(REPLACE(STAT_TOTAL, '%', '') AS FLOAT) END) as POSS,
             SUM(CASE WHEN STAT_TYPE = 'accuratePass' THEN STAT_TOTAL ELSE 0 END) as PASSES_ACCURATE,
@@ -148,7 +148,7 @@ def vis_side(dp=None):
     FROM MatchStats m
     LEFT JOIN ExpectedStats e ON m.TEAM_ID = e.TEAM_ID
     LEFT JOIN CornersAgainst c ON m.TEAM_ID = c.TEAM_ID
-    '''
+    '''.format(DB=DB, LIGA_UUID=LIGA_UUID)
 
     NUMERIC_COLS = [
         'GOALS', 'SHOTS_TOTAL', 'SHOTS_ON_TARGET', 'SHOTS_BLOCKED', 'ASSISTS',
@@ -193,7 +193,7 @@ def vis_side(dp=None):
 
     if wyid:
         try:
-            ppda_sql = f'''
+            ppda_sql = '''
                 SELECT tm.TEAM_WYID, AVG(md.PPDA) as PPDA
                 FROM {DB}.WYSCOUT_TEAMMATCHES tm
                 LEFT JOIN {DB}.WYSCOUT_MATCHADVANCEDSTATS_DEFENCE md 
@@ -201,7 +201,8 @@ def vis_side(dp=None):
                 WHERE tm.COMPETITION_WYID = {wyid}
                 AND tm.DATE BETWEEN '{saeson_start}' AND '{saeson_slut}'
                 GROUP BY tm.TEAM_WYID
-            '''
+            '''.format(DB=DB, wyid=wyid, saeson_start=saeson_start, saeson_slut=saeson_slut)
+            
             df_ppda = conn.query(ppda_sql) if hasattr(conn, 'query') else pd.read_sql(ppda_sql, conn)
             df_ppda.columns = [str(c).upper() for c in df_ppda.columns]
 
