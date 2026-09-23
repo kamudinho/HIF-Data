@@ -311,9 +311,9 @@ def vis_side(dp=None):
         st.markdown(f"""
         <div class="analysis-card">
             <div class="section-title">Afslutningsspil</div>
-            <div class="stat-line">• {get_rank('SCORINGER_MAAL')} flest mål scoret ({int(row.get('SCORINGER_MAAL', 0))})</div>
+            <div class="stat-line">• {get_rank('SCORINGER_MAAL')} flest mål scoret ({int(row.get('GOALS', 0))})</div>
             <div class="stat-line">• {get_rank('XG')} højeste expected goals ({row.get('XG', 0):.1f} xG)</div>
-            <div class="stat-line">• Forskel: {row.get('SCORINGER_MAAL', 0) - row.get('XG', 0):.1f} mål vs xG</div>
+            <div class="stat-line">• Forskel: {row.get('GOALS', 0) - row.get('XG', 0):.1f} mål vs xG</div>
             <div class="stat-line">• {get_rank('TOTAL_SKUD')} flest skud i alt ({int(row.get('TOTAL_SKUD', 0))})</div>
             <div class="stat-line">• Skudpræcision: {safe_val(row.get('SHOT_ACCURACY', 0), suffix='%')}</div>
             <div class="stat-line">• {get_rank('BIG_CHANCES_CREATED')} flest store chancer skabt ({int(row.get('BIG_CHANCES_CREATED', 0))})</div>
