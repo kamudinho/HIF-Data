@@ -138,7 +138,7 @@ def hent_hold_formkurve(_conn, calendar_uuid: str, team_optauuid: str, limit: in
 
 
 @st.cache_data(ttl=600, show_spinner="Henter kampdata og statistik fra Snowflake...")
-def stat_hoved_stats(_conn, calendar_uuid: str) -> pd.DataFrame:
+def hent_hoved_stats(_conn, calendar_uuid: str) -> pd.DataFrame:
     """
     Henter kampdata på kamp-niveau inkl. hold-ID'er, xG og holdstatistikker per kamp.
     """
