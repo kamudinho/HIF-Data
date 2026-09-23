@@ -173,6 +173,11 @@ def hent_hoved_stats(_conn, calendar_uuid: str) -> pd.DataFrame:
                 s.CONTESTANT_OPTAUUID,
                 MAX(CASE WHEN s.STAT_TYPE = 'totalScoringAtt' THEN TRY_CAST(s.STAT_TOTAL AS FLOAT) END) AS SHOTS,
                 MAX(CASE WHEN s.STAT_TYPE = 'shotOffTarget' THEN TRY_CAST(s.STAT_TOTAL AS FLOAT) END) AS OFF_TARGET,
+                MAX(CASE WHEN s.STAT_TYPE = 'totalThrows' THEN TRY_CAST(s.STAT_TOTAL AS FLOAT) END) AS THROWS,
+                MAX(CASE WHEN s.STAT_TYPE = 'fkFoulWon' THEN TRY_CAST(s.STAT_TOTAL AS FLOAT) END) AS FOULS_WON,
+                MAX(CASE WHEN s.STAT_TYPE = 'wonCorners' THEN TRY_CAST(s.STAT_TOTAL AS FLOAT) END) AS CORNERS_WON,
+                MAX(CASE WHEN s.STAT_TYPE = 'totalTackle' THEN TRY_CAST(s.STAT_TOTAL AS FLOAT) END) AS TACKLES,
+                MAX(CASE WHEN s.STAT_TYPE = 'totalClearance' THEN TRY_CAST(s.STAT_TOTAL AS FLOAT) END) AS CLEARANCES,
                 MAX(CASE WHEN s.STAT_TYPE = 'totalPass' THEN TRY_CAST(s.STAT_TOTAL AS FLOAT) END) AS PASSES,
                 MAX(CASE WHEN s.STAT_TYPE IN ('touches', 'totalTouch') THEN TRY_CAST(s.STAT_TOTAL AS FLOAT) END) AS TOUCHES,
                 -- Manuel override for kampen mod AaB, hvis besiddelse mangler
@@ -185,7 +190,7 @@ def hent_hoved_stats(_conn, calendar_uuid: str) -> pd.DataFrame:
                 ) AS POSSESSION
             FROM {DB}.OPTA_MATCHSTATS s
             GROUP BY s.MATCH_OPTAUUID, s.CONTESTANT_OPTAUUID
-        ),  -- <--- KOMMA TILFØJET HER
+        ),
         TeamXGTable AS (
             SELECT 
                 MATCH_OPTAUUID,
@@ -215,7 +220,9 @@ def hent_hoved_stats(_conn, calendar_uuid: str) -> pd.DataFrame:
             COALESCE(s_home.CLEARANCES, 0) AS HOME_CLEARANCES,
             COALESCE(s_away.CLEARANCES, 0) AS AWAY_CLEARANCES,
             COALESCE(s_home.PASSES, 0) AS HOME_PASSES,
-            COALESCE(s_away.PASSES, 0) AS AWAY_PASSES
+            COALESCE(s_away.PASSES, 0) AS AWAY_PASSES,
+            COALESCE(s_home.TOUCHES, 0) AS HOME_TOUCHES,
+            COALESCE(s_away.TOUCHES, 0) AS AWAY_TOUCHES
         FROM Matches m
         LEFT JOIN TeamXGTable tx_home ON m.MATCH_OPTAUUID = tx_home.MATCH_OPTAUUID AND m.CONTESTANTHOME_OPTAUUID = tx_home.CONTESTANT_OPTAUUID
         LEFT JOIN TeamXGTable tx_away ON m.MATCH_OPTAUUID = tx_away.MATCH_OPTAUUID AND m.CONTESTANTAWAY_OPTAUUID = tx_away.CONTESTANT_OPTAUUID
