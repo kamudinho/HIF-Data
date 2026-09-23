@@ -68,14 +68,6 @@ def vis_side(dp=None):
         st.warning(f"Ingen kampstatistik fundet for turneringen '{COMPETITION_NAME}' i sæsonen '{SAESON_NAVN}'.")
         return
 
-    # Sikre grundlæggende beregnede kolonner, hvis de ikke allerede findes
-    if 'SHOT_ACCURACY' not in df.columns:
-        df['SHOT_ACCURACY'] = (df['SKUD_PAA_MAAL'] / df['TOTAL_SKUD'].replace(0, pd.NA)) * 100
-    if 'PASS_ACCURACY' not in df.columns:
-        df['PASS_ACCURACY'] = 0.0  # Kan udbygges hvis pass-accuracy kolonnen tilføjes i SQL
-    if 'TACKLE_SUCCESS' not in df.columns:
-        df['TACKLE_SUCCESS'] = 0.0
-
     # Ekskluder 'Liga Gennemsnit' fra enkelt-hold ranglisterne, hvis det er medtaget
     df_teams_only = df[df['TEAM_ID'] != 'LIGA_AVG'].copy()
 
@@ -123,6 +115,8 @@ def vis_side(dp=None):
         return f"{n}{suffix}"
 
     def get_rank(col, ascending=False):
+        if col not in df_teams_only.columns:
+            return "**?**"
         temp = df_teams_only.dropna(subset=[col]).sort_values(col, ascending=ascending).reset_index(drop=True)
         try:
             rank = temp[temp['TEAM_ID'] == target_uuid].index[0] + 1
@@ -238,7 +232,7 @@ def vis_side(dp=None):
                 t_name = r["Hold"]
                 row_disp = {"Hold": t_name}
                 for label, col, ascending, decimals, suffix, _ in cat_defs:
-                    val = r[col]
+                    val = r[col] if col in r else pd.NA
                     row_disp[label] = safe_val(val, decimals, suffix)
                 display_rows.append(row_disp)
             
@@ -248,7 +242,7 @@ def vis_side(dp=None):
                 styled = pd.DataFrame('', index=data.index, columns=data.columns)
                 for col_name in data.columns:
                     col_key = next((m[1] for m in cat_defs if m[0] == col_name), None)
-                    if not col_key:
+                    if not col_key or col_key not in df_raw_teams.columns:
                         continue
                     temp_sorted = df_raw_teams.dropna(subset=[col_key]).sort_values(col_key, ascending=next(m[2] for m in cat_defs if m[0] == col_name)).reset_index(drop=True)
                     for idx, row in data.iterrows():
@@ -314,7 +308,7 @@ def vis_side(dp=None):
             <div class="stat-line">• {get_rank('GOALS')} flest mål scoret ({int(row.get('GOALS', 0))})</div>
             <div class="stat-line">• {get_rank('XG')} højeste expected goals ({row.get('XG', 0):.1f} xG)</div>
             <div class="stat-line">• Forskel: {row.get('GOALS', 0) - row.get('XG', 0):.1f} mål vs xG</div>
-            <div class="stat-line">• {get_rank('TOTAL_SKUD')} flest skud i alt ({int(row.get('TOTAL_SKUD', 0))})</div>
+            <div class="stat-line">• {get_rank('SHOTS_TOTAL')} flest skud i alt ({int(row.get('SHOTS_TOTAL', 0))})</div>
             <div class="stat-line">• Skudpræcision: {safe_val(row.get('SHOT_ACCURACY', 0), suffix='%')}</div>
             <div class="stat-line">• {get_rank('BIG_CHANCES_CREATED')} flest store chancer skabt ({int(row.get('BIG_CHANCES_CREATED', 0))})</div>
             <div class="stat-line">• Ramt stolpe/overligger: {int(row.get('WOODWORK', 0))}</div>
@@ -326,12 +320,11 @@ def vis_side(dp=None):
         st.markdown(f"""
         <div class="analysis-card">
             <div class="section-title">Opbygningsspil</div>
-            <div class="stat-line">• {get_rank('BOLDBESIDDELSE_PCT')} højeste boldbesiddelse ({row.get('BOLDBESIDDELSE_PCT', 0):.1f}%)</div>
+            <div class="stat-line">• {get_rank('POSS')} højeste boldbesiddelse ({row.get('POSS', 0):.1f}%)</div>
             <div class="stat-line">• {get_rank('TOUCHES')} flest berøringer i alt ({int(row.get('TOUCHES', 0))})</div>
             <div class="stat-line">• Afleveringspræcision: {safe_val(row.get('PASS_ACCURACY', 0), suffix='%')}</div>
             <div class="stat-line">• {get_rank('XA', ascending=False)} højeste expected assists ({row.get('XA', 0):.2f} xA)</div>
             <div class="stat-line">• {get_rank('BOX_TOUCHES')} flest berøringer i modstanderens felt ({int(row.get('BOX_TOUCHES', 0))})</div>
-            <div class="stat-line">• Gennemsnitlig distance: {safe_val(row.get('GENNEMSNITSLIG_DISTANCE', 0), suffix=' km')}</div>
             <div class="conclusion-text">Konklusion – Opbygningsstatistikker indlæst.</div>
         </div>
         """, unsafe_allow_html=True)
@@ -342,12 +335,11 @@ def vis_side(dp=None):
         st.markdown(f"""
         <div class="analysis-card">
             <div class="section-title">Forsvarsspil</div>
-            <div class="stat-line">• Tacklinger, succes: {safe_val(row.get('TACKLE_SUCCESS', 0), suffix='%')} ({int(row.get('VUNDNE_TAKKLINGER', 0))})</div>
+            <div class="stat-line">• Tackling, succes: {safe_val(row.get('TACKLE_SUCCESS', 0), suffix='%')} ({int(row.get('TACKLES_WON', 0))})</div>
             <div class="stat-line">• {get_rank('CLEARANCES')} flest clearinger ({int(row.get('CLEARANCES', 0))})</div>
             <div class="stat-line">• {get_rank('OFFSIDES_WON')} flest offsides ({int(row.get('OFFSIDES_WON', 0))})</div>
-            <div class="stat-line">• {get_rank('PPDA', ascending=True)} laveste PPDA ({safe_val(row.get('PPDA', 0), decimals=2)})</div>
             <div class="stat-line">• {get_rank('XG_AGAINST', ascending=True)} laveste xG imod ({safe_val(row.get('XG_AGAINST', 0), decimals=2)})</div>
-            <div class="conclusion-text">Konklusion – Presser med en PPDA på {safe_val(row.get('PPDA', 0), decimals=2)}.</div>
+            <div class="conclusion-text">Konklusion – Defensiv statistik indlæst.</div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -357,22 +349,21 @@ def vis_side(dp=None):
             <div class="section-title">Målmand & standarder</div>
             <div class="stat-line">• {get_rank('SAVES')} flest redninger ({int(row.get('SAVES', 0))})</div>
             <div class="stat-line">• {get_rank('CLEAN_SHEETS')} flest clean sheets ({int(row.get('CLEAN_SHEETS', 0))})</div>
-            <div class="stat-line">• {get_rank('MAAL_IMOD', ascending=True)} færrest mål imod ({int(row.get('MAAL_IMOD', 0))})</div>
-            <div class="stat-line">• Hjørnespark taget: {int(row.get('VUNDNE_HJORNESPARK', 0))}</div>
-            <div class="conclusion-text">Konklusion – {int(row.get('CLEAN_SHEETS', 0))} clean sheets og {int(row.get('MAAL_IMOD', 0))} mål imod.</div>
+            <div class="stat-line">• {get_rank('GOALS_CONCEDED', ascending=True)} færrest mål imod ({int(row.get('GOALS_CONCEDED', 0))})</div>
+            <div class="stat-line">• Hjørnespark taget: {int(row.get('CORNERS_TAKEN', 0))}</div>
+            <div class="conclusion-text">Konklusion – {int(row.get('CLEAN_SHEETS', 0))} clean sheets og {int(row.get('GOALS_CONCEDED', 0))} mål imod.</div>
         </div>
         """, unsafe_allow_html=True)
 
     col5, _ = st.columns(2)
 
     with col5:
-        total_kort = int(row.get('YELLOW_CARDS', 0) + row.get('SECOND_YELLOWS', 0) + row.get('RED_CARDS', 0))
+        total_kort = int(row.get('YELLOW_CARDS', 0) + row.get('RED_CARDS', 0))
         st.markdown(f"""
         <div class="analysis-card">
             <div class="section-title">Disciplin</div>
             <div class="stat-line">• {get_rank('YELLOW_CARDS', ascending=True)} færrest gule kort ({int(row.get('YELLOW_CARDS', 0))})</div>
             <div class="stat-line">• Direkte røde kort: {int(row.get('RED_CARDS', 0))}</div>
-            <div class="stat-line">• Udvisninger efter 2. gule: {int(row.get('SECOND_YELLOWS', 0))}</div>
             <div class="conclusion-text">Konklusion – {total_kort} kort i alt denne sæson.</div>
         </div>
         """, unsafe_allow_html=True)
