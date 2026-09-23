@@ -208,9 +208,27 @@ def draw_match_trend_chart(df_matches, metric, label, team_name, valgt_saeson):
         )
     )
 
+    if is_reversed:
+        team_pos = "top right" if snit_vaerdi < ligasnit else "bottom right"
+        liga_pos = "bottom right" if snit_vaerdi < ligasnit else "top right"
+    else:
+        team_pos = "top right" if snit_vaerdi >= ligasnit else "bottom right"
+        liga_pos = "bottom right" if snit_vaerdi >= ligasnit else "top right"
+
+    # Tilføj gennemsnitslinjer FØR logoer, så linjerne ligger under logoerne
+    fig.add_hline(
+        y=snit_vaerdi, line_dash="solid", line_color="black", line_width=1.5,
+        annotation_text=f"(Gennemsnit: {team_name})", annotation_position=team_pos,
+    )
+    fig.add_hline(
+        y=ligasnit, line_dash="dash", line_color="gray", line_width=1.5,
+        annotation_text=f"(Gennemsnit: {DEFAULT_COMP})", annotation_position=liga_pos,
+    )
+
     logo_size_x = 0.65
     logo_size_y = y_span * 0.20 if y_span > 0.5 else 0.25
 
+    # Tilføj logoer SIDST, så de placeres som det absolut øverste lag over alt andet
     for _, row in df_matches.iterrows():
         if row.get("OPP_LOGO"):
             b64_logo = get_base64_image(row["OPP_LOGO"])
@@ -222,22 +240,6 @@ def draw_match_trend_chart(df_matches, metric, label, team_name, valgt_saeson):
                     xanchor="center", yanchor="middle", layer="above",
                 )
             )
-
-    if is_reversed:
-        team_pos = "top right" if snit_vaerdi < ligasnit else "bottom right"
-        liga_pos = "bottom right" if snit_vaerdi < ligasnit else "top right"
-    else:
-        team_pos = "top right" if snit_vaerdi >= ligasnit else "bottom right"
-        liga_pos = "bottom right" if snit_vaerdi >= ligasnit else "top right"
-
-    fig.add_hline(
-        y=snit_vaerdi, line_dash="solid", line_color="black", line_width=1.5,
-        annotation_text=f"(Gennemsnit: {team_name})", annotation_position=team_pos,
-    )
-    fig.add_hline(
-        y=ligasnit, line_dash="dash", line_color="gray", line_width=1.5,
-        annotation_text=f"(Gennemsnit: {DEFAULT_COMP})", annotation_position=liga_pos,
-    )
 
     padding = y_span * 0.15 if y_span > 0 else 1.0
     y_range = [y_max + padding, y_min - padding] if is_reversed else [y_min - padding, y_max + padding]
@@ -323,8 +325,7 @@ def vis_side():
         st.markdown(
             """
             <div style="border: 1px solid black; padding: 10px 15px; border-radius: 5px; background-color: #f9f9f9; margin-bottom: 15px;">
-                <b>Offensivt Index:</b> Vurderer holdets samlede chanceskabelse baseret på følgende kategorier:<br>
-                <i>xG, Mål, Skud på mål, Skud total og Berøringer i modstanderens felt.</i>
+                <b>Offensivt Index:</b> Vurderer holdets samlede chanceskabelse baseret på følgende kategorier: xG, Mål, Skud på mål, Skud total og Berøringer i modstanderens felt.
             </div>
             """,
             unsafe_allow_html=True,
@@ -333,8 +334,7 @@ def vis_side():
         st.markdown(
             """
             <div style="border: 1px solid black; padding: 10px 15px; border-radius: 5px; background-color: #f9f9f9; margin-bottom: 15px;">
-                <b>Defensivt Index:</b> Vurderer holdets evne til at forsvare baseret på følgende kategorier:<br>
-                <i>Vundne tacklinger, Clearinger, Blokeringer, Clean sheets, Mål imod og Modstanderens berøringer i feltet.</i>
+                <b>Defensivt Index:</b> Vurderer holdets evne til at forsvare baseret på følgende kategorier: Vundne tacklinger, Clearinger, Blokeringer, Clean sheets, Mål imod og Modstanderens berøringer i feltet.
             </div>
             """,
             unsafe_allow_html=True,
