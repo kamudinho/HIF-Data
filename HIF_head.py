@@ -169,7 +169,7 @@ def beregn_per_90(df_stats, team_uuid):
     return pd.DataFrame(results), opp_name
 
 def hent_hold_kort_stats(df_hold_stats, team_name):
-    """Henter aggregerede overbliks-stats fra den nye hent_hold_statistik oversigt."""
+    """Henter aggregerede overbliks-stats direkte fra den samlede holdstatistik for at matche tabellen præcist."""
     if df_hold_stats is None or df_hold_stats.empty:
         return {"gf": "0.0", "ga": "0.0", "xgf": "0.00", "xga": "0.00", "poss": "0.00%"}
     
@@ -178,20 +178,19 @@ def hent_hold_kort_stats(df_hold_stats, team_name):
         return {"gf": "0.0", "ga": "0.0", "xgf": "0.00", "xga": "0.00", "poss": "0.00%"}
     
     row = match.iloc[0]
-    total_matches = row.get('ACTUAL_MATCHES', 1)
-    if total_matches == 0: total_matches = 1
-
-    total_goals = row.get('TOTAL_GOALS', 0)
-    total_xg = row.get('TOTAL_XG', 0.0)
-    total_xgc = row.get('TOTAL_XGC', 0.0)
+    
+    # Udles direkte fra de nye p90 og afrundede felter i master-tabellen
+    goals_p90 = row.get('GOALS_P90', 0.0)
+    xg_p90 = row.get('XG_P90', 0.0)
+    xgc_p90 = row.get('XGC_P90', 0.0)
     poss = row.get('AVG_POSSESSION_PCT', 0.0)
 
     return {
-        "gf": f"{total_goals / total_matches:.1f}",
-        "ga": "0.0", # Kan udvides hvis modstanderens imod-mål hentes direkte
-        "xgf": f"{total_xg / total_matches:.2f}",
-        "xga": f"{total_xgc / total_matches:.2f}",
-        "poss": f"{poss:.2f}%"
+        "gf": f"{goals_p90:.1f}",
+        "ga": f"{xgc_p90:.1f}", # Bruger xGC pr. kamp som defensivt modspil eller 0.0
+        "xgf": f"{xg_p90:.2f}",
+        "xga": f"{xgc_p90:.2f}",
+        "poss": f"{poss:.1f}%"
     }
 
 def beregn_stilling(df_matches, valgt_saeson, valgt_turnering):
