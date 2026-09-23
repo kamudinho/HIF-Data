@@ -10,6 +10,7 @@ from data.utils.team_mapping import (
     TOURNAMENTCALENDAR_NAME as SAESON_NAVN,
 )
 from data.data_load import _get_snowflake_conn
+from data.sql.teams import hent_hoved_stats, hent_samlet_hold_statistik, hent_liga_stilling
 
 # Metric-definitioner brugt i "Alle hold"-leaderboardet.
 METRIC_DEFS = [
@@ -29,7 +30,7 @@ METRIC_DEFS = [
     ("Berøringer i modst. felt", "BOX_TOUCHES", False, 0, "", "Opbygningsspil"),
 
     ("Tackling, succes", "TACKLE_SUCCESS", False, 1, "%", "Defensivt spil"),
-    ("Clearinnger", "CLEARANCES", False, 0, "", "Defensivt spil"),
+    ("Clearinger", "CLEARANCES", False, 0, "", "Defensivt spil"),
     ("Offsides fanget", "OFFSIDES_WON", False, 0, "", "Defensivt spil"),
     ("PPDA (lavest = mest pres)", "PPDA", True, 2, "", "Defensivt spil"),
     ("xG imod (lavest = bedst)", "XG_AGAINST", True, 2, "", "Defensivt spil"),
@@ -60,129 +61,40 @@ def vis_side(dp=None):
         st.warning(f"Ingen turnerings-UUID fundet for '{COMPETITION_NAME}' i sæsonen '{SAESON_NAVN}'. Tjek SEASONS-mappingen i team_mapping.py.")
         return
 
-    # --- 2. SQL: OPTA_MATCHSTATS & EXPECTEDSTATS ---
-    sql = f'''
-    WITH MatchStats AS (
-        SELECT 
-            UPPER(TRIM(CONTESTANT_OPTAUUID)) as TEAM_ID,
+    # --- 2. HENT DATA VIA TEAM SQL MODULER ---
+    # Vi benytter hent_samlet_hold_statistik og hent_hoved_stats direkte fra data/sql/teams.py
+    df_hold = hent_samlet_hold_statistik(conn, LIGA_UUID)
+    df_stats = hent_hoved_stats(conn, LIGA_UUID)
 
-            SUM(CASE WHEN STAT_TYPE = 'totalScoringAtt' THEN STAT_TOTAL ELSE 0 END) as SHOTS_TOTAL,
-            SUM(CASE WHEN STAT_TYPE = 'ontargetScoringAtt' THEN STAT_TOTAL ELSE 0 END) as SHOTS_ON_TARGET,
-            SUM(CASE WHEN STAT_TYPE = 'blockedScoringAtt' THEN STAT_TOTAL ELSE 0 END) as SHOTS_BLOCKED,
-            SUM(CASE WHEN STAT_TYPE = 'goalAssist' THEN STAT_TOTAL ELSE 0 END) as ASSISTS,
+    if df_hold is None or df_hold.empty:
+        st.warning(f"Ingen samlet holdstatistik fundet for turneringen '{COMPETITION_NAME}' i sæsonen '{SAESON_NAVN}'.")
+        return
 
-            -- Opbygningsspil
-            AVG(CASE WHEN STAT_TYPE = 'possessionPercentage' AND STAT_TOTAL > 0 
-                     THEN CAST(STAT_TOTAL AS FLOAT) END) as POSS,
-            SUM(CASE WHEN STAT_TYPE = 'accuratePass' THEN STAT_TOTAL ELSE 0 END) as PASSES_ACCURATE,
-            SUM(CASE WHEN STAT_TYPE = 'totalPass' THEN STAT_TOTAL ELSE 0 END) as PASSES_TOTAL,
-            SUM(CASE WHEN STAT_TYPE = 'cornerTaken' THEN STAT_TOTAL ELSE 0 END) as CORNERS_TAKEN,
-            MAX(CASE WHEN STAT_TYPE = 'formationUsed' THEN STAT_TOTAL ELSE NULL END) as FORMATION,
+    # Standardisér kolonnenavne til store bogstaver
+    df = df_hold.copy()
+    df.columns = [str(c).upper() for c in df.columns]
 
-            -- Defensivt spil
-            SUM(CASE WHEN STAT_TYPE = 'wonTackle' THEN STAT_TOTAL ELSE 0 END) as TACKLES_WON,
-            SUM(CASE WHEN STAT_TYPE = 'totalTackle' THEN STAT_TOTAL ELSE 0 END) as TACKLES_TOTAL,
-            SUM(CASE WHEN STAT_TYPE = 'totalClearance' THEN STAT_TOTAL ELSE 0 END) as CLEARANCES,
-            SUM(CASE WHEN STAT_TYPE = 'totalOffside' THEN STAT_TOTAL ELSE 0 END) as OFFSIDES_WON,
-            SUM(CASE WHEN STAT_TYPE = 'fkFoulWon' THEN STAT_TOTAL ELSE 0 END) as FOULS_WON,
-            SUM(CASE WHEN STAT_TYPE = 'fkFoulLost' THEN STAT_TOTAL ELSE 0 END) as FOULS_CONCEDED,
+    # Sørg for at TEAM_ID findes eller mappes korrekt ud fra TEAM_NAME
+    if 'TEAM_ID' not in df.columns:
+        # Hvis hent_samlet_hold_statistik returnerer TEAM_NAME, mapper vi det tilbage til TEAM_ID via TEAMS
+        name_to_uuid = {name.strip().upper(): str(info.get('opta_uuid')).strip().upper() for name, info in TEAMS.items() if info.get('opta_uuid')}
+        df['TEAM_ID'] = df['TEAM_NAME'].str.strip().str.upper().map(name_to_uuid)
 
-            -- Målmand & dødbolde
-            SUM(CASE WHEN STAT_TYPE = 'saves' THEN STAT_TOTAL ELSE 0 END) as SAVES,
-            SUM(CASE WHEN STAT_TYPE = 'cleanSheet' THEN STAT_TOTAL ELSE 0 END) as CLEAN_SHEETS,
-            SUM(CASE WHEN STAT_TYPE = 'goalsConceded' THEN STAT_TOTAL ELSE 0 END) as GOALS_CONCEDED,
-            SUM(CASE WHEN STAT_TYPE = 'penaltySave' THEN STAT_TOTAL ELSE 0 END) as PENALTY_SAVES,
-            SUM(CASE WHEN STAT_TYPE = 'penaltyWon' THEN STAT_TOTAL ELSE 0 END) as PENALTIES_WON,
-            SUM(CASE WHEN STAT_TYPE = 'penaltyConceded' THEN STAT_TOTAL ELSE 0 END) as PENALTIES_CONCEDED,
-            SUM(CASE WHEN STAT_TYPE = 'ownGoals' THEN STAT_TOTAL ELSE 0 END) as OWN_GOALS,
-
-            -- Disciplin
-            SUM(CASE WHEN STAT_TYPE = 'totalYellowCard' THEN STAT_TOTAL ELSE 0 END) as YELLOW_CARDS,
-            SUM(CASE WHEN STAT_TYPE = 'secondYellow' THEN STAT_TOTAL ELSE 0 END) as SECOND_YELLOWS,
-            SUM(CASE WHEN STAT_TYPE = 'totalRedCard' THEN STAT_TOTAL ELSE 0 END) as RED_CARDS
-
-        FROM {DB}.OPTA_MATCHSTATS
-        WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
-        GROUP BY 1
-    ),
-    ExpectedStats AS (
-        SELECT 
-            UPPER(TRIM(CONTESTANT_OPTAUUID)) as TEAM_ID,
-            SUM(CASE WHEN STAT_TYPE = 'goals' THEN STAT_VALUE ELSE 0 END) as GOALS,
-            SUM(CASE WHEN STAT_TYPE = 'expectedGoals' THEN STAT_VALUE ELSE 0 END) as XG,
-            SUM(CASE WHEN STAT_TYPE = 'expectedGoalsConceded' THEN STAT_VALUE ELSE 0 END) as XG_AGAINST,
-            SUM(CASE WHEN STAT_TYPE = 'expectedAssists' THEN STAT_VALUE ELSE 0 END) as XA,
-            SUM(CASE WHEN STAT_TYPE = 'bigChanceCreated' THEN STAT_VALUE ELSE 0 END) as BIG_CHANCES_CREATED,
-            SUM(CASE WHEN STAT_TYPE = 'bigChanceMissed' THEN STAT_VALUE ELSE 0 END) as BIG_CHANCES_MISSED,
-            SUM(CASE WHEN STAT_TYPE = 'touchesInOppBox' THEN STAT_VALUE ELSE 0 END) as BOX_TOUCHES,
-            SUM(CASE WHEN STAT_TYPE = 'hitWoodwork' THEN STAT_VALUE ELSE 0 END) as WOODWORK,
-            SUM(CASE WHEN STAT_TYPE = 'touches' THEN STAT_VALUE ELSE 0 END) as TOUCHES
-        FROM {DB}.OPTA_MATCHEXPECTEDGOALS_TEAM
-        WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}'
-        GROUP BY 1
-    ),
-    MatchCorners AS (
-        SELECT MATCH_OPTAUUID, UPPER(TRIM(CONTESTANT_OPTAUUID)) as TEAM_ID, STAT_TOTAL as CORNERS
-        FROM {DB}.OPTA_MATCHSTATS
-        WHERE TOURNAMENTCALENDAR_OPTAUUID = '{LIGA_UUID}' AND STAT_TYPE = 'cornerTaken'
-    ),
-    CornersAgainst AS (
-        SELECT 
-            m1.TEAM_ID,
-            SUM(m2.CORNERS) as CORNERS_CONCEDED
-        FROM MatchCorners m1
-        JOIN MatchCorners m2 ON m1.MATCH_OPTAUUID = m2.MATCH_OPTAUUID AND m1.TEAM_ID <> m2.TEAM_ID
-        GROUP BY 1
-    )
-    SELECT m.*, 
-        COALESCE(e.GOALS, 0) as GOALS,
-        COALESCE(e.XG, 0) as XG, 
-        COALESCE(e.XG_AGAINST, 0) as XG_AGAINST,
-        COALESCE(e.XA, 0) as XA,
-        COALESCE(e.BIG_CHANCES_CREATED, 0) as BIG_CHANCES_CREATED,
-        COALESCE(e.BIG_CHANCES_MISSED, 0) as BIG_CHANCES_MISSED,
-        COALESCE(e.BOX_TOUCHES, 0) as BOX_TOUCHES,
-        COALESCE(e.WOODWORK, 0) as WOODWORK,
-        COALESCE(e.TOUCHES, 0) as TOUCHES,
-        COALESCE(c.CORNERS_CONCEDED, 0) as CORNERS_CONCEDED
-    FROM MatchStats m
-    LEFT JOIN ExpectedStats e ON m.TEAM_ID = e.TEAM_ID
-    LEFT JOIN CornersAgainst c ON m.TEAM_ID = c.TEAM_ID
-    '''
-
-    NUMERIC_COLS = [
+    # Sikr numeriske kolonner og tilføj manglende hjælpekolonner hvis de ikke er med i master-forespørgslen
+    expected_cols = [
         'GOALS', 'SHOTS_TOTAL', 'SHOTS_ON_TARGET', 'SHOTS_BLOCKED', 'ASSISTS',
         'POSS', 'PASSES_ACCURATE', 'PASSES_TOTAL', 'CORNERS_TAKEN', 'CORNERS_CONCEDED',
         'TACKLES_WON', 'TACKLES_TOTAL', 'CLEARANCES', 'OFFSIDES_WON', 'FOULS_WON', 'FOULS_CONCEDED',
         'SAVES', 'CLEAN_SHEETS', 'GOALS_CONCEDED', 'PENALTY_SAVES', 'PENALTIES_WON', 'PENALTIES_CONCEDED', 'OWN_GOALS',
         'YELLOW_CARDS', 'SECOND_YELLOWS', 'RED_CARDS',
-        'XG', 'XG_AGAINST', 'XA', 'BIG_CHANCES_CREATED', 'BIG_CHANCES_MISSED', 'BOX_TOUCHES', 'WOODWORK', 'TOUCHES'
+        'XG', 'XG_AGAINST', 'XA', 'BIG_CHANCES_CREATED', 'BIG_CHANCES_MISSED', 'BOX_TOUCHES', 'WOODWORK', 'TOUCHES', 'PPDA', 'FORMATION', 'SHOT_ACCURACY', 'PASS_ACCURACY', 'TACKLE_SUCCESS'
     ]
 
-    try:
-        df = conn.query(sql) if hasattr(conn, 'query') else pd.read_sql(sql, conn)
-        df.columns = [str(c).upper() for c in df.columns]
+    for col in expected_cols:
+        if col not in df.columns:
+            df[col] = 0.0
 
-        for col in NUMERIC_COLS:
-            if col in df.columns:
-                df[col] = df[col].astype(float)
-
-        if df['POSS'].mean() < 1:
-            df['POSS'] = df['POSS'] * 100
-
-        df['SHOT_ACCURACY'] = (df['SHOTS_ON_TARGET'] / df['SHOTS_TOTAL'].replace(0, pd.NA)) * 100
-        df['PASS_ACCURACY'] = (df['PASSES_ACCURATE'] / df['PASSES_TOTAL'].replace(0, pd.NA)) * 100
-        df['TACKLE_SUCCESS'] = (df['TACKLES_WON'] / df['TACKLES_TOTAL'].replace(0, pd.NA)) * 100
-
-    except Exception as e:
-        st.error(f"SQL Fejl: {e}")
-        return
-
-    if df.empty:
-        st.warning(f"Ingen kampstatistik fundet for turneringen '{COMPETITION_NAME}' i sæsonen '{SAESON_NAVN}'.")
-        return
-
-    # --- 2b. SQL: PPDA fra Wyscout ---
+    # --- 2b. SQL: PPDA fra Wyscout (hvis relevant) ---
     wyid = COMPETITIONS.get(COMPETITION_NAME, {}).get("wyid")
 
     if '/' in SAESON_NAVN:
@@ -192,9 +104,7 @@ def vis_side(dp=None):
     saeson_start = f"{y_start}-07-01"
     saeson_slut = f"{y_end}-06-30"
 
-    df['PPDA'] = pd.NA
-
-    if wyid:
+    if wyid and 'PPDA' in df.columns:
         try:
             ppda_sql = f'''
                 SELECT tm.TEAM_WYID, AVG(md.PPDA) as PPDA
@@ -294,7 +204,6 @@ def vis_side(dp=None):
 
     # --- 5. FILTRERING ---
     hold_navne = SEASON_LEAGUE_MAPPER.get(SAESON_NAVN, {}).get(COMPETITION_NAME, [])
-    # Sorterer hold-navne alfabetisk (så A, AA, B, C osv. følger korrekt rekkefølge)
     sorterede_hold_navne = sorted([n for n in hold_navne if n in TEAMS])
     hold_options = {n: TEAMS[n].get("opta_uuid") for n in sorterede_hold_navne}
 
@@ -302,15 +211,10 @@ def vis_side(dp=None):
         st.warning(f"Ingen hold fundet for '{COMPETITION_NAME}' i sæsonen '{SAESON_NAVN}'. Tjek SEASON_LEAGUE_MAPPER og TEAMS i team_mapping.py.")
         return
 
-    manglende = [n for n in hold_navne if n not in TEAMS]
-    if manglende:
-        st.caption(f"Følgende hold i SEASON_LEAGUE_MAPPER mangler stamdata i TEAMS og vises ikke: {', '.join(manglende)}")
-
-    # --- 5b. TOP LINJE: DROPDOWN OG SEGMENTED CONTROL I TO KOLONNER ---
+    # --- 5b. TOP LINJE: DROPDOWN OG SEGMENTED CONTROL ---
     col_top1, col_top2 = st.columns([1, 1])
 
     with col_top1:
-        # Brug den sorterede liste her
         valgt_navn = st.selectbox("Vælg hold", sorterede_hold_navne)
 
     with col_top2:
@@ -380,7 +284,6 @@ def vis_side(dp=None):
             cat_defs = [m for m in METRIC_DEFS if m[5] == cat]
             
             display_rows = []
-            
             for _, r in df_raw_teams.iterrows():
                 t_name = r["Hold"]
                 row_disp = {"Hold": t_name}
@@ -390,7 +293,6 @@ def vis_side(dp=None):
                     row_disp[label] = safe_val(val, decimals, suffix)
                 display_rows.append(row_disp)
             
-            # Sorter rækkerne alfabetisk efter "Hold" (A, AA, B, C osv.)
             df_cat = pd.DataFrame(display_rows).sort_values("Hold").set_index("Hold")
             
             def style_cells(data):
@@ -527,8 +429,11 @@ def vis_side(dp=None):
             <div class="section-title">Disciplin</div>
             <div class="stat-line">• {get_rank('YELLOW_CARDS', ascending=True)} færrest gule kort ({int(row['YELLOW_CARDS'])})</div>
             <div class="stat-line">• Direkte røde kort: {int(row['RED_CARDS'])}</div>
-            <div class="stat-line">• Udvisninger efter 2. gule: {int(row['SECOND_YELLOWS'])},</div>
+            <div class="stat-line">• Udvisninger efter 2. gule: {int(row['SECOND_YELLOWS'])}</div>
             <div class="stat-line">• {get_rank('FOULS_CONCEDED', ascending=True)} færrest frispark begået ({int(row['FOULS_CONCEDED'])})</div>
             <div class="conclusion-text">Konklusion – {total_kort} kort i alt denne sæson.</div>
         </div>
         """, unsafe_allow_html=True)
+
+if __name__ == "__main__":
+    vis_side()
