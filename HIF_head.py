@@ -289,9 +289,10 @@ def vis_side():
                 """
                 st.markdown(meta_html, unsafe_allow_html=True)
                 
-                # Hent stats via den fælles holdstatistik-funktion
+                # Hent de korrekte separate værdier for holdene fra hold-statistikken
                 hif_stats = hent_hold_kort_stats(df_hold_stats, "Hvidovre")
                 opp_stats = hent_hold_kort_stats(df_hold_stats, opp_name)
+                
                 hif_logo = TEAMS.get("Hvidovre", {}).get("logo", "")
                 opp_logo = TEAMS.get(opp_name, {}).get("logo", "")
                 
@@ -301,9 +302,9 @@ def vis_side():
                         <td style='text-align: center; width: 33%; border-bottom: 1px solid #eee; padding-bottom: 4px;'><img src='{hif_logo}' style='width: 22px; height: 22px; object-fit: contain;'></td>
                         <td style='text-align: center; width: 33%; border-bottom: 1px solid #eee; padding-bottom: 4px;'><img src='{opp_logo}' style='width: 22px; height: 22px; object-fit: contain;'></td>
                     </tr>
-                    <tr><td class='stats-label'>Besiddelse</td><td class='stats-value'>{hif_stats['poss']}</td><td class='stats-value'>{opp_stats['poss']}</td></tr>
-                    <tr><td class='stats-label'>Mål for/imod</td><td class='stats-value'>{hif_stats['gf']}/{hif_stats['ga']}</td><td class='stats-value'>{opp_stats['gf']}/{opp_stats['ga']}</td></tr>
-                    <tr><td class='stats-label'>xG for/imod</td><td class='stats-value'>{hif_stats['xgf']}/{hif_stats['xga']}</td><td class='stats-value'>{opp_stats['xgf']}/{opp_stats['xga']}</td></tr>
+                    <tr><td class='stats-label'>Besiddelse</td><td class='stats-value'>{hif_stats.get('poss', '-')}</td><td class='stats-value'>{opp_stats.get('poss', '-')}</td></tr>
+                    <tr><td class='stats-label'>Mål for/imod</td><td class='stats-value'>{hif_stats.get('gf', '0')}/{hif_stats.get('ga', '0')}</td><td class='stats-value'>{opp_stats.get('gf', '0')}/{opp_stats.get('ga', '0')}</td></tr>
+                    <tr><td class='stats-label'>xG for/imod</td><td class='stats-value'>{hif_stats.get('xgf', '0')}/{hif_stats.get('xga', '0')}</td><td class='stats-value'>{opp_stats.get('xgf', '0')}/{opp_stats.get('xga', '0')}</td></tr>
                 </table>"""
                 st.markdown(stats_html, unsafe_allow_html=True)
             else:
