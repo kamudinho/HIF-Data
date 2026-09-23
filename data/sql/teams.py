@@ -175,10 +175,9 @@ def hent_hoved_stats(_conn, calendar_uuid: str) -> pd.DataFrame:
                 MAX(CASE WHEN s.STAT_TYPE = 'shotOffTarget' THEN TRY_CAST(s.STAT_TOTAL AS FLOAT) END) AS OFF_TARGET,
                 MAX(CASE WHEN s.STAT_TYPE = 'totalPass' THEN TRY_CAST(s.STAT_TOTAL AS FLOAT) END) AS PASSES,
                 MAX(CASE WHEN s.STAT_TYPE IN ('touches', 'totalTouch') THEN TRY_CAST(s.STAT_TOTAL AS FLOAT) END) AS TOUCHES,
-                -- Manuel override for kampen mod AaB, hvis besiddelse mangler (indsæt evt. det specifikke MATCH_OPTAUUID eller tjek på modstander)
+                -- Manuel override for kampen mod AaB, hvis besiddelse mangler
                 MAX(
                     CASE 
-                        -- Eksempel: Hvis det er den manglende kamp mod AaB, tvinges værdien til f.eks. 50 (eller det ønskede tal)
                         WHEN s.MATCH_OPTAUUID = 'd3lpt2cuazbovha22dv2c3vh0' THEN 62.0 
                         WHEN s.STAT_TYPE = 'possessionPercentage' THEN TRY_CAST(s.STAT_TOTAL AS FLOAT) 
                         ELSE NULL 
@@ -186,7 +185,7 @@ def hent_hoved_stats(_conn, calendar_uuid: str) -> pd.DataFrame:
                 ) AS POSSESSION
             FROM {DB}.OPTA_MATCHSTATS s
             GROUP BY s.MATCH_OPTAUUID, s.CONTESTANT_OPTAUUID
-        )
+        ),  -- <--- KOMMA TILFØJET HER
         TeamXGTable AS (
             SELECT 
                 MATCH_OPTAUUID,
