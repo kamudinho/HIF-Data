@@ -135,7 +135,7 @@ def beregn_per_90(df_stats, team_uuid):
     
     results = []
     for display_name, (h_col, a_col) in stats_map.items():
-        # HIF snit (beregnet konsekvent per kamp)
+        # HIF snit
         hif_vals = []
         for _, r in hif_matches.iterrows():
             if str(r['CONTESTANTHOME_OPTAUUID']).strip().upper() == team_uuid.strip().upper():
@@ -145,11 +145,10 @@ def beregn_per_90(df_stats, team_uuid):
             if pd.notnull(val): hif_vals.append(val)
         hif_val = sum(hif_vals) / len(hif_vals) if hif_vals else 0.0
 
-        # Modstanderens snit (samme logik som beregn_hold_stats)
-        opp_home = played[played['CONTESTANTHOME_OPTAUUID'].str.upper() == opp_uuid.str.upper() if isinstance(opp_uuid, str) else False]
-        # Sikrer sikker sammenligning af UUID
-        opp_home = played[played['CONTESTANTHOME_OPTAUUID'].str.upper() == str(opp_uuid).upper()]
-        opp_away = played[played['CONTESTANTAWAY_OPTAUUID'].str.upper() == str(opp_uuid).upper()]
+        # Modstanderens snit (rettet string-håndtering)
+        opp_uuid_clean = str(opp_uuid).strip().upper() if opp_uuid else ""
+        opp_home = played[played['CONTESTANTHOME_OPTAUUID'].str.upper() == opp_uuid_clean]
+        opp_away = played[played['CONTESTANTAWAY_OPTAUUID'].str.upper() == opp_uuid_clean]
         
         opp_vals = []
         for _, r in opp_home.iterrows():
@@ -171,6 +170,7 @@ def beregn_per_90(df_stats, team_uuid):
         })
         
     return pd.DataFrame(results), opp_name
+    
 def beregn_hold_stats(df_stats, team_uuid):
     if df_stats is None or df_stats.empty: return {"gf": "0.0", "ga": "0.0", "xgf": "0.00", "xga": "0.00", "poss": "0.00%"}
     played = df_stats[df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].copy()
