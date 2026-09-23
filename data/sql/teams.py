@@ -248,17 +248,24 @@ def hent_hoved_stats(_conn, calendar_uuid: str) -> pd.DataFrame:
                     if col in df.columns:
                         df.loc[mask, col] = val
 
-        # --- 2. AUTOMATISK KONTROL / ADVARSEL FOR MANGLENDE DATA ---
-        # Vi tjekker afsluttede kampe (f.eks. hvor status er 'Played' eller lignende, eller bare generelt hvor besiddelse mangler)
+        # --- AUTOMATISK KONTROL / ADVARSEL FOR MANGLENDE DATA ---
         if 'HOME_POSSESSION' in df.columns:
-            # Filtrer kampe der mangler besiddelse (og som måske er spillet)
-            missing_stats = df[df['HOME_POSSESSION'].isna()]
-            if not missing_stats.empty:
-                # Vis en advarsel i Streamlit med UUID'er så du nemt kan tilføje dem
-                uuids_str = ", ".join(missing_stats['MATCH_OPTAUUID'].unique())
+            # 1. Filtrer kun kampe der er spillet ('Played' eller lignende status)
+            # 2. Filtrer kun kampe hvor Hvidovre er involveret (f.eks. hvor holdnavnet matcher)
+            played_matches = df[df['MATCH_STATUS'].str.lower() == 'played']
+            
+            hvidovre_played = played_matches[
+                played_matches['CONTESTANTHOME_NAME'].str.contains('Hvidovre', case=False, na=False) | 
+                played_matches['CONTESTANTAWAY_NAME'].str.contains('Hvidovre', case=False, na=False)
+            ]
+            
+            # Tjek om der mangler besiddelse i Hvidovres egne kampe
+            missing_hvidovre_stats = hvidovre_played[hvidovre_played['HOME_POSSESSION'].isna() | hvidovre_played['AWAY_POSSESSION'].isna()]
+            
+            if not missing_hvidovre_stats.empty:
+                uuids_str = ", ".join(missing_hvidovre_stats['MATCH_OPTAUUID'].unique())
                 st.warning(
-                    f"⚠️ **Opta-statistik mangler for {len(missing_stats)} kamp(e)!** "
-                    f"Disse mangler i `OPTA_MATCHSTATS`. "
+                    f"⚠️ **Opta-statistik mangler for {len(missing_hvidovre_stats)} af Hvidovres spillede kampe!** "
                     f"Berørte Match UUID'er: `{uuids_str}`"
                 )
 
