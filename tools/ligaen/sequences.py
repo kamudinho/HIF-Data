@@ -34,6 +34,16 @@ def draw_match_info_box(ax, scoring_team_logo, opp_team_logo, date_str, score_st
         ax_l2.imshow(opp_team_logo); ax_l2.axis('off')
     ax.text(0.03, 0.07, f"{date_str} | Stilling: {score_str} ({min_str}. min)", transform=ax.transAxes, fontsize=6, color='#444444', va='top')
 
+def get_final_label_t4(row):
+    if str(row['EVENT_TYPEID']) == '16':
+        q_list = str(row.get('QUALIFIER_LIST', ''))
+        if "28" in [q.strip() for q in q_list.split(",")]:
+            return "Selvmål"
+    if 'AKTION' in row and pd.notna(row['AKTION']) and row['AKTION'] != "":
+        return row['AKTION']
+    label = get_action_label(row)
+    return label if label else "Opbygning"
+
 def vis_side(dp=None):
     # --- SÆSON- OG HOLDVÆLGER I TOPPEN ---
     available_seasons = sorted(list(SEASONS.keys()), reverse=True)
@@ -124,6 +134,9 @@ def vis_side(dp=None):
         g_ts = r['GOAL_TIMESTAMP']
         key = f"{m_uuid}_{g_ts}_{seq_id}"
 
+        qualifiers = str(r.get('QUALIFIER_LIST', ''))
+        er_selvmål = "28" in [q.strip() for q in qualifiers.split(",")]
+
         dato_str = pd.to_datetime(r['MATCH_LOCALDATE']).strftime('%d/%m')
         h_uuid = r['CONTESTANTHOME_OPTAUUID']
         a_uuid = r['CONTESTANTAWAY_OPTAUUID']
@@ -131,7 +144,6 @@ def vis_side(dp=None):
         opp_uuid = a_uuid if h_uuid == valgt_uuid else h_uuid
 
         kamp_res = f"{int(r['FINAL_HOME_SCORE'])}-{int(r['FINAL_AWAY_SCORE'])}"
-
         h_maal = int(r['GOAL_HOME_SCORE'])
         a_maal = int(r['GOAL_AWAY_SCORE'])
 
@@ -141,7 +153,9 @@ def vis_side(dp=None):
         raw_min = r['GOAL_MIN']
         minuttal = 1 if pd.isna(raw_min) else int(raw_min) + 1
 
-        label_tekst = f"{dato_str}: {mål_stilling} ({minuttal}. min) vs. {opp_navn} ({kamp_res})"
+        # Tilføj en mærkat, hvis det er et selvmål
+        maal_type_tekst = " (Selvmål)" if er_selvmål else ""
+        label_tekst = f"{dato_str}: {mål_stilling} ({minuttal}. min) vs. {opp_navn} ({kamp_res}){maal_type_tekst}"
 
         opts[key] = {
             'label': label_tekst,
