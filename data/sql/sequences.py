@@ -99,7 +99,6 @@ def load_goal_sequences_data(valgt_uuid, liga_ids_tuple):
                 e.EVENT_OPTAUUID as GOAL_EVENT_OPTAUUID,
                 SUM(
                     CASE 
-                        -- Hvis det er selvmål (qualifier 28), tilfalder målet modstanderholdet i stedet
                         WHEN q_og.EVENT_OPTAUUID IS NOT NULL THEN 
                             CASE WHEN e.EVENT_CONTESTANT_OPTAUUID = m.CONTESTANTHOME_OPTAUUID THEN 0 ELSE 1 END
                         ELSE 
