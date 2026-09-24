@@ -1,5 +1,5 @@
 # HIF-head.py
-# HIF-head.py
+import os
 import streamlit as st
 import pandas as pd
 import altair as alt
@@ -77,8 +77,7 @@ def resolve_team_name(uuid_str, raw_name=""):
 
 def beregn_kamp_metrics(row, hif_uuid):
     """
-    Rene, selvforklarende per-kamp-tal for HIF (ingen vægtede composite-indekser,
-    ingen frispark/indkast) - bruges til trendgraferne.
+    Rene, selvforklarende per-kamp-tal for HIF - bruges til trendgraferne.
     """
     is_home = str(row['CONTESTANTHOME_OPTAUUID']).strip().upper() == hif_uuid.strip().upper()
     def get_val(col_h, col_a):
@@ -274,6 +273,41 @@ def vis_side():
     df_stats = hent_hoved_stats(conn, calendar_uuid)
     df_hold_stats = hent_samlet_hold_statistik(conn, calendar_uuid)
     df_matches = df_stats.copy()
+
+    # --- TJEK OM DER MANGLER DATA (Hverken i Snowflake eller i kampe_fallback.csv) ---
+    if 'HOME_POSSESSION' in df_stats.columns and 'MATCH_STATUS' in df_stats.columns:
+        played_matches = df_stats[df_stats['MATCH_STATUS'].str.lower() == 'played']
+        hvidovre_played = played_matches[
+            played_matches['CONTESTANTHOME_NAME'].str.contains('Hvidovre', case=False, na=False) | 
+            played_matches['CONTESTANTAWAY_NAME'].str.contains('Hvidovre', case=False, na=False)
+        ]
+        
+        # Filtrer kun kampe hvor der virkelig mangler data (hvor selv fallback ikke har udfyldt det)
+        missing_hvidovre_stats = hvidovre_played[
+            hvidovre_played['HOME_POSSESSION'].isna() | hvidovre_played['AWAY_POSSESSION'].isna()
+        ]
+
+        # Tjek mod kampe_fallback.csv for at fjerne dem, der er indtastet der
+        fallback_file = "data/csv/kampe_fallback.csv"
+        if os.path.exists(fallback_file) and not missing_hvidovre_stats.empty:
+            try:
+                fallback_df = pd.read_csv(fallback_file)
+                fallback_df.columns = [str(c).upper() for c in fallback_df.columns]
+                if 'MATCH_OPTAUUID' in fallback_df.columns:
+                    fallback_uuids = fallback_df['MATCH_OPTAUUID'].astype(str).str.strip().values
+                    # Fjern fra listen hvis de findes i fallback-filen
+                    missing_hvidovre_stats = missing_hvidovre_stats[
+                        ~missing_hvidovre_stats['MATCH_OPTAUUID'].astype(str).str.strip().isin(fallback_uuids)
+                    ]
+            except Exception:
+                pass
+
+        if not missing_hvidovre_stats.empty:
+            uuids_str = ", ".join(missing_hvidovre_stats['MATCH_OPTAUUID'].unique())
+            st.warning(
+                f"**Opta-statistik mangler fuldstændigt (hverken i SQL eller kampe_fallback.csv) for {len(missing_hvidovre_stats)} af Hvidovres spillede kampe!** "
+                f"Berørte Match UUID'er: `{uuids_str}`"
+            )
 
     # --- TOPSEKTION ---
     st.markdown('<div class="top-section-container">', unsafe_allow_html=True)
