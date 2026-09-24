@@ -211,7 +211,7 @@ with st.sidebar:
             "TRUPPEN": ["TRUPPEN", "Oversigt", "Forecast"],
             "SCOUTING": ["SCOUTING", "Scoutrapport", "Database", "Emnedatabase", "Sammenligning", "Top10-scouting", "Opgaver", "Opret emne"],
             "TILPASNING": ["TILPASNING", "Spillerdata", "Spiller-score", "Standardsituationer"],
-            "TESTSIDE": ["TESTSIDE", "Dataviz", "Performance", "Winning Performance", "1. Div-tilpasning", "Charts", "Oversigt", "Forecast", "Model", "Transfers"],
+            "TESTSIDE": ["TESTSIDE", "Data-overblik", "Performance", "Winning Performance", "1. Div-tilpasning", "Charts", "Oversigt", "Forecast", "Model", "Transfers"],
             "ADMIN": ["ADMIN", "System Log", "Profil", "Datakatalog", "Konklusion", "Teamradar", "Spillerradar", "Fysisk profil", "Hold: Fysisk profil", "Intern analyse", "Top 5: Spillere", "Ordbog"],
             "ADMIN_SCOUTING": ["ADMIN_SCOUTING"],
             "PROFIL": ["PROFIL", "Profil"]
@@ -246,7 +246,7 @@ with st.sidebar:
             "SPILLERANALYSE": ["Spiller-stats", "Spilleraktioner", "Spiller-profil", "Spilleroversigt", "Spillerprofil"],
             "SCOUTING": ["Scoutrapport", "Database", "Emnedatabase", "Sammenligning", "Top10-scouting", "Opgaver"],
             "TILPASNING": ["Spillerdata", "Spiller-score", "Standardsituationer"],
-            "TESTSIDE": ["Dataviz", "Performance", "Winning Performance", "1. Div-tilpasning", "Charts", "Oversigt", "Forecast", "Model", "Transfers"],
+            "TESTSIDE": ["Data-overblik", "Performance", "Winning Performance", "1. Div-tilpasning", "Charts", "Oversigt", "Forecast", "Model", "Transfers"],
             "ADMIN": ["System Log", "Profil", "Datakatalog", "Konklusion", "Teamradar", "Spillerradar", "Fysisk profil", "Hold: Fysisk profil", "Intern analyse", "Top 5: Spillere", "Ordbog"],
             "ADMIN_SCOUTING": ["Opgaver"]
         }
@@ -400,6 +400,9 @@ try:
         if s == "1. Div-tilpasning":
             import tools.tilpasning.div_tilpasning as div
             div.vis_side()
+        elif s == "Data-overblik":
+            import tools.hifanalyse.viz as viz
+            viz.vis_side()
         elif s == "Grafer":
             import tools.ligaen.dataviz as dviz
             dviz.vis_side()
@@ -450,9 +453,6 @@ try:
         elif s == "Teamradar":
             import tools.hifanalyse.teamradar as tr
             tr.vis_side()
-        elif s == "Dataviz":
-            import tools.hifanalyse.viz as viz
-            viz.vis_side()
         elif s == "Opgaver":
             import tools.admin_page.opgaver as opg
             opg.vis_side()
