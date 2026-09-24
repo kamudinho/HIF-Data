@@ -56,7 +56,7 @@ def main():
             st.session_state.menu_under = "Hovedoversigt"
             st.rerun()
 
-    # Spilleranalyse (eksempel med mange punkter)
+    # Spilleranalyse (med ensartet knap-styling)
     with col2:
         with st.popover("Spilleranalyse ▾", use_container_width=True):
             if st.button("Spillerprofil", use_container_width=True):
@@ -84,7 +84,7 @@ def main():
                 st.session_state.menu_under = "Spiller-profil"
                 st.rerun()
 
-    # Kampanalyse (eksempel med færre punkter - de vil nu have præcis samme stil/bredde)
+    # Kampanalyse
     with col3:
         with st.popover("Kampanalyse ▾", use_container_width=True):
             if st.button("Kampliste", use_container_width=True):
@@ -112,7 +112,7 @@ def main():
 
     # --- 5. RUTEVALG (ROUTER) ---
     try:
-        if m == "OVERSIGT":
+        if m == "Forside":
             st.markdown(f'<div class="main-header">Hovedoversigt</div>', unsafe_allow_html=True)
             from HIF_head import vis_side
             vis_side()
