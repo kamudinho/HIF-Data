@@ -1,21 +1,7 @@
-#tools/hifanalyse/dataviz.py
 """
 Data-visualisering for Hvidovre IF: sammenligner alle hold i den valgte liga på
 tværs af nøgletal (skud, xG, mål, pasninger, possession) - ét punkt pr. hold,
-med gennemsnitslinjer og Hvidovre fremhævet.
-
-Bygget på samme princip som Næsby-akademiets pages/data_viz.py (Dash/Plotly:
-punkt-scatter pr. hold med gennemsnitslinjer og fremhævet eget hold), men
-portet til Streamlit og til denne kodebases egen datakilde
-(data/sql/kampe.py's load_league_match_level_data) i stedet for et separat
-Excel-datasæt, og tegnet med Altair for at matche den charting-library resten
-af appen allerede bruger (se HIF-head.py's trendgrafer).
-
-Til forskel fra Næsby-siden, som fik data pr. kamp direkte fra sit datasæt,
-kommer load_league_match_level_data som én række PR. KAMP med HOME_-/AWAY_-
-kolonner. Denne side aggregerer den om til én række PR. HOLD for hele sæsonen
-(summer "for" og "mod" ud fra hjemme/ude-siden), fordi alle seks visninger her
-er sæson-totaler, ikke enkeltkampe.
+med gennemsnitslinjer og Hvidovre fremhævet (med holdlogoer i stedet for prikker).
 """
 
 import streamlit as st
@@ -36,8 +22,6 @@ HIF_NAVN = "Hvidovre"
 HIF_FARVE = TEAM_COLORS.get(HIF_NAVN, {}).get("primary", "#cc0000")
 GRAA = "#999999"
 
-# Nøgle -> (x-kolonne, y-kolonne, titel). Kolonnerne refererer til de
-# aggregerede holdkolonner fra _aggreger_holdstatistik nedenfor.
 VISNING_MAPPING = {
     "skud_vs_xg": ("SHOTS_FOR", "XG_FOR", "Skud vs. xG"),
     "skud_vs_maal": ("SHOTS_FOR", "GOALS_FOR", "Skud vs. Mål"),
@@ -49,7 +33,6 @@ VISNING_MAPPING = {
     "possession_vs_touches": ("POSSESSION", "TOUCHES_IN_BOX_FOR", "Possession vs. Touches in box"),
 }
 
-# Kolonner der IKKE skal deles med antal kampe (possession er allerede en procent)
 IKKE_PR_KAMP = {"POSSESSION"}
 
 DANSK_LABEL = {
@@ -67,11 +50,6 @@ DANSK_LABEL = {
 
 
 def _aggreger_holdstatistik(df_matches: pd.DataFrame) -> pd.DataFrame:
-    """
-    Lægger load_league_match_level_data's én-række-pr.-kamp-format (HOME_-/
-    AWAY_-kolonner) om til én række pr. hold for hele sæsonen, med separate
-    "for"- og "mod"-summer.
-    """
     def side_split(side: str, opp_side: str, uuid_col: str) -> pd.DataFrame:
         return pd.DataFrame({
             "TEAM_OPTAUUID": df_matches[uuid_col].astype(str).str.strip().str.upper(),
@@ -103,18 +81,13 @@ def _aggreger_holdstatistik(df_matches: pd.DataFrame) -> pd.DataFrame:
 
 
 def _byg_chart(plot_df: pd.DataFrame, x_key: str, y_key: str, x_col: str, y_col: str, title: str) -> alt.LayerChart:
-    # NB: x_key/y_key er de "rene" nøgler (fx "TOUCHES_IN_BOX_FOR") brugt til at
-    # slå danske labels op i DANSK_LABEL/IKKE_PR_KAMP. x_col/y_col er de faktiske
-    # datakolonner i plot_df (fx "TOUCHES_IN_BOX_FOR_VAL") - de to må ikke blandes
-    # sammen ved labelopslag, ellers falder det tilbage til at vise det rå,
-    # suffikserede kolonnenavn (det var buggen på skærmbilledet).
     x_label = DANSK_LABEL.get(x_key, x_key) + (" pr. kamp" if x_key not in IKKE_PR_KAMP else "")
     y_label = DANSK_LABEL.get(y_key, y_key) + (" pr. kamp" if y_key not in IKKE_PR_KAMP else "")
 
     x_enc = alt.X(f"{x_col}:Q", title=x_label, scale=alt.Scale(zero=False),
-                   axis=alt.Axis(grid=False, tickCount=6))
+                  axis=alt.Axis(grid=False, tickCount=6))
     y_enc = alt.Y(f"{y_col}:Q", title=y_label, scale=alt.Scale(zero=False),
-                   axis=alt.Axis(grid=False, tickCount=6))
+                  axis=alt.Axis(grid=False, tickCount=6))
     tooltip = [
         alt.Tooltip("TEAM_NAME:N", title="Hold"),
         alt.Tooltip(f"{x_col}:Q", title=x_label, format=".2f"),
@@ -128,17 +101,24 @@ def _byg_chart(plot_df: pd.DataFrame, x_key: str, y_key: str, x_col: str, y_col:
         strokeDash=[4, 4], color="#bbbbbb"
     ).encode(y="y:Q")
 
-    points = alt.Chart(plot_df).mark_circle(size=170, opacity=0.95, stroke="white", strokeWidth=1).encode(
-        x=x_enc, y=y_enc,
-        color=alt.condition(alt.datum.ER_HIF, alt.value(HIF_FARVE), alt.value(GRAA)),
-        tooltip=tooltip,
+    # Erstattet prikkerne med logoer vha. mark_image
+    logos = alt.Chart(plot_df).mark_image(
+        width=24,
+        height=24
+    ).encode(
+        x=x_enc,
+        y=y_enc,
+        url="LOGO_URL:N",
+        tooltip=tooltip
     )
 
-    # Hvidovres label rykkes længere væk fra prikken end de øvrige holds, så den
-    # ikke kolliderer med et naboholds label (som på skærmbilledet, hvor
-    # "Hvidovre" og "HB Køge" lå oven i hinanden). Vega-Lite laver ikke
-    # automatisk kollisionsundgåelse, så det er et "best effort" - to hold der
-    # ligger PRÆCIS oven i hinanden vil stadig kunne overlappe.
+    # Tilføjer en usynlig gennemsigtig prik bagved for at gøre hover-området større og mere præcist på logoerne
+    hit_boxes = alt.Chart(plot_df).mark_circle(size=250, opacity=0).encode(
+        x=x_enc,
+        y=y_enc,
+        tooltip=tooltip
+    )
+
     labels = alt.Chart(plot_df).mark_text(
         fontSize=11, fontWeight="bold", stroke="white", strokeWidth=3,
     ).encode(
@@ -147,12 +127,12 @@ def _byg_chart(plot_df: pd.DataFrame, x_key: str, y_key: str, x_col: str, y_col:
         color=alt.condition(alt.datum.ER_HIF, alt.value(HIF_FARVE), alt.value("#333333")),
     )
 
-    chart = alt.layer(v_snit, h_snit, points, labels).properties(title=title, height=560)
+    chart = alt.layer(v_snit, h_snit, hit_boxes, logos, labels).properties(title=title, height=560)
     return chart.configure_view(strokeWidth=0).configure_axis(domainColor="#dddddd", tickColor="#dddddd")
 
 
 def vis_side(dp=None):
-    st.caption("Sammenligner alle hold i ligaen for sæsonens spillede kampe - hvert punkt er ét hold.")
+    st.caption("Sammenligner alle hold i ligaen for sæsonens spillede kampe - hvert logo er ét hold.")
 
     liga_uuid = SEASONS.get(DEFAULT_SEASON, {}).get(DEFAULT_COMP)
     if not liga_uuid:
@@ -184,9 +164,14 @@ def vis_side(dp=None):
         return
 
     opta_to_name = {str(v.get("opta_uuid")).strip().upper(): k for k, v in TEAMS.items() if v.get("opta_uuid")}
+    
+    # Henter logo-url fra TEAMS-mappingen (hvis den findes, ellers en tom streng)
+    opta_to_logo = {str(v.get("opta_uuid")).strip().upper(): v.get("logo", "") for k, v in TEAMS.items() if v.get("opta_uuid")}
+
     holdstats["TEAM_NAME"] = holdstats["TEAM_OPTAUUID"].map(opta_to_name).fillna("Ukendt hold")
+    holdstats["LOGO_URL"] = holdstats["TEAM_OPTAUUID"].map(opta_to_logo).fillna("")
     holdstats["ER_HIF"] = holdstats["TEAM_NAME"] == HIF_NAVN
-    holdstats["LABEL_DY"] = np.where(holdstats["ER_HIF"], -22, -13)
+    holdstats["LABEL_DY"] = np.where(holdstats["ER_HIF"], -24, -16)
 
     x_key, y_key, title = VISNING_MAPPING[visning_valg]
 
