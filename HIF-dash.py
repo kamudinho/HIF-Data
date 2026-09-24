@@ -13,22 +13,30 @@ ACTIVE_SEASON = "2026/2027"
 ACTIVE_COMPETITION = "NordicBet Liga"
 TEAM_WYID = 7490
 
-# --- 3. STYLING (MINIMALISTISK & UT UTAN IKONER) ---
+# --- 3. STYLING (FJERNER STANDARD TOP-PADDING OG GØR DEN REN) ---
 st.markdown("""
     <style>
+        /* Fjerner Streamlits standard top-margin og padding, så alt rykkes helt op */
         .stApp { background-color: #FFFFFF; }
-        .main-header { font-size: 22px; font-weight: 700; color: #1a1a1a; margin-bottom: 10px; }
-        /* Skjul standard Streamlit-elementer hvis ønsket */
+        .block-container {
+            padding-top: 1rem !important;
+            padding-bottom: 2rem !important;
+            padding-left: 2rem !important;
+            padding-right: 2rem !important;
+        }
+        /* Skjul standard Streamlit header elementer */
         [data-testid="stHeaderBlockContainer"] h1 { display: none; }
+        header { visibility: hidden; }
+        
+        .main-header { font-size: 22px; font-weight: 700; color: #1a1a1a; margin-bottom: 10px; }
     </style>
 """, unsafe_allow_html=True)
 
 def main():
-    # --- 4. TOPMENU / NAVIGATION ---
+    # --- 4. TOPMENU / NAVIGATION (HELT OPPE I TOPPEN) ---
     col1, col2 = st.columns([3, 1])
     
     with col1:
-        # Vandret topmenu som radio-knapper
         valgt_side = st.radio(
             "Navigation",
             ["Oversigt (HIF-head)", "Trup & Spillere", "Kampe & Statistik", "Indstillinger"],
