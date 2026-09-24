@@ -471,7 +471,7 @@ def hent_samlet_hold_statistik(_conn, calendar_uuid: str) -> pd.DataFrame:
 
 # Tilføj denne i data/sql/teams.py
 @st.cache_data(ttl=600)
-def hent_liga_stilling(calendar_uuid: str) -> pd.DataFrame:
+def hent_hurtig_stilling(calendar_uuid: str) -> pd.DataFrame:
     """
     Henter en komplet, lynhurtig stilling direkte fra Snowflake via SQL.
     """
