@@ -2,7 +2,6 @@
 import streamlit as st
 import pandas as pd
 from data.utils.data.sql.teams import (
-    def_load_season_team_average,
     hent_hurtig_stilling,
     hent_hold_formkurve
 )
@@ -13,39 +12,27 @@ def vis_side():
 
     st.markdown(f"### Holdets Nøgletal - Sæson {season_name}")
     
-    # Hent data fra Snowflake
-    df_season_stats = def_load_season_team_average(calendar_uuid)
+    # Hent stillingstabellen fra Snowflake
     df_stilling = hent_hurtig_stilling(calendar_uuid)
 
-    # Find Hvidovres Opta UUID ud fra stillingstabellen
+    # Find Hvidovres data direkte fra stillingstabellen (sindssygt stabilt)
+    hvidovre_row = pd.Series(dtype=object)
     hvidovre_optauuid = None
+    
+    point = 0
+    kampe_spillet = 0
+    maal_for = 0
+    maal_imod = 0
+
     if df_stilling is not None and not df_stilling.empty:
         hv_row_st = df_stilling[df_stilling['HOLD'].str.contains("Hvidovre", case=False, na=False)]
         if not hv_row_st.empty:
-            hvidovre_optauuid = hv_row_st.iloc[0].get('TEAM_ID')
-
-    # Udtræk Hvidovres specifikke række fra sæsondata
-    hvidovre_row = pd.Series(dtype=object)
-    if hvidovre_optauuid and df_season_stats is not None and not df_season_stats.empty:
-        match_row = df_season_stats[df_season_stats['TEAM_OPTAUUID'] == hvidovre_optauuid]
-        if not match_row.empty:
-            hvidovre_row = match_row.iloc[0]
-
-    # Udtræk værdier til KPI-kort
-    kampe_spillet = int(hvidovre_row.get('PL', 0)) if not hvidovre_row.empty else 0
-    xg_pr_kamp = float(hvidovre_row.get('XG_AVG', 0.0)) if not hvidovre_row.empty else 0.0
-    
-    maal_for = 0
-    maal_imod = 0
-    point = 0
-    if df_stilling is not None and not df_stilling.empty:
-        hv_stilling = df_stilling[df_stilling['HOLD'].str.contains("Hvidovre", case=False, na=False)]
-        if not hv_stilling.empty:
-            point = int(hv_stilling.iloc[0].get('P', 0))
-            maal_for = int(hv_stilling.iloc[0].get('GF', 0))
-            maal_imod = int(hv_stilling.iloc[0].get('GA', 0))
-
-    boldbesiddelse = 0.0
+            hvidovre_row = hv_row_st.iloc[0]
+            hvidovre_optauuid = hvidovre_row.get('TEAM_ID')
+            point = int(hvidovre_row.get('P', 0))
+            kampe_spillet = int(hvidovre_row.get('K', 0))
+            maal_for = int(hvidovre_row.get('GF', 0))
+            maal_imod = int(hvidovre_row.get('GA', 0))
 
     # --- 1. SEKTION: HOVEDOVERBLIK & NØGLEMETAL (KPI KORT) ---
     col1, col2, col3, col4, col5 = st.columns(5)
@@ -57,13 +44,13 @@ def vis_side():
     with col3:
         st.metric(label="Målscore", value=f"{maal_for} - {maal_imod}")
     with col4:
-        st.metric(label="Forventede Mål (xG)", value=f"{xg_pr_kamp:.2f}", delta="pr. kamp")
+        st.metric(label="Mål snit (for)", value=f"{(maal_for / kampe_spillet if kampe_spillet > 0 else 0):.2f}", delta="pr. kamp")
     with col5:
-        st.metric(label="Boldbesiddelse", value=f"{boldbesiddelse:.1f}%")
+        st.metric(label="Mål snit (imod)", value=f"{(maal_imod / kampe_spillet if kampe_spillet > 0 else 0):.2f}", delta="pr. kamp")
 
     st.divider()
 
-    # --- 2. SEKTION: SENESTE RESULTATER OG TAKTISKE NØGLETAL ---
+    # --- 2. SEKTION: SENESTE RESULTATER ---
     col_left, col_right = st.columns(2)
 
     with col_left:
@@ -83,18 +70,11 @@ def vis_side():
             st.info("Hvidovre ID ikke fundet i turneringen.")
 
     with col_right:
-        st.markdown("#### Taktiske Nøgletal (Gennemsnit)")
+        st.markdown("#### Hvidovre IF Status")
         if not hvidovre_row.empty:
-            tactical_stats = pd.DataFrame({
-                "Parameter": ["Mål pr. kamp", "Forventede Mål (xG) pr. kamp"],
-                "Værdi": [
-                    f"{float(hvidovre_row.get('GOALS_AVG', 0)):.2f}",
-                    f"{float(hvidovre_row.get('XG_AVG', 0)):.2f}"
-                ]
-            })
-            st.dataframe(tactical_stats, use_container_width=True, hide_index=True)
+            st.success(f"Hvidovre IF er placeret som nr. **{int(hvidovre_row.get('POSITION', 0))}** i NordicBet Ligaen med **{point} point** efter {kampe_spillet} kampe.")
         else:
-            st.info("Ingen taktisk data tilgængelig.")
+            st.info("Afventer turneringsdata...")
 
     st.divider()
 
