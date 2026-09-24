@@ -101,7 +101,6 @@ def _byg_chart(plot_df: pd.DataFrame, x_key: str, y_key: str, x_col: str, y_col:
         strokeDash=[4, 4], color="#bbbbbb"
     ).encode(y="y:Q")
 
-    # Opdel i modstandere (grå) og Hvidovre (rød) for at styre prikstørrelse og farve præcist
     points_andre = alt.Chart(plot_df[~plot_df["ER_HIF"]]).mark_circle(
         size=300,
         filled=True,
@@ -126,17 +125,18 @@ def _byg_chart(plot_df: pd.DataFrame, x_key: str, y_key: str, x_col: str, y_col:
         tooltip=tooltip
     )
 
+    # Fjernet stroke="white", så teksten står rent og læsbart uden hvide blokke
     labels_andre = alt.Chart(plot_df[~plot_df["ER_HIF"]]).mark_text(
-        fontSize=11, fontWeight="bold", stroke="white", strokeWidth=3,
-        dy=-14,
-        color="#333333"
+        fontSize=11, fontWeight="bold",
+        dy=-15,
+        color="#222222"
     ).encode(
         x=x_enc, y=y_enc, text="TEAM_NAME:N", tooltip=tooltip
     )
 
     labels_hif = alt.Chart(plot_df[plot_df["ER_HIF"]]).mark_text(
-        fontSize=13, fontWeight="bold", stroke="white", strokeWidth=3,
-        dy=-16,
+        fontSize=13, fontWeight="bold",
+        dy=-17,
         color=HIF_FARVE
     ).encode(
         x=x_enc, y=y_enc, text="TEAM_NAME:N", tooltip=tooltip
@@ -144,7 +144,6 @@ def _byg_chart(plot_df: pd.DataFrame, x_key: str, y_key: str, x_col: str, y_col:
 
     chart = alt.layer(v_snit, h_snit, points_andre, points_hif, labels_andre, labels_hif).properties(title=title, height=560)
     return chart.configure_view(strokeWidth=0).configure_axis(domainColor="#dddddd", tickColor="#dddddd")
-
 
 def vis_side(dp=None):
     st.caption("Sammenligner alle hold i ligaen for sæsonens spillede kampe.")
