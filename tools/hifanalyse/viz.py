@@ -83,10 +83,12 @@ def _byg_chart(plot_df: pd.DataFrame, x_key: str, y_key: str, x_col: str, y_col:
     x_label = DANSK_LABEL.get(x_key, x_key) + (" pr. kamp" if x_key not in IKKE_PR_KAMP else "")
     y_label = DANSK_LABEL.get(y_key, y_key) + (" pr. kamp" if y_key not in IKKE_PR_KAMP else "")
 
-    x_enc = alt.X(f"{x_col}:Q", title=x_label, scale=alt.Scale(zero=False),
+    # Tilføjet padding til Y-skalaen, så der er plads til labels foroven
+    x_enc = alt.X(f"{x_col}:Q", title=x_label, scale=alt.Scale(zero=False, padding=20),
                   axis=alt.Axis(grid=False, tickCount=6))
-    y_enc = alt.Y(f"{y_col}:Q", title=y_label, scale=alt.Scale(zero=False),
+    y_enc = alt.Y(f"{y_col}:Q", title=y_label, scale=alt.Scale(zero=False, padding=30),
                   axis=alt.Axis(grid=False, tickCount=6))
+    
     tooltip = [
         alt.Tooltip("TEAM_NAME:N", title="Hold"),
         alt.Tooltip(f"{x_col}:Q", title=x_label, format=".2f"),
@@ -100,7 +102,6 @@ def _byg_chart(plot_df: pd.DataFrame, x_key: str, y_key: str, x_col: str, y_col:
         strokeDash=[4, 4], color="#bbbbbb"
     ).encode(y="y:Q")
 
-    # Brug cirkler i holdets farve med hvid kant i stedet for billeder, der skæres af
     points = alt.Chart(plot_df).mark_circle(
         size=350,
         filled=True,
@@ -113,19 +114,18 @@ def _byg_chart(plot_df: pd.DataFrame, x_key: str, y_key: str, x_col: str, y_col:
         tooltip=tooltip
     )
 
-    # Tekstlabels til de andre hold
+    # Justeret dy og sikret tydelig tekstfarve med let baggrundskant (stroke)
     labels_andre = alt.Chart(plot_df[~plot_df["ER_HIF"]]).mark_text(
         fontSize=11, fontWeight="bold", stroke="white", strokeWidth=3,
-        dy=-16,
+        dy=-14,
         color="#333333"
     ).encode(
         x=x_enc, y=y_enc, text="TEAM_NAME:N", tooltip=tooltip
     )
 
-    # Tekstlabels til Hvidovre (fremhævet)
     labels_hif = alt.Chart(plot_df[plot_df["ER_HIF"]]).mark_text(
         fontSize=12, fontWeight="bold", stroke="white", strokeWidth=3,
-        dy=-18,
+        dy=-15,
         color=HIF_FARVE
     ).encode(
         x=x_enc, y=y_enc, text="TEAM_NAME:N", tooltip=tooltip
@@ -133,7 +133,6 @@ def _byg_chart(plot_df: pd.DataFrame, x_key: str, y_key: str, x_col: str, y_col:
 
     chart = alt.layer(v_snit, h_snit, points, labels_andre, labels_hif).properties(title=title, height=560)
     return chart.configure_view(strokeWidth=0).configure_axis(domainColor="#dddddd", tickColor="#dddddd")
-
 
 def vis_side(dp=None):
     st.caption("Sammenligner alle hold i ligaen for sæsonens spillede kampe.")
