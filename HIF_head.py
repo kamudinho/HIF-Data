@@ -278,11 +278,17 @@ def vis_side():
                     diff_hif_color = "#28a745" if r['Diff_vs_Hif'] > 0 else "#dc3545"
                     
                     if "besiddelse" in r['Stat'].lower():
-                        hif_str = f"{r['HIF']:.1f}%"; liga_str = f"{r['Liga']:.1f}%"; last_str = f"{r['Seneste']:.1f}%"
+                        hif_str = f"{r['HIF']:.1f}%"
+                        liga_str = f"{r['Liga']:.1f}%"
+                        last_str = f"{r['Seneste']:.1f}%"
                     elif "mål" in r['Stat'].lower() or "xg" in r['Stat'].lower():
-                        hif_str = f"{r['HIF']:.2f}"; liga_str = f"{r['Liga']:.2f}"; last_str = f"{r['Seneste']:.2f}"
+                        hif_str = f"{r['HIF']:.2f}"
+                        liga_str = f"{r['Liga']:.2f}"
+                        last_str = f"{r['Seneste']:.2f}"
                     else:
-                        hif_str = f"{r['HIF']:.2f}"; liga_str = f"{r['Liga']:.2f}"; last_str = f"{r['Seneste']:.0f}"
+                        hif_str = f"{r['HIF']:.2f}"
+                        liga_str = f"{r['Liga']:.2f}"
+                        last_str = f"{r['Seneste']:.0f}"
 
                     html += f"""<tr>
                         <td class='stats-label'>{r['Stat']}</td>
@@ -361,7 +367,7 @@ def vis_side():
                     st.markdown(f"<div style='margin-top:-8px; font-size:10px; margin-bottom:4px; color:#666;'>{desc}</div>", unsafe_allow_html=True)
                     
                     hif_avg = hif_recent[col].mean()
-                    hif_recent['tooltip_header'] = hif_recent.apply(lambda r: f"vs. {r['OPPONENT_NAME']} {int(r['TOTAL_HOME_SCORE'])}-{int(r['TOTAL_AWAY_SCORE})} ({r['HOME_OR_AWAY']})", axis=1)
+                    hif_recent['tooltip_header'] = hif_recent.apply(lambda r: f"vs. {r['OPPONENT_NAME']} {int(r['TOTAL_HOME_SCORE'])}-{int(r['TOTAL_AWAY_SCORE'])} ({r['HOME_OR_AWAY']})", axis=1)
                     hif_recent['diff_label'] = hif_recent[col].apply(lambda x: f"{x - hif_avg:+.1f}")
                     
                     line = alt.Chart(hif_recent).mark_line(color='#AAAAAA', point=alt.MarkConfig(color='#C41E3A', filled=True)).encode(
