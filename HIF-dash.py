@@ -42,7 +42,7 @@ st.markdown("""
 
 # Initialiser session state
 if 'menu_hoved' not in st.session_state:
-    st.session_state.menu_hoved = "OVERSIGT"
+    st.session_state.menu_hoved = "Forside"
 if 'menu_under' not in st.session_state:
     st.session_state.menu_under = "Hovedoversigt"
 
@@ -52,7 +52,7 @@ def main():
     
     with col1:
         if st.button("Oversigt", use_container_width=True):
-            st.session_state.menu_hoved = "OVERSIGT"
+            st.session_state.menu_hoved = "Forside"
             st.session_state.menu_under = "Hovedoversigt"
             st.rerun()
 
