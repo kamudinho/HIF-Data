@@ -1,7 +1,7 @@
 """
 Data-visualisering for Hvidovre IF: sammenligner alle hold i den valgte liga på
-tværs af nøgletal (skud, xG, mål, pasninger, possession) - ét punkt pr. hold,
-med gennemsnitslinjer og Hvidovre fremhævet (med holdlogoer i stedet for prikker).
+tværs af nøgletal (skud, xG, mål, pasninger, possession) - ét logo pr. hold,
+med gennemsnitslinjer og Hvidovre fremhævet.
 """
 
 import streamlit as st
@@ -101,7 +101,6 @@ def _byg_chart(plot_df: pd.DataFrame, x_key: str, y_key: str, x_col: str, y_col:
         strokeDash=[4, 4], color="#bbbbbb"
     ).encode(y="y:Q")
 
-    # Erstattet prikkerne med logoer vha. mark_image
     logos = alt.Chart(plot_df).mark_image(
         width=24,
         height=24
@@ -112,22 +111,30 @@ def _byg_chart(plot_df: pd.DataFrame, x_key: str, y_key: str, x_col: str, y_col:
         tooltip=tooltip
     )
 
-    # Tilføjer en usynlig gennemsigtig prik bagved for at gøre hover-området større og mere præcist på logoerne
     hit_boxes = alt.Chart(plot_df).mark_circle(size=250, opacity=0).encode(
         x=x_enc,
         y=y_enc,
         tooltip=tooltip
     )
 
-    labels = alt.Chart(plot_df).mark_text(
+    # Opdel tekst-labels i to lag for at styre dy og farve udenom .encode()
+    labels_andre = alt.Chart(plot_df[~plot_df["ER_HIF"]]).mark_text(
         fontSize=11, fontWeight="bold", stroke="white", strokeWidth=3,
+        dy=-16,
+        color="#333333"
     ).encode(
-        x=x_enc, y=y_enc, text="TEAM_NAME:N",
-        dy="LABEL_DY:Q",
-        color=alt.condition(alt.datum.ER_HIF, alt.value(HIF_FARVE), alt.value("#333333")),
+        x=x_enc, y=y_enc, text="TEAM_NAME:N", tooltip=tooltip
     )
 
-    chart = alt.layer(v_snit, h_snit, hit_boxes, logos, labels).properties(title=title, height=560)
+    labels_hif = alt.Chart(plot_df[plot_df["ER_HIF"]]).mark_text(
+        fontSize=11, fontWeight="bold", stroke="white", strokeWidth=3,
+        dy=-24,
+        color=HIF_FARVE
+    ).encode(
+        x=x_enc, y=y_enc, text="TEAM_NAME:N", tooltip=tooltip
+    )
+
+    chart = alt.layer(v_snit, h_snit, hit_boxes, logos, labels_andre, labels_hif).properties(title=title, height=560)
     return chart.configure_view(strokeWidth=0).configure_axis(domainColor="#dddddd", tickColor="#dddddd")
 
 
@@ -164,14 +171,11 @@ def vis_side(dp=None):
         return
 
     opta_to_name = {str(v.get("opta_uuid")).strip().upper(): k for k, v in TEAMS.items() if v.get("opta_uuid")}
-    
-    # Henter logo-url fra TEAMS-mappingen (hvis den findes, ellers en tom streng)
     opta_to_logo = {str(v.get("opta_uuid")).strip().upper(): v.get("logo", "") for k, v in TEAMS.items() if v.get("opta_uuid")}
 
     holdstats["TEAM_NAME"] = holdstats["TEAM_OPTAUUID"].map(opta_to_name).fillna("Ukendt hold")
     holdstats["LOGO_URL"] = holdstats["TEAM_OPTAUUID"].map(opta_to_logo).fillna("")
     holdstats["ER_HIF"] = holdstats["TEAM_NAME"] == HIF_NAVN
-    holdstats["LABEL_DY"] = np.where(holdstats["ER_HIF"], -24, -16)
 
     x_key, y_key, title = VISNING_MAPPING[visning_valg]
 
