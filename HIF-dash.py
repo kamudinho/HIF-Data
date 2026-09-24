@@ -9,7 +9,7 @@ st.set_page_config(
 )
 
 # --- 2. GLOBALE KONSTANTER ---
-ACTIVE_SEASON = "2026/2027"
+ACTIVE_SEASON = "2025/2026"
 ACTIVE_COMPETITION = "NordicBet Liga"
 TEAM_WYID = 7490
 
@@ -48,7 +48,7 @@ if 'menu_under' not in st.session_state:
 
 def main():
     # --- 4. TOPMENU MED STABIL DROPDOWN (POPOVER) ---
-    col1, col2, col3, col4 = st.columns([1.2, 1.5, 1.5, 2])
+    col1, col2, col3, col4, col5 = st.columns([1, 1.3, 1.3, 1.3, 1.8])
     
     with col1:
         if st.button("Oversigt", use_container_width=True):
@@ -56,8 +56,16 @@ def main():
             st.session_state.menu_under = "Hovedoversigt"
             st.rerun()
 
-    # Spilleranalyse (med ensartet knap-styling)
+    # Holdanalyse (Ny sektion med Modstanderanalyse)
     with col2:
+        with st.popover("Holdanalyse ▾", use_container_width=True):
+            if st.button("Modstanderanalyse", use_container_width=True):
+                st.session_state.menu_hoved = "HOLDANALYSE"
+                st.session_state.menu_under = "Modstanderanalyse"
+                st.rerun()
+
+    # Spilleranalyse
+    with col3:
         with st.popover("Spilleranalyse ▾", use_container_width=True):
             if st.button("Spillerprofil", use_container_width=True):
                 st.session_state.menu_hoved = "SPILLERANALYSE"
@@ -85,7 +93,7 @@ def main():
                 st.rerun()
 
     # Kampanalyse
-    with col3:
+    with col4:
         with st.popover("Kampanalyse ▾", use_container_width=True):
             if st.button("Kampliste", use_container_width=True):
                 st.session_state.menu_hoved = "KAMPANALYSE"
@@ -96,7 +104,7 @@ def main():
                 st.session_state.menu_under = "Holdstatistik"
                 st.rerun()
 
-    with col4:
+    with col5:
         st.markdown(
             f"<div style='text-align: right; font-size: 11px; color: #666; padding-top: 8px;'>"
             f"<b>Sæson:</b> {ACTIVE_SEASON} | <b>Liga:</b> {ACTIVE_COMPETITION}"
@@ -113,13 +121,32 @@ def main():
     # --- 5. RUTEVALG (ROUTER) ---
     try:
         if m == "Forside":
-            st.markdown(f'<div class="main-header">Hovedoversigt</div>', unsafe_allow_html=True)
-            from HIF_head import vis_side
-            vis_side()
+            # Indlæser fra pages/01_oversigt/forside.py (eller HIF_head)
+            try:
+                import pages.01_oversigt.forside as forside
+                # Hvis forside er opbygget som et modul eller script
+            except ImportError:
+                from HIF_head import vis_side
+                vis_side()
+
+        elif m == "HOLDANALYSE":
+            if s == "Modstanderanalyse":
+                # Indlæser fra pages/02_holdanalyse/Modstanderanalyse.py
+                # Da filer med store bogstaver og mapper kan importeres, eller vi kan køre dem via runpy / direkte modulstruktur:
+                import importlib.util
+                import sys
+                import pathlib
+                
+                mod_path = pathlib.Path("pages/02_holdanalyse/Modstanderanalyse.py")
+                if mod_path.exists():
+                    spec = importlib.util.spec_from_file_location("Modstanderanalyse", mod_path)
+                    mod = importlib.util.module_from_spec(spec)
+                    sys.modules["Modstanderanalyse"] = mod
+                    spec.loader.exec_module(mod)
+                else:
+                    st.warning("Kunne ikke finde 'pages/02_holdanalyse/Modstanderanalyse.py'.")
 
         elif m == "SPILLERANALYSE":
-            st.markdown(f'<div class="main-header">Spilleranalyse: {s}</div>', unsafe_allow_html=True)
-            
             if s == "Spillerprofil":
                 import tools.players.player_profile as pp
                 pp.vis_side()
