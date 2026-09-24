@@ -1,7 +1,48 @@
 import streamlit as st
 import pandas as pd
 
-# --- 1. APP OPSÆTNING ---
+# --- 0. LOGIN OPSÆTNING ---
+PASSWORD = "hif2026"  # Skift denne til din ønskede adgangskode
+
+def check_password():
+    """Returnerer True hvis brugeren er logget ind, ellers vises login-skærmen."""
+    if 'authenticated' not in st.session_state:
+        st.session_state.authenticated = False
+
+    if st.session_state.authenticated:
+        return True
+
+    st.set_page_config(
+        page_title="Hvidovre IF - Login",
+        layout="centered",
+        initial_sidebar_state="collapsed"
+    )
+
+    st.markdown("""
+        <style>
+            .stApp { background-color: #FFFFFF; }
+            .login-container { max-width: 400px; margin: 100px auto; padding: 20px; }
+        </style>
+    """, unsafe_allow_html=True)
+
+    with st.container():
+        st.markdown("<h2 style='text-align: center; color: #C41E3A;'>Hvidovre IF</h2>", unsafe_allow_html=True)
+        st.markdown("<p style='text-align: center; color: #666;'>Match & Performance Dashboard</p>", unsafe_allow_html=True)
+        
+        pwd = st.text_input("Indtast adgangskode", type="password")
+        if st.button("Log ind", use_container_width=True):
+            if pwd == PASSWORD:
+                st.session_state.authenticated = True
+                st.rerun()
+            else:
+                st.error("Forkert adgangskode. Prøv igen.")
+    return False
+
+if not check_password():
+    st.stop()
+
+
+# --- 1. APP OPSÆTNING (KUN FOR LOGGEDE BRUGERE) ---
 st.set_page_config(
     page_title="Hvidovre IF - Match & Performance Dashboard",
     layout="wide",
