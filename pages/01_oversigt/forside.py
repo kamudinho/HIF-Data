@@ -9,7 +9,6 @@ from data.utils.data.sql.teams import (
 
 def vis_side():
     season_name = "2026/2027"
-    # Sørg for at dette UUID peger på 2026/2027-kalenderen for NordicBet Liga i din database
     calendar_uuid = '2mb332vncy4450vu14paj8844'  
 
     st.markdown(f"### Holdets Nøgletal - Sæson {season_name}")
@@ -26,7 +25,7 @@ def vis_side():
             hvidovre_optauuid = hv_row_st.iloc[0].get('TEAM_ID')
 
     # Udtræk Hvidovres specifikke række fra sæsondata
-    hvidovre_row = pd.Series()
+    hvidovre_row = pd.Series(dtype=object)
     if hvidovre_optauuid and df_season_stats is not None and not df_season_stats.empty:
         match_row = df_season_stats[df_season_stats['TEAM_OPTAUUID'] == hvidovre_optauuid]
         if not match_row.empty:
@@ -46,7 +45,7 @@ def vis_side():
             maal_for = int(hv_stilling.iloc[0].get('GF', 0))
             maal_imod = int(hv_stilling.iloc[0].get('GA', 0))
 
-    boldbesiddelse = 0.0  # Justeres hvis feltet tilføjes i SQL
+    boldbesiddelse = 0.0
 
     # --- 1. SEKTION: HOVEDOVERBLIK & NØGLEMETAL (KPI KORT) ---
     col1, col2, col3, col4, col5 = st.columns(5)
