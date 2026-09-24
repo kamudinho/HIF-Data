@@ -1,3 +1,4 @@
+#pages/01_oversigt/forside.py
 import streamlit as st
 import pandas as pd
 from data.utils.data.sql.teams import (
@@ -9,7 +10,7 @@ from data.utils.data.sql.teams import (
 def vis_side():
     season_name = "2026/2027"
     # Sørg for at dette UUID peger på 2026/2027-kalenderen for NordicBet Liga i din database
-    calendar_uuid = '2mb332vncy4450vu14paj8844' 
+    calendar_uuid = '2mb332vncy4450vu14paj8844'  
 
     st.markdown(f"### Holdets Nøgletal - Sæson {season_name}")
     
@@ -31,19 +32,29 @@ def vis_side():
         if not match_row.empty:
             hvidovre_row = match_row.iloc[0]
 
-    # Udtræk værdier til KPI-kort
-    kampe_spillet = int(hvidovre_row.get('SPILLER_KAMPE', 0)) if not hvidovre_row.empty else 0
-    maal_for = int(hvidovre_row.get('TOTAL_GOALS', 0)) if not hvidovre_row.empty else 0
-    maal_imod = int(hvidovre_row.get('TOTAL_GOALS_AGAINST', 0)) if not hvidovre_row.empty else 0
-    xg_pr_kamp = float(hvidovre_row.get('AVG_EXPECTEDGOALS', 0.0)) if not hvidovre_row.empty else 0.0
-    boldbesiddelse = float(hvidovre_row.get('AVG_POSSESSION', 0.0)) if not hvidovre_row.empty else 0.0
-
-    # Hent point fra stillingstabellen
+    # Udtræk værdier til KPI-kort (rettet til de korrekte kolonnenavne fra SQL)
+    kampe_spillet = int(hvidovre_row.get('PL', 0)) if not hvidovre_row.empty else 0
+    
+    # Da din SQL henter gennemsnit pr. kamp, kan vi gange med kampe spillet for at få totaler, 
+    # eller hente direkte fra de summerede kolonner, hvis de tilføjes. Her bruger vi gennemsnit * kampe:
+    goals_avg = float(hvidovre_row.get('GOALS_AVG', 0.0)) if not hvidovre_row.empty else 0.0
+    xg_pr_kamp = float(hvidovre_row.get('XG_AVG', 0.0)) if not hvidovre_row.empty else 0.0
+    
+    # Da mål for/imod ikke er i den lille udgave af def_load_season_team_average, 
+    # henter vi dem sikrest direkte fra stillingstabellen (GF og GA):
+    maal_for = 0
+    maal_imod = 0
     point = 0
     if df_stilling is not None and not df_stilling.empty:
         hv_stilling = df_stilling[df_stilling['HOLD'].str.contains("Hvidovre", case=False, na=False)]
         if not hv_stilling.empty:
             point = int(hv_stilling.iloc[0].get('P', 0))
+            maal_for = int(hv_stilling.iloc[0].get('GF', 0))
+            maal_imod = int(hv_stilling.iloc[0].get('GA', 0))
+
+    # Bemærk: Hvis boldbesiddelse/taktiske tal mangler i den nuværende SQL for def_load_season_team_average, 
+    # kan du udvide SQL-funktionen med flere AVG()-felter, eller håndtere dem sikkert med .get():
+    boldbesiddelse = float(hvidovre_row.get('AVG_POSSESSION_PCT', 0.0)) if not hvidovre_row.empty else 0.0
 
     # --- 1. SEKTION: HOVEDOVERBLIK & NØGLEMETAL (KPI KORT) ---
     col1, col2, col3, col4, col5 = st.columns(5)
@@ -84,13 +95,10 @@ def vis_side():
         st.markdown("#### Taktiske Nøgletal (Gennemsnit)")
         if not hvidovre_row.empty:
             tactical_stats = pd.DataFrame({
-                "Parameter": ["Afslutninger pr. kamp", "Skud på mål pr. kamp", "Berøringer i felt pr. kamp", "Afleveringer pr. kamp", "Gule kort pr. kamp"],
+                "Parameter": ["Mål pr. kamp", "Forventede Mål (xG) pr. kamp"],
                 "Værdi": [
-                    f"{float(hvidovre_row.get('AVG_TOTALSCORINGATT', 0)):.1f}",
-                    f"{float(hvidovre_row.get('AVG_ONTARGETSCORINGATT', 0)):.1f}",
-                    f"{float(hvidovre_row.get('AVG_TOUCHESINOPPBOX', 0)):.1f}",
-                    f"{float(hvidovre_row.get('AVG_TOTALPASS', 0)):.1f}",
-                    f"{float(hvidovre_row.get('AVG_TOTALYELLOW_CARDS', 0)):.1f}"
+                    f"{float(hvidovre_row.get('GOALS_AVG', 0)):.2f}",
+                    f"{float(hvidovre_row.get('XG_AVG', 0)):.2f}"
                 ]
             })
             st.dataframe(tactical_stats, use_container_width=True, hide_index=True)
