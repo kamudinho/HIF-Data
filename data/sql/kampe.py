@@ -3,7 +3,7 @@ import os
 import numpy as np
 import pandas as pd
 from data.data_load import _get_snowflake_conn
-from data.sql.fallback import fill_gaps_team_row, FALLBACK_FILE
+from data.sql.fallback import fill_gaps_team_row, fill_gaps_side_aware, FALLBACK_FILE
 import streamlit as st
 
 @st.cache_data(ttl=3600)
@@ -418,4 +418,21 @@ def load_league_match_level_data(tournament_opta_uuid):
 
     if df is not None and not df.empty:
         df.columns = [str(c).upper() for c in df.columns]
+
+        # FALLBACK: udfyld huller fra kampe_fallback.csv - samme "udfyld kun huller"-
+        # logik som teams.py og load_match_level_data ovenfor bruger (se data/sql/
+        # fallback.py). CSV'en dækker kun de fire grundlæggende stats den kender i
+        # forvejen (possessionPercentage, totalPass, totalScoringAtt, expectedGoals);
+        # de nyere felter herfra (xGnp, store chancer, touches in box, skud fra
+        # farezonen, fremadrettede/afsluttende pasninger i sidste tredjedel) findes
+        # ikke i CSV'en og kan derfor ikke hulfyldes - de forbliver NULL/NaN hvis
+        # Snowflake mangler dem.
+        col_mapping = {
+            'POSSESSIONPERCENTAGE': 'POSS',
+            'TOTALPASS': 'PASSES',
+            'TOTALSCORINGATT': 'SHOTS',
+            'EXPECTEDGOALS': 'XG',
+        }
+        df = fill_gaps_side_aware(df, col_mapping)
+
     return df if df is not None else pd.DataFrame()
