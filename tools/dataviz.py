@@ -1,22 +1,48 @@
+#tools/dataviz.py
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 import numpy as np
 
-def vis_side(df_events, kamp, hold_map):
-    HIF_ID = 38331
+# --- IMPORT MAPPINGS OG SQL MODUL ---
+from data.utils.team_mapping import (
+    SEASONS,
+    COMPETITIONS,
+    TEAMS,
+    COMPETITION_NAME as DEFAULT_COMP,
+    TOURNAMENTCALENDAR_NAME as DEFAULT_SEASON
+)
+from data.sql.kampe import load_league_performance_data
+from data.utils.team_mapping import TEAM_WYID
+
+def vis_side(dp=None):
+    HIF_ID = TEAM_WYID  # Bruger den centrale WyScout ID-værdi (7490 for Hvidovre)
     HIF_RED = '#df003b'
     
     # --- 1. INITIALISER STATE ---
     if 'show_data' not in st.session_state:
         st.session_state.show_data = False
 
-    # --- 2. DATA PREP ---
-    df_plot = kamp.copy()
+    # Find ID'er ud fra de globale konstanter
+    wyid = COMPETITIONS.get(DEFAULT_COMP, {}).get("wyid", 328)
+    calendar_uuid = SEASONS.get(DEFAULT_SEASON, {}).get(DEFAULT_COMP)
+
+    # Byg hold-mapping (WyScout ID til Navn) baseret på TEAMS konstanterne
+    hold_map = {info.get('team_wyid'): name for name, info in TEAMS.items() if info.get('team_wyid')}
+
+    # --- 2. DATA PREP VIA SQL MODUL ---
+    # Vi henter data via den opdaterede funktion fra data/sql/kampe.py
+    _, df_wy = load_league_performance_data(calendar_uuid, wyid, "IS NOT NULL")
+
+    if df_wy is None or df_wy.empty:
+        st.warning("Ingen WyScout data tilgængelig for denne turnering.")
+        return
+
+    df_plot = df_wy.copy()
     df_plot['TEAM_WYID'] = pd.to_numeric(df_plot['TEAM_WYID'], errors='coerce')
     df_plot = df_plot.dropna(subset=['TEAM_WYID'])
 
-    # Top-bar
+    # Top-bar med valg og knap
     col_header, col_btn = st.columns([3, 1])
     
     with col_header:
@@ -27,7 +53,6 @@ def vis_side(df_events, kamp, hold_map):
         valgt_label = st.selectbox("Analyse", options=list(BILLEDE_MAPPING.keys()), label_visibility="collapsed")
     
     with col_btn:
-        # En knap der fylder hele bredden og skifter tilstand
         if st.button("Data", use_container_width=True):
             st.session_state.show_data = not st.session_state.show_data
 
@@ -43,7 +68,6 @@ def vis_side(df_events, kamp, hold_map):
 
     # --- 3. DYNAMISK LAYOUT ---
     if st.session_state.show_data:
-        # Layout med to kolonner (Graf fylder 70%, Data 30%)
         col_graf, col_data = st.columns([2.5, 1])
         
         with col_data:
@@ -63,7 +87,6 @@ def vis_side(df_events, kamp, hold_map):
             """, unsafe_allow_html=True)
             st.table(df_table)
     else:
-        # Layout med én kolonne (Graf fylder det hele)
         col_graf = st.container()
 
     # --- 4. SCATTERPLOT ---
@@ -102,3 +125,6 @@ def vis_side(df_events, kamp, hold_map):
             showlegend=False
         )
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+
+if __name__ == "__main__":
+    vis_side()
