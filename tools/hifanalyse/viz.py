@@ -102,8 +102,8 @@ def _byg_chart(plot_df: pd.DataFrame, x_key: str, y_key: str, x_col: str, y_col:
     ).encode(y="y:Q")
 
     logos = alt.Chart(plot_df).mark_image(
-        width=24,
-        height=24
+        width=32,
+        height=32
     ).encode(
         x=x_enc,
         y=y_enc,
