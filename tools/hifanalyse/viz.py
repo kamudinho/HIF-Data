@@ -19,7 +19,7 @@ from data.sql.kampe import load_league_match_level_data
 
 HIF_NAVN = "Hvidovre"
 HIF_FARVE = TEAM_COLORS.get(HIF_NAVN, {}).get("primary", "#cc0000")
-MODSTANDER_FARVE = "#d3d3d3"
+MODSTANDER_FARVE = "#A4A4A4"
 
 VISNING_MAPPING = {
     "skud_vs_xg": ("SHOTS_FOR", "XG_FOR", "Skud vs. xG"),
