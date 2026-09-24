@@ -12,7 +12,9 @@ from data.utils.team_mapping import (
     TOURNAMENTCALENDAR_NAME as DEFAULT_SEASON
 )
 from data.data_load import _get_snowflake_conn
-from data.sql.teams import hent_hoved_stats, hent_samlet_hold_statistik, hent_hurtig_stilling
+from data.sql.head import hent_hoved_stats
+from data.sql.teams import hent_samlet_hold_statistik, hent_hurtig_stilling
+from data.sql.fallback import fill_gaps_side_aware
 
 def apply_custom_style():
     st.markdown("""
@@ -63,8 +65,30 @@ def hent_side_data(calendar_uuid):
     conn = _get_snowflake_conn()
     if not conn:
         return pd.DataFrame(), pd.DataFrame()
+    
+    # Hent primære hoved-stats via vores head.py
     df_stats = hent_hoved_stats(conn, calendar_uuid)
-    df_hold_stats = hent_samlet_hold_statistik(conn, calendar_uuid)
+    
+    # Kør fallback-tjek på felterne, hvis der mangler live-data
+    if df_stats is not None and not df_stats.empty:
+        col_mapping = {
+            "EXPECTEDGOALS": "XG",
+            "TOTALSCORINGATT": "SHOTS",
+            "TOUCHESINOPPBOX": "TOUCHES_IN_BOX",
+            "POSSESSIONPERCENTAGE": "POSSESSION",
+            "TOTALPASS": "PASSES",
+            "WONCORNERS": "CORNERS_WON",
+            "SHOTOFFTARGET": "OFF_TARGET",
+            "TOTALTHROWS": "THROWS",
+            "FKFOULWON": "FOULS_WON",
+            "FKFOULLOST": "FOULS_LOST",
+            "DUELAERIALWON": "AERIAL_WON",
+            "TOTALTACKLE": "TACKLES",
+            "TOTALCLEARANCE": "CLEARANCES"
+        }
+        df_stats = fill_gaps_side_aware(df_stats, col_mapping)
+
+    df_hold_stats = hent_samlet_hold_statistik(calendar_uuid)
     return df_stats, df_hold_stats
 
 def resolve_team_name(uuid_str, raw_name=""):
