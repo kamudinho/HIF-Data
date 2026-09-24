@@ -468,3 +468,73 @@ def hent_samlet_hold_statistik(_conn, calendar_uuid: str) -> pd.DataFrame:
     if df is not None and not df.empty:
         df.columns = [str(c).upper() for c in df.columns]
     return df if df is not None else pd.DataFrame()
+
+# Tilføj denne i data/sql/teams.py
+@st.cache_data(ttl=600)
+def hent_liga_stilling(calendar_uuid: str) -> pd.DataFrame:
+    """
+    Henter en komplet, lynhurtig stilling direkte fra Snowflake via SQL.
+    """
+    conn = _get_snowflake_conn()
+    if not conn or not calendar_uuid:
+        return pd.DataFrame()
+        
+    db = "KLUB_HVIDOVREIF.AXIS"
+    query = f"""
+        WITH Matches AS (
+            SELECT 
+                CONTESTANTHOME_OPTAUUID AS HOME_ID,
+                CONTESTANTHOME_NAME AS HOME_NAME,
+                CONTESTANTAWAY_OPTAUUID AS AWAY_ID,
+                CONTESTANTAWAY_NAME AS AWAY_NAME,
+                TRY_CAST(TOTAL_HOME_SCORE AS INT) AS HOME_SCORE,
+                TRY_CAST(TOTAL_AWAY_SCORE AS INT) AS AWAY_SCORE,
+                MATCH_STATUS
+            FROM {db}.OPTA_MATCHINFO
+            WHERE TOURNAMENTCALENDAR_OPTAUUID = '{calendar_uuid}'
+              AND MATCH_STATUS = 'Played'
+              AND TOTAL_HOME_SCORE IS NOT NULL
+              AND TOTAL_AWAY_SCORE IS NOT NULL
+        ),
+        TeamMatchRows AS (
+            SELECT HOME_ID AS TEAM_ID, HOME_NAME AS TEAM_NAME, 1 AS PLAYED,
+                   CASE WHEN HOME_SCORE > AWAY_SCORE THEN 1 ELSE 0 END AS WON,
+                   CASE WHEN HOME_SCORE = AWAY_SCORE THEN 1 ELSE 0 END AS DRAW,
+                   CASE WHEN HOME_SCORE < AWAY_SCORE THEN 1 ELSE 0 END AS LOST,
+                   HOME_SCORE AS GOALS_FOR, AWAY_SCORE AS GOALS_AGAINST
+            FROM Matches
+            UNION ALL
+            SELECT AWAY_ID AS TEAM_ID, AWAY_NAME AS TEAM_NAME, 1 AS PLAYED,
+                   CASE WHEN AWAY_SCORE > HOME_SCORE THEN 1 ELSE 0 END AS WON,
+                   CASE WHEN AWAY_SCORE = HOME_SCORE THEN 1 ELSE 0 END AS DRAW,
+                   CASE WHEN AWAY_SCORE < HOME_SCORE THEN 1 ELSE 0 END AS LOST,
+                   AWAY_SCORE AS GOALS_FOR, HOME_SCORE AS GOALS_AGAINST
+            FROM Matches
+        ),
+        Aggregated AS (
+            SELECT 
+                TEAM_ID, TEAM_NAME,
+                SUM(PLAYED) AS K,
+                SUM(WON) AS V,
+                SUM(DRAW) AS U,
+                SUM(LOST) AS T,
+                SUM(GOALS_FOR) AS GF,
+                SUM(GOALS_AGAINST) AS GA,
+                (SUM(GOALS_FOR) - SUM(GOALS_AGAINST)) AS MF,
+                (SUM(WON) * 3 + SUM(DRAW) * 1) AS P
+            FROM TeamMatchRows
+            GROUP BY TEAM_ID, TEAM_NAME
+        )
+        SELECT 
+            ROW_NUMBER() OVER (ORDER BY P DESC, MF DESC, GF DESC, TEAM_NAME ASC) AS POSITION,
+            TEAM_ID, TEAM_NAME AS HOLD, K, V, U, T, MF, GF, GA, P
+        FROM Aggregated
+        ORDER BY POSITION ASC
+    """
+    try:
+        df = conn.query(query)
+        if df is not None and not df.empty:
+            df.columns = [str(c).upper() for c in df.columns]
+        return df if df is not None else pd.DataFrame()
+    except Exception:
+        return pd.DataFrame()
