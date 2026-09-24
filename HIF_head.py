@@ -261,8 +261,14 @@ def beregn_stilling(df_matches, valgt_saeson, valgt_turnering):
 
 def vis_side():
     apply_custom_style()
+    
+    # Indsæt loade-funktionen her, lige før forbindelsen og data hentes
+    loader = load_med_hif_fakta("Henter holddata og statistik fra Snowflake...")
+    
     conn = _get_snowflake_conn()
-    if not conn: return
+    if not conn: 
+        loader.empty()
+        return
 
     HIF_UUID = TEAMS.get("Hvidovre", {}).get("opta_uuid", "8gxd9ry2580pu1b1dd5ny9ymy").upper()
 
@@ -270,9 +276,13 @@ def vis_side():
     active_comp = DEFAULT_COMP
     calendar_uuid = SEASONS.get(active_season, {}).get(active_comp)
 
+    # Dine eksisterende datakald
     df_stats = hent_hoved_stats(conn, calendar_uuid)
     df_hold_stats = hent_samlet_hold_statistik(conn, calendar_uuid)
     df_matches = df_stats.copy()
+
+    # Når data er hentet færdigt, fjerner vi loade-boksen igen
+    loader.empty()
 
     # --- TJEK OM DER MANGLER DATA (Hverken i Snowflake eller i kampe_fallback.csv) ---
     if 'HOME_POSSESSION' in df_stats.columns and 'MATCH_STATUS' in df_stats.columns:
