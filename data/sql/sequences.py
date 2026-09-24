@@ -7,7 +7,7 @@ DB = "KLUB_HVIDOVREIF.AXIS"
 @st.cache_data(ttl=1800, show_spinner="Henter målsekvenser fra Snowflake...")
 def load_goal_sequences_data(valgt_uuid, liga_ids_tuple):
     """
-    Henter alle relevante målsekvenser (startende efter clearing/interception)
+    Henter alle relevante målsekvenser (inkl. korrekt korrigerede selvmål for stilling)
     for det valgte hold og turnering i én samlet, optimeret CTE-forespørgsel.
     """
     conn = _get_snowflake_conn()
@@ -53,21 +53,16 @@ def load_goal_sequences_data(valgt_uuid, liga_ids_tuple):
               AND e.EVENT_TIMESTAMP >= DATEADD('millisecond', -45000, tg.G_TIME)
         ),
         RecoveryCheck AS (
-            -- Finder holdets SIDSTE (dvs. den der ligger tættest på målet) interception/clearance
-            -- inden for 40 sekunder før målet. Kun events udført AF DET SCORENDE HOLD tæller som
-            -- en reel boldgenvinding - modstanderens clearing/interception betyder tværtimod at
-            -- valgt_uuid lige har mistet bolden, og skal ikke kunne udpeges som sekvensens start.
-            SELECT MATCH_OPTAUUID, GOAL_TIMESTAMP, MAX(EVENT_TIMESTAMP) AS LAST_RECOVERY_TIME
+            SELECT MATCH_OPTAUUID, GOAL_TIMESTAMP, MIN(EVENT_TIMESTAMP) AS MIN_RECOVERY_TIME
             FROM BaseMatchEvents
             WHERE EVENT_TYPEID IN (7, 12)  -- 7 = Interception, 12 = Clearance
-              AND EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}'
               AND EVENT_TIMESTAMP >= DATEADD('millisecond', -40000, GOAL_TIMESTAMP)
             GROUP BY MATCH_OPTAUUID, GOAL_TIMESTAMP
         ),
         DynamicWindowEvents AS (
             SELECT 
                 b.*,
-                COALESCE(r.LAST_RECOVERY_TIME, DATEADD('millisecond', -15000, b.GOAL_TIMESTAMP)) AS EFFECTIVE_START_TIME
+                COALESCE(r.MIN_RECOVERY_TIME, DATEADD('millisecond', -15000, b.GOAL_TIMESTAMP)) AS EFFECTIVE_START_TIME
             FROM BaseMatchEvents b
             LEFT JOIN RecoveryCheck r 
                 ON b.MATCH_OPTAUUID = r.MATCH_OPTAUUID AND b.GOAL_TIMESTAMP = r.GOAL_TIMESTAMP
@@ -102,12 +97,25 @@ def load_goal_sequences_data(valgt_uuid, liga_ids_tuple):
             SELECT 
                 e.MATCH_OPTAUUID,
                 e.EVENT_OPTAUUID as GOAL_EVENT_OPTAUUID,
-                SUM(CASE WHEN e.EVENT_CONTESTANT_OPTAUUID = m.CONTESTANTHOME_OPTAUUID THEN 1 ELSE 0 END) 
-                    OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_TIMESTAMP ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS CURRENT_HOME_SCORE,
-                SUM(CASE WHEN e.EVENT_CONTESTANT_OPTAUUID = m.CONTESTANTAWAY_OPTAUUID THEN 1 ELSE 0 END) 
-                    OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_TIMESTAMP ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS CURRENT_AWAY_SCORE
+                SUM(
+                    CASE 
+                        WHEN q_og.EVENT_OPTAUUID IS NOT NULL THEN 
+                            CASE WHEN e.EVENT_CONTESTANT_OPTAUUID = m.CONTESTANTHOME_OPTAUUID THEN 0 ELSE 1 END
+                        ELSE 
+                            CASE WHEN e.EVENT_CONTESTANT_OPTAUUID = m.CONTESTANTHOME_OPTAUUID THEN 1 ELSE 0 END
+                    END
+                ) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_TIMESTAMP ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS CURRENT_HOME_SCORE,
+                SUM(
+                    CASE 
+                        WHEN q_og.EVENT_OPTAUUID IS NOT NULL THEN 
+                            CASE WHEN e.EVENT_CONTESTANT_OPTAUUID = m.CONTESTANTAWAY_OPTAUUID THEN 0 ELSE 1 END
+                        ELSE 
+                            CASE WHEN e.EVENT_CONTESTANT_OPTAUUID = m.CONTESTANTAWAY_OPTAUUID THEN 1 ELSE 0 END
+                    END
+                ) OVER (PARTITION BY e.MATCH_OPTAUUID ORDER BY e.EVENT_TIMESTAMP ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS CURRENT_AWAY_SCORE
             FROM {DB}.OPTA_EVENTS e
             JOIN {DB}.OPTA_MATCHINFO m ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
+            LEFT JOIN {DB}.OPTA_QUALIFIERS q_og ON e.EVENT_OPTAUUID = q_og.EVENT_OPTAUUID AND q_og.QUALIFIER_QID = 28
             WHERE e.EVENT_TYPEID = 16
         )
         SELECT 
