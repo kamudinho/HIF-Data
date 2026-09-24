@@ -1,4 +1,5 @@
 # HIF-head.py
+# HIF-head.py
 import streamlit as st
 import pandas as pd
 import altair as alt
@@ -12,9 +13,8 @@ from data.utils.team_mapping import (
     TOURNAMENTCALENDAR_NAME as DEFAULT_SEASON
 )
 from data.data_load import _get_snowflake_conn
-from data.sql.head import hent_hoved_stats
-from data.sql.teams import hent_samlet_hold_statistik, hent_hurtig_stilling
-from data.sql.fallback import fill_gaps_side_aware
+from data.utils.stattype_map import STAT_TYPE_MAP
+from data.sql.teams import hent_hoved_stats, hent_samlet_hold_statistik
 
 def apply_custom_style():
     st.markdown("""
@@ -60,37 +60,6 @@ def apply_custom_style():
         </style>
     """, unsafe_allow_html=True)
 
-@st.cache_data(ttl=1800)
-def hent_side_data(calendar_uuid):
-    conn = _get_snowflake_conn()
-    if not conn:
-        return pd.DataFrame(), pd.DataFrame()
-    
-    # Hent primære hoved-stats via vores head.py
-    df_stats = hent_hoved_stats(conn, calendar_uuid)
-    
-    # Kør fallback-tjek på felterne, hvis der mangler live-data
-    if df_stats is not None and not df_stats.empty:
-        col_mapping = {
-            "EXPECTEDGOALS": "XG",
-            "TOTALSCORINGATT": "SHOTS",
-            "TOUCHESINOPPBOX": "TOUCHES_IN_BOX",
-            "POSSESSIONPERCENTAGE": "POSSESSION",
-            "TOTALPASS": "PASSES",
-            "WONCORNERS": "CORNERS_WON",
-            "SHOTOFFTARGET": "OFF_TARGET",
-            "TOTALTHROWS": "THROWS",
-            "FKFOULWON": "FOULS_WON",
-            "FKFOULLOST": "FOULS_LOST",
-            "DUELAERIALWON": "AERIAL_WON",
-            "TOTALTACKLE": "TACKLES",
-            "TOTALCLEARANCE": "CLEARANCES"
-        }
-        df_stats = fill_gaps_side_aware(df_stats, col_mapping)
-
-    df_hold_stats = hent_samlet_hold_statistik(calendar_uuid)
-    return df_stats, df_hold_stats
-
 def resolve_team_name(uuid_str, raw_name=""):
     if not uuid_str:
         return raw_name
@@ -107,16 +76,25 @@ def resolve_team_name(uuid_str, raw_name=""):
     return "Ukendt"
 
 def beregn_kamp_metrics(row, hif_uuid):
+    """
+    Rene, selvforklarende per-kamp-tal for HIF (ingen vægtede composite-indekser,
+    ingen frispark/indkast) - bruges til trendgraferne.
+    """
     is_home = str(row['CONTESTANTHOME_OPTAUUID']).strip().upper() == hif_uuid.strip().upper()
     def get_val(col_h, col_a):
         val = row[col_h] if is_home else row[col_a]
         return float(val) if pd.notnull(val) else 0.0
+    
+    xg_for = get_val('HOME_XG', 'AWAY_XG')
+    xg_against = get_val('AWAY_XG', 'HOME_XG')
+    skud = get_val('HOME_SHOTS', 'AWAY_SHOTS')
+    besiddelse = get_val('HOME_POSSESSION', 'AWAY_POSSESSION')
 
     return pd.Series({
-        'XG_FOR': get_val('HOME_XG', 'AWAY_XG'),
-        'XG_IMOD': get_val('AWAY_XG', 'HOME_XG'),
-        'SKUD': get_val('HOME_SHOTS', 'AWAY_SHOTS'),
-        'BESIDDELSE': get_val('HOME_POSSESSION', 'AWAY_POSSESSION')
+        'XG_FOR': xg_for,
+        'XG_IMOD': xg_against,
+        'SKUD': skud,
+        'BESIDDELSE': besiddelse
     })
 
 def beregn_per_90(df_stats, team_uuid):
@@ -160,30 +138,41 @@ def beregn_per_90(df_stats, team_uuid):
         ("Clearances", ('HOME_CLEARANCES', 'AWAY_CLEARANCES')),
         ("Hjørnespark", ('HOME_CORNERS_WON', 'AWAY_CORNERS_WON'))
     ]
-    
+
     results = []
     for display_name, (h_col, a_col) in stats_config:
         hif_vals = []
         for _, r in hif_matches.iterrows():
-            val = r[h_col] if str(r['CONTESTANTHOME_OPTAUUID']).strip().upper() == team_uuid.strip().upper() else r[a_col]
+            if str(r['CONTESTANTHOME_OPTAUUID']).strip().upper() == team_uuid.strip().upper():
+                val = r[h_col]
+            else:
+                val = r[a_col]
             if pd.notnull(val): hif_vals.append(val)
         hif_val = sum(hif_vals) / len(hif_vals) if hif_vals else 0.0
 
-        last_val = float(last_match[h_col] if is_home else last_match[a_col]) if pd.notnull(last_match.get(h_col if is_home else a_col)) else 0.0
+        if is_home:
+            last_val = last_match[h_col] if h_col in last_match else 0.0
+        else:
+            last_val = last_match[a_col] if a_col in last_match else 0.0
+        last_val = float(last_val) if pd.notnull(last_val) else 0.0
+
         liga_val = pd.concat([played[h_col], played[a_col]]).mean()
-        
+
+        diff_vs_liga = hif_val - liga_val
+        diff_vs_hif = last_val - hif_val 
+
         results.append({
             "Stat": display_name, "HIF": hif_val, "Liga": liga_val, 
-            "Diff_Liga": hif_val - liga_val, "Seneste": last_val, 
-            "Diff_vs_Hif": last_val - hif_val
+            "Diff_Liga": diff_vs_liga, "Seneste": last_val, 
+            "Diff_vs_Hif": diff_vs_hif
         })
-        
+
     return pd.DataFrame(results), opp_name
 
 def beregn_hold_per_90_stats(df_stats, team_uuid):
     if df_stats is None or df_stats.empty: 
         return {"poss": "0.0%", "gf": "0.00", "ga": "0.00", "xgf": "0.00", "xga": "0.00"}
-    
+
     played = df_stats[df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].copy()
     if played.empty: 
         return {"poss": "0.0%", "gf": "0.00", "ga": "0.00", "xgf": "0.00", "xga": "0.00"}
@@ -201,29 +190,89 @@ def beregn_hold_per_90_stats(df_stats, team_uuid):
 
     for _, r in team_matches.iterrows():
         is_home = str(r['CONTESTANTHOME_OPTAUUID']).strip().upper() == team_uuid.strip().upper()
-        if pd.notnull(r['HOME_POSSESSION' if is_home else 'AWAY_POSSESSION']): poss_vals.append(r['HOME_POSSESSION' if is_home else 'AWAY_POSSESSION'])
-        if pd.notnull(r['TOTAL_HOME_SCORE' if is_home else 'TOTAL_AWAY_SCORE']): gf_vals.append(r['TOTAL_HOME_SCORE' if is_home else 'TOTAL_AWAY_SCORE'])
-        if pd.notnull(r['TOTAL_AWAY_SCORE' if is_home else 'TOTAL_HOME_SCORE']): ga_vals.append(r['TOTAL_AWAY_SCORE' if is_home else 'TOTAL_HOME_SCORE'])
-        if pd.notnull(r['HOME_XG' if is_home else 'AWAY_XG']): xgf_vals.append(r['HOME_XG' if is_home else 'AWAY_XG'])
-        if pd.notnull(r['AWAY_XG' if is_home else 'HOME_XG']): xga_vals.append(r['AWAY_XG' if is_home else 'HOME_XG'])
+
+        poss = r['HOME_POSSESSION'] if is_home else r['AWAY_POSSESSION']
+        gf = r['TOTAL_HOME_SCORE'] if is_home else r['TOTAL_AWAY_SCORE']
+        ga = r['TOTAL_AWAY_SCORE'] if is_home else r['TOTAL_HOME_SCORE']
+        xgf = r['HOME_XG'] if is_home else r['AWAY_XG']
+        xga = r['AWAY_XG'] if is_home else r['HOME_XG']
+
+        if pd.notnull(poss): poss_vals.append(poss)
+        if pd.notnull(gf): gf_vals.append(gf)
+        if pd.notnull(ga): ga_vals.append(ga)
+        if pd.notnull(xgf): xgf_vals.append(xgf)
+        if pd.notnull(xga): xga_vals.append(xga)
+
+    avg_poss = sum(poss_vals) / len(poss_vals) if poss_vals else 0.0
+    avg_gf = sum(gf_vals) / len(gf_vals) if gf_vals else 0.0
+    avg_ga = sum(ga_vals) / len(ga_vals) if ga_vals else 0.0
+    avg_xgf = sum(xgf_vals) / len(xgf_vals) if xgf_vals else 0.0
+    avg_xga = sum(xga_vals) / len(xga_vals) if xga_vals else 0.0
 
     return {
-        "poss": f"{(sum(poss_vals)/len(poss_vals) if poss_vals else 0.0):.1f}%",
-        "gf": f"{(sum(gf_vals)/len(gf_vals) if gf_vals else 0.0):.2f}",
-        "ga": f"{(sum(ga_vals)/len(ga_vals) if ga_vals else 0.0):.2f}",
-        "xgf": f"{(sum(xgf_vals)/len(xgf_vals) if xgf_vals else 0.0):.2f}",
-        "xga": f"{(sum(xga_vals)/len(xga_vals) if xga_vals else 0.0):.2f}"
+        "poss": f"{avg_poss:.1f}%",
+        "gf": f"{avg_gf:.2f}",
+        "ga": f"{avg_ga:.2f}",
+        "xgf": f"{avg_xgf:.2f}",
+        "xga": f"{avg_xga:.2f}"
     }
+
+def beregn_stilling(df_matches, valgt_saeson, valgt_turnering):
+    stats = {}
+    saesons_hold = SEASON_LEAGUE_MAPPER.get(valgt_saeson, {}).get(valgt_turnering, [])
+    if not saesons_hold: saesons_hold = sorted(TEAMS.keys())
+
+    for name in saesons_hold:
+        stats[name] = {'K': 0, 'V': 0, 'U': 0, 'T': 0, 'MF': 0, 'GF': 0, 'P': 0}
+
+    if df_matches is not None and not df_matches.empty and 'MATCH_STATUS' in df_matches.columns:
+        played = df_matches[df_matches['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].copy()
+        for _, row in played.iterrows():
+            h_uuid = str(row['CONTESTANTHOME_OPTAUUID']).upper()
+            a_uuid = str(row['CONTESTANTAWAY_OPTAUUID']).upper()
+            h_name = resolve_team_name(h_uuid, row.get('CONTESTANTHOME_NAME', ''))
+            a_name = resolve_team_name(a_uuid, row.get('CONTESTANTAWAY_NAME', ''))
+
+            if h_name not in stats: stats[h_name] = {'K': 0, 'V': 0, 'U': 0, 'T': 0, 'MF': 0, 'GF': 0, 'P': 0}
+            if a_name not in stats: stats[a_name] = {'K': 0, 'V': 0, 'U': 0, 'T': 0, 'MF': 0, 'GF': 0, 'P': 0}
+
+            try:
+                h_g = int(row['TOTAL_HOME_SCORE'])
+                a_g = int(row['TOTAL_AWAY_SCORE'])
+            except:
+                continue
+
+            stats[h_name]['K'] += 1; stats[a_name]['K'] += 1
+            stats[h_name]['MF'] += (h_g - a_g); stats[a_name]['MF'] += (a_g - h_g)
+            stats[h_name]['GF'] += h_g; stats[a_name]['GF'] += a_g
+
+            if h_g > a_g:
+                stats[h_name]['V'] += 1; stats[h_name]['P'] += 3; stats[a_name]['T'] += 1
+            elif a_g > h_g:
+                stats[a_name]['V'] += 1; stats[a_name]['P'] += 3; stats[h_name]['T'] += 1
+            else:
+                stats[h_name]['U'] += 1; stats[a_name]['U'] += 1
+                stats[h_name]['P'] += 1; stats[a_name]['P'] += 1
+
+    df_standings = pd.DataFrame.from_dict(stats, orient='index').reset_index()
+    df_standings.columns = ['Hold', 'K', 'V', 'U', 'T', 'MF', 'GF', 'P']
+    df_standings = df_standings.sort_values(by=['P', 'MF', 'GF', 'Hold'], ascending=[False, False, False, True]).reset_index(drop=True)
+    df_standings.index = df_standings.index + 1
+    return df_standings
 
 def vis_side():
     apply_custom_style()
-    
+    conn = _get_snowflake_conn()
+    if not conn: return
+
     HIF_UUID = TEAMS.get("Hvidovre", {}).get("opta_uuid", "8gxd9ry2580pu1b1dd5ny9ymy").upper()
+
     active_season = DEFAULT_SEASON
     active_comp = DEFAULT_COMP
     calendar_uuid = SEASONS.get(active_season, {}).get(active_comp)
 
-    df_stats, df_hold_stats = hent_side_data(calendar_uuid)
+    df_stats = hent_hoved_stats(conn, calendar_uuid)
+    df_hold_stats = hent_samlet_hold_statistik(conn, calendar_uuid)
     df_matches = df_stats.copy()
 
     # --- TOPSEKTION ---
@@ -234,8 +283,9 @@ def vis_side():
         # KOLONNE 1: NÆSTE MODSTANDER
         with col1:
             st.markdown("<div class='card-title'><span>NÆSTE MODSTANDER</span></div>", unsafe_allow_html=True)
+
             future = pd.DataFrame()
-            if not df_matches.empty and 'MATCH_DATE_FULL' in df_matches.columns:
+            if not df_matches.empty:
                 hif_m = df_matches[(df_matches['CONTESTANTHOME_OPTAUUID'].str.upper() == HIF_UUID) | 
                                    (df_matches['CONTESTANTAWAY_OPTAUUID'].str.upper() == HIF_UUID)]
                 today = pd.Timestamp.today().normalize()
@@ -246,20 +296,28 @@ def vis_side():
                 opp_id = nk['CONTESTANTAWAY_OPTAUUID'] if str(nk['CONTESTANTHOME_OPTAUUID']).upper() == HIF_UUID else nk['CONTESTANTHOME_OPTAUUID']
                 opp_raw = nk['CONTESTANTAWAY_NAME'] if str(nk['CONTESTANTHOME_OPTAUUID']).upper() == HIF_UUID else nk['CONTESTANTHOME_NAME']
                 opp_name = resolve_team_name(opp_id, opp_raw)
-                
+
                 match_date = nk['MATCH_DATE_FULL'].strftime('%d/%m/%Y') if pd.notnull(nk['MATCH_DATE_FULL']) else ""
                 match_time = nk.get('MATCH_LOCALTIME', '') or nk.get('MATCH_TIME', '')
                 venue = nk.get('VENUE_LONGNAME', 'Ukendt stadion')
                 round_week = nk.get('WEEK', '')
-                
+
                 st.markdown(f"<div class='card-title' style='border:none; margin-top:0px; padding-bottom:0; font-size: 13px;'><span>vs. {opp_name.upper()}</span><span>{match_date} kl. {match_time}</span></div>", unsafe_allow_html=True)
-                st.markdown(f"<div style='font-size: 11px; color: #555; margin-bottom: 8px; line-height: 1.4;'><b>Stadion:</b> {venue}<br><b>Runde:</b> Spillerunde {round_week}<br></div>", unsafe_allow_html=True)
-                
+
+                meta_html = f"""
+                <div style='font-size: 11px; color: #555; margin-bottom: 8px; line-height: 1.4;'>
+                    <b>Stadion:</b> {venue}<br>
+                    <b>Runde:</b> Spillerunde {round_week}<br>
+                </div>
+                """
+                st.markdown(meta_html, unsafe_allow_html=True)
+
                 hif_stats = beregn_hold_per_90_stats(df_stats, HIF_UUID)
                 opp_stats = beregn_hold_per_90_stats(df_stats, opp_id)
+
                 hif_logo = TEAMS.get("Hvidovre", {}).get("logo", "")
                 opp_logo = TEAMS.get(opp_name, {}).get("logo", "")
-                
+
                 stats_html = f"""
                 <table class='stats-table' style='width: 100%; margin-top: 4px;'>
                     <tr><td style='width: 34%;'></td>
@@ -273,7 +331,7 @@ def vis_side():
                 st.markdown(stats_html, unsafe_allow_html=True)
             else:
                 st.caption(f"Afventer næste kamp for sæson {active_season}")
-                
+
         # KOLONNE 2: HVIDOVRE IF vs. LIGA
         with col2:
             c_title, c_icon = st.columns([12, 1])
@@ -281,7 +339,8 @@ def vis_side():
                 st.markdown("<div class='card-title' style='border:none; margin-bottom:0;'><span>HVIDOVRE IF vs. LIGA</span></div>", unsafe_allow_html=True)
             with c_icon:
                 st.markdown("""
-                    <div class="hover-parent" style="float: right;">ℹ️
+                    <div class="hover-parent" style="float: right;">
+                        ℹ️
                         <div class="hover-child">
                             <b>Om denne oversigt</b><br>
                             Sammenligner Hvidovres per-90-minutters nøgletal mod ligaens gennemsnit samt den seneste modstander.<br>
@@ -290,29 +349,24 @@ def vis_side():
                         </div>
                     </div>
                 """, unsafe_allow_html=True)
-            
+
             st.markdown("<div style='border-bottom: 1px solid #f0f0f0; margin-bottom: 8px;'></div>", unsafe_allow_html=True)
-            
+
             df_stats_comp, opp_navn = beregn_per_90(df_stats, HIF_UUID)
             if df_stats_comp is not None:
                 opp_header = f"vs. {opp_navn}"
+
                 html = f"<table class='stats-table'><thead><tr><th></th><th>{opp_header}</th><th>Diff vs HIF</th><th>HIF</th><th>Liga</th><th>Diff</th></tr></thead><tbody>"
                 for _, r in df_stats_comp.iterrows():
                     diff_liga_color = "#28a745" if r['Diff_Liga'] > 0 else "#dc3545"
                     diff_hif_color = "#28a745" if r['Diff_vs_Hif'] > 0 else "#dc3545"
-                    
+
                     if "besiddelse" in r['Stat'].lower():
-                        hif_str = f"{r['HIF']:.1f}%"
-                        liga_str = f"{r['Liga']:.1f}%"
-                        last_str = f"{r['Seneste']:.1f}%"
+                        hif_str = f"{r['HIF']:.1f}%"; liga_str = f"{r['Liga']:.1f}%"; last_str = f"{r['Seneste']:.1f}%"
                     elif "mål" in r['Stat'].lower() or "xg" in r['Stat'].lower():
-                        hif_str = f"{r['HIF']:.2f}"
-                        liga_str = f"{r['Liga']:.2f}"
-                        last_str = f"{r['Seneste']:.2f}"
+                        hif_str = f"{r['HIF']:.2f}"; liga_str = f"{r['Liga']:.2f}"; last_str = f"{r['Seneste']:.2f}"
                     else:
-                        hif_str = f"{r['HIF']:.2f}"
-                        liga_str = f"{r['Liga']:.2f}"
-                        last_str = f"{r['Seneste']:.0f}"
+                        hif_str = f"{r['HIF']:.2f}"; liga_str = f"{r['Liga']:.2f}"; last_str = f"{r['Seneste']:.0f}"
 
                     html += f"""<tr>
                         <td class='stats-label'>{r['Stat']}</td>
@@ -328,16 +382,14 @@ def vis_side():
         # KOLONNE 3: STILLING
         with col3:
             st.markdown(f"<div class='card-title'><span>STILLING ({active_comp.upper()})</span></div>", unsafe_allow_html=True)
-            
-            df_stilling = hent_hurtig_stilling(calendar_uuid)
+
+            df_stilling = beregn_stilling(df_matches, active_season, active_comp)
             if not df_stilling.empty:
                 table_html = "<table class='table-standings'><thead><tr><th style='text-align:left;'>Hold</th><th>K</th><th>MF</th><th>P</th></tr></thead><tbody>"
-                for _, row in df_stilling.head(12).iterrows():
-                    team_name = row['HOLD']
-                    row_class = "hif-row" if "Hvidovre" in team_name else ""
-                    mf_val = int(row['MF'])
-                    mf_sign = f"+{mf_val}" if mf_val > 0 else str(mf_val)
-                    table_html += f"<tr class='{row_class}'><td>{int(row['POSITION'])}</td><td class='team-cell'>{team_name}</td><td>{int(row['K'])}</td><td>{mf_sign}</td><td><b>{int(row['P'])}</b></td></tr>"
+                for idx, row in df_stilling.head(12).iterrows():
+                    row_class = "hif-row" if "Hvidovre" in row['Hold'] else ""
+                    mf_sign = f"+{row['MF']}" if row['MF'] > 0 else str(row['MF'])
+                    table_html += f"<tr class='{row_class}'><td>{idx}</td><td class='team-cell'>{row['Hold']}</td><td>{row['K']}</td><td>{mf_sign}</td><td><b>{row['P']}</b></td></tr>"
                 table_html += "</tbody></table>"
                 st.markdown(table_html, unsafe_allow_html=True)
             else:
@@ -348,26 +400,26 @@ def vis_side():
     with st.container(border=True):
         st.markdown('<div class="card-title"><span>PRÆSTATION-TRENDS (Seneste 10 kampe)</span></div>', unsafe_allow_html=True)
         hif_recent = df_stats[((df_stats['CONTESTANTHOME_OPTAUUID'].str.upper() == HIF_UUID) | (df_stats['CONTESTANTAWAY_OPTAUUID'].str.upper() == HIF_UUID)) & (df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False))].sort_values('MATCH_DATE_FULL', ascending=True).tail(10).copy()
-        
+
         if not hif_recent.empty:
             num_cols = ['HOME_XG', 'AWAY_XG', 'HOME_SHOTS', 'AWAY_SHOTS', 'TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE', 'HOME_POSSESSION', 'AWAY_POSSESSION']
             for col in num_cols: 
                 hif_recent[col] = pd.to_numeric(hif_recent[col], errors='coerce').fillna(0)
-            
+
             hif_recent['OPPONENT_NAME'] = hif_recent.apply(lambda r: resolve_team_name(r['CONTESTANTAWAY_OPTAUUID'] if str(r['CONTESTANTHOME_OPTAUUID']).strip().upper() == HIF_UUID else r['CONTESTANTHOME_OPTAUUID'], r['CONTESTANTAWAY_NAME'] if str(r['CONTESTANTHOME_OPTAUUID']).strip().upper() == HIF_UUID else r['CONTESTANTHOME_NAME']), axis=1)
             hif_recent['HOME_OR_AWAY'] = hif_recent.apply(lambda r: "H" if str(r['CONTESTANTHOME_OPTAUUID']).strip().upper() == HIF_UUID else "U", axis=1)
-            
+
             metrics = hif_recent.apply(lambda row: beregn_kamp_metrics(row, HIF_UUID), axis=1)
             hif_recent = pd.concat([hif_recent, metrics], axis=1)
             hif_recent['index'] = range(1, len(hif_recent) + 1)
-            
+
             played = df_stats[df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].copy()
             for col in num_cols: 
                 played[col] = pd.to_numeric(played[col], errors='coerce').fillna(0)
-            
+
             liga_metrics = played.apply(lambda row: beregn_kamp_metrics(row, "DUMMY_UUID"), axis=1)
             liga_means = liga_metrics.mean()
-            
+
             r1_c1, r1_c2, r2_c1, r2_c2 = st.columns(4)
             categories = [
                 ("xG FOR", "XG_FOR", "Forventede mål skabt (xG) pr. kamp", r1_c1),
@@ -375,7 +427,7 @@ def vis_side():
                 ("SKUD", "SKUD", "Samlede skudforsøg pr. kamp", r2_c1),
                 ("BESIDDELSE", "BESIDDELSE", "Boldbesiddelse i procent pr. kamp", r2_c2)
             ]
-            
+
             for title, col, desc, target in categories:
                 with target:
                     g_title, g_icon = st.columns([12, 1])
@@ -383,23 +435,27 @@ def vis_side():
                         st.markdown(f"<div style='font-weight:700; font-size:12px;'>{title}</div>", unsafe_allow_html=True)
                     with g_icon:
                         st.markdown(f"""
-                            <div class="hover-parent" style="float: right;">ℹ️
-                                <div class="hover-child"><b>{title}</b><br>{desc}</div>
+                            <div class="hover-parent" style="float: right;">
+                                ℹ️
+                                <div class="hover-child">
+                                    <b>{title}</b><br>
+                                    {desc}
+                                </div>
                             </div>
                         """, unsafe_allow_html=True)
-                    
+
                     st.markdown(f"<div style='margin-top:-8px; font-size:10px; margin-bottom:4px; color:#666;'>{desc}</div>", unsafe_allow_html=True)
-                    
+
                     hif_avg = hif_recent[col].mean()
                     hif_recent['tooltip_header'] = hif_recent.apply(lambda r: f"vs. {r['OPPONENT_NAME']} {int(r['TOTAL_HOME_SCORE'])}-{int(r['TOTAL_AWAY_SCORE'])} ({r['HOME_OR_AWAY']})", axis=1)
                     hif_recent['diff_label'] = hif_recent[col].apply(lambda x: f"{x - hif_avg:+.1f}")
-                    
+
                     line = alt.Chart(hif_recent).mark_line(color='#AAAAAA', point=alt.MarkConfig(color='#C41E3A', filled=True)).encode(
                         x=alt.X('index:O', axis=None), 
                         y=alt.Y(f'{col}:Q', axis=None, scale=alt.Scale(zero=False)), 
                         tooltip=[alt.Tooltip('tooltip_header', title='Kamp'), alt.Tooltip(f'{col}', title='Værdi', format='.2f'), alt.Tooltip('diff_label', title='Diff vs Snit')]
                     ).properties(height=120)
-                    
+
                     st.altair_chart(line + alt.Chart(pd.DataFrame({'y': [hif_avg]})).mark_rule(color='#C41E3A', strokeDash=[3,3]).encode(y='y:Q') + alt.Chart(pd.DataFrame({'y': [liga_means[col]]})).mark_rule(color='#000000', strokeDash=[2,2], opacity=0.4).encode(y='y:Q'), use_container_width=True)
 
 if __name__ == "__main__":
