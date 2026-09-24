@@ -13,7 +13,7 @@ ACTIVE_SEASON = "2026/2027"
 ACTIVE_COMPETITION = "NordicBet Liga"
 TEAM_WYID = 7490
 
-# --- 3. STYLING ---
+# --- 3. STYLING OG ENSARTEDE KNAPPER ---
 st.markdown("""
     <style>
         .stApp { background-color: #FFFFFF; }
@@ -26,6 +26,17 @@ st.markdown("""
         header { visibility: hidden; }
         [data-testid="stHeaderBlockContainer"] h1 { display: none; }
         .main-header { font-size: 20px; font-weight: 700; color: #1a1a1a; margin-bottom: 5px; }
+
+        /* Tvinger alle knapper inde i popover/menuer til at have fast størrelse og venstrestillet tekst */
+        div[data-testid="stPopover"] button {
+            width: 100% !important;
+            text-align: left !important;
+            justify-content: flex-start !important;
+            border-radius: 4px !important;
+            font-size: 13px !important;
+            padding: 6px 10px !important;
+            margin-bottom: 2px !important;
+        }
     </style>
 """, unsafe_allow_html=True)
 
@@ -45,7 +56,7 @@ def main():
             st.session_state.menu_under = "Hovedoversigt"
             st.rerun()
 
-    # Spilleranalyse som en popover-knap med undermenuer
+    # Spilleranalyse (eksempel med mange punkter)
     with col2:
         with st.popover("Spilleranalyse ▾", use_container_width=True):
             if st.button("Spillerprofil", use_container_width=True):
@@ -73,7 +84,7 @@ def main():
                 st.session_state.menu_under = "Spiller-profil"
                 st.rerun()
 
-    # Kampanalyse som en popover-knap med undermenuer
+    # Kampanalyse (eksempel med færre punkter - de vil nu have præcis samme stil/bredde)
     with col3:
         with st.popover("Kampanalyse ▾", use_container_width=True):
             if st.button("Kampliste", use_container_width=True):
@@ -83,10 +94,6 @@ def main():
             if st.button("Holdstatistik", use_container_width=True):
                 st.session_state.menu_hoved = "KAMPANALYSE"
                 st.session_state.menu_under = "Holdstatistik"
-                st.rerun()
-            if st.button("XG-analyse", use_container_width=True):
-                st.session_state.menu_hoved = "KAMPANALYSE"
-                st.session_state.menu_under = "XG-analyse"
                 st.rerun()
 
     with col4:
