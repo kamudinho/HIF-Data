@@ -1,382 +1,463 @@
-# HIF-head.py
+# HIF-dash.py
+import os
+import sys
 import streamlit as st
+from streamlit_option_menu import option_menu
 import pandas as pd
-import altair as alt
+from datetime import datetime
 
-from data.utils.team_mapping import (
-    SEASONS,
-    COMPETITIONS,
-    SEASON_LEAGUE_MAPPER,
-    TEAMS,
-    COMPETITION_NAME as DEFAULT_COMP,
-    TOURNAMENTCALENDAR_NAME as DEFAULT_SEASON
+# Sikr at vi kan finde vores egne moduler
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+# IMPORTS
+import data.hif_load as hif_load
+from data.users import get_users
+
+# --- 1. KONFIGURATION & BRANDING ---
+HIF_LOGO_URL = "https://cdn5.wyscout.com/photos/team/public/2659_120x120.png"
+HIF_ROD = "#df003b"
+
+st.set_page_config(
+    page_title="HIF Data Hub",
+    layout="wide",
+    page_icon=HIF_LOGO_URL,
+    initial_sidebar_state="auto"
 )
-from data.data_load import _get_snowflake_conn
-from data.sql.teams import hent_hoved_stats, hent_samlet_hold_statistik, hent_hurtig_stilling
 
-def apply_custom_style():
-    st.markdown("""
+# Centraliseret CSS
+st.markdown(f"""
+    <style>
+        #MainMenu {{visibility: hidden;}}
+        <footer> {{visibility: hidden;}}
+        header {{visibility: visible !important; background: transparent !important;}}
+        [data-testid="stHeader"] {{background-color: transparent !important;}}
+        [data-testid="stDecoration"] {{display: none;}}
+        .block-container {{ padding-top: 1.5rem !important; }}
+    </style>
+""", unsafe_allow_html=True)
+
+def render_hif_header(titel):
+    st.markdown(f'''
+        <div style="background-color: {HIF_ROD} !important; background: {HIF_ROD} !important; height: 50px; display: flex; align-items: center; justify-content: center; border-radius: 4px; margin-bottom: 15px; width: 100%;">
+            <p style="color: white !important; text-transform: uppercase; letter-spacing: 2px; font-weight: 600; margin: 0;">{titel}</p>
+        </div>
+    ''', unsafe_allow_html=True)
+
+
+# --- 1.5. OPGAVE DIALOG VED LOGIN ---
+@st.dialog("Ny opgave kræver handling")
+def vis_opgave_popup(opgave_id, opgave_titel, opgave_beskrivelse):
+    st.write("Du er blevet tildelt følgende aktive opgave:")
+    st.info(f"**{opgave_titel}**\n\n{opgave_beskrivelse}")
+
+    st.write("Du skal tage stilling til opgaven, før du kan fortsætte i systemet:")
+
+    col1, col2, col3 = st.columns(3)
+    aktuel_bruger = st.session_state.get("user", "ukendt")
+    import tools.admin_page.opgaver as opg
+
+    clean_id = int(opgave_id)
+
+    if col1.button("Godkend", key=f"btn_godkend_{clean_id}", use_container_width=True):
+        opg._opdater_raekke_sikkert(clean_id, {"status": "I gang", "scout_status": "Igangsat"})
+        try:
+            import tools.admin_page.admin as admin
+            admin.save_action_log(aktuel_bruger, "Godkendte opgave", f"ID {opgave_id}: {opgave_titel}")
+        except Exception:
+            pass
+        st.success("Opgave sat i gang!")
+        st.session_state["task_handled"] = True
+        st.rerun()
+
+    if col2.button("Udskyd", key=f"btn_udskyd_{clean_id}", use_container_width=True):
+        opg._opdater_raekke_sikkert(clean_id, {"status": "Udskudt", "scout_status": "Afventer"})
+        try:
+            import tools.admin_page.admin as admin
+            admin.save_action_log(aktuel_bruger, "Udskød opgave", f"ID {opgave_id}: {opgave_titel}")
+        except Exception:
+            pass
+        st.warning("Opgave udskudt til senere.")
+        st.session_state["task_handled"] = True
+        st.rerun()
+
+    if col3.button("Afvis", key=f"btn_afvis_{clean_id}", use_container_width=True):
+        opg._opdater_raekke_sikkert(clean_id, {"status": "Færdig", "scout_status": "Afvist"})
+        try:
+            import tools.admin_page.admin as admin
+            admin.save_action_log(aktuel_bruger, "Afviste opgave", f"ID {opgave_id}: {opgave_titel}")
+        except Exception:
+            pass
+        st.error("Opgave afvist.")
+        st.session_state["task_handled"] = True
+        st.rerun()
+        
+
+# --- 2. LOGIN SYSTEM ---
+USER_DB = get_users()
+if "logged_in" not in st.session_state:
+    st.session_state["logged_in"] = False
+
+if not st.session_state["logged_in"]:
+    st.markdown(f"""
         <style>
-            [data-testid="stHeaderBlockContainer"] h1 { display: none; }
-            .stApp { background-color: #FFFFFF; }
-            
-            div.top-section-container [data-testid="stHorizontalBlock"] {
-                display: flex;
-                align-items: stretch;
-            }
-            div.top-section-container [data-testid="stHorizontalBlock"] > div:nth-child(1) {
-                flex: 1 1 24% !important; max-width: 24% !important;
-            }
-            div.top-section-container [data-testid="stHorizontalBlock"] > div:nth-child(2) {
-                flex: 1 1 52% !important; max-width: 52% !important;
-            }
-            div.top-section-container [data-testid="stHorizontalBlock"] > div:nth-child(3) {
-                flex: 1 1 24% !important; max-width: 24% !important;
-            }
-
-            .stats-table { width: 100%; font-size: 11px; border-collapse: collapse; table-layout: auto; }
-            .stats-table th { text-align: center; padding: 4px; color: #888; font-weight: 600; white-space: nowrap; }
-            .stats-label { text-align: left !important; color: #666; font-weight: 700; width: 30%; padding: 4px 4px 4px 0; }
-            .stats-value { text-align: center !important; font-weight: 700; color: #111; padding: 4px 2px; min-width: 20px; }
-            .card-title { color: #1a1a1a; font-size: 11px; font-weight: 700; margin-bottom: 8px; text-transform: uppercase; border-bottom: 1px solid #f0f0f0; padding-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
-            
-            .table-standings { width: 100%; font-size: 11px; border-collapse: collapse; }
-            .table-standings th { text-align: center; padding: 4px 2px; color: #888; border-bottom: 1px solid #eee; font-weight: 600; }
-            .table-standings td { padding: 4px 2px; text-align: center; color: #333; font-weight: 600; }
-            .table-standings .team-cell { text-align: left; font-weight: 700; color: #111; }
-            .table-standings .hif-row { background-color: #ffebe8; }
-
-            .hover-parent { position: relative; display: inline-block; cursor: help; }
-            .hover-child {
-                visibility: hidden; width: 220px; background-color: #333; color: #fff;
-                text-align: left; padding: 8px 10px; border-radius: 4px; position: absolute;
-                z-index: 1000; bottom: 125%; left: 50%; margin-left: -110px; opacity: 0;
-                transition: opacity 0.2s ease-in-out; font-size: 11px; font-weight: normal;
-                box-shadow: 0px 4px 6px rgba(0,0,0,0.1);
-            }
-            .hover-parent:hover .hover-child { visibility: visible; opacity: 1; }
+            [data-testid="stAppViewContainer"] {{ padding: 0 !important; }}
+            [data-testid="stHeader"] {{ display: none; }}
+            .stApp {{ background: linear-gradient(to right, white 35%, transparent 35%); }}
+            [data-testid="stAppViewContainer"]::before {{
+                content: ""; position: fixed; right: 0; top: 0; width: 65%; height: 100vh;
+                background-image: url('https://static1.squarespace.com/static/573c1b7d01dbae9b52cd0936/573d6bdc37013bcc611eefd5/6477a814a3929d7ab0fa3006/1685610754298/GettyImages-1252722215.jpg?format=1500w');
+                background-size: cover; background-position: left; opacity: 0.7; 
+            }}
         </style>
     """, unsafe_allow_html=True)
 
-@st.cache_data(ttl=1800)
-def hent_side_data(calendar_uuid):
-    conn = _get_snowflake_conn()
-    if not conn:
-        return pd.DataFrame(), pd.DataFrame()
-    df_stats = hent_hoved_stats(conn, calendar_uuid)
-    df_hold_stats = hent_samlet_hold_statistik(conn, calendar_uuid)
-    return df_stats, df_hold_stats
+    col_left, col_right = st.columns([35, 65])
 
-def resolve_team_name(uuid_str, raw_name=""):
-    if not uuid_str:
-        return raw_name
-    uuid_clean = str(uuid_str).strip().upper()
-    for t_name, t_info in TEAMS.items():
-        if str(t_info.get('opta_uuid', '')).strip().upper() == uuid_clean:
-            return t_name
-    if raw_name:
-        clean_raw = raw_name.replace("FF", "").replace("IF", "").strip()
-        for t_name in TEAMS.keys():
-            if clean_raw.lower() in t_name.lower() or t_name.lower() in clean_raw.lower():
-                return t_name
-        return raw_name
-    return "Ukendt"
+    with col_left:
+        st.markdown("<br><br><br><br><br>", unsafe_allow_html=True)
+        _, center, _ = st.columns([0.8, 2.4, 0.8])
+        with center:
+            st.markdown(f'<div style="display: flex; justify-content: center;"><img src="{HIF_LOGO_URL}" style="width: 70px;"></div>', unsafe_allow_html=True)
+            st.markdown("<h2 style='text-align: center;'>HIF Data HUB</h2>", unsafe_allow_html=True)
+            with st.form("login"):
+                u = st.text_input("BRUGER", placeholder="Brugernavn", label_visibility="collapsed").lower().strip()
+                p = st.text_input("KODE", type="password", placeholder="Adgangskode", label_visibility="collapsed")
+                if st.form_submit_button("LOG IND", use_container_width=True):
+                    if u in USER_DB and USER_DB[u]["pass"] == p:
+                        st.session_state["logged_in"] = True
+                        st.session_state["user"] = u
+                        st.session_state["task_handled"] = False
 
-def beregn_kamp_metrics(row, hif_uuid):
-    is_home = str(row['CONTESTANTHOME_OPTAUUID']).strip().upper() == hif_uuid.strip().upper()
-    def get_val(col_h, col_a):
-        val = row[col_h] if is_home else row[col_a]
-        return float(val) if pd.notnull(val) else 0.0
+                        try:
+                            import tools.admin_page.admin as admin
+                            admin.save_action_log(u, "Login", "HIF Data Hub")
+                        except Exception as log_e:
+                            st.warning(f"Login lykkedes, men kunne ikke skrive til log: {log_e}")
 
-    return pd.Series({
-        'XG_FOR': get_val('HOME_XG', 'AWAY_XG'),
-        'XG_IMOD': get_val('AWAY_XG', 'HOME_XG'),
-        'SKUD': get_val('HOME_SHOTS', 'AWAY_SHOTS'),
-        'BESIDDELSE': get_val('HOME_POSSESSION', 'AWAY_POSSESSION')
-    })
+                        st.rerun()
+                    else: 
+                        st.error("Ugyldig login")
+    st.stop()
 
-def beregn_per_90(df_stats, team_uuid):
-    if df_stats is None or df_stats.empty: return None, ""
-    played = df_stats[df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].copy()
-    if played.empty: return None, ""
 
-    zero_fill_cols = [
-        'TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE', 'HOME_XG', 'AWAY_XG', 
-        'HOME_OFF_TARGET', 'AWAY_OFF_TARGET', 'HOME_ACCURATE_PASSES', 'AWAY_ACCURATE_PASSES', 
-        'HOME_FOULS_WON', 'AWAY_FOULS_WON', 'HOME_CORNERS_WON', 'AWAY_CORNERS_WON', 
-        'HOME_TACKLES', 'AWAY_TACKLES', 'HOME_CLEARANCES', 'AWAY_CLEARANCES', 
-        'HOME_PASSES', 'AWAY_PASSES'
-    ]
-    for col in zero_fill_cols:
-        if col in played.columns:
-            played[col] = pd.to_numeric(played[col], errors='coerce').fillna(0)
+# --- 2.5. TJEK FOR UAFSLUTTEDE OPGAVER VED LOGIN ---
+if st.session_state.get("logged_in") and not st.session_state.get("task_handled", False):
+    aktuel_bruger = st.session_state["user"]
+    try:
+        import tools.admin_page.opgaver as opg
+        df_alle_opgaver = opg.indlaes_opgaver()
 
-    for col in ['HOME_POSSESSION', 'AWAY_POSSESSION']:
-        if col in played.columns:
-            played[col] = pd.to_numeric(played[col], errors='coerce')
+        mine_aktive = df_alle_opgaver[
+            (df_alle_opgaver["tildelt_til"] == aktuel_bruger) & 
+            (df_alle_opgaver["status"] == "Afventer")
+        ]
 
-    hif_matches = played[((played['CONTESTANTHOME_OPTAUUID'].str.upper() == team_uuid.upper()) | (played['CONTESTANTAWAY_OPTAUUID'].str.upper() == team_uuid.upper()))].sort_values('MATCH_DATE_FULL')
-    if len(hif_matches) == 0: return None, ""
+        if not mine_aktive.empty:
+            foerste_opgave = mine_aktive.iloc[0]
+            vis_opgave_popup(
+                foerste_opgave["id"], 
+                foerste_opgave["titel"], 
+                foerste_opgave["beskrivelse"]
+            )
+        else:
+            st.session_state["task_handled"] = True
+    except Exception:
+        st.session_state["task_handled"] = True
 
-    last_match = hif_matches.iloc[-1]
-    is_home = str(last_match['CONTESTANTHOME_OPTAUUID']).strip().upper() == team_uuid.strip().upper()
-    opp_uuid = last_match['CONTESTANTAWAY_OPTAUUID'] if is_home else last_match['CONTESTANTHOME_OPTAUUID']
-    opp_raw = last_match['CONTESTANTAWAY_NAME'] if is_home else last_match['CONTESTANTHOME_NAME']
-    opp_name = resolve_team_name(opp_uuid, opp_raw)
 
-    stats_config = [
-        ("Besiddelse", ('HOME_POSSESSION', 'AWAY_POSSESSION')),
-        ("Afleveringer", ('HOME_PASSES', 'AWAY_PASSES')),
-        ("Succesfulde afleveringer", ('HOME_ACCURATE_PASSES', 'AWAY_ACCURATE_PASSES')),
-        ("Skud ved siden", ('HOME_OFF_TARGET', 'AWAY_OFF_TARGET')),
-        ("Mål", ('TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE')),
-        ("xG", ('HOME_XG', 'AWAY_XG')),
-        ("xG mod", ('AWAY_XG', 'HOME_XG')),
-        ("Tacklinger", ('HOME_TACKLES', 'AWAY_TACKLES')),
-        ("Clearances", ('HOME_CLEARANCES', 'AWAY_CLEARANCES')),
-        ("Hjørnespark", ('HOME_CORNERS_WON', 'AWAY_CORNERS_WON'))
-    ]
-    
-    results = []
-    for display_name, (h_col, a_col) in stats_config:
-        hif_vals = []
-        for _, r in hif_matches.iterrows():
-            val = r[h_col] if str(r['CONTESTANTHOME_OPTAUUID']).strip().upper() == team_uuid.strip().upper() else r[a_col]
-            if pd.notnull(val): hif_vals.append(val)
-        hif_val = sum(hif_vals) / len(hif_vals) if hif_vals else 0.0
+# --- 3. SIDEBAR NAVIGATION ---
+with st.sidebar:
+    st.markdown("""
+        <style>
+            [data-testid="stSidebarUserContent"] {
+                padding-top: 1rem !important;
+                overflow: hidden !important; 
+                display: flex;
+                flex-direction: column;
+                height: 98vh; 
+            }
+            .nav-wrapper { flex-grow: 1; }
+            .custom-hr {
+                margin: 5px 0px !important;
+                opacity: 0.2;
+                border: 0;
+                border-top: 1px solid #31333F;
+            }
+        </style>
+    """, unsafe_allow_html=True)
 
-        last_val = float(last_match[h_col] if is_home else last_match[a_col]) if pd.notnull(last_match.get(h_col if is_home else a_col)) else 0.0
-        liga_val = pd.concat([played[h_col], played[a_col]]).mean()
-        
-        results.append({
-            "Stat": display_name, "HIF": hif_val, "Liga": liga_val, 
-            "Diff_Liga": hif_val - liga_val, "Seneste": last_val, 
-            "Diff_vs_Hif": last_val - hif_val
-        })
-        
-    return pd.DataFrame(results), opp_name
+    st.markdown('<div class="nav-wrapper">', unsafe_allow_html=True)
 
-def beregn_hold_per_90_stats(df_stats, team_uuid):
-    if df_stats is None or df_stats.empty: 
-        return {"poss": "0.0%", "gf": "0.00", "ga": "0.00", "xgf": "0.00", "xga": "0.00"}
-    
-    played = df_stats[df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].copy()
-    if played.empty: 
-        return {"poss": "0.0%", "gf": "0.00", "ga": "0.00", "xgf": "0.00", "xga": "0.00"}
-
-    zero_fill_cols = ['TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE', 'HOME_XG', 'AWAY_XG', 'HOME_POSSESSION', 'AWAY_POSSESSION']
-    for col in zero_fill_cols:
-        if col in played.columns:
-            played[col] = pd.to_numeric(played[col], errors='coerce').fillna(0)
-
-    team_matches = played[((played['CONTESTANTHOME_OPTAUUID'].str.upper() == team_uuid.upper()) | (played['CONTESTANTAWAY_OPTAUUID'].str.upper() == team_uuid.upper()))]
-    if len(team_matches) == 0: 
-        return {"poss": "0.0%", "gf": "0.00", "ga": "0.00", "xgf": "0.00", "xga": "0.00"}
-
-    poss_vals, gf_vals, ga_vals, xgf_vals, xga_vals = [], [], [], [], []
-
-    for _, r in team_matches.iterrows():
-        is_home = str(r['CONTESTANTHOME_OPTAUUID']).strip().upper() == team_uuid.strip().upper()
-        if pd.notnull(r['HOME_POSSESSION' if is_home else 'AWAY_POSSESSION']): poss_vals.append(r['HOME_POSSESSION' if is_home else 'AWAY_POSSESSION'])
-        if pd.notnull(r['TOTAL_HOME_SCORE' if is_home else 'TOTAL_AWAY_SCORE']): gf_vals.append(r['TOTAL_HOME_SCORE' if is_home else 'TOTAL_AWAY_SCORE'])
-        if pd.notnull(r['TOTAL_AWAY_SCORE' if is_home else 'TOTAL_HOME_SCORE']): ga_vals.append(r['TOTAL_AWAY_SCORE' if is_home else 'TOTAL_HOME_SCORE'])
-        if pd.notnull(r['HOME_XG' if is_home else 'AWAY_XG']): xgf_vals.append(r['HOME_XG' if is_home else 'AWAY_XG'])
-        if pd.notnull(r['AWAY_XG' if is_home else 'HOME_XG']): xga_vals.append(r['AWAY_XG' if is_home else 'HOME_XG'])
-
-    return {
-        "poss": f"{(sum(poss_vals)/len(poss_vals) if poss_vals else 0.0):.1f}%",
-        "gf": f"{(sum(gf_vals)/len(gf_vals) if gf_vals else 0.0):.2f}",
-        "ga": f"{(sum(ga_vals)/len(ga_vals) if ga_vals else 0.0):.2f}",
-        "xgf": f"{(sum(xgf_vals)/len(xgf_vals) if xgf_vals else 0.0):.2f}",
-        "xga": f"{(sum(xga_vals)/len(xga_vals) if xga_vals else 0.0):.2f}"
+    menu_style = {
+        "container": {"padding": "0!important", "background-color": "transparent"},
+        "nav-link": {"font-size": "14px", "text-align": "left", "margin": "0px", "color": "#31333F", "border-radius": "4px"},
+        "nav-link-selected": {"background-color": HIF_ROD, "color": "white"}
     }
 
-def vis_side():
-    apply_custom_style()
-    
-    HIF_UUID = TEAMS.get("Hvidovre", {}).get("opta_uuid", "8gxd9ry2580pu1b1dd5ny9ymy").upper()
-    active_season = DEFAULT_SEASON
-    active_comp = DEFAULT_COMP
-    calendar_uuid = SEASONS.get(active_season, {}).get(active_comp)
+    from data.users import get_role_permissions
+    user_info = USER_DB.get(st.session_state["user"], {})
+    bruger_rolle = user_info.get("role", "scout")
+    tilladelser = get_role_permissions().get(bruger_rolle, [])
 
-    df_stats, df_hold_stats = hent_side_data(calendar_uuid)
-    df_matches = df_stats.copy()
+    alle_omraader = ["HVIDOVRE IF", "HOLDANALYSE", "SPILLERANALYSE", "SCOUTING", "TILPASNING", "TESTSIDE", "ADMIN", "ADMIN_SCOUTING", "PROFIL"]
 
-    # --- TOPSEKTION ---
-    st.markdown('<div class="top-section-container">', unsafe_allow_html=True)
-    with st.container(border=True):
-        col1, col2, col3 = st.columns([1, 2.2, 1])
+    if tilladelser == "ALL":
+        synlige_hoved_options = alle_omraader
+    else:
+        menu_map_checker = {
+            "HVIDOVRE IF": ["HVIDOVRE IF", "Forside"],
+            "HOLDANALYSE": ["HOLDANALYSE", "Modstanderanalyse", "Kampoversigt", "Kampudvikling", "Afslutninger", "Målsekvenser", "Grafer", "BETINIA LIGAEN", "HIF ANALYSE"],
+            "SPILLERANALYSE": ["SPILLERANALYSE", "Spiller-stats", "Spilleraktioner", "Spiller-profil", "Spilleroversigt", "Spillerprofil"],
+            "TRUPPEN": ["TRUPPEN", "Oversigt", "Forecast"],
+            "SCOUTING": ["SCOUTING", "Scoutrapport", "Database", "Emnedatabase", "Sammenligning", "Top10-scouting", "Opgaver", "Opret emne"],
+            "TILPASNING": ["TILPASNING", "Spillerdata", "Spiller-score", "Standardsituationer"],
+            "TESTSIDE": ["TESTSIDE", "Performance", "Winning Performance", "1. Div-tilpasning", "Charts", "Oversigt", "Forecast", "Model", "Transfers"],
+            "ADMIN": ["ADMIN", "System Log", "Profil", "Datakatalog", "Konklusion", "Teamradar", "Spillerradar", "Fysisk profil", "Hold: Fysisk profil", "Intern analyse", "Top 5: Spillere", "Ordbog"],
+            "ADMIN_SCOUTING": ["ADMIN_SCOUTING"],
+            "PROFIL": ["PROFIL", "Profil"]
+        }
+        synlige_hoved_options = [
+            hm for hm in alle_omraader 
+            if any(item in tilladelser for item in menu_map_checker.get(hm, [hm]))
+        ]
 
-        # KOLONNE 1: NÆSTE MODSTANDER
-        with col1:
-            st.markdown("<div class='card-title'><span>NÆSTE MODSTANDER</span></div>", unsafe_allow_html=True)
-            future = pd.DataFrame()
-            if not df_matches.empty and 'MATCH_DATE_FULL' in df_matches.columns:
-                hif_m = df_matches[(df_matches['CONTESTANTHOME_OPTAUUID'].str.upper() == HIF_UUID) | 
-                                   (df_matches['CONTESTANTAWAY_OPTAUUID'].str.upper() == HIF_UUID)]
-                today = pd.Timestamp.today().normalize()
-                future = hif_m[hif_m['MATCH_DATE_FULL'] >= today].sort_values('MATCH_DATE_FULL')
+    if not synlige_hoved_options:
+        synlige_hoved_options = ["SCOUTING"]
 
-            if not future.empty:
-                nk = future.iloc[0]
-                opp_id = nk['CONTESTANTAWAY_OPTAUUID'] if str(nk['CONTESTANTHOME_OPTAUUID']).upper() == HIF_UUID else nk['CONTESTANTHOME_OPTAUUID']
-                opp_raw = nk['CONTESTANTAWAY_NAME'] if str(nk['CONTESTANTHOME_OPTAUUID']).upper() == HIF_UUID else nk['CONTESTANTHOME_NAME']
-                opp_name = resolve_team_name(opp_id, opp_raw)
-                
-                match_date = nk['MATCH_DATE_FULL'].strftime('%d/%m/%Y') if pd.notnull(nk['MATCH_DATE_FULL']) else ""
-                match_time = nk.get('MATCH_LOCALTIME', '') or nk.get('MATCH_TIME', '')
-                venue = nk.get('VENUE_LONGNAME', 'Ukendt stadion')
-                round_week = nk.get('WEEK', '')
-                
-                st.markdown(f"<div class='card-title' style='border:none; margin-top:0px; padding-bottom:0; font-size: 13px;'><span>vs. {opp_name.upper()}</span><span>{match_date} kl. {match_time}</span></div>", unsafe_allow_html=True)
-                st.markdown(f"<div style='font-size: 11px; color: #555; margin-bottom: 8px; line-height: 1.4;'><b>Stadion:</b> {venue}<br><b>Runde:</b> Spillerunde {round_week}<br></div>", unsafe_allow_html=True)
-                
-                hif_stats = beregn_hold_per_90_stats(df_stats, HIF_UUID)
-                opp_stats = beregn_hold_per_90_stats(df_stats, opp_id)
-                hif_logo = TEAMS.get("Hvidovre", {}).get("logo", "")
-                opp_logo = TEAMS.get(opp_name, {}).get("logo", "")
-                
-                stats_html = f"""
-                <table class='stats-table' style='width: 100%; margin-top: 4px;'>
-                    <tr><td style='width: 34%;'></td>
-                        <td style='text-align: center; width: 33%; border-bottom: 1px solid #eee; padding-bottom: 4px;'><img src='{hif_logo}' style='width: 22px; height: 22px; object-fit: contain;'></td>
-                        <td style='text-align: center; width: 33%; border-bottom: 1px solid #eee; padding-bottom: 4px;'><img src='{opp_logo}' style='width: 22px; height: 22px; object-fit: contain;'></td>
-                    </tr>
-                    <tr><td class='stats-label'>Besiddelse</td><td class='stats-value'>{hif_stats.get('poss', '-')}</td><td class='stats-value'>{opp_stats.get('poss', '-')}</td></tr>
-                    <tr><td class='stats-label'>Mål for/imod</td><td class='stats-value'>{hif_stats.get('gf', '0')}/{hif_stats.get('ga', '0')}</td><td class='stats-value'>{opp_stats.get('gf', '0')}/{opp_stats.get('ga', '0')}</td></tr>
-                    <tr><td class='stats-label'>xG for/imod</td><td class='stats-value'>{hif_stats.get('xgf', '0')}/{hif_stats.get('xga', '0')}</td><td class='stats-value'>{opp_stats.get('xgf', '0')}/{opp_stats.get('xga', '0')}</td></tr>
-                </table>"""
-                st.markdown(stats_html, unsafe_allow_html=True)
-            else:
-                st.caption(f"Afventer næste kamp for sæson {active_season}")
-                
-        # KOLONNE 2: HVIDOVRE IF vs. LIGA
-        with col2:
-            c_title, c_icon = st.columns([12, 1])
-            with c_title:
-                st.markdown("<div class='card-title' style='border:none; margin-bottom:0;'><span>HVIDOVRE IF vs. LIGA</span></div>", unsafe_allow_html=True)
-            with c_icon:
-                st.markdown("""
-                    <div class="hover-parent" style="float: right;">ℹ️
-                        <div class="hover-child">
-                            <b>Om denne oversigt</b><br>
-                            Sammenligner Hvidovres per-90-minutters nøgletal mod ligaens gennemsnit samt den seneste modstander.<br>
-                            - <b>Diff vs Liga:</b> Afvigelse mellem HIF-snit og liga-snit.<br>
-                            - <b>Diff vs HIF:</b> Sidste kamps afvigelse fra HIFs eget snit.
-                        </div>
-                    </div>
-                """, unsafe_allow_html=True)
-            
-            st.markdown("<div style='border-bottom: 1px solid #f0f0f0; margin-bottom: 8px;'></div>", unsafe_allow_html=True)
-            
-            df_stats_comp, opp_navn = beregn_per_90(df_stats, HIF_UUID)
-            if df_stats_comp is not None:
-                opp_header = f"vs. {opp_navn}"
-                html = f"<table class='stats-table'><thead><tr><th></th><th>{opp_header}</th><th>Diff vs HIF</th><th>HIF</th><th>Liga</th><th>Diff</th></tr></thead><tbody>"
-                for _, r in df_stats_comp.iterrows():
-                    diff_liga_color = "#28a745" if r['Diff_Liga'] > 0 else "#dc3545"
-                    diff_hif_color = "#28a745" if r['Diff_vs_Hif'] > 0 else "#dc3545"
-                    
-                    if "besiddelse" in r['Stat'].lower():
-                        hif_str = f"{r['HIF']:.1f}%"
-                        liga_str = f"{r['Liga']:.1f}%"
-                        last_str = f"{r['Seneste']:.1f}%"
-                    elif "mål" in r['Stat'].lower() or "xg" in r['Stat'].lower():
-                        hif_str = f"{r['HIF']:.2f}"
-                        liga_str = f"{r['Liga']:.2f}"
-                        last_str = f"{r['Seneste']:.2f}"
-                    else:
-                        hif_str = f"{r['HIF']:.2f}"
-                        liga_str = f"{r['Liga']:.2f}"
-                        last_str = f"{r['Seneste']:.0f}"
+    if "main_menu_selection" not in st.session_state or st.session_state["main_menu_selection"] not in synlige_hoved_options:
+        st.session_state["main_menu_selection"] = synlige_hoved_options[0]
 
-                    html += f"""<tr>
-                        <td class='stats-label'>{r['Stat']}</td>
-                        <td class='stats-value'>{last_str}</td>
-                        <td class='stats-value' style='color:{diff_hif_color}; font-weight:800;'>{r['Diff_vs_Hif']:+.2f}</td>
-                        <td class='stats-value'>{hif_str}</td>
-                        <td class='stats-value'>{liga_str}</td>
-                        <td class='stats-value' style='color:{diff_liga_color}; font-weight:800;'>{r['Diff_Liga']:+.2f}</td>
-                    </tr>"""
-                html += "</tbody></table>"
-                st.markdown(html, unsafe_allow_html=True)
+    hoved_omraade = option_menu(
+        None, options=synlige_hoved_options,
+        icons=["play-fill"] * len(synlige_hoved_options),
+        default_index=synlige_hoved_options.index(st.session_state["main_menu_selection"]),
+        key="main_menu_widget", styles=menu_style
+    )
+    st.session_state["main_menu_selection"] = hoved_omraade
 
-        # KOLONNE 3: STILLING
-        with col3:
-            st.markdown(f"<div class='card-title'><span>STILLING ({active_comp.upper()})</span></div>", unsafe_allow_html=True)
-            
-            df_stilling = hent_hurtig_stilling(calendar_uuid)
-            if not df_stilling.empty:
-                table_html = "<table class='table-standings'><thead><tr><th style='text-align:left;'>Hold</th><th>K</th><th>MF</th><th>P</th></tr></thead><tbody>"
-                for _, row in df_stilling.head(12).iterrows():
-                    team_name = row['HOLD']
-                    row_class = "hif-row" if "Hvidovre" in team_name else ""
-                    mf_val = int(row['MF'])
-                    mf_sign = f"+{mf_val}" if mf_val > 0 else str(mf_val)
-                    table_html += f"<tr class='{row_class}'><td>{int(row['POSITION'])}</td><td class='team-cell'>{team_name}</td><td>{int(row['K'])}</td><td>{mf_sign}</td><td><b>{int(row['P'])}</b></td></tr>"
-                table_html += "</tbody></table>"
-                st.markdown(table_html, unsafe_allow_html=True)
-            else:
-                st.caption("Ingen stillingsdata fundet.")
-    st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown('<hr class="custom-hr">', unsafe_allow_html=True)
 
-    # --- BUNDSEKTION: TRENDGRAFER ---
-    with st.container(border=True):
-        st.markdown('<div class="card-title"><span>PRÆSTATION-TRENDS (Seneste 10 kampe)</span></div>', unsafe_allow_html=True)
-        hif_recent = df_stats[((df_stats['CONTESTANTHOME_OPTAUUID'].str.upper() == HIF_UUID) | (df_stats['CONTESTANTAWAY_OPTAUUID'].str.upper() == HIF_UUID)) & (df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False))].sort_values('MATCH_DATE_FULL', ascending=True).tail(10).copy()
-        
-        if not hif_recent.empty:
-            num_cols = ['HOME_XG', 'AWAY_XG', 'HOME_SHOTS', 'AWAY_SHOTS', 'TOTAL_HOME_SCORE', 'TOTAL_AWAY_SCORE', 'HOME_POSSESSION', 'AWAY_POSSESSION']
-            for col in num_cols: 
-                hif_recent[col] = pd.to_numeric(hif_recent[col], errors='coerce').fillna(0)
-            
-            hif_recent['OPPONENT_NAME'] = hif_recent.apply(lambda r: resolve_team_name(r['CONTESTANTAWAY_OPTAUUID'] if str(r['CONTESTANTHOME_OPTAUUID']).strip().upper() == HIF_UUID else r['CONTESTANTHOME_OPTAUUID'], r['CONTESTANTAWAY_NAME'] if str(r['CONTESTANTHOME_OPTAUUID']).strip().upper() == HIF_UUID else r['CONTESTANTHOME_NAME']), axis=1)
-            hif_recent['HOME_OR_AWAY'] = hif_recent.apply(lambda r: "H" if str(r['CONTESTANTHOME_OPTAUUID']).strip().upper() == HIF_UUID else "U", axis=1)
-            
-            metrics = hif_recent.apply(lambda row: beregn_kamp_metrics(row, HIF_UUID), axis=1)
-            hif_recent = pd.concat([hif_recent, metrics], axis=1)
-            hif_recent['index'] = range(1, len(hif_recent) + 1)
-            
-            played = df_stats[df_stats['MATCH_STATUS'].str.lower().str.contains('play|full|finish', na=False)].copy()
-            for col in num_cols: 
-                played[col] = pd.to_numeric(played[col], errors='coerce').fillna(0)
-            
-            liga_metrics = played.apply(lambda row: beregn_kamp_metrics(row, "DUMMY_UUID"), axis=1)
-            liga_means = liga_metrics.mean()
-            
-            r1_c1, r1_c2, r2_c1, r2_c2 = st.columns(4)
-            categories = [
-                ("xG FOR", "XG_FOR", "Forventede mål skabt (xG) pr. kamp", r1_c1),
-                ("xG IMOD", "XG_IMOD", "Forventede mål tilladt (xG mod) pr. kamp", r1_c2),
-                ("SKUD", "SKUD", "Samlede skudforsøg pr. kamp", r2_c1),
-                ("BESIDDELSE", "BESIDDELSE", "Boldbesiddelse i procent pr. kamp", r2_c2)
-            ]
-            
-            for title, col, desc, target in categories:
-                with target:
-                    g_title, g_icon = st.columns([12, 1])
-                    with g_title:
-                        st.markdown(f"<div style='font-weight:700; font-size:12px;'>{title}</div>", unsafe_allow_html=True)
-                    with g_icon:
-                        st.markdown(f"""
-                            <div class="hover-parent" style="float: right;">ℹ️
-                                <div class="hover-child"><b>{title}</b><br>{desc}</div>
-                            </div>
-                        """, unsafe_allow_html=True)
-                    
-                    st.markdown(f"<div style='margin-top:-8px; font-size:10px; margin-bottom:4px; color:#666;'>{desc}</div>", unsafe_allow_html=True)
-                    
-                    hif_avg = hif_recent[col].mean()
-                    hif_recent['tooltip_header'] = hif_recent.apply(lambda r: f"vs. {r['OPPONENT_NAME']} {int(r['TOTAL_HOME_SCORE'])}-{int(r['TOTAL_AWAY_SCORE'])} ({r['HOME_OR_AWAY']})", axis=1)
-                    hif_recent['diff_label'] = hif_recent[col].apply(lambda x: f"{x - hif_avg:+.1f}")
-                    
-                    line = alt.Chart(hif_recent).mark_line(color='#AAAAAA', point=alt.MarkConfig(color='#C41E3A', filled=True)).encode(
-                        x=alt.X('index:O', axis=None), 
-                        y=alt.Y(f'{col}:Q', axis=None, scale=alt.Scale(zero=False)), 
-                        tooltip=[alt.Tooltip('tooltip_header', title='Kamp'), alt.Tooltip(f'{col}', title='Værdi', format='.2f'), alt.Tooltip('diff_label', title='Diff vs Snit')]
-                    ).properties(height=120)
-                    
-                    st.altair_chart(line + alt.Chart(pd.DataFrame({'y': [hif_avg]})).mark_rule(color='#C41E3A', strokeDash=[3,3]).encode(y='y:Q') + alt.Chart(pd.DataFrame({'y': [liga_means[col]]})).mark_rule(color='#000000', strokeDash=[2,2], opacity=0.4).encode(y='y:Q'), use_container_width=True)
+    if hoved_omraade == "PROFIL":
+        st.session_state["sub_menu_selection"] = "Profil"
+    else:
+        menu_map = {
+            "HVIDOVRE IF": ["Forside"],
+            "HOLDANALYSE": ["Modstanderanalyse", "Kampoversigt", "Kampudvikling", "Afslutninger", "Målsekvenser", "Grafer"],
+            "SPILLERANALYSE": ["Spiller-stats", "Spilleraktioner", "Spiller-profil", "Spilleroversigt", "Spillerprofil"],
+            "SCOUTING": ["Scoutrapport", "Database", "Emnedatabase", "Sammenligning", "Top10-scouting", "Opgaver"],
+            "TILPASNING": ["Spillerdata", "Spiller-score", "Standardsituationer"],
+            "TESTSIDE": ["Performance", "Winning Performance", "1. Div-tilpasning", "Charts", "Oversigt", "Forecast", "Model", "Transfers"],
+            "ADMIN": ["System Log", "Profil", "Datakatalog", "Konklusion", "Teamradar", "Spillerradar", "Fysisk profil", "Hold: Fysisk profil", "Intern analyse", "Top 5: Spillere", "Ordbog"],
+            "ADMIN_SCOUTING": ["Opgaver"]
+        }
 
-if __name__ == "__main__":
-    vis_side()
+        mulige_under = menu_map.get(hoved_omraade, ["Forside"])
+        if tilladelser == "ALL":
+            aktuel_undermenu = mulige_under
+        else:
+            aktuel_undermenu = [u for u in mulige_under if u in tilladelser]
+
+        if not aktuel_undermenu:
+            aktuel_undermenu = [mulige_under[0]]
+
+        if "sub_menu_selection" not in st.session_state or st.session_state["sub_menu_selection"] not in aktuel_undermenu:
+            u_index = 0
+        else:
+            u_index = aktuel_undermenu.index(st.session_state["sub_menu_selection"])
+
+        sel = option_menu(
+            None, options=aktuel_undermenu,
+            icons=["play-fill"] * len(aktuel_undermenu),
+            default_index=u_index,
+            key=f"sub_menu_{hoved_omraade}", 
+            styles=menu_style
+        )
+        st.session_state["sub_menu_selection"] = sel
+
+    _nuvaerende_fane = f"{hoved_omraade} -> {st.session_state.get('sub_menu_selection', '')}"
+    if st.session_state.get("_forrige_fane") != _nuvaerende_fane:
+        try:
+            import tools.admin_page.admin as admin
+            admin.save_action_log(st.session_state["user"], "Skiftede fane", _nuvaerende_fane)
+        except Exception as log_e:
+            st.warning(f"Kunne ikke skrive faneskift til log: {log_e}")
+        st.session_state["_forrige_fane"] = _nuvaerende_fane
+
+    st.markdown('</div>', unsafe_allow_html=True) 
+
+    st.markdown('<hr class="custom-hr">', unsafe_allow_html=True)
+    if st.button("Ryd cache", use_container_width=True):
+        st.cache_data.clear()
+        st.rerun()
+
+# --- 4. DATA LOADING & RENDERING ---
+if st.session_state['main_menu_selection'] == "PROFIL":
+    render_hif_header("PROFIL")
+else:
+    render_hif_header(f"{st.session_state['main_menu_selection']}  |  {st.session_state['sub_menu_selection'].upper()}")
+
+try:
+    s = st.session_state["sub_menu_selection"]
+    m = st.session_state["main_menu_selection"]
+
+    if m == "PROFIL":
+        import tools.admin_page.profil as profil
+        profil.vis_side({})
+
+    elif m == "HVIDOVRE IF":
+        if s == "Forside":
+            import HIF_head as fh
+            fh.vis_side()
+        else:
+            dp_quick = hif_load.get_squad_only()
+            if s == "Oversigt":
+                import tools.truppen.players as pl
+                pl.vis_side(dp_quick["players"])
+            elif s == "Forecast":
+                import tools.truppen.squad as sq
+                sq.vis_side(dp_quick["players"])
+
+    elif m == "SCOUTING":
+        if s == "Opgaver":
+            import tools.admin_page.opgaver as opg
+            opg.vis_side()
+        else:
+            aktuel_uge = datetime.now().isocalendar()[1]
+            with st.spinner("Henter scouting-data... (Henter automatisk kun 1 gang ugentligt)"):
+                dp = hif_load.get_scouting_package(aktuel_uge)
+
+            if s == "Scoutrapport":
+                import tools.scouting.scout_input as si
+                si.vis_side(dp)
+            elif s == "Database":
+                import tools.scouting.scout_db as sdb
+                sdb.vis_side(dp["scout_reports"], dp["players"], dp["sql_players"], dp["career"])
+            elif s == "Emnedatabase":
+                import tools.scouting.emne_db as edb
+                edb.vis_side()
+            elif s == "Sammenligning":
+                import tools.scouting.sammenligning as comp
+                comp.vis_side(dp["players"], None, dp["wyscout_players"], dp["career"], dp["sql_players"], dp["advanced_stats"], dp.get("primaer_positioner"))
+            elif s == "Top10-scouting":
+                import tools.scouting.top10_scouting as t10
+                t10.vis_side(dp.get("advanced_stats"), dp.get("primaer_positioner"))
+
+    elif m == "SPILLERANALYSE":
+        if s == "Spillerprofil":
+            import tools.players.player_profile as pp
+            pp.vis_side()
+        elif s == "Spilleroversigt":
+            import tools.players.player_rank as pr
+            pr.vis_side()
+        elif s == "Målsekvenser":
+            import tools.hifanalyse.sequences as ms
+            ms.vis_side()
+        elif s == "Spilleraktioner":
+            import tools.players.player_actions as pa
+            pa.vis_side()
+        elif s == "Spiller-stats":
+            import tools.players.player_stats as ps
+            ps.vis_side()
+        elif s == "Spiller-profil":
+            import tools.players.player_profile2 as pp2
+            pp2.vis_side()
+
+    elif m == "HOLDANALYSE":
+        if s == "Ligaoversigt":
+            import tools.ligaen.test_teams as tt
+            tt.vis_side()
+        elif s == "Kampoversigt":
+            import tools.ligaen.test_matches as tm
+            tm.vis_side()
+        elif s == "Afslutninger":
+            import tools.ligaen.leagueshots as ls
+            ls.vis_side()
+        elif s == "Modstanderanalyse":
+            import tools.hifanalyse.modstander_oversigt as mo
+            mo.vis_side()
+        elif s == "Grafer":
+            import tools.ligaen.dataviz as dviz
+            dviz.vis_side()
+        elif s == "Målsekvenser":
+            import tools.ligaen.sequences as ms
+            ms.vis_side()
+        elif s == "Kampudvikling":
+            import tools.ligaen.kampudvikling as ku
+            ku.vis_side()
+
+    elif m == "TILPASNING":
+        if s == "Spillerdata":
+            import tools.tilpasning.spiller_tilpasning as tilpasning
+            tilpasning.vis_side()
+        elif s == "Spiller-score":
+            import tools.players.player_score as pscore
+            pscore.vis_side()
+        elif s == "Standardsituationer":
+            import tools.standarder.setpieces as std
+            std.vis_side()
+
+    elif m == "TESTSIDE":
+        if s == "1. Div-tilpasning":
+            import tools.tilpasning.div_tilpasning as div
+            div.vis_side()
+        elif s == "Grafer":
+            import tools.ligaen.dataviz as dviz
+            dviz.vis_side()
+        elif s == "Winning Performance":
+            import tools.analyse.winning_performance as wp
+            wp.vis_side()
+        elif s == "Performance":
+            import tools.analyse.baseline_performance as bp
+            bp.vis_side()
+        elif s == "Model":
+            import tools.ligaen.model as xg
+            xg.vis_side()
+        elif s == "Transfers":
+            import tools.scouting.transfer_input as t_input
+            t_input.vis_side()
+
+    elif m == "ADMIN":
+        if s == "System Log":
+            import tools.admin_page.admin as admin
+            admin.vis_log()
+        elif s == "Profil":
+            import tools.admin_page.profil as profil
+            profil.vis_side({})
+        elif s == "Konklusion":
+            import tools.analyse.konklusion as kon
+            kon.vis_side()
+        elif s == "Datakatalog":
+            import tools.admin_page.data_katalog as dk
+            dk.vis_side(hif_load._get_snowflake_conn())
+        elif s == "Fysisk profil":
+            import tools.players.fysisk_player as fp
+            fp.vis_side()
+        elif s == "Hold: Fysisk profil":
+            import tools.ligaen.hold_fysisk as hf
+            hf.vis_side()
+        elif s == "Intern analyse":
+            import tools.admin_page.intern_modstanderanalyse as im
+            im.vis_side()
+        elif s == "Top 5: Spillere":
+            import tools.players.top_players as tp
+            tp.vis_side()
+        elif s == "Ordbog":
+            import utils.ordbog as ob
+            ob.vis_side()
+        elif s == "Spillerradar":
+            import tools.players.spillerradar as sr
+            sr.vis_side()
+        elif s == "Teamradar":
+            import tools.hifanalyse.teamradar as tr
+            tr.vis_side()
+        elif s == "Opgaver":
+            import tools.admin_page.opgaver as opg
+            opg.vis_side()
+
+    elif m == "ADMIN_SCOUTING":
+        if s == "Opgaver":
+            import tools.admin_page.opgaver as opg
+            opg.vis_side()
+
+except Exception as e:
+    st.error(f"Fejl ved indlæsning: {e}")
