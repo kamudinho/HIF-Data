@@ -1,3 +1,4 @@
+#data/sql/kampe.py
 import os
 import numpy as np
 import pandas as pd
@@ -197,3 +198,64 @@ def load_match_level_data(
         df[numeric_cols] = df[numeric_cols].fillna(0)
 
     return df
+
+
+@st.cache_data(ttl=1800, show_spinner="Henter ligadata fra Snowflake...")
+def load_league_performance_data(calendar_uuid, wyid, filter_sql):
+    """
+    Henter samlet match- og statistikdata for hele ligaen (både Opta og WyScout)
+    til Placering vs. Performance-siden med automatisk fallback til lokal CSV-fil.
+    """
+    conn = _get_snowflake_conn()
+    db = "KLUB_HVIDOVREIF.AXIS"
+    
+    df_opta = pd.DataFrame()
+    df_wy = pd.DataFrame()
+
+    if conn:
+        if calendar_uuid:
+            try:
+                df_opta = conn.query(f"""
+                    SELECT * FROM {db}.OPTA_MATCHINFO 
+                    WHERE TOURNAMENTCALENDAR_OPTAUUID = '{calendar_uuid}'
+                    AND MATCH_DATE_FULL {filter_sql}
+                """)
+            except Exception as e:
+                st.info(f"Kunne ikke hente OPTA-matchinfo fra databasen: {e}")
+
+        if wyid:
+            try:
+                df_wy = conn.query(f"""
+                    SELECT 
+                        tm.TEAM_WYID, 
+                        AVG(adv.XG) as XG, AVG(adv.SHOTS) as SHOTS, AVG(adv.GOALS) as GOALS,
+                        AVG(opp_adv.GOALS) as GOALS_AGAINST,
+                        AVG(md.PPDA) as PPDA, AVG(mp.PASSES) as PASSES
+                    FROM {db}.WYSCOUT_TEAMMATCHES tm 
+                    LEFT JOIN {db}.WYSCOUT_MATCHADVANCEDSTATS_GENERAL adv ON tm.MATCH_WYID = adv.MATCH_WYID AND tm.TEAM_WYID = adv.TEAM_WYID 
+                    LEFT JOIN {db}.WYSCOUT_TEAMMATCHES opp ON tm.MATCH_WYID = opp.MATCH_WYID AND tm.TEAM_WYID <> opp.TEAM_WYID
+                    LEFT JOIN {db}.WYSCOUT_MATCHADVANCEDSTATS_GENERAL opp_adv ON opp.MATCH_WYID = opp_adv.MATCH_WYID AND opp.TEAM_WYID = opp_adv.TEAM_WYID
+                    LEFT JOIN {db}.WYSCOUT_MATCHADVANCEDSTATS_DEFENCE md ON tm.MATCH_WYID = md.MATCH_WYID AND tm.TEAM_WYID = md.TEAM_WYID 
+                    LEFT JOIN {db}.WYSCOUT_MATCHADVANCEDSTATS_PASSES mp ON tm.MATCH_WYID = mp.MATCH_WYID AND tm.TEAM_WYID = mp.TEAM_WYID
+                    WHERE tm.COMPETITION_WYID = {wyid} 
+                    AND tm.DATE {filter_sql} 
+                    GROUP BY tm.TEAM_WYID
+                """)
+            except Exception as e:
+                st.info(f"Kunne ikke hente WyScout data fra databasen: {e}")
+
+    # Fallback hvis OPTA-data er tom
+    fallback_file = "data/csv/kampe_fallback.csv"
+    if df_opta.empty and os.path.exists(fallback_file):
+        try:
+            df_opta = pd.read_csv(fallback_file)
+        except Exception as csv_error:
+            st.error(f"Fejl ved indlæsning af fallback CSV-fil: {csv_error}")
+
+    if df_opta is not None and not df_opta.empty:
+        df_opta.columns = [c.upper() for c in df_opta.columns]
+        
+    if df_wy is not None and not df_wy.empty:
+        df_wy.columns = [c.upper() for c in df_wy.columns]
+        
+    return df_opta, df_wy
