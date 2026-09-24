@@ -1,67 +1,99 @@
-import streamlit as st
+import dash
+from dash import dcc, html, callback, Output, Input, State
+import dash_bootstrap_components as dbc
 import pandas as pd
+import logging
+import os
+import sys
+import numpy as np
 
-# --- 1. APP OPSÆTNING ---
-st.set_page_config(
-    page_title="Hvidovre IF - Match & Performance Dashboard",
-    layout="wide",
-    initial_sidebar_state="collapsed" # Minimerer sidebaren, da vi bruger topmenu
-)
+# Konfigurer logging
+logger = logging.getLogger(__name__)
+if not logger.handlers:
+    handler = logging.StreamHandler(sys.stdout)
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+logger.setLevel(logging.DEBUG)
 
-# --- 2. GLOBALE KONSTANTER & VÆRDIER ---
+app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP, '/assets/styles.css'],
+                suppress_callback_exceptions=True)
+server = app.server
+
+# --- IMPORT AF MODULER ---
+try:
+    from components.header import build_header_layout
+    import pages.kampoversigt
+    import pages.player_stats
+    import pages.team_stats
+    import pages.dataoversigt
+    import pages.team_matches
+    import pages.top5
+    import pages.kpi
+    import pages.data_viz
+    import pages.player_score
+    logger.debug("Alle sider og header importeret succesfuldt.")
+except ImportError as e:
+    logger.error(f"FEJL ved import af moduler: {e}", exc_info=True)
+
+# --- GLOBALE KONSTANTER & HOLD-VALG ---
 ACTIVE_SEASON = "2026/2027"
 ACTIVE_COMPETITION = "NordicBet Liga"
 TEAM_WYID = 7490
 
-# --- 3. GLOBAL STYLING ---
-st.markdown("""
-    <style>
-        .stApp { background-color: #FFFFFF; }
-        .main-header { font-size: 22px; font-weight: 700; color: #1a1a1a; margin-bottom: 10px; }
-        /* Gør radio-knapper mere vandrette og pæne øverst */
-        div[data-testid="stHorizontalBlock"] { align-items: center; }
-    </style>
-""", unsafe_allow_html=True)
+# Dropdown-muligheder for Hvidovre IF setup
+team_dropdown_options = [
+    {'label': 'Hvidovre IF', 'value': 7490},
+]
 
-def main():
-    # --- 4. TOPMENU & INFO ---
-    top_col1, top_col2 = st.columns([3, 1])
-    
-    with top_col1:
-        # Vandret navigation
-        valgt_side = st.radio(
-            "Navigation",
-            ["Oversigt (HIF-head)", "Trup & Spillere", "Kampe & Statistik", "Indstillinger"],
-            horizontal=True,
-            label_visibility="collapsed"
-        )
-        
-    with top_col2:
-        st.markdown(f"<div style='text-align: right; font-size: 13px; color: #666;'><b>Sæson:</b> {ACTIVE_SEASON} | <b>Turnering:</b> {ACTIVE_COMPETITION}</div>", unsafe_allow_html=True)
+dcc_stores = html.Div([
+    dcc.Store(id='players-data'),
+    dcc.Store(id='playermatches-data'),
+    dcc.Store(id='all-matches-data'),
+    dcc.Store(id='all-teams-stats-data'),
+    dcc.Store(id='events-data'),
+], style={'display': 'none'})
 
-    st.divider()
+# --- APP LAYOUT MED TOPMENU ---
+app.layout = html.Div([
+    dcc.Location(id='url', refresh=False),
+    dcc_stores,
+    build_header_layout(team_dropdown_options),  # Topmenu / Header placeret øverst
+    html.Div(id='page-content', className="page-content", style={"padding": "20px"}),
+], style={"min-height": "100vh", "backgroundColor": "#FFFFFF"})
 
-    # --- 5. RUTEVALG (ROUTER) ---
-    if "Oversigt" in valgt_side:
-        st.markdown('<div class="main-header">Hovedoversigt</div>', unsafe_allow_html=True)
-        try:
-            from HIF_head import vis_side
-            vis_side()
-        except ImportError:
-            st.error("Kunne ikke indhente 'HIF_head.py'. Sørg for filen ligger i mappen.")
 
-    elif "Trup" in valgt_side:
-        st.markdown('<div class="main-header">Trupoversigt</div>', unsafe_allow_html=True)
-        st.info("Truppens sider under opbygning fra scratch...")
+@app.callback(
+    Output('page-content', 'children'),
+    [Input('url', 'pathname'),
+     Input('team-dropdown', 'value')]
+)
+def display_page(pathname, selected_team):
+    logger.debug(f"display_page kaldes for path: {pathname}, team: {selected_team}")
 
-    elif "Kampe" in valgt_side:
-        st.markdown('<div class="main-header">Kampoversigt & Statistik</div>', unsafe_allow_html=True)
-        st.info("Kampmoduler under opbygning fra scratch...")
+    try:
+        if pathname == '/player-stats':
+            return pages.player_stats.generate_player_stats_layout()
+        elif pathname == '/team-stats':
+            return pages.team_stats.generate_team_stats_layout()
+        elif pathname == '/kampoversigt':
+            return pages.kampoversigt.generate_match_stats(selected_team)
+        elif pathname == '/top5':
+            return pages.top5.generate_top5_layout(selected_team)
+        elif pathname == '/dataoversigt':
+            return pages.dataoversigt.generate_dataoversigt_layout(selected_team)
+        elif pathname == '/kpi':
+            return pages.kpi.generate_kpi_layout(selected_team)
+        else:
+            return html.Div([
+                html.H3("Hvidovre IF - Match & Performance Dashboard"),
+                html.P(f"Aktiv sæson: {ACTIVE_SEASON} | Turnering: {ACTIVE_COMPETITION}"),
+                html.P("Brug topmenuen til at navigere mellem siderne.")
+            ])
+    except Exception as e:
+        logger.error(f"Fejl ved routing til {pathname}: {e}", exc_info=True)
+        return html.Div([html.H3(f"Fejl ved indlæsning af side: {pathname}")])
 
-    elif "Indstillinger" in valgt_side:
-        st.markdown('<div class="main-header">App Indstillinger</div>', unsafe_allow_html=True)
-        st.write(f"Aktivt Hold ID (WyScout): {TEAM_WYID}")
-        st.write(f"Aktiv Sæson: {ACTIVE_SEASON}")
 
-if __name__ == "__main__":
-    main()
+if __name__ == '__main__':
+    app.run_server(debug=True)
