@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from utils.data.sql.teams import (
+from data.utils.data.sql.teams import (
     def_load_season_team_average,
     hent_hurtig_stilling,
     hent_hold_formkurve
