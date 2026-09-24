@@ -7,32 +7,31 @@ from utils.data.sql.teams import (
 )
 
 def vis_side():
-    # --- 1. KONSTANTER & KALENDER UUID ---
     season_name = "2026/2027"
-    # Sørg for at dette UUID svarer til 2026/2027-sæsonen for NordicBet Liga i din database
+    # Sørg for at dette UUID peger på 2026/2027-kalenderen for NordicBet Liga i din database
     calendar_uuid = '2mb332vncy4450vu14paj8844' 
 
     st.markdown(f"### Holdets Nøgletal - Sæson {season_name}")
     
-    # --- 2. HENT DATA FRA SNOWFLAKE ---
+    # Hent data fra Snowflake
     df_season_stats = def_load_season_team_average(calendar_uuid)
     df_stilling = hent_hurtig_stilling(calendar_uuid)
 
-    # Find Hvidovres Opta UUID ud fra stillingstabellen (eller brug TEAM_WYID = 7490 hvis det mapper dertil)
+    # Find Hvidovres Opta UUID ud fra stillingstabellen
     hvidovre_optauuid = None
     if df_stilling is not None and not df_stilling.empty:
         hv_row_st = df_stilling[df_stilling['HOLD'].str.contains("Hvidovre", case=False, na=False)]
         if not hv_row_st.empty:
             hvidovre_optauuid = hv_row_st.iloc[0].get('TEAM_ID')
 
-    # Udtræk Hvidovres specifikke række fra de aggregerede sæsondata
+    # Udtræk Hvidovres specifikke række fra sæsondata
     hvidovre_row = pd.Series()
     if hvidovre_optauuid and df_season_stats is not None and not df_season_stats.empty:
         match_row = df_season_stats[df_season_stats['TEAM_OPTAUUID'] == hvidovre_optauuid]
         if not match_row.empty:
             hvidovre_row = match_row.iloc[0]
 
-    # --- 3. UDTRÆK VÆRDIER TIL KPI-KORT ---
+    # Udtræk værdier til KPI-kort
     kampe_spillet = int(hvidovre_row.get('SPILLER_KAMPE', 0)) if not hvidovre_row.empty else 0
     maal_for = int(hvidovre_row.get('TOTAL_GOALS', 0)) if not hvidovre_row.empty else 0
     maal_imod = int(hvidovre_row.get('TOTAL_GOALS_AGAINST', 0)) if not hvidovre_row.empty else 0
@@ -46,7 +45,7 @@ def vis_side():
         if not hv_stilling.empty:
             point = int(hv_stilling.iloc[0].get('P', 0))
 
-    # --- 4. SEKTION: HOVEDOVERBLIK & NØGLEMETAL (KPI KORT) ---
+    # --- 1. SEKTION: HOVEDOVERBLIK & NØGLEMETAL (KPI KORT) ---
     col1, col2, col3, col4, col5 = st.columns(5)
     
     with col1:
@@ -62,7 +61,7 @@ def vis_side():
 
     st.divider()
 
-    # --- 5. SEKTION: SENESTE RESULTATER OG TAKTISKE NØGLETAL ---
+    # --- 2. SEKTION: SENESTE RESULTATER OG TAKTISKE NØGLETAL ---
     col_left, col_right = st.columns(2)
 
     with col_left:
@@ -100,8 +99,8 @@ def vis_side():
 
     st.divider()
 
-    # --- 6. SEKTION: TURNERINGSSTILLING ---
-    st.markdown(f"### Stilling i {ACTIVE_COMPETITION}")
+    # --- 3. SEKTION: TURNERINGSSTILLING ---
+    st.markdown("### Stilling i Ligaen")
     if df_stilling is not None and not df_stilling.empty:
         st.dataframe(df_stilling[['POSITION', 'HOLD', 'K', 'V', 'U', 'T', 'MF', 'P']], use_container_width=True, hide_index=True)
     else:
