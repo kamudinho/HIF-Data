@@ -29,8 +29,24 @@ def get_snowflake_session():
         st.error(f"❌ Snowflake Forbindelsesfejl: {e}")
         return None
 
-def _get_snowflake_conn():
-    """Bevarer kompatibilitet med dine eksisterende 30 filer."""
+def _get_snowflake_conn(force_new=False):
+    """Bevarer kompatibilitet med dine eksisterende filer og understøtter parallelitet."""
+    if force_new:
+        # Returnerer en ny ucachet forbindelse til parallelle tråde
+        try:
+            s = st.secrets["connections"]["snowflake"]
+            p_key_raw = s["private_key"]
+            p_key_pem = p_key_raw.strip().replace("\\n", "\n") if isinstance(p_key_raw, str) else p_key_raw
+            p_key_obj = serialization.load_pem_private_key(p_key_pem.encode('utf-8'), password=None, backend=default_backend())
+            p_key_der = p_key_obj.private_bytes(encoding=serialization.Encoding.DER, format=serialization.PrivateFormat.PKCS8, encryption_algorithm=serialization.NoEncryption())
+            
+            return st.connection("snowflake", type="snowflake", account=s["account"], user=s["user"], 
+                                 role=s["role"], warehouse=s["warehouse"], database=s["database"], 
+                                 schema=s["schema"], private_key=p_key_der)
+        except Exception as e:
+            st.error(f"❌ Ny Snowflake Forbindelsesfejl: {e}")
+            return None
+            
     return get_snowflake_session()
 
 # --- 2. API SESSION MANAGER (TIL WYSCOUT/OPTA/SS) ---
