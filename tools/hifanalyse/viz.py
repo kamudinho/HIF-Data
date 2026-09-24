@@ -1,7 +1,6 @@
 """
 Data-visualisering for Hvidovre IF: sammenligner alle hold i den valgte liga på
-tværs af nøgletal (skud, xG, mål, pasninger, possession) - ét logo pr. hold,
-med gennemsnitslinjer og Hvidovre fremhævet.
+tværs af nøgletal - med cirkler i holdfarver og initialer/navne, helt uden afskårne billeder.
 """
 
 import streamlit as st
@@ -101,24 +100,20 @@ def _byg_chart(plot_df: pd.DataFrame, x_key: str, y_key: str, x_col: str, y_col:
         strokeDash=[4, 4], color="#bbbbbb"
     ).encode(y="y:Q")
 
-    logos = alt.Chart(plot_df).mark_image(
-        width=30,
-        height=30,
-        clip=False
+    # Brug cirkler i holdets farve med hvid kant i stedet for billeder, der skæres af
+    points = alt.Chart(plot_df).mark_circle(
+        size=350,
+        filled=True,
+        stroke="white",
+        strokeWidth=2
     ).encode(
         x=x_enc,
         y=y_enc,
-        url="LOGO_URL:N",
+        color=alt.Color("TEAM_COLOR:N", scale=None),
         tooltip=tooltip
     )
 
-    hit_boxes = alt.Chart(plot_df).mark_circle(size=250, opacity=0).encode(
-        x=x_enc,
-        y=y_enc,
-        tooltip=tooltip
-    )
-
-    # Opdel tekst-labels i to lag for at styre dy og farve udenom .encode()
+    # Tekstlabels til de andre hold
     labels_andre = alt.Chart(plot_df[~plot_df["ER_HIF"]]).mark_text(
         fontSize=11, fontWeight="bold", stroke="white", strokeWidth=3,
         dy=-16,
@@ -127,20 +122,21 @@ def _byg_chart(plot_df: pd.DataFrame, x_key: str, y_key: str, x_col: str, y_col:
         x=x_enc, y=y_enc, text="TEAM_NAME:N", tooltip=tooltip
     )
 
+    # Tekstlabels til Hvidovre (fremhævet)
     labels_hif = alt.Chart(plot_df[plot_df["ER_HIF"]]).mark_text(
-        fontSize=11, fontWeight="bold", stroke="white", strokeWidth=3,
-        dy=-24,
+        fontSize=12, fontWeight="bold", stroke="white", strokeWidth=3,
+        dy=-18,
         color=HIF_FARVE
     ).encode(
         x=x_enc, y=y_enc, text="TEAM_NAME:N", tooltip=tooltip
     )
 
-    chart = alt.layer(v_snit, h_snit, hit_boxes, logos, labels_andre, labels_hif).properties(title=title, height=560)
+    chart = alt.layer(v_snit, h_snit, points, labels_andre, labels_hif).properties(title=title, height=560)
     return chart.configure_view(strokeWidth=0).configure_axis(domainColor="#dddddd", tickColor="#dddddd")
 
 
 def vis_side(dp=None):
-    st.caption("Sammenligner alle hold i ligaen for sæsonens spillede kampe - hvert logo er ét hold.")
+    st.caption("Sammenligner alle hold i ligaen for sæsonens spillede kampe.")
 
     liga_uuid = SEASONS.get(DEFAULT_SEASON, {}).get(DEFAULT_COMP)
     if not liga_uuid:
@@ -172,10 +168,14 @@ def vis_side(dp=None):
         return
 
     opta_to_name = {str(v.get("opta_uuid")).strip().upper(): k for k, v in TEAMS.items() if v.get("opta_uuid")}
-    opta_to_logo = {str(v.get("opta_uuid")).strip().upper(): v.get("logo", "") for k, v in TEAMS.items() if v.get("opta_uuid")}
+    
+    def get_team_color(name):
+        if name == HIF_NAVN:
+            return HIF_FARVE
+        return TEAM_COLORS.get(name, {}).get("primary", "#1f77b4")
 
     holdstats["TEAM_NAME"] = holdstats["TEAM_OPTAUUID"].map(opta_to_name).fillna("Ukendt hold")
-    holdstats["LOGO_URL"] = holdstats["TEAM_OPTAUUID"].map(opta_to_logo).fillna("")
+    holdstats["TEAM_COLOR"] = holdstats["TEAM_NAME"].apply(get_team_color)
     holdstats["ER_HIF"] = holdstats["TEAM_NAME"] == HIF_NAVN
 
     x_key, y_key, title = VISNING_MAPPING[visning_valg]
