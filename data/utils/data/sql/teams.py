@@ -549,6 +549,7 @@ def hent_hurtig_stilling(calendar_uuid: str) -> pd.DataFrame:
     except Exception:
         return pd.DataFrame()
 
+
 @st.cache_data(ttl=600, show_spinner="Henter sæson- og holdgennemsnit fra Snowflake...")
 def def_load_season_team_average(calendar_uuid: str) -> pd.DataFrame:
     """
@@ -568,7 +569,7 @@ def def_load_season_team_average(calendar_uuid: str) -> pd.DataFrame:
                 TOTAL_HOME_SCORE,
                 TOTAL_AWAY_SCORE,
                 MATCH_DATE_FULL
-            FROM KLUB_HVIDOVREIF.AXIS.OPTA_MATCHINFO
+            FROM {DB}.OPTA_MATCHINFO
             WHERE TOURNAMENTCALENDAR_OPTAUUID = '{calendar_uuid}'
               AND MATCH_STATUS = 'Played'
               AND CAST(MATCH_DATE_FULL AS DATE) <= CURRENT_DATE()
@@ -580,7 +581,7 @@ def def_load_season_team_average(calendar_uuid: str) -> pd.DataFrame:
         ),
         PlayerSubs AS (
             SELECT MATCH_OPTAUUID, PLAYER_OPTAUUID, MIN(EVENT_TIMESTAMP) AS SUB_TIME
-            FROM KLUB_HVIDOVREIF.AXIS.OPTA_EVENTS
+            FROM {DB}.OPTA_EVENTS
             WHERE EVENT_TYPEID = 19
             GROUP BY MATCH_OPTAUUID, PLAYER_OPTAUUID
         ),
@@ -589,9 +590,9 @@ def def_load_season_team_average(calendar_uuid: str) -> pd.DataFrame:
                 e.MATCH_OPTAUUID,
                 e.EVENT_CONTESTANT_OPTAUUID AS TEAM_OPTAUUID,
                 COUNT(DISTINCT e.EVENT_OPTAUUID) AS SUBSGOALS
-            FROM KLUB_HVIDOVREIF.AXIS.OPTA_EVENTS e
+            FROM {DB}.OPTA_EVENTS e
             JOIN PlayerSubs s ON e.MATCH_OPTAUUID = s.MATCH_OPTAUUID AND e.PLAYER_OPTAUUID = s.PLAYER_OPTAUUID
-            LEFT JOIN KLUB_HVIDOVREIF.AXIS.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID AND q.QUALIFIER_QID = 28
+            LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID AND q.QUALIFIER_QID = 28
             WHERE e.EVENT_TYPEID = 16
               AND e.EVENT_TIMESTAMP > s.SUB_TIME
               AND q.EVENT_OPTAUUID IS NULL
@@ -621,7 +622,7 @@ def def_load_season_team_average(calendar_uuid: str) -> pd.DataFrame:
                 SUM(CASE WHEN STAT_TYPE = 'wonCorners' THEN CAST(STAT_TOTAL AS FLOAT) ELSE 0 END) AS WONCORNERS,
                 SUM(CASE WHEN STAT_TYPE = 'lostCorners' THEN CAST(STAT_TOTAL AS FLOAT) ELSE 0 END) AS LOSTCORNERS,
                 SUM(CASE WHEN STAT_TYPE = 'goalAssist' THEN CAST(STAT_TOTAL AS FLOAT) ELSE 0 END) AS GOALASSIST
-            FROM KLUB_HVIDOVREIF.AXIS.OPTA_MATCHSTATS
+            FROM {DB}.OPTA_MATCHSTATS
             WHERE MATCH_OPTAUUID IN (SELECT MATCH_OPTAUUID FROM MatchBase)
             GROUP BY MATCH_OPTAUUID, CONTESTANT_OPTAUUID
         ),
@@ -644,79 +645,18 @@ def def_load_season_team_average(calendar_uuid: str) -> pd.DataFrame:
                 SUM(CASE WHEN STAT_TYPE = 'attFastbreak' THEN CAST(STAT_VALUE AS FLOAT) ELSE 0 END) AS ATTFASTBREAK,
                 SUM(CASE WHEN STAT_TYPE = 'attIboxGoal' THEN CAST(STAT_VALUE AS FLOAT) ELSE 0 END) AS ATTIBOXGOAL,
                 SUM(CASE WHEN STAT_TYPE = 'attOboxGoal' THEN CAST(STAT_VALUE AS FLOAT) ELSE 0 END) AS ATTOBOXGOAL
-            FROM KLUB_HVIDOVREIF.AXIS.OPTA_MATCHEXPECTEDGOALS_TEAM
+            FROM {DB}.OPTA_MATCHEXPECTEDGOALS_TEAM
             WHERE MATCH_OPTAUUID IN (SELECT MATCH_OPTAUUID FROM MatchBase)
             GROUP BY MATCH_OPTAUUID, CONTESTANT_OPTAUUID
-        ),
-        MatchStatsPerTeam AS (
-            SELECT 
-                tm.MATCH_OPTAUUID,
-                tm.TEAM_OPTAUUID,
-                tm.GOALS,
-                tm.GOALS_AGAINST,
-                COALESCE(ms.TOTALPASS, 0) AS TOTALPASS,
-                COALESCE(ms.ACCURATEPASS, 0) AS ACCURATEPASS,
-                COALESCE(ms.POSSESSIONPERCENTAGE, 0) AS POSSESSIONPERCENTAGE,
-                COALESCE(ms.TOTALTHROWS, 0) AS TOTALTHROWS,
-                COALESCE(ms.TOTALOFFSIDE, 0) AS TOTALOFFSIDE,
-                COALESCE(ms.TOTALSCORINGATT, 0) AS TOTALSCORINGATT,
-                COALESCE(ms.ONTARGETSCORINGATT, 0) AS ONTARGETSCORINGATT,
-                COALESCE(ms.SHOTOFFTARGET, 0) AS SHOTOFFTARGET,
-                COALESCE(ms.BLOCKEDSCORINGATT, 0) AS BLOCKEDSCORINGATT,
-                COALESCE(ms.GOALSCONCEDED, 0) AS GOALSCONCEDED,
-                COALESCE(ms.CLEANSHEET, 0) AS CLEANSHEET,
-                COALESCE(ms.TOTALTACKLE, 0) AS TOTALTACKLE,
-                COALESCE(ms.WONTACKLE, 0) AS WONTACKLE,
-                COALESCE(ms.TOTALCLEARANCE, 0) AS TOTALCLEARANCE,
-                COALESCE(ms.TOTALYELLOWCARD, 0) AS TOTALYELLOWCARD,
-                COALESCE(ms.TOTALREDCARD, 0) AS TOTALREDCARD,
-                COALESCE(ms.SAVES, 0) AS SAVES,
-                COALESCE(ms.WONCORNERS, 0) AS WONCORNERS,
-                COALESCE(ms.LOSTCORNERS, 0) AS LOSTCORNERS,
-                COALESCE(ms.GOALASSIST, 0) AS GOALASSIST,
-                COALESCE(mx.TOUCHES, 0) AS TOUCHES,
-                COALESCE(mx.TOUCHESINOPPBOX, 0) AS TOUCHESINOPPBOX,
-                COALESCE(mx.EXPECTEDGOALS, 0) AS EXPECTEDGOALS,
-                COALESCE(mx.EXPECTEDGOALSNONPENALTY, 0) AS EXPECTEDGOALSNONPENALTY,
-                COALESCE(mx.EXPECTEDGOALSCONCEDED, 0) AS EXPECTEDGOALSCONCEDED,
-                COALESCE(mx.EXPECTEDASSISTS, 0) AS EXPECTEDASSISTS,
-                COALESCE(mx.BIGCHANCECREATED, 0) AS BIGCHANCECREATED,
-                COALESCE(mx.BIGCHANCEMISSED, 0) AS BIGCHANCEMISSED,
-                COALESCE(mx.BIGCHANCESCORED, 0) AS BIGCHANCESCORED,
-                COALESCE(mx.HITWOODWORK, 0) AS HITWOODWORK,
-                COALESCE(mx.ATTOPENPLAY, 0) AS ATTOPENPLAY,
-                COALESCE(mx.ATTSETPIECE, 0) AS ATTSETPIECE,
-                COALESCE(mx.ATTFASTBREAK, 0) AS ATTFASTBREAK,
-                COALESCE(mx.ATTIBOXGOAL, 0) AS ATTIBOXGOAL,
-                COALESCE(mx.ATTOBOXGOAL, 0) AS ATTOBOXGOAL,
-                COALESCE(cs.SUBSGOALS, 0) AS SUBSGOALS
-            FROM TeamMatchesFlattened tm
-            LEFT JOIN TeamMatchStatsAgg ms ON tm.MATCH_OPTAUUID = ms.MATCH_OPTAUUID AND tm.TEAM_OPTAUUID = ms.TEAM_OPTAUUID
-            LEFT JOIN TeamMatchXgAgg mx ON tm.MATCH_OPTAUUID = mx.MATCH_OPTAUUID AND tm.TEAM_OPTAUUID = mx.TEAM_OPTAUUID
-            LEFT JOIN CalculatedSubGoals cs ON tm.MATCH_OPTAUUID = cs.MATCH_OPTAUUID AND tm.TEAM_OPTAUUID = cs.TEAM_OPTAUUID
-        ),
-        TeamLookup AS (
-            SELECT CONTESTANTHOME_OPTAUUID AS TEAM_ID, CONTESTANTHOME_NAME AS TEAM_NAME FROM MatchBase
-            UNION
-            SELECT CONTESTANTAWAY_OPTAUUID AS TEAM_ID, CONTESTANTAWAY_NAME AS TEAM_NAME FROM MatchBase
         )
         SELECT 
-            t.TEAM_NAME,
-            m.TEAM_OPTAUUID,
-            COUNT(m.MATCH_OPTAUUID) AS ACTUAL_MATCHES,
-            SUM(m.GOALS) AS TOTAL_GOALS,
-            SUM(m.GOALS_AGAINST) AS TOTAL_GOALS_AGAINST,
-            SUM(m.EXPECTEDGOALS) AS TOTAL_EXPECTEDGOALS,
-            SUM(m.EXPECTEDGOALSCONCEDED) AS TOTAL_EXPECTEDGOALSCONCEDED,
-            AVG(m.GOALS) AS GOALS_P90,
-            AVG(m.GOALS_AGAINST) AS GOALS_AGAINST_P90,
-            AVG(m.EXPECTEDGOALS) AS XG_P90,
-            AVG(m.EXPECTEDGOALSCONCEDED) AS XGC_P90,
-            AVG(m.POSSESSIONPERCENTAGE) AS AVG_POSSESSION_PCT
-        FROM MatchStatsPerTeam m
-        JOIN TeamLookup t ON m.TEAM_OPTAUUID = t.TEAM_ID
-        GROUP BY t.TEAM_NAME, m.TEAM_OPTAUUID
-        ORDER BY TOTAL_GOALS DESC;
+            tm.TEAM_OPTAUUID,
+            COUNT(tm.MATCH_OPTAUUID) AS PL,
+            AVG(tm.GOALS) AS GOALS_AVG,
+            AVG(mx.EXPECTEDGOALS) AS XG_AVG
+        FROM TeamMatchesFlattened tm
+        LEFT JOIN TeamMatchXgAgg mx ON tm.MATCH_OPTAUUID = mx.MATCH_OPTAUUID AND tm.TEAM_OPTAUUID = mx.TEAM_OPTAUUID
+        GROUP BY tm.TEAM_OPTAUUID
     """
     
     try:
@@ -728,5 +668,4 @@ def def_load_season_team_average(calendar_uuid: str) -> pd.DataFrame:
             df.columns = [str(c).upper() for c in df.columns]
         return df if df is not None else pd.DataFrame()
     except Exception as e:
-        st.error(f"Fejl ved hentning af sæsontotaler: {e}")
         return pd.DataFrame()
