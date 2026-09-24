@@ -2,6 +2,8 @@
 import pandas as pd
 import streamlit as st
 
+from data.sql.fallback import fill_gaps_side_aware
+
 DB = "KLUB_HVIDOVREIF.AXIS"
 
 @st.cache_data(ttl=600, show_spinner="Henter stilling og holdoversigt fra Snowflake...")
@@ -235,55 +237,20 @@ def hent_hoved_stats(_conn, calendar_uuid: str) -> pd.DataFrame:
         df.columns = [str(c).upper() for c in df.columns]
         if 'MATCH_DATE_FULL' in df.columns:
             df['MATCH_DATE_FULL'] = pd.to_datetime(df['MATCH_DATE_FULL'], errors='coerce').dt.tz_localize(None)
-            
-        # --- 1. AUTOMATISK FALLBACK FRA CSV-FIL (data/csv/kampe_fallback.csv) ---
-        import os
-        fallback_file = "data/csv/kampe_fallback.csv"
-        
-        if os.path.exists(fallback_file):
-            try:
-                fallback_df = pd.read_csv(fallback_file)
-                fallback_df.columns = [str(c).upper() for c in fallback_df.columns]
-                
-                if 'MATCH_OPTAUUID' in fallback_df.columns:
-                    for _, fb_row in fallback_df.iterrows():
-                        match_uuid = str(fb_row['MATCH_OPTAUUID']).strip()
-                        mask = df['MATCH_OPTAUUID'] == match_uuid
-                        
-                        if mask.any():
-                            team_uuid = fb_row.get('TEAM_OPTAUUID')
-                            is_home = False
-                            is_away = False
-                            
-                            h_id = df.loc[mask, 'CONTESTANTHOME_OPTAUUID'].values[0]
-                            a_id = df.loc[mask, 'CONTESTANTAWAY_OPTAUUID'].values[0]
-                            
-                            if team_uuid == h_id:
-                                is_home = True
-                            elif team_uuid == a_id:
-                                is_away = True
-                                
-                            col_mapping = {
-                                'POSSESSIONPERCENTAGE': ('HOME_POSSESSION' if is_home else 'AWAY_POSSESSION'),
-                                'TOTALPASS': ('HOME_PASSES' if is_home else 'AWAY_PASSES'),
-                                'ACCURATEPASS': ('HOME_ACCURATE_PASSES' if is_home else 'AWAY_ACCURATE_PASSES'),
-                                'TOTALSCORINGATT': ('HOME_SHOTS' if is_home else 'AWAY_SHOTS'),
-                                'SHOTOFFTARGET': ('HOME_OFF_TARGET' if is_home else 'AWAY_OFF_TARGET'),
-                                'WONCORNERS': ('HOME_CORNERS_WON' if is_home else 'AWAY_CORNERS_WON'),
-                                'TOTALTACKLE': ('HOME_TACKLES' if is_home else 'AWAY_TACKLES'),
-                                'TOTALCLEARANCE': ('HOME_CLEARANCES' if is_home else 'AWAY_CLEARANCES'),
-                                'EXPECTEDGOALS': ('HOME_XG' if is_home else 'AWAY_XG')
-                            }
-                            
-                            for csv_col, df_col in col_mapping.items():
-                                if csv_col in fb_row and df_col in df.columns:
-                                    val = fb_row[csv_col]
-                                    if pd.notna(val):
-                                        current_val = df.loc[mask, df_col].values[0]
-                                        if pd.isna(current_val):
-                                            df.loc[mask, df_col] = pd.to_numeric(val, errors='coerce')
-            except Exception as e:
-                st.warning(f"Kunne ikke indlæse kampe_fallback.csv: {e}")
+
+        # --- 1. FALLBACK: udfyld KUN huller fra data/csv/kampe_fallback.csv (delt logik, se data/sql/fallback.py) ---
+        col_mapping = {
+            'POSSESSIONPERCENTAGE': 'POSSESSION',
+            'TOTALPASS': 'PASSES',
+            'ACCURATEPASS': 'ACCURATE_PASSES',
+            'TOTALSCORINGATT': 'SHOTS',
+            'SHOTOFFTARGET': 'OFF_TARGET',
+            'WONCORNERS': 'CORNERS_WON',
+            'TOTALTACKLE': 'TACKLES',
+            'TOTALCLEARANCE': 'CLEARANCES',
+            'EXPECTEDGOALS': 'XG'
+        }
+        df = fill_gaps_side_aware(df, col_mapping)
 
         # --- 2. KUN ADVARSEL (Tjekket kører EFTER fallback er flettet ind) ---
         if 'HOME_POSSESSION' in df.columns and 'MATCH_STATUS' in df.columns:
