@@ -1,16 +1,12 @@
+# data/sql/teams.py
 import pandas as pd
 import streamlit as st
-
-from data.sql.fallback import fill_gaps_side_aware
+import os
 
 DB = "KLUB_HVIDOVREIF.AXIS"
 
 @st.cache_data(ttl=600, show_spinner="Henter stilling og holdoversigt fra Snowflake...")
 def hent_liga_stilling(_conn, calendar_uuid: str) -> pd.DataFrame:
-    """
-    Beregner en komplet stilling (tabel) for den valgte turnering/sæson 
-    direkte ud fra kampresultaterne i OPTA_MATCHINFO for at sikre 100% konsistens.
-    """
     if not _conn or not calendar_uuid:
         return pd.DataFrame()
 
@@ -33,7 +29,6 @@ def hent_liga_stilling(_conn, calendar_uuid: str) -> pd.DataFrame:
               AND TOTAL_AWAY_SCORE IS NOT NULL
         ),
         TeamMatchRows AS (
-            -- Hjemmeholdets perspektiv
             SELECT 
                 HOME_ID AS TEAM_ID,
                 HOME_NAME AS TEAM_NAME,
@@ -46,7 +41,6 @@ def hent_liga_stilling(_conn, calendar_uuid: str) -> pd.DataFrame:
                 MATCH_DATE_FULL
             FROM Matches
             UNION ALL
-            -- Udeholdets perspektiv
             SELECT 
                 AWAY_ID AS TEAM_ID,
                 AWAY_NAME AS TEAM_NAME,
@@ -89,7 +83,7 @@ def hent_liga_stilling(_conn, calendar_uuid: str) -> pd.DataFrame:
         FROM Aggregated
         ORDER BY POSITION ASC
     """
-    
+
     df = _conn.query(query)
     if df is not None and not df.empty:
         df.columns = [str(c).upper() for c in df.columns]
@@ -98,10 +92,6 @@ def hent_liga_stilling(_conn, calendar_uuid: str) -> pd.DataFrame:
 
 @st.cache_data(ttl=600, show_spinner="Henter holdets formkurve...")
 def hent_hold_formkurve(_conn, calendar_uuid: str, team_optauuid: str, limit: int = 5) -> pd.DataFrame:
-    """
-    Henter de seneste kampe for et specifikt hold med resultat og mål, 
-    så man kan vise holdets formkurve (f.eks. seneste 5 kampe).
-    """
     if not _conn or not calendar_uuid or not team_optauuid:
         return pd.DataFrame()
 
@@ -130,13 +120,14 @@ def hent_hold_formkurve(_conn, calendar_uuid: str, team_optauuid: str, limit: in
         ORDER BY MATCH_DATE_FULL DESC
         LIMIT {limit}
     """
-    
+
     df = _conn.query(query)
     if df is not None and not df.empty:
         df.columns = [str(c).upper() for c in df.columns]
         if 'MATCH_DATE_FULL' in df.columns:
             df['MATCH_DATE_FULL'] = pd.to_datetime(df['MATCH_DATE_FULL'], errors='coerce').dt.tz_localize(None)
     return df if df is not None else pd.DataFrame()
+
 
 @st.cache_data(ttl=600, show_spinner="Henter kampdata og statistik fra Snowflake...")
 def hent_hoved_stats(_conn, calendar_uuid: str) -> pd.DataFrame:
@@ -230,311 +221,150 @@ def hent_hoved_stats(_conn, calendar_uuid: str) -> pd.DataFrame:
         LEFT JOIN TeamStats s_away ON m.MATCH_OPTAUUID = s_away.MATCH_OPTAUUID AND m.CONTESTANTAWAY_OPTAUUID = s_away.CONTESTANT_OPTAUUID
         ORDER BY m.MATCH_DATE_FULL ASC
     """
-    
+
     df = _conn.query(query)
     if df is not None and not df.empty:
         df.columns = [str(c).upper() for c in df.columns]
         if 'MATCH_DATE_FULL' in df.columns:
             df['MATCH_DATE_FULL'] = pd.to_datetime(df['MATCH_DATE_FULL'], errors='coerce').dt.tz_localize(None)
 
-        # --- 1. FALLBACK: udfyld KUN huller fra data/csv/kampe_fallback.csv ---
-        col_mapping = {
-            'POSSESSIONPERCENTAGE': 'POSSESSION',
-            'TOTALPASS': 'PASSES',
-            'ACCURATEPASS': 'ACCURATE_PASSES',
-            'TOTALSCORINGATT': 'SHOTS',
-            'SHOTOFFTARGET': 'OFF_TARGET',
-            'WONCORNERS': 'CORNERS_WON',
-            'TOTALTACKLE': 'TACKLES',
-            'TOTALCLEARANCE': 'CLEARANCES',
-            'EXPECTEDGOALS': 'XG'
-        }
-        df = fill_gaps_side_aware(df, col_mapping)
+        # Automatisk fallback fra CSV-fil
+        fallback_file = "data/csv/kampe_fallback.csv"
+        if os.path.exists(fallback_file):
+            try:
+                fallback_df = pd.read_csv(fallback_file)
+                fallback_df.columns = [str(c).upper() for c in fallback_df.columns]
 
-        # --- 2. KUN ADVARSEL ---
-        if 'HOME_POSSESSION' in df.columns and 'MATCH_STATUS' in df.columns:
-            played_matches = df[df['MATCH_STATUS'].str.lower() == 'played']
-            
-            hvidovre_played = played_matches[
-                played_matches['CONTESTANTHOME_NAME'].str.contains('Hvidovre', case=False, na=False) | 
-                played_matches['CONTESTANTAWAY_NAME'].str.contains('Hvidovre', case=False, na=False)
-            ]
-            
-            missing_hvidovre_stats = hvidovre_played[
-                hvidovre_played['HOME_POSSESSION'].isna() | hvidovre_played['AWAY_POSSESSION'].isna()
-            ]
-            
-            if not missing_hvidovre_stats.empty:
-                uuids_str = ", ".join(missing_hvidovre_stats['MATCH_OPTAUUID'].unique())
-                st.warning(
-                    f"**Opta-statistik mangler for {len(missing_hvidovre_stats)} af Hvidovres spillede kampe!** "
-                    f"Berørte Match UUID'er: `{uuids_str}`"
-                )
+                if 'MATCH_OPTAUUID' in fallback_df.columns:
+                    for _, fb_row in fallback_df.iterrows():
+                        match_uuid = str(fb_row['MATCH_OPTAUUID']).strip()
+                        mask = df['MATCH_OPTAUUID'] == match_uuid
+
+                        if mask.any():
+                            team_uuid = fb_row.get('TEAM_OPTAUUID')
+                            is_home = False
+                            is_away = False
+
+                            h_id = df.loc[mask, 'CONTESTANTHOME_OPTAUUID'].values[0]
+                            a_id = df.loc[mask, 'CONTESTANTAWAY_OPTAUUID'].values[0]
+
+                            if team_uuid == h_id:
+                                is_home = True
+                            elif team_uuid == a_id:
+                                is_away = True
+
+                            col_mapping = {
+                                'POSSESSIONPERCENTAGE': ('HOME_POSSESSION' if is_home else 'AWAY_POSSESSION'),
+                                'TOTALPASS': ('HOME_PASSES' if is_home else 'AWAY_PASSES'),
+                                'ACCURATEPASS': ('HOME_ACCURATE_PASSES' if is_home else 'AWAY_ACCURATE_PASSES'),
+                                'TOTALSCORINGATT': ('HOME_SHOTS' if is_home else 'AWAY_SHOTS'),
+                                'SHOTOFFTARGET': ('HOME_OFF_TARGET' if is_home else 'AWAY_OFF_TARGET'),
+                                'WONCORNERS': ('HOME_CORNERS_WON' if is_home else 'AWAY_CORNERS_WON'),
+                                'TOTALTACKLE': ('HOME_TACKLES' if is_home else 'AWAY_TACKLES'),
+                                'TOTALCLEARANCE': ('HOME_CLEARANCES' if is_home else 'AWAY_CLEARANCES'),
+                                'EXPECTEDGOALS': ('HOME_XG' if is_home else 'AWAY_XG')
+                            }
+
+                            for csv_col, df_col in col_mapping.items():
+                                if csv_col in fb_row and df_col in df.columns:
+                                    val = fb_row[csv_col]
+                                    if pd.notna(val):
+                                        current_val = df.loc[mask, df_col].values[0]
+                                        if pd.isna(current_val):
+                                            df.loc[mask, df_col] = pd.to_numeric(val, errors='coerce')
+            except Exception as e:
+                st.warning(f"Kunne ikke indlæse kampe_fallback.csv: {e}")
 
     return df if df is not None else pd.DataFrame()
 
 
 @st.cache_data(ttl=600, show_spinner="Henter opdateret holdstatistik fra Snowflake...")
 def hent_samlet_hold_statistik(_conn, calendar_uuid: str) -> pd.DataFrame:
-    """
-    Henter en komplet, synkroniseret oversigt over holdenes mål, xG og statistikker
-    baseret på den nye struktur med totaler først og derefter gennemsnit.
-    """
     if not _conn or not calendar_uuid:
         return pd.DataFrame()
 
     query = f"""
-    WITH MatchBase AS (
+    WITH MatchResults AS (
         SELECT 
             MATCH_OPTAUUID,
-            CONTESTANTHOME_OPTAUUID,
-            CONTESTANTAWAY_OPTAUUID,
-            CONTESTANTHOME_NAME,
-            CONTESTANTAWAY_NAME,
-            TOTAL_HOME_SCORE,
-            TOTAL_AWAY_SCORE,
-            MATCH_DATE_FULL
+            CONTESTANTHOME_OPTAUUID as HOME_ID,
+            CONTESTANTHOME_NAME as HOME_NAME,
+            CONTESTANTAWAY_OPTAUUID as AWAY_ID,
+            CONTESTANTAWAY_NAME as AWAY_NAME,
+            FT_HOME_SCORE,
+            FT_AWAY_SCORE
         FROM {DB}.OPTA_MATCHINFO
         WHERE TOURNAMENTCALENDAR_OPTAUUID = '{calendar_uuid}'
           AND MATCH_STATUS = 'Played'
-          AND CAST(MATCH_DATE_FULL AS DATE) <= CURRENT_DATE()
     ),
     TeamLookup AS (
-        SELECT CONTESTANTHOME_OPTAUUID AS TEAM_ID, CONTESTANTHOME_NAME AS TEAM_NAME FROM MatchBase
+        SELECT HOME_ID as TEAM_ID, HOME_NAME as TEAM_NAME FROM MatchResults
         UNION
-        SELECT CONTESTANTAWAY_OPTAUUID AS TEAM_ID, CONTESTANTAWAY_NAME AS TEAM_NAME FROM MatchBase
+        SELECT AWAY_ID as TEAM_ID, AWAY_NAME as TEAM_NAME FROM MatchResults
     ),
-    TeamMatchesFlattened AS (
-        SELECT MATCH_OPTAUUID, CONTESTANTHOME_OPTAUUID AS TEAM_OPTAUUID, TOTAL_HOME_SCORE AS GOALS, TOTAL_AWAY_SCORE AS GOALS_AGAINST FROM MatchBase
+    TeamGoals AS (
+        SELECT HOME_ID as TEAM_ID, FT_HOME_SCORE as TOTAL_GOALS, 1 as MATCH_COUNT FROM MatchResults
         UNION ALL
-        SELECT MATCH_OPTAUUID, CONTESTANTAWAY_OPTAUUID AS TEAM_OPTAUUID, TOTAL_AWAY_SCORE AS GOALS, TOTAL_HOME_SCORE AS GOALS_AGAINST FROM MatchBase
+        SELECT AWAY_ID as TEAM_ID, FT_AWAY_SCORE as TOTAL_GOALS, 1 as MATCH_COUNT FROM MatchResults
     ),
-    PlayerSubs AS (
-        SELECT MATCH_OPTAUUID, PLAYER_OPTAUUID, MIN(EVENT_TIMESTAMP) AS SUB_TIME
-        FROM {DB}.OPTA_EVENTS
-        WHERE EVENT_TYPEID = 19
-        GROUP BY MATCH_OPTAUUID, PLAYER_OPTAUUID
+    FinalGoals AS (
+        SELECT TEAM_ID, SUM(TOTAL_GOALS) as TOTAL_GOALS, SUM(MATCH_COUNT) as ACTUAL_MATCHES
+        FROM TeamGoals GROUP BY TEAM_ID
     ),
-    CalculatedSubGoals AS (
+    TeamXG AS (
         SELECT 
-            e.MATCH_OPTAUUID,
-            e.EVENT_CONTESTANT_OPTAUUID AS TEAM_OPTAUUID,
-            COUNT(DISTINCT e.EVENT_OPTAUUID) AS SUBSGOALS
-        FROM {DB}.OPTA_EVENTS e
-        JOIN PlayerSubs s ON e.MATCH_OPTAUUID = s.MATCH_OPTAUUID AND e.PLAYER_OPTAUUID = s.PLAYER_OPTAUUID
-        LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID AND q.QUALIFIER_QID = 28
-        WHERE e.EVENT_TYPEID = 16
-          AND e.EVENT_TIMESTAMP > s.SUB_TIME
-          AND q.EVENT_OPTAUUID IS NULL
-        GROUP BY e.MATCH_OPTAUUID, e.EVENT_CONTESTANT_OPTAUUID
-    ),
-    TeamMatchStatsAgg AS (
-        SELECT 
-            MATCH_OPTAUUID,
-            CONTESTANT_OPTAUUID AS TEAM_OPTAUUID,
-            SUM(CASE WHEN STAT_TYPE = 'totalPass' THEN CAST(STAT_TOTAL AS FLOAT) ELSE 0 END) AS TOTALPASS,
-            SUM(CASE WHEN STAT_TYPE = 'accuratePass' THEN CAST(STAT_TOTAL AS FLOAT) ELSE 0 END) AS ACCURATEPASS,
-            MAX(CASE WHEN STAT_TYPE = 'possessionPercentage' THEN CAST(STAT_TOTAL AS FLOAT) END) AS POSSESSIONPERCENTAGE,
-            SUM(CASE WHEN STAT_TYPE = 'totalThrows' THEN CAST(STAT_TOTAL AS FLOAT) ELSE 0 END) AS TOTALTHROWS,
-            SUM(CASE WHEN STAT_TYPE = 'totalOffside' THEN CAST(STAT_TOTAL AS FLOAT) ELSE 0 END) AS TOTALOFFSIDE,
-            SUM(CASE WHEN STAT_TYPE = 'totalScoringAtt' THEN CAST(STAT_TOTAL AS FLOAT) ELSE 0 END) AS TOTALSCORINGATT,
-            SUM(CASE WHEN STAT_TYPE = 'ontargetScoringAtt' THEN CAST(STAT_TOTAL AS FLOAT) ELSE 0 END) AS ONTARGETSCORINGATT,
-            SUM(CASE WHEN STAT_TYPE = 'shotOffTarget' THEN CAST(STAT_TOTAL AS FLOAT) ELSE 0 END) AS SHOTOFFTARGET,
-            SUM(CASE WHEN STAT_TYPE = 'blockedScoringAtt' THEN CAST(STAT_TOTAL AS FLOAT) ELSE 0 END) AS BLOCKEDSCORINGATT,
-            SUM(CASE WHEN STAT_TYPE = 'goalsConceded' THEN CAST(STAT_TOTAL AS FLOAT) ELSE 0 END) AS GOALSCONCEDED,
-            MAX(CASE WHEN STAT_TYPE = 'cleanSheet' THEN CAST(STAT_TOTAL AS FLOAT) END) AS CLEANSHEET,
-            SUM(CASE WHEN STAT_TYPE = 'totalTackle' THEN CAST(STAT_TOTAL AS FLOAT) ELSE 0 END) AS TOTALTACKLE,
-            SUM(CASE WHEN STAT_TYPE = 'wonTackle' THEN CAST(STAT_TOTAL AS FLOAT) ELSE 0 END) AS WONTACKLE,
-            SUM(CASE WHEN STAT_TYPE = 'totalClearance' THEN CAST(STAT_TOTAL AS FLOAT) ELSE 0 END) AS TOTALCLEARANCE,
-            SUM(CASE WHEN STAT_TYPE = 'totalYellowCard' THEN CAST(STAT_TOTAL AS FLOAT) ELSE 0 END) AS TOTALYELLOWCARD,
-            SUM(CASE WHEN STAT_TYPE = 'totalRedCard' THEN CAST(STAT_TOTAL AS FLOAT) ELSE 0 END) AS TOTALREDCARD,
-            SUM(CASE WHEN STAT_TYPE = 'saves' THEN CAST(STAT_TOTAL AS FLOAT) ELSE 0 END) AS SAVES,
-            SUM(CASE WHEN STAT_TYPE = 'wonCorners' THEN CAST(STAT_TOTAL AS FLOAT) ELSE 0 END) AS WONCORNERS,
-            SUM(CASE WHEN STAT_TYPE = 'lostCorners' THEN CAST(STAT_TOTAL AS FLOAT) ELSE 0 END) AS LOSTCORNERS,
-            SUM(CASE WHEN STAT_TYPE = 'goalAssist' THEN CAST(STAT_TOTAL AS FLOAT) ELSE 0 END) AS GOALASSIST
-        FROM {DB}.OPTA_MATCHSTATS
-        WHERE MATCH_OPTAUUID IN (SELECT MATCH_OPTAUUID FROM MatchBase)
-        GROUP BY MATCH_OPTAUUID, CONTESTANT_OPTAUUID
-    ),
-    TeamMatchXgAgg AS (
-        SELECT 
-            MATCH_OPTAUUID,
-            CONTESTANT_OPTAUUID AS TEAM_OPTAUUID,
-            SUM(CASE WHEN STAT_TYPE = 'touches' THEN CAST(STAT_VALUE AS FLOAT) ELSE 0 END) AS TOUCHES,
-            SUM(CASE WHEN STAT_TYPE = 'touchesInOppBox' THEN CAST(STAT_VALUE AS FLOAT) ELSE 0 END) AS TOUCHESINOPPBOX,
-            SUM(CASE WHEN STAT_TYPE = 'expectedGoals' THEN CAST(STAT_VALUE AS FLOAT) ELSE 0 END) AS EXPECTEDGOALS,
-            SUM(CASE WHEN STAT_TYPE = 'expectedGoalsNonpenalty' THEN CAST(STAT_VALUE AS FLOAT) ELSE 0 END) AS EXPECTEDGOALSNONPENALTY,
-            SUM(CASE WHEN STAT_TYPE = 'expectedGoalsConceded' THEN CAST(STAT_VALUE AS FLOAT) ELSE 0 END) AS EXPECTEDGOALSCONCEDED,
-            SUM(CASE WHEN STAT_TYPE = 'expectedAssists' THEN CAST(STAT_VALUE AS FLOAT) ELSE 0 END) AS EXPECTEDASSISTS,
-            SUM(CASE WHEN STAT_TYPE = 'bigChanceCreated' THEN CAST(STAT_VALUE AS FLOAT) ELSE 0 END) AS BIGCHANCECREATED,
-            SUM(CASE WHEN STAT_TYPE = 'bigChanceMissed' THEN CAST(STAT_VALUE AS FLOAT) ELSE 0 END) AS BIGCHANCEMISSED,
-            SUM(CASE WHEN STAT_TYPE = 'bigChanceScored' THEN CAST(STAT_VALUE AS FLOAT) ELSE 0 END) AS BIGCHANCESCORED,
-            SUM(CASE WHEN STAT_TYPE = 'hitWoodwork' THEN CAST(STAT_VALUE AS FLOAT) ELSE 0 END) AS HITWOODWORK,
-            SUM(CASE WHEN STAT_TYPE = 'attOpenplay' THEN CAST(STAT_VALUE AS FLOAT) ELSE 0 END) AS ATTOPENPLAY,
-            SUM(CASE WHEN STAT_TYPE = 'attSetpiece' THEN CAST(STAT_VALUE AS FLOAT) ELSE 0 END) AS ATTSETPIECE,
-            SUM(CASE WHEN STAT_TYPE = 'attFastbreak' THEN CAST(STAT_VALUE AS FLOAT) ELSE 0 END) AS ATTFASTBREAK,
-            SUM(CASE WHEN STAT_TYPE = 'attIboxGoal' THEN CAST(STAT_VALUE AS FLOAT) ELSE 0 END) AS ATTIBOXGOAL,
-            SUM(CASE WHEN STAT_TYPE = 'attOboxGoal' THEN CAST(STAT_VALUE AS FLOAT) ELSE 0 END) AS ATTOBOXGOAL
+            CONTESTANT_OPTAUUID,
+            SUM(CASE WHEN STAT_TYPE = 'expectedGoals' THEN STAT_VALUE ELSE 0 END) as TOTAL_XG,
+            SUM(CASE WHEN STAT_TYPE = 'expectedGoalsConceded' THEN STAT_VALUE ELSE 0 END) as TOTAL_XGC
         FROM {DB}.OPTA_MATCHEXPECTEDGOALS_TEAM
-        WHERE MATCH_OPTAUUID IN (SELECT MATCH_OPTAUUID FROM MatchBase)
-        GROUP BY MATCH_OPTAUUID, CONTESTANT_OPTAUUID
+        WHERE TOURNAMENTCALENDAR_OPTAUUID = '{calendar_uuid}'
+        GROUP BY CONTESTANT_OPTAUUID
     ),
-    MatchStatsPerTeam AS (
+    AggregatedStats AS (
         SELECT 
-            tm.MATCH_OPTAUUID,
-            tm.TEAM_OPTAUUID,
-            tm.GOALS,
-            tm.GOALS_AGAINST,
-            COALESCE(ms.TOTALPASS, 0) AS TOTALPASS,
-            COALESCE(ms.ACCURATEPASS, 0) AS ACCURATEPASS,
-            COALESCE(ms.POSSESSIONPERCENTAGE, 0) AS POSSESSIONPERCENTAGE,
-            COALESCE(ms.TOTALTHROWS, 0) AS TOTALTHROWS,
-            COALESCE(ms.TOTALOFFSIDE, 0) AS TOTALOFFSIDE,
-            COALESCE(ms.TOTALSCORINGATT, 0) AS TOTALSCORINGATT,
-            COALESCE(ms.ONTARGETSCORINGATT, 0) AS ONTARGETSCORINGATT,
-            COALESCE(ms.SHOTOFFTARGET, 0) AS SHOTOFFTARGET,
-            COALESCE(ms.BLOCKEDSCORINGATT, 0) AS BLOCKEDSCORINGATT,
-            COALESCE(ms.GOALSCONCEDED, 0) AS GOALSCONCEDED,
-            COALESCE(ms.CLEANSHEET, 0) AS CLEANSHEET,
-            COALESCE(ms.TOTALTACKLE, 0) AS TOTALTACKLE,
-            COALESCE(ms.WONTACKLE, 0) AS WONTACKLE,
-            COALESCE(ms.TOTALCLEARANCE, 0) AS TOTALCLEARANCE,
-            COALESCE(ms.TOTALYELLOWCARD, 0) AS TOTALYELLOWCARD,
-            COALESCE(ms.TOTALREDCARD, 0) AS TOTALREDCARD,
-            COALESCE(ms.SAVES, 0) AS SAVES,
-            COALESCE(ms.WONCORNERS, 0) AS WONCORNERS,
-            COALESCE(ms.LOSTCORNERS, 0) AS LOSTCORNERS,
-            COALESCE(ms.GOALASSIST, 0) AS GOALASSIST,
-            COALESCE(mx.TOUCHES, 0) AS TOUCHES,
-            COALESCE(mx.TOUCHESINOPPBOX, 0) AS TOUCHESINOPPBOX,
-            COALESCE(mx.EXPECTEDGOALS, 0) AS EXPECTEDGOALS,
-            COALESCE(mx.EXPECTEDGOALSNONPENALTY, 0) AS EXPECTEDGOALSNONPENALTY,
-            COALESCE(mx.EXPECTEDGOALSCONCEDED, 0) AS EXPECTEDGOALSCONCEDED,
-            COALESCE(mx.EXPECTEDASSISTS, 0) AS EXPECTEDASSISTS,
-            COALESCE(mx.BIGCHANCECREATED, 0) AS BIGCHANCECREATED,
-            COALESCE(mx.BIGCHANCEMISSED, 0) AS BIGCHANCEMISSED,
-            COALESCE(mx.BIGCHANCESCORED, 0) AS BIGCHANCESCORED,
-            COALESCE(mx.HITWOODWORK, 0) AS HITWOODWORK,
-            COALESCE(mx.ATTOPENPLAY, 0) AS ATTOPENPLAY,
-            COALESCE(mx.ATTSETPIECE, 0) AS ATTSETPIECE,
-            COALESCE(mx.ATTFASTBREAK, 0) AS ATTFASTBREAK,
-            COALESCE(mx.ATTIBOXGOAL, 0) AS ATTIBOXGOAL,
-            COALESCE(mx.ATTOBOXGOAL, 0) AS ATTOBOXGOAL,
-            COALESCE(cs.SUBSGOALS, 0) AS SUBSGOALS
-        FROM TeamMatchesFlattened tm
-        LEFT JOIN TeamMatchStatsAgg ms ON tm.MATCH_OPTAUUID = ms.MATCH_OPTAUUID AND tm.TEAM_OPTAUUID = ms.TEAM_OPTAUUID
-        LEFT JOIN TeamMatchXgAgg mx ON tm.MATCH_OPTAUUID = mx.MATCH_OPTAUUID AND tm.TEAM_OPTAUUID = mx.TEAM_OPTAUUID
-        LEFT JOIN CalculatedSubGoals cs ON tm.MATCH_OPTAUUID = cs.MATCH_OPTAUUID AND tm.TEAM_OPTAUUID = cs.TEAM_OPTAUUID
+            CONTESTANT_OPTAUUID,
+            SUM(CASE WHEN STAT_TYPE = 'totalScoringAtt' THEN STAT_TOTAL ELSE 0 END) as TOTAL_SHOTS,
+            SUM(CASE WHEN STAT_TYPE = 'ontargetScoringAtt' THEN STAT_TOTAL ELSE 0 END) as ON_TARGET_SHOTS,
+            SUM(CASE WHEN STAT_TYPE = 'shotOffTarget' THEN STAT_TOTAL ELSE 0 END) as SHOTS_OFF_TARGET,
+            SUM(CASE WHEN STAT_TYPE = 'blockedScoringAtt' THEN STAT_TOTAL ELSE 0 END) as BLOCKED_SHOTS,
+            SUM(CASE WHEN STAT_TYPE = 'totalPass' THEN STAT_TOTAL ELSE 0 END) as TOTAL_PASSES,
+            SUM(CASE WHEN STAT_TYPE = 'accuratePass' THEN STAT_TOTAL ELSE 0 END) as TOTAL_ACCURATE_PASSES,
+            SUM(CASE WHEN STAT_TYPE = 'totalTackle' THEN STAT_TOTAL ELSE 0 END) as TOTAL_TACKLES,
+            SUM(CASE WHEN STAT_TYPE = 'wonTackle' THEN STAT_TOTAL ELSE 0 END) as WON_TACKLES,
+            SUM(CASE WHEN STAT_TYPE = 'totalClearance' THEN STAT_TOTAL ELSE 0 END) as CLEARANCES,
+            SUM(CASE WHEN STAT_TYPE = 'cornerTaken' THEN STAT_TOTAL ELSE 0 END) as CORNERS,
+            SUM(CASE WHEN STAT_TYPE = 'totalYellowCard' THEN STAT_TOTAL ELSE 0 END) as YELLOW_CARDS,
+            SUM(CASE WHEN STAT_TYPE = 'fkFoulLost' THEN STAT_TOTAL ELSE 0 END) as FOULS_CONCEDED,
+            AVG(CASE WHEN STAT_TYPE = 'possessionPercentage' THEN TRY_CAST(REPLACE(STAT_TOTAL, '%', '') AS FLOAT) END) as AVG_POSSESSION_PCT
+        FROM {DB}.OPTA_MATCHSTATS
+        WHERE TOURNAMENTCALENDAR_OPTAUUID = '{calendar_uuid}'
+        GROUP BY CONTESTANT_OPTAUUID
     )
     SELECT 
         t.TEAM_NAME,
-        m.TEAM_OPTAUUID,
-        COUNT(m.MATCH_OPTAUUID) AS ACTUAL_MATCHES,
-        
-        -- === TOTALER (Sæson-summer) ===
-        SUM(m.GOALS) AS TOTAL_GOALS,
-        SUM(m.GOALS_AGAINST) AS TOTAL_GOALS_AGAINST,
-        SUM(m.EXPECTEDGOALS) AS TOTAL_EXPECTEDGOALS,
-        SUM(m.EXPECTEDGOALSCONCEDED) AS TOTAL_EXPECTEDGOALSCONCEDED,
-        SUM(m.TOTALSCORINGATT) AS TOTAL_SCORINGATT,
-        SUM(m.ONTARGETSCORINGATT) AS TOTAL_ONTARGETSCORINGATT,
-        SUM(m.TOUCHESINOPPBOX) AS TOTAL_TOUCHESINOPPBOX,
-        SUM(m.TOTALPASS) AS TOTAL_PASS,
-        SUM(m.BIGCHANCECREATED) AS TOTAL_BIGCHANCECREATED,
-        SUM(m.TOTALYELLOWCARD) AS TOTAL_YELLOW_CARDS,
-        SUM(m.TOTALREDCARD) AS TOTAL_RED_CARDS,
-        SUM(m.CLEANSHEET) AS TOTAL_CLEAN_SHEETS,
-        
-        -- === GENNEMSNIT (Pr. kamp) ===
-        AVG(m.GOALS) AS GOALS_P90,
-        AVG(m.GOALS_AGAINST) AS GOALS_AGAINST_P90,
-        AVG(m.EXPECTEDGOALS) AS XG_P90,
-        AVG(m.EXPECTEDGOALSCONCEDED) AS XGC_P90,
-        AVG(m.POSSESSIONPERCENTAGE) AS AVG_POSSESSION_PCT,
-        AVG(m.TOTALSCORINGATT) AS SHOTS_P90,
-        AVG(m.ONTARGETSCORINGATT) AS ON_TARGET_SHOTS_P90,
-        AVG(m.TOUCHESINOPPBOX) AS TOUCHES_IN_BOX_P90,
-        AVG(m.TOTALPASS) AS PASSES_P90,
-        AVG(m.BIGCHANCECREATED) AS BIG_CHANCES_P90,
-        AVG(m.TOTALYELLOWCARD) AS YELLOW_CARDS_P90
-
-    FROM MatchStatsPerTeam m
-    JOIN TeamLookup t ON m.TEAM_OPTAUUID = t.TEAM_ID
-    GROUP BY t.TEAM_NAME, m.TEAM_OPTAUUID
-    ORDER BY TOTAL_GOALS DESC;
+        f.ACTUAL_MATCHES,
+        f.TOTAL_GOALS,
+        ROUND(f.TOTAL_GOALS / NULLIF(f.ACTUAL_MATCHES, 0), 2) as GOALS_P90,
+        ROUND(COALESCE(x.TOTAL_XG, 0), 2) as TOTAL_XG,
+        ROUND(COALESCE(x.TOTAL_XG, 0) / NULLIF(f.ACTUAL_MATCHES, 0), 2) as XG_P90,
+        ROUND(f.TOTAL_GOALS - COALESCE(x.TOTAL_XG, 0), 2) as XG_DIFF,
+        ROUND(COALESCE(x.TOTAL_XGC, 0), 2) as TOTAL_XGC,
+        ROUND(COALESCE(x.TOTAL_XGC, 0) / NULLIF(f.ACTUAL_MATCHES, 0), 2) as XGC_P90,
+        ROUND(COALESCE(s.TOTAL_SHOTS, 0) / NULLIF(f.ACTUAL_MATCHES, 0), 2) as SHOTS_P90,
+        ROUND(COALESCE(s.TOTAL_PASSES, 0) / NULLIF(f.ACTUAL_MATCHES, 0), 1) as PASSES_P90,
+        ROUND(COALESCE(s.AVG_POSSESSION_PCT, 0), 1) as AVG_POSSESSION_PCT,
+        ROUND(COALESCE(s.CORNERS, 0) / NULLIF(f.ACTUAL_MATCHES, 0), 2) as CORNERS_P90,
+        ROUND(COALESCE(s.TOTAL_TACKLES, 0) / NULLIF(f.ACTUAL_MATCHES, 0), 2) as TACKLES_P90,
+        ROUND(COALESCE(s.YELLOW_CARDS, 0) / NULLIF(f.ACTUAL_MATCHES, 0), 2) as YELLOW_CARDS_P90
+    FROM FinalGoals f
+    JOIN TeamLookup t ON f.TEAM_ID = t.TEAM_ID
+    LEFT JOIN TeamXG x ON f.TEAM_ID = x.CONTESTANT_OPTAUUID
+    LEFT JOIN AggregatedStats s ON f.TEAM_ID = s.CONTESTANT_OPTAUUID
+    WHERE f.ACTUAL_MATCHES > 0
+    ORDER BY f.TOTAL_GOALS DESC;
     """
-    
+
     df = _conn.query(query)
     if df is not None and not df.empty:
         df.columns = [str(c).upper() for c in df.columns]
     return df if df is not None else pd.DataFrame()
-
-# Tilføj denne i data/sql/teams.py
-@st.cache_data(ttl=600)
-def hent_hurtig_stilling(calendar_uuid: str) -> pd.DataFrame:
-    """
-    Henter en komplet, lynhurtig stilling direkte fra Snowflake via SQL.
-    """
-    conn = _get_snowflake_conn()
-    if not conn or not calendar_uuid:
-        return pd.DataFrame()
-        
-    db = "KLUB_HVIDOVREIF.AXIS"
-    query = f"""
-        WITH Matches AS (
-            SELECT 
-                CONTESTANTHOME_OPTAUUID AS HOME_ID,
-                CONTESTANTHOME_NAME AS HOME_NAME,
-                CONTESTANTAWAY_OPTAUUID AS AWAY_ID,
-                CONTESTANTAWAY_NAME AS AWAY_NAME,
-                TRY_CAST(TOTAL_HOME_SCORE AS INT) AS HOME_SCORE,
-                TRY_CAST(TOTAL_AWAY_SCORE AS INT) AS AWAY_SCORE,
-                MATCH_STATUS
-            FROM {db}.OPTA_MATCHINFO
-            WHERE TOURNAMENTCALENDAR_OPTAUUID = '{calendar_uuid}'
-              AND MATCH_STATUS = 'Played'
-              AND TOTAL_HOME_SCORE IS NOT NULL
-              AND TOTAL_AWAY_SCORE IS NOT NULL
-        ),
-        TeamMatchRows AS (
-            SELECT HOME_ID AS TEAM_ID, HOME_NAME AS TEAM_NAME, 1 AS PLAYED,
-                   CASE WHEN HOME_SCORE > AWAY_SCORE THEN 1 ELSE 0 END AS WON,
-                   CASE WHEN HOME_SCORE = AWAY_SCORE THEN 1 ELSE 0 END AS DRAW,
-                   CASE WHEN HOME_SCORE < AWAY_SCORE THEN 1 ELSE 0 END AS LOST,
-                   HOME_SCORE AS GOALS_FOR, AWAY_SCORE AS GOALS_AGAINST
-            FROM Matches
-            UNION ALL
-            SELECT AWAY_ID AS TEAM_ID, AWAY_NAME AS TEAM_NAME, 1 AS PLAYED,
-                   CASE WHEN AWAY_SCORE > HOME_SCORE THEN 1 ELSE 0 END AS WON,
-                   CASE WHEN AWAY_SCORE = HOME_SCORE THEN 1 ELSE 0 END AS DRAW,
-                   CASE WHEN AWAY_SCORE < HOME_SCORE THEN 1 ELSE 0 END AS LOST,
-                   AWAY_SCORE AS GOALS_FOR, HOME_SCORE AS GOALS_AGAINST
-            FROM Matches
-        ),
-        Aggregated AS (
-            SELECT 
-                TEAM_ID, TEAM_NAME,
-                SUM(PLAYED) AS K,
-                SUM(WON) AS V,
-                SUM(DRAW) AS U,
-                SUM(LOST) AS T,
-                SUM(GOALS_FOR) AS GF,
-                SUM(GOALS_AGAINST) AS GA,
-                (SUM(GOALS_FOR) - SUM(GOALS_AGAINST)) AS MF,
-                (SUM(WON) * 3 + SUM(DRAW) * 1) AS P
-            FROM TeamMatchRows
-            GROUP BY TEAM_ID, TEAM_NAME
-        )
-        SELECT 
-            ROW_NUMBER() OVER (ORDER BY P DESC, MF DESC, GF DESC, TEAM_NAME ASC) AS POSITION,
-            TEAM_ID, TEAM_NAME AS HOLD, K, V, U, T, MF, GF, GA, P
-        FROM Aggregated
-        ORDER BY POSITION ASC
-    """
-    try:
-        df = conn.query(query)
-        if df is not None and not df.empty:
-            df.columns = [str(c).upper() for c in df.columns]
-        return df if df is not None else pd.DataFrame()
-    except Exception:
-        return pd.DataFrame()
