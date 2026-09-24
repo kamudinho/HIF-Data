@@ -1,14 +1,17 @@
 # pages/01_oversigt/forside.py
+# pages/01_oversigt/forside.py
 import streamlit as st
 import pandas as pd
 import data.hif_load as hif_load
 from data.utils.team_mapping import TEAMS, SEASONS, COMPETITIONS, TEAM_COLORS, TOURNAMENTCALENDAR_NAME, COMPETITION_NAME
+from data.sql.teams import hent_hurtig_stilling, hent_hold_formkurve
 
 def vis_side():
     # 1. Hent dynamiske data for Hvidovre fra team_mapping
     team_name = "Hvidovre"
     hif_data = TEAMS.get(team_name, {})
     team_wyid = hif_data.get("team_wyid", 7490)
+    team_optauuid = hif_data.get("opta_uuid", "")
     logo_url = hif_data.get("logo", "")
     colors = TEAM_COLORS.get(team_name, {"primary": "#df003b", "secondary": "#1a1a1a"})
     primary_color = colors.get("primary", "#df003b")
@@ -16,8 +19,9 @@ def vis_side():
     # Aktuelle indstillinger fra mapping
     current_season = TOURNAMENTCALENDAR_NAME  # f.eks. "2026/2027" eller "2025/2026"
     current_comp = COMPETITION_NAME           # f.eks. "1. Division"
-    comp_info = COMPETITIONS.get(current_comp, {})
-    comp_wyid = comp_info.get("wyid", 328)
+    
+    # Hent den korrekte Opta UUID for sæsonen/turneringen
+    calendar_uuid = SEASONS.get(current_season, {}).get(current_comp, "")
 
     # Top header med logo og titel
     cols = st.columns([1, 8])
@@ -36,61 +40,66 @@ def vis_side():
 
     st.divider()
 
-    # 2. Hent rigtige data via hif_load (dynamisk baseret på konfigurationen)
-    try:
-        # Eksempel: Hent trup eller holdoversigt fra hif_load
-        squad_data = hif_load.get_squad_only()
-        # Hvis get_squad_only returnerer en dictionary eller dataframe, håndteres det herunder
-        if isinstance(squad_data, dict):
-            players_list = squad_data.get("players", [])
-            antal_spillere = len(players_list)
-        elif isinstance(squad_data, pd.DataFrame):
-            antal_spillere = len(squad_data)
-        else:
-            antal_spillere = "Ukendt"
-    except Exception as e:
-        antal_spillere = "Data ikke tilgængelig"
+    # 2. Hent live data fra Snowflake via dine SQL-funktioner
+    stilling_df = hent_hurtig_stilling(calendar_uuid) if calendar_uuid else pd.DataFrame()
+    form_df = hent_hold_formkurve(calendar_uuid, team_optauuid, limit=5) if calendar_uuid and team_optauuid else pd.DataFrame()
 
-    # 3. Metrikker baseret på rigtige værdier
+    # Find Hvidovres aktuelle placering i stillingen hvis muligt
+    hif_placering = "-"
+    hif_point = "-"
+    if not stilling_df.empty and 'TEAM_ID' in stilling_df.columns:
+        hif_row = stilling_df[stilling_df['TEAM_ID'] == team_optauuid]
+        if not hif_row.empty:
+            hif_placering = str(hif_row.iloc[0].get('POSITION', '-'))
+            hif_point = str(hif_row.iloc[0].get('P', '-'))
+
+    # 3. Metrikker baseret på rigtige data fra databasen
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.metric(label="Aktiv Sæson", value=current_season)
+        st.metric(label="Ligaplacering", value=hif_placering)
     with col2:
-        st.metric(label="Turnering", value=current_comp)
+        st.metric(label="Point", value=hif_point)
     with col3:
-        st.metric(label="Truppens Størrelse", value=str(antal_spillere))
+        st.metric(label="Aktiv Sæson", value=current_season)
     with col4:
-        st.metric(label="Team WYID", value=str(team_wyid))
+        st.metric(label="Turnering", value=current_comp)
 
     st.divider()
 
-    # 4. Hovedsektion
+    # 4. Hovedsektion med stilling og formkurve
     col_left, col_right = st.columns([2, 1])
     
     with col_left:
-        st.subheader("📋 Status & Konfiguration")
-        st.markdown(f"""
-            Applikationen kører nu fuldt dynamisk op imod din centrale konfiguration i `team_mapping.py`. 
-            Alle ID'er, holdnavne og turneringer for **{current_season}** er synkroniseret for **{team_name}**.
-        """)
-        
-        # Vis evt. en lille tabel over holdene i rækken for den aktuelle sæson
-        from data.utils.team_mapping import SEASON_LEAGUE_MAPPER
-        current_teams_in_league = SEASON_LEAGUE_MAPPER.get(current_season, {}).get(current_comp, [])
-        if current_teams_in_league:
-            st.write(f"**Modstandere i {current_comp} ({current_season}):**")
-            st.info(", ".join(current_teams_in_league))
+        st.subheader(f"🏆 Aktuel Stilling – {current_comp}")
+        if not stilling_df.empty:
+            # Vis de vigtigste kolonner i tabellen
+            vis_cols = [c for c in ['POSITION', 'HOLD', 'K', 'V', 'U', 'T', 'MF', 'P'] if c in stilling_df.columns]
+            st.dataframe(stilling_df[vis_cols], use_container_width=True, hide_index=True)
+        else:
+            st.info("Ingen stillingsdata tilgængelig for den valgte sæson/turnering.")
 
     with col_right:
-        st.subheader("⚙️ Værktøjer")
-        if st.button("Ryd App Cache", use_container_width=True):
-            st.cache_data.clear()
-            st.success("Cache tømt!")
-            st.rerun()
+        st.subheader("📈 Seneste Form (5 kampe)")
+        if not form_df.empty:
+            for _, row in form_df.iterrows():
+                res = row.get('RESULTAT', '-')
+                modstander = row.get('CONTESTANTAWAY_NAME', '') if row.get('CONTESTANTHOME_OPTAUUID') == team_optauuid else row.get('CONTESTANTHOME_NAME', '')
+                dato = str(row.get('MATCH_DATE_FULL', ''))[:10]
+                
+                # Farvekode for resultat
+                f_farve = "#28a745" if res == "V" else ("#ffc107" if res == "U" else "#dc3545")
+                st.markdown(f"""
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; margin-bottom: 6px; background: #f8f9fa; border-radius: 4px; border-left: 4px solid {f_farve};">
+                        <span><b>{res}</b> mod {modstander}</span>
+                        <span style="font-size: 12px; color: #666;">{dato}</span>
+                    </div>
+                """, unsafe_allow_html=True)
+        else:
+            st.info("Ingen formkurve-data fundet.")
 
         st.markdown(f"""
             <div style="background-color: #f4f4f4; padding: 12px; border-radius: 6px; border-left: 4px solid {primary_color}; margin-top: 15px; font-size: 13px;">
                 <b>Opta UUID Aktiv:</b><br>
-                <code>{hif_data.get('opta_uuid', 'Ikke sat')}</code>
+                <code>{team_optauuid or 'Ikke sat'}</code>
             </div>
         """, unsafe_allow_html=True)
