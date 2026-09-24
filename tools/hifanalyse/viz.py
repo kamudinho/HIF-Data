@@ -102,14 +102,19 @@ def _aggreger_holdstatistik(df_matches: pd.DataFrame) -> pd.DataFrame:
     return pd.concat([match_counts, sums, means], axis=1).reset_index()
 
 
-def _byg_chart(plot_df: pd.DataFrame, x_col: str, y_col: str, title: str) -> alt.LayerChart:
-    x_label = f"{DANSK_LABEL.get(x_col, x_col)}" + (" pr. kamp" if x_col not in IKKE_PR_KAMP else "")
-    y_label = f"{DANSK_LABEL.get(y_col, y_col)}" + (" pr. kamp" if y_col not in IKKE_PR_KAMP else "")
+def _byg_chart(plot_df: pd.DataFrame, x_key: str, y_key: str, x_col: str, y_col: str, title: str) -> alt.LayerChart:
+    # NB: x_key/y_key er de "rene" nøgler (fx "TOUCHES_IN_BOX_FOR") brugt til at
+    # slå danske labels op i DANSK_LABEL/IKKE_PR_KAMP. x_col/y_col er de faktiske
+    # datakolonner i plot_df (fx "TOUCHES_IN_BOX_FOR_VAL") - de to må ikke blandes
+    # sammen ved labelopslag, ellers falder det tilbage til at vise det rå,
+    # suffikserede kolonnenavn (det var buggen på skærmbilledet).
+    x_label = DANSK_LABEL.get(x_key, x_key) + (" pr. kamp" if x_key not in IKKE_PR_KAMP else "")
+    y_label = DANSK_LABEL.get(y_key, y_key) + (" pr. kamp" if y_key not in IKKE_PR_KAMP else "")
 
     x_enc = alt.X(f"{x_col}:Q", title=x_label, scale=alt.Scale(zero=False),
-                   axis=alt.Axis(grid=False, tickCount=5))
+                   axis=alt.Axis(grid=False, tickCount=6))
     y_enc = alt.Y(f"{y_col}:Q", title=y_label, scale=alt.Scale(zero=False),
-                   axis=alt.Axis(grid=False, tickCount=5))
+                   axis=alt.Axis(grid=False, tickCount=6))
     tooltip = [
         alt.Tooltip("TEAM_NAME:N", title="Hold"),
         alt.Tooltip(f"{x_col}:Q", title=x_label, format=".2f"),
@@ -123,37 +128,26 @@ def _byg_chart(plot_df: pd.DataFrame, x_col: str, y_col: str, title: str) -> alt
         strokeDash=[4, 4], color="#bbbbbb"
     ).encode(y="y:Q")
 
-    layers = [v_snit, h_snit]
+    points = alt.Chart(plot_df).mark_circle(size=170, opacity=0.95, stroke="white", strokeWidth=1).encode(
+        x=x_enc, y=y_enc,
+        color=alt.condition(alt.datum.ER_HIF, alt.value(HIF_FARVE), alt.value(GRAA)),
+        tooltip=tooltip,
+    )
 
-    har_logo = plot_df["LOGO"].astype(bool)
-    df_logo = plot_df[har_logo]
-    df_uden_logo = plot_df[~har_logo]
+    # Hvidovres label rykkes længere væk fra prikken end de øvrige holds, så den
+    # ikke kolliderer med et naboholds label (som på skærmbilledet, hvor
+    # "Hvidovre" og "HB Køge" lå oven i hinanden). Vega-Lite laver ikke
+    # automatisk kollisionsundgåelse, så det er et "best effort" - to hold der
+    # ligger PRÆCIS oven i hinanden vil stadig kunne overlappe.
+    labels = alt.Chart(plot_df).mark_text(
+        fontSize=11, fontWeight="bold", stroke="white", strokeWidth=3,
+    ).encode(
+        x=x_enc, y=y_enc, text="TEAM_NAME:N",
+        dy="LABEL_DY:Q",
+        color=alt.condition(alt.datum.ER_HIF, alt.value(HIF_FARVE), alt.value("#333333")),
+    )
 
-    if not df_logo[df_logo["ER_HIF"]].empty:
-        # Blød "halo" bag HIF's logo, så eget hold er let at finde uden ekstra
-        # streger eller tekstlabels i billedet.
-        halo = alt.Chart(df_logo[df_logo["ER_HIF"]]).mark_circle(
-            size=1400, color=HIF_FARVE, opacity=0.18
-        ).encode(x=x_enc, y=y_enc)
-        layers.append(halo)
-
-    if not df_logo.empty:
-        logos = alt.Chart(df_logo).mark_image(width=30, height=30).encode(
-            x=x_enc, y=y_enc, url="LOGO:N", tooltip=tooltip
-        )
-        layers.append(logos)
-
-    if not df_uden_logo.empty:
-        # Hold uden logo i TEAMS-mappen falder tilbage til en prik, så de ikke
-        # bare mangler i grafen.
-        fallback = alt.Chart(df_uden_logo).mark_circle(size=140, opacity=0.9).encode(
-            x=x_enc, y=y_enc,
-            color=alt.condition(alt.datum.ER_HIF, alt.value(HIF_FARVE), alt.value(GRAA)),
-            tooltip=tooltip,
-        )
-        layers.append(fallback)
-
-    chart = alt.layer(*layers).properties(title=title, height=560)
+    chart = alt.layer(v_snit, h_snit, points, labels).properties(title=title, height=560)
     return chart.configure_view(strokeWidth=0).configure_axis(domainColor="#dddddd", tickColor="#dddddd")
 
 
@@ -192,7 +186,7 @@ def vis_side(dp=None):
     opta_to_name = {str(v.get("opta_uuid")).strip().upper(): k for k, v in TEAMS.items() if v.get("opta_uuid")}
     holdstats["TEAM_NAME"] = holdstats["TEAM_OPTAUUID"].map(opta_to_name).fillna("Ukendt hold")
     holdstats["ER_HIF"] = holdstats["TEAM_NAME"] == HIF_NAVN
-    holdstats["LOGO"] = holdstats["TEAM_NAME"].map(lambda n: TEAMS.get(n, {}).get("logo", ""))
+    holdstats["LABEL_DY"] = np.where(holdstats["ER_HIF"], -22, -13)
 
     x_key, y_key, title = VISNING_MAPPING[visning_valg]
 
@@ -214,7 +208,7 @@ def vis_side(dp=None):
         st.warning(f"Ingen hold har gyldig data for '{title}'.")
         return
 
-    chart = _byg_chart(plot_df, x_col, y_col, title)
+    chart = _byg_chart(plot_df, x_key, y_key, x_col, y_col, title)
     st.altair_chart(chart, use_container_width=True)
 
 
