@@ -308,28 +308,6 @@ def load_league_performance_data(calendar_uuid, wyid, filter_sql):
 
 @st.cache_data(ttl=1800, show_spinner="Henter ligadata (kampe, xG og eventtal) fra Snowflake...")
 def load_league_match_level_data(tournament_opta_uuid):
-    """
-    Henter ÉN række pr. kamp for HELE turneringen med separate HOME_-/AWAY_-kolonner
-    (til sider der skal sammenligne alle hold på tværs - fx sæsonoverblik og liga-snit).
-    Til forskel fra load_match_level_data ovenfor (som filtrerer på ét hold og
-    returnerer én række pr. hold pr. kamp) er denne funktion "side-aware", samme
-    layout som teams.py's hent_hoved_stats.
-
-    Flyttet hertil fra team_matches.py's egen inline-forespørgsel. Rettet undervejs:
-    - StatsPivot, XGPivot og AdvancedEvents manglede WHERE-filter på turneringen, så
-      de aggregerede over SAMTLIGE kampe/events klubben nogensinde har hentet, hver
-      gang siden loadede - i praksis en fuld scan af OPTA_EVENTS (som er langt større
-      end de aggregerede stat-tabeller) med et window-function-kald (LEAD) oven i.
-      De tre CTE'er filtreres nu til kampene i MatchBase, ligesom
-      load_match_level_data ovenfor allerede gør med MatchStatsPivot.
-    - possessionPercentage blev tidligere hentet som rå streng (ingen CAST) og fejlede
-      derfor stille til NaN i Python, når værdien indeholder '%' (samme mønster som
-      rettet i teams.py/kampe.py/konklusion_query.py) - nu TRY_CAST(REPLACE(...,'%','')).
-    - Hele forespørgslen manglede @st.cache_data, så ALT dette blev genkørt mod
-      Snowflake ved hver eneste interaktion på siden (selectbox, faneskift m.m.),
-      ikke kun ved første load. Det er den væsentligste årsag til at siden er blevet
-      langsom - se svar i chatten.
-    """
     conn = _get_snowflake_conn()
     if not conn:
         return pd.DataFrame()
@@ -348,12 +326,12 @@ def load_league_match_level_data(tournament_opta_uuid):
         ),
         StatsPivot AS (
             SELECT 
-                MATCH_OPTAUUID, CONTESTANT_OPTAUUID,
-                MAX(CASE WHEN STAT_TYPE = 'possessionPercentage' THEN TRY_CAST(REPLACE(STAT_TOTAL, '%', '') AS FLOAT) END) AS POSSESSION,
-                SUM(CASE WHEN STAT_TYPE = 'totalPass' THEN TRY_CAST(STAT_TOTAL AS FLOAT) ELSE 0 END) AS PASSES,
-                SUM(CASE WHEN STAT_TYPE = 'totalScoringAtt' THEN TRY_CAST(STAT_TOTAL AS FLOAT) ELSE 0 END) AS SHOTS
-            FROM {db}.OPTA_MATCHSTATS
-            WHERE MATCH_OPTAUUID IN (SELECT MATCH_OPTAUUID FROM MatchBase)
+                s.MATCH_OPTAUUID, s.CONTESTANT_OPTAUUID,
+                MAX(CASE WHEN s.STAT_TYPE = 'possessionPercentage' THEN TRY_CAST(REPLACE(s.STAT_TOTAL, '%', '') AS FLOAT) END) AS POSSESSION,
+                SUM(CASE WHEN s.STAT_TYPE = 'totalPass' THEN TRY_CAST(s.STAT_TOTAL AS FLOAT) ELSE 0 END) AS PASSES,
+                SUM(CASE WHEN s.STAT_TYPE = 'totalScoringAtt' THEN TRY_CAST(s.STAT_TOTAL AS FLOAT) ELSE 0 END) AS SHOTS
+            FROM {db}.OPTA_MATCHSTATS s
+            JOIN MatchBase mb ON s.MATCH_OPTAUUID = mb.MATCH_OPTAUUID
             GROUP BY 1, 2
         ),
         AdvancedEvents AS (
@@ -366,29 +344,29 @@ def load_league_match_level_data(tournament_opta_uuid):
                 COUNT(CASE WHEN EVENT_TYPEID = 1 AND EVENT_OUTCOME = 1 AND LEAD_X > (EVENT_X + 10) THEN 1 END) AS FORWARD_PASSES
             FROM (
                 SELECT 
-                    MATCH_OPTAUUID, 
-                    EVENT_CONTESTANT_OPTAUUID, 
-                    EVENT_TYPEID, 
-                    EVENT_OUTCOME, 
-                    EVENT_X, 
-                    EVENT_Y,
-                    LEAD(EVENT_X) OVER (
-                        PARTITION BY MATCH_OPTAUUID, EVENT_CONTESTANT_OPTAUUID 
-                        ORDER BY EVENT_TIMESTAMP, EVENT_EVENTID
+                    e.MATCH_OPTAUUID, 
+                    e.EVENT_CONTESTANT_OPTAUUID, 
+                    e.EVENT_TYPEID, 
+                    e.EVENT_OUTCOME, 
+                    e.EVENT_X, 
+                    e.EVENT_Y,
+                    LEAD(e.EVENT_X) OVER (
+                        PARTITION BY e.MATCH_OPTAUUID, e.EVENT_CONTESTANT_OPTAUUID 
+                        ORDER BY e.EVENT_TIMESTAMP, e.EVENT_EVENTID
                     ) AS LEAD_X
-                FROM {db}.OPTA_EVENTS
-                WHERE MATCH_OPTAUUID IN (SELECT MATCH_OPTAUUID FROM MatchBase)
+                FROM {db}.OPTA_EVENTS e
+                JOIN MatchBase mb ON e.MATCH_OPTAUUID = mb.MATCH_OPTAUUID
             )
             GROUP BY 1, 2
         ),
         XGPivot AS (
             SELECT 
-                MATCH_ID, CONTESTANT_OPTAUUID,
-                SUM(CASE WHEN STAT_TYPE IN ('expectedGoals', 'expectedGoal') THEN TRY_CAST(STAT_VALUE AS FLOAT) ELSE 0 END) AS XG,
-                SUM(CASE WHEN STAT_TYPE IN ('expectedGoalsNonpenalty', 'expectedGoalsNonPenalty') THEN TRY_CAST(STAT_VALUE AS FLOAT) ELSE 0 END) AS XGNP,
-                SUM(CASE WHEN STAT_TYPE = 'bigChanceCreated' THEN TRY_CAST(STAT_VALUE AS FLOAT) ELSE 0 END) AS BIG_CHANCES
-            FROM {db}.OPTA_MATCHEXPECTEDGOALS
-            WHERE MATCH_ID IN (SELECT MATCH_OPTAUUID FROM MatchBase)
+                x.MATCH_ID, x.CONTESTANT_OPTAUUID,
+                SUM(CASE WHEN x.STAT_TYPE IN ('expectedGoals', 'expectedGoal') THEN TRY_CAST(x.STAT_VALUE AS FLOAT) ELSE 0 END) AS XG,
+                SUM(CASE WHEN x.STAT_TYPE IN ('expectedGoalsNonpenalty', 'expectedGoalsNonPenalty') THEN TRY_CAST(x.STAT_VALUE AS FLOAT) ELSE 0 END) AS XGNP,
+                SUM(CASE WHEN x.STAT_TYPE = 'bigChanceCreated' THEN TRY_CAST(x.STAT_VALUE AS FLOAT) ELSE 0 END) AS BIG_CHANCES
+            FROM {db}.OPTA_MATCHEXPECTEDGOALS x
+            JOIN MatchBase mb ON x.MATCH_ID = mb.MATCH_OPTAUUID
             GROUP BY 1, 2
         )
         SELECT 
@@ -418,4 +396,16 @@ def load_league_match_level_data(tournament_opta_uuid):
 
     if df is not None and not df.empty:
         df.columns = [str(c).upper() for c in df.columns]
+        
+        # Sørg for at fallback-data (kampe_fallback.csv) automatisk lapper huller
+        col_mapping = {
+            'POSSESSIONPERCENTAGE': 'POSS',
+            'TOTALPASS': 'PASSES',
+            'TOTALSCORINGATT': 'SHOTS',
+            'EXPECTEDGOALS': 'XG',
+            'EXPECTEDGOALSNONPENALTY': 'XGNP',
+            'BIGCHANCECREATED': 'BIG_CHANCES'
+        }
+        df = fill_gaps_side_aware(df, col_mapping)
+
     return df if df is not None else pd.DataFrame()
