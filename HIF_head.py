@@ -2,54 +2,43 @@ import streamlit as st
 import pandas as pd
 from utils.data.data_load import _get_snowflake_conn
 from utils.data.sql.teams import (
+    def_load_season_team_average,
     hent_hurtig_stilling,
-    hent_samlet_hold_statistik,
     hent_hold_formkurve
 )
 
-DB = "KLUB_HVIDOVREIF.AXIS"
-
-@st.cache_data(ttl=3600)
-def _faar_standard_kalender_uuid():
-    """Henter det første tilgængelige kalender-UUID fra databasen til visning."""
-    conn = _get_snowflake_conn()
-    if not conn:
-        return None
-    try:
-        query = f"SELECT DISTINCT TOURNAMENTCALENDAR_OPTAUUID FROM {DB}.OPTA_MATCHINFO LIMIT 1"
-        cur = conn.cursor()
-        cur.execute(query)
-        row = cur.fetchone()
-        cur.close()
-        return row[0] if row else None
-    except Exception:
-        return None
-
 def vis_side():
-    st.markdown("### Holdets Nøgletal - Sæson 2025/2026")
-    
-    calendar_uuid = _faar_standard_kalender_uuid()
-    if not calendar_uuid:
-        st.warning("Kunne ikke finde et aktivt turneringskalender-UUID i Snowflake.")
-        return
+    # Opdateret til sæson 2026/2027
+    season_name = "2026/2027"
+    # Sørg for at dette UUID peger på 2026/2027-kalenderen i din database
+    calendar_uuid = '2mb332vncy4450vu14paj8844' 
 
-    # Hent samlet holdstatistik og stilling
-    df_stats = hent_samlet_hold_statistik(calendar_uuid)
+    st.markdown(f"### Holdets Nøgletal - Sæson {season_name}")
+    
+    # Hent data ved hjælp af din funktion fra teams.py
+    df_season_stats = def_load_season_team_average(calendar_uuid)
     df_stilling = hent_hurtig_stilling(calendar_uuid)
 
-    # Filtrér data for Hvidovre (Matcher på holdnavn eller ID)
-    hvidovre_row = pd.Series()
-    if df_stats is not None and not df_stats.empty:
-        match_hvidovre = df_stats[df_stats['TEAM_NAME'].str.contains("Hvidovre", case=False, na=False)]
-        if not match_hvidovre.empty:
-            hvidovre_row = match_hvidovre.iloc[0]
+    # Find Hvidovres Opta UUID ud fra stillingstabellen
+    hvidovre_optauuid = None
+    if df_stilling is not None and not df_stilling.empty:
+        hv_row_st = df_stilling[df_stilling['HOLD'].str.contains("Hvidovre", case=False, na=False)]
+        if not hv_row_st.empty:
+            hvidovre_optauuid = hv_row_st.iloc[0].get('TEAM_ID')
 
-    # Udtræk værdier med sikre standarder, hvis data mangler
-    kampe_spillet = int(hvidovre_row.get('ACTUAL_MATCHES', 0)) if not hvidovre_row.empty else 0
+    # Udtræk Hvidovres specifikke række fra sæsondata
+    hvidovre_row = pd.Series()
+    if hvidovre_optauuid and df_season_stats is not None and not df_season_stats.empty:
+        match_row = df_season_stats[df_season_stats['TEAM_OPTAUUID'] == hvidovre_optauuid]
+        if not match_row.empty:
+            hvidovre_row = match_row.iloc[0]
+
+    # Sikre værdier med standarder, hvis data mangler
+    kampe_spillet = int(hvidovre_row.get('SPILLER_KAMPE', 0)) if not hvidovre_row.empty else 0
     maal_for = int(hvidovre_row.get('TOTAL_GOALS', 0)) if not hvidovre_row.empty else 0
     maal_imod = int(hvidovre_row.get('TOTAL_GOALS_AGAINST', 0)) if not hvidovre_row.empty else 0
-    xg_pr_kamp = float(hvidovre_row.get('XG_P90', 0.0)) if not hvidovre_row.empty else 0.0
-    boldbesiddelse = float(hvidovre_row.get('AVG_POSSESSION_PCT', 0.0)) if not hvidovre_row.empty else 0.0
+    xg_pr_kamp = float(hvidovre_row.get('AVG_EXPECTEDGOALS', 0.0)) if not hvidovre_row.empty else 0.0
+    boldbesiddelse = float(hvidovre_row.get('AVG_POSSESSION', 0.0)) if not hvidovre_row.empty else 0.0
 
     # Hent point fra stillingstabellen
     point = 0
@@ -79,13 +68,6 @@ def vis_side():
 
     with col_left:
         st.markdown("#### Seneste kampe")
-        # Find Hvidovres Opta UUID fra stillingstabellen for at hente formkurve
-        hvidovre_optauuid = None
-        if df_stilling is not None and not df_stilling.empty:
-            hv_row_st = df_stilling[df_stilling['HOLD'].str.contains("Hvidovre", case=False, na=False)]
-            if not hv_row_st.empty:
-                hvidovre_optauuid = hv_row_st.iloc[0].get('TEAM_ID')
-
         if hvidovre_optauuid:
             df_form = hent_hold_formkurve(calendar_uuid, hvidovre_optauuid, limit=5)
             if df_form is not None and not df_form.empty:
@@ -98,7 +80,7 @@ def vis_side():
             else:
                 st.info("Ingen formkurve-data fundet endnu.")
         else:
-            st.info("Hvidovre ID ikke fundet i turneringen.")
+            st.info("Hvidovre ID ikke fundet.")
 
     with col_right:
         st.markdown("#### Taktiske Nøgletal (Gennemsnit)")
@@ -106,11 +88,11 @@ def vis_side():
             tactical_stats = pd.DataFrame({
                 "Parameter": ["Afslutninger pr. kamp", "Skud på mål pr. kamp", "Berøringer i felt pr. kamp", "Afleveringer pr. kamp", "Gule kort pr. kamp"],
                 "Værdi": [
-                    f"{float(hvidovre_row.get('SHOTS_P90', 0)):.1f}",
-                    f"{float(hvidovre_row.get('ON_TARGET_SHOTS_P90', 0)):.1f}",
-                    f"{float(hvidovre_row.get('TOUCHES_IN_BOX_P90', 0)):.1f}",
-                    f"{float(hvidovre_row.get('PASSES_P90', 0)):.1f}",
-                    f"{float(hvidovre_row.get('YELLOW_CARDS_P90', 0)):.1f}"
+                    f"{float(hvidovre_row.get('AVG_TOTALSCORINGATT', 0)):.1f}",
+                    f"{float(hvidovre_row.get('AVG_ONTARGETSCORINGATT', 0)):.1f}",
+                    f"{float(hvidovre_row.get('AVG_TOUCHESINOPPBOX', 0)):.1f}",
+                    f"{float(hvidovre_row.get('AVG_TOTALPASS', 0)):.1f}",
+                    f"{float(hvidovre_row.get('AVG_TOTALYELLOW_CARDS', 0)):.1f}"
                 ]
             })
             st.dataframe(tactical_stats, use_container_width=True, hide_index=True)
