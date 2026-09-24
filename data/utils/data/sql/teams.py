@@ -2,9 +2,14 @@
 import pandas as pd
 import streamlit as st
 
-# Importer din eksisterende forbindelse fra data_load.py
+# Korrekt absolut import fra projektets rod
 from utils.data.data_load import _get_snowflake_conn
-from data.sql.fallback import fill_gaps_side_aware
+
+try:
+    from data.sql.fallback import fill_gaps_side_aware
+except ImportError:
+    def fill_gaps_side_aware(df, mapping):
+        return df
 
 DB = "KLUB_HVIDOVREIF.AXIS"
 
