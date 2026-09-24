@@ -106,28 +106,55 @@ def _byg_chart(plot_df: pd.DataFrame, x_col: str, y_col: str, title: str) -> alt
     x_label = f"{DANSK_LABEL.get(x_col, x_col)}" + (" pr. kamp" if x_col not in IKKE_PR_KAMP else "")
     y_label = f"{DANSK_LABEL.get(y_col, y_col)}" + (" pr. kamp" if y_col not in IKKE_PR_KAMP else "")
 
-    points = alt.Chart(plot_df).mark_circle(size=160, opacity=0.9).encode(
-        x=alt.X(f"{x_col}:Q", title=x_label, scale=alt.Scale(zero=False)),
-        y=alt.Y(f"{y_col}:Q", title=y_label, scale=alt.Scale(zero=False)),
-        color=alt.condition(alt.datum.ER_HIF, alt.value(HIF_FARVE), alt.value(GRAA)),
-        tooltip=[
-            alt.Tooltip("TEAM_NAME:N", title="Hold"),
-            alt.Tooltip(f"{x_col}:Q", title=x_label, format=".2f"),
-            alt.Tooltip(f"{y_col}:Q", title=y_label, format=".2f"),
-        ],
-    )
-    labels = alt.Chart(plot_df).mark_text(dy=-14, fontSize=10, fontWeight="bold").encode(
-        x=f"{x_col}:Q", y=f"{y_col}:Q", text="TEAM_NAME:N",
-        color=alt.condition(alt.datum.ER_HIF, alt.value(HIF_FARVE), alt.value("#555555")),
-    )
+    x_enc = alt.X(f"{x_col}:Q", title=x_label, scale=alt.Scale(zero=False),
+                   axis=alt.Axis(grid=False, tickCount=5))
+    y_enc = alt.Y(f"{y_col}:Q", title=y_label, scale=alt.Scale(zero=False),
+                   axis=alt.Axis(grid=False, tickCount=5))
+    tooltip = [
+        alt.Tooltip("TEAM_NAME:N", title="Hold"),
+        alt.Tooltip(f"{x_col}:Q", title=x_label, format=".2f"),
+        alt.Tooltip(f"{y_col}:Q", title=y_label, format=".2f"),
+    ]
+
     v_snit = alt.Chart(pd.DataFrame({"x": [plot_df[x_col].mean()]})).mark_rule(
-        strokeDash=[4, 4], color="black", opacity=0.5
+        strokeDash=[4, 4], color="#bbbbbb"
     ).encode(x="x:Q")
     h_snit = alt.Chart(pd.DataFrame({"y": [plot_df[y_col].mean()]})).mark_rule(
-        strokeDash=[4, 4], color="black", opacity=0.5
+        strokeDash=[4, 4], color="#bbbbbb"
     ).encode(y="y:Q")
 
-    return (v_snit + h_snit + points + labels).properties(title=title, height=560)
+    layers = [v_snit, h_snit]
+
+    har_logo = plot_df["LOGO"].astype(bool)
+    df_logo = plot_df[har_logo]
+    df_uden_logo = plot_df[~har_logo]
+
+    if not df_logo[df_logo["ER_HIF"]].empty:
+        # Blød "halo" bag HIF's logo, så eget hold er let at finde uden ekstra
+        # streger eller tekstlabels i billedet.
+        halo = alt.Chart(df_logo[df_logo["ER_HIF"]]).mark_circle(
+            size=1400, color=HIF_FARVE, opacity=0.18
+        ).encode(x=x_enc, y=y_enc)
+        layers.append(halo)
+
+    if not df_logo.empty:
+        logos = alt.Chart(df_logo).mark_image(width=30, height=30).encode(
+            x=x_enc, y=y_enc, url="LOGO:N", tooltip=tooltip
+        )
+        layers.append(logos)
+
+    if not df_uden_logo.empty:
+        # Hold uden logo i TEAMS-mappen falder tilbage til en prik, så de ikke
+        # bare mangler i grafen.
+        fallback = alt.Chart(df_uden_logo).mark_circle(size=140, opacity=0.9).encode(
+            x=x_enc, y=y_enc,
+            color=alt.condition(alt.datum.ER_HIF, alt.value(HIF_FARVE), alt.value(GRAA)),
+            tooltip=tooltip,
+        )
+        layers.append(fallback)
+
+    chart = alt.layer(*layers).properties(title=title, height=560)
+    return chart.configure_view(strokeWidth=0).configure_axis(domainColor="#dddddd", tickColor="#dddddd")
 
 
 def vis_side(dp=None):
@@ -165,6 +192,7 @@ def vis_side(dp=None):
     opta_to_name = {str(v.get("opta_uuid")).strip().upper(): k for k, v in TEAMS.items() if v.get("opta_uuid")}
     holdstats["TEAM_NAME"] = holdstats["TEAM_OPTAUUID"].map(opta_to_name).fillna("Ukendt hold")
     holdstats["ER_HIF"] = holdstats["TEAM_NAME"] == HIF_NAVN
+    holdstats["LOGO"] = holdstats["TEAM_NAME"].map(lambda n: TEAMS.get(n, {}).get("logo", ""))
 
     x_key, y_key, title = VISNING_MAPPING[visning_valg]
 
