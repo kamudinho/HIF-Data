@@ -1,4 +1,4 @@
-# utils/data/sql/teams.py
+# data/utils/data/sql/teams.py
 import pandas as pd
 import streamlit as st
 
@@ -694,35 +694,28 @@ def def_load_season_team_average(calendar_uuid: str) -> pd.DataFrame:
             LEFT JOIN TeamMatchStatsAgg ms ON tm.MATCH_OPTAUUID = ms.MATCH_OPTAUUID AND tm.TEAM_OPTAUUID = ms.TEAM_OPTAUUID
             LEFT JOIN TeamMatchXgAgg mx ON tm.MATCH_OPTAUUID = mx.MATCH_OPTAUUID AND tm.TEAM_OPTAUUID = mx.TEAM_OPTAUUID
             LEFT JOIN CalculatedSubGoals cs ON tm.MATCH_OPTAUUID = cs.MATCH_OPTAUUID AND tm.TEAM_OPTAUUID = cs.TEAM_OPTAUUID
+        ),
+        TeamLookup AS (
+            SELECT CONTESTANTHOME_OPTAUUID AS TEAM_ID, CONTESTANTHOME_NAME AS TEAM_NAME FROM MatchBase
+            UNION
+            SELECT CONTESTANTAWAY_OPTAUUID AS TEAM_ID, CONTESTANTAWAY_NAME AS TEAM_NAME FROM MatchBase
         )
         SELECT 
-            TEAM_OPTAUUID,
-            COUNT(MATCH_OPTAUUID) AS SPILLER_KAMPE,
-            SUM(GOALS) AS TOTAL_GOALS,
-            SUM(GOALS_AGAINST) AS TOTAL_GOALS_AGAINST,
-            SUM(EXPECTEDGOALS) AS TOTAL_EXPECTEDGOALS,
-            SUM(EXPECTEDGOALSCONCEDED) AS TOTAL_EXPECTEDGOALSCONCEDED,
-            SUM(TOTALSCORINGATT) AS TOTAL_SCORINGATT,
-            SUM(ONTARGETSCORINGATT) AS TOTAL_ONTARGETSCORINGATT,
-            SUM(TOUCHESINOPPBOX) AS TOTAL_TOUCHESINOPPBOX,
-            SUM(TOTALPASS) AS TOTAL_PASS,
-            SUM(BIGCHANCECREATED) AS TOTAL_BIGCHANCECREATED,
-            SUM(TOTALYELLOWCARD) AS TOTAL_YELLOW_CARDS,
-            SUM(TOTALREDCARD) AS TOTAL_RED_CARDS,
-            SUM(CLEANSHEET) AS TOTAL_CLEAN_SHEETS,
-            AVG(GOALS) AS AVG_GOALS,
-            AVG(GOALS_AGAINST) AS AVG_GOALS_AGAINST,
-            AVG(EXPECTEDGOALS) AS AVG_EXPECTEDGOALS,
-            AVG(EXPECTEDGOALSCONCEDED) AS AVG_EXPECTEDGOALSCONCEDED,
-            AVG(POSSESSIONPERCENTAGE) AS AVG_POSSESSION,
-            AVG(TOTALSCORINGATT) AS AVG_TOTALSCORINGATT,
-            AVG(ONTARGETSCORINGATT) AS AVG_ONTARGETSCORINGATT,
-            AVG(TOUCHESINOPPBOX) AS AVG_TOUCHESINOPPBOX,
-            AVG(TOTALPASS) AS AVG_TOTALPASS,
-            AVG(BIGCHANCECREATED) AS AVG_BIGCHANCECREATED,
-            AVG(TOTALYELLOWCARD) AS AVG_TOTALYELLOW_CARDS
-        FROM MatchStatsPerTeam
-        GROUP BY TEAM_OPTAUUID
+            t.TEAM_NAME,
+            m.TEAM_OPTAUUID,
+            COUNT(m.MATCH_OPTAUUID) AS ACTUAL_MATCHES,
+            SUM(m.GOALS) AS TOTAL_GOALS,
+            SUM(m.GOALS_AGAINST) AS TOTAL_GOALS_AGAINST,
+            SUM(m.EXPECTEDGOALS) AS TOTAL_EXPECTEDGOALS,
+            SUM(m.EXPECTEDGOALSCONCEDED) AS TOTAL_EXPECTEDGOALSCONCEDED,
+            AVG(m.GOALS) AS GOALS_P90,
+            AVG(m.GOALS_AGAINST) AS GOALS_AGAINST_P90,
+            AVG(m.EXPECTEDGOALS) AS XG_P90,
+            AVG(m.EXPECTEDGOALSCONCEDED) AS XGC_P90,
+            AVG(m.POSSESSIONPERCENTAGE) AS AVG_POSSESSION_PCT
+        FROM MatchStatsPerTeam m
+        JOIN TeamLookup t ON m.TEAM_OPTAUUID = t.TEAM_ID
+        GROUP BY t.TEAM_NAME, m.TEAM_OPTAUUID
         ORDER BY TOTAL_GOALS DESC;
     """
     
@@ -735,5 +728,5 @@ def def_load_season_team_average(calendar_uuid: str) -> pd.DataFrame:
             df.columns = [str(c).upper() for c in df.columns]
         return df if df is not None else pd.DataFrame()
     except Exception as e:
-        st.error(f"Fejl ved hentning af sæsondata: {e}")
+        st.error(f"Fejl ved hentning af sæsontotaler: {e}")
         return pd.DataFrame()
