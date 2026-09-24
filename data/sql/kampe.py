@@ -304,3 +304,118 @@ def load_league_performance_data(calendar_uuid, wyid, filter_sql):
         df_wy.columns = [c.upper() for c in df_wy.columns]
         
     return df_opta, df_wy
+
+
+@st.cache_data(ttl=1800, show_spinner="Henter ligadata (kampe, xG og eventtal) fra Snowflake...")
+def load_league_match_level_data(tournament_opta_uuid):
+    """
+    Henter ÉN række pr. kamp for HELE turneringen med separate HOME_-/AWAY_-kolonner
+    (til sider der skal sammenligne alle hold på tværs - fx sæsonoverblik og liga-snit).
+    Til forskel fra load_match_level_data ovenfor (som filtrerer på ét hold og
+    returnerer én række pr. hold pr. kamp) er denne funktion "side-aware", samme
+    layout som teams.py's hent_hoved_stats.
+
+    Flyttet hertil fra team_matches.py's egen inline-forespørgsel. Rettet undervejs:
+    - StatsPivot, XGPivot og AdvancedEvents manglede WHERE-filter på turneringen, så
+      de aggregerede over SAMTLIGE kampe/events klubben nogensinde har hentet, hver
+      gang siden loadede - i praksis en fuld scan af OPTA_EVENTS (som er langt større
+      end de aggregerede stat-tabeller) med et window-function-kald (LEAD) oven i.
+      De tre CTE'er filtreres nu til kampene i MatchBase, ligesom
+      load_match_level_data ovenfor allerede gør med MatchStatsPivot.
+    - possessionPercentage blev tidligere hentet som rå streng (ingen CAST) og fejlede
+      derfor stille til NaN i Python, når værdien indeholder '%' (samme mønster som
+      rettet i teams.py/kampe.py/konklusion_query.py) - nu TRY_CAST(REPLACE(...,'%','')).
+    - Hele forespørgslen manglede @st.cache_data, så ALT dette blev genkørt mod
+      Snowflake ved hver eneste interaktion på siden (selectbox, faneskift m.m.),
+      ikke kun ved første load. Det er den væsentligste årsag til at siden er blevet
+      langsom - se svar i chatten.
+    """
+    conn = _get_snowflake_conn()
+    if not conn:
+        return pd.DataFrame()
+
+    db = "KLUB_HVIDOVREIF.AXIS"
+
+    query = f"""
+        WITH MatchBase AS (
+            SELECT 
+                MATCH_OPTAUUID, MATCH_DATE_FULL, WEEK, MATCH_STATUS,
+                CONTESTANTHOME_OPTAUUID, CONTESTANTHOME_NAME,
+                CONTESTANTAWAY_OPTAUUID, CONTESTANTAWAY_NAME,
+                TOTAL_HOME_SCORE, TOTAL_AWAY_SCORE, MATCH_LOCALTIME
+            FROM {db}.OPTA_MATCHINFO
+            WHERE TOURNAMENTCALENDAR_OPTAUUID = '{tournament_opta_uuid}'
+        ),
+        StatsPivot AS (
+            SELECT 
+                MATCH_OPTAUUID, CONTESTANT_OPTAUUID,
+                MAX(CASE WHEN STAT_TYPE = 'possessionPercentage' THEN TRY_CAST(REPLACE(STAT_TOTAL, '%', '') AS FLOAT) END) AS POSSESSION,
+                SUM(CASE WHEN STAT_TYPE = 'totalPass' THEN TRY_CAST(STAT_TOTAL AS FLOAT) ELSE 0 END) AS PASSES,
+                SUM(CASE WHEN STAT_TYPE = 'totalScoringAtt' THEN TRY_CAST(STAT_TOTAL AS FLOAT) ELSE 0 END) AS SHOTS
+            FROM {db}.OPTA_MATCHSTATS
+            WHERE MATCH_OPTAUUID IN (SELECT MATCH_OPTAUUID FROM MatchBase)
+            GROUP BY 1, 2
+        ),
+        AdvancedEvents AS (
+            SELECT 
+                MATCH_OPTAUUID, 
+                EVENT_CONTESTANT_OPTAUUID,
+                COUNT(CASE WHEN EVENT_X >= 81.0 AND EVENT_Y BETWEEN 20.0 AND 80.0 AND EVENT_TYPEID IN (1, 3, 4, 7, 13, 14, 15, 16, 17, 19, 24, 30) THEN 1 END) AS TOUCHES_IN_BOX,
+                COUNT(CASE WHEN EVENT_TYPEID IN (13, 14, 15, 16) AND EVENT_X BETWEEN 83.0 AND 100.0 AND EVENT_Y BETWEEN 38.5 AND 61.5 THEN 1 END) AS DANGERZONE_SHOTS,
+                COUNT(CASE WHEN EVENT_TYPEID = 1 AND EVENT_OUTCOME = 1 AND EVENT_X > 66.6 THEN 1 END) AS PASSES_FINAL_THIRD,
+                COUNT(CASE WHEN EVENT_TYPEID = 1 AND EVENT_OUTCOME = 1 AND LEAD_X > (EVENT_X + 10) THEN 1 END) AS FORWARD_PASSES
+            FROM (
+                SELECT 
+                    MATCH_OPTAUUID, 
+                    EVENT_CONTESTANT_OPTAUUID, 
+                    EVENT_TYPEID, 
+                    EVENT_OUTCOME, 
+                    EVENT_X, 
+                    EVENT_Y,
+                    LEAD(EVENT_X) OVER (
+                        PARTITION BY MATCH_OPTAUUID, EVENT_CONTESTANT_OPTAUUID 
+                        ORDER BY EVENT_TIMESTAMP, EVENT_EVENTID
+                    ) AS LEAD_X
+                FROM {db}.OPTA_EVENTS
+                WHERE MATCH_OPTAUUID IN (SELECT MATCH_OPTAUUID FROM MatchBase)
+            )
+            GROUP BY 1, 2
+        ),
+        XGPivot AS (
+            SELECT 
+                MATCH_ID, CONTESTANT_OPTAUUID,
+                SUM(CASE WHEN STAT_TYPE IN ('expectedGoals', 'expectedGoal') THEN TRY_CAST(STAT_VALUE AS FLOAT) ELSE 0 END) AS XG,
+                SUM(CASE WHEN STAT_TYPE IN ('expectedGoalsNonpenalty', 'expectedGoalsNonPenalty') THEN TRY_CAST(STAT_VALUE AS FLOAT) ELSE 0 END) AS XGNP,
+                SUM(CASE WHEN STAT_TYPE = 'bigChanceCreated' THEN TRY_CAST(STAT_VALUE AS FLOAT) ELSE 0 END) AS BIG_CHANCES
+            FROM {db}.OPTA_MATCHEXPECTEDGOALS
+            WHERE MATCH_ID IN (SELECT MATCH_OPTAUUID FROM MatchBase)
+            GROUP BY 1, 2
+        )
+        SELECT 
+            b.*,
+            h.POSSESSION AS HOME_POSS, hx.XG AS HOME_XG, hx.XGNP AS HOME_XGNP, hx.BIG_CHANCES AS HOME_BIG_CHANCES, 
+            h.PASSES AS HOME_PASSES, h.SHOTS AS HOME_SHOTS, 
+            ae_h.FORWARD_PASSES AS HOME_FORWARD_PASSES, ae_h.DANGERZONE_SHOTS AS HOME_DZ_SHOTS, 
+            ae_h.PASSES_FINAL_THIRD AS HOME_PASSES_FT, ae_h.TOUCHES_IN_BOX AS HOME_TOUCHES_IN_BOX,
+            a.POSSESSION AS AWAY_POSS, ax.XG AS AWAY_XG, ax.XGNP AS AWAY_XGNP, ax.BIG_CHANCES AS AWAY_BIG_CHANCES, 
+            a.PASSES AS AWAY_PASSES, a.SHOTS AS AWAY_SHOTS, 
+            ae_a.FORWARD_PASSES AS AWAY_FORWARD_PASSES, ae_a.DANGERZONE_SHOTS AS AWAY_DZ_SHOTS, 
+            ae_a.PASSES_FINAL_THIRD AS AWAY_PASSES_FT, ae_a.TOUCHES_IN_BOX AS AWAY_TOUCHES_IN_BOX
+        FROM MatchBase b
+        LEFT JOIN StatsPivot h ON b.MATCH_OPTAUUID = h.MATCH_OPTAUUID AND b.CONTESTANTHOME_OPTAUUID = h.CONTESTANT_OPTAUUID
+        LEFT JOIN StatsPivot a ON b.MATCH_OPTAUUID = a.MATCH_OPTAUUID AND b.CONTESTANTAWAY_OPTAUUID = a.CONTESTANT_OPTAUUID
+        LEFT JOIN XGPivot hx ON b.MATCH_OPTAUUID = hx.MATCH_ID AND b.CONTESTANTHOME_OPTAUUID = hx.CONTESTANT_OPTAUUID
+        LEFT JOIN XGPivot ax ON b.MATCH_OPTAUUID = ax.MATCH_ID AND b.CONTESTANTAWAY_OPTAUUID = ax.CONTESTANT_OPTAUUID
+        LEFT JOIN AdvancedEvents ae_h ON b.MATCH_OPTAUUID = ae_h.MATCH_OPTAUUID AND b.CONTESTANTHOME_OPTAUUID = ae_h.EVENT_CONTESTANT_OPTAUUID
+        LEFT JOIN AdvancedEvents ae_a ON b.MATCH_OPTAUUID = ae_a.MATCH_OPTAUUID AND b.CONTESTANTAWAY_OPTAUUID = ae_a.EVENT_CONTESTANT_OPTAUUID
+    """
+
+    try:
+        df = conn.query(query) if hasattr(conn, "query") else pd.read_sql(query, conn)
+    except Exception as e:
+        st.error(f"Fejl ved hentning af ligadata: {e}")
+        return pd.DataFrame()
+
+    if df is not None and not df.empty:
+        df.columns = [str(c).upper() for c in df.columns]
+    return df if df is not None else pd.DataFrame()
