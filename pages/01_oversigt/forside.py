@@ -1,4 +1,4 @@
-#pages/01_oversigt/forside.py
+# pages/01_oversigt/forside.py
 import streamlit as st
 import pandas as pd
 from data.utils.data.sql.teams import (
@@ -32,16 +32,10 @@ def vis_side():
         if not match_row.empty:
             hvidovre_row = match_row.iloc[0]
 
-    # Udtræk værdier til KPI-kort (rettet til de korrekte kolonnenavne fra SQL)
+    # Udtræk værdier til KPI-kort
     kampe_spillet = int(hvidovre_row.get('PL', 0)) if not hvidovre_row.empty else 0
-    
-    # Da din SQL henter gennemsnit pr. kamp, kan vi gange med kampe spillet for at få totaler, 
-    # eller hente direkte fra de summerede kolonner, hvis de tilføjes. Her bruger vi gennemsnit * kampe:
-    goals_avg = float(hvidovre_row.get('GOALS_AVG', 0.0)) if not hvidovre_row.empty else 0.0
     xg_pr_kamp = float(hvidovre_row.get('XG_AVG', 0.0)) if not hvidovre_row.empty else 0.0
     
-    # Da mål for/imod ikke er i den lille udgave af def_load_season_team_average, 
-    # henter vi dem sikrest direkte fra stillingstabellen (GF og GA):
     maal_for = 0
     maal_imod = 0
     point = 0
@@ -52,9 +46,7 @@ def vis_side():
             maal_for = int(hv_stilling.iloc[0].get('GF', 0))
             maal_imod = int(hv_stilling.iloc[0].get('GA', 0))
 
-    # Bemærk: Hvis boldbesiddelse/taktiske tal mangler i den nuværende SQL for def_load_season_team_average, 
-    # kan du udvide SQL-funktionen med flere AVG()-felter, eller håndtere dem sikkert med .get():
-    boldbesiddelse = float(hvidovre_row.get('AVG_POSSESSION_PCT', 0.0)) if not hvidovre_row.empty else 0.0
+    boldbesiddelse = 0.0  # Justeres hvis feltet tilføjes i SQL
 
     # --- 1. SEKTION: HOVEDOVERBLIK & NØGLEMETAL (KPI KORT) ---
     col1, col2, col3, col4, col5 = st.columns(5)
