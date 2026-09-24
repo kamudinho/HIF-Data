@@ -103,7 +103,8 @@ def _byg_chart(plot_df: pd.DataFrame, x_key: str, y_key: str, x_col: str, y_col:
 
     logos = alt.Chart(plot_df).mark_image(
         width=32,
-        height=32
+        height=32,
+        clip=False
     ).encode(
         x=x_enc,
         y=y_enc,
