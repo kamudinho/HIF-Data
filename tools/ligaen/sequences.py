@@ -5,7 +5,7 @@ from mplsoccer import Pitch
 
 # --- CENTRAL DATA & MAPPING ---
 from data.sql.sequences import load_goal_sequences_data
-from data.utils.team_mapping import TEAMS, SEASON_LEAGUE_MAPPER, SEASONS, COMPETITION_NAME
+from data.utils.team_mapping import TEAMS, SEASON_LEAGUE_MAPPER, SEASONS, COMPETITIONS, COMPETITION_NAME
 from data.utils.mapping import OPTA_EVENT_TYPES, OPTA_QUALIFIERS, get_action_label
 from data.players.player_mapping import player_mapping  
 from utils.helpers import get_logo_img
@@ -34,6 +34,16 @@ def draw_match_info_box(ax, scoring_team_logo, opp_team_logo, date_str, score_st
         ax_l2.imshow(opp_team_logo); ax_l2.axis('off')
     ax.text(0.03, 0.07, f"{date_str} | Stilling: {score_str} ({min_str}. min)", transform=ax.transAxes, fontsize=6, color='#444444', va='top')
 
+def get_final_label_t4(row):
+    if str(row['EVENT_TYPEID']) == '16':
+        q_list = str(row.get('QUALIFIER_LIST', ''))
+        if "28" in [q.strip() for q in q_list.split(",")]:
+            return "Selvmål"
+    if 'AKTION' in row and pd.notna(row['AKTION']) and row['AKTION'] != "":
+        return row['AKTION']
+    label = get_action_label(row)
+    return label if label else "Opbygning"
+
 def vis_side(dp=None):
     # --- SÆSON- OG HOLDVÆLGER I TOPPEN ---
     available_seasons = sorted(list(SEASONS.keys()), reverse=True)
@@ -49,11 +59,11 @@ def vis_side(dp=None):
         key="saeson_select"
     )
 
-    # Kun sæsonens egne Opta TOURNAMENTCALENDAR_OPTAUUID'er skal med i filteret -
-    # tidligere lå der her også et loop, der hev Wyscout-ID'er (wyid) ind fra ALLE
-    # turneringer uanset valgt sæson. Wyscout-ID'er matcher aldrig Opta-UUID-formatet
-    # i OPTA_MATCHINFO.TOURNAMENTCALENDAR_OPTAUUID, så det var dødt/forkert filter-input.
     LIGA_IDS_LIST = []
+    for comp_data in COMPETITIONS.values():
+        if "wyid" in comp_data and comp_data["wyid"]:
+            LIGA_IDS_LIST.append(str(comp_data["wyid"]))
+
     if valgt_saeson in SEASONS:
         for comp_key, uuid_val in SEASONS[valgt_saeson].items():
             if uuid_val and "dummy" not in str(uuid_val).lower():
@@ -124,6 +134,9 @@ def vis_side(dp=None):
         g_ts = r['GOAL_TIMESTAMP']
         key = f"{m_uuid}_{g_ts}_{seq_id}"
 
+        qualifiers = str(r.get('QUALIFIER_LIST', ''))
+        er_selvmål = "28" in [q.strip() for q in qualifiers.split(",")]
+
         dato_str = pd.to_datetime(r['MATCH_LOCALDATE']).strftime('%d/%m')
         h_uuid = r['CONTESTANTHOME_OPTAUUID']
         a_uuid = r['CONTESTANTAWAY_OPTAUUID']
@@ -131,7 +144,6 @@ def vis_side(dp=None):
         opp_uuid = a_uuid if h_uuid == valgt_uuid else h_uuid
 
         kamp_res = f"{int(r['FINAL_HOME_SCORE'])}-{int(r['FINAL_AWAY_SCORE'])}"
-
         h_maal = int(r['GOAL_HOME_SCORE'])
         a_maal = int(r['GOAL_AWAY_SCORE'])
 
@@ -141,7 +153,8 @@ def vis_side(dp=None):
         raw_min = r['GOAL_MIN']
         minuttal = 1 if pd.isna(raw_min) else int(raw_min) + 1
 
-        label_tekst = f"{dato_str}: {mål_stilling} ({minuttal}. min) vs. {opp_navn} ({kamp_res})"
+        maal_type_tekst = " (Selvmål)" if er_selvmål else ""
+        label_tekst = f"{dato_str}: {mål_stilling} ({minuttal}. min) vs. {opp_navn} ({kamp_res}){maal_type_tekst}"
 
         opts[key] = {
             'label': label_tekst,
@@ -200,11 +213,19 @@ def vis_side(dp=None):
                 r_x = row['RAW_X']
                 r_y = row['RAW_Y']
                 nr_str = str(row['sekvens_nr'])
-                er_maal = (str(row['EVENT_TYPEID']) == '16')
+                
+                q_list = str(row.get('QUALIFIER_LIST', ''))
+                er_selvmål = (str(row['EVENT_TYPEID']) == '16' and "28" in [q.strip() for q in q_list.split(",")])
+                er_maal = (str(row['EVENT_TYPEID']) == '16' and not er_selvmål)
                 er_modstander = (str(row['EVENT_CONTESTANT_OPTAUUID']) != str(valgt_uuid))
 
                 if er_maal:
                     prik_farve = '#df003b'
+                    prik_str = 70
+                    tekst_farve = '#333333'
+                elif er_selvmål:
+                    # Selvmål markeres tydeligt (f.eks. med orange/mørkegul eller en særskilt farve)
+                    prik_farve = '#d68910'
                     prik_str = 70
                     tekst_farve = '#333333'
                 elif er_modstander:
@@ -225,8 +246,10 @@ def vis_side(dp=None):
 
                 navn = str(row.get('PLAYER_NAME', ''))
                 if navn and navn != 'nan' and navn != 'Ukendt':
+                    # Tilføj evt. (SM) eller lignende hvis det er selvmål, så det fremgår i figuren
+                    vis_navn = f"{navn} (SM)" if er_selvmål else navn
                     ax.text(
-                        r_x, r_y - 2.5, navn,
+                        r_x, r_y - 2.5, vis_navn,
                         fontsize=6, ha='center', va='top', color=tekst_farve, zorder=5
                     )
 
@@ -238,12 +261,6 @@ def vis_side(dp=None):
     with col_tabel:
         st.markdown("##### Aktioner i sekvensen")
         
-        def get_final_label_t4(row):
-            if 'AKTION' in row and pd.notna(row['AKTION']) and row['AKTION'] != "":
-                return row['AKTION']
-            label = get_action_label(row)
-            return label if label else "Opbygning"
-
         tge['Aktion'] = tge.apply(get_final_label_t4, axis=1)
         
         vis_cols = ['sekvens_nr', 'PLAYER_NAME', 'Aktion']
