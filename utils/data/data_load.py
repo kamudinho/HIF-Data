@@ -8,7 +8,7 @@ import snowflake.connector
 
 # Import fra dine mapper
 from utils.data.sql.wy_queries import get_wy_queries
-from utils.utils.positional_helper import beregn_primaere_positioner, berig_med_spillernavne
+from utils.positional_helper import beregn_primaere_positioner, berig_med_spillernavne
 
 DB = "KLUB_HVIDOVREIF.AXIS"
 BILLEDE_CACHE_TTL = 180 * 24 * 3600  # 180 dage
