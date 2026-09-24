@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 
-def vis_trup_side(team_wyid, seasonname):
+def vis_side(team_wyid, seasonname):
     st.markdown('<div class="main-header">Modstanderanalyse</div>', unsafe_allow_html=True)
     
     st.write(f"Viser trup for Hold ID: {team_wyid} i sæson {seasonname}")
