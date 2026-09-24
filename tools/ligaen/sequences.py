@@ -172,7 +172,7 @@ def vis_side(dp=None):
         ev_type = str(first_row['EVENT_TYPEID'])
         first_idx = tge.index[0]
         if ev_type == '12':
-            tge.loc[first_idx, 'AKTION'] = 'Klarering'
+            tge.loc[first_idx, 'AKTION'] = 'Clearing'
         elif ev_type == '7':
             tge.loc[first_idx, 'AKTION'] = 'Interception'
 
