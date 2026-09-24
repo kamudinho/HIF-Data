@@ -211,7 +211,7 @@ with st.sidebar:
             "TRUPPEN": ["TRUPPEN", "Oversigt", "Forecast"],
             "SCOUTING": ["SCOUTING", "Scoutrapport", "Database", "Emnedatabase", "Sammenligning", "Top10-scouting", "Opgaver", "Opret emne"],
             "TILPASNING": ["TILPASNING", "Spillerdata", "Spiller-score", "Standardsituationer"],
-            "TESTSIDE": ["TESTSIDE", "Performance", "Winning Performance", "1. Div-tilpasning", "Charts", "Oversigt", "Forecast", "Model", "Transfers"],
+            "TESTSIDE": ["TESTSIDE", "Dataviz", "Performance", "Winning Performance", "1. Div-tilpasning", "Charts", "Oversigt", "Forecast", "Model", "Transfers"],
             "ADMIN": ["ADMIN", "System Log", "Profil", "Datakatalog", "Konklusion", "Teamradar", "Spillerradar", "Fysisk profil", "Hold: Fysisk profil", "Intern analyse", "Top 5: Spillere", "Ordbog"],
             "ADMIN_SCOUTING": ["ADMIN_SCOUTING"],
             "PROFIL": ["PROFIL", "Profil"]
@@ -451,8 +451,8 @@ try:
             import tools.hifanalyse.teamradar as tr
             tr.vis_side()
         elif s == "Dataviz":
-            import tools.hifanalyse.dataviz as dv
-            dv.vis_side()
+            import tools.hifanalyse.viz as viz
+            viz.vis_side()
         elif s == "Opgaver":
             import tools.admin_page.opgaver as opg
             opg.vis_side()
