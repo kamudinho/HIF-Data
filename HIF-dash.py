@@ -56,7 +56,7 @@ def main():
             st.session_state.menu_under = "Hovedoversigt"
             st.rerun()
 
-    # Holdanalyse (Ny sektion med Modstanderanalyse)
+    # Holdanalyse
     with col2:
         with st.popover("Holdanalyse ▾", use_container_width=True):
             if st.button("Modstanderanalyse", use_container_width=True):
@@ -131,6 +131,11 @@ def main():
                 mod = importlib.util.module_from_spec(spec)
                 sys.modules["forside"] = mod
                 spec.loader.exec_module(mod)
+                # Kør vis_side funktionen i forside.py
+                if hasattr(mod, "vis_side"):
+                    mod.vis_side()
+                else:
+                    st.error("Filen 'forside.py' mangler en vis_side() funktion.")
             else:
                 st.warning("Kunne ikke finde 'pages/01_oversigt/forside.py'. Sørg for filen ligger i mappen.")
 
@@ -173,5 +178,6 @@ def main():
         st.error(f"Kunne ikke indhente modulet for '{s}'. Detaljer: {e}")
     except Exception as e:
         st.error(f"Der opstod en fejl under indlæsning af siden: {e}")
+
 if __name__ == "__main__":
     main()
