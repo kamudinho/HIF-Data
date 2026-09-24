@@ -75,11 +75,11 @@ def main():
         except ImportError:
             st.warning("Kunne ikke finde 'HIF_head.py'. Sørg for filen ligger i mappen.")
 
-    elif st.session_state.valgt_side == "Trup":
+    elif st.session_state.valgt_side == "Modstanderanalyse":
         if vis_trup_side:
             vis_trup_side(TEAM_WYID, ACTIVE_SEASON)
         else:
-            st.error("Kunne ikke indlæse 'pages/trup.py'.")
+            st.error("Kunne ikke indlæse 'pages/modstanderanalyse.py'.")
 
     elif st.session_state.valgt_side == "Kampe":
         st.markdown('<div class="main-header">Kampoversigt & Statistik</div>', unsafe_allow_html=True)
