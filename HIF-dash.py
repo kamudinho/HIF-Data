@@ -13,12 +13,12 @@ ACTIVE_SEASON = "2026/2027"
 ACTIVE_COMPETITION = "NordicBet Liga"
 TEAM_WYID = 7490
 
-# --- 3. STYLING & HOVER-MENU CSS ---
+# --- 3. STYLING ---
 st.markdown("""
     <style>
         .stApp { background-color: #FFFFFF; }
         .block-container {
-            padding-top: 0.8rem !important;
+            padding-top: 1rem !important;
             padding-bottom: 2rem !important;
             padding-left: 2rem !important;
             padding-right: 2rem !important;
@@ -26,59 +26,6 @@ st.markdown("""
         header { visibility: hidden; }
         [data-testid="stHeaderBlockContainer"] h1 { display: none; }
         .main-header { font-size: 20px; font-weight: 700; color: #1a1a1a; margin-bottom: 5px; }
-
-        /* --- CSS HOVER DROPDOWN MENU --- */
-        .navbar-container {
-            display: flex;
-            align-items: center;
-            gap: 20px;
-            background-color: #ffffff;
-            padding: 10px 0;
-            border-bottom: 1px solid #e0e0e0;
-            margin-bottom: 20px;
-        }
-        .dropdown {
-            position: relative;
-            display: inline-block;
-        }
-        .dropbtn {
-            background-color: transparent;
-            color: #1a1a1a;
-            padding: 8px 12px;
-            font-size: 14px;
-            font-weight: 600;
-            border: none;
-            cursor: pointer;
-            border-radius: 4px;
-        }
-        .dropdown-content {
-            display: none;
-            position: absolute;
-            background-color: #ffffff;
-            min-width: 180px;
-            box-shadow: 0px 8px 16px rgba(0,0,0,0.1);
-            z-index: 100;
-            border: 1px solid #e0e0e0;
-            border-radius: 4px;
-        }
-        .dropdown-content a {
-            color: #333;
-            padding: 10px 14px;
-            text-decoration: none;
-            display: block;
-            font-size: 13px;
-        }
-        .dropdown-content a:hover {
-            background-color: #f1f1f1;
-            color: #000;
-        }
-        /* Viser undermenuen når musen føres over */
-        .dropdown:hover .dropdown-content {
-            display: block;
-        }
-        .dropdown:hover .dropbtn {
-            background-color: #f8f9fa;
-        }
     </style>
 """, unsafe_allow_html=True)
 
@@ -89,53 +36,68 @@ if 'menu_under' not in st.session_state:
     st.session_state.menu_under = "Hovedoversigt"
 
 def main():
-    # Vi bruger query_params til at opfange klik fra vores HTML hover-menu
-    query_params = st.query_params
-    if "m" in query_params:
-        st.session_state.menu_hoved = query_params["m"]
-    if "s" in query_params:
-        st.session_state.menu_under = query_params["s"]
+    # --- 4. TOPMENU MED STABIL DROPDOWN (POPOVER) ---
+    col1, col2, col3, col4 = st.columns([1.2, 1.5, 1.5, 2])
+    
+    with col1:
+        if st.button("Oversigt", use_container_width=True):
+            st.session_state.menu_hoved = "OVERSIGT"
+            st.session_state.menu_under = "Hovedoversigt"
+            st.rerun()
 
-    # --- 4. TOPMENU MED REN CSS HOVER ---
-    # Vi designer topmenuen i HTML, så den reagerer øjeblikkeligt på hover
-    st.markdown(f"""
-        <div class="navbar-container">
-            <div style="font-weight: 700; font-size: 16px; margin-right: 20px;">HVIDOVRE IF</div>
-            
-            <!-- Oversigt -->
-            <div class="dropdown">
-                <a href="?m=OVERSIGT&s=Hovedoversigt"><button class="dropbtn">Oversigt</button></a>
-            </div>
+    # Spilleranalyse som en popover-knap med undermenuer
+    with col2:
+        with st.popover("Spilleranalyse ▾", use_container_width=True):
+            if st.button("Spillerprofil", use_container_width=True):
+                st.session_state.menu_hoved = "SPILLERANALYSE"
+                st.session_state.menu_under = "Spillerprofil"
+                st.rerun()
+            if st.button("Spilleroversigt", use_container_width=True):
+                st.session_state.menu_hoved = "SPILLERANALYSE"
+                st.session_state.menu_under = "Spilleroversigt"
+                st.rerun()
+            if st.button("Målsekvenser", use_container_width=True):
+                st.session_state.menu_hoved = "SPILLERANALYSE"
+                st.session_state.menu_under = "Målsekvenser"
+                st.rerun()
+            if st.button("Spilleraktioner", use_container_width=True):
+                st.session_state.menu_hoved = "SPILLERANALYSE"
+                st.session_state.menu_under = "Spilleraktioner"
+                st.rerun()
+            if st.button("Spiller-stats", use_container_width=True):
+                st.session_state.menu_hoved = "SPILLERANALYSE"
+                st.session_state.menu_under = "Spiller-stats"
+                st.rerun()
+            if st.button("Spiller-profil (2)", use_container_width=True):
+                st.session_state.menu_hoved = "SPILLERANALYSE"
+                st.session_state.menu_under = "Spiller-profil"
+                st.rerun()
 
-            <!-- Spilleranalyse med Hover Dropdown -->
-            <div class="dropdown">
-                <button class="dropbtn">Spilleranalyse ▾</button>
-                <div class="dropdown-content">
-                    <a href="?m=SPILLERANALYSE&s=Spillerprofil">Spillerprofil</a>
-                    <a href="?m=SPILLERANALYSE&s=Spilleroversigt">Spilleroversigt</a>
-                    <a href="?m=SPILLERANALYSE&s=Målsekvenser">Målsekvenser</a>
-                    <a href="?m=SPILLERANALYSE&s=Spilleraktioner">Spilleraktioner</a>
-                    <a href="?m=SPILLERANALYSE&s=Spiller-stats">Spiller-stats</a>
-                    <a href="?m=SPILLERANALYSE&s=Spiller-profil">Spiller-profil (2)</a>
-                </div>
-            </div>
+    # Kampanalyse som en popover-knap med undermenuer
+    with col3:
+        with st.popover("Kampanalyse ▾", use_container_width=True):
+            if st.button("Kampliste", use_container_width=True):
+                st.session_state.menu_hoved = "KAMPANALYSE"
+                st.session_state.menu_under = "Kampliste"
+                st.rerun()
+            if st.button("Holdstatistik", use_container_width=True):
+                st.session_state.menu_hoved = "KAMPANALYSE"
+                st.session_state.menu_under = "Holdstatistik"
+                st.rerun()
+            if st.button("XG-analyse", use_container_width=True):
+                st.session_state.menu_hoved = "KAMPANALYSE"
+                st.session_state.menu_under = "XG-analyse"
+                st.rerun()
 
-            <!-- Kampanalyse med Hover Dropdown -->
-            <div class="dropdown">
-                <button class="dropbtn">Kampanalyse ▾</button>
-                <div class="dropdown-content">
-                    <a href="?m=KAMPANALYSE&s=Kampliste">Kampliste</a>
-                    <a href="?m=KAMPANALYSE&s=Holdstatistik">Holdstatistik</a>
-                    <a href="?m=KAMPANALYSE&s=XG-analyse">XG-analyse</a>
-                </div>
-            </div>
+    with col4:
+        st.markdown(
+            f"<div style='text-align: right; font-size: 11px; color: #666; padding-top: 8px;'>"
+            f"<b>Sæson:</b> {ACTIVE_SEASON} | <b>Liga:</b> {ACTIVE_COMPETITION}"
+            f"</div>", 
+            unsafe_allow_html=True
+        )
 
-            <!-- Info til højre -->
-            <div style="margin-left: auto; font-size: 11px; color: #666; text-align: right;">
-                <b>Sæson:</b> {ACTIVE_SEASON} | <b>Liga:</b> {ACTIVE_COMPETITION}
-            </div>
-        </div>
-    """, unsafe_allow_html=True)
+    st.divider()
 
     # Hent aktuelle værdier fra state
     m = st.session_state.menu_hoved
