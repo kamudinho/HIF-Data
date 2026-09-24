@@ -1,10 +1,15 @@
+# data/hif_load.py
+import os
+import concurrent.futures
 import streamlit as st
 import pandas as pd
-import os
 from datetime import datetime
 from data.data_load import _get_snowflake_conn, load_local_players
 from data.sql.wy_queries import get_wy_queries
 from utils.positional_helper import beregn_primaere_positioner, berig_med_spillernavne
+
+DB = "KLUB_HVIDOVREIF.AXIS"
+BILLEDE_CACHE_TTL = 180 * 24 * 3600  # 180 dage
 
 
 def _rens_og_udtræk_id(val):
@@ -21,30 +26,13 @@ def _rens_og_udtræk_id(val):
 
 
 def _cache_filsti(uge_id, mappe="data"):
-    """
-    Filnavnet indeholder nu ISO-ÅRET, ikke kun ugenummeret.
-
-    Uden årstal er 'cache_uge_1.pkl' for 2026 og 2027 det SAMME filnavn. Hvis
-    oprydningen (nedenfor) skulle svigte bare én gang - disk-fejl,
-    rettighedsproblem, en except der sluger fejlen - kan en gammel fil ligge
-    der i månedsvis. Rammer man samme ugenummer et år senere, indlæses
-    sidste års data stille og roligt, uden fejl og uden at Snowflake
-    overhovedet bliver spurgt.
-
-    isocalendar()[0] bruges i stedet for datetime.now().year, fordi ISO-uge 1
-    i starten af januar i sjældne tilfælde teknisk hører til det foregående
-    ISO-år - det er præcis den kant vi vil undgå at ramme.
-    """
+    """Filnavn med ISO-ÅR + uge, så 2026 og 2027 aldrig kolliderer."""
     iso_aar = datetime.now().isocalendar()[0]
     return os.path.join(mappe, f"cache_{iso_aar}_uge_{uge_id}.pkl")
 
 
 def _beskaer_cache_filer(mappe="data", behold=4):
-    """
-    Rydder gamle uge-cachefiler. Kaldes EFTER den nye fil er skrevet, så
-    'behold=4' faktisk betyder 4 filer i alt bagefter - ikke 4 plus den der
-    lige blev oprettet (som den oprindelige rækkefølge gjorde).
-    """
+    """Rydder gamle uge-cachefiler. Kaldes EFTER den nye fil er skrevet."""
     try:
         if not os.path.exists(mappe):
             return
@@ -63,6 +51,53 @@ def _beskaer_cache_filer(mappe="data", behold=4):
         pass
 
 
+def _opret_ny_forbindelse():
+    """
+    ÉN NY Snowflake-forbindelse pr. query — kræves for ægte parallelitet,
+    da snowflake-connector serialiserer queries på samme forbindelse.
+
+    VIGTIGT: Hvis _get_snowflake_conn() er @st.cache_resource-cachet og
+    returnerer DEN SAMME forbindelse hver gang, skal data_load.py have et
+    'force_new=True'-argument. Tilføj i data_load.py:
+
+        @st.cache_resource
+        def _connect(force_new=False):
+            ...
+        def _get_snowflake_conn(force_new=False):
+            return _connect() if not force_new else _lav_ny_forbindelse()
+    """
+    return _get_snowflake_conn(force_new=True)
+
+
+def _fetch_parallel(query_jobs: dict) -> dict:
+    """Kører flere Snowflake-queries parallelt (én forbindelse pr. query)."""
+    results = {}
+
+    def _run(sql):
+        conn = _opret_ny_forbindelse()
+        return conn.query(sql)
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(5, len(query_jobs))) as pool:
+        futures = {navn: pool.submit(_run, sql) for navn, sql in query_jobs.items()}
+        for navn, fut in futures.items():
+            results[navn] = fut.result()
+    return results
+
+
+@st.cache_data(ttl=BILLEDE_CACHE_TTL, show_spinner=False)
+def hent_profilbillede(player_wyid):
+    
+    pid = _rens_og_udtræk_id(player_wyid)
+    if not pid:
+        return None
+    conn = _get_snowflake_conn()
+    df = conn.query(f"SELECT IMAGEDATAURL FROM {DB}.WYSCOUT_PLAYERS WHERE PLAYER_WYID = {pid}")
+    if df is None or df.empty or "IMAGEDATAURL" not in df.columns:
+        return None
+    val = df["IMAGEDATAURL"].iloc[0]
+    return val if pd.notna(val) else None
+
+
 @st.cache_data(ttl=600)
 def get_squad_only():
     """LYNHURTIG indlæsning til trup-oversigten (kun lokal data)."""
@@ -76,29 +111,8 @@ def get_squad_only():
     return {"players": df_local, "scout_reports": scout_df}
 
 
-@st.cache_data
-def get_scouting_package(uge_id):
-    """DEN TUNGE PAKKE: Snowflake, karriere, stats og profilbilleder (Med 4-ugers disk-cache)."""
-    fil_sti = _cache_filsti(uge_id)
-
-    # 1. Hvis filen for denne uge (og dette ISO-år) allerede findes lokalt,
-    #    læs den med det samme! (Lynende hurtigt og uafhængig af servergenstart)
-    if os.path.exists(fil_sti):
-        try:
-            return pd.read_pickle(fil_sti)
-        except Exception:
-            pass  # Hvis filen mod forventning er korrupt, hentes den blot på ny
-
-    # 2. Hent fra Snowflake (da det er en ny uge/år, eller filen ikke findes endnu)
-    conn = _get_snowflake_conn()
-    if not conn:
-        st.error("Kunne ikke oprette forbindelse til Snowflake.")
-        return {}
-
-    DB = "KLUB_HVIDOVREIF.AXIS"
-    queries = get_wy_queries("", "")
-
-    # Hent grundlæggende data (lokale filer)
+def _indlaes_lokal_data():
+    """Lokale spillere + scoutrapporter (fælles for begge pakker)."""
     df_local = load_local_players()
     try:
         path = os.path.join(os.getcwd(), 'data', 'scouting_db.csv')
@@ -106,57 +120,81 @@ def get_scouting_package(uge_id):
         scout_df.columns = [c.strip().upper() for c in scout_df.columns]
     except Exception:
         scout_df = pd.DataFrame()
+    return df_local, scout_df
 
-    # ID-opsamling med sikker rensning mod bogstaver
-    all_relevant_ids = []
 
-    if not df_local.empty:
+def _opsaml_relevante_ids(df_local, scout_df):
+    """ID-opsamling med sikker rensning mod bogstaver."""
+    alle_ids = []
+    for df in [df_local, scout_df]:
+        if df is None or df.empty:
+            continue
         for col in ['PLAYER_WYID', 'WYID', 'PLAYER_ID', 'ID']:
-            if col in df_local.columns:
-                ids = df_local[col].apply(_rens_og_udtræk_id).dropna().unique().tolist()
-                all_relevant_ids.extend(ids)
+            if col in df.columns:
+                ids = df[col].apply(_rens_og_udtræk_id).dropna().unique().tolist()
+                alle_ids.extend(ids)
+    return sorted(set(int(x) for x in alle_ids if x))
 
-    if not scout_df.empty:
-        for col in ['PLAYER_WYID', 'WYID', 'PLAYER_ID', 'ID']:
-            if col in scout_df.columns:
-                ids = scout_df[col].apply(_rens_og_udtræk_id).dropna().unique().tolist()
-                all_relevant_ids.extend(ids)
 
-    all_relevant_ids = list(set([int(x) for x in all_relevant_ids if x]))
+@st.cache_data
+def get_scouting_package(uge_id):
+    """
+    DEN TUNGE PAKKE: Snowflake (parallelt), karriere, stats og positioner.
+    Disk-cache pr. (ISO-år, uge) — kun skrevet hvis hentningen lykkedes.
+    Profilbilleder hentes separat via hent_profilbillede().
+    """
+    fil_sti = _cache_filsti(uge_id)
 
-    df_sql_p, df_career, df_wyscout_search, df_adv = pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+    # 1. Var disk-cache? Returner med det samme
+    if os.path.exists(fil_sti):
+        try:
+            return pd.read_pickle(fil_sti)
+        except Exception:
+            pass  # Korrupt fil — hentes på ny nedenfor
+
+    conn = _get_snowflake_conn()
+    if not conn:
+        st.error("Kunne ikke oprette forbindelse til Snowflake.")
+        return {}
+
+    queries = get_wy_queries("", "")
+    df_local, scout_df = _indlaes_lokal_data()
+    all_relevant_ids = _opsaml_relevante_ids(df_local, scout_df)
+
+    df_sql_p = pd.DataFrame()
+    df_career = pd.DataFrame()
+    df_wyscout_search = pd.DataFrame()
+    df_adv = pd.DataFrame()
     df_primaer_positioner = pd.DataFrame()
+    hentning_ok = True
 
     try:
-        # A. HENT LIGA-DATA
+        # A. Liga-data hentes alene (kræves til berigelse af positioner)
         df_wyscout_search = conn.query(queries["players"])
 
-        # B. HENT SPECIFIK DATA (hvis IDs findes)
+        # B. De øvrige queries køres PARALLELT (billeder er taget UD af pakken)
         if all_relevant_ids:
-            if len(all_relevant_ids) == 1:
-                id_str = f"({all_relevant_ids[0]})"
-            else:
-                id_str = str(tuple(all_relevant_ids))
+            id_str = f"({all_relevant_ids[0]})" if len(all_relevant_ids) == 1 else str(tuple(all_relevant_ids))
 
-            # Profilbilleder
-            df_sql_p = conn.query(f"SELECT PLAYER_WYID, IMAGEDATAURL FROM {DB}.WYSCOUT_PLAYERS WHERE PLAYER_WYID IN {id_str}")
-
-            # Karriere
             career_q = queries["player_career"]
-            career_q = career_q.replace("ORDER BY", f"WHERE pc.PLAYER_WYID IN {id_str} ORDER BY") if "ORDER BY" in career_q else career_q + f" WHERE pc.PLAYER_WYID IN {id_str}"
-            df_career = conn.query(career_q)
+            career_q = (career_q.replace("ORDER BY", f"WHERE pc.PLAYER_WYID IN {id_str} ORDER BY")
+                        if "ORDER BY" in career_q
+                        else career_q + f" WHERE pc.PLAYER_WYID IN {id_str}")
 
-            # Stats
             adv_q = queries["player_stats_total"]
-            adv_q += f" AND pt.PLAYER_WYID IN {id_str}" if "WHERE" in adv_q else f" WHERE pt.PLAYER_WYID IN {id_str}"
-            df_adv = conn.query(adv_q)
+            adv_q = (adv_q + f" AND pt.PLAYER_WYID IN {id_str}" if "WHERE" in adv_q
+                     else adv_q + f" WHERE pt.PLAYER_WYID IN {id_str}")
+
+            pos_q = queries["position_base"].format(id_list=id_str)
+
+            par = _fetch_parallel({"career": career_q, "adv": adv_q, "pos": pos_q})
+            df_career = par["career"]
+            df_adv = par["adv"]
 
             # --- PRIMÆR POSITION ---
             try:
-                pos_q = queries["position_base"].format(id_list=id_str)
-                df_position_base = conn.query(pos_q)
-
-                if not df_position_base.empty:
+                df_position_base = par["pos"]
+                if df_position_base is not None and not df_position_base.empty:
                     df_primaer_positioner = beregn_primaere_positioner(df_position_base)
                     df_primaer_positioner = berig_med_spillernavne(df_primaer_positioner, df_wyscout_search)
             except Exception as pos_e:
@@ -172,6 +210,7 @@ def get_scouting_package(uge_id):
                         df[col] = df[col].astype(str).str.split('.').str[0].str.strip()
 
     except Exception as e:
+        hentning_ok = False
         st.error(f"SQL Fejl i Scouting Load: {e}")
 
     data_pakke = {
@@ -179,21 +218,20 @@ def get_scouting_package(uge_id):
         "wyscout_players": df_wyscout_search,
         "players": df_wyscout_search,
         "local_players": df_local,
-        "sql_players": df_sql_p,
+        "sql_players": df_sql_p,  # NB: indeholder ikke længere IMAGEDATAURL
         "career": df_career,
         "advanced_stats": df_adv,
         "primaer_positioner": df_primaer_positioner,
     }
 
-    # 3. Gem den nye uges pakke ned på disken, så den overlever servergenstart
-    try:
-        os.makedirs("data", exist_ok=True)
-        pd.to_pickle(data_pakke, fil_sti)
-    except Exception:
-        pass
-
-    # 4. Ryd op EFTER skrivning, så "behold de 4 nyeste" faktisk betyder 4
-    #    filer bagefter - ikke 4 plus den der lige blev skrevet.
-    _beskaer_cache_filer(mappe="data", behold=4)
+    # Kun gem cache når data FAKTISK kom hjem — ellers blokerer en
+    # transient fejl data resten af ugen via disk-cachen
+    if hentning_ok:
+        try:
+            os.makedirs("data", exist_ok=True)
+            pd.to_pickle(data_pakke, fil_sti)
+            _beskaer_cache_filer(mappe="data", behold=4)
+        except Exception:
+            pass
 
     return data_pakke
