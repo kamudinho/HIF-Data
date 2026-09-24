@@ -1,6 +1,7 @@
 # data/sql/head.py
 import pandas as pd
 import streamlit as st
+from data.sql.fallback import fill_gaps_side_aware
 
 DB = "KLUB_HVIDOVREIF.AXIS"
 
@@ -8,13 +9,14 @@ DB = "KLUB_HVIDOVREIF.AXIS"
 def hent_hoved_stats(_conn, calendar_uuid: str) -> pd.DataFrame:
     """
     Henter samlede hold- og match-statistikker direkte fra Snowflake i én effektiv forespørgsel
-    baseret på det fremsendte turnering/sæson-UUID (calendar_uuid).
+    baseret på det fremsendte turnering/sæson-UUID (calendar_uuid). 
+    Inkluderer automatisk fallback-udfyldning af manglende felter via fallback.py.
     """
     if not _conn or not calendar_uuid:
         return pd.DataFrame()
 
     query = f"""
-        WITH CombinedStats AS (
+        With CombinedStats AS (
             SELECT MATCH_OPTAUUID, CONTESTANT_OPTAUUID, STAT_TYPE, TRY_CAST(STAT_TOTAL AS FLOAT) AS STAT_VALUE
             FROM {DB}.OPTA_MATCHSTATS
             UNION ALL
@@ -61,4 +63,24 @@ def hent_hoved_stats(_conn, calendar_uuid: str) -> pd.DataFrame:
         df.columns = [str(c).upper() for c in df.columns]
         if 'MATCH_DATE_FULL' in df.columns:
             df['MATCH_DATE_FULL'] = pd.to_datetime(df['MATCH_DATE_FULL'], errors='coerce').dt.tz_localize(None)
+            
+        # --- HER KØRES FALLBACK AUTOMATISK PÅ HULLER (NAN) ---
+        col_mapping = {
+            "EXPECTEDGOALS": "XG",
+            "TOTALSCORINGATT": "SHOTS",
+            "TOUCHESINOPPBOX": "TOUCHES_IN_BOX",
+            "POSSESSIONPERCENTAGE": "POSSESSION",
+            "TOTALPASS": "PASSES",
+            "WONCORNERS": "CORNERS_WON",
+            "SHOTOFFTARGET": "OFF_TARGET",
+            "TOTALTHROWS": "THROWS",
+            "FKFOULWON": "FOULS_WON",
+            "FKFOULLOST": "FOULS_LOST",
+            "DUELAERIALWON": "AERIAL_WON",
+            "TOTALTACKLE": "TACKLES",
+            "TOTALCLEARANCE": "CLEARANCES"
+        }
+        
+        df = fill_gaps_side_aware(df, col_mapping)
+
     return df if df is not None else pd.DataFrame()
