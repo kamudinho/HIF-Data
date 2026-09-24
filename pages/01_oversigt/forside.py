@@ -1,6 +1,15 @@
 # pages/01_oversigt/forside.py
 import streamlit as st
 import pandas as pd
+import sys
+from pathlib import Path
+
+# Tilføj projektets overordnede mappe til sys.path
+root_dir = Path(__file__).resolve().parent.parent.parent
+if str(root_dir) not in sys.path:
+    sys.path.append(str(root_dir))
+
+# Nu kan Python finde hele stien 'data.utils.data.sql'
 from data.utils.data.sql.teams import (
     hent_hurtig_stilling,
     hent_hold_formkurve
