@@ -5,7 +5,7 @@ import pandas as pd
 st.set_page_config(
     page_title="Hvidovre IF - Match & Performance Dashboard",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed" # Minimerer sidebaren, da vi bruger topmenu
 )
 
 # --- 2. GLOBALE KONSTANTER & VÆRDIER ---
@@ -17,25 +17,29 @@ TEAM_WYID = 7490
 st.markdown("""
     <style>
         .stApp { background-color: #FFFFFF; }
-        .main-header { font-size: 24px; font-weight: 700; color: #1a1a1a; margin-bottom: 20px; }
+        .main-header { font-size: 22px; font-weight: 700; color: #1a1a1a; margin-bottom: 10px; }
+        /* Gør radio-knapper mere vandrette og pæne øverst */
+        div[data-testid="stHorizontalBlock"] { align-items: center; }
     </style>
 """, unsafe_allow_html=True)
 
 def main():
-    # --- 4. SIDEBAR NAVIGATION ---
-    st.sidebar.title("Hvidovre IF")
-    st.sidebar.markdown(f"**Sæson:** {ACTIVE_SEASON}")
-    st.sidebar.markdown(f"**Turnering:** {ACTIVE_COMPETITION}")
+    # --- 4. TOPMENU & INFO ---
+    top_col1, top_col2 = st.columns([3, 1])
     
-    st.sidebar.divider()
-    
-    valgt_side = st.sidebar.radio(
-        "Navigation",
-        ["Oversigt (HIF-head)", "Trup & Spillere", "Kampe & Statistik", "Indstillinger"]
-    )
+    with top_col1:
+        # Vandret navigation
+        valgt_side = st.radio(
+            "Navigation",
+            ["Oversigt (HIF-head)", "Trup & Spillere", "Kampe & Statistik", "Indstillinger"],
+            horizontal=True,
+            label_visibility="collapsed"
+        )
+        
+    with top_col2:
+        st.markdown(f"<div style='text-align: right; font-size: 13px; color: #666;'><b>Sæson:</b> {ACTIVE_SEASON} | <b>Turnering:</b> {ACTIVE_COMPETITION}</div>", unsafe_allow_html=True)
 
-    st.sidebar.divider()
-    st.sidebar.caption("Data leveret via Snowflake")
+    st.divider()
 
     # --- 5. RUTEVALG (ROUTER) ---
     if "Oversigt" in valgt_side:
