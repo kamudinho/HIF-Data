@@ -9,7 +9,7 @@ st.set_page_config(
 )
 
 # --- 2. GLOBALE KONSTANTER ---
-ACTIVE_SEASON = "2025/2026"
+ACTIVE_SEASON = "2026/2027"
 ACTIVE_COMPETITION = "NordicBet Liga"
 TEAM_WYID = 7490
 
