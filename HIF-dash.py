@@ -131,7 +131,6 @@ def main():
                 mod = importlib.util.module_from_spec(spec)
                 sys.modules["forside"] = mod
                 spec.loader.exec_module(mod)
-                # Kør vis_side funktionen i forside.py
                 if hasattr(mod, "vis_side"):
                     mod.vis_side()
                 else:
