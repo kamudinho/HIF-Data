@@ -295,7 +295,7 @@ def vis_side():
                 html += "</tbody></table>"
                 st.markdown(html, unsafe_allow_html=True)
 
-        # KOLONNE 3: STILLING (Hentes direkte og lynhurtigt fra teams.py)
+        # KOLONNE 3: STILLING
         with col3:
             st.markdown(f"<div class='card-title'><span>STILLING ({active_comp.upper()})</span></div>", unsafe_allow_html=True)
             
@@ -358,7 +358,7 @@ def vis_side():
                             </div>
                         """, unsafe_allow_html=True)
                     
-                    st.caption(f"<div style='margin-top:-8px; font-size:10px; margin-bottom:4px;'>{desc}</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div style='margin-top:-8px; font-size:10px; margin-bottom:4px; color:#666;'>{desc}</div>", unsafe_allow_html=True)
                     
                     hif_avg = hif_recent[col].mean()
                     hif_recent['tooltip_header'] = hif_recent.apply(lambda r: f"vs. {r['OPPONENT_NAME']} {int(r['TOTAL_HOME_SCORE'])}-{int(r['TOTAL_AWAY_SCORE})} ({r['HOME_OR_AWAY']})", axis=1)
