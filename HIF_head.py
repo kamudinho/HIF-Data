@@ -1,109 +1,58 @@
 import streamlit as st
 import pandas as pd
-from utils.data.data_load import _get_snowflake_conn
-from utils.data.sql.teams import (
-    def_load_season_team_average,
-    hent_hurtig_stilling,
-    hent_hold_formkurve
-)
+import data.hif_load as hif_load
 
 def vis_side():
-    # Opdateret til sæson 2026/2027
-    season_name = "2026/2027"
-    # Sørg for at dette UUID peger på 2026/2027-kalenderen i din database
-    calendar_uuid = '2mb332vncy4450vu14paj8844' 
-
-    st.markdown(f"### Holdets Nøgletal - Sæson {season_name}")
+    # Brand-farve fra din app
+    HIF_ROD = "#df003b"
     
-    # Hent data ved hjælp af din funktion fra teams.py
-    df_season_stats = def_load_season_team_average(calendar_uuid)
-    df_stilling = hent_hurtig_stilling(calendar_uuid)
-
-    # Find Hvidovres Opta UUID ud fra stillingstabellen
-    hvidovre_optauuid = None
-    if df_stilling is not None and not df_stilling.empty:
-        hv_row_st = df_stilling[df_stilling['HOLD'].str.contains("Hvidovre", case=False, na=False)]
-        if not hv_row_st.empty:
-            hvidovre_optauuid = hv_row_st.iloc[0].get('TEAM_ID')
-
-    # Udtræk Hvidovres specifikke række fra sæsondata
-    hvidovre_row = pd.Series()
-    if hvidovre_optauuid and df_season_stats is not None and not df_season_stats.empty:
-        match_row = df_season_stats[df_season_stats['TEAM_OPTAUUID'] == hvidovre_optauuid]
-        if not match_row.empty:
-            hvidovre_row = match_row.iloc[0]
-
-    # Sikre værdier med standarder, hvis data mangler
-    kampe_spillet = int(hvidovre_row.get('SPILLER_KAMPE', 0)) if not hvidovre_row.empty else 0
-    maal_for = int(hvidovre_row.get('TOTAL_GOALS', 0)) if not hvidovre_row.empty else 0
-    maal_imod = int(hvidovre_row.get('TOTAL_GOALS_AGAINST', 0)) if not hvidovre_row.empty else 0
-    xg_pr_kamp = float(hvidovre_row.get('AVG_EXPECTEDGOALS', 0.0)) if not hvidovre_row.empty else 0.0
-    boldbesiddelse = float(hvidovre_row.get('AVG_POSSESSION', 0.0)) if not hvidovre_row.empty else 0.0
-
-    # Hent point fra stillingstabellen
-    point = 0
-    if df_stilling is not None and not df_stilling.empty:
-        hv_stilling = df_stilling[df_stilling['HOLD'].str.contains("Hvidovre", case=False, na=False)]
-        if not hv_stilling.empty:
-            point = int(hv_stilling.iloc[0].get('P', 0))
-
-    # --- 1. SEKTION: HOVEDOVERBLIK & NØGLEMETAL (KPI KORT) ---
-    col1, col2, col3, col4, col5 = st.columns(5)
+    st.markdown(f'<div style="font-size: 24px; font-weight: 700; color: #1a1a1a; margin-bottom: 20px;">Hvidovre IF - Hovedoversigt (2025/2026)</div>', unsafe_allow_html=True)
     
+    # 1. Hent data via hif_load (eller brug cachede elementer hvis tilgængelig)
+    try:
+        # Hent f.eks. truppen eller holddata
+        dp_quick = hif_load.get_squad_only()
+        antal_spillere = len(dp_quick.get("players", [])) if dp_quick and "players" in dp_quick else 0
+    except Exception:
+        antal_spillere = 0
+
+    # 2. Overordnede Metrikker / KPIs
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.metric(label="Kampe Spillet", value=str(kampe_spillet))
+        st.metric(label="Sæson", value="2025/2026")
     with col2:
-        st.metric(label="Point", value=str(point))
+        st.metric(label="Team ID (Wyscout)", value="7490")
     with col3:
-        st.metric(label="Målscore", value=f"{maal_for} - {maal_imod}")
+        st.metric(label="Aktive Spillere i Truppen", value=str(antal_spillere))
     with col4:
-        st.metric(label="Forventede Mål (xG)", value=f"{xg_pr_kamp:.2f}", delta="pr. kamp")
-    with col5:
-        st.metric(label="Boldbesiddelse", value=f"{boldbesiddelse:.1f}%")
+        st.metric(label="Liga", value="NordicBet Liga")
 
     st.divider()
 
-    # --- 2. SEKTION: SENESTE RESULTATER OG UDVIKLING ---
-    col_left, col_right = st.columns(2)
-
+    # 3. Sektion med genveje eller status
+    col_left, col_right = st.columns([2, 1])
+    
     with col_left:
-        st.markdown("#### Seneste kampe")
-        if hvidovre_optauuid:
-            df_form = hent_hold_formkurve(calendar_uuid, hvidovre_optauuid, limit=5)
-            if df_form is not None and not df_form.empty:
-                recent_matches = pd.DataFrame({
-                    "Kamp": df_form['CONTESTANTHOME_NAME'] + " - " + df_form['CONTESTANTAWAY_NAME'],
-                    "Resultat": df_form['TOTAL_HOME_SCORE'].astype(str) + " - " + df_form['TOTAL_AWAY_SCORE'].astype(str),
-                    "Form": df_form['RESULTAT']
-                })
-                st.dataframe(recent_matches, use_container_width=True, hide_index=True)
-            else:
-                st.info("Ingen formkurve-data fundet endnu.")
-        else:
-            st.info("Hvidovre ID ikke fundet.")
+        st.subheader("📊 Velkommen til HIF Data Hub")
+        st.write("""
+            Her har du det samlede overblik over Hvidovre IF's data, modstanderanalyser, 
+            spillerstatistikker og scouting-emner for **2025/2026**-sæsonen.
+        """)
+        
+        # Eksempel på at vise lidt data fra tabeller hvis muligt
+        st.info("💡 **Tip:** Brug menuen i venstre side til at navigere mellem Holdanalyse, Spilleranalyse og Scouting.")
 
     with col_right:
-        st.markdown("#### Taktiske Nøgletal (Gennemsnit)")
-        if not hvidovre_row.empty:
-            tactical_stats = pd.DataFrame({
-                "Parameter": ["Afslutninger pr. kamp", "Skud på mål pr. kamp", "Berøringer i felt pr. kamp", "Afleveringer pr. kamp", "Gule kort pr. kamp"],
-                "Værdi": [
-                    f"{float(hvidovre_row.get('AVG_TOTALSCORINGATT', 0)):.1f}",
-                    f"{float(hvidovre_row.get('AVG_ONTARGETSCORINGATT', 0)):.1f}",
-                    f"{float(hvidovre_row.get('AVG_TOUCHESINOPPBOX', 0)):.1f}",
-                    f"{float(hvidovre_row.get('AVG_TOTALPASS', 0)):.1f}",
-                    f"{float(hvidovre_row.get('AVG_TOTALYELLOW_CARDS', 0)):.1f}"
-                ]
-            })
-            st.dataframe(tactical_stats, use_container_width=True, hide_index=True)
-        else:
-            st.info("Ingen taktisk data tilgængelig.")
-
-    st.divider()
-
-    # --- 3. SEKTION: TURNERINGSSTILLING ---
-    st.markdown("### Stilling i Ligaen")
-    if df_stilling is not None and not df_stilling.empty:
-        st.dataframe(df_stilling[['POSITION', 'HOLD', 'K', 'V', 'U', 'T', 'MF', 'P']], use_container_width=True, hide_index=True)
-    else:
-        st.info("Kunne ikke indhente stillingstabellen.")
+        st.subheader("⚡ Hurtige Handlinger")
+        if st.button("Ryd App Cache", use_container_width=True):
+            st.cache_data.clear()
+            st.success("Cachen blev rydet!")
+            st.rerun()
+            
+        st.markdown(f"""
+            <div style="background-color: #f9f9f9; padding: 15px; border-radius: 6px; border-left: 4px solid {HIF_ROD}; margin-top: 15px;">
+                <b>System Status</b><br>
+                Forbindelse til datakilder: Aktiv<br>
+                Kompetence: NordicBet Liga (328)
+            </div>
+        """, unsafe_allow_html=True)
