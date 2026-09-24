@@ -12,7 +12,7 @@ from data.utils.team_mapping import (
     TOURNAMENTCALENDAR_NAME as DEFAULT_SEASON
 )
 from data.data_load import _get_snowflake_conn
-from data.sql.teams import hent_hoved_stats, hent_samlet_hold_statistik, hent_liga_stilling
+from data.sql.teams import hent_hoved_stats, hent_samlet_hold_statistik, hent_hurtig_stilling
 
 def apply_custom_style():
     st.markdown("""
@@ -305,7 +305,7 @@ def vis_side():
         with col3:
             st.markdown(f"<div class='card-title'><span>STILLING ({active_comp.upper()})</span></div>", unsafe_allow_html=True)
             
-            df_stilling = hent_liga_stilling(calendar_uuid)
+            df_stilling = hent_hurtig_stilling(calendar_uuid)
             if not df_stilling.empty:
                 table_html = "<table class='table-standings'><thead><tr><th style='text-align:left;'>Hold</th><th>K</th><th>MF</th><th>P</th></tr></thead><tbody>"
                 for _, row in df_stilling.head(12).iterrows():
