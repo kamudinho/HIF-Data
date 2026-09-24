@@ -3,6 +3,7 @@ import os
 import numpy as np
 import pandas as pd
 from data.data_load import _get_snowflake_conn
+from data.sql.fallback import fill_gaps_team_row, FALLBACK_FILE
 import streamlit as st
 
 @st.cache_data(ttl=3600)
@@ -53,26 +54,35 @@ def load_match_level_data(
             GROUP BY e.MATCH_OPTAUUID, e.EVENT_CONTESTANT_OPTAUUID
         ),
         MatchStatsPivot AS (
+            -- RETTET: possessionPercentage er tidligere blevet parset med almindelig CAST
+            -- uden at fjerne '%'. Værdien gemmes som streng med procenttegn (fx "45.0%"),
+            -- og et almindeligt CAST af den streng FEJLER i Snowflake - det fik hele
+            -- forespørgslen til at kaste en exception, som blev fanget nedenfor og fik
+            -- siden til altid at falde tilbage til den statiske CSV-fil i stedet for at
+            -- vise friske Snowflake-data. Samme mønster (TRY_CAST + REPLACE) som teams.py
+            -- og konklusion_query.py bruges nu her. Alle øvrige felter er også lagt om til
+            -- TRY_CAST i stedet for CAST, så én uventet værdi i ét felt ikke længere kan
+            -- vælte hele forespørgslen og udløse alt-eller-intet-fallback.
             SELECT 
                 MATCH_OPTAUUID, CONTESTANT_OPTAUUID,
-                MAX(CASE WHEN STAT_TYPE = 'totalScoringAtt' THEN CAST(STAT_TOTAL AS FLOAT) END) AS TOTALSCORINGATT,
-                MAX(CASE WHEN STAT_TYPE = 'ontargetScoringAtt' THEN CAST(STAT_TOTAL AS FLOAT) END) AS ONTARGETSCORINGATT,
-                MAX(CASE WHEN STAT_TYPE = 'shotOffTarget' THEN CAST(STAT_TOTAL AS FLOAT) END) AS SHOTOFFTARGET,
-                MAX(CASE WHEN STAT_TYPE = 'blockedScoringAtt' THEN CAST(STAT_TOTAL AS FLOAT) END) AS BLOCKEDSCORINGATT,
-                MAX(CASE WHEN STAT_TYPE = 'totalPass' THEN CAST(STAT_TOTAL AS FLOAT) END) AS TOTALPASS,
-                MAX(CASE WHEN STAT_TYPE = 'accuratePass' THEN CAST(STAT_TOTAL AS FLOAT) END) AS ACCURATEPASS,
-                MAX(CASE WHEN STAT_TYPE = 'possessionPercentage' THEN CAST(STAT_TOTAL AS FLOAT) END) AS POSSESSIONPERCENTAGE,
-                MAX(CASE WHEN STAT_TYPE = 'wonCorners' THEN CAST(STAT_TOTAL AS FLOAT) END) AS WONCORNERS,
-                MAX(CASE WHEN STAT_TYPE = 'lostCorners' THEN CAST(STAT_TOTAL AS FLOAT) END) AS LOSTCORNERS,
-                MAX(CASE WHEN STAT_TYPE = 'totalTackle' THEN CAST(STAT_TOTAL AS FLOAT) END) AS TOTALTACKLE,
-                MAX(CASE WHEN STAT_TYPE = 'wonTackle' THEN CAST(STAT_TOTAL AS FLOAT) END) AS WONTACKLE,
-                MAX(CASE WHEN STAT_TYPE = 'totalClearance' THEN CAST(STAT_TOTAL AS FLOAT) END) AS TOTALCLEARANCE,
-                MAX(CASE WHEN STAT_TYPE = 'outfielderBlock' THEN CAST(STAT_TOTAL AS FLOAT) END) AS OUTFIELDERBLOCK,
-                MAX(CASE WHEN STAT_TYPE = 'fkFoulWon' THEN CAST(STAT_TOTAL AS FLOAT) END) AS FKFOULWON,
-                MAX(CASE WHEN STAT_TYPE = 'fkFoulLost' THEN CAST(STAT_TOTAL AS FLOAT) END) AS FKFOULLOST,
-                MAX(CASE WHEN STAT_TYPE = 'saves' THEN CAST(STAT_TOTAL AS FLOAT) END) AS SAVES,
-                MAX(CASE WHEN STAT_TYPE = 'goalsConceded' THEN CAST(STAT_TOTAL AS FLOAT) END) AS GOALSCONCEDED,
-                MAX(CASE WHEN STAT_TYPE = 'cleanSheet' THEN CAST(STAT_TOTAL AS FLOAT) END) AS CLEANSHEET
+                MAX(CASE WHEN STAT_TYPE = 'totalScoringAtt' THEN TRY_CAST(STAT_TOTAL AS FLOAT) END) AS TOTALSCORINGATT,
+                MAX(CASE WHEN STAT_TYPE = 'ontargetScoringAtt' THEN TRY_CAST(STAT_TOTAL AS FLOAT) END) AS ONTARGETSCORINGATT,
+                MAX(CASE WHEN STAT_TYPE = 'shotOffTarget' THEN TRY_CAST(STAT_TOTAL AS FLOAT) END) AS SHOTOFFTARGET,
+                MAX(CASE WHEN STAT_TYPE = 'blockedScoringAtt' THEN TRY_CAST(STAT_TOTAL AS FLOAT) END) AS BLOCKEDSCORINGATT,
+                MAX(CASE WHEN STAT_TYPE = 'totalPass' THEN TRY_CAST(STAT_TOTAL AS FLOAT) END) AS TOTALPASS,
+                MAX(CASE WHEN STAT_TYPE = 'accuratePass' THEN TRY_CAST(STAT_TOTAL AS FLOAT) END) AS ACCURATEPASS,
+                MAX(CASE WHEN STAT_TYPE = 'possessionPercentage' THEN TRY_CAST(REPLACE(STAT_TOTAL, '%', '') AS FLOAT) END) AS POSSESSIONPERCENTAGE,
+                MAX(CASE WHEN STAT_TYPE = 'wonCorners' THEN TRY_CAST(STAT_TOTAL AS FLOAT) END) AS WONCORNERS,
+                MAX(CASE WHEN STAT_TYPE = 'lostCorners' THEN TRY_CAST(STAT_TOTAL AS FLOAT) END) AS LOSTCORNERS,
+                MAX(CASE WHEN STAT_TYPE = 'totalTackle' THEN TRY_CAST(STAT_TOTAL AS FLOAT) END) AS TOTALTACKLE,
+                MAX(CASE WHEN STAT_TYPE = 'wonTackle' THEN TRY_CAST(STAT_TOTAL AS FLOAT) END) AS WONTACKLE,
+                MAX(CASE WHEN STAT_TYPE = 'totalClearance' THEN TRY_CAST(STAT_TOTAL AS FLOAT) END) AS TOTALCLEARANCE,
+                MAX(CASE WHEN STAT_TYPE = 'outfielderBlock' THEN TRY_CAST(STAT_TOTAL AS FLOAT) END) AS OUTFIELDERBLOCK,
+                MAX(CASE WHEN STAT_TYPE = 'fkFoulWon' THEN TRY_CAST(STAT_TOTAL AS FLOAT) END) AS FKFOULWON,
+                MAX(CASE WHEN STAT_TYPE = 'fkFoulLost' THEN TRY_CAST(STAT_TOTAL AS FLOAT) END) AS FKFOULLOST,
+                MAX(CASE WHEN STAT_TYPE = 'saves' THEN TRY_CAST(STAT_TOTAL AS FLOAT) END) AS SAVES,
+                MAX(CASE WHEN STAT_TYPE = 'goalsConceded' THEN TRY_CAST(STAT_TOTAL AS FLOAT) END) AS GOALSCONCEDED,
+                MAX(CASE WHEN STAT_TYPE = 'cleanSheet' THEN TRY_CAST(STAT_TOTAL AS FLOAT) END) AS CLEANSHEET
             FROM {db}.OPTA_MATCHSTATS
             WHERE MATCH_OPTAUUID IN (SELECT MATCH_OPTAUUID FROM MatchBase)
               AND CONTESTANT_OPTAUUID = '{team_opta_uuid}'
@@ -81,8 +91,8 @@ def load_match_level_data(
         ExpectedGoalsPivot AS (
             SELECT 
                 MATCH_ID AS MATCH_OPTAUUID, CONTESTANT_OPTAUUID,
-                SUM(CASE WHEN STAT_TYPE = 'expectedGoals' THEN CAST(STAT_VALUE AS FLOAT) ELSE 0 END) AS EXPECTEDGOALS,
-                SUM(CASE WHEN STAT_TYPE = 'touchesInOppBox' THEN CAST(STAT_VALUE AS FLOAT) ELSE 0 END) AS TOUCHESINOPPBOX
+                SUM(CASE WHEN STAT_TYPE = 'expectedGoals' THEN TRY_CAST(STAT_VALUE AS FLOAT) ELSE 0 END) AS EXPECTEDGOALS,
+                SUM(CASE WHEN STAT_TYPE = 'touchesInOppBox' THEN TRY_CAST(STAT_VALUE AS FLOAT) ELSE 0 END) AS TOUCHESINOPPBOX
             FROM {db}.OPTA_MATCHEXPECTEDGOALS
             WHERE MATCH_ID IN (SELECT MATCH_OPTAUUID FROM MatchBase)
             GROUP BY 1, 2
@@ -105,28 +115,35 @@ def load_match_level_data(
                 COALESCE(CASE WHEN '{team_opta_uuid}' = mb.CONTESTANTHOME_OPTAUUID THEN mb.TOTAL_AWAY_SCORE ELSE mb.TOTAL_HOME_SCORE END, 0) AS GOALS_AGAINST,
                 mb.CONTESTANTHOME_OPTAUUID,
                 mb.CONTESTANTAWAY_OPTAUUID,
-                COALESCE(sp.TOTALSCORINGATT, 0) AS TOTALSCORINGATT,
-                COALESCE(sp.ONTARGETSCORINGATT, 0) AS ONTARGETSCORINGATT,
-                COALESCE(sp.SHOTOFFTARGET, 0) AS SHOTOFFTARGET,
-                COALESCE(sp.BLOCKEDSCORINGATT, 0) AS BLOCKEDSCORINGATT,
+                -- NB: disse felter COALESCE'es bevidst IKKE til 0 her længere (kun GOALS/
+                -- GOALS_AGAINST/SUBSGOALS ovenfor/nedenfor, hvor NULL fra en LEFT JOIN reelt
+                -- betyder "0 forekomster af den event-type", ikke "data mangler"). Ægte
+                -- manglende Opta-statistik skal stå som NULL herfra, så Python-fallbacken
+                -- (fill_gaps_team_row, se data/sql/fallback.py) kan udfylde PRÆCIS de huller
+                -- fra kampe_fallback.csv - samme "udfyld kun huller"-logik som teams.py bruger,
+                -- i stedet for at hele kampens resultat erstattes med CSV'en.
+                sp.TOTALSCORINGATT,
+                sp.ONTARGETSCORINGATT,
+                sp.SHOTOFFTARGET,
+                sp.BLOCKEDSCORINGATT,
                 COALESCE(csg.SUBSGOALS, 0) AS SUBSGOALS,
-                COALESCE(sp.TOTALPASS, 0) AS TOTALPASS,
-                COALESCE(sp.ACCURATEPASS, 0) AS ACCURATEPASS,
-                COALESCE(sp.POSSESSIONPERCENTAGE, 0) AS POSSESSIONPERCENTAGE,
-                COALESCE(sp.WONCORNERS, 0) AS WONCORNERS,
-                COALESCE(sp.LOSTCORNERS, 0) AS LOSTCORNERS,
-                COALESCE(sp.TOTALTACKLE, 0) AS TOTALTACKLE,
-                COALESCE(sp.WONTACKLE, 0) AS WONTACKLE,
-                COALESCE(sp.TOTALCLEARANCE, 0) AS TOTALCLEARANCE,
-                COALESCE(sp.OUTFIELDERBLOCK, 0) AS OUTFIELDERBLOCK,
-                COALESCE(sp.FKFOULWON, 0) AS FKFOULWON,
-                COALESCE(sp.FKFOULLOST, 0) AS FKFOULLOST,
-                COALESCE(sp.SAVES, 0) AS SAVES,
-                COALESCE(sp.GOALSCONCEDED, 0) AS GOALSCONCEDED,
-                COALESCE(sp.CLEANSHEET, 0) AS CLEANSHEET,
-                COALESCE(xg.EXPECTEDGOALS, 0) AS EXPECTEDGOALS,
-                COALESCE(xg.TOUCHESINOPPBOX, 0) AS TOUCHESINOPPBOX,
-                COALESCE(opp_xg.TOUCHESINOPPBOX, 0) AS OPPONENT_TOUCHESINOPPBOX,
+                sp.TOTALPASS,
+                sp.ACCURATEPASS,
+                sp.POSSESSIONPERCENTAGE,
+                sp.WONCORNERS,
+                sp.LOSTCORNERS,
+                sp.TOTALTACKLE,
+                sp.WONTACKLE,
+                sp.TOTALCLEARANCE,
+                sp.OUTFIELDERBLOCK,
+                sp.FKFOULWON,
+                sp.FKFOULLOST,
+                sp.SAVES,
+                sp.GOALSCONCEDED,
+                sp.CLEANSHEET,
+                xg.EXPECTEDGOALS,
+                xg.TOUCHESINOPPBOX,
+                opp_xg.TOUCHESINOPPBOX AS OPPONENT_TOUCHESINOPPBOX,
                 wd.PPDA,
                 (COALESCE(xg.EXPECTEDGOALS, 0) * 2.0 + COALESCE(CASE WHEN '{team_opta_uuid}' = mb.CONTESTANTHOME_OPTAUUID THEN mb.TOTAL_HOME_SCORE ELSE mb.TOTAL_AWAY_SCORE END, 0) * 3.0 + COALESCE(sp.ONTARGETSCORINGATT, 0) * 1.0 + COALESCE(sp.TOTALSCORINGATT, 0) * 0.2 + COALESCE(xg.TOUCHESINOPPBOX, 0) * 0.1) AS OFFENSIV_INDEX,
                 (COALESCE(sp.WONTACKLE, 0) * 1.0 + COALESCE(sp.TOTALCLEARANCE, 0) * 0.5 + COALESCE(sp.OUTFIELDERBLOCK, 0) * 1.0 + COALESCE(sp.CLEANSHEET, 0) * 3.0 - COALESCE(CASE WHEN '{team_opta_uuid}' = mb.CONTESTANTHOME_OPTAUUID THEN mb.TOTAL_AWAY_SCORE ELSE mb.TOTAL_HOME_SCORE END, 0) * 2.0 - COALESCE(opp_xg.TOUCHESINOPPBOX, 0) * 0.1) AS DEFENSIV_INDEX,
@@ -179,10 +196,39 @@ def load_match_level_data(
     except Exception as e:
         st.info(f"Bruger lokal CSV-fallback, da forbindelsen til databasen fejlede: {e}")
 
-    fallback_file = "data/csv/kampe_fallback.csv"
-    if df.empty and os.path.exists(fallback_file):
+    if not df.empty:
+        df.columns = [c.upper() for c in df.columns]
+        # Live-forespørgslen lykkedes (helt eller delvist) - udfyld KUN de faktiske
+        # huller pr. kamp fra CSV'en, i stedet for at overskrive alt. Samme logik
+        # (og samme fil) som teams.py bruger - se data/sql/fallback.py.
+        col_mapping = {
+            'TOTALSCORINGATT': 'TOTALSCORINGATT',
+            'ONTARGETSCORINGATT': 'ONTARGETSCORINGATT',
+            'SHOTOFFTARGET': 'SHOTOFFTARGET',
+            'BLOCKEDSCORINGATT': 'BLOCKEDSCORINGATT',
+            'TOTALPASS': 'TOTALPASS',
+            'ACCURATEPASS': 'ACCURATEPASS',
+            'POSSESSIONPERCENTAGE': 'POSSESSIONPERCENTAGE',
+            'WONCORNERS': 'WONCORNERS',
+            'LOSTCORNERS': 'LOSTCORNERS',
+            'TOTALTACKLE': 'TOTALTACKLE',
+            'WONTACKLE': 'WONTACKLE',
+            'TOTALCLEARANCE': 'TOTALCLEARANCE',
+            'OUTFIELDERBLOCK': 'OUTFIELDERBLOCK',
+            'FKFOULWON': 'FKFOULWON',
+            'FKFOULLOST': 'FKFOULLOST',
+            'SAVES': 'SAVES',
+            'GOALSCONCEDED': 'GOALSCONCEDED',
+            'CLEANSHEET': 'CLEANSHEET',
+            'EXPECTEDGOALS': 'EXPECTEDGOALS',
+        }
+        df = fill_gaps_team_row(df, col_mapping)
+    elif os.path.exists(FALLBACK_FILE):
+        # Sidste udvej: forbindelsen fejlede helt, eller holdet har ingen kampe i
+        # live-resultatet overhovedet - der er intet at hulfylde i, så her (og kun her)
+        # bruges hele CSV-filen som erstatning.
         try:
-            df = pd.read_csv(fallback_file)
+            df = pd.read_csv(FALLBACK_FILE)
             if "TEAM_OPTAUUID" in df.columns:
                 df = df[df["TEAM_OPTAUUID"] == team_opta_uuid]
         except Exception as csv_error:
@@ -245,10 +291,9 @@ def load_league_performance_data(calendar_uuid, wyid, filter_sql):
                 st.info(f"Kunne ikke hente WyScout data fra databasen: {e}")
 
     # Fallback hvis OPTA-data er tom
-    fallback_file = "data/csv/kampe_fallback.csv"
-    if df_opta.empty and os.path.exists(fallback_file):
+    if df_opta.empty and os.path.exists(FALLBACK_FILE):
         try:
-            df_opta = pd.read_csv(fallback_file)
+            df_opta = pd.read_csv(FALLBACK_FILE)
         except Exception as csv_error:
             st.error(f"Fejl ved indlæsning af fallback CSV-fil: {csv_error}")
 
