@@ -3,11 +3,7 @@ import streamlit as st
 import random
 
 HIF_CITATER_OG_FAKTA = [
-    "Vidste du det? Hvidovre IF har spillet i den bedste danske række i flere årtier og taget store skalpe gennem tiden.",
-    "Citat: 'Kampen varer i 90 minutter, og bagefter følger statistikken i HIF Data Hub.'",
-    "Vidste du det? Systemet henter automatisk live-data fra Snowflake og indsætter fallback-data, hvis der mangler felter.",
-    "Klub-ånd: Hvidovre er stolthed, traditionsrige værdier og stærke fællesskaber på Vestegnen.",
-    "Statistik-tip: Du kan altid tjekke formkurven for de seneste 10 kampe direkte i toppen af dashboardet."
+    "Vidste du, at Hvidovre IF vandt deres første mesterskab i 1966.",
 ]
 
 def load_med_hif_fakta(beskrivelse="Henter data..."):
