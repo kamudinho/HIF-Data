@@ -15,6 +15,7 @@ from data.utils.team_mapping import (
 from data.data_load import _get_snowflake_conn
 from data.utils.stattype_map import STAT_TYPE_MAP
 from data.sql.teams import hent_hoved_stats, hent_samlet_hold_statistik
+from data/utils/loaders import load_med_hif_fakta
 
 def apply_custom_style():
     st.markdown("""
