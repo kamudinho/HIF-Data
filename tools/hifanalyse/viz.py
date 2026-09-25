@@ -24,10 +24,10 @@ MODSTANDER_FARVE = "#A4A4A4"
 VISNING_MAPPING = {
     "skud_vs_xg": ("SHOTS_FOR", "XG_FOR", "Skud vs. xG"),
     "skud_vs_maal": ("SHOTS_FOR", "GOALS_FOR", "Skud vs. Mål"),
-    "skud_vs_touches": ("SHOTS_FOR", "TOUCHES_IN_BOX_FOR", "Skud vs. Touches in box"),
     "skud_vs_pasninger": ("SHOTS_FOR", "PASSES", "Skud vs. Pasninger"),
     "skud_vs_fremad": ("SHOTS_FOR", "FORWARD_PASSES", "Skud vs. Fremadrettede pasninger"),
-    "touches_vs_mål": ("TOUCHES_IN_BOX", "GOALS_FOR", "Touches in box vs. Mål"),
+    "touches_vs_skud": ("TOUCHES_IN_BOX_FOR", "SHOTS_FOR", "Touches in box vs. Skud"),
+    "touches_vs_mål": ("TOUCHES_IN_BOX_FOR", "GOALS_FOR", "Touches in box vs. Mål"),
     "skud_mod_vs_xg_mod": ("SHOTS_AGAINST", "XG_AGAINST", "Skud mod vs. xG mod"),
     "skud_mod_vs_maal_mod": ("SHOTS_AGAINST", "GOALS_AGAINST", "Skud mod vs. Mål mod"),
     "possession_vs_skud": ("POSSESSION", "SHOTS_FOR", "Possession vs. Skud"),
