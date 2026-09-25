@@ -28,6 +28,7 @@ VISNING_MAPPING = {
     "skud_vs_fremad": ("SHOTS_FOR", "FORWARD_PASSES", "Skud vs. Fremadrettede pasninger"),
     "touches_vs_skud": ("TOUCHES_IN_BOX_FOR", "SHOTS_FOR", "Touches in box vs. Skud"),
     "touches_vs_mål": ("TOUCHES_IN_BOX_FOR", "GOALS_FOR", "Touches in box vs. Mål"),
+    "touches_vs_possession": ("TOUCHES_IN_BOX_FOR", "POSSESSION", "Touches in box vs. Possession"),
     "skud_mod_vs_xg_mod": ("SHOTS_AGAINST", "XG_AGAINST", "Skud mod vs. xG mod"),
     "skud_mod_vs_maal_mod": ("SHOTS_AGAINST", "GOALS_AGAINST", "Skud mod vs. Mål mod"),
     "possession_vs_skud": ("POSSESSION", "SHOTS_FOR", "Possession vs. Skud"),
