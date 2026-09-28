@@ -1,8 +1,9 @@
+# tools/hifanalyse/modstander_heatmaps.py
 import streamlit as st
 
 from modstander_common import (
     render_hold_saeson_selector,
-    fetch_recent_match_ids,
+    fetch_full_match_history,
     fetch_event_data,
     plot_custom_pitch,
 )
@@ -12,7 +13,7 @@ def vis_side():
     valgt_saeson, valgt_hold_navn, valgt_uuid, hold_logo, liga_ids_sql = render_hold_saeson_selector()
 
     with st.spinner(f"Henter data for {valgt_hold_navn} ({valgt_saeson})..."):
-        df_res = fetch_recent_match_ids(valgt_uuid, liga_ids_sql)
+        df_res = fetch_full_match_history(valgt_uuid, liga_ids_sql, valgt_saeson)
 
         if df_res is None or df_res.empty:
             st.warning(f"Der er endnu ikke spillet/registreret nogen færdigspillede kampe for {valgt_hold_navn} i sæsonen {valgt_saeson}.")
