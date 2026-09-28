@@ -232,6 +232,9 @@ with st.sidebar:
             "HVIDOVRE IF": ["HVIDOVRE IF", "Forside"],
             "MODSTANDERANALYSE": [
                 "Modstanderanalyse",
+                "Heatmaps",
+                "Common",
+                "Sekvenser",
             ],
             "HOLDANALYSE": [
                 "Ligaoversigt",
@@ -324,6 +327,9 @@ with st.sidebar:
             "HVIDOVRE IF": ["Forside"],
             "MODSTANDERANALYSE": [
                 "Modstanderanalyse",
+                "Heatmaps",
+                "Common",
+                "Sekvenser",
             ],
             "HOLDANALYSE": [
                 "Ligaoversigt",
@@ -459,15 +465,15 @@ try:
         if s == "Modstanderanalyse":
             import tools.hifanalyse.modstander_oversigt as mo
             mo.vis_side()
-        elif s == "Kampoversigt":
-            import tools.ligaen.test_matches as tm
-            tm.vis_side()
-        elif s == "Kampudvikling":
-            import tools.ligaen.kampudvikling as ku
-            ku.vis_side()
-        elif s == "Afslutninger":
-            import tools.ligaen.leagueshots as ls
-            ls.vis_side()
+        elif s == "Heatmaps":
+            import tools.ligaen.modstander_heatmaps as hm
+            hm.vis_side()
+        elif s == "Common":
+            import tools.ligaen.modstander_common as hc
+            hc.vis_side()
+        elif s == "Sekvenser":
+            import tools.ligaen.modstander_sekvenser as hs
+            hs.vis_side()
         elif s == "Målsekvenser":
             import tools.ligaen.sequences as ms
             ms.vis_side()
