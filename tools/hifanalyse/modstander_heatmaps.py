@@ -10,6 +10,7 @@ from tools.hifanalyse.modstander_common import (
     fetch_full_match_history,
     fetch_event_data,
     draw_match_row,
+    plot_custom_pitch,  # <-- Tilføj denne her!
 )
 
 
