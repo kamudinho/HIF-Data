@@ -206,6 +206,7 @@ with st.sidebar:
     else:
         menu_map_checker = {
             "HVIDOVRE IF": ["HVIDOVRE IF", "Forside"],
+            "MODSTANDERANALYSE": ["HOLDANALYSE", "Modstanderanalyse", "Kampoversigt", "Kampudvikling", "Afslutninger", "Målsekvenser", "Grafer", "BETINIA LIGAEN", "HIF ANALYSE"],
             "HOLDANALYSE": ["HOLDANALYSE", "Modstanderanalyse", "Kampoversigt", "Kampudvikling", "Afslutninger", "Målsekvenser", "Grafer", "BETINIA LIGAEN", "HIF ANALYSE"],
             "SPILLERANALYSE": ["SPILLERANALYSE", "Spiller-stats", "Spilleraktioner", "Spiller-profil", "Spilleroversigt", "Spillerprofil"],
             "TRUPPEN": ["TRUPPEN", "Oversigt", "Forecast"],
@@ -242,6 +243,7 @@ with st.sidebar:
     else:
         menu_map = {
             "HVIDOVRE IF": ["Forside"],
+            "MODSTANDERANALYSE": ["Modstanderanalyse", "Kampoversigt", "Kampudvikling", "Afslutninger", "Målsekvenser", "Grafer"],
             "HOLDANALYSE": ["Modstanderanalyse", "Kampoversigt", "Kampudvikling", "Afslutninger", "Målsekvenser", "Grafer"],
             "SPILLERANALYSE": ["Spiller-stats", "Spilleraktioner", "Spiller-profil", "Spilleroversigt", "Spillerprofil"],
             "SCOUTING": ["Scoutrapport", "Database", "Emnedatabase", "Sammenligning", "Top10-scouting", "Opgaver"],
