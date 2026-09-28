@@ -233,7 +233,6 @@ with st.sidebar:
             "MODSTANDERANALYSE": [
                 "Modstanderanalyse",
                 "Heatmaps",
-                "Common",
                 "Sekvenser",
             ],
             "HOLDANALYSE": [
@@ -328,7 +327,6 @@ with st.sidebar:
             "MODSTANDERANALYSE": [
                 "Modstanderanalyse",
                 "Heatmaps",
-                "Common",
                 "Sekvenser",
             ],
             "HOLDANALYSE": [
@@ -468,9 +466,6 @@ try:
         elif s == "Heatmaps":
             import tools.hifanalyse.modstander_heatmaps as hm
             hm.vis_side()
-        elif s == "Common":
-            import tools.hifanalyse.modstander_common as hc
-            hc.vis_side()
         elif s == "Sekvenser":
             import tools.hifanalyse.modstander_sekvenser as hs
             hs.vis_side()
