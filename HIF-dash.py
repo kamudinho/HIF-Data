@@ -232,11 +232,6 @@ with st.sidebar:
             "HVIDOVRE IF": ["HVIDOVRE IF", "Forside"],
             "MODSTANDERANALYSE": [
                 "Modstanderanalyse",
-                "Kampoversigt",
-                "Kampudvikling",
-                "Afslutninger",
-                "Målsekvenser",
-                "Grafer",
             ],
             "HOLDANALYSE": [
                 "Ligaoversigt",
@@ -329,11 +324,6 @@ with st.sidebar:
             "HVIDOVRE IF": ["Forside"],
             "MODSTANDERANALYSE": [
                 "Modstanderanalyse",
-                "Kampoversigt",
-                "Kampudvikling",
-                "Afslutninger",
-                "Målsekvenser",
-                "Grafer",
             ],
             "HOLDANALYSE": [
                 "Ligaoversigt",
@@ -342,7 +332,6 @@ with st.sidebar:
                 "Afslutninger",
                 "Målsekvenser",
                 "Grafer",
-                "Modstanderanalyse"
             ],
             "SPILLERANALYSE": [
                 "Spiller-stats",
