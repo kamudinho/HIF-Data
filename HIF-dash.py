@@ -466,13 +466,13 @@ try:
             import tools.hifanalyse.modstander_oversigt as mo
             mo.vis_side()
         elif s == "Heatmaps":
-            import tools.ligaen.modstander_heatmaps as hm
+            import tools.hifanalyse.modstander_heatmaps as hm
             hm.vis_side()
         elif s == "Common":
-            import tools.ligaen.modstander_common as hc
+            import tools.hifanalyse.modstander_common as hc
             hc.vis_side()
         elif s == "Sekvenser":
-            import tools.ligaen.modstander_sekvenser as hs
+            import tools.hifanalyse.modstander_sekvenser as hs
             hs.vis_side()
         elif s == "Målsekvenser":
             import tools.ligaen.sequences as ms
