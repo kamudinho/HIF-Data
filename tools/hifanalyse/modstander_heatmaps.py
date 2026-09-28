@@ -1,11 +1,15 @@
 # tools/hifanalyse/modstander_heatmaps.py
 import streamlit as st
+import pandas as pd
+import numpy as np
+import plotly.express as px
 
-from modstander_common import (
+from data.utils.team_mapping import COMPETITION_NAME
+from tools.hifanalyse.modstander_common import (
     render_hold_saeson_selector,
     fetch_full_match_history,
     fetch_event_data,
-    plot_custom_pitch,
+    draw_match_row,
 )
 
 
