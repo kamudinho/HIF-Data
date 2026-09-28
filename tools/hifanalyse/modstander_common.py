@@ -1,4 +1,4 @@
-#tools/hifanalyse/modstander_common.py
+# tools/hifanalyse/modstander_common.py
 import streamlit as st
 import pandas as pd
 from PIL import Image
@@ -301,7 +301,7 @@ def fetch_goal_sequences(valgt_uuid, liga_ids_sql):
         FROM {DB}.OPTA_EVENTS e
         LEFT JOIN (
             SELECT DISTINCT PLAYER_OPTAUUID, FIRST_NAME, LAST_NAME
-            FROM {DB}.OPTA_MATCH_LINEUPS
+            FROM {DB}.OPTA_MATCH_LINE_UPS
             WHERE FIRST_NAME IS NOT NULL
         ) p ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
         JOIN SeasonMatches m ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
@@ -323,3 +323,8 @@ def fetch_goal_sequences(valgt_uuid, liga_ids_sql):
     df_all_events['PLAYER_NAME'] = resolve_player_names(df_all_events, conn)
     df_all_events['qual_list'] = df_all_events['QUALIFIERS'].fillna('').str.split(',')
     return df_all_events
+
+
+def vis_side():
+    """Fallback vis_side funktion hvis modulet kaldes direkte som en side."""
+    st.info("Dette er et fælles modul (modstander_common.py) og indeholder hjælpefunktioner til analyse.")
