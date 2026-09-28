@@ -536,7 +536,7 @@ try:
         elif s == "Performance":
             import tools.analyse.baseline_performance as bp
             bp.vis_side()
-            elif s == "Model":
+        elif s == "Model":
             import tools.ligaen.model as xg
             xg.vis_side()
         elif s == "Transfers":
