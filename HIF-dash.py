@@ -49,7 +49,6 @@ def render_hif_header(titel):
 def vis_opgave_popup(opgave_id, opgave_titel, opgave_beskrivelse):
     st.write("Du er blevet tildelt følgende aktive opgave:")
     st.info(f"**{opgave_titel}**\n\n{opgave_beskrivelse}")
-
     st.write("Du skal tage stilling til opgaven, før du kan fortsætte i systemet:")
 
     col1, col2, col3 = st.columns(3)
@@ -90,7 +89,7 @@ def vis_opgave_popup(opgave_id, opgave_titel, opgave_beskrivelse):
         st.error("Opgave afvist.")
         st.session_state["task_handled"] = True
         st.rerun()
-        
+
 
 # --- 2. LOGIN SYSTEM ---
 USER_DB = get_users()
@@ -214,7 +213,6 @@ with st.sidebar:
 
     alle_omraader = [
         "HVIDOVRE IF",
-        "MODSTANDERANALYSE",
         "HOLDANALYSE",
         "SPILLERANALYSE",
         "SCOUTING",
@@ -225,93 +223,37 @@ with st.sidebar:
         "PROFIL",
     ]
 
+    menu_map_checker = {
+        "HVIDOVRE IF": ["HVIDOVRE IF", "Forside", "Oversigt", "Forecast"],
+        "HOLDANALYSE": ["HOLDANALYSE", "Ligaoversigt", "Kampoversigt", "Kampudvikling", "Afslutninger", "Målsekvenser", "Grafer", "Modstanderanalyse"],
+        "SPILLERANALYSE": ["SPILLERANALYSE", "Spiller-stats", "Spilleraktioner", "Spiller-profil", "Spilleroversigt", "Spillerprofil"],
+        "SCOUTING": ["SCOUTING", "Scoutrapport", "Database", "Emnedatabase", "Sammenligning", "Top10-scouting", "Opgaver"],
+        "TILPASNING": ["TILPASNING", "Spillerdata", "Spiller-score", "Standardsituationer"],
+        "TESTSIDE": ["TESTSIDE", "Data-overblik", "Performance", "Winning Performance", "1. Div-tilpasning", "Charts", "Oversigt", "Forecast", "Model", "Transfers"],
+        "ADMIN": ["ADMIN", "System Log", "Profil", "Datakatalog", "Konklusion", "Teamradar", "Spillerradar", "Fysisk profil", "Hold: Fysisk profil", "Intern analyse", "Top 5: Spillere", "Ordbog"],
+        "ADMIN_SCOUTING": ["ADMIN_SCOUTING", "Opgaver"],
+        "PROFIL": ["PROFIL", "Profil"]
+    }
+
     if tilladelser == "ALL":
         synlige_hoved_options = alle_omraader
     else:
-        menu_map_checker = {
-            "HVIDOVRE IF": ["HVIDOVRE IF", "Forside"],
-            "MODSTANDERANALYSE": [
-                "Modstanderanalyse",
-                "Heatmaps",
-                "Sekvenser",
-            ],
-            "HOLDANALYSE": [
-                "Ligaoversigt",
-                "Kampoversigt",
-                "Kampudvikling",
-                "Afslutninger",
-                "Målsekvenser",
-                "Grafer",
-            ],
-            "SPILLERANALYSE": [
-                "Spiller-stats",
-                "Spilleraktioner",
-                "Spiller-profil",
-                "Spilleroversigt",
-                "Spillerprofil",
-            ],
-            "TRUPPEN": ["Oversigt", "Forecast"],
-            "SCOUTING": [
-                "Scoutrapport",
-                "Database",
-                "Emnedatabase",
-                "Sammenligning",
-                "Top10-scouting",
-                "Opgaver",
-            ],
-            "TILPASNING": ["Spillerdata", "Spiller-score", "Standardsituationer"],
-            "TESTSIDE": [
-                "Data-overblik",
-                "Performance",
-                "Winning Performance",
-                "1. Div-tilpasning",
-                "Charts",
-                "Oversigt",
-                "Forecast",
-                "Model",
-                "Transfers",
-            ],
-            "ADMIN": [
-                "System Log",
-                "Profil",
-                "Datakatalog",
-                "Konklusion",
-                "Teamradar",
-                "Spillerradar",
-                "Fysisk profil",
-                "Hold: Fysisk profil",
-                "Intern analyse",
-                "Top 5: Spillere",
-                "Ordbog",
-            ],
-            "ADMIN_SCOUTING": ["Opgaver"],
-            "PROFIL": ["Profil"],
-        }
         synlige_hoved_options = [
-            hm
-            for hm in alle_omraader
-            if any(
-                item in tilladelser
-                for item in menu_map_checker.get(hm, [hm])
-            )
+            hm for hm in alle_omraader
+            if any(item in tilladelser for item in menu_map_checker.get(hm, [hm]))
         ]
 
     if not synlige_hoved_options:
         synlige_hoved_options = ["SCOUTING"]
 
-    if (
-        "main_menu_selection" not in st.session_state
-        or st.session_state["main_menu_selection"] not in synlige_hoved_options
-    ):
+    if "main_menu_selection" not in st.session_state or st.session_state["main_menu_selection"] not in synlige_hoved_options:
         st.session_state["main_menu_selection"] = synlige_hoved_options[0]
 
     hoved_omraade = option_menu(
         None,
         options=synlige_hoved_options,
         icons=["play-fill"] * len(synlige_hoved_options),
-        default_index=synlige_hoved_options.index(
-            st.session_state["main_menu_selection"]
-        ),
+        default_index=synlige_hoved_options.index(st.session_state["main_menu_selection"]),
         key="main_menu_widget",
         styles=menu_style,
     )
@@ -323,61 +265,14 @@ with st.sidebar:
         st.session_state["sub_menu_selection"] = "Profil"
     else:
         menu_map = {
-            "HVIDOVRE IF": ["Forside"],
-            "MODSTANDERANALYSE": [
-                "Modstanderanalyse",
-                "Heatmaps",
-                "Sekvenser",
-            ],
-            "HOLDANALYSE": [
-                "Ligaoversigt",
-                "Kampoversigt",
-                "Kampudvikling",
-                "Afslutninger",
-                "Målsekvenser",
-                "Grafer",
-            ],
-            "SPILLERANALYSE": [
-                "Spiller-stats",
-                "Spilleraktioner",
-                "Spiller-profil",
-                "Spilleroversigt",
-                "Spillerprofil",
-            ],
-            "SCOUTING": [
-                "Scoutrapport",
-                "Database",
-                "Emnedatabase",
-                "Sammenligning",
-                "Top10-scouting",
-                "Opgaver",
-            ],
+            "HVIDOVRE IF": ["Forside", "Oversigt", "Forecast"],
+            "HOLDANALYSE": ["Ligaoversigt", "Kampoversigt", "Kampudvikling", "Afslutninger", "Målsekvenser", "Grafer", "Modstanderanalyse"],
+            "SPILLERANALYSE": ["Spiller-stats", "Spilleraktioner", "Spiller-profil", "Spilleroversigt", "Spillerprofil"],
+            "SCOUTING": ["Scoutrapport", "Database", "Emnedatabase", "Sammenligning", "Top10-scouting", "Opgaver"],
             "TILPASNING": ["Spillerdata", "Spiller-score", "Standardsituationer"],
-            "TESTSIDE": [
-                "Data-overblik",
-                "Performance",
-                "Winning Performance",
-                "1. Div-tilpasning",
-                "Charts",
-                "Oversigt",
-                "Forecast",
-                "Model",
-                "Transfers",
-            ],
-            "ADMIN": [
-                "System Log",
-                "Profil",
-                "Datakatalog",
-                "Konklusion",
-                "Teamradar",
-                "Spillerradar",
-                "Fysisk profil",
-                "Hold: Fysisk profil",
-                "Intern analyse",
-                "Top 5: Spillere",
-                "Ordbog",
-            ],
-            "ADMIN_SCOUTING": ["Opgaver"],
+            "TESTSIDE": ["Data-overblik", "Performance", "Winning Performance", "1. Div-tilpasning", "Charts", "Oversigt", "Forecast", "Model", "Transfers"],
+            "ADMIN": ["System Log", "Profil", "Datakatalog", "Konklusion", "Teamradar", "Spillerradar", "Fysisk profil", "Hold: Fysisk profil", "Intern analyse", "Top 5: Spillere", "Ordbog"],
+            "ADMIN_SCOUTING": ["Opgaver"]
         }
 
         mulige_under = menu_map.get(hoved_omraade, ["Forside"])
@@ -389,15 +284,10 @@ with st.sidebar:
         if not aktuel_undermenu:
             aktuel_undermenu = [mulige_under[0]]
 
-        if (
-            "sub_menu_selection" not in st.session_state
-            or st.session_state["sub_menu_selection"] not in aktuel_undermenu
-        ):
+        if "sub_menu_selection" not in st.session_state or st.session_state["sub_menu_selection"] not in aktuel_undermenu:
             u_index = 0
         else:
-            u_index = aktuel_undermenu.index(
-                st.session_state["sub_menu_selection"]
-            )
+            u_index = aktuel_undermenu.index(st.session_state["sub_menu_selection"])
 
         sel = option_menu(
             None,
@@ -409,15 +299,11 @@ with st.sidebar:
         )
         st.session_state["sub_menu_selection"] = sel
 
-    _nuvaerende_fane = (
-        f"{hoved_omraade} -> {st.session_state.get('sub_menu_selection', '')}"
-    )
+    _nuvaerende_fane = f"{hoved_omraade} -> {st.session_state.get('sub_menu_selection', '')}"
     if st.session_state.get("_forrige_fane") != _nuvaerende_fane:
         try:
             import tools.admin_page.admin as admin
-            admin.save_action_log(
-                st.session_state["user"], "Skiftede fane", _nuvaerende_fane
-            )
+            admin.save_action_log(st.session_state["user"], "Skiftede fane", _nuvaerende_fane)
         except Exception as log_e:
             st.warning(f"Kunne ikke skrive faneskift til log: {log_e}")
         st.session_state["_forrige_fane"] = _nuvaerende_fane
@@ -433,10 +319,7 @@ with st.sidebar:
 if st.session_state["main_menu_selection"] == "PROFIL":
     render_hif_header("PROFIL")
 else:
-    render_hif_header(
-        f"{st.session_state['main_menu_selection']}  | "
-        f" {st.session_state['sub_menu_selection'].upper()}"
-    )
+    render_hif_header(f"{st.session_state['main_menu_selection']}  |   {st.session_state['sub_menu_selection'].upper()}")
 
 try:
     s = st.session_state["sub_menu_selection"]
@@ -459,22 +342,47 @@ try:
                 import tools.truppen.squad as sq
                 sq.vis_side(dp_quick["players"])
 
-    elif m == "MODSTANDERANALYSE":
-        if s == "Modstanderanalyse":
-            import tools.hifanalyse.modstander_oversigt as mo
-            mo.vis_side()
-        elif s == "Heatmaps":
-            import tools.hifanalyse.modstander_heatmaps as hm
-            hm.vis_side()
-        elif s == "Sekvenser":
-            import tools.hifanalyse.modstander_sekvenser as hs
-            hs.vis_side()
-        elif s == "Målsekvenser":
-            import tools.ligaen.sequences as ms
-            ms.vis_side()
-        elif s == "Grafer":
-            import tools.ligaen.dataviz as dviz
-            dviz.vis_side()
+    elif m == "SCOUTING":
+        if s == "Opgaver":
+            import tools.admin_page.opgaver as opg
+            opg.vis_side()
+        else:
+            aktuel_uge = datetime.now().isocalendar()[1]
+            with st.spinner("Henter scouting-data... (Henter automatisk kun 1 gang ugentligt)"):
+                dp = hif_load.get_scouting_package(aktuel_uge)
+
+            if s == "Scoutrapport":
+                import tools.scouting.scout_input as si
+                si.vis_side(dp)
+            elif s == "Database":
+                import tools.scouting.scout_db as sdb
+                sdb.vis_side(dp["scout_reports"], dp["players"], dp["sql_players"], dp["career"])
+            elif s == "Emnedatabase":
+                import tools.scouting.emne_db as edb
+                edb.vis_side()
+            elif s == "Sammenligning":
+                import tools.scouting.sammenligning as comp
+                comp.vis_side(dp["players"], None, dp["wyscout_players"], dp["career"], dp["sql_players"], dp["advanced_stats"], dp.get("primaer_positioner"))
+            elif s == "Top10-scouting":
+                import tools.scouting.top10_scouting as t10
+                t10.vis_side(dp.get("advanced_stats"), dp.get("primaer_positioner"))
+
+    elif m == "SPILLERANALYSE":
+        if s == "Spillerprofil":
+            import tools.players.player_profile as pp
+            pp.vis_side()
+        elif s == "Spilleroversigt":
+            import tools.players.player_rank as pr
+            pr.vis_side()
+        elif s == "Spilleraktioner":
+            import tools.players.player_actions as pa
+            pa.vis_side()
+        elif s == "Spiller-stats":
+            import tools.players.player_stats as ps
+            ps.vis_side()
+        elif s == "Spiller-profil":
+            import tools.players.player_profile2 as pp2
+            pp2.vis_side()
 
     elif m == "HOLDANALYSE":
         if s == "Ligaoversigt":
@@ -498,17 +406,6 @@ try:
         elif s == "Kampudvikling":
             import tools.ligaen.kampudvikling as ku
             ku.vis_side()
-
-    elif m == "SPILLERPROFIL":
-        if s == "Spiller-profil":
-            import tools.players.spiller_profil as sp
-            sp.vis_side()
-        elif s == "Spilleraktioner":
-            import tools.players.player_actions as pa
-            pa.vis_side()
-        elif s == "Spilleroversigt":
-            import tools.players.player_stats as ps
-            ps.vis_side()
 
     elif m == "TILPASNING":
         if s == "Spillerdata":
