@@ -83,22 +83,29 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None)
     from mplsoccer import VerticalPitch
     plot_data = df[df['EVENT_TYPEID'].astype(str).isin([str(i) for i in event_ids])].copy()
     
-    # Opret VerticalPitch (Opta-koordinater: X: 0-100 (bredde), Y: 0-100 (længde))
-    # Vi bruger en smal figsize, da vi kun viser halv bane
-    fig_height = 4 if zone in ['up', 'down'] else 7
-    pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD', half=True if zone in ['up', 'down'] else False)
+    # Bestem om vi kun vil vise en halv bane
+    is_half = zone in ['up', 'down']
+    fig_height = 4 if is_half else 7
+    
+    # Opret banen (hvis zone == 'up', klipper vi den nederste halvdel, ellers den øverste)
+    pitch = VerticalPitch(
+        pitch_type='opta', 
+        pitch_color='#ffffff', 
+        line_color='#BDBDBD', 
+        half=is_half,
+        pad_top=2, pad_bottom=2, pad_left=2, pad_right=2
+    )
     fig, ax = pitch.draw(figsize=(5, fig_height))
 
-    # Hvis vi bruger half=True i VerticalPitch, håndterer den selv at vise den ene halvdel perfekt,
-    # men hvis vi vil styre det manuelt for 'up' / 'down':
+    # Tilpas Y-akse og placering af logo/titel baseret på zone
     if zone == 'up':
-        # Egen halvdel (Y: 0 til 50)
+        # Egen halvdel (Y: 0 til 50 i Opta-koordinater, hvor eget mål er ved Y=0)
         ax.set_ylim(0, 50)
-        logo_pos, text_y = [0.04, 0.85, 0.08, 0.08], 0.93
+        logo_pos, text_y = [0.04, 0.82, 0.08, 0.08], 0.92
     elif zone == 'down':
         # Modstanderens halvdel (Y: 50 til 100)
         ax.set_ylim(50, 100)
-        logo_pos, text_y = [0.04, 0.85, 0.08, 0.08], 0.93
+        logo_pos, text_y = [0.04, 0.82, 0.08, 0.08], 0.92
     else:
         logo_pos, text_y = [0.04, 0.90, 0.08, 0.08], 0.97
 
@@ -124,8 +131,8 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None)
             extent=(0, 100, y_min, y_max)
         )
         
-    # Fjern unødvendig luft omkring figuren i matplotlib
-    fig.subplots_adjust(left=0.05, right=0.95, top=0.95, bottom=0.05)
+    # Sørg for at fjerne alt unødvendigt hvidt mellemrum omkring figuren
+    fig.subplots_adjust(left=0.02, right=0.98, top=0.98, bottom=0.02)
     
     return fig
 
