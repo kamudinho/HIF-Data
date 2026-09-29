@@ -9,8 +9,9 @@ from tools.hifanalyse.modstander_common import (
     render_hold_saeson_selector,
     fetch_full_match_history,
     fetch_event_data,
+    fetch_zone_aggregates,  # <-- Tilføjet her
     draw_match_row,
-    plot_custom_pitch,  # <-- Tilføj denne her!
+    plot_custom_pitch,
 )
 
 
@@ -66,6 +67,8 @@ def vis_side():
         total_act = len(df_f)
 
         with c_left:
+            # Hvis du vil trække direkte via zone-aggregates til f.eks. avancerede plots:
+            # df_agg = fetch_zone_aggregates(valgt_uuid, match_ids, ids)
             st.pyplot(plot_custom_pitch(df_f, df_f['EVENT_TYPEID'].unique().tolist() if v_med == "Touches in Box" else ids, tit, zone=zn, cmap=cm, logo=hold_logo))
 
         with c_right:
