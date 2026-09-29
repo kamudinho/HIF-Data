@@ -1,12 +1,17 @@
 # tools/hifanalyse/modstander_heatmaps.py
+# tools/hifanalyse/modstander_heatmaps.py
 import streamlit as st
 import pandas as pd
 import numpy as np
+import plotly.express as px
 
+from data.utils.team_mapping import COMPETITION_NAME
 from tools.hifanalyse.modstander_common import (
     render_hold_saeson_selector,
     fetch_full_match_history,
     fetch_event_data,
+    fetch_zone_aggregates,
+    draw_match_row,
     plot_custom_pitch,
 )
 
@@ -46,26 +51,17 @@ def vis_side():
         c_left, c_right = st.columns([2, 1])
         v_med = c_right.selectbox("Vælg Fokusområde", kat_options, key="ms_t2", label_visibility="collapsed")
 
-        # BEMÆRK: I VerticalPitch er Y-aksen banens længde (0 = egen baglinje, 100 = modstanderens baglinje)
-        # TAB 1
-        # --- DETTE ER DEN NYE (KORREKTE) LOGIK ---
+        # --- KORREKT LOGIK (Efter Master Fix i common.py) ---
         if v_med == "Fase 1":
-            # Opbygning sker på egen halvdel (Y fra 0 til 50)
             ids, tit, cm, zn = [1], "OPBYGNING", "Reds", "up"
-            df_f = df_all_h[(df_all_h['EVENT_Y'] <= 50) & (df_all_h['EVENT_TYPEID'].isin(ids))].copy()
-        
+            df_f = df_all_h[(df_all_h['EVENT_Y'] <= 50) & (df_all_h['EVENT_TYPEID'] == 1)].copy()
         elif v_med == "Gennembrud":
-            # Gennembrud sker på modstanderens halvdel (Y fra 50 til 100)
             ids, tit, cm, zn = [1], "GENNEMBRUD", "Blues", "down"
             df_f = df_all_h[(df_all_h['EVENT_Y'] > 50) & (df_all_h['EVENT_TYPEID'] == 1)].copy()
-        
         elif v_med == "Touches in Box":
-            # Touches i boks: Vi kigger på den sidste del af banen (Y > 83) 
-            # og begrænser bredden (X) til at være midt i banen (ca. 20 til 80)
             ids, tit, cm, zn = [0], "TOUCHES IN BOX", "Blues", "down"
             df_f = df_all_h[(df_all_h['EVENT_Y'] > 83) & (df_all_h['EVENT_X'] > 15) & (df_all_h['EVENT_X'] < 85)].copy()
             df_shots = df_all_h[df_all_h['EVENT_TYPEID'].isin([13, 14, 15, 16])].copy()
-
         else:
             ids, tit, cm, zn = [13, 14, 15, 16], "AFSLUTNINGER", "YlOrRd", "down"
             df_f = df_all_h[df_all_h['EVENT_TYPEID'].isin(ids)].copy()
@@ -107,7 +103,7 @@ def vis_side():
 
                 df_top['RATE'] = (df_top['SUCCESS'] / df_top['TOTAL'] * 100).fillna(0)
 
-                min_limit = 1  # Sikret mod at udrense spillere forkert
+                min_limit = 100 if v_med in ["Fase 1", "Gennembrud"] else 1
                 df_top = df_top[df_top['TOTAL'] >= min_limit]
                 df_top = df_top.sort_values(['RATE', 'TOTAL'], ascending=[False, False]).head(8)
 
@@ -136,63 +132,6 @@ def vis_side():
         erobring_ids = [7, 8, 12, 127]
         duel_ids = [7, 44]
 
+        # --- KORREKT LOGIK (Efter Master Fix i common.py) ---
         if "Erobringer" in v_uden:
-            ids, tit, cm, zn = erobring_ids, "Egen halvdel: EROBRINGER", "Oranges", "up"
-            df_f = df_all_h[(df_all_h['EVENT_Y'] <= 50) & (df_all_h['EVENT_TYPEID'].isin(ids))].copy()
-        elif "Pres" in v_uden:
-            ids, tit, cm, zn = erobring_ids, "Off. halvdel: PRES", "Oranges", "down"
-            df_f = df_all_h[(df_all_h['EVENT_Y'] > 50) & (df_all_h['EVENT_TYPEID'].isin(ids))].copy()
-        elif "Egen halvdel: Dueller" in v_uden:
-            ids, tit, cm, zn = duel_ids, "Egen halvdel: DUELLER", "Oranges", "up"
-            df_f = df_all_h[(df_all_h['EVENT_Y'] <= 50) & (df_all_h['EVENT_TYPEID'].isin(ids))].copy()
-        else:
-            ids, tit, cm, zn = duel_ids, "Off. halvdel: DUELLER", "Oranges", "down"
-            df_f = df_all_h[(df_all_h['EVENT_Y'] > 50) & (df_all_h['EVENT_TYPEID'].isin(ids))].copy()
-
-        total_act = len(df_f)
-
-        with c_left:
-            fig = plot_custom_pitch(df_f, ids, tit, zone=zn, cmap=cm, logo=hold_logo)
-            st.pyplot(fig)
-
-        with c_right:
-            acc_pct = (df_f['OUTCOME'].sum() / total_act * 100) if total_act > 0 else 0
-            avg_p90 = (total_act / total_minutes * 90) if total_minutes > 0 else 0
-
-            m_cols = st.columns(3)
-            m_cols[0].metric("Total", total_act)
-            m_cols[1].metric("p90", round(avg_p90, 1))
-            m_cols[2].metric("Succes", f"{int(acc_pct)}%")
-
-            st.markdown("<div style='margin-top:10px; border-top: 1px solid #eee; padding-top: 10px;'></div>", unsafe_allow_html=True)
-            st.write(f"**Top 8: {v_uden}**")
-
-            if not df_f.empty:
-                df_top = df_f.groupby('PLAYER_NAME').agg(
-                    TOTAL=('EVENT_TYPEID', 'count'),
-                    SUCCESS=('OUTCOME', 'sum')
-                ).reset_index()
-                df_top['RATE'] = (df_top['SUCCESS'] / df_top['TOTAL'] * 100).fillna(0)
-
-                df_top = df_top[df_top['TOTAL'] >= 1]
-                df_top = df_top.sort_values(['RATE', 'TOTAL'], ascending=[False, False]).head(8)
-
-                for _, r in df_top.iterrows():
-                    rate_val = int(r['RATE'])
-                    st.markdown(f"""
-                        <div style="margin-bottom: 12px;">
-                            <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; margin-bottom: 2px;">
-                                <span>{r['PLAYER_NAME']}</span>
-                                <span>{int(r['SUCCESS'])} / {int(r['TOTAL'])} ({rate_val}%)</span>
-                            </div>
-                            <div style="background-color: #f0f2f6; border-radius: 4px; height: 5px; width: 100%;">
-                                <div style="background-color: #ec7014; height: 5px; width: {rate_val}%; border-radius: 4px;"></div>
-                            </div>
-                        </div>
-                    """, unsafe_allow_html=True)
-            else:
-                st.info("Ingen data fundet for dette område.")
-
-
-if __name__ == "__main__":
-    vis_side()
+            ids, tit, cm
