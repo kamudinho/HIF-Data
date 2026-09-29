@@ -1,10 +1,4 @@
-Den kode, du sendte, var desværre meget ødelagt rent strukturelt. Det skyldes sandsynligvis, at den er blevet kopieret forkert, da **indrykningen (indentation)** er helt væk, og filen bliver **afbrudt midt i en sætning** i bunden. I Python er indrykning altafgørende – uden den virker koden slet ikke.
 
-Jeg har herunder **genopbygget og rettet hele filen** for dig. Jeg har rettet indrykningen, fjernet de dublerede linjer i "Fase 1"-logikken og sørget for, at filen slutter korrekt.
-
-### Her er den komplette og rettede `modstander_heatmaps.py`:
-
-```python
 # tools/hifanalyse/modstander_heatmaps.py
 import streamlit as st
 import pandas as pd
