@@ -79,21 +79,26 @@ def draw_match_info_box(ax, scoring_team_logo, opp_team_logo, date_str, score_st
 
 
 def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None):
-    """Genererer baneplot med hexbins og korrekt afgrænsning af zoner."""
+    """Genererer baneplot med korrekte proportioner og zoner for VerticalPitch."""
     from mplsoccer import VerticalPitch
     plot_data = df[df['EVENT_TYPEID'].astype(str).isin([str(i) for i in event_ids])].copy()
     
-    # Opsæt bane
-    pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
-    fig, ax = pitch.draw(figsize=(5, 7))
+    # Opret VerticalPitch (Opta-koordinater: X: 0-100 (bredde), Y: 0-100 (længde))
+    # Vi bruger en smal figsize, da vi kun viser halv bane
+    fig_height = 4 if zone in ['up', 'down'] else 7
+    pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD', half=True if zone in ['up', 'down'] else False)
+    fig, ax = pitch.draw(figsize=(5, fig_height))
 
-    # Styr visning af halvdele og placering af logo/titel
+    # Hvis vi bruger half=True i VerticalPitch, håndterer den selv at vise den ene halvdel perfekt,
+    # men hvis vi vil styre det manuelt for 'up' / 'down':
     if zone == 'up':
-        ax.set_ylim(0, 50)  # Kun egen halvdel (Y: 0 til 50)
-        logo_pos, text_y = [0.04, 0.88, 0.08, 0.08], 0.95
+        # Egen halvdel (Y: 0 til 50)
+        ax.set_ylim(0, 50)
+        logo_pos, text_y = [0.04, 0.85, 0.08, 0.08], 0.93
     elif zone == 'down':
-        ax.set_ylim(50, 100) # Kun modstanderens halvdel (Y: 50 til 100)
-        logo_pos, text_y = [0.04, 0.88, 0.08, 0.08], 0.95
+        # Modstanderens halvdel (Y: 50 til 100)
+        ax.set_ylim(50, 100)
+        logo_pos, text_y = [0.04, 0.85, 0.08, 0.08], 0.93
     else:
         logo_pos, text_y = [0.04, 0.90, 0.08, 0.08], 0.97
 
@@ -105,7 +110,6 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None)
     ax.text(0.94, text_y, title, transform=ax.transAxes, fontsize=6, fontweight='bold', ha='right', va='top')
 
     if not plot_data.empty:
-        # Sørg for at hexbin kun beregner og viser inden for det aktuelle Y-vindue
         y_min, y_max = ax.get_ylim()
         
         pitch.hexbin(
@@ -113,13 +117,16 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None)
             plot_data.EVENT_Y, 
             ax=ax, 
             cmap=cmap, 
-            gridsize=25,
+            gridsize=20,
             edgecolors='white',
             linewidths=0.5, 
             alpha=0.85,
-            extent=(0, 100, y_min, y_max) # Låser hexbins fast til den viste del af banen
+            extent=(0, 100, y_min, y_max)
         )
         
+    # Fjern unødvendig luft omkring figuren i matplotlib
+    fig.subplots_adjust(left=0.05, right=0.95, top=0.95, bottom=0.05)
+    
     return fig
 
 def resolve_player_names(df, conn):
