@@ -21,6 +21,7 @@ from data.players.player_mapping import player_mapping, PLAYER_MAPPING
 
 DB = "KLUB_HVIDOVREIF.AXIS"
 
+# Sørg for at den statiske spillerliste kun indlæses én gang pr. proces
 if not player_mapping.optauuid_to_name:
     player_mapping._load_data(PLAYER_MAPPING)
 
@@ -45,6 +46,7 @@ def get_logo_img(opta_uuid):
 
 
 def draw_match_row(date, h_name, h_uuid, score, a_name, a_uuid, res_char):
+    """Tegner en række i kampoversigten med logoer og farvet resultat-badge"""
     bg_color = "#2e7d32" if res_char == "W" else ("#757575" if res_char == "D" else "#c62828")
     cols = st.columns([0.5, 1.2, 0.25, 0.7, 0.25, 1.2, 0.3], vertical_alignment="center")
     flex_style = "display: flex; align-items: center; height: 30px; margin: 0;"
@@ -68,6 +70,7 @@ def draw_match_row(date, h_name, h_uuid, score, a_name, a_uuid, res_char):
 
 
 def draw_match_info_box(ax, scoring_team_logo, opp_team_logo, date_str, score_str, min_str):
+    """Tegner info-boks ved mål-sekvenser"""
     if scoring_team_logo:
         ax_l1 = ax.inset_axes([0.02, 0.08, 0.05, 0.05], transform=ax.transAxes)
         ax_l1.imshow(scoring_team_logo); ax_l1.axis('off')
@@ -79,63 +82,33 @@ def draw_match_info_box(ax, scoring_team_logo, opp_team_logo, date_str, score_st
 
 
 def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None):
-    """Genererer baneplot med korrekte proportioner for fuld og halvt banelayout."""
+    """Genererer baneplot (KDE/Heatmap) med fastlåst stregtykkelse."""
     from mplsoccer import VerticalPitch
-    plot_data = df[df['EVENT_TYPEID'].isin([int(i) for i in event_ids])].copy()
-    
-    # Vi tegner altid en fuld bane i bunden, men styrer zonen via ylim
-    is_half = zone in ['up', 'down']
-    fig_height = 4 if is_half else 7
-    
-    # Opret standard VerticalPitch UDEN half=True, så koordinatsystemet er stabilt (Y: 0 til 100)
-    pitch = VerticalPitch(
-        pitch_type='opta', 
-        pitch_color='#ffffff', 
-        line_color='#BDBDBD'
-    )
-    fig, ax = pitch.draw(figsize=(5, fig_height))
+    plot_data = df[df['EVENT_TYPEID'].astype(str).isin([str(i) for i in event_ids])].copy()
+    pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
+    fig, ax = pitch.draw(figsize=(5, 7))
 
-    # Styr præcis hvilken del af banen der vises
     if zone == 'up':
-        # Egen halvdel: Vis fra Y = 0 til 50 (bund til midterlinje)
-        ax.set_ylim(0, 50)
-        logo_pos, text_y = [0.04, 0.82, 0.08, 0.08], 0.92
+        ax.set_ylim(0, 55)
+        logo_pos, text_y = [0.04, 0.03, 0.08, 0.08], 0.05
     elif zone == 'down':
-        # Modstanderens halvdel: Vis fra Y = 50 til 100 (midterlinje til top)
-        ax.set_ylim(50, 100)
-        logo_pos, text_y = [0.04, 0.82, 0.08, 0.08], 0.92
+        ax.set_ylim(45, 100)
+        logo_pos, text_y = [0.04, 0.90, 0.08, 0.08], 0.97
     else:
-        ax.set_ylim(0, 100)
         logo_pos, text_y = [0.04, 0.90, 0.08, 0.08], 0.97
 
     if logo:
-        ax_l = ax.inset_axes(logo_pos, transform=ax.transAxes)
-        ax_l.imshow(logo)
-        ax_l.axis('off')
+        ax_l = ax.inset_axes(logo_pos, transform=ax.transAxes); ax_l.imshow(logo); ax_l.axis('off')
 
     ax.text(0.94, text_y, title, transform=ax.transAxes, fontsize=6, fontweight='bold', ha='right', va='top')
 
     if not plot_data.empty:
-        y_min, y_max = ax.get_ylim()
-        
-        pitch.hexbin(
-            plot_data.EVENT_X, 
-            plot_data.EVENT_Y, 
-            ax=ax, 
-            cmap=cmap, 
-            gridsize=20,
-            edgecolors='white',
-            linewidths=0.5, 
-            alpha=0.85,
-            extent=(0, 100, y_min, y_max)
-        )
-        
-    # Fjern unødvendig plads omkring figuren
-    fig.subplots_adjust(left=0.02, right=0.98, top=0.98, bottom=0.02)
-    
+        pitch.kdeplot(plot_data.EVENT_X, plot_data.EVENT_Y, ax=ax, cmap=cmap, fill=True, alpha=0.5, levels=100, linewidths=1.2)
     return fig
 
+
 def resolve_player_names(df, conn):
+    """Slår spillernavne op for en hel event-dataframe ad gangen."""
     if df.empty or 'PLAYER_OPTAUUID' not in df.columns:
         return df['PLAYER_NAME'] if 'PLAYER_NAME' in df.columns else pd.Series(dtype=object, index=df.index)
 
@@ -278,16 +251,21 @@ def fetch_event_data(valgt_uuid, match_ids):
     df_all_h = conn.query(sql, ttl=0)
     if df_all_h is None or df_all_h.empty:
         return pd.DataFrame()
-    
-    for col in ['EVENT_X', 'EVENT_Y']:
-        df_all_h[col] = pd.to_numeric(df_all_h[col], errors='coerce')
-    df_all_h['EVENT_TYPEID'] = pd.to_numeric(df_all_h['EVENT_TYPEID'], errors='coerce').astype('Int64')
-    df_all_h['OUTCOME'] = pd.to_numeric(df_all_h['OUTCOME'], errors='coerce').fillna(0)
-    df_all_h = df_all_h.dropna(subset=['EVENT_X', 'EVENT_Y', 'EVENT_TYPEID'])
+
+    # --- MASTER FIX: Vend X og Y om med det samme ---
+    df_all_h[['EVENT_X', 'EVENT_Y']] = df_all_h[['EVENT_Y', 'EVENT_X']].values
+
+    df_all_h['PLAYER_NAME'] = resolve_player_names(df_all_h, conn)
+    df_all_h['qual_list'] = df_all_h['QUALIFIERS'].fillna('').str.split(',')
+    df_all_h['Action_Label'] = df_all_h.apply(get_action_label, axis=1)
+    df_all_h = df_all_h.dropna(subset=['Action_Label'])
     return df_all_h
 
 @st.cache_data(ttl=900, show_spinner=False)
 def fetch_zone_aggregates(valgt_uuid, match_ids, event_type_ids):
+    """
+    Henter 40-zone aggregater for en specifik hold- og event-type kombination 
+    """
     if not match_ids or not event_type_ids:
         return pd.DataFrame()
 
@@ -410,6 +388,9 @@ def fetch_goal_sequences(valgt_uuid, liga_ids_sql):
 
     if df_all_events is None or df_all_events.empty:
         return pd.DataFrame()
+
+    # --- MASTER FIX: Vend X og Y om med det samme ---
+    df_all_events[['EVENT_X', 'EVENT_Y']] = df_all_events[['EVENT_Y', 'EVENT_X']].values
 
     df_all_events['PLAYER_NAME'] = resolve_player_names(df_all_events, conn)
     df_all_events['qual_list'] = df_all_events['QUALIFIERS'].fillna('').str.split(',')
