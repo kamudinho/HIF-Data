@@ -1,3 +1,20 @@
+Fejlen er meget klar: Din fil `modstander_heatmaps.py` prøver at hente en funktion, der hedder `fetch_zone_aggregates`, men den funktion findes slet ikke i den `modstander_common.py` fil, du lige har sendt mig.
+
+Det skete sandsynligvis, fordi du (eller jeg ved en fejl) erstattede hele indholdet af `modstander_common.py` med en version, der kun indeholdt de funktioner, vi arbejdede på, og dermed kom til at slette `fetch_zone_aggregates`.
+
+**Her er løsningen:**
+
+Jeg har taget din fulde kode og indsat en **"Placeholder"** (en midlertidig tom funktion) for `fetch_zone_aggregates`. 
+
+**Hvad betyder det?**
+1.  **Fejlen forsvinder:** Din app vil nu kunne indlæse og starte uden den "cannot import name"-fejl.
+2.  **Vigtig begrænsning:** Fanen "UDEN BOLDEN" i dit heatmap vil sandsynligvis være tom eller ikke virke, fordi den rigtige logik til at beregne zoner mangler.
+
+**For at få det hele til at virke 100%, skal du finde den originale `fetch_zone_aggregates` funktion i din gamle backup og indsætte den i stedet for min "placeholder".**
+
+### Her er den fulde `modstander_common.py` (Klar til brug):
+
+```python
 # tools/hifanalyse/modstander_common.py
 import streamlit as st
 import pandas as pd
@@ -187,7 +204,7 @@ def fetch_event_data(valgt_uuid, match_ids):
     if df_all_h is None or df_all_h.empty:
         return pd.DataFrame()
 
-    # --- DETTE ER DETTE FIX: Vi bytter X og Y her ---
+    # --- KOORDINAT FIX ---
     df_all_h[['EVENT_X', 'EVENT_Y']] = df_all_h[['EVENT_Y', 'EVENT_X']].values
 
     df_all_h['PLAYER_NAME'] = resolve_player_names(df_all_h, conn)
@@ -245,9 +262,23 @@ def fetch_goal_sequences(valgt_uuid, liga_ids_sql):
     if df_all_events is None or df_all_events.empty:
         return pd.DataFrame()
 
-    # --- DETTE ER DETTE FIX: Vi bytter X og Y her ---
+    # --- KOORDINAT FIX ---
     df_all_events[['EVENT_X', 'EVENT_Y']] = df_all_events[['EVENT_Y', 'EVENT_X']].values
 
     df_all_events['PLAYER_NAME'] = resolve_player_names(df_all_events, conn)
     df_all_events['qual_list'] = df_all_events['QUALIFIERS'].fillna('').str.split(',')
     return df_all_events
+
+# ---------------------------------------------------------------------------
+# PLACEHOLDER FOR MANGlENDE FUNKTION
+# ---------------------------------------------------------------------------
+
+@st.cache_data(ttl=900, show_spinner=False)
+def fetch_zone_aggregates(valgt_uuid, match_ids, zone_type):
+    """
+    ADVARSEL: Denne funktion er en midlertidig placeholder for at undgå Import Error.
+    Du skal finde den rigtige version af 'fetch_zone_aggregates' i din gamle backup 
+    og erstatte denne placeholder med den rigtige kode.
+    """
+    return pd.DataFrame()
+```
