@@ -1,137 +1,266 @@
-# tools/hifanalyse/modstander_heatmaps.py
-# tools/hifanalyse/modstander_heatmaps.py
+# tools/hifanalyse/modstander_common.py
 import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
+from PIL import Image
+from io import BytesIO
+import requests
+from mplsoccer import Pitch, VerticalPitch
 
-from data.utils.team_mapping import COMPETITION_NAME
-from tools.hifanalyse.modstander_common import (
-    render_hold_saeson_selector,
-    fetch_full_match_history,
-    fetch_event_data,
-    fetch_zone_aggregates,
-    draw_match_row,
-    plot_custom_pitch,
+from data.data_load import _get_snowflake_conn
+from data.utils.team_mapping import (
+    TEAMS,
+    SEASONS,
+    COMPETITIONS,
+    SEASON_LEAGUE_MAPPER,
+    COMPETITION_NAME
 )
+from data.utils.mapping import get_action_label
+from data.players.player_mapping import player_mapping, PLAYER_MAPPING
+
+DB = "KLUB_HVIDOVREIF.AXIS"
+
+if not player_mapping.optauuid_to_name:
+    player_mapping._load_data(PLAYER_MAPPING)
+
+# ---------------------------------------------------------------------------
+# VISUELLE HJÆLPEFUNKTIONER
+# ---------------------------------------------------------------------------
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def get_logo_img(opta_uuid):
+    if not opta_uuid: return None
+    url = next((info['logo'] for name, info in TEAMS.items() if info.get('opta_uuid') == opta_uuid), None)
+    if not url: return None
+    try:
+        response = requests.get(url, timeout=5)
+        return Image.open(BytesIO(response.content))
+    except Exception: return None
+
+def draw_match_row(date, h_name, h_uuid, score, a_name, a_uuid, res_char):
+    bg_color = "#2e7d32" if res_char == "W" else ("#757575" if res_char == "D" else "#c62828")
+    cols = st.columns([0.5, 1.2, 0.25, 0.7, 0.25, 1.2, 0.3], vertical_alignment="center")
+    flex_style = "display: flex; align-items: center; height: 30px; margin: 0;"
+    with cols[0]: st.markdown(f"<div style='{flex_style} font-size:11px; color:#666;'>{date}</div>", unsafe_allow_html=True)
+    with cols[1]: st.markdown(f"<div style='{flex_style} justify-content: flex-end; font-size:13px; font-weight:600; text-align:right;'>{h_name[:12]}</div>", unsafe_allow_html=True)
+    with cols[2]:
+        logo_h = next((info['logo'] for name, info in TEAMS.items() if info.get('opta_uuid') == h_uuid), "")
+        if logo_h: st.image(logo_h, width=18)
+    with cols[3]: st.markdown(f"<div style='{flex_style} justify-content: center;'><div style='background:#f0f2f6; border-radius:3px; width: 100%; text-align:center; font-size:12px; font-weight:800; padding:2px 0;'>{score}</div></div>", unsafe_allow_html=True)
+    with cols[4]:
+        logo_a = next((info['logo'] for name, info in TEAMS.items() if info.get('opta_uuid') == a_uuid), "")
+        if logo_a: st.image(logo_a, width=18)
+    with cols[5]: st.markdown(f"<div style='{flex_style} justify-content: flex-start; font-size:13px; font-weight:600; text-align:left;'>{a_name[:12]}</div>", unsafe_allow_html=True)
+    with cols[6]: st.markdown(f"<div style='{flex_style} justify-content: center;'><div style='background-color:{bg_color}; color:white; border-radius:3px; text-align:center; font-weight:bold; font-size:11px; padding:2px 0; width:22px;'>{res_char}</div></div>", unsafe_allow_html=True)
+
+def draw_match_info_box(ax, scoring_team_logo, opp_team_logo, date_str, score_str, min_str):
+    if scoring_team_logo:
+        ax_l1 = ax.inset_axes([0.02, 0.08, 0.05, 0.05], transform=ax.transAxes)
+        ax_l1.imshow(scoring_team_logo); ax_l1.axis('off')
+    ax.text(0.08, 0.105, "vs.", transform=ax.transAxes, fontsize=8, fontweight='bold', va='center')
+    if opp_team_logo:
+        ax_l2 = ax.inset_axes([0.10, 0.08, 0.05, 0.05], transform=ax.transAxes)
+        ax_l2.imshow(opp_team_logo); ax_l2.axis('off')
+    ax.text(0.03, 0.07, f"{date_str} | Stilling: {score_str} ({min_str}. min)", transform=ax.transAxes, fontsize=8, color='#444444', va='top')
+
+def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None):
+    """Genererer baneplot med korrekt zoom-håndtering og koordinat-swap."""
+    plot_data = df[df['EVENT_TYPEID'].astype(str).isin([str(i) for i in event_ids])].copy()
+    
+    pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
+    fig, ax = pitch.draw(figsize=(5, 7))
+
+    if not plot_data.empty:
+        # Efter swappet i fetch-funktionerne: X=bredde, Y=længde
+        pitch.kdeplot(plot_data.EVENT_X, plot_data.EVENT_Y, ax=ax, cmap=cmap, fill=True, alpha=0.5, levels=100, linewidths=1.2)
+
+    if logo:
+        if zone == 'up': logo_pos, text_y = [0.04, 0.03, 0.08, 0.08], 0.05
+        else: logo_pos, text_y = [0.04, 0.90, 0.08, 0.08], 0.97
+        ax_l = ax.inset_axes(logo_pos, transform=ax.transAxes); ax_l.imshow(logo); ax_l.axis('off')
+    else:
+        text_y = 0.97
+
+    ax.text(0.94, text_y, title, transform=ax.transAxes, fontsize=6, fontweight='bold', ha='right', va='top')
+
+    if zone == 'up':
+        ax.set_ylim(50, 100)
+    elif zone == 'down':
+        ax.set_ylim(0, 50)
+    
+    return fig
+
+def resolve_player_names(df, conn):
+    if df.empty or 'PLAYER_OPTAUUID' not in df.columns:
+        return df['PLAYER_NAME'] if 'PLAYER_NAME' in df.columns else pd.Series(dtype=object, index=df.index)
+    uuid_col = df['PLAYER_OPTAUUID'].astype(str).str.strip()
+    valid_uuid = df['PLAYER_OPTAUUID'].notna() & ~uuid_col.isin(["", "None", "nan"])
+    resolved = uuid_col.where(valid_uuid).map(player_mapping.optauuid_to_name)
+    if 'PLAYER_NAME' in df.columns:
+        resolved = resolved.fillna(df['PLAYER_NAME'])
+    resolved = resolved.fillna('Ukendt').replace(["", "None", "nan"], "Ukendt")
+    return resolved
+
+# ---------------------------------------------------------------------------
+# SÆSON/HOLD-VÆLGER
+# ---------------------------------------------------------------------------
+
+def render_hold_saeson_selector():
+    available_seasons = sorted(list(SEASONS.keys()), reverse=True)
+    col_spacer_top, col_saeson, col_hold = st.columns([2.5, 1, 1])
+    default_season_idx = available_seasons.index("2026/2027") if "2026/2027" in available_seasons else 0
+    valgt_saeson = col_saeson.selectbox("Vælg sæson", available_seasons, index=default_season_idx, label_visibility="collapsed", key="saeson_select")
+    
+    LIGA_IDS_LIST = []
+    for comp_data in COMPETITIONS.values():
+        if "wyid" in comp_data and comp_data["wyid"]: LIGA_IDS_LIST.append(str(comp_data["wyid"]))
+    
+    if valgt_saeson in SEASONS:
+        for comp_key, uuid_val in SEASONS[valgt_saeson].items():
+            if uuid_val and "dummy" not in str(uuid_val).lower(): LIGA_IDS_LIST.append(str(uuid_val))
+    
+    liga_ids_sql = str(tuple(LIGA_IDS_LIST))
+    allowed_team_names = SEASON_LEAGUE_MAPPER.get(valgt_saeson, {}).get(COMPETITION_NAME, [])
+    
+    team_map = {}
+    for team_name, info in TEAMS.items():
+        if not allowed_team_names or team_name in allowed_team_names:
+            if "opta_uuid" in info and info["opta_uuid"]: team_map[team_name] = info["opta_uuid"]
+    
+    if not team_map: team_map = {name: info["opta_uuid"] for name, info in TEAMS.items() if info.get("opta_uuid")}
+    
+    sorted_teams = sorted(list(team_map.keys()))
+    default_index = sorted_teams.index("Hvidovre") if "Hvidovre" in sorted_teams else 0
+    valgt_hold_navn = col_hold.selectbox("Vælg hold", sorted_teams, index=default_index, label_visibility="collapsed", key="hold_select")
+    
+    valgt_uuid = team_map[valgt_hold_navn]
+    hold_logo = get_logo_img(valgt_uuid)
+    return valgt_saeson, valgt_hold_navn, valgt_uuid, hold_logo, liga_ids_sql
+
+# ---------------------------------------------------------------------------
+# DATAHENTNING
+# ---------------------------------------------------------------------------
+
+@st.cache_data(ttl=900, show_spinner=False)
+def fetch_full_match_history(valgt_uuid, liga_ids_sql, valgt_saeson):
+    conn = _get_snowflake_conn()
+    sql = f"""
+        SELECT MATCH_LOCALDATE, MATCH_DATE_FULL, CONTESTANTHOME_NAME, CONTESTANTAWAY_NAME,
+               TOTAL_HOME_SCORE, TOTAL_AWAY_SCORE, CONTESTANTHOME_OPTAUUID,
+               CONTESTANTAWAY_OPTAUUID, MATCH_OPTAUUID, MATCH_STATUS
+        FROM {DB}.OPTA_MATCHINFO
+        WHERE (CONTESTANTHOME_OPTAUUID = '{valgt_uuid}' OR CONTESTANTAWAY_OPTAUUID = '{valgt_uuid}')
+        AND TOURNAMENTCALENDAR_OPTAUUID IN {liga_ids_sql}
+        AND TOURNAMENTCALENDAR_NAME = '{valgt_saeson}'
+        ORDER BY COALESCE(MATCH_DATE_FULL, MATCH_LOCALDATE) ASC
+    """
+    return conn.query(sql, ttl=0)
+
+@st.cache_data(ttl=900, show_spinner=False)
+def fetch_event_data(valgt_uuid, match_ids):
+    if not match_ids:
+        return pd.DataFrame()
+
+    conn = _get_snowflake_conn()
+    m_ids_str = f"('{match_ids[0]}')" if len(match_ids) == 1 else str(tuple(match_ids))
+
+    sql = f"""
+       SELECT
+           e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID,
+           e.PLAYER_OPTAUUID,
+           TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME) as PLAYER_NAME,
+           e.MATCH_OPTAUUID, e.EVENT_TIMESTAMP, e.EVENT_OUTCOME as OUTCOME,
+           LISTAGG(q.QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY q.QUALIFIER_QID) as QUALIFIERS
+       FROM {DB}.OPTA_EVENTS e
+       LEFT JOIN (
+           SELECT DISTINCT PLAYER_OPTAUUID, FIRST_NAME, LAST_NAME
+           FROM {DB}.OPTA_MATCH_LINEUPS
+           WHERE FIRST_NAME IS NOT NULL
+       ) p ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
+       LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
+       WHERE e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}'
+       AND e.MATCH_OPTAUUID IN {m_ids_str}
+       GROUP BY 1, 2, 3, 4, 5, 6, 7, 8
+   """
+    df_all_h = conn.query(sql, ttl=0)
+    if df_all_h is None or df_all_h.empty:
+        return pd.DataFrame()
+
+    # --- KOORDINAT FIX ---
+    df_all_h[['EVENT_X', 'EVENT_Y']] = df_all_h[['EVENT_Y', 'EVENT_X']].values
+
+    df_all_h['PLAYER_NAME'] = resolve_player_names(df_all_h, conn)
+    df_all_h['qual_list'] = df_all_h['QUALIFIERS'].fillna('').str.split(',')
+    df_all_h['Action_Label'] = df_all_h.apply(get_action_label, axis=1)
+    df_all_h = df_all_h.dropna(subset=['Action_Label'])
+    return df_all_h
 
 
-def vis_side():
-    valgt_saeson, valgt_hold_navn, valgt_uuid, hold_logo, liga_ids_sql = render_hold_saeson_selector()
+@st.cache_data(ttl=900, show_spinner=False)
+def fetch_goal_sequences(valgt_uuid, liga_ids_sql):
+    conn = _get_snowflake_conn()
+    sql = f"""
+       WITH SeasonMatches AS (
+           SELECT MATCH_OPTAUUID, CONTESTANTHOME_NAME, CONTESTANTAWAY_NAME,
+                  MATCH_LOCALDATE, CONTESTANTHOME_OPTAUUID, CONTESTANTAWAY_OPTAUUID,
+                  TOTAL_HOME_SCORE, TOTAL_AWAY_SCORE
+           FROM {DB}.OPTA_MATCHINFO
+           WHERE TOURNAMENTCALENDAR_OPTAUUID IN {liga_ids_sql}
+       ),
+       TargetGoals AS (
+           SELECT MATCH_OPTAUUID, EVENT_TIMESTAMP as G_TIME, EVENT_TIMEMIN as G_MIN
+           FROM {DB}.OPTA_EVENTS
+           WHERE EVENT_TYPEID = 16 AND EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}'
+           AND MATCH_OPTAUUID IN (SELECT MATCH_OPTAUUID FROM SeasonMatches)
+       )
+       SELECT e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID,
+              e.PLAYER_OPTAUUID,
+              TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME) as PLAYER_NAME,
+              e.EVENT_TIMESTAMP, e.MATCH_OPTAUUID,
+              m.MATCH_LOCALDATE, m.CONTESTANTHOME_NAME, m.CONTESTANTAWAY_NAME,
+              m.CONTESTANTHOME_OPTAUUID, m.CONTESTANTAWAY_OPTAUUID,
+              m.TOTAL_HOME_SCORE, m.TOTAL_AWAY_SCORE,
+              tg.G_TIME as GOAL_TIME, tg.G_MIN as GOAL_MIN,
+              LISTAGG(q.QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY q.QUALIFIER_QID) as QUALIFIERS
+       FROM {DB}.OPTA_EVENTS e
+       LEFT JOIN (
+           SELECT DISTINCT PLAYER_OPTAUUID, FIRST_NAME, LAST_NAME
+           FROM {DB}.OPTA_MATCH_LINE_UPS
+           WHERE FIRST_NAME IS NOT NULL
+       ) p ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
+       JOIN SeasonMatches m ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
+       INNER JOIN TargetGoals tg ON e.MATCH_OPTAUUID = tg.MATCH_OPTAUUID
+           AND e.EVENT_TIMESTAMP >= DATEADD(second, -20, tg.G_TIME)
+           AND e.EVENT_TIMESTAMP <= tg.G_TIME
+       LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
+       WHERE e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}'
+       GROUP BY 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16
+   """
+    try:
+        df_all_events = conn.query(sql, ttl=0)
+    except Exception:
+        return pd.DataFrame()
 
-    with st.spinner(f"Henter data for {valgt_hold_navn} ({valgt_saeson})..."):
-        df_res = fetch_full_match_history(valgt_uuid, liga_ids_sql, valgt_saeson)
+    if df_all_events is None or df_all_events.empty:
+        return pd.DataFrame()
 
-        if df_res is None or df_res.empty:
-            st.warning(f"Der er endnu ikke spillet/registreret nogen færdigspillede kampe for {valgt_hold_navn} i sæsonen {valgt_saeson}.")
-            return
+    # --- KOORDINAT FIX ---
+    df_all_events[['EVENT_X', 'EVENT_Y']] = df_all_events[['EVENT_Y', 'EVENT_X']].values
 
-        match_ids = tuple(df_res['MATCH_OPTAUUID'].tolist())
-        df_all_h = fetch_event_data(valgt_uuid, match_ids)
+    df_all_events['PLAYER_NAME'] = resolve_player_names(df_all_events, conn)
+    df_all_events['qual_list'] = df_all_events['QUALIFIERS'].fillna('').str.split(',')
+    return df_all_events
 
-    if df_all_h.empty:
-        st.info("Ingen aktionsdata fundet for de seneste kampe.")
-        return
+# ---------------------------------------------------------------------------
+# PLACEHOLDER FOR MANGlENDE FUNKTION
+# ---------------------------------------------------------------------------
 
-    n_matches = df_all_h['MATCH_OPTAUUID'].nunique()
-    total_minutes = n_matches * 90
-
-    t2, t3 = st.tabs(["MED BOLDEN", "UDEN BOLDEN"])
-
-    with t2:
-        st.markdown("""
-            <style>
-            [data-testid="stHorizontalBlock"] [data-testid="stMetric"] { text-align: center; align-items: center; justify-content: center; width: 100%; }
-            [data-testid="stMetricLabel"] { justify-content: center !important; font-size: 10px !important; white-space: nowrap; margin-bottom: -3px !important; }
-            [data-testid="stMetricValue"] { justify-content: center !important; font-size: 14px !important; font-weight: 700; }
-            </style>
-            """, unsafe_allow_html=True)
-
-        kat_options = ["Fase 1", "Gennembrud", "Touches in Box", "Afslutninger"]
-        c_left, c_right = st.columns([2, 1])
-        v_med = c_right.selectbox("Vælg Fokusområde", kat_options, key="ms_t2", label_visibility="collapsed")
-
-        # --- KORREKT LOGIK (Efter Master Fix i common.py) ---
-        if v_med == "Fase 1":
-            ids, tit, cm, zn = [1], "OPBYGNING", "Reds", "up"
-            df_f = df_all_h[(df_all_h['EVENT_Y'] <= 50) & (df_all_h['EVENT_TYPEID'] == 1)].copy()
-        elif v_med == "Gennembrud":
-            ids, tit, cm, zn = [1], "GENNEMBRUD", "Blues", "down"
-            df_f = df_all_h[(df_all_h['EVENT_Y'] > 50) & (df_all_h['EVENT_TYPEID'] == 1)].copy()
-        elif v_med == "Touches in Box":
-            ids, tit, cm, zn = [0], "TOUCHES IN BOX", "Blues", "down"
-            df_f = df_all_h[(df_all_h['EVENT_Y'] > 83) & (df_all_h['EVENT_X'] > 15) & (df_all_h['EVENT_X'] < 85)].copy()
-            df_shots = df_all_h[df_all_h['EVENT_TYPEID'].isin([13, 14, 15, 16])].copy()
-        else:
-            ids, tit, cm, zn = [13, 14, 15, 16], "AFSLUTNINGER", "YlOrRd", "down"
-            df_f = df_all_h[df_all_h['EVENT_TYPEID'].isin(ids)].copy()
-
-        total_act = len(df_f)
-
-        with c_left:
-            st.pyplot(plot_custom_pitch(df_f, df_f['EVENT_TYPEID'].unique().tolist() if v_med == "Touches in Box" else ids, tit, zone=zn, cmap=cm, logo=hold_logo))
-
-        with c_right:
-            if v_med == "Touches in Box":
-                shots_total = len(df_shots)
-                touches_p90 = (total_act / total_minutes * 90) if total_minutes > 0 else 0
-                conv_box = (shots_total / total_act * 100) if total_act > 0 else 0
-                m_cols = st.columns(3)
-                m_cols[0].metric("Touches", total_act); m_cols[1].metric("p90", round(touches_p90, 1)); m_cols[2].metric("Afsl/Box %", f"{int(conv_box)}%")
-            elif v_med == "Afslutninger":
-                goals = len(df_f[df_f['EVENT_TYPEID'] == 16])
-                shots_p90 = (total_act / total_minutes * 90) if total_minutes > 0 else 0
-                goals_p90 = (goals / total_minutes * 90) if total_minutes > 0 else 0
-                conv_rate = (goals / total_act * 100) if total_act > 0 else 0
-                m_cols = st.columns(5)
-                m_cols[0].metric("Skud", total_act); m_cols[1].metric("p90", round(shots_p90, 1))
-                m_cols[2].metric("Mål", goals); m_cols[3].metric("p90", round(goals_p90, 1))
-                m_cols[4].metric("Konv %", f"{int(conv_rate)}%")
-            else:
-                acc_pct = (df_f['OUTCOME'].sum() / total_act * 100) if total_act > 0 else 0
-                avg_p90 = (total_act / total_minutes * 90) if total_minutes > 0 else 0
-                m_cols = st.columns(3)
-                m_cols[0].metric("Total", total_act); m_cols[1].metric("Gns p90", round(avg_p90, 1)); m_cols[2].metric("Succes", f"{int(acc_pct)}%")
-
-            st.markdown("<div style='margin-top:10px; border-top: 1px solid #eee; padding-top: 10px;'></div>", unsafe_allow_html=True)
-            st.write(f"**Top 8: {v_med}**")
-
-            if not df_f.empty:
-                df_top = df_f.groupby('PLAYER_NAME').agg(TOTAL=('EVENT_TYPEID', 'count'), SUCCESS=('OUTCOME', 'sum')).reset_index()
-                if v_med == "Afslutninger":
-                    df_top['SUCCESS'] = df_f[df_f['EVENT_TYPEID'] == 16].groupby('PLAYER_NAME').size().reindex(df_top['PLAYER_NAME'], fill_value=0).values
-
-                df_top['RATE'] = (df_top['SUCCESS'] / df_top['TOTAL'] * 100).fillna(0)
-
-                min_limit = 100 if v_med in ["Fase 1", "Gennembrud"] else 1
-                df_top = df_top[df_top['TOTAL'] >= min_limit]
-                df_top = df_top.sort_values(['RATE', 'TOTAL'], ascending=[False, False]).head(8)
-
-                if df_top.empty:
-                    st.info(f"Ingen spillere med +{min_limit} aktioner")
-                else:
-                    for _, r in df_top.iterrows():
-                        rate_val = int(r['RATE'])
-                        st.markdown(f"""
-                            <div style="margin-bottom: 12px;">
-                                <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; margin-bottom: 2px;">
-                                    <span>{r['PLAYER_NAME']}</span>
-                                    <span>{int(r['SUCCESS'])} / {int(r['TOTAL'])} ({rate_val}%)</span>
-                                </div>
-                                <div style="background-color: #f0f2f6; border-radius: 4px; height: 5px; width: 100%;">
-                                    <div style="background-color: #084594; height: 5px; width: {rate_val}%; border-radius: 4px;"></div>
-                                </div>
-                            </div>
-                        """, unsafe_allow_html=True)
-
-    with t3:
-        uden_options = ["Egen halvdel: Erobringer", "Off. halvdel: Pres", "Egen halvdel: Dueller", "Off. halvdel: Dueller"]
-        c_left, c_right = st.columns([2, 1])
-        v_uden = c_right.selectbox("Vælg Fokusområde", uden_options, key="ms_t3", label_visibility="collapsed")
-
-        erobring_ids = [7, 8, 12, 127]
-        duel_ids = [7, 44]
-
-        # --- KORREKT LOGIK (Efter Master Fix i common.py) ---
-        if "Erobringer" in v_uden:
-            ids, tit, cm
+@st.cache_data(ttl=900, show_spinner=False)
+def fetch_zone_aggregates(valgt_uuid, match_ids, zone_type):
+    """
+    ADVARSEL: Denne funktion er en midlertidig placeholder for at undgå Import Error.
+    Du skal finde den rigtige version af 'fetch_zone_aggregates' i din gamle backup 
+    og erstatte denne placeholder med den rigtige kode.
+    """
+    return pd.DataFrame()
