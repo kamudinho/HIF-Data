@@ -2,15 +2,11 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import plotly.express as px
 
-from data.utils.team_mapping import COMPETITION_NAME
 from tools.hifanalyse.modstander_common import (
     render_hold_saeson_selector,
     fetch_full_match_history,
     fetch_event_data,
-    fetch_zone_aggregates,  
-    draw_match_row,
     plot_custom_pitch,
 )
 
@@ -50,15 +46,16 @@ def vis_side():
         c_left, c_right = st.columns([2, 1])
         v_med = c_right.selectbox("Vælg Fokusområde", kat_options, key="ms_t2", label_visibility="collapsed")
 
+        # BEMÆRK: I VerticalPitch er Y-aksen banens længde (0 = egen baglinje, 100 = modstanderens baglinje)
         if v_med == "Fase 1":
             ids, tit, cm, zn = [1], "OPBYGNING", "Reds", "up"
-            df_f = df_all_h[(df_all_h['EVENT_X'] <= 50) & (df_all_h['EVENT_TYPEID'] == 1)].copy()
+            df_f = df_all_h[(df_all_h['EVENT_Y'] <= 50) & (df_all_h['EVENT_TYPEID'] == 1)].copy()
         elif v_med == "Gennembrud":
             ids, tit, cm, zn = [1], "GENNEMBRUD", "Blues", "down"
-            df_f = df_all_h[(df_all_h['EVENT_X'] > 50) & (df_all_h['EVENT_TYPEID'] == 1)].copy()
+            df_f = df_all_h[(df_all_h['EVENT_Y'] > 50) & (df_all_h['EVENT_TYPEID'] == 1)].copy()
         elif v_med == "Touches in Box":
             ids, tit, cm, zn = [0], "TOUCHES IN BOX", "Blues", "down"
-            df_f = df_all_h[(df_all_h['EVENT_X'] > 83) & (df_all_h['EVENT_Y'] > 21.1) & (df_all_h['EVENT_Y'] < 78.9)].copy()
+            df_f = df_all_h[(df_all_h['EVENT_Y'] > 83) & (df_all_h['EVENT_X'] > 21.1) & (df_all_h['EVENT_X'] < 78.9)].copy()
             df_shots = df_all_h[df_all_h['EVENT_TYPEID'].isin([13, 14, 15, 16])].copy()
         else:
             ids, tit, cm, zn = [13, 14, 15, 16], "AFSLUTNINGER", "YlOrRd", "down"
@@ -101,7 +98,7 @@ def vis_side():
 
                 df_top['RATE'] = (df_top['SUCCESS'] / df_top['TOTAL'] * 100).fillna(0)
 
-                min_limit = 100 if v_med in ["Opbygning", "Gennembrud"] else 1
+                min_limit = 1  # Sikret mod at udrense spillere forkert
                 df_top = df_top[df_top['TOTAL'] >= min_limit]
                 df_top = df_top.sort_values(['RATE', 'TOTAL'], ascending=[False, False]).head(8)
 
@@ -132,16 +129,16 @@ def vis_side():
 
         if "Erobringer" in v_uden:
             ids, tit, cm, zn = erobring_ids, "Egen halvdel: EROBRINGER", "Oranges", "up"
-            df_f = df_all_h[(df_all_h['EVENT_X'] <= 50) & (df_all_h['EVENT_TYPEID'].isin(ids))].copy()
+            df_f = df_all_h[(df_all_h['EVENT_Y'] <= 50) & (df_all_h['EVENT_TYPEID'].isin(ids))].copy()
         elif "Pres" in v_uden:
             ids, tit, cm, zn = erobring_ids, "Off. halvdel: PRES", "Oranges", "down"
-            df_f = df_all_h[(df_all_h['EVENT_X'] > 50) & (df_all_h['EVENT_TYPEID'].isin(ids))].copy()
+            df_f = df_all_h[(df_all_h['EVENT_Y'] > 50) & (df_all_h['EVENT_TYPEID'].isin(ids))].copy()
         elif "Egen halvdel: Dueller" in v_uden:
             ids, tit, cm, zn = duel_ids, "Egen halvdel: DUELLER", "Oranges", "up"
-            df_f = df_all_h[(df_all_h['EVENT_X'] <= 50) & (df_all_h['EVENT_TYPEID'].isin(ids))].copy()
+            df_f = df_all_h[(df_all_h['EVENT_Y'] <= 50) & (df_all_h['EVENT_TYPEID'].isin(ids))].copy()
         else:
             ids, tit, cm, zn = duel_ids, "Off. halvdel: DUELLER", "Oranges", "down"
-            df_f = df_all_h[(df_all_h['EVENT_X'] > 50) & (df_all_h['EVENT_TYPEID'].isin(ids))].copy()
+            df_f = df_all_h[(df_all_h['EVENT_Y'] > 50) & (df_all_h['EVENT_TYPEID'].isin(ids))].copy()
 
         total_act = len(df_f)
 
