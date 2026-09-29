@@ -187,8 +187,14 @@ def fetch_event_data(valgt_uuid, match_ids):
     if df_all_h is None or df_all_h.empty:
         return pd.DataFrame()
 
-    # --- KOORDINAT FIX ---
-    df_all_h[['EVENT_X', 'EVENT_Y']] = df_all_h[['EVENT_Y', 'EVENT_X']].values
+    # --- DEN RIGTIGE KOORDINAT FIX ---
+    # 1. Vi swapper X og Y (for at få bredde og længde korrekt til VerticalPitch)
+    # 2. Vi vender Y-aksen (100 - gammel_X), så modstanderens mål (100) lander i bunden (0)
+    temp_x = df_all_h['EVENT_Y'].values
+    temp_y = 100 - df_all_h['EVENT_X'].values
+    df_all_h['EVENT_X'] = temp_x
+    df_all_h['EVENT_Y'] = temp_y
+    # ----------------------------------
 
     df_all_h['PLAYER_NAME'] = resolve_player_names(df_all_h, conn)
     df_all_h['qual_list'] = df_all_h['QUALIFIERS'].fillna('').str.split(',')
@@ -245,8 +251,12 @@ def fetch_goal_sequences(valgt_uuid, liga_ids_sql):
     if df_all_events is None or df_all_events.empty:
         return pd.DataFrame()
 
-    # --- KOORDINAT FIX ---
-    df_all_events[['EVENT_X', 'EVENT_Y']] = df_all_events[['EVENT_Y', 'EVENT_X']].values
+    # --- DEN RIGTIGE KOORDINAT FIX (Samme som ovenfor) ---
+    temp_x = df_all_events['EVENT_Y'].values
+    temp_y = 100 - df_all_events['EVENT_X'].values
+    df_all_events['EVENT_X'] = temp_x
+    df_all_events['EVENT_Y'] = temp_y
+    # ----------------------------------------------------
 
     df_all_events['PLAYER_NAME'] = resolve_player_names(df_all_events, conn)
     df_all_events['qual_list'] = df_all_events['QUALIFIERS'].fillna('').str.split(',')
