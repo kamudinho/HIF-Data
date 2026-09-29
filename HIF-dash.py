@@ -499,6 +499,17 @@ try:
             import tools.ligaen.kampudvikling as ku
             ku.vis_side()
 
+    elif m == "SPILLERPROFIL":
+        if s == "Spiller-profil":
+            import tools.players.spiller_profil as sp
+            sp.vis_side()
+        elif s == "Spilleraktioner":
+            import tools.players.player_actions as pa
+            pa.vis_side()
+        elif s == "Spilleroversigt":
+            import tools.players.player_stats as ps
+            ps.vis_side()
+
     elif m == "TILPASNING":
         if s == "Spillerdata":
             import tools.tilpasning.spiller_tilpasning as tilpasning
