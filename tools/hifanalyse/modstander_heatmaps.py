@@ -51,7 +51,7 @@ def vis_side():
         v_med = c_right.selectbox("Vælg Fokusområde", kat_options, key="ms_t2", label_visibility="collapsed")
 
         if v_med == "Fase 1":
-            ids, tit, cm, zn = [1], "OPBYGNING", "red", "up"
+            ids, tit, cm, zn = [1], "OPBYGNING", "Reds", "up"
             df_f = df_all_h[(df_all_h['EVENT_X'] <= 50) & (df_all_h['EVENT_TYPEID'] == 1)].copy()
         elif v_med == "Gennembrud":
             ids, tit, cm, zn = [1], "GENNEMBRUD", "Blues", "down"
