@@ -81,7 +81,7 @@ def draw_match_info_box(ax, scoring_team_logo, opp_team_logo, date_str, score_st
 def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None):
     """Genererer baneplot med korrekte proportioner for fuld og halvt banelayout."""
     from mplsoccer import VerticalPitch
-    plot_data = df[df['EVENT_TYPEID'].astype(str).isin([str(i) for i in event_ids])].copy()
+    plot_data = df[df['EVENT_TYPEID'].isin([int(i) for i in event_ids])].copy()
     
     # Vi tegner altid en fuld bane i bunden, men styrer zonen via ylim
     is_half = zone in ['up', 'down']
@@ -278,11 +278,12 @@ def fetch_event_data(valgt_uuid, match_ids):
     df_all_h = conn.query(sql, ttl=0)
     if df_all_h is None or df_all_h.empty:
         return pd.DataFrame()
-
-    df_all_h['PLAYER_NAME'] = resolve_player_names(df_all_h, conn)
-    df_all_h['qual_list'] = df_all_h['QUALIFIERS'].fillna('').str.split(',')
-    df_all_h['Action_Label'] = df_all_h.apply(get_action_label, axis=1)
-    df_all_h = df_all_h.dropna(subset=['Action_Label'])
+    
+    for col in ['EVENT_X', 'EVENT_Y']:
+        df_all_h[col] = pd.to_numeric(df_all_h[col], errors='coerce')
+    df_all_h['EVENT_TYPEID'] = pd.to_numeric(df_all_h['EVENT_TYPEID'], errors='coerce').astype('Int64')
+    df_all_h['OUTCOME'] = pd.to_numeric(df_all_h['OUTCOME'], errors='coerce').fillna(0)
+    df_all_h = df_all_h.dropna(subset=['EVENT_X', 'EVENT_Y', 'EVENT_TYPEID'])
     return df_all_h
 
 @st.cache_data(ttl=900, show_spinner=False)
