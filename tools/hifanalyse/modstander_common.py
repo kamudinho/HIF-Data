@@ -79,34 +79,33 @@ def draw_match_info_box(ax, scoring_team_logo, opp_team_logo, date_str, score_st
 
 
 def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None):
-    """Genererer baneplot med korrekte proportioner og zoner for VerticalPitch."""
+    """Genererer baneplot med korrekte proportioner for fuld og halvt banelayout."""
     from mplsoccer import VerticalPitch
     plot_data = df[df['EVENT_TYPEID'].astype(str).isin([str(i) for i in event_ids])].copy()
     
-    # Bestem om vi kun vil vise en halv bane
+    # Vi tegner altid en fuld bane i bunden, men styrer zonen via ylim
     is_half = zone in ['up', 'down']
     fig_height = 4 if is_half else 7
     
-    # Opret banen (hvis zone == 'up', klipper vi den nederste halvdel, ellers den øverste)
+    # Opret standard VerticalPitch UDEN half=True, så koordinatsystemet er stabilt (Y: 0 til 100)
     pitch = VerticalPitch(
         pitch_type='opta', 
         pitch_color='#ffffff', 
-        line_color='#BDBDBD', 
-        half=is_half,
-        pad_top=2, pad_bottom=2, pad_left=2, pad_right=2
+        line_color='#BDBDBD'
     )
     fig, ax = pitch.draw(figsize=(5, fig_height))
 
-    # Tilpas Y-akse og placering af logo/titel baseret på zone
+    # Styr præcis hvilken del af banen der vises
     if zone == 'up':
-        # Egen halvdel (Y: 0 til 50 i Opta-koordinater, hvor eget mål er ved Y=0)
+        # Egen halvdel: Vis fra Y = 0 til 50 (bund til midterlinje)
         ax.set_ylim(0, 50)
         logo_pos, text_y = [0.04, 0.82, 0.08, 0.08], 0.92
     elif zone == 'down':
-        # Modstanderens halvdel (Y: 50 til 100)
+        # Modstanderens halvdel: Vis fra Y = 50 til 100 (midterlinje til top)
         ax.set_ylim(50, 100)
         logo_pos, text_y = [0.04, 0.82, 0.08, 0.08], 0.92
     else:
+        ax.set_ylim(0, 100)
         logo_pos, text_y = [0.04, 0.90, 0.08, 0.08], 0.97
 
     if logo:
@@ -131,7 +130,7 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None)
             extent=(0, 100, y_min, y_max)
         )
         
-    # Sørg for at fjerne alt unødvendigt hvidt mellemrum omkring figuren
+    # Fjern unødvendig plads omkring figuren
     fig.subplots_adjust(left=0.02, right=0.98, top=0.98, bottom=0.02)
     
     return fig
