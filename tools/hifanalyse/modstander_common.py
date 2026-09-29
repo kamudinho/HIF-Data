@@ -1,13 +1,13 @@
+# tools/hifanalyse/modstander_common.py
 import streamlit as st
 import pandas as pd
 import numpy as np
-import plotly.express as px
+import requests
 from PIL import Image
 from io import BytesIO
-import requests
-from mplsoccer import Pitch
+from mplsoccer import VerticalPitch
 
-from data.data_load import _get_snowflake_conn
+from data.database import run_query
 from data.utils.team_mapping import (
     TEAMS,
     SEASONS,
@@ -78,41 +78,50 @@ def draw_match_info_box(ax, scoring_team_logo, opp_team_logo, date_str, score_st
 
 
 def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None):
-    """Genererer baneplot med hexbins (oktagoner/hexagons) i stedet for glat KDE/heatmap."""
-    from mplsoccer import VerticalPitch
+    """Genererer baneplot med korrekte proportioner for fuld og halvt banelayout via VerticalPitch."""
     plot_data = df[df['EVENT_TYPEID'].astype(str).isin([str(i) for i in event_ids])].copy()
     
-    # Opsæt bane
+    is_half = zone in ['up', 'down']
+    fig_height = 4 if is_half else 7
+    
+    # Opret standard VerticalPitch uden half=True for at bevare fuld kontrol over Y-akse og extent
     pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
-    fig, ax = pitch.draw(figsize=(5, 7))
+    fig, ax = pitch.draw(figsize=(5, fig_height))
 
     if zone == 'up':
-        ax.set_ylim(0, 55)
-        logo_pos, text_y = [0.04, 0.03, 0.08, 0.08], 0.05
+        ax.set_ylim(0, 50)
+        logo_pos, text_y = [0.04, 0.82, 0.08, 0.08], 0.92
     elif zone == 'down':
-        ax.set_ylim(45, 100)
-        logo_pos, text_y = [0.04, 0.90, 0.08, 0.08], 0.97
+        ax.set_ylim(50, 100)
+        logo_pos, text_y = [0.04, 0.82, 0.08, 0.08], 0.92
     else:
+        ax.set_ylim(0, 100)
         logo_pos, text_y = [0.04, 0.90, 0.08, 0.08], 0.97
 
     if logo:
-        ax_l = ax.inset_axes(logo_pos, transform=ax.transAxes); ax_l.imshow(logo); ax_l.axis('off')
+        ax_l = ax.inset_axes(logo_pos, transform=ax.transAxes)
+        ax_l.imshow(logo)
+        ax_l.axis('off')
 
     ax.text(0.94, text_y, title, transform=ax.transAxes, fontsize=6, fontweight='bold', ha='right', va='top')
 
     if not plot_data.empty:
-        # Ændret fra kdeplot til hexbin (oktagoner/hexagons)
+        y_min, y_max = ax.get_ylim()
+        
+        # Korrekt mappet: EVENT_X til bredde, EVENT_Y til længde
         pitch.hexbin(
-            plot_data.EVENT_X, 
-            plot_data.EVENT_Y, 
+            plot_data['EVENT_X'], 
+            plot_data['EVENT_Y'], 
             ax=ax, 
             cmap=cmap, 
-            gridsize=25,          # Størrelsen på cellerne (justér efter behov, f.eks. 20-30)
-            edgecolors='white',   # Hvide linjer mellem cellerne for at fremhæve dem
+            gridsize=20,
+            edgecolors='white',
             linewidths=0.5, 
-            alpha=0.85
+            alpha=0.85,
+            extent=(0, 100, y_min, y_max)
         )
         
+    fig.subplots_adjust(left=0.02, right=0.98, top=0.98, bottom=0.02)
     return fig
 
 
@@ -162,7 +171,7 @@ def render_hold_saeson_selector():
 
     col_spacer_top, col_saeson, col_hold = st.columns([2.5, 1, 1])
 
-    default_season_idx = available_seasons.index("2026/2027") if "2026/2027" in available_seasons else 0
+    default_season_idx = available_seasons.index("2025/2026") if "2025/2026" in available_seasons else 0
     valgt_saeson = col_saeson.selectbox(
         "Vælg sæson",
         available_seasons,
@@ -266,13 +275,13 @@ def fetch_event_data(valgt_uuid, match_ids):
     df_all_h = df_all_h.dropna(subset=['Action_Label'])
     return df_all_h
 
+
 @st.cache_data(ttl=900, show_spinner=False)
 def fetch_zone_aggregates(valgt_uuid, match_ids, event_type_ids):
     if not match_ids or not event_type_ids:
         return pd.DataFrame()
 
     conn = _get_snowflake_conn()
-    
     m_ids_str = f"('{match_ids[0]}')" if len(match_ids) == 1 else str(tuple(match_ids))
     types_str = str(tuple(event_type_ids)) if len(event_type_ids) > 1 else f"({event_type_ids[0]})"
 
@@ -343,6 +352,7 @@ def fetch_zone_aggregates(valgt_uuid, match_ids, event_type_ids):
     """
     return conn.query(sql, ttl=0)
 
+
 @st.cache_data(ttl=900, show_spinner=False)
 def fetch_goal_sequences(valgt_uuid, liga_ids_sql):
     conn = _get_snowflake_conn()
@@ -372,7 +382,7 @@ def fetch_goal_sequences(valgt_uuid, liga_ids_sql):
         FROM {DB}.OPTA_EVENTS e
         LEFT JOIN (
             SELECT DISTINCT PLAYER_OPTAUUID, FIRST_NAME, LAST_NAME
-            FROM {DB}.OPTA_MATCH_LINE_UPS
+            FROM {DB}.OPTA_MATCH_LINEUPS
             WHERE FIRST_NAME IS NOT NULL
         ) p ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
         JOIN SeasonMatches m ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
