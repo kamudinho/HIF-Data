@@ -21,7 +21,6 @@ from data.players.player_mapping import player_mapping, PLAYER_MAPPING
 
 DB = "KLUB_HVIDOVREIF.AXIS"
 
-# Sørg for at den statiske spillerliste kun indlæses én gang pr. proces
 if not player_mapping.optauuid_to_name:
     player_mapping._load_data(PLAYER_MAPPING)
 
@@ -46,7 +45,6 @@ def get_logo_img(opta_uuid):
 
 
 def draw_match_row(date, h_name, h_uuid, score, a_name, a_uuid, res_char):
-    """Tegner en række i kampoversigten med logoer og farvet resultat-badge"""
     bg_color = "#2e7d32" if res_char == "W" else ("#757575" if res_char == "D" else "#c62828")
     cols = st.columns([0.5, 1.2, 0.25, 0.7, 0.25, 1.2, 0.3], vertical_alignment="center")
     flex_style = "display: flex; align-items: center; height: 30px; margin: 0;"
@@ -70,7 +68,6 @@ def draw_match_row(date, h_name, h_uuid, score, a_name, a_uuid, res_char):
 
 
 def draw_match_info_box(ax, scoring_team_logo, opp_team_logo, date_str, score_str, min_str):
-    """Tegner info-boks ved mål-sekvenser"""
     if scoring_team_logo:
         ax_l1 = ax.inset_axes([0.02, 0.08, 0.05, 0.05], transform=ax.transAxes)
         ax_l1.imshow(scoring_team_logo); ax_l1.axis('off')
@@ -82,9 +79,11 @@ def draw_match_info_box(ax, scoring_team_logo, opp_team_logo, date_str, score_st
 
 
 def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None):
-    """Genererer baneplot (KDE/Heatmap) med fastlåst stregtykkelse."""
+    """Genererer baneplot med hexbins (oktagoner/hexagons) i stedet for glat KDE/heatmap."""
     from mplsoccer import VerticalPitch
     plot_data = df[df['EVENT_TYPEID'].astype(str).isin([str(i) for i in event_ids])].copy()
+    
+    # Opsæt bane
     pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
     fig, ax = pitch.draw(figsize=(5, 7))
 
@@ -103,12 +102,22 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None)
     ax.text(0.94, text_y, title, transform=ax.transAxes, fontsize=6, fontweight='bold', ha='right', va='top')
 
     if not plot_data.empty:
-        pitch.kdeplot(plot_data.EVENT_X, plot_data.EVENT_Y, ax=ax, cmap=cmap, fill=True, alpha=0.5, levels=100, linewidths=1.2)
+        # Ændret fra kdeplot til hexbin (oktagoner/hexagons)
+        pitch.hexbin(
+            plot_data.EVENT_X, 
+            plot_data.EVENT_Y, 
+            ax=ax, 
+            cmap=cmap, 
+            gridsize=25,          # Størrelsen på cellerne (justér efter behov, f.eks. 20-30)
+            edgecolors='white',   # Hvide linjer mellem cellerne for at fremhæve dem
+            linewidths=0.5, 
+            alpha=0.85
+        )
+        
     return fig
 
 
 def resolve_player_names(df, conn):
-    """Slår spillernavne op for en hel event-dataframe ad gangen."""
     if df.empty or 'PLAYER_OPTAUUID' not in df.columns:
         return df['PLAYER_NAME'] if 'PLAYER_NAME' in df.columns else pd.Series(dtype=object, index=df.index)
 
@@ -260,17 +269,11 @@ def fetch_event_data(valgt_uuid, match_ids):
 
 @st.cache_data(ttl=900, show_spinner=False)
 def fetch_zone_aggregates(valgt_uuid, match_ids, event_type_ids):
-    """
-    Henter 40-zone aggregater for en specifik hold- og event-type kombination 
-    (f.eks. [1] for opbygning/afleveringer eller [13, 14, 15, 16] for afslutninger).
-    """
     if not match_ids or not event_type_ids:
         return pd.DataFrame()
 
     conn = _get_snowflake_conn()
     
-    # Formater ID'er sikkert til SQL IN-clauses uden brug af %s, 
-    # så Snowflake ikke fejler på procenttegn.
     m_ids_str = f"('{match_ids[0]}')" if len(match_ids) == 1 else str(tuple(match_ids))
     types_str = str(tuple(event_type_ids)) if len(event_type_ids) > 1 else f"({event_type_ids[0]})"
 
@@ -283,7 +286,6 @@ def fetch_zone_aggregates(valgt_uuid, match_ids, event_type_ids):
             FROM {DB}.OPTA_EVENTS e
             WHERE e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}'
               AND e.MATCH_OPTAUUID IN {m_ids_str}
-              -- Undgå selvmål via qualifier 28
               AND NOT EXISTS (
                   SELECT 1 
                   FROM {DB}.OPTA_QUALIFIERS q 
@@ -297,7 +299,6 @@ def fetch_zone_aggregates(valgt_uuid, match_ids, event_type_ids):
         SELECT 
             TEAM_UUID,
             COUNT(*) AS TOTAL_EVENTS,
-            -- Zoner 1 - 20 (Egen banehalvdel)
             SUM(CASE WHEN EVENT_X >= 0 AND EVENT_X < 12.5 AND EVENT_Y >= 0 AND EVENT_Y < 20 THEN 1 ELSE 0 END) AS ZONE_1,
             SUM(CASE WHEN EVENT_X >= 0 AND EVENT_X < 12.5 AND EVENT_Y >= 20 AND EVENT_Y < 40 THEN 1 ELSE 0 END) AS ZONE_2,
             SUM(CASE WHEN EVENT_X >= 0 AND EVENT_X < 12.5 AND EVENT_Y >= 40 AND EVENT_Y < 60 THEN 1 ELSE 0 END) AS ZONE_3,
@@ -318,7 +319,6 @@ def fetch_zone_aggregates(valgt_uuid, match_ids, event_type_ids):
             SUM(CASE WHEN EVENT_X >= 37.5 AND EVENT_X < 50.0 AND EVENT_Y >= 40 AND EVENT_Y < 60 THEN 1 ELSE 0 END) AS ZONE_18,
             SUM(CASE WHEN EVENT_X >= 37.5 AND EVENT_X < 50.0 AND EVENT_Y >= 60 AND EVENT_Y < 80 THEN 1 ELSE 0 END) AS ZONE_19,
             SUM(CASE WHEN EVENT_X >= 37.5 AND EVENT_X < 50.0 AND EVENT_Y >= 80 AND EVENT_Y <= 100 THEN 1 ELSE 0 END) AS ZONE_20,
-            -- Zoner 21 - 40 (Offensiv banehalvdel)
             SUM(CASE WHEN EVENT_X >= 50.0 AND EVENT_X < 62.5 AND EVENT_Y >= 0 AND EVENT_Y < 20 THEN 1 ELSE 0 END) AS ZONE_21,
             SUM(CASE WHEN EVENT_X >= 50.0 AND EVENT_X < 62.5 AND EVENT_Y >= 20 AND EVENT_Y < 40 THEN 1 ELSE 0 END) AS ZONE_22,
             SUM(CASE WHEN EVENT_X >= 50.0 AND EVENT_X < 62.5 AND EVENT_Y >= 40 AND EVENT_Y < 60 THEN 1 ELSE 0 END) AS ZONE_23,
