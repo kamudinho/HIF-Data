@@ -79,7 +79,7 @@ def draw_match_info_box(ax, scoring_team_logo, opp_team_logo, date_str, score_st
 
 
 def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None):
-    """Genererer baneplot med hexbins (oktagoner/hexagons) i stedet for glat KDE/heatmap."""
+    """Genererer baneplot med hexbins og korrekt afgrænsning af zoner."""
     from mplsoccer import VerticalPitch
     plot_data = df[df['EVENT_TYPEID'].astype(str).isin([str(i) for i in event_ids])].copy()
     
@@ -87,35 +87,40 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None)
     pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
     fig, ax = pitch.draw(figsize=(5, 7))
 
+    # Styr visning af halvdele og placering af logo/titel
     if zone == 'up':
-        ax.set_ylim(0, 55)
-        logo_pos, text_y = [0.04, 0.03, 0.08, 0.08], 0.05
+        ax.set_ylim(0, 50)  # Kun egen halvdel (Y: 0 til 50)
+        logo_pos, text_y = [0.04, 0.88, 0.08, 0.08], 0.95
     elif zone == 'down':
-        ax.set_ylim(45, 100)
-        logo_pos, text_y = [0.04, 0.90, 0.08, 0.08], 0.97
+        ax.set_ylim(50, 100) # Kun modstanderens halvdel (Y: 50 til 100)
+        logo_pos, text_y = [0.04, 0.88, 0.08, 0.08], 0.95
     else:
         logo_pos, text_y = [0.04, 0.90, 0.08, 0.08], 0.97
 
     if logo:
-        ax_l = ax.inset_axes(logo_pos, transform=ax.transAxes); ax_l.imshow(logo); ax_l.axis('off')
+        ax_l = ax.inset_axes(logo_pos, transform=ax.transAxes)
+        ax_l.imshow(logo)
+        ax_l.axis('off')
 
     ax.text(0.94, text_y, title, transform=ax.transAxes, fontsize=6, fontweight='bold', ha='right', va='top')
 
     if not plot_data.empty:
-        # Ændret fra kdeplot til hexbin (oktagoner/hexagons)
+        # Sørg for at hexbin kun beregner og viser inden for det aktuelle Y-vindue
+        y_min, y_max = ax.get_ylim()
+        
         pitch.hexbin(
             plot_data.EVENT_X, 
             plot_data.EVENT_Y, 
             ax=ax, 
             cmap=cmap, 
-            gridsize=25,          # Størrelsen på cellerne (justér efter behov, f.eks. 20-30)
-            edgecolors='white',   # Hvide linjer mellem cellerne for at fremhæve dem
+            gridsize=25,
+            edgecolors='white',
             linewidths=0.5, 
-            alpha=0.85
+            alpha=0.85,
+            extent=(0, 100, y_min, y_max) # Låser hexbins fast til den viste del af banen
         )
         
     return fig
-
 
 def resolve_player_names(df, conn):
     if df.empty or 'PLAYER_OPTAUUID' not in df.columns:
