@@ -159,90 +159,95 @@ def fetch_full_match_history(valgt_uuid, liga_ids_sql, valgt_saeson):
 
 @st.cache_data(ttl=900, show_spinner=False)
 def fetch_event_data(valgt_uuid, match_ids):
-    if not match_ids: return pd.DataFrame()
+    if not match_ids:
+        return pd.DataFrame()
+
     conn = _get_snowflake_conn()
     m_ids_str = f"('{match_ids[0]}')" if len(match_ids) == 1 else str(tuple(match_ids))
+
     sql = f"""
-        SELECT
-            e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID,
-            e.PLAYER_OPTAUUID,
-            TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME) as PLAYER_NAME,
-            e.MATCH_OPTAUUID, e.EVENT_TIMESTAMP, e.EVENT_OUTCOME as OUTCOME,
-            LISTAGG(q.QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY q.QUALIFIER_QID) as QUALIFIERS
-        FROM {DB}.OPTA_EVENTS e
-        LEFT JOIN (
-            SELECT DISTINCT PLAYER_OPTAUUID, FIRST_NAME, LAST_NAME
-            FROM {DB}.OPTA_MATCH_LINEUPS
-            WHERE FIRST_NAME IS NOT NULL
-        ) p ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
-        LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
-        WHERE e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}'
-        AND e.MATCH_OPTAUUID IN {m_ids_str}
-        GROUP BY 1, 2, 3, 4, 5, 6, 7, 8
-    """
-    df = conn.query(sql, ttl=0)
-    if df is None or df.empty: return pd.DataFrame()
+       SELECT
+           e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID,
+           e.PLAYER_OPTAUUID,
+           TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME) as PLAYER_NAME,
+           e.MATCH_OPTAUUID, e.EVENT_TIMESTAMP, e.EVENT_OUTCOME as OUTCOME,
+           LISTAGG(q.QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY q.QUALIFIER_QID) as QUALIFIERS
+       FROM {DB}.OPTA_EVENTS e
+       LEFT JOIN (
+           SELECT DISTINCT PLAYER_OPTAUUID, FIRST_NAME, LAST_NAME
+           FROM {DB}.OPTA_MATCH_LINEUPS
+           WHERE FIRST_NAME IS NOT NULL
+       ) p ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
+       LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
+       WHERE e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}'
+       AND e.MATCH_OPTAUUID IN {m_ids_str}
+       GROUP BY 1, 2, 3, 4, 5, 6, 7, 8
+   """
+    df_all_h = conn.query(sql, ttl=0)
+    if df_all_h is None or df_all_h.empty:
+        return pd.DataFrame()
 
-    # --- SWAP: Vi gør X til Bredde og Y til Længde her, 
-    # så alle efterfølgende funktioner (plot, zoner, osv.) får det rigtige format ---
-    df[['EVENT_X', 'EVENT_Y']] = df[['EVENT_Y', 'EVENT_X']].values
+    # --- DETTE ER DETTE FIX: Vi bytter X og Y her ---
+    df_all_h[['EVENT_X', 'EVENT_Y']] = df_all_h[['EVENT_Y', 'EVENT_X']].values
 
-    df['PLAYER_NAME'] = resolve_player_names(df, conn)
-    df['qual_list'] = df['QUALIFIERS'].fillna('').str.split(',')
-    df['Action_Label'] = df.apply(get_action_label, axis=1)
-    df = df.dropna(subset=['Action_Label'])
-    return df
+    df_all_h['PLAYER_NAME'] = resolve_player_names(df_all_h, conn)
+    df_all_h['qual_list'] = df_all_h['QUALIFIERS'].fillna('').str.split(',')
+    df_all_h['Action_Label'] = df_all_h.apply(get_action_label, axis=1)
+    df_all_h = df_all_h.dropna(subset=['Action_Label'])
+    return df_all_h
+
 
 @st.cache_data(ttl=900, show_spinner=False)
-def fetch_goal_sequences(valgt_uuid, match_ids):
-    if not match_ids: return pd.DataFrame()
+def fetch_goal_sequences(valgt_uuid, liga_ids_sql):
     conn = _get_snowflake_conn()
-    m_ids_str = f"('{match_ids[0]}')" if len(match_ids) == 1 else str(tuple(match_ids))
     sql = f"""
-        WITH SeasonMatches AS (
-            SELECT MATCH_OPTAUUID, CONTESTANTHOME_NAME, CONTESTANTAWAY_NAME,
-                   MATCH_LOCALDATE, CONTESTANTHOME_OPTAUUID, CONTESTANTAWAY_OPTAUUID,
-                   TOTAL_HOME_SCORE, TOTAL_AWAY_SCORE
-            FROM {DB}.OPTA_MATCHINFO
-            WHERE TOURNAMENTCALENDAR_OPTAUUID IN (SELECT TOURNAMENTCALENDAR_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE MATCH_OPTAUUID IN {m_ids_str})
-        ),
-        TargetGoals AS (
-            SELECT MATCH_OPTAUUID, EVENT_TIMESTAMP as G_TIME, EVENT_TIMEMIN as G_MIN
-            FROM {DB}.OPTA_EVENTS
-            WHERE EVENT_TYPEID = 16 AND EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}'
-            AND MATCH_OPTAUUID IN (SELECT MATCH_OPTAUUID FROM SeasonMatches)
-        )
-        SELECT e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID,
-               e.PLAYER_OPTAUUID,
-               TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME) as PLAYER_NAME,
-               e.EVENT_TIMESTAMP, e.MATCH_OPTAUUID,
-               m.MATCH_LOCALDATE, m.CONTESTANTHOME_NAME, m.CONTESTANTAWAY_NAME,
-               m.CONTESTANTHOME_OPTAUUID, m.CONTESTANTAWAY_OPTAUUID,
-               m.TOTAL_HOME_SCORE, m.TOTAL_AWAY_SCORE,
-               tg.G_TIME as GOAL_TIME, tg.G_MIN as GOAL_MIN,
-               LISTAGG(q.QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY q.QUALIFIER_QID) as QUALIFIERS
-        FROM {DB}.OPTA_EVENTS e
-        LEFT JOIN (
-            SELECT DISTINCT PLAYER_OPTAUUID, FIRST_NAME, LAST_NAME
-            FROM {DB}.OPTA_MATCH_LINEUPS
-            WHERE FIRST_NAME IS NOT NULL
-        ) p ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
-        JOIN SeasonMatches m ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
-        INNER JOIN TargetGoals tg ON e.MATCH_OPTAUUID = tg.MATCH_OPTAUUID
-            AND e.EVENT_TIMESTAMP >= DATEADD(second, -20, tg.G_TIME)
-            AND e.EVENT_TIMESTAMP <= tg.G_TIME
-        LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
-        WHERE e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}'
-        GROUP BY 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16
-    """
+       WITH SeasonMatches AS (
+           SELECT MATCH_OPTAUUID, CONTESTANTHOME_NAME, CONTESTANTAWAY_NAME,
+                  MATCH_LOCALDATE, CONTESTANTHOME_OPTAUUID, CONTESTANTAWAY_OPTAUUID,
+                  TOTAL_HOME_SCORE, TOTAL_AWAY_SCORE
+           FROM {DB}.OPTA_MATCHINFO
+           WHERE TOURNAMENTCALENDAR_OPTAUUID IN {liga_ids_sql}
+       ),
+       TargetGoals AS (
+           SELECT MATCH_OPTAUUID, EVENT_TIMESTAMP as G_TIME, EVENT_TIMEMIN as G_MIN
+           FROM {DB}.OPTA_EVENTS
+           WHERE EVENT_TYPEID = 16 AND EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}'
+           AND MATCH_OPTAUUID IN (SELECT MATCH_OPTAUUID FROM SeasonMatches)
+       )
+       SELECT e.EVENT_X, e.EVENT_Y, e.EVENT_TYPEID,
+              e.PLAYER_OPTAUUID,
+              TRIM(p.FIRST_NAME) || ' ' || TRIM(p.LAST_NAME) as PLAYER_NAME,
+              e.EVENT_TIMESTAMP, e.MATCH_OPTAUUID,
+              m.MATCH_LOCALDATE, m.CONTESTANTHOME_NAME, m.CONTESTANTAWAY_NAME,
+              m.CONTESTANTHOME_OPTAUUID, m.CONTESTANTAWAY_OPTAUUID,
+              m.TOTAL_HOME_SCORE, m.TOTAL_AWAY_SCORE,
+              tg.G_TIME as GOAL_TIME, tg.G_MIN as GOAL_MIN,
+              LISTAGG(q.QUALIFIER_QID, ',') WITHIN GROUP (ORDER BY q.QUALIFIER_QID) as QUALIFIERS
+       FROM {DB}.OPTA_EVENTS e
+       LEFT JOIN (
+           SELECT DISTINCT PLAYER_OPTAUUID, FIRST_NAME, LAST_NAME
+           FROM {DB}.OPTA_MATCH_LINE_UPS
+           WHERE FIRST_NAME IS NOT NULL
+       ) p ON e.PLAYER_OPTAUUID = p.PLAYER_OPTAUUID
+       JOIN SeasonMatches m ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
+       INNER JOIN TargetGoals tg ON e.MATCH_OPTAUUID = tg.MATCH_OPTAUUID
+           AND e.EVENT_TIMESTAMP >= DATEADD(second, -20, tg.G_TIME)
+           AND e.EVENT_TIMESTAMP <= tg.G_TIME
+       LEFT JOIN {DB}.OPTA_QUALIFIERS q ON e.EVENT_OPTAUUID = q.EVENT_OPTAUUID
+       WHERE e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}'
+       GROUP BY 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16
+   """
     try:
-        df = conn.query(sql, ttl=0)
-    except Exception: return pd.DataFrame()
-    if df is None or df.empty: return pd.DataFrame()
-    
-    # --- SWAP: Samme logik her som i fetch_event_data ---
-    df[['EVENT_X', 'EVENT_Y']] = df[['EVENT_Y', 'EVENT_X']].values
+        df_all_events = conn.query(sql, ttl=0)
+    except Exception:
+        return pd.DataFrame()
 
-    df['PLAYER_NAME'] = resolve_player_names(df, conn)
-    df['qual_list'] = df['QUALIFIERS'].fillna('').str.split(',')
-    return df
+    if df_all_events is None or df_all_events.empty:
+        return pd.DataFrame()
+
+    # --- DETTE ER DETTE FIX: Vi bytter X og Y her ---
+    df_all_events[['EVENT_X', 'EVENT_Y']] = df_all_events[['EVENT_Y', 'EVENT_X']].values
+
+    df_all_events['PLAYER_NAME'] = resolve_player_names(df_all_events, conn)
+    df_all_events['qual_list'] = df_all_events['QUALIFIERS'].fillna('').str.split(',')
+    return df_all_events
