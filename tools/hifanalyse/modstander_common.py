@@ -258,6 +258,91 @@ def fetch_event_data(valgt_uuid, match_ids):
     df_all_h = df_all_h.dropna(subset=['Action_Label'])
     return df_all_h
 
+@st.cache_data(ttl=900, show_spinner=False)
+def fetch_zone_aggregates(valgt_uuid, match_ids, event_type_ids):
+    """
+    Henter 40-zone aggregater for en specifik hold- og event-type kombination 
+    (f.eks. [1] for opbygning/afleveringer eller [13, 14, 15, 16] for afslutninger).
+    """
+    if not match_ids or not event_type_ids:
+        return pd.DataFrame()
+
+    conn = _get_snowflake_conn()
+    
+    # Formater ID'er sikkert til SQL IN-clauses uden brug af %s, 
+    # så Snowflake ikke fejler på procenttegn.
+    m_ids_str = f"('{match_ids[0]}')" if len(match_ids) == 1 else str(tuple(match_ids))
+    types_str = str(tuple(event_type_ids)) if len(event_type_ids) > 1 else f"({event_type_ids[0]})"
+
+    sql = f"""
+        WITH filtered_events AS (
+            SELECT 
+                e.EVENT_CONTESTANT_OPTAUUID AS TEAM_UUID,
+                e.EVENT_X,
+                e.EVENT_Y
+            FROM {DB}.OPTA_EVENTS e
+            WHERE e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}'
+              AND e.MATCH_OPTAUUID IN {m_ids_str}
+              -- Undgå selvmål via qualifier 28
+              AND NOT EXISTS (
+                  SELECT 1 
+                  FROM {DB}.OPTA_QUALIFIERS q 
+                  WHERE q.EVENT_OPTAUUID = e.EVENT_OPTAUUID 
+                    AND q.QUALIFIER_QID = 28
+              )
+              AND e.EVENT_TYPEID IN {types_str}
+              AND e.EVENT_X BETWEEN 0 AND 100
+              AND e.EVENT_Y BETWEEN 0 AND 100
+        )
+        SELECT 
+            TEAM_UUID,
+            COUNT(*) AS TOTAL_EVENTS,
+            -- Zoner 1 - 20 (Egen banehalvdel)
+            SUM(CASE WHEN EVENT_X >= 0 AND EVENT_X < 12.5 AND EVENT_Y >= 0 AND EVENT_Y < 20 THEN 1 ELSE 0 END) AS ZONE_1,
+            SUM(CASE WHEN EVENT_X >= 0 AND EVENT_X < 12.5 AND EVENT_Y >= 20 AND EVENT_Y < 40 THEN 1 ELSE 0 END) AS ZONE_2,
+            SUM(CASE WHEN EVENT_X >= 0 AND EVENT_X < 12.5 AND EVENT_Y >= 40 AND EVENT_Y < 60 THEN 1 ELSE 0 END) AS ZONE_3,
+            SUM(CASE WHEN EVENT_X >= 0 AND EVENT_X < 12.5 AND EVENT_Y >= 60 AND EVENT_Y < 80 THEN 1 ELSE 0 END) AS ZONE_4,
+            SUM(CASE WHEN EVENT_X >= 0 AND EVENT_X < 12.5 AND EVENT_Y >= 80 AND EVENT_Y <= 100 THEN 1 ELSE 0 END) AS ZONE_5,
+            SUM(CASE WHEN EVENT_X >= 12.5 AND EVENT_X < 25.0 AND EVENT_Y >= 0 AND EVENT_Y < 20 THEN 1 ELSE 0 END) AS ZONE_6,
+            SUM(CASE WHEN EVENT_X >= 12.5 AND EVENT_X < 25.0 AND EVENT_Y >= 20 AND EVENT_Y < 40 THEN 1 ELSE 0 END) AS ZONE_7,
+            SUM(CASE WHEN EVENT_X >= 12.5 AND EVENT_X < 25.0 AND EVENT_Y >= 40 AND EVENT_Y < 60 THEN 1 ELSE 0 END) AS ZONE_8,
+            SUM(CASE WHEN EVENT_X >= 12.5 AND EVENT_X < 25.0 AND EVENT_Y >= 60 AND EVENT_Y < 80 THEN 1 ELSE 0 END) AS ZONE_9,
+            SUM(CASE WHEN EVENT_X >= 12.5 AND EVENT_X < 25.0 AND EVENT_Y >= 80 AND EVENT_Y <= 100 THEN 1 ELSE 0 END) AS ZONE_10,
+            SUM(CASE WHEN EVENT_X >= 25.0 AND EVENT_X < 37.5 AND EVENT_Y >= 0 AND EVENT_Y < 20 THEN 1 ELSE 0 END) AS ZONE_11,
+            SUM(CASE WHEN EVENT_X >= 25.0 AND EVENT_X < 37.5 AND EVENT_Y >= 20 AND EVENT_Y < 40 THEN 1 ELSE 0 END) AS ZONE_12,
+            SUM(CASE WHEN EVENT_X >= 25.0 AND EVENT_X < 37.5 AND EVENT_Y >= 40 AND EVENT_Y < 60 THEN 1 ELSE 0 END) AS ZONE_13,
+            SUM(CASE WHEN EVENT_X >= 25.0 AND EVENT_X < 37.5 AND EVENT_Y >= 60 AND EVENT_Y < 80 THEN 1 ELSE 0 END) AS ZONE_14,
+            SUM(CASE WHEN EVENT_X >= 25.0 AND EVENT_X < 37.5 AND EVENT_Y >= 80 AND EVENT_Y <= 100 THEN 1 ELSE 0 END) AS ZONE_15,
+            SUM(CASE WHEN EVENT_X >= 37.5 AND EVENT_X < 50.0 AND EVENT_Y >= 0 AND EVENT_Y < 20 THEN 1 ELSE 0 END) AS ZONE_16,
+            SUM(CASE WHEN EVENT_X >= 37.5 AND EVENT_X < 50.0 AND EVENT_Y >= 20 AND EVENT_Y < 40 THEN 1 ELSE 0 END) AS ZONE_17,
+            SUM(CASE WHEN EVENT_X >= 37.5 AND EVENT_X < 50.0 AND EVENT_Y >= 40 AND EVENT_Y < 60 THEN 1 ELSE 0 END) AS ZONE_18,
+            SUM(CASE WHEN EVENT_X >= 37.5 AND EVENT_X < 50.0 AND EVENT_Y >= 60 AND EVENT_Y < 80 THEN 1 ELSE 0 END) AS ZONE_19,
+            SUM(CASE WHEN EVENT_X >= 37.5 AND EVENT_X < 50.0 AND EVENT_Y >= 80 AND EVENT_Y <= 100 THEN 1 ELSE 0 END) AS ZONE_20,
+            -- Zoner 21 - 40 (Offensiv banehalvdel)
+            SUM(CASE WHEN EVENT_X >= 50.0 AND EVENT_X < 62.5 AND EVENT_Y >= 0 AND EVENT_Y < 20 THEN 1 ELSE 0 END) AS ZONE_21,
+            SUM(CASE WHEN EVENT_X >= 50.0 AND EVENT_X < 62.5 AND EVENT_Y >= 20 AND EVENT_Y < 40 THEN 1 ELSE 0 END) AS ZONE_22,
+            SUM(CASE WHEN EVENT_X >= 50.0 AND EVENT_X < 62.5 AND EVENT_Y >= 40 AND EVENT_Y < 60 THEN 1 ELSE 0 END) AS ZONE_23,
+            SUM(CASE WHEN EVENT_X >= 50.0 AND EVENT_X < 62.5 AND EVENT_Y >= 60 AND EVENT_Y < 80 THEN 1 ELSE 0 END) AS ZONE_24,
+            SUM(CASE WHEN EVENT_X >= 50.0 AND EVENT_X < 62.5 AND EVENT_Y >= 80 AND EVENT_Y <= 100 THEN 1 ELSE 0 END) AS ZONE_25,
+            SUM(CASE WHEN EVENT_X >= 62.5 AND EVENT_X < 75.0 AND EVENT_Y >= 0 AND EVENT_Y < 20 THEN 1 ELSE 0 END) AS ZONE_26,
+            SUM(CASE WHEN EVENT_X >= 62.5 AND EVENT_X < 75.0 AND EVENT_Y >= 20 AND EVENT_Y < 40 THEN 1 ELSE 0 END) AS ZONE_27,
+            SUM(CASE WHEN EVENT_X >= 62.5 AND EVENT_X < 75.0 AND EVENT_Y >= 40 AND EVENT_Y < 60 THEN 1 ELSE 0 END) AS ZONE_28,
+            SUM(CASE WHEN EVENT_X >= 62.5 AND EVENT_X < 75.0 AND EVENT_Y >= 60 AND EVENT_Y < 80 THEN 1 ELSE 0 END) AS ZONE_29,
+            SUM(CASE WHEN EVENT_X >= 62.5 AND EVENT_X < 75.0 AND EVENT_Y >= 80 AND EVENT_Y <= 100 THEN 1 ELSE 0 END) AS ZONE_30,
+            SUM(CASE WHEN EVENT_X >= 75.0 AND EVENT_X < 87.5 AND EVENT_Y >= 0 AND EVENT_Y < 20 THEN 1 ELSE 0 END) AS ZONE_31,
+            SUM(CASE WHEN EVENT_X >= 75.0 AND EVENT_X < 87.5 AND EVENT_Y >= 20 AND EVENT_Y < 40 THEN 1 ELSE 0 END) AS ZONE_32,
+            SUM(CASE WHEN EVENT_X >= 75.0 AND EVENT_X < 87.5 AND EVENT_Y >= 40 AND EVENT_Y < 60 THEN 1 ELSE 0 END) AS ZONE_33,
+            SUM(CASE WHEN EVENT_X >= 75.0 AND EVENT_X < 87.5 AND EVENT_Y >= 60 AND EVENT_Y < 80 THEN 1 ELSE 0 END) AS ZONE_34,
+            SUM(CASE WHEN EVENT_X >= 75.0 AND EVENT_X < 87.5 AND EVENT_Y >= 80 AND EVENT_Y <= 100 THEN 1 ELSE 0 END) AS ZONE_35,
+            SUM(CASE WHEN EVENT_X >= 87.5 AND EVENT_X <= 100.0 AND EVENT_Y >= 0 AND EVENT_Y < 20 THEN 1 ELSE 0 END) AS ZONE_36,
+            SUM(CASE WHEN EVENT_X >= 87.5 AND EVENT_X <= 100.0 AND EVENT_Y >= 20 AND EVENT_Y < 40 THEN 1 ELSE 0 END) AS ZONE_37,
+            SUM(CASE WHEN EVENT_X >= 87.5 AND EVENT_X <= 100.0 AND EVENT_Y >= 40 AND EVENT_Y < 60 THEN 1 ELSE 0 END) AS ZONE_38,
+            SUM(CASE WHEN EVENT_X >= 87.5 AND EVENT_X <= 100.0 AND EVENT_Y >= 60 AND EVENT_Y < 80 THEN 1 ELSE 0 END) AS ZONE_39,
+            SUM(CASE WHEN EVENT_X >= 87.5 AND EVENT_X <= 100.0 AND EVENT_Y >= 80 AND EVENT_Y <= 100 THEN 1 ELSE 0 END) AS ZONE_40
+        FROM filtered_events
+        GROUP BY TEAM_UUID;
+    """
+    return conn.query(sql, ttl=0)
 
 @st.cache_data(ttl=900, show_spinner=False)
 def fetch_goal_sequences(valgt_uuid, liga_ids_sql):
