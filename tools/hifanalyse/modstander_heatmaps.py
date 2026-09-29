@@ -48,16 +48,24 @@ def vis_side():
 
         # BEMÆRK: I VerticalPitch er Y-aksen banens længde (0 = egen baglinje, 100 = modstanderens baglinje)
         # TAB 1
+        # --- DETTE ER DEN NYE (KORREKTE) LOGIK ---
         if v_med == "Fase 1":
+            # Opbygning sker på egen halvdel (Y fra 0 til 50)
             ids, tit, cm, zn = [1], "OPBYGNING", "Reds", "up"
-            df_f = df_all_h[(df_all_h['EVENT_X'] <= 50) & (df_all_h['EVENT_TYPEID'].isin(ids))].copy()
+            df_f = df_all_h[(df_all_h['EVENT_Y'] <= 50) & (df_all_h['EVENT_TYPEID'].isin(ids))].copy()
+        
         elif v_med == "Gennembrud":
+            # Gennembrud sker på modstanderens halvdel (Y fra 50 til 100)
             ids, tit, cm, zn = [1], "GENNEMBRUD", "Blues", "down"
-            df_f = df_all_h[(df_all_h['EVENT_X'] > 50) & (df_all_h['EVENT_TYPEID'] == 1)].copy()
+            df_f = df_all_h[(df_all_h['EVENT_Y'] > 50) & (df_all_h['EVENT_TYPEID'] == 1)].copy()
+        
         elif v_med == "Touches in Box":
+            # Touches i boks: Vi kigger på den sidste del af banen (Y > 83) 
+            # og begrænser bredden (X) til at være midt i banen (ca. 20 til 80)
             ids, tit, cm, zn = [0], "TOUCHES IN BOX", "Blues", "down"
-            df_f = df_all_h[(df_all_h['EVENT_X'] > 83) & (df_all_h['EVENT_Y'] > 21.1) & (df_all_h['EVENT_Y'] < 78.9)].copy()
+            df_f = df_all_h[(df_all_h['EVENT_Y'] > 83) & (df_all_h['EVENT_X'] > 15) & (df_all_h['EVENT_X'] < 85)].copy()
             df_shots = df_all_h[df_all_h['EVENT_TYPEID'].isin([13, 14, 15, 16])].copy()
+
         else:
             ids, tit, cm, zn = [13, 14, 15, 16], "AFSLUTNINGER", "YlOrRd", "down"
             df_f = df_all_h[df_all_h['EVENT_TYPEID'].isin(ids)].copy()
