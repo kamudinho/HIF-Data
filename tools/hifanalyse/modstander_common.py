@@ -183,7 +183,8 @@ def fetch_event_data(valgt_uuid, match_ids):
     df = conn.query(sql, ttl=0)
     if df is None or df.empty: return pd.DataFrame()
 
-    # --- SWAP: X=Længde, Y=Bredde -> X=Bredde, Y=Længde ---
+    # --- SWAP: Vi gør X til Bredde og Y til Længde her, 
+    # så alle efterfølgende funktioner (plot, zoner, osv.) får det rigtige format ---
     df[['EVENT_X', 'EVENT_Y']] = df[['EVENT_Y', 'EVENT_X']].values
 
     df['PLAYER_NAME'] = resolve_player_names(df, conn)
@@ -203,7 +204,7 @@ def fetch_goal_sequences(valgt_uuid, match_ids):
                    MATCH_LOCALDATE, CONTESTANTHOME_OPTAUUID, CONTESTANTAWAY_OPTAUUID,
                    TOTAL_HOME_SCORE, TOTAL_AWAY_SCORE
             FROM {DB}.OPTA_MATCHINFO
-            WHERE TOURNAMENTCALENDAR_OPTAUUID IN {match_ids_str} -- Note: This part might need adjustment based on your logic, but keeping it close to original
+            WHERE TOURNAMENTCALENDAR_OPTAUUID IN (SELECT TOURNAMENTCALENDAR_OPTAUUID FROM {DB}.OPTA_MATCHINFO WHERE MATCH_OPTAUUID IN {m_ids_str})
         ),
         TargetGoals AS (
             SELECT MATCH_OPTAUUID, EVENT_TIMESTAMP as G_TIME, EVENT_TIMEMIN as G_MIN
@@ -234,15 +235,12 @@ def fetch_goal_sequences(valgt_uuid, match_ids):
         WHERE e.EVENT_CONTESTANT_OPTAUUID = '{valgt_uuid}'
         GROUP BY 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16
     """
-    # Note: I kept the logic from your snippet. Ensure 'match_ids_str' is correct for the CTE if needed.
-    # For safety, I will use the match_ids directly in the SQL if it's for specific matches.
-    
     try:
         df = conn.query(sql, ttl=0)
     except Exception: return pd.DataFrame()
     if df is None or df.empty: return pd.DataFrame()
     
-    # --- SWAP: X=Længde, Y=Bredde -> X=Bredde, Y=Længde ---
+    # --- SWAP: Samme logik her som i fetch_event_data ---
     df[['EVENT_X', 'EVENT_Y']] = df[['EVENT_Y', 'EVENT_X']].values
 
     df['PLAYER_NAME'] = resolve_player_names(df, conn)
