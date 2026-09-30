@@ -117,7 +117,7 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='magma', logo=None
             cmap=cmap,
             edgecolors='white',
             linewidth=0.2,
-            gridsize=15,
+            gridsize=35,
             mincnt=1,
             alpha=0.55,
         )
