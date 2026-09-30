@@ -1,5 +1,4 @@
 # tools/hifanalyse/modstander_heatmaps.py
-# tools/hifanalyse/modstander_heatmaps.py
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -9,7 +8,12 @@ from tools.hifanalyse.modstander_common import (
     fetch_full_match_history,
     fetch_event_data,
     plot_custom_pitch,
+    DB
 )
+from data.players.player_mapping import player_mapping, PLAYER_MAPPING
+
+if not player_mapping.optauuid_to_name:
+    player_mapping._load_data(PLAYER_MAPPING)
 
 
 def vis_side():
@@ -28,6 +32,15 @@ def vis_side():
     if df_all_h.empty:
         st.info("Ingen aktionsdata fundet for de seneste kampe.")
         return
+
+    # Sørg for at registrere/opdatere spillernavne fra player_mapping
+    player_mapping.register_players_from_df(df_all_h, uuid_col='PLAYER_OPTAUUID', name_col='PLAYER_NAME')
+    
+    # Kør igennem player_mapping for at sikre korrekte navne
+    if 'PLAYER_OPTAUUID' in df_all_h.columns:
+        df_all_h['PLAYER_NAME'] = df_all_h['PLAYER_OPTAUUID'].apply(
+            lambda x: player_mapping.get_name_by_opta_uuid(x) if pd.notna(x) else "Ukendt"
+        )
 
     n_matches = df_all_h['MATCH_OPTAUUID'].nunique()
     total_minutes = n_matches * 90
@@ -64,7 +77,6 @@ def vis_side():
         total_act = len(df_f)
 
         with c_left:
-            # Vi sender de unikke IDs fra df_f for at sikre at hexbin kun tegner det vi har filtreret
             target_ids = df_f['EVENT_TYPEID'].unique().tolist() if v_med == "Touches in Box" else ids
             st.pyplot(plot_custom_pitch(df_f, target_ids, tit, zone=zn, cmap=cm, logo=hold_logo))
 
@@ -99,21 +111,29 @@ def vis_side():
                     df_top['SUCCESS'] = df_f[df_f['EVENT_TYPEID'] == 16].groupby('PLAYER_NAME').size().reindex(df_top['PLAYER_NAME'], fill_value=0).values
 
                 df_top['RATE'] = (df_top['SUCCESS'] / df_top['TOTAL'] * 100).fillna(0)
-                df_top = df_top[df_top['TOTAL'] >= 1].sort_values(['RATE', 'TOTAL'], ascending=[False, False]).head(8)
+                
+                # ÆNDRET: Sorterer efter flest aktioner (TOTAL) først, derefter RATE
+                df_top = df_top[df_top['TOTAL'] >= 1].sort_values(['TOTAL', 'RATE'], ascending=[False, False]).head(8)
 
                 if df_top.empty:
                     st.info(f"Ingen spillere fundet")
                 else:
+                    max_total = df_top['TOTAL'].max() if not df_top.empty else 1
                     for _, r in df_top.iterrows():
                         rate_val = int(r['RATE'])
+                        total_val = int(r['TOTAL'])
+                        success_val = int(r['SUCCESS'])
+                        # Lad progress-baren afspejle relative aktioner ift. top-spilleren eller procent
+                        bar_width = int((total_val / max_total) * 100) if max_total > 0 else 0
+                        
                         st.markdown(f"""
                             <div style="margin-bottom: 12px;">
                                 <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; margin-bottom: 2px;">
                                     <span>{r['PLAYER_NAME']}</span>
-                                    <span>{int(r['SUCCESS'])} / {int(r['TOTAL'])} ({rate_val}%)</span>
+                                    <span>{success_val} / {total_val} ({rate_val}%)</span>
                                 </div>
                                 <div style="background-color: #f0f2f6; border-radius: 4px; height: 5px; width: 100%;">
-                                    <div style="background-color: #084594; height: 5px; width: {rate_val}%; border-radius: 4px;"></div>
+                                    <div style="background-color: #084594; height: 5px; width: {bar_width}%; border-radius: 4px;"></div>
                                 </div>
                             </div>
                         """, unsafe_allow_html=True)
@@ -163,18 +183,25 @@ def vis_side():
                     SUCCESS=('OUTCOME', 'sum')
                 ).reset_index()
                 df_top['RATE'] = (df_top['SUCCESS'] / df_top['TOTAL'] * 100).fillna(0)
-                df_top = df_top[df_top['TOTAL'] >= 1].sort_values(['RATE', 'TOTAL'], ascending=[False, False]).head(8)
+                
+                # ÆNDRET: Sorterer efter flest aktioner (TOTAL) først, derefter RATE
+                df_top = df_top[df_top['TOTAL'] >= 1].sort_values(['TOTAL', 'RATE'], ascending=[False, False]).head(8)
 
+                max_total = df_top['TOTAL'].max() if not df_top.empty else 1
                 for _, r in df_top.iterrows():
                     rate_val = int(r['RATE'])
+                    total_val = int(r['TOTAL'])
+                    success_val = int(r['SUCCESS'])
+                    bar_width = int((total_val / max_total) * 100) if max_total > 0 else 0
+                    
                     st.markdown(f"""
                         <div style="margin-bottom: 12px;">
                             <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; margin-bottom: 2px;">
                                 <span>{r['PLAYER_NAME']}</span>
-                                <span>{int(r['SUCCESS'])} / {int(r['TOTAL'])} ({rate_val}%)</span>
+                                <span>{success_val} / {total_val} ({rate_val}%)</span>
                             </div>
                             <div style="background-color: #f0f2f6; border-radius: 4px; height: 5px; width: 100%;">
-                                <div style="background-color: #ec7014; height: 5px; width: {rate_val}%; border-radius: 4px;"></div>
+                                <div style="background-color: #ec7014; height: 5px; width: {bar_width}%; border-radius: 4px;"></div>
                             </div>
                         </div>
                     """, unsafe_allow_html=True)
