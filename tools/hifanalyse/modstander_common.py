@@ -72,7 +72,7 @@ def draw_match_info_box(ax, scoring_team_logo, opp_team_logo, date_str, score_st
 
 def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None, flip_x=False, show_events=True):
     """
-    Genererer baneplot med hexbin (sekskanter) - fuld eller halv bane.
+    Genererer baneplot med hexbin (sekskanter) vha. fuld bane og præcis zoom via ylim.
     """
     plot_data = df[df['EVENT_TYPEID'].astype(str).isin([str(i) for i in event_ids])].copy()
 
@@ -83,13 +83,11 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None,
     if flip_x:
         plot_data['EVENT_X'] = 100 - plot_data['EVENT_X']
 
-    # Opret bane (brug half=True hvis det er op/ned, ellers fuld bane)
-    is_half = zone in ['up', 'down']
-    pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD', half=is_half)
-    
+    # Opret altid en standard lodret bane for at undgå 'half=True' fejl-cropping
+    pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
     fig, ax = pitch.draw(figsize=(5, 7))
 
-    # Tegn hexbin
+    # Tegn hexbin over hele koordinatsættet
     if not plot_data.empty:
         bin_statistic = pitch.hexbin(
             plot_data.EVENT_X, 
@@ -107,24 +105,29 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None,
         if zone == 'up': 
             logo_pos = [0.04, 0.03, 0.08, 0.08]
             text_y = 0.05
-        else: 
+        elif zone == 'down': 
             logo_pos = [0.04, 0.85, 0.08, 0.08]
             text_y = 0.92
+        else:
+            logo_pos = [0.04, 0.90, 0.08, 0.08]
+            text_y = 0.97
+            
         ax_l = ax.inset_axes(logo_pos, transform=ax.transAxes)
         ax_l.imshow(logo)
         ax_l.axis('off')
     else:
-        text_y = 0.92 if is_half else 0.97
+        text_y = 0.97
 
     ax.text(0.94, text_y, title, transform=ax.transAxes, fontsize=6, fontweight='bold', ha='right', va='top')
 
-    # Hvis vi kører med halv bane ('down'), skal vi sikre at y-aksen vender rigtigt ift. Opta-koordinaterne (0 til 50)
-    if zone == 'down':
-        ax.set_ylim(0, 50)
-    elif zone == 'up':
-        ax.set_ylim(50, 100)
+    # PRÆCIS ZOOM: Bestem synlighed via ax.set_ylim() uden at ødelægge banens proportioner
+    if zone == 'up':
+        ax.set_ylim(45, 100)  # Viser den ene halvdel
+    elif zone == 'down':
+        ax.set_ylim(0, 55)    # Viser den anden halvdel
 
     return fig
+    
 # ---------------------------------------------------------------------------
 # SÆSON/HOLD-VÆLGER
 # ---------------------------------------------------------------------------
