@@ -104,15 +104,18 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='magma', logo=None
     plot_data = plot_data[(plot_data['EVENT_X'] >= x0) & (plot_data['EVENT_X'] <= x1)]
 
     if not plot_data.empty:
-        stat = pitch.bin_statistic(
+        # Brug pitch.hexbin i stedet for bin_statistic + heatmap
+        pitch.hexbin(
             plot_data['EVENT_X'].to_numpy(),
             plot_data['EVENT_Y'].to_numpy(),
-            statistic='count',
-            bins=(32, 32),   # 16 celler i længden (6,25 pr. celle) og 16 i bredden
+            ax=ax,
+            cmap=cmap,
+            edgecolors='white',  # Hvide kanter mellem hex-cellerne (giver det klassiske look)
+            linewidth=0.2,       # Juster tykkelsen af kanterne efter behov
+            gridsize=30,         # Styrer størrelsen/antallet af hex-celler (prøv f.eks. mellem 25 og 35)
+            mincnt=1,            # Sørger for, at celler med 0 hændelser ikke vises
+            alpha=0.6
         )
-        stat['statistic'] = np.ma.masked_where(stat['statistic'] == 0, stat['statistic'])
-        pitch.heatmap(stat, ax=ax, cmap=cmap, edgecolors='white', linewidth=0.0, antialiased=False, alpha=0.6)
-
     # Logo og titel (transAxes følger nu den viste halvdel)
     if zone == 'down':
         logo_pos, text_y = [0.04, 0.06, 0.08, 0.12], 0.10
