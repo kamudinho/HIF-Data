@@ -72,7 +72,7 @@ def draw_match_info_box(ax, scoring_team_logo, opp_team_logo, date_str, score_st
 
 def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None, flip_x=False, show_events=True):
     """
-    Genererer baneplot med rigtige 8-kanter (oktogoner).
+    Genererer baneplot med rigtige sekskanter (hexbin) ligesom på StatsBomb-billedet.
     """
     plot_data = df[df['EVENT_TYPEID'].astype(str).isin([str(i) for i in event_ids])].copy()
 
@@ -86,18 +86,17 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None,
     pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
     fig, ax = pitch.draw(figsize=(5, 7))
 
-    # Tegn 8-kanter (oktogoner)
-    if show_events and not plot_data.empty:
-        pitch.scatter(
+    # Brug hexbin til at lave de sekskantede kasser (binning af banen)
+    if not plot_data.empty:
+        bin_statistic = pitch.hexbin(
             plot_data.EVENT_X, 
             plot_data.EVENT_Y, 
             ax=ax, 
-            s=55,               # Større størrelse så 8-kanten tydeligt kan ses
-            marker='8',         # <--- Matplotlibs oktogon (8-kant)
-            color='black',      # Farven på 8-kanten
-            alpha=0.8,          # Lidt mindre gennemsigtighed for bedre kontrast
-            edgecolors='white', # Hvid kant fremhæver de kantede hjørner
-            linewidths=1.0      # Tykkere kant for at markere formen skarpt
+            gridsize=25,          # Størrelsen på sekskanterne (juster evt. til 20 eller 30)
+            cmap=cmap,            # Farvetema (f.eks. 'Reds' eller 'Blues')
+            edgecolors='white',   # Hvide kanter mellem sekskanterne
+            linewidth=0.8,        # Tykkelse på kanterne
+            mincnt=1              # Skjul sekskanter helt uden hændelser
         )
 
     # 3. Tegn logo og tekst
@@ -123,7 +122,6 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None,
         ax.set_ylim(0, 55)   
 
     return fig
-
 
 # ---------------------------------------------------------------------------
 # SÆSON/HOLD-VÆLGER
