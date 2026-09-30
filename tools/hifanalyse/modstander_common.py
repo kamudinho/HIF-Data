@@ -72,7 +72,7 @@ def draw_match_info_box(ax, scoring_team_logo, opp_team_logo, date_str, score_st
 
 def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None, flip_x=False, show_events=True):
     """
-    Genererer baneplot med hexbin (sekskanter) vha. fuld bane og præcis zoom via ylim.
+    Genererer baneplot med hexbin (sekskanter), hvor banen rent faktisk skæres over (halv bane).
     """
     plot_data = df[df['EVENT_TYPEID'].astype(str).isin([str(i) for i in event_ids])].copy()
 
@@ -83,28 +83,42 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None,
     if flip_x:
         plot_data['EVENT_X'] = 100 - plot_data['EVENT_X']
 
-    # Opret altid en standard lodret bane for at undgå 'half=True' fejl-cropping
-    pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
+    # Bestem om vi kør med halv bane eller fuld bane
+    is_half = zone in ['up', 'down']
+    
+    # Opret bane (hvis half=True, tegner mplsoccer automatisk en halv bane)
+    pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD', half=is_half)
     fig, ax = pitch.draw(figsize=(5, 7))
 
-    # Tegn hexbin over hele koordinatsættet
+    # Hvis det er en halv bane, skal Opta-koordinaterne (0-100) mappes til den halve bane (0-50)
+    if is_half and not plot_data.empty:
+        if zone == 'up':
+            # Hvis vi kigger på "up" (fase 1 / egen banehalvdel), tager vi bunden af banen (0 til 50)
+            plot_data = plot_data[plot_data['EVENT_X'] <= 50].copy()
+            # EVENT_X er allerede mellem 0 og 50, hvilket matcher den halve bane
+        elif zone == 'down':
+            # Hvis vi kigger på "down" (modsat banehalvdel), filtrerer vi og skyder data over på den halve bane (omregner 50-100 til 0-50)
+            plot_data = plot_data[plot_data['EVENT_X'] > 50].copy()
+            plot_data['EVENT_X'] = plot_data['EVENT_X'] - 50
+
+    # Tegn hexbin på den tilpassede data
     if not plot_data.empty:
         bin_statistic = pitch.hexbin(
             plot_data.EVENT_X, 
             plot_data.EVENT_Y, 
             ax=ax, 
-            gridsize=20,          
+            gridsize=18,          
             cmap=cmap,            
             edgecolors='white',   
             linewidth=0.8,        
             mincnt=1              
         )
 
-    # Logo og tekst placering
+    # Logo og tekst placering tilpasset den halve bane
     if logo:
         if zone == 'up': 
             logo_pos = [0.04, 0.03, 0.08, 0.08]
-            text_y = 0.05
+            text_y = 0.08
         elif zone == 'down': 
             logo_pos = [0.04, 0.85, 0.08, 0.08]
             text_y = 0.92
@@ -116,15 +130,9 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None,
         ax_l.imshow(logo)
         ax_l.axis('off')
     else:
-        text_y = 0.97
+        text_y = 0.92 if is_half else 0.97
 
     ax.text(0.94, text_y, title, transform=ax.transAxes, fontsize=6, fontweight='bold', ha='right', va='top')
-
-    # PRÆCIS ZOOM: Bestem synlighed via ax.set_ylim() uden at ødelægge banens proportioner
-    if zone == 'up':
-        ax.set_ylim(45, 100)  # Viser den ene halvdel
-    elif zone == 'down':
-        ax.set_ylim(0, 55)    # Viser den anden halvdel
 
     return fig
     
