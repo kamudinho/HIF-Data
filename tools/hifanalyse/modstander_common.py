@@ -72,7 +72,7 @@ def draw_match_info_box(ax, scoring_team_logo, opp_team_logo, date_str, score_st
 
 def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None, flip_x=False, show_events=True):
     """
-    Genererer baneplot med hexbin (sekskanter) - enten fuld bane eller halv bane ('up' / 'down').
+    Genererer baneplot med hexbin (sekskanter) - fuld eller halv bane.
     """
     plot_data = df[df['EVENT_TYPEID'].astype(str).isin([str(i) for i in event_ids])].copy()
 
@@ -83,15 +83,10 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None,
     if flip_x:
         plot_data['EVENT_X'] = 100 - plot_data['EVENT_X']
 
-    # Konfigurer om det er fuld eller halv bane
-    if zone == 'up':
-        pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD', half=True, restrict_zone=False)
-    elif zone == 'down':
-        # Hvis det er 'down', kan vi enten invertere eller bruge standard half=True (som viser fra midterlinjen til målet i bunden)
-        pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD', half=True, restrict_zone=False)
-    else:
-        pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
-
+    # Opret bane (brug half=True hvis det er op/ned, ellers fuld bane)
+    is_half = zone in ['up', 'down']
+    pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD', half=is_half)
+    
     fig, ax = pitch.draw(figsize=(5, 7))
 
     # Tegn hexbin
@@ -119,12 +114,17 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None,
         ax_l.imshow(logo)
         ax_l.axis('off')
     else:
-        text_y = 0.92 if zone != 'full' else 0.97
+        text_y = 0.92 if is_half else 0.97
 
     ax.text(0.94, text_y, title, transform=ax.transAxes, fontsize=6, fontweight='bold', ha='right', va='top')
 
-    return fig
+    # Hvis vi kører med halv bane ('down'), skal vi sikre at y-aksen vender rigtigt ift. Opta-koordinaterne (0 til 50)
+    if zone == 'down':
+        ax.set_ylim(0, 50)
+    elif zone == 'up':
+        ax.set_ylim(50, 100)
 
+    return fig
 # ---------------------------------------------------------------------------
 # SÆSON/HOLD-VÆLGER
 # ---------------------------------------------------------------------------
