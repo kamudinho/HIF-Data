@@ -2,6 +2,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt  # VIGTIGT: Skal være her
 import plotly.express as px
 from PIL import Image
 from io import BytesIO
@@ -70,41 +71,44 @@ def draw_match_info_box(ax, scoring_team_logo, opp_team_logo, date_str, score_st
         ax_l2.imshow(opp_team_logo); ax_l2.axis('off')
     ax.text(0.03, 0.07, f"{date_str} | Stilling: {score_str} ({min_str}. min)", transform=ax.transAxes, fontsize=8, color='#444444', va='top')
 
-def plot_custom_pitch(df, event_ids, title, zone='full', cmap='magma', logo=None, flip_x=False, show_events=True):
+def plot_custom_pitch(df, event_ids, title, zone='full', cmap='magma', logo=None, flip_x=False):
     """
-    Genererer baneplot. Hvis zone er 'up' eller 'down', 
-    justeres figurens højde, så vi ikke får hvidt tomrum.
+    Genererer baneplot uden hvidt tomrum ved at tvinge aksen til at fylde hele figuren.
     """
     plot_data = df[df['EVENT_TYPEID'].astype(str).isin([str(i) for i in event_ids])].copy()
 
+    # 1. BESTEM FIGUR-STØRRELSE (Forholdet mellem bredde og højde)
+    if zone == 'full':
+        current_figsize = (5, 7)
+    else:
+        current_figsize = (5, 3.5) 
+
     if plot_data.empty:
-        # Vi bruger også dynamisk højde her for at undgå tomrum i tomme plots
-        h = 7 if zone == 'full' else 3.5
-        fig, ax = plt.subplots(figsize=(5, h))
+        fig, ax = plt.subplots(figsize=current_figsize)
         return fig
 
     if flip_x:
         plot_data['EVENT_X'] = 100 - plot_data['EVENT_X']
 
-    # 1. Filtrer data baseret på zonen
-    if zone == 'up':
-        plot_data = plot_data[plot_data['EVENT_X'] <= 50].copy()
-    elif zone == 'down':
-        plot_data = plot_data[plot_data['EVENT_X'] >= 50].copy()
-
-    # --- NY LOGIK: JUSTER FIGUREN ---
-    # Hvis det er en halv bane, gør vi figuren halvt så høj (3.5 i stedet for 7)
-    if zone == 'full':
-        current_figsize = (5, 7)
-    else:
-        current_figsize = (5, 3.5) 
-    # --------------------------------
-
-    # 2. Opret bane med den korrekte figsize
+    # 2. Opret bane
     pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
     fig, ax = pitch.draw(figsize=current_figsize)
 
-    # 3. Tegn hexbin
+    # --- DET MAGISKE TRIN: Fjern alle marginer ---
+    ax.set_position([0, 0, 1, 1]) 
+    # --------------------------------------------
+
+    # 3. Filtrer data baseret på zonen
+    if zone == 'up':
+        plot_data = plot_data[plot_data['EVENT_X'] <= 50].copy()
+        ax.set_ylim(0, 52)
+    elif zone == 'down':
+        plot_data = plot_data[plot_data['EVENT_X'] >= 50].copy()
+        ax.set_ylim(48, 100)
+    else:
+        ax.set_ylim(0, 100)
+
+    # 4. Tegn hexbin
     if not plot_data.empty:
         pitch.hexbin(
             plot_data.EVENT_X, 
@@ -118,36 +122,28 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='magma', logo=None
             alpha=0.9             
         )
 
-    # 4. Logo og tekst placering
+    # 5. Logo og tekst placering (Bruger transAxes da aksen nu fylder 0-1)
     if logo:
         if zone == 'up': 
-            logo_pos = [0.04, 0.90, 0.08, 0.08]
-            text_y = 0.97
+            logo_pos = [0.04, 0.88, 0.08, 0.08]
+            text_y = 0.96
         elif zone == 'down': 
-            logo_pos = [0.04, 0.03, 0.08, 0.08]
+            logo_pos = [0.04, 0.04, 0.08, 0.08]
             text_y = 0.08
         else:
             logo_pos = [0.04, 0.90, 0.08, 0.08]
-            text_y = 0.97
+            text_y = 0.96
             
         ax_l = ax.inset_axes(logo_pos, transform=ax.transAxes)
         ax_l.imshow(logo)
         ax_l.axis('off')
     else:
-        text_y = 0.97 if zone != 'down' else 0.08
+        text_y = 0.96 if zone != 'down' else 0.08
 
-    ax.text(0.94, text_y, title, transform=ax.transAxes, fontsize=6, fontweight='bold', ha='right', va='top')
-
-    # 5. ZOOM (Dette skærer selve indholdet til)
-    if zone == 'up':
-        ax.set_ylim(0, 52)    
-    elif zone == 'down':
-        ax.set_ylim(48, 100)  
+    ax.text(0.94, text_y, title, transform=ax.transAxes, fontsize=7, fontweight='bold', ha='right', va='center')
 
     return fig
 
-
-    
 # ---------------------------------------------------------------------------
 # SÆSON/HOLD-VÆLGER
 # ---------------------------------------------------------------------------
@@ -247,8 +243,6 @@ def fetch_event_data(valgt_uuid, match_ids):
     df = conn.query(sql, ttl=0)
     if df is None or df.empty: return pd.DataFrame()
 
-    # SWAP ER FJERNET HER - Vi bruger rå Opta data (X=Længde, Y=Bredde)
-
     df['PLAYER_NAME'] = resolve_player_names(df, conn)
     df['qual_list'] = df['QUALIFIERS'].fillna('').str.split(',')
     df['Action_Label'] = df.apply(get_action_label, axis=1)
@@ -309,8 +303,6 @@ def fetch_goal_sequences(valgt_uuid, match_ids):
         return pd.DataFrame()
         
     if df is None or df.empty: return pd.DataFrame()
-
-    # SWAP ER FJERNET HER
 
     df['PLAYER_NAME'] = resolve_player_names(df, conn)
     df['qual_list'] = df['QUALIFIERS'].fillna('').str.split(',')
