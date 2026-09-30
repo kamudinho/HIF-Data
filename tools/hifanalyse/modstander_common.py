@@ -72,63 +72,70 @@ def draw_match_info_box(ax, scoring_team_logo, opp_team_logo, date_str, score_st
     ax.text(0.03, 0.07, f"{date_str} | Stilling: {score_str} ({min_str}. min)", transform=ax.transAxes, fontsize=8, color='#444444', va='top')
 
 def plot_custom_pitch(df, event_ids, title, zone='full', cmap='magma', logo=None, flip_x=False):
-    """Genererer baneplot, hvor egen halvdel (zone='up') viser mål nederst og midterlinje øverst."""
-    type_num = pd.to_numeric(df['EVENT_TYPEID'], errors='coerce')
-    plot_data = df[type_num.isin([int(i) for i in event_ids])].copy()
-    plot_data['EVENT_X'] = pd.to_numeric(plot_data['EVENT_X'], errors='coerce')
-    plot_data['EVENT_Y'] = pd.to_numeric(plot_data['EVENT_Y'], errors='coerce')
-    plot_data = plot_data.dropna(subset=['EVENT_X', 'EVENT_Y'])
+    """
+    zone='up'   : egen halvdel, mål nederst, midterlinje øverst
+    zone='down' : modstanderens halvdel, midterlinje nederst, mål øverst
+    zone='full' : hel bane, eget mål nederst
+    """
+    type_num = pd.to_numeric(df['EVENT_TYPEID'], errors='coerce')
+    plot_data = df[type_num.isin([int(i) for i in event_ids])].copy()
+    plot_data['EVENT_X'] = pd.to_numeric(plot_data['EVENT_X'], errors='coerce')
+    plot_data['EVENT_Y'] = pd.to_numeric(plot_data['EVENT_Y'], errors='coerce')
+    plot_data = plot_data.dropna(subset=['EVENT_X', 'EVENT_Y'])
 
-    if flip_x:
-        plot_data['EVENT_X'] = 100 - plot_data['EVENT_X']
+    if flip_x:
+        plot_data['EVENT_X'] = 100 - plot_data['EVENT_X']
 
-    is_half = zone in ['up', 'down']
-    width_in = 5
-    height_in = 3.5 if is_half else 7
+    is_half = zone in ['up', 'down']
 
-    # Brug half=False, så vi selv kan styre synlighed og placering af målet
-    pitch = VerticalPitch(
-        pitch_type='opta', 
-        pitch_color='#ffffff', 
-        line_color='#BDBDBD',
-        half=False
-    )
-    fig, ax = pitch.draw(figsize=(width_in, height_in))
+    # Filtrer og spejl data, så det passer til en halv bane (som altid er x 50-100)
+    if zone == 'up':
+        plot_data = plot_data[plot_data['EVENT_X'] <= 50].copy()
+        plot_data['EVENT_X'] = 100 - plot_data['EVENT_X']
+    elif zone == 'down':
+        plot_data = plot_data[plot_data['EVENT_X'] >= 50].copy()
 
-    # Filtrer data og sæt akse-grænser for den valgte zone
-    if zone == 'up':
-        plot_data = plot_data[plot_data['EVENT_X'] <= 50].copy()
-        ax.set_ylim(0, 50)  # Mål (0) i bunden, midterlinje (50) i toppen
-    elif zone == 'down':
-        plot_data = plot_data[plot_data['EVENT_X'] >= 50].copy()
-        ax.set_ylim(50, 100)
+    width_in = 5
+    height_in = width_in * (52.5 / 68) if is_half else width_in * (105 / 68)
 
-    if not plot_data.empty:
-        pitch.hexbin(
-            plot_data['EVENT_X'].to_numpy(),
-            plot_data['EVENT_Y'].to_numpy(),
-            ax=ax,
-            cmap=cmap,
-            edgecolors='white',
-            linewidth=0.5,
-            gridsize=25,
-            mincnt=1,
-            alpha=0.85
-        )
+    pitch = VerticalPitch(
+        pitch_type='opta',
+        pitch_color='#ffffff',
+        line_color='#4a4a4a',
+        linewidth=1.2,
+        half=is_half,
+    )
+    fig, ax = pitch.draw(figsize=(width_in, height_in))
 
-    # Logo og titel placeres øverst (ved midterlinjen)
-    if logo:
-        logo_pos = [0.04, 0.82, 0.08, 0.12] if is_half else [0.04, 0.90, 0.08, 0.08]
-        ax_l = ax.inset_axes(logo_pos, transform=ax.transAxes)
-        ax_l.imshow(logo)
-        ax_l.axis('off')
+    if zone == 'up':
+        ax.invert_yaxis()   # egen halvdel: mål nederst, midterlinje øverst
 
-    text_y = 0.92 if is_half else 0.96
-    ax.text(0.94, text_y, title, transform=ax.transAxes, fontsize=8,
-            fontweight='bold', ha='right', va='center', color='#111111')
+    if not plot_data.empty:
+        pitch.hexbin(
+            plot_data['EVENT_X'].to_numpy(),
+            plot_data['EVENT_Y'].to_numpy(),
+            ax=ax,
+            cmap=cmap,
+            edgecolors='white',
+            linewidth=0.3,
+            gridsize=20,
+            mincnt=1,
+            alpha=0.75,
+        )
 
-    fig.subplots_adjust(left=0.01, right=0.99, top=0.99, bottom=0.01)
-    return fig
+    # Logo og titel øverst i billedet
+    if logo:
+        logo_pos = [0.04, 0.82, 0.08, 0.12] if is_half else [0.04, 0.90, 0.08, 0.08]
+        ax_l = ax.inset_axes(logo_pos, transform=ax.transAxes)
+        ax_l.imshow(logo)
+        ax_l.axis('off')
+
+    text_y = 0.92 if is_half else 0.96
+    ax.text(0.94, text_y, title, transform=ax.transAxes, fontsize=8,
+            fontweight='bold', ha='right', va='center', color='#111111', zorder=5)
+
+    fig.subplots_adjust(left=0.01, right=0.99, top=0.99, bottom=0.01)
+    return fig
     
 # ---------------------------------------------------------------------------
 # SÆSON/HOLD-VÆLGER
