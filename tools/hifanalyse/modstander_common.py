@@ -70,34 +70,42 @@ def draw_match_info_box(ax, scoring_team_logo, opp_team_logo, date_str, score_st
         ax_l2.imshow(opp_team_logo); ax_l2.axis('off')
     ax.text(0.03, 0.07, f"{date_str} | Stilling: {score_str} ({min_str}. min)", transform=ax.transAxes, fontsize=8, color='#444444', va='top')
 
-def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None, flip_x=False):
+def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None, flip_x=False, show_events=True):
     """
-    Genererer baneplot. 
-    flip_x=True: Vender banen (hvis angreb er i bunden, men skal være i toppen).
+    Genererer baneplot.
+    show_events=True: Tegner små oktogoner for hver hændelse.
     """
     plot_data = df[df['EVENT_TYPEID'].astype(str).isin([str(i) for i in event_ids])].copy()
 
     if plot_data.empty:
-        # Returner en tom figur hvis der ikke er data, så appen ikke crasher
         fig, ax = plt.subplots(figsize=(5, 7))
         return fig
 
-    # --- FIX 1: Håndtering af spejlvending (Mirror) ---
     if flip_x:
-        # Vi vender X-aksen (længden), så 100 bliver 0 og omvendt
         plot_data['EVENT_X'] = 100 - plot_data['EVENT_X']
 
     pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
     fig, ax = pitch.draw(figsize=(5, 7))
 
-    # --- FIX 2: Håndtering af Swap (X/Y byttet om) ---
-    # Din nuværende kode fejler, fordi den sender (Y, X). 
-    # Baseret på dine billeder skal vi sende (X, Y) for at få den korrekte orientering.
+    # 1. Tegn heatmap (KDE) - Dette er den "bløde" farveflade
     if not plot_data.empty:
-        # Vi bytter om på EVENT_Y og EVENT_X her for at matche den visuelle bane
-        pitch.kdeplot(plot_data.EVENT_X, plot_data.EVENT_Y, ax=ax, cmap=cmap, fill=True, alpha=0.5, levels=100, linewidths=1.2)
+        pitch.kdeplot(plot_data.EVENT_X, plot_data.EVENT_Y, ax=ax, cmap=cmap, fill=True, alpha=0.4, levels=100, linewidths=1.2)
 
-    # 2. Tegn logo og tekst
+    # 2. NYT: Tegn oktogoner (Scatter) - Dette markerer de præcise punkter
+    if show_events and not plot_data.empty:
+        pitch.scatter(
+            plot_data.EVENT_X, 
+            plot_data.EVENT_Y, 
+            ax=ax, 
+            s=30,           # Størrelsen på oktogonen (juster denne)
+            marker='8',     # <--- DETTE ER KODEN FOR EN OKTOGON
+            color='black',  # Farven på oktogonen
+            alpha=0.7,      # Hvor gennemsigtig den skal være
+            edgecolors='white', # En lille hvid kant gør dem nemmere at se
+            linewidths=0.5
+        )
+
+    # 3. Tegn logo og tekst
     if logo:
         if zone == 'up': 
             logo_pos = [0.04, 0.03, 0.08, 0.08]
@@ -113,13 +121,14 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None,
 
     ax.text(0.94, text_y, title, transform=ax.transAxes, fontsize=6, fontweight='bold', ha='right', va='top')
 
-    # 3. ZOOM
+    # 4. ZOOM
     if zone == 'up':
         ax.set_ylim(45, 100) 
     elif zone == 'down':
         ax.set_ylim(0, 55)   
 
     return fig
+
 
 
 # ---------------------------------------------------------------------------
