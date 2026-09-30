@@ -54,12 +54,12 @@ def vis_side():
             ids, tit, cm, zn = [1], "GENNEMBRUD", "Blues", "up"
             df_f = df_all_h[(df_all_h['EVENT_X'] > 50) & (df_all_h['EVENT_TYPEID'] == 1)].copy()
         elif v_med == "Touches in Box":
-            ids, tit, cm, zn = [0], "TOUCHES IN BOX", "Blues", "down"
+            ids, tit, cm, zn = [0], "TOUCHES IN BOX", "Blues", "up"
             # X er længde (skal være i boksen 83-100), Y er bredde (skal være mellem 21.1 og 78.9)
             df_f = df_all_h[(df_all_h['EVENT_X'] > 83) & (df_all_h['EVENT_Y'] > 21.1) & (df_all_h['EVENT_Y'] < 78.9)].copy()
             df_shots = df_all_h[df_all_h['EVENT_TYPEID'].isin([13, 14, 15, 16])].copy()
         else:
-            ids, tit, cm, zn = [13, 14, 15, 16], "AFSLUTNINGER", "YlOrRd", "down"
+            ids, tit, cm, zn = [13, 14, 15, 16], "AFSLUTNINGER", "YlOrRd", "up"
             df_f = df_all_h[df_all_h['EVENT_TYPEID'].isin(ids)].copy()
 
         total_act = len(df_f)
