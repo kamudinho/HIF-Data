@@ -72,8 +72,7 @@ def draw_match_info_box(ax, scoring_team_logo, opp_team_logo, date_str, score_st
 
 def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None, flip_x=False, show_events=True):
     """
-    Genererer baneplot.
-    show_events=True: Tegner små oktogoner for hver hændelse.
+    Genererer baneplot med udelukkende oktogoner.
     """
     plot_data = df[df['EVENT_TYPEID'].astype(str).isin([str(i) for i in event_ids])].copy()
 
@@ -87,21 +86,19 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None,
     pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
     fig, ax = pitch.draw(figsize=(5, 7))
 
-    # 1. Tegn heatmap (KDE) - Dette er den "bløde" farveflade
-    if not plot_data.empty:
-        pitch.kdeplot(plot_data.EVENT_X, plot_data.EVENT_Y, ax=ax, cmap=cmap, fill=True, alpha=0.4, levels=100, linewidths=1.2)
+    # Heatmap (KDE) er slettet herfra, så der kun tegnes oktogoner
 
-    # 2. NYT: Tegn oktogoner (Scatter) - Dette markerer de præcise punkter
+    # Tegn oktogoner (Scatter) 
     if show_events and not plot_data.empty:
         pitch.scatter(
             plot_data.EVENT_X, 
             plot_data.EVENT_Y, 
             ax=ax, 
-            s=30,           # Størrelsen på oktogonen (juster denne)
-            marker='8',     # <--- DETTE ER KODEN FOR EN OKTOGON
-            color='black',  # Farven på oktogonen
-            alpha=0.7,      # Hvor gennemsigtig den skal være
-            edgecolors='white', # En lille hvid kant gør dem nemmere at se
+            s=30,               # Størrelsen på oktogonen
+            marker='8',         # <--- Koden for en oktogon
+            color='black',      # Farven på oktogonen
+            alpha=0.7,          # Gennemsigtighed
+            edgecolors='white', # Hvid kant
             linewidths=0.5
         )
 
@@ -128,7 +125,6 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None,
         ax.set_ylim(0, 55)   
 
     return fig
-
 
 
 # ---------------------------------------------------------------------------
