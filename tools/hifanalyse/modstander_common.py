@@ -72,7 +72,7 @@ def draw_match_info_box(ax, scoring_team_logo, opp_team_logo, date_str, score_st
 
 def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None, flip_x=False, show_events=True):
     """
-    Genererer baneplot med rigtige sekskanter (hexbin) ligesom på StatsBomb-billedet.
+    Genererer baneplot med hexbin (sekskanter) - enten fuld bane eller halv bane ('up' / 'down').
     """
     plot_data = df[df['EVENT_TYPEID'].astype(str).isin([str(i) for i in event_ids])].copy()
 
@@ -83,43 +83,45 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None,
     if flip_x:
         plot_data['EVENT_X'] = 100 - plot_data['EVENT_X']
 
-    pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
+    # Konfigurer om det er fuld eller halv bane
+    if zone == 'up':
+        pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD', half=True, restrict_zone=False)
+    elif zone == 'down':
+        # Hvis det er 'down', kan vi enten invertere eller bruge standard half=True (som viser fra midterlinjen til målet i bunden)
+        pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD', half=True, restrict_zone=False)
+    else:
+        pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
+
     fig, ax = pitch.draw(figsize=(5, 7))
 
-    # Brug hexbin til at lave de sekskantede kasser (binning af banen)
+    # Tegn hexbin
     if not plot_data.empty:
         bin_statistic = pitch.hexbin(
             plot_data.EVENT_X, 
             plot_data.EVENT_Y, 
             ax=ax, 
-            gridsize=25,          # Størrelsen på sekskanterne (juster evt. til 20 eller 30)
-            cmap=cmap,            # Farvetema (f.eks. 'Reds' eller 'Blues')
-            edgecolors='white',   # Hvide kanter mellem sekskanterne
-            linewidth=0.8,        # Tykkelse på kanterne
-            mincnt=1              # Skjul sekskanter helt uden hændelser
+            gridsize=20,          
+            cmap=cmap,            
+            edgecolors='white',   
+            linewidth=0.8,        
+            mincnt=1              
         )
 
-    # 3. Tegn logo og tekst
+    # Logo og tekst placering
     if logo:
         if zone == 'up': 
             logo_pos = [0.04, 0.03, 0.08, 0.08]
             text_y = 0.05
         else: 
-            logo_pos = [0.04, 0.90, 0.08, 0.08]
-            text_y = 0.97
+            logo_pos = [0.04, 0.85, 0.08, 0.08]
+            text_y = 0.92
         ax_l = ax.inset_axes(logo_pos, transform=ax.transAxes)
         ax_l.imshow(logo)
         ax_l.axis('off')
     else:
-        text_y = 0.97
+        text_y = 0.92 if zone != 'full' else 0.97
 
     ax.text(0.94, text_y, title, transform=ax.transAxes, fontsize=6, fontweight='bold', ha='right', va='top')
-
-    # 4. ZOOM
-    if zone == 'up':
-        ax.set_ylim(45, 100) 
-    elif zone == 'down':
-        ax.set_ylim(0, 55)   
 
     return fig
 
