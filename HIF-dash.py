@@ -225,7 +225,7 @@ with st.sidebar:
 
     menu_map_checker = {
         "HVIDOVRE IF": ["HVIDOVRE IF", "Forside", "Oversigt", "Forecast"],
-        "HOLDANALYSE": ["HOLDANALYSE", "Ligaoversigt", "Kampoversigt", "Kampudvikling", "Afslutninger", "Målsekvenser", "Grafer", "Modstanderanalyse"],
+        "HOLDANALYSE": ["HOLDANALYSE", "Kampoversigt", "Kampudvikling", "Afslutninger", "Målsekvenser", "Grafer", "Modstanderanalyse"],
         "SPILLERANALYSE": ["SPILLERANALYSE", "Spiller-stats", "Spilleraktioner", "Spiller-profil", "Spilleroversigt", "Spillerprofil"],
         "SCOUTING": ["SCOUTING", "Scoutrapport", "Database", "Emnedatabase", "Sammenligning", "Top10-scouting", "Opgaver"],
         "TILPASNING": ["TILPASNING", "Spillerdata", "Spiller-score", "Standardsituationer"],
@@ -266,7 +266,7 @@ with st.sidebar:
     else:
         menu_map = {
             "HVIDOVRE IF": ["Forside", "Oversigt", "Forecast"],
-            "HOLDANALYSE": ["Ligaoversigt", "Kampoversigt", "Kampudvikling", "Afslutninger", "Målsekvenser", "Grafer", "Modstanderanalyse"],
+            "HOLDANALYSE": ["Kampoversigt", "Kampudvikling", "Afslutninger", "Målsekvenser", "Grafer", "Modstanderanalyse"],
             "SPILLERANALYSE": ["Spiller-stats", "Spilleraktioner", "Spiller-profil", "Spilleroversigt", "Spillerprofil"],
             "SCOUTING": ["Scoutrapport", "Database", "Emnedatabase", "Sammenligning", "Top10-scouting", "Opgaver"],
             "TILPASNING": ["Spillerdata", "Spiller-score", "Standardsituationer"],
@@ -385,10 +385,7 @@ try:
             pp2.vis_side()
 
     elif m == "HOLDANALYSE":
-        if s == "Ligaoversigt":
-            import tools.ligaen.test_teams as tt
-            tt.vis_side()
-        elif s == "Kampoversigt":
+        if s == "Kampoversigt":
             import tools.ligaen.test_matches as tm
             tm.vis_side()
         elif s == "Afslutninger":
