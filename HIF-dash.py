@@ -226,7 +226,7 @@ with st.sidebar:
 
     menu_map_checker = {
         "HVIDOVRE IF": ["HVIDOVRE IF", "Forside", "Oversigt", "Forecast"],
-        "MODSTANDERANALYSE": ["MODSTANDERANALYSE", "Modstanderanalyse"],
+        "MODSTANDERANALYSE": ["MODSTANDERANALYSE", "Modstanderanalyse", "Heatmaps"],
         "HOLDANALYSE": ["HOLDANALYSE", "Kampoversigt", "Kampudvikling", "Afslutninger", "Målsekvenser", "Grafer"],
         "SPILLERANALYSE": ["SPILLERANALYSE", "Spiller-stats", "Spilleraktioner", "Spiller-profil", "Spilleroversigt", "Spillerprofil"],
         "SCOUTING": ["SCOUTING", "Scoutrapport", "Database", "Emnedatabase", "Sammenligning", "Top10-scouting", "Opgaver"],
@@ -268,7 +268,7 @@ with st.sidebar:
     else:
         menu_map = {
             "HVIDOVRE IF": ["Forside", "Oversigt", "Forecast"],
-            "MODSTANDERANALYSE": ["Modstanderanalyse"],
+            "MODSTANDERANALYSE": ["Modstanderanalyse", "Heatmaps"],
             "HOLDANALYSE": ["Kampoversigt", "Kampudvikling", "Afslutninger", "Målsekvenser", "Grafer"],
             "SPILLERANALYSE": ["Spiller-stats", "Spilleraktioner", "Spiller-profil", "Spilleroversigt", "Spillerprofil"],
             "SCOUTING": ["Scoutrapport", "Database", "Emnedatabase", "Sammenligning", "Top10-scouting", "Opgaver"],
@@ -391,6 +391,9 @@ try:
         if s == "Modstanderanalyse":
             import tools.hifanalyse.modstander_oversigt as mo
             mo.vis_side()
+        elif s == "Heatmaps":
+            import tools.hifanalyse.modstander_heatmaps as hm
+            hm.vis_side()
             
     elif m == "HOLDANALYSE":
         if s == "Kampoversigt":
