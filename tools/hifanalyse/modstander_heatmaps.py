@@ -56,7 +56,7 @@ def vis_side():
             </style>
             """, unsafe_allow_html=True)
 
-        kat_options = ["Fase 1", "Gennembrud", "Touches in Box", "Afslutninger"]
+        kat_options = ["Opbygning", "Gennembrud", "Touches in Box", "Afslutninger"]
         c_left, c_right = st.columns([2, 1])
         v_med = c_right.selectbox("Vælg Fokusområde", kat_options, key="ms_t2", label_visibility="collapsed")
 
