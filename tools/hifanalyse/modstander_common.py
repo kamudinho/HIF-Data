@@ -101,7 +101,7 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='magma', logo=None
         pitch_type='opta',
         pitch_color='#ffffff',
         line_color='#4a4a4a',
-        linewidth=1.2,
+        linewidth=0.0,
         half=is_half,
     )
     fig, ax = pitch.draw(figsize=(width_in, height_in))
