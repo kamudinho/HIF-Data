@@ -48,10 +48,10 @@ def vis_side():
 
         # NU BRUGER VI X TIL LÆNGDE (0-100) OG Y TIL BREDDE (0-100)
         if v_med == "Fase 1":
-            ids, tit, cm, zn = [1], "OPBYGNING", "Reds", "up"
+            ids, tit, cm, zn = [1], "OPBYGNING", "Reds", "down"
             df_f = df_all_h[(df_all_h['EVENT_X'] <= 50) & (df_all_h['EVENT_TYPEID'] == 1)].copy()
         elif v_med == "Gennembrud":
-            ids, tit, cm, zn = [1], "GENNEMBRUD", "Blues", "down"
+            ids, tit, cm, zn = [1], "GENNEMBRUD", "Blues", "up"
             df_f = df_all_h[(df_all_h['EVENT_X'] > 50) & (df_all_h['EVENT_TYPEID'] == 1)].copy()
         elif v_med == "Touches in Box":
             ids, tit, cm, zn = [0], "TOUCHES IN BOX", "Blues", "down"
