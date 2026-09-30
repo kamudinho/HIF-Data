@@ -84,18 +84,16 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='magma', logo=None
 
     is_half = zone in ['up', 'down']
 
-    # Filtrer og tilpas koordinater til half=True (som som standard viser området 50-100)
+    # Tilpas koordinater til half=True
     if zone == 'up':
         plot_data = plot_data[plot_data['EVENT_X'] <= 50].copy()
-        plot_data['EVENT_X'] = 100 - plot_data['EVENT_X']  # Spejlvender egen halvdel, så den passer i half-view
+        plot_data['EVENT_X'] = plot_data['EVENT_X'] + 50  # 0 (mål) i bunden, 50 (midterlinje) i toppen
     elif zone == 'down':
         plot_data = plot_data[plot_data['EVENT_X'] >= 50].copy()
-        # 50-100 bruges direkte til modstanderens halvdel
 
     width_in = 5
     height_in = 3.5 if is_half else 7
 
-    # Opret banen med half=True, hvis der vælges en halvdel
     pitch = VerticalPitch(
         pitch_type='opta', 
         pitch_color='#ffffff', 
@@ -117,7 +115,7 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='magma', logo=None
             alpha=0.85
         )
 
-    # Logo og titel placering
+    # Logo og titel placering (øverst ved midterlinjen for 'up', da målet nu er nederst)
     if logo:
         logo_pos = [0.04, 0.82, 0.08, 0.12] if is_half else [0.04, 0.90, 0.08, 0.08]
         ax_l = ax.inset_axes(logo_pos, transform=ax.transAxes)
