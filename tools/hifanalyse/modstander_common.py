@@ -72,11 +72,11 @@ def draw_match_info_box(ax, scoring_team_logo, opp_team_logo, date_str, score_st
     ax.text(0.03, 0.07, f"{date_str} | Stilling: {score_str} ({min_str}. min)", transform=ax.transAxes, fontsize=8, color='#444444', va='top')
 
 def plot_custom_pitch(df, event_ids, title, zone='full', cmap='magma', logo=None, flip_x=False):
-    """Genererer baneplot, hvor egen halvdel (zone='up') viser mål nederst og midterlinje øverst."""
+    """Genererer baneplot, hvor egen halvdel ('up') viser mål nederst og midterlinje øverst."""
     type_num = pd.to_numeric(df['EVENT_TYPEID'], errors='coerce')
     plot_data = df[type_num.isin([int(i) for i in event_ids])].copy()
     
-    # I Opta er Y normalt banens længde (0-100) og X er bredden (0-100)
+    # Opta koordinater: X er bredde (0-100), Y er længde (0-100)
     plot_data['EVENT_X'] = pd.to_numeric(plot_data['EVENT_X'], errors='coerce')
     plot_data['EVENT_Y'] = pd.to_numeric(plot_data['EVENT_Y'], errors='coerce')
     plot_data = plot_data.dropna(subset=['EVENT_X', 'EVENT_Y'])
@@ -88,21 +88,26 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='magma', logo=None
     width_in = 5
     height_in = 3.5 if is_half else 7
 
-    # Vi bruger en standard lodret bane (VerticalPitch) hvor Y er banens længde
+    # Brug altid en fuld bane (half=False), så vi selv har fuld kontrol over y-akserne
     pitch = VerticalPitch(
         pitch_type='opta', 
         pitch_color='#ffffff', 
         line_color='#BDBDBD',
-        half=is_half
+        half=False
     )
     fig, ax = pitch.draw(figsize=(width_in, height_in))
 
-    # Hvis vi viser en halv bane for eget hold ('up'), skal vi filtrere på EVENT_Y <= 50 
-    # (egen banehalvdel fra y=0 (mål) til y=50 (midterlinje))
+    # Styr visning og filtrering ud fra zone
     if zone == 'up':
+        # Egen halvdel: Mål i bunden (y=0), midterlinje i toppen (y=50)
         plot_data = plot_data[plot_data['EVENT_Y'] <= 50].copy()
+        ax.set_ylim(0, 50)
     elif zone == 'down':
+        # Modstanderens halvdel: Midterlinje i bunden (y=50), mål i toppen (y=100)
         plot_data = plot_data[plot_data['EVENT_Y'] >= 50].copy()
+        ax.set_ylim(50, 100)
+    else:
+        ax.set_ylim(0, 100)
 
     if not plot_data.empty:
         pitch.hexbin(
@@ -117,7 +122,7 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='magma', logo=None
             alpha=0.85
         )
 
-    # Logo og titel placeres øverst
+    # Logo og titel placeres øverst i det aktuelle vindue
     if logo:
         logo_pos = [0.04, 0.82, 0.08, 0.12] if is_half else [0.04, 0.90, 0.08, 0.08]
         ax_l = ax.inset_axes(logo_pos, transform=ax.transAxes)
@@ -128,8 +133,8 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='magma', logo=None
     ax.text(0.94, text_y, title, transform=ax.transAxes, fontsize=8,
             fontweight='bold', ha='right', va='center', color='#111111')
 
-    fig.subplots_adjust(left=0.01, right=0.99, top=0.99, bottom=0.01)
-    return fig
+     fig.subplots_adjust(left=0.01, right=0.99, top=0.99, bottom=0.01)
+     return fig
     
 # ---------------------------------------------------------------------------
 # SÆSON/HOLD-VÆLGER
