@@ -72,7 +72,7 @@ def draw_match_info_box(ax, scoring_team_logo, opp_team_logo, date_str, score_st
     ax.text(0.03, 0.07, f"{date_str} | Stilling: {score_str} ({min_str}. min)", transform=ax.transAxes, fontsize=8, color='#444444', va='top')
 
 def plot_custom_pitch(df, event_ids, title, zone='full', cmap='magma', logo=None, flip_x=False):
-    """Genererer baneplot, der klipper den modsatte halvdel helt væk ved brug af half=True."""
+    """Genererer baneplot, hvor egen halvdel (zone='up') viser mål nederst og midterlinje øverst."""
     type_num = pd.to_numeric(df['EVENT_TYPEID'], errors='coerce')
     plot_data = df[type_num.isin([int(i) for i in event_ids])].copy()
     plot_data['EVENT_X'] = pd.to_numeric(plot_data['EVENT_X'], errors='coerce')
@@ -83,24 +83,25 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='magma', logo=None
         plot_data['EVENT_X'] = 100 - plot_data['EVENT_X']
 
     is_half = zone in ['up', 'down']
-
-    # Tilpas koordinater til half=True
-    if zone == 'up':
-        plot_data = plot_data[plot_data['EVENT_X'] <= 50].copy()
-        plot_data['EVENT_X'] = plot_data['EVENT_X'] + 50  # 0 (mål) i bunden, 50 (midterlinje) i toppen
-    elif zone == 'down':
-        plot_data = plot_data[plot_data['EVENT_X'] >= 50].copy()
-
     width_in = 5
     height_in = 3.5 if is_half else 7
 
+    # Brug half=False, så vi selv kan styre synlighed og placering af målet
     pitch = VerticalPitch(
         pitch_type='opta', 
         pitch_color='#ffffff', 
         line_color='#BDBDBD',
-        half=is_half
+        half=False
     )
     fig, ax = pitch.draw(figsize=(width_in, height_in))
+
+    # Filtrer data og sæt akse-grænser for den valgte zone
+    if zone == 'up':
+        plot_data = plot_data[plot_data['EVENT_X'] <= 50].copy()
+        ax.set_ylim(0, 50)  # Mål (0) i bunden, midterlinje (50) i toppen
+    elif zone == 'down':
+        plot_data = plot_data[plot_data['EVENT_X'] >= 50].copy()
+        ax.set_ylim(50, 100)
 
     if not plot_data.empty:
         pitch.hexbin(
@@ -115,7 +116,7 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='magma', logo=None
             alpha=0.85
         )
 
-    # Logo og titel placering (øverst ved midterlinjen for 'up', da målet nu er nederst)
+    # Logo og titel placeres øverst (ved midterlinjen)
     if logo:
         logo_pos = [0.04, 0.82, 0.08, 0.12] if is_half else [0.04, 0.90, 0.08, 0.08]
         ax_l = ax.inset_axes(logo_pos, transform=ax.transAxes)
