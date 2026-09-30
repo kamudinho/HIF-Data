@@ -101,9 +101,9 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None)
 
     # 3. ZOOM
     if zone == 'up':
-        ax.set_ylim(50, 100) 
+        ax.set_ylim(0, 55) 
     elif zone == 'down':
-        ax.set_ylim(0, 50)   
+        ax.set_ylim(45, 100)   
 
     return fig
 
