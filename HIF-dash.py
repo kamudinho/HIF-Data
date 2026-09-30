@@ -213,6 +213,7 @@ with st.sidebar:
 
     alle_omraader = [
         "HVIDOVRE IF",
+        "SPILLERANALYSE",
         "HOLDANALYSE",
         "SPILLERANALYSE",
         "SCOUTING",
@@ -225,7 +226,8 @@ with st.sidebar:
 
     menu_map_checker = {
         "HVIDOVRE IF": ["HVIDOVRE IF", "Forside", "Oversigt", "Forecast"],
-        "HOLDANALYSE": ["HOLDANALYSE", "Kampoversigt", "Kampudvikling", "Afslutninger", "Målsekvenser", "Grafer", "Modstanderanalyse"],
+        "MODSTANDERANALYSE": ["MODSTANDERANALYSE", "Modstanderanalyse"],
+        "HOLDANALYSE": ["HOLDANALYSE", "Kampoversigt", "Kampudvikling", "Afslutninger", "Målsekvenser", "Grafer"],
         "SPILLERANALYSE": ["SPILLERANALYSE", "Spiller-stats", "Spilleraktioner", "Spiller-profil", "Spilleroversigt", "Spillerprofil"],
         "SCOUTING": ["SCOUTING", "Scoutrapport", "Database", "Emnedatabase", "Sammenligning", "Top10-scouting", "Opgaver"],
         "TILPASNING": ["TILPASNING", "Spillerdata", "Spiller-score", "Standardsituationer"],
@@ -266,7 +268,8 @@ with st.sidebar:
     else:
         menu_map = {
             "HVIDOVRE IF": ["Forside", "Oversigt", "Forecast"],
-            "HOLDANALYSE": ["Kampoversigt", "Kampudvikling", "Afslutninger", "Målsekvenser", "Grafer", "Modstanderanalyse"],
+            "MODSTANDERANALYSE": ["Modstanderanalyse"],
+            "HOLDANALYSE": ["Kampoversigt", "Kampudvikling", "Afslutninger", "Målsekvenser", "Grafer"],
             "SPILLERANALYSE": ["Spiller-stats", "Spilleraktioner", "Spiller-profil", "Spilleroversigt", "Spillerprofil"],
             "SCOUTING": ["Scoutrapport", "Database", "Emnedatabase", "Sammenligning", "Top10-scouting", "Opgaver"],
             "TILPASNING": ["Spillerdata", "Spiller-score", "Standardsituationer"],
@@ -384,6 +387,11 @@ try:
             import tools.players.player_profile2 as pp2
             pp2.vis_side()
 
+    elif m == "MODSTANDERANALYSE":
+        if s == "Modstanderanalyse":
+            import tools.hifanalyse.modstander_oversigt as mo
+            mo.vis_side()
+            
     elif m == "HOLDANALYSE":
         if s == "Kampoversigt":
             import tools.ligaen.test_matches as tm
