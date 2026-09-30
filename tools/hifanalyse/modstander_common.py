@@ -72,13 +72,15 @@ def draw_match_info_box(ax, scoring_team_logo, opp_team_logo, date_str, score_st
 
 def plot_custom_pitch(df, event_ids, title, zone='full', cmap='magma', logo=None, flip_x=False, show_events=True):
     """
-    Genererer baneplot med hexbin (sekskanter) der matcher det ønskede 'tiled' look.
-    Standard cmap er nu 'magma' for at matche dit billede.
+    Genererer baneplot. Hvis zone er 'up' eller 'down', 
+    justeres figurens højde, så vi ikke får hvidt tomrum.
     """
     plot_data = df[df['EVENT_TYPEID'].astype(str).isin([str(i) for i in event_ids])].copy()
 
     if plot_data.empty:
-        fig, ax = plt.subplots(figsize=(5, 7))
+        # Vi bruger også dynamisk højde her for at undgå tomrum i tomme plots
+        h = 7 if zone == 'full' else 3.5
+        fig, ax = plt.subplots(figsize=(5, h))
         return fig
 
     if flip_x:
@@ -90,26 +92,33 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='magma', logo=None
     elif zone == 'down':
         plot_data = plot_data[plot_data['EVENT_X'] >= 50].copy()
 
-    # 2. Opret bane
-    pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
-    fig, ax = pitch.draw(figsize=(5, 7))
+    # --- NY LOGIK: JUSTER FIGUREN ---
+    # Hvis det er en halv bane, gør vi figuren halvt så høj (3.5 i stedet for 7)
+    if zone == 'full':
+        current_figsize = (5, 7)
+    else:
+        current_figsize = (5, 3.5) 
+    # --------------------------------
 
-    # 3. TEGN HEXBIN (Det "tiled" look)
+    # 2. Opret bane med den korrekte figsize
+    pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
+    fig, ax = pitch.draw(figsize=current_figsize)
+
+    # 3. Tegn hexbin
     if not plot_data.empty:
-        # Vi bruger 'magma' som standard for at få den mørke/orange/gule effekt
         pitch.hexbin(
             plot_data.EVENT_X, 
             plot_data.EVENT_Y, 
             ax=ax, 
-            gridsize=25,          # Juster denne: 20 = store fliser, 30 = små fliser
-            cmap=cmap,            # Her kommer 'magma' ind i billedet
-            edgecolors='white',   # De hvide streger mellem fliserne
-            linewidth=0.5,        # Tykkelsen på de hvide streger
-            mincnt=1,             # Vigtigt: Tegner kun fliser med data (holder baggrund hvid)
-            alpha=0.9             # Gør farverne lidt mere mættede
+            gridsize=25,          
+            cmap=cmap,            
+            edgecolors='white',   
+            linewidth=0.5,        
+            mincnt=1,
+            alpha=0.9             
         )
 
-    # 4. Logo og tekst placering (beholdes som din oprindelige logik)
+    # 4. Logo og tekst placering
     if logo:
         if zone == 'up': 
             logo_pos = [0.04, 0.90, 0.08, 0.08]
@@ -129,13 +138,14 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='magma', logo=None
 
     ax.text(0.94, text_y, title, transform=ax.transAxes, fontsize=6, fontweight='bold', ha='right', va='top')
 
-    # 5. ZOOM
+    # 5. ZOOM (Dette skærer selve indholdet til)
     if zone == 'up':
         ax.set_ylim(0, 52)    
     elif zone == 'down':
         ax.set_ylim(48, 100)  
 
     return fig
+
 
     
 # ---------------------------------------------------------------------------
