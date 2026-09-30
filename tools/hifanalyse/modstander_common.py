@@ -73,7 +73,7 @@ def draw_match_info_box(ax, scoring_team_logo, opp_team_logo, date_str, score_st
 
 def plot_custom_pitch(df, event_ids, title, zone='full', cmap='magma', logo=None, flip_x=False):
     """
-    Genererer baneplot, der enten viser fuld bane eller skærer rent til den specifikke banehalvdel (up/down) uden hvide tomrum.
+    Genererer baneplot, der enten viser fuld bane eller skærer rent til den specifikke banehalvdel (up/down).
     """
     plot_data = df[df['EVENT_TYPEID'].astype(str).isin([str(i) for i in event_ids])].copy()
 
@@ -94,29 +94,24 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='magma', logo=None
     pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
     fig, ax = pitch.draw(figsize=current_figsize)
 
-    # 3. Filtrer data og tving aksen til kun at vise den relevante halvdel af banen
+    # Fjern alle standard-marginer omkring plottet
+    ax.set_position([0, 0, 1, 1]) 
+
+    # 3. Filtrer data og sæt korrekte grænser for Y-aksen (længden af banen)
     if zone == 'up':
         plot_data = plot_data[plot_data['EVENT_X'] <= 50].copy()
-        # Viser kun bunden af banen (egen halvdel i Opta-koordinater: Y går fra 0 til 100, X er fra 0 til 50, 
-        # men i VerticalPitch er målet på Y-aksen eller X-aksen afhængig af orientering. 
-        # Opta VerticalPitch har normalt Y fra 0 til 100 i længden af banen).
-        # Lad os styre y-grænserne for at zoome ind på halvdelen (0 til 50):
-        ax.set_ylim(0, 50)
+        ax.set_ylim(0, 50)  # Viser kun egen banehalvdel (0 til 50)
     elif zone == 'down':
         plot_data = plot_data[plot_data['EVENT_X'] >= 50].copy()
-        # Viser modstanderens halvdel (50 til 100)
-        ax.set_ylim(50, 100)
+        ax.set_ylim(50, 100) # Viser kun modstanderens banehalvdel (50 til 100)
     else:
         ax.set_ylim(0, 100)
 
-    # Fjern alle standard-marginer omkring plottet, så det fylder hele billedet ud
-    ax.set_position([0, 0, 1, 1]) 
-
-    # 4. Tegn hexbin
+    # 4. Tegn hexbin (BEMÆRK: EVENT_Y først pga. VerticalPitch, derefter EVENT_X)
     if not plot_data.empty:
         pitch.hexbin(
-            plot_data.EVENT_X, 
-            plot_data.EVENT_Y, 
+            plot_data.EVENT_Y,  # X-akse i VerticalPitch = banens bredde
+            plot_data.EVENT_X,  # Y-akse i VerticalPitch = banens længde
             ax=ax, 
             gridsize=20,          
             cmap=cmap,            
@@ -147,7 +142,6 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='magma', logo=None
     ax.text(0.94, text_y, title, transform=ax.transAxes, fontsize=7, fontweight='bold', ha='right', va='center')
 
     return fig
-
 # ---------------------------------------------------------------------------
 # SÆSON/HOLD-VÆLGER
 # ---------------------------------------------------------------------------
