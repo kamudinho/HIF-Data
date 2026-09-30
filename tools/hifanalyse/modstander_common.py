@@ -116,10 +116,10 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='magma', logo=None
             ax=ax,
             cmap=cmap,
             edgecolors='white',
-            linewidth=0.3,
-            gridsize=20,
+            linewidth=0.2,
+            gridsize=15,
             mincnt=1,
-            alpha=0.75,
+            alpha=0.55,
         )
 
     # Logo og titel øverst i billedet
