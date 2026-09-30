@@ -71,15 +71,17 @@ def draw_match_info_box(ax, scoring_team_logo, opp_team_logo, date_str, score_st
     ax.text(0.03, 0.07, f"{date_str} | Stilling: {score_str} ({min_str}. min)", transform=ax.transAxes, fontsize=8, color='#444444', va='top')
 
 def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None):
-    """Genererer baneplot med korrekt zoom-håndtering og koordinat-swap."""
+    """Genererer baneplot. Vi swapper X og Y her internt, så VerticalPitch tegner korrekt."""
     plot_data = df[df['EVENT_TYPEID'].astype(str).isin([str(i) for i in event_ids])].copy()
 
     pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
     fig, ax = pitch.draw(figsize=(5, 7))
 
     # 1. Tegn heatmap (KDE)
+    # VIGTIGT: Da vi har fjernet swappet i data-hentningen, skal vi sende 
+    # EVENT_Y som X (bredde) og EVENT_X som Y (længde) til VerticalPitch.
     if not plot_data.empty:
-        pitch.kdeplot(plot_data.EVENT_X, plot_data.EVENT_Y, ax=ax, cmap=cmap, fill=True, alpha=0.5, levels=100, linewidths=1.2)
+        pitch.kdeplot(plot_data.EVENT_Y, plot_data.EVENT_X, ax=ax, cmap=cmap, fill=True, alpha=0.5, levels=100, linewidths=1.2)
 
     # 2. Tegn logo og tekst
     if logo:
@@ -99,9 +101,9 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None)
 
     # 3. ZOOM
     if zone == 'up':
-        ax.set_ylim(50, 100) # Modstanderens mål (øverst på banen)
+        ax.set_ylim(50, 100) 
     elif zone == 'down':
-        ax.set_ylim(0, 50)   # Eget mål (nederst på banen)
+        ax.set_ylim(0, 50)   
 
     return fig
 
@@ -146,7 +148,6 @@ def render_hold_saeson_selector():
 # ---------------------------------------------------------------------------
 
 def resolve_player_names(df, conn):
-    """Matcher Opta UUIDs til navne via database/mapping."""
     if df.empty or 'PLAYER_OPTAUUID' not in df.columns: return df.get('PLAYER_NAME', pd.Series(dtype=object))
     uuids = tuple(df['PLAYER_OPTAUUID'].dropna().unique())
     if not uuids: return df['PLAYER_OPTAUUID'].astype(str)
@@ -205,8 +206,7 @@ def fetch_event_data(valgt_uuid, match_ids):
     df = conn.query(sql, ttl=0)
     if df is None or df.empty: return pd.DataFrame()
 
-    # --- SWAP: X=Længde, Y=Bredde -> X=Bredde, Y=Længde ---
-    df[['EVENT_X', 'EVENT_Y']] = df[['EVENT_Y', 'EVENT_X']].values
+    # SWAP ER FJERNET HER - Vi bruger rå Opta data (X=Længde, Y=Bredde)
 
     df['PLAYER_NAME'] = resolve_player_names(df, conn)
     df['qual_list'] = df['QUALIFIERS'].fillna('').str.split(',')
@@ -269,8 +269,7 @@ def fetch_goal_sequences(valgt_uuid, match_ids):
         
     if df is None or df.empty: return pd.DataFrame()
 
-    # --- SWAP: X=Længde, Y=Bredde -> X=Bredde, Y=Længde ---
-    df[['EVENT_X', 'EVENT_Y']] = df[['EVENT_Y', 'EVENT_X']].values
+    # SWAP ER FJERNET HER
 
     df['PLAYER_NAME'] = resolve_player_names(df, conn)
     df['qual_list'] = df['QUALIFIERS'].fillna('').str.split(',')
