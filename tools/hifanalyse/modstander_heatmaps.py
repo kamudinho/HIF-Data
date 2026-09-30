@@ -112,19 +112,16 @@ def vis_side():
 
                 df_top['RATE'] = (df_top['SUCCESS'] / df_top['TOTAL'] * 100).fillna(0)
                 
-                # ÆNDRET: Sorterer efter flest aktioner (TOTAL) først, derefter RATE
+                # Sorterer efter flest aktioner (TOTAL) først, derefter RATE
                 df_top = df_top[df_top['TOTAL'] >= 1].sort_values(['TOTAL', 'RATE'], ascending=[False, False]).head(8)
 
                 if df_top.empty:
                     st.info(f"Ingen spillere fundet")
                 else:
-                    max_total = df_top['TOTAL'].max() if not df_top.empty else 1
                     for _, r in df_top.iterrows():
                         rate_val = int(r['RATE'])
                         total_val = int(r['TOTAL'])
                         success_val = int(r['SUCCESS'])
-                        # Lad progress-baren afspejle relative aktioner ift. top-spilleren eller procent
-                        bar_width = int((total_val / max_total) * 100) if max_total > 0 else 0
                         
                         st.markdown(f"""
                             <div style="margin-bottom: 12px;">
@@ -133,7 +130,7 @@ def vis_side():
                                     <span>{success_val} / {total_val} ({rate_val}%)</span>
                                 </div>
                                 <div style="background-color: #f0f2f6; border-radius: 4px; height: 5px; width: 100%;">
-                                    <div style="background-color: #084594; height: 5px; width: {bar_width}%; border-radius: 4px;"></div>
+                                    <div style="background-color: #084594; height: 5px; width: {rate_val}%; border-radius: 4px;"></div>
                                 </div>
                             </div>
                         """, unsafe_allow_html=True)
@@ -184,15 +181,13 @@ def vis_side():
                 ).reset_index()
                 df_top['RATE'] = (df_top['SUCCESS'] / df_top['TOTAL'] * 100).fillna(0)
                 
-                # ÆNDRET: Sorterer efter flest aktioner (TOTAL) først, derefter RATE
+                # Sorterer efter flest aktioner (TOTAL) først, derefter RATE
                 df_top = df_top[df_top['TOTAL'] >= 1].sort_values(['TOTAL', 'RATE'], ascending=[False, False]).head(8)
 
-                max_total = df_top['TOTAL'].max() if not df_top.empty else 1
                 for _, r in df_top.iterrows():
                     rate_val = int(r['RATE'])
                     total_val = int(r['TOTAL'])
                     success_val = int(r['SUCCESS'])
-                    bar_width = int((total_val / max_total) * 100) if max_total > 0 else 0
                     
                     st.markdown(f"""
                         <div style="margin-bottom: 12px;">
@@ -201,7 +196,7 @@ def vis_side():
                                 <span>{success_val} / {total_val} ({rate_val}%)</span>
                             </div>
                             <div style="background-color: #f0f2f6; border-radius: 4px; height: 5px; width: 100%;">
-                                <div style="background-color: #ec7014; height: 5px; width: {bar_width}%; border-radius: 4px;"></div>
+                                <div style="background-color: #ec7014; height: 5px; width: {rate_val}%; border-radius: 4px;"></div>
                             </div>
                         </div>
                     """, unsafe_allow_html=True)
