@@ -72,80 +72,64 @@ def draw_match_info_box(ax, scoring_team_logo, opp_team_logo, date_str, score_st
     ax.text(0.03, 0.07, f"{date_str} | Stilling: {score_str} ({min_str}. min)", transform=ax.transAxes, fontsize=8, color='#444444', va='top')
 
 def plot_custom_pitch(df, event_ids, title, zone='full', cmap='magma', logo=None, flip_x=False):
-    """
-    Genererer baneplot, der enten viser fuld bane eller skærer rent til den specifikke banehalvdel (up/down) uden hvide tomrum.
-    """
-    plot_data = df[df['EVENT_TYPEID'].astype(str).isin([str(i) for i in event_ids])].copy()
-
-    # 1. Bestem figurstørrelse baseret på zone
-    if zone == 'full':
-        current_figsize = (5, 7)
-    else:
-        current_figsize = (5, 3.5) 
-
-    if plot_data.empty:
-        fig, ax = plt.subplots(figsize=current_figsize)
-        return fig
+    """Viser enten fuld bane eller en ren halvdel (up = egen, down = modstanderens) uden hvidt tomrum."""
+    # Numerisk filter, så float/Decimal fra Snowflake ikke giver tomme resultater
+    type_num = pd.to_numeric(df['EVENT_TYPEID'], errors='coerce')
+    plot_data = df[type_num.isin([int(i) for i in event_ids])].copy()
+    plot_data['EVENT_X'] = pd.to_numeric(plot_data['EVENT_X'], errors='coerce')
+    plot_data['EVENT_Y'] = pd.to_numeric(plot_data['EVENT_Y'], errors='coerce')
+    plot_data = plot_data.dropna(subset=['EVENT_X', 'EVENT_Y'])
 
     if flip_x:
         plot_data['EVENT_X'] = 100 - plot_data['EVENT_X']
 
-    # 2. Opret bane
-    pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
-    fig, ax = pitch.draw(figsize=current_figsize)
-
-    # 3. Filtrer data og tving aksen til kun at vise den relevante halvdel af banen
+    # Hvilken del af banens længde (Opta X) skal vises
     if zone == 'up':
-        plot_data = plot_data[plot_data['EVENT_X'] <= 50].copy()
-        # Viser kun bunden af banen (egen halvdel i Opta-koordinater: Y går fra 0 til 100, X er fra 0 til 50, 
-        # men i VerticalPitch er målet på Y-aksen eller X-aksen afhængig af orientering. 
-        # Opta VerticalPitch har normalt Y fra 0 til 100 i længden af banen).
-        # Lad os styre y-grænserne for at zoome ind på halvdelen (0 til 50):
-        ax.set_ylim(0, 50)
+        x0, x1 = 0, 50
     elif zone == 'down':
-        plot_data = plot_data[plot_data['EVENT_X'] >= 50].copy()
-        # Viser modstanderens halvdel (50 til 100)
-        ax.set_ylim(50, 100)
+        x0, x1 = 50, 100
     else:
-        ax.set_ylim(0, 100)
+        x0, x1 = 0, 100
 
-    # Fjern alle standard-marginer omkring plottet, så det fylder hele billedet ud
-    ax.set_position([0, 0, 1, 1]) 
+    # Figurhøjde ud fra banens proportioner (105 x 68 m), så der ikke er hvidt tomrum
+    width_in = 5
+    height_in = width_in * ((x1 - x0) / 100) * (105 / 68)
 
-    # 4. Tegn hexbin
+    pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
+    fig, ax = pitch.draw(figsize=(width_in, height_in))
+
+    # Klip til den valgte halvdel (på en VerticalPitch er matplotlib-y = banens længde)
+    ax.set_ylim(x0, x1)
+
+    plot_data = plot_data[(plot_data['EVENT_X'] >= x0) & (plot_data['EVENT_X'] <= x1)]
+
     if not plot_data.empty:
-        pitch.hexbin(
-            plot_data.EVENT_X, 
-            plot_data.EVENT_Y, 
-            ax=ax, 
-            gridsize=20,          
-            cmap=cmap,            
-            edgecolors='white',   
-            linewidth=0.5,        
-            mincnt=1,
-            alpha=0.9              
+        stat = pitch.bin_statistic(
+            plot_data['EVENT_X'].to_numpy(),
+            plot_data['EVENT_Y'].to_numpy(),
+            statistic='count',
+            bins=(16, 16),   # 16 celler i længden (6,25 pr. celle) og 16 i bredden
         )
+        stat['statistic'] = np.ma.masked_where(stat['statistic'] == 0, stat['statistic'])
+        pitch.heatmap(stat, ax=ax, cmap=cmap, edgecolors='white', linewidth=0.5, alpha=0.9)
 
-    # 5. Logo og tekst placering tilpasset den valgte visning
+    # Logo og titel (transAxes følger nu den viste halvdel)
+    if zone == 'down':
+        logo_pos, text_y = [0.04, 0.06, 0.08, 0.12], 0.10
+    elif zone == 'up':
+        logo_pos, text_y = [0.04, 0.82, 0.08, 0.12], 0.92
+    else:
+        logo_pos, text_y = [0.04, 0.90, 0.08, 0.08], 0.96
+
     if logo:
-        if zone == 'up': 
-            logo_pos = [0.04, 0.82, 0.08, 0.12]
-            text_y = 0.92
-        elif zone == 'down': 
-            logo_pos = [0.04, 0.06, 0.08, 0.12]
-            text_y = 0.12
-        else:
-            logo_pos = [0.04, 0.90, 0.08, 0.08]
-            text_y = 0.96
-            
         ax_l = ax.inset_axes(logo_pos, transform=ax.transAxes)
         ax_l.imshow(logo)
         ax_l.axis('off')
-    else:
-        text_y = 0.92 if zone == 'up' else (0.12 if zone == 'down' else 0.96)
 
-    ax.text(0.94, text_y, title, transform=ax.transAxes, fontsize=7, fontweight='bold', ha='right', va='center')
+    ax.text(0.94, text_y, title, transform=ax.transAxes, fontsize=7,
+            fontweight='bold', ha='right', va='center')
 
+    fig.subplots_adjust(left=0.01, right=0.99, top=0.99, bottom=0.01)
     return fig
     
 # ---------------------------------------------------------------------------
