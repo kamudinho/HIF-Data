@@ -72,7 +72,7 @@ def draw_match_info_box(ax, scoring_team_logo, opp_team_logo, date_str, score_st
     ax.text(0.03, 0.07, f"{date_str} | Stilling: {score_str} ({min_str}. min)", transform=ax.transAxes, fontsize=8, color='#444444', va='top')
 
 def plot_custom_pitch(df, event_ids, title, zone='full', cmap='magma', logo=None, flip_x=False):
-    """Genererer baneplot, der viser fuld bane eller en ren halvdel (up/down) uden tomrum eller rendering-fejl."""
+    """Genererer baneplot, der klipper den modsatte halvdel helt væk ved brug af half=True."""
     type_num = pd.to_numeric(df['EVENT_TYPEID'], errors='coerce')
     plot_data = df[type_num.isin([int(i) for i in event_ids])].copy()
     plot_data['EVENT_X'] = pd.to_numeric(plot_data['EVENT_X'], errors='coerce')
@@ -82,29 +82,28 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='magma', logo=None
     if flip_x:
         plot_data['EVENT_X'] = 100 - plot_data['EVENT_X']
 
-    # Sæt grænser for banens længde (Opta X)
+    is_half = zone in ['up', 'down']
+
+    # Filtrer og tilpas koordinater til half=True (som som standard viser området 50-100)
     if zone == 'up':
-        x0, x1 = 0, 50
+        plot_data = plot_data[plot_data['EVENT_X'] <= 50].copy()
+        plot_data['EVENT_X'] = 100 - plot_data['EVENT_X']  # Spejlvender egen halvdel, så den passer i half-view
     elif zone == 'down':
-        x0, x1 = 50, 100
-    else:
-        x0, x1 = 0, 100
+        plot_data = plot_data[plot_data['EVENT_X'] >= 50].copy()
+        # 50-100 bruges direkte til modstanderens halvdel
 
-    # Fastlæg proportioner for at undgå at plottet mastes sammen
     width_in = 5
-    height_in = 7 if zone == 'full' else 3.5
+    height_in = 3.5 if is_half else 7
 
-    pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
+    # Opret banen med half=True, hvis der vælges en halvdel
+    pitch = VerticalPitch(
+        pitch_type='opta', 
+        pitch_color='#ffffff', 
+        line_color='#BDBDBD',
+        half=is_half
+    )
     fig, ax = pitch.draw(figsize=(width_in, height_in))
 
-    # Tving aksen til at fylde rammen ud og sæt det korrekte udsnit (halv bane)
-    ax.set_position([0, 0, 1, 1])
-    ax.set_ylim(x0, x1)
-
-    # Filtrer data til den valgte zone
-    plot_data = plot_data[(plot_data['EVENT_X'] >= x0) & (plot_data['EVENT_X'] <= x1)]
-
-    # Tegn hexbin direkte med pitch.hexbin
     if not plot_data.empty:
         pitch.hexbin(
             plot_data['EVENT_X'].to_numpy(),
@@ -118,24 +117,18 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='magma', logo=None
             alpha=0.85
         )
 
-    # Logo og titel placering baseret på zone
+    # Logo og titel placering
     if logo:
-        if zone == 'down':
-            logo_pos, text_y = [0.04, 0.82, 0.08, 0.12], 0.92
-        elif zone == 'up':
-            logo_pos, text_y = [0.04, 0.82, 0.08, 0.12], 0.92
-        else:
-            logo_pos, text_y = [0.04, 0.90, 0.08, 0.08], 0.96
-            
+        logo_pos = [0.04, 0.82, 0.08, 0.12] if is_half else [0.04, 0.90, 0.08, 0.08]
         ax_l = ax.inset_axes(logo_pos, transform=ax.transAxes)
         ax_l.imshow(logo)
         ax_l.axis('off')
-    else:
-        text_y = 0.92
 
+    text_y = 0.92 if is_half else 0.96
     ax.text(0.94, text_y, title, transform=ax.transAxes, fontsize=8,
             fontweight='bold', ha='right', va='center', color='#111111')
 
+    fig.subplots_adjust(left=0.01, right=0.99, top=0.99, bottom=0.01)
     return fig
     
 # ---------------------------------------------------------------------------
