@@ -75,6 +75,8 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='magma', logo=None
     """Genererer baneplot, hvor egen halvdel (zone='up') viser mål nederst og midterlinje øverst."""
     type_num = pd.to_numeric(df['EVENT_TYPEID'], errors='coerce')
     plot_data = df[type_num.isin([int(i) for i in event_ids])].copy()
+    
+    # I Opta er Y normalt banens længde (0-100) og X er bredden (0-100)
     plot_data['EVENT_X'] = pd.to_numeric(plot_data['EVENT_X'], errors='coerce')
     plot_data['EVENT_Y'] = pd.to_numeric(plot_data['EVENT_Y'], errors='coerce')
     plot_data = plot_data.dropna(subset=['EVENT_X', 'EVENT_Y'])
@@ -86,22 +88,21 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='magma', logo=None
     width_in = 5
     height_in = 3.5 if is_half else 7
 
-    # Brug half=False, så vi selv kan styre synlighed og placering af målet
+    # Vi bruger en standard lodret bane (VerticalPitch) hvor Y er banens længde
     pitch = VerticalPitch(
         pitch_type='opta', 
         pitch_color='#ffffff', 
         line_color='#BDBDBD',
-        half=False
+        half=is_half
     )
     fig, ax = pitch.draw(figsize=(width_in, height_in))
 
-    # Filtrer data og sæt akse-grænser for den valgte zone
+    # Hvis vi viser en halv bane for eget hold ('up'), skal vi filtrere på EVENT_Y <= 50 
+    # (egen banehalvdel fra y=0 (mål) til y=50 (midterlinje))
     if zone == 'up':
-        plot_data = plot_data[plot_data['EVENT_X'] <= 50].copy()
-        ax.set_ylim(0, 50)  # Mål (0) i bunden, midterlinje (50) i toppen
+        plot_data = plot_data[plot_data['EVENT_Y'] <= 50].copy()
     elif zone == 'down':
-        plot_data = plot_data[plot_data['EVENT_X'] >= 50].copy()
-        ax.set_ylim(50, 100)
+        plot_data = plot_data[plot_data['EVENT_Y'] >= 50].copy()
 
     if not plot_data.empty:
         pitch.hexbin(
@@ -116,7 +117,7 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='magma', logo=None
             alpha=0.85
         )
 
-    # Logo og titel placeres øverst (ved midterlinjen)
+    # Logo og titel placeres øverst
     if logo:
         logo_pos = [0.04, 0.82, 0.08, 0.12] if is_half else [0.04, 0.90, 0.08, 0.08]
         ax_l = ax.inset_axes(logo_pos, transform=ax.transAxes)
