@@ -213,7 +213,7 @@ with st.sidebar:
 
     alle_omraader = [
         "HVIDOVRE IF",
-        "SPILLERANALYSE",
+        "MODSTANDERANALYSE",
         "HOLDANALYSE",
         "SPILLERANALYSE",
         "SCOUTING",
