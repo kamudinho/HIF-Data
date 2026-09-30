@@ -72,8 +72,7 @@ def draw_match_info_box(ax, scoring_team_logo, opp_team_logo, date_str, score_st
     ax.text(0.03, 0.07, f"{date_str} | Stilling: {score_str} ({min_str}. min)", transform=ax.transAxes, fontsize=8, color='#444444', va='top')
 
 def plot_custom_pitch(df, event_ids, title, zone='full', cmap='magma', logo=None, flip_x=False):
-    """Viser enten fuld bane eller en ren halvdel (up = egen, down = modstanderens) uden hvidt tomrum."""
-    # Numerisk filter, så float/Decimal fra Snowflake ikke giver tomme resultater
+    """Genererer baneplot, der viser fuld bane eller en ren halvdel (up/down) uden tomrum eller rendering-fejl."""
     type_num = pd.to_numeric(df['EVENT_TYPEID'], errors='coerce')
     plot_data = df[type_num.isin([int(i) for i in event_ids])].copy()
     plot_data['EVENT_X'] = pd.to_numeric(plot_data['EVENT_X'], errors='coerce')
@@ -83,7 +82,7 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='magma', logo=None
     if flip_x:
         plot_data['EVENT_X'] = 100 - plot_data['EVENT_X']
 
-    # Hvilken del af banens længde (Opta X) skal vises
+    # Sæt grænser for banens længde (Opta X)
     if zone == 'up':
         x0, x1 = 0, 50
     elif zone == 'down':
@@ -91,48 +90,52 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='magma', logo=None
     else:
         x0, x1 = 0, 100
 
-    # Figurhøjde ud fra banens proportioner (105 x 68 m), så der ikke er hvidt tomrum
+    # Fastlæg proportioner for at undgå at plottet mastes sammen
     width_in = 5
-    height_in = width_in * ((x1 - x0) / 100) * (105 / 68)
+    height_in = 7 if zone == 'full' else 3.5
 
     pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
     fig, ax = pitch.draw(figsize=(width_in, height_in))
 
-    # Klip til den valgte halvdel (på en VerticalPitch er matplotlib-y = banens længde)
+    # Tving aksen til at fylde rammen ud og sæt det korrekte udsnit (halv bane)
+    ax.set_position([0, 0, 1, 1])
     ax.set_ylim(x0, x1)
 
+    # Filtrer data til den valgte zone
     plot_data = plot_data[(plot_data['EVENT_X'] >= x0) & (plot_data['EVENT_X'] <= x1)]
 
+    # Tegn hexbin direkte med pitch.hexbin
     if not plot_data.empty:
-        # Brug pitch.hexbin i stedet for bin_statistic + heatmap
         pitch.hexbin(
             plot_data['EVENT_X'].to_numpy(),
             plot_data['EVENT_Y'].to_numpy(),
             ax=ax,
             cmap=cmap,
-            edgecolors='white',  # Hvide kanter mellem hex-cellerne (giver det klassiske look)
-            linewidth=0.2,       # Juster tykkelsen af kanterne efter behov
-            gridsize=30,         # Styrer størrelsen/antallet af hex-celler (prøv f.eks. mellem 25 og 35)
-            mincnt=1,            # Sørger for, at celler med 0 hændelser ikke vises
-            alpha=0.6
+            edgecolors='white',
+            linewidth=0.5,
+            gridsize=25,
+            mincnt=1,
+            alpha=0.85
         )
-    # Logo og titel (transAxes følger nu den viste halvdel)
-    if zone == 'down':
-        logo_pos, text_y = [0.04, 0.06, 0.08, 0.12], 0.10
-    elif zone == 'up':
-        logo_pos, text_y = [0.04, 0.82, 0.08, 0.12], 0.92
-    else:
-        logo_pos, text_y = [0.04, 0.90, 0.08, 0.08], 0.96
 
+    # Logo og titel placering baseret på zone
     if logo:
+        if zone == 'down':
+            logo_pos, text_y = [0.04, 0.82, 0.08, 0.12], 0.92
+        elif zone == 'up':
+            logo_pos, text_y = [0.04, 0.82, 0.08, 0.12], 0.92
+        else:
+            logo_pos, text_y = [0.04, 0.90, 0.08, 0.08], 0.96
+            
         ax_l = ax.inset_axes(logo_pos, transform=ax.transAxes)
         ax_l.imshow(logo)
         ax_l.axis('off')
+    else:
+        text_y = 0.92
 
-    ax.text(0.94, text_y, title, transform=ax.transAxes, fontsize=7,
-            fontweight='bold', ha='right', va='center')
+    ax.text(0.94, text_y, title, transform=ax.transAxes, fontsize=8,
+            fontweight='bold', ha='right', va='center', color='#111111')
 
-    fig.subplots_adjust(left=0.01, right=0.99, top=0.99, bottom=0.01)
     return fig
     
 # ---------------------------------------------------------------------------
