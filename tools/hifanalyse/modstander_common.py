@@ -111,7 +111,7 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='magma', logo=None
             bins=(50, 50),   # 16 celler i længden (6,25 pr. celle) og 16 i bredden
         )
         stat['statistic'] = np.ma.masked_where(stat['statistic'] == 0, stat['statistic'])
-        pitch.heatmap(stat, ax=ax, cmap=cmap, edgecolors='white', linewidth=0.5, alpha=0.4)
+        pitch.heatmap(stat, ax=ax, cmap=cmap, edgecolors='white', linewidth=0.5, alpha=0.6)
 
     # Logo og titel (transAxes følger nu den viste halvdel)
     if zone == 'down':
