@@ -72,7 +72,7 @@ def draw_match_info_box(ax, scoring_team_logo, opp_team_logo, date_str, score_st
 
 def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None, flip_x=False, show_events=True):
     """
-    Genererer baneplot med udelukkende oktogoner.
+    Genererer baneplot med rigtige 8-kanter (oktogoner).
     """
     plot_data = df[df['EVENT_TYPEID'].astype(str).isin([str(i) for i in event_ids])].copy()
 
@@ -86,20 +86,18 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None,
     pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
     fig, ax = pitch.draw(figsize=(5, 7))
 
-    # Heatmap (KDE) er slettet herfra, så der kun tegnes oktogoner
-
-    # Tegn oktogoner (Scatter) 
+    # Tegn 8-kanter (oktogoner)
     if show_events and not plot_data.empty:
         pitch.scatter(
             plot_data.EVENT_X, 
             plot_data.EVENT_Y, 
             ax=ax, 
-            s=30,               # Størrelsen på oktogonen
-            marker='8',         # <--- Koden for en oktogon
-            color='black',      # Farven på oktogonen
-            alpha=0.7,          # Gennemsigtighed
-            edgecolors='white', # Hvid kant
-            linewidths=0.5
+            s=55,               # Større størrelse så 8-kanten tydeligt kan ses
+            marker='8',         # <--- Matplotlibs oktogon (8-kant)
+            color='black',      # Farven på 8-kanten
+            alpha=0.8,          # Lidt mindre gennemsigtighed for bedre kontrast
+            edgecolors='white', # Hvid kant fremhæver de kantede hjørner
+            linewidths=1.0      # Tykkere kant for at markere formen skarpt
         )
 
     # 3. Tegn logo og tekst
