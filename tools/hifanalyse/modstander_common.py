@@ -70,9 +70,10 @@ def draw_match_info_box(ax, scoring_team_logo, opp_team_logo, date_str, score_st
         ax_l2.imshow(opp_team_logo); ax_l2.axis('off')
     ax.text(0.03, 0.07, f"{date_str} | Stilling: {score_str} ({min_str}. min)", transform=ax.transAxes, fontsize=8, color='#444444', va='top')
 
-def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None, flip_x=False, show_events=True):
+def plot_custom_pitch(df, event_ids, title, zone='full', cmap='magma', logo=None, flip_x=False, show_events=True):
     """
-    Genererer baneplot med hexbin (sekskanter) med korrekte zoner og rette vej på banen.
+    Genererer baneplot med hexbin (sekskanter) der matcher det ønskede 'tiled' look.
+    Standard cmap er nu 'magma' for at matche dit billede.
     """
     plot_data = df[df['EVENT_TYPEID'].astype(str).isin([str(i) for i in event_ids])].copy()
 
@@ -85,36 +86,36 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None,
 
     # 1. Filtrer data baseret på zonen
     if zone == 'up':
-        # Egen banehalvdel (0 til 50 i Opta X)
         plot_data = plot_data[plot_data['EVENT_X'] <= 50].copy()
     elif zone == 'down':
-        # Modstanderens banehalvdel (50 til 100 i Opta X)
         plot_data = plot_data[plot_data['EVENT_X'] >= 50].copy()
 
     # 2. Opret bane
     pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
     fig, ax = pitch.draw(figsize=(5, 7))
 
-    # 3. Tegn hexbin
+    # 3. TEGN HEXBIN (Det "tiled" look)
     if not plot_data.empty:
-        bin_statistic = pitch.hexbin(
+        # Vi bruger 'magma' som standard for at få den mørke/orange/gule effekt
+        pitch.hexbin(
             plot_data.EVENT_X, 
             plot_data.EVENT_Y, 
             ax=ax, 
-            gridsize=18,          
-            cmap=cmap,            
-            edgecolors='white',   
-            linewidth=0.8,        
-            mincnt=1              
+            gridsize=25,          # Juster denne: 20 = store fliser, 30 = små fliser
+            cmap=cmap,            # Her kommer 'magma' ind i billedet
+            edgecolors='white',   # De hvide streger mellem fliserne
+            linewidth=0.5,        # Tykkelsen på de hvide streger
+            mincnt=1,             # Vigtigt: Tegner kun fliser med data (holder baggrund hvid)
+            alpha=0.9             # Gør farverne lidt mere mættede
         )
 
-    # 4. Logo og tekst placering
+    # 4. Logo og tekst placering (beholdes som din oprindelige logik)
     if logo:
         if zone == 'up': 
-            logo_pos = [0.04, 0.90, 0.08, 0.08] # Øverst når vi zoomer til bunden
+            logo_pos = [0.04, 0.90, 0.08, 0.08]
             text_y = 0.97
         elif zone == 'down': 
-            logo_pos = [0.04, 0.03, 0.08, 0.08] # Nederst når vi zoomer til toppen
+            logo_pos = [0.04, 0.03, 0.08, 0.08]
             text_y = 0.08
         else:
             logo_pos = [0.04, 0.90, 0.08, 0.08]
@@ -128,13 +129,14 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None,
 
     ax.text(0.94, text_y, title, transform=ax.transAxes, fontsize=6, fontweight='bold', ha='right', va='top')
 
-    # 5. RETTET ZOOM: Sørg for at 'up' viser bunden af banen (hvor eget mål er) og 'down' viser toppen
+    # 5. ZOOM
     if zone == 'up':
-        ax.set_ylim(0, 52)    # Viser egen banehalvdel (bunden med målet)
+        ax.set_ylim(0, 52)    
     elif zone == 'down':
-        ax.set_ylim(48, 100)  # Viser modstanderens banehalvdel (toppen med målet)
+        ax.set_ylim(48, 100)  
 
     return fig
+
     
 # ---------------------------------------------------------------------------
 # SÆSON/HOLD-VÆLGER
