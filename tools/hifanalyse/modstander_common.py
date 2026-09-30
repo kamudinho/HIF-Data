@@ -112,7 +112,7 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None)
 def render_hold_saeson_selector():
     available_seasons = sorted(list(SEASONS.keys()), reverse=True)
     col_spacer_top, col_saeson, col_hold = st.columns([2.5, 1, 1])
-    default_season_idx = available_seasons.index("2025/2026") if "2025/2026" in available_seasons else 0
+    default_season_idx = available_seasons.index("2026/2027") if "2026/2027" in available_seasons else 0
     valgt_saeson = col_saeson.selectbox("Vælg sæson", available_seasons, index=default_season_idx, label_visibility="collapsed", key="saeson_select")
     
     LIGA_IDS_LIST = []
