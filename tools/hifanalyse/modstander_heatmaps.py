@@ -1,4 +1,5 @@
 # tools/hifanalyse/modstander_heatmaps.py
+# tools/hifanalyse/modstander_heatmaps.py
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -46,7 +47,6 @@ def vis_side():
         c_left, c_right = st.columns([2, 1])
         v_med = c_right.selectbox("Vælg Fokusområde", kat_options, key="ms_t2", label_visibility="collapsed")
 
-        # NU BRUGER VI X TIL LÆNGDE (0-100) OG Y TIL BREDDE (0-100)
         if v_med == "Fase 1":
             ids, tit, cm, zn = [1], "OPBYGNING", "Reds", "up"
             df_f = df_all_h[(df_all_h['EVENT_X'] <= 50) & (df_all_h['EVENT_TYPEID'] == 1)].copy()
@@ -55,7 +55,6 @@ def vis_side():
             df_f = df_all_h[(df_all_h['EVENT_X'] > 50) & (df_all_h['EVENT_TYPEID'] == 1)].copy()
         elif v_med == "Touches in Box":
             ids, tit, cm, zn = [0], "TOUCHES IN BOX", "Blues", "down"
-            # X er længde (skal være i boksen 83-100), Y er bredde (skal være mellem 21.1 og 78.9)
             df_f = df_all_h[(df_all_h['EVENT_X'] > 83) & (df_all_h['EVENT_Y'] > 21.1) & (df_all_h['EVENT_Y'] < 78.9)].copy()
             df_shots = df_all_h[df_all_h['EVENT_TYPEID'].isin([13, 14, 15, 16])].copy()
         else:
@@ -65,7 +64,9 @@ def vis_side():
         total_act = len(df_f)
 
         with c_left:
-            st.pyplot(plot_custom_pitch(df_f, df_f['EVENT_TYPEID'].unique().tolist() if v_med == "Touches in Box" else ids, tit, zone=zn, cmap=cm, logo=hold_logo))
+            # Vi sender de unikke IDs fra df_f for at sikre at hexbin kun tegner det vi har filtreret
+            target_ids = df_f['EVENT_TYPEID'].unique().tolist() if v_med == "Touches in Box" else ids
+            st.pyplot(plot_custom_pitch(df_f, target_ids, tit, zone=zn, cmap=cm, logo=hold_logo))
 
         with c_right:
             if v_med == "Touches in Box":
@@ -98,13 +99,10 @@ def vis_side():
                     df_top['SUCCESS'] = df_f[df_f['EVENT_TYPEID'] == 16].groupby('PLAYER_NAME').size().reindex(df_top['PLAYER_NAME'], fill_value=0).values
 
                 df_top['RATE'] = (df_top['SUCCESS'] / df_top['TOTAL'] * 100).fillna(0)
-
-                min_limit = 1  
-                df_top = df_top[df_top['TOTAL'] >= min_limit]
-                df_top = df_top.sort_values(['RATE', 'TOTAL'], ascending=[False, False]).head(8)
+                df_top = df_top[df_top['TOTAL'] >= 1].sort_values(['RATE', 'TOTAL'], ascending=[False, False]).head(8)
 
                 if df_top.empty:
-                    st.info(f"Ingen spillere med +{min_limit} aktioner")
+                    st.info(f"Ingen spillere fundet")
                 else:
                     for _, r in df_top.iterrows():
                         rate_val = int(r['RATE'])
@@ -128,7 +126,6 @@ def vis_side():
         erobring_ids = [7, 8, 12, 127]
         duel_ids = [7, 44]
 
-        # NU BRUGER VI X TIL LÆNGDE (0-100) OG Y TIL BREDDE (0-100)
         if "Erobringer" in v_uden:
             ids, tit, cm, zn = erobring_ids, "Egen halvdel: EROBRINGER", "Oranges", "up"
             df_f = df_all_h[(df_all_h['EVENT_X'] <= 50) & (df_all_h['EVENT_TYPEID'].isin(ids))].copy()
@@ -166,9 +163,7 @@ def vis_side():
                     SUCCESS=('OUTCOME', 'sum')
                 ).reset_index()
                 df_top['RATE'] = (df_top['SUCCESS'] / df_top['TOTAL'] * 100).fillna(0)
-
-                df_top = df_top[df_top['TOTAL'] >= 1]
-                df_top = df_top.sort_values(['RATE', 'TOTAL'], ascending=[False, False]).head(8)
+                df_top = df_top[df_top['TOTAL'] >= 1].sort_values(['RATE', 'TOTAL'], ascending=[False, False]).head(8)
 
                 for _, r in df_top.iterrows():
                     rate_val = int(r['RATE'])
