@@ -72,7 +72,7 @@ def draw_match_info_box(ax, scoring_team_logo, opp_team_logo, date_str, score_st
     ax.text(0.03, 0.07, f"{date_str} | Stilling: {score_str} ({min_str}. min)", transform=ax.transAxes, fontsize=8, color='#444444', va='top')
 
 def plot_custom_pitch(df, event_ids, title, zone='full', cmap='magma', logo=None, flip_x=False):
-    """Genererer baneplot, hvor egen halvdel ('up') viser mål nederst og midterlinje øverst."""
+    """Genererer baneplot, hvor en halv bane (zone='up') viser mål nederst og midterlinje øverst."""
     type_num = pd.to_numeric(df['EVENT_TYPEID'], errors='coerce')
     plot_data = df[type_num.isin([int(i) for i in event_ids])].copy()
     
@@ -88,26 +88,24 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='magma', logo=None
     width_in = 5
     height_in = 3.5 if is_half else 7
 
-    # Brug altid en fuld bane (half=False), så vi selv har fuld kontrol over y-akserne
+    # Vi bruger half=is_half, så mplsoccer fysisk klipper banen over, når det er en halv bane
     pitch = VerticalPitch(
         pitch_type='opta', 
         pitch_color='#ffffff', 
         line_color='#BDBDBD',
-        half=False
+        half=is_half
     )
     fig, ax = pitch.draw(figsize=(width_in, height_in))
 
-    # Styr visning og filtrering ud fra zone
+    # Filtrering baseret på zone
     if zone == 'up':
-        # Egen halvdel: Mål i bunden (y=0), midterlinje i toppen (y=50)
+        # Egen halvdel: Vis kun hændelser fra y=0 til y=50 (mål til midterlinje)
         plot_data = plot_data[plot_data['EVENT_Y'] <= 50].copy()
-        ax.set_ylim(0, 50)
     elif zone == 'down':
-        # Modstanderens halvdel: Midterlinje i bunden (y=50), mål i toppen (y=100)
+        # Modstanderens halvdel: Vis kun hændelser fra y=50 til y=100
+        # Da half=True klipper bunden væk, skal vi her modsvare at banen er vendt
+        # (eller hvis mplsoccer viser top-halvdelen, så tilpasses det herfra)
         plot_data = plot_data[plot_data['EVENT_Y'] >= 50].copy()
-        ax.set_ylim(50, 100)
-    else:
-        ax.set_ylim(0, 100)
 
     if not plot_data.empty:
         pitch.hexbin(
@@ -133,8 +131,8 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='magma', logo=None
     ax.text(0.94, text_y, title, transform=ax.transAxes, fontsize=8,
             fontweight='bold', ha='right', va='center', color='#111111')
 
-     fig.subplots_adjust(left=0.01, right=0.99, top=0.99, bottom=0.01)
-     return fig
+    fig.subplots_adjust(left=0.01, right=0.99, top=0.99, bottom=0.01)
+    return fig
     
 # ---------------------------------------------------------------------------
 # SÆSON/HOLD-VÆLGER
