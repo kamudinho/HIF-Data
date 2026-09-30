@@ -73,11 +73,11 @@ def draw_match_info_box(ax, scoring_team_logo, opp_team_logo, date_str, score_st
 
 def plot_custom_pitch(df, event_ids, title, zone='full', cmap='magma', logo=None, flip_x=False):
     """
-    Genererer baneplot uden hvidt tomrum ved at tvinge aksen til at fylde hele figuren.
+    Genererer baneplot, der enten viser fuld bane eller skærer rent til den specifikke banehalvdel (up/down) uden hvide tomrum.
     """
     plot_data = df[df['EVENT_TYPEID'].astype(str).isin([str(i) for i in event_ids])].copy()
 
-    # 1. BESTEM FIGUR-STØRRELSE (Forholdet mellem bredde og højde)
+    # 1. Bestem figurstørrelse baseret på zone
     if zone == 'full':
         current_figsize = (5, 7)
     else:
@@ -94,19 +94,23 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='magma', logo=None
     pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
     fig, ax = pitch.draw(figsize=current_figsize)
 
-    # --- DET MAGISKE TRIN: Fjern alle marginer ---
-    ax.set_position([0, 0, 1, 1]) 
-    # --------------------------------------------
-
-    # 3. Filtrer data baseret på zonen
+    # 3. Filtrer data og tving aksen til kun at vise den relevante halvdel af banen
     if zone == 'up':
         plot_data = plot_data[plot_data['EVENT_X'] <= 50].copy()
-        ax.set_ylim(0, 52)
+        # Viser kun bunden af banen (egen halvdel i Opta-koordinater: Y går fra 0 til 100, X er fra 0 til 50, 
+        # men i VerticalPitch er målet på Y-aksen eller X-aksen afhængig af orientering. 
+        # Opta VerticalPitch har normalt Y fra 0 til 100 i længden af banen).
+        # Lad os styre y-grænserne for at zoome ind på halvdelen (0 til 50):
+        ax.set_ylim(0, 50)
     elif zone == 'down':
         plot_data = plot_data[plot_data['EVENT_X'] >= 50].copy()
-        ax.set_ylim(48, 100)
+        # Viser modstanderens halvdel (50 til 100)
+        ax.set_ylim(50, 100)
     else:
         ax.set_ylim(0, 100)
+
+    # Fjern alle standard-marginer omkring plottet, så det fylder hele billedet ud
+    ax.set_position([0, 0, 1, 1]) 
 
     # 4. Tegn hexbin
     if not plot_data.empty:
@@ -114,22 +118,22 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='magma', logo=None
             plot_data.EVENT_X, 
             plot_data.EVENT_Y, 
             ax=ax, 
-            gridsize=25,          
+            gridsize=20,          
             cmap=cmap,            
             edgecolors='white',   
             linewidth=0.5,        
             mincnt=1,
-            alpha=0.9             
+            alpha=0.9              
         )
 
-    # 5. Logo og tekst placering (Bruger transAxes da aksen nu fylder 0-1)
+    # 5. Logo og tekst placering tilpasset den valgte visning
     if logo:
         if zone == 'up': 
-            logo_pos = [0.04, 0.88, 0.08, 0.08]
-            text_y = 0.96
+            logo_pos = [0.04, 0.82, 0.08, 0.12]
+            text_y = 0.92
         elif zone == 'down': 
-            logo_pos = [0.04, 0.04, 0.08, 0.08]
-            text_y = 0.08
+            logo_pos = [0.04, 0.06, 0.08, 0.12]
+            text_y = 0.12
         else:
             logo_pos = [0.04, 0.90, 0.08, 0.08]
             text_y = 0.96
@@ -138,7 +142,7 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='magma', logo=None
         ax_l.imshow(logo)
         ax_l.axis('off')
     else:
-        text_y = 0.96 if zone != 'down' else 0.08
+        text_y = 0.92 if zone == 'up' else (0.12 if zone == 'down' else 0.96)
 
     ax.text(0.94, text_y, title, transform=ax.transAxes, fontsize=7, fontweight='bold', ha='right', va='center')
 
