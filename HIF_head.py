@@ -264,7 +264,7 @@ def vis_side():
     apply_custom_style()
     
     # Indsæt loade-funktionen her, lige før forbindelsen og data hentes
-    loader = load_med_hif_fakta("Henter holddata og statistik fra Snowflake...")
+    loader = load_med_hif_fakta()
     
     conn = _get_snowflake_conn()
     if not conn: 
