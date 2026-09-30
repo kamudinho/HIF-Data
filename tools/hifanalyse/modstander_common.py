@@ -72,7 +72,7 @@ def draw_match_info_box(ax, scoring_team_logo, opp_team_logo, date_str, score_st
 
 def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None, flip_x=False, show_events=True):
     """
-    Genererer baneplot med hexbin (sekskanter) - klipper den uønskede banehalvdel helt væk.
+    Genererer baneplot med hexbin (sekskanter) med korrekte zoner og rette vej på banen.
     """
     plot_data = df[df['EVENT_TYPEID'].astype(str).isin([str(i) for i in event_ids])].copy()
 
@@ -83,17 +83,19 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None,
     if flip_x:
         plot_data['EVENT_X'] = 100 - plot_data['EVENT_X']
 
-    # 1. Filtrer data, så den uønskede banehalvdel fjernes helt fra beregningen
+    # 1. Filtrer data baseret på zonen
     if zone == 'up':
+        # Egen banehalvdel (0 til 50 i Opta X)
         plot_data = plot_data[plot_data['EVENT_X'] <= 50].copy()
     elif zone == 'down':
+        # Modstanderens banehalvdel (50 til 100 i Opta X)
         plot_data = plot_data[plot_data['EVENT_X'] >= 50].copy()
 
     # 2. Opret bane
     pitch = VerticalPitch(pitch_type='opta', pitch_color='#ffffff', line_color='#BDBDBD')
     fig, ax = pitch.draw(figsize=(5, 7))
 
-    # 3. Tegn hexbin på de rent filtrerede data
+    # 3. Tegn hexbin
     if not plot_data.empty:
         bin_statistic = pitch.hexbin(
             plot_data.EVENT_X, 
@@ -109,11 +111,11 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None,
     # 4. Logo og tekst placering
     if logo:
         if zone == 'up': 
-            logo_pos = [0.04, 0.03, 0.08, 0.08]
-            text_y = 0.08
+            logo_pos = [0.04, 0.90, 0.08, 0.08] # Øverst når vi zoomer til bunden
+            text_y = 0.97
         elif zone == 'down': 
-            logo_pos = [0.04, 0.85, 0.08, 0.08]
-            text_y = 0.92
+            logo_pos = [0.04, 0.03, 0.08, 0.08] # Nederst når vi zoomer til toppen
+            text_y = 0.08
         else:
             logo_pos = [0.04, 0.90, 0.08, 0.08]
             text_y = 0.97
@@ -122,15 +124,15 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='Reds', logo=None,
         ax_l.imshow(logo)
         ax_l.axis('off')
     else:
-        text_y = 0.92 if zone in ['up', 'down'] else 0.97
+        text_y = 0.97 if zone != 'down' else 0.08
 
     ax.text(0.94, text_y, title, transform=ax.transAxes, fontsize=6, fontweight='bold', ha='right', va='top')
 
-    # 5. Skær den uønskede banehalvdel rent væk visuelt
+    # 5. RETTET ZOOM: Sørg for at 'up' viser bunden af banen (hvor eget mål er) og 'down' viser toppen
     if zone == 'up':
-        ax.set_ylim(0, 52)    # Vis kun egen banehalvdel
+        ax.set_ylim(0, 52)    # Viser egen banehalvdel (bunden med målet)
     elif zone == 'down':
-        ax.set_ylim(48, 100)  # Vis kun modstanderens banehalvdel
+        ax.set_ylim(48, 100)  # Viser modstanderens banehalvdel (toppen med målet)
 
     return fig
     
