@@ -27,7 +27,7 @@ def vis_side():
         return
 
     # Opret tabs til navigation
-    tab_overview, tab_profile = st.tabs(["Oversigt & Top 10", "Spillerprofil"])
+    tab_overview, tab_profile = st.tabs(["🏆 Oversigt & Top 10", "📊 Generér Spillerprofil"])
 
     with tab_overview:
         st.subheader("Top 10 Spillere per Kategori")
@@ -44,7 +44,7 @@ def vis_side():
         st.dataframe(df, use_container_width=True)
 
     with tab_profile:
-        st.subheader("Visuel Spillerprofil")
+        st.subheader("Visuel Spillerprofil Generator (Opta-stil)")
         
         teams = sorted(df['HOLD_NAVN'].unique())
         selected_team = st.selectbox("Vælg hold:", teams, key="profile_team")
@@ -84,55 +84,54 @@ def vis_side():
                     percentiles.append(player_row[pct_col])
 
             # Byg matplotlib-figur
-            fig, ax = plt.subplots(figsize=(9, len(labels) * 0.45 + 1.8))
+            fig, ax = plt.subplots(figsize=(10, len(labels) * 0.45 + 1.8))
             
             y_pos = np.arange(len(labels))
 
-            # Sæt x-grænser: -18 til 105 (negativ del til Per 90 værdier, 0-100 til percentil søjler)
-            ax.set_xlim(-18, 105)
+            ax.set_xlim(-45, 105)
             ax.set_ylim(-1, len(labels))
             ax.invert_yaxis()
 
-            # Brug indbyggede y-ticks til kategorinavnene i venstre side
-            ax.set_yticks(y_pos)
-            ax.set_yticklabels(labels, fontsize=10, fontweight='medium', color='#111111')
-            
-            # Skjul x-akse og kanter
+            ax.set_yticks([])
             ax.xaxis.set_visible(False)
             for spine in ['top', 'right', 'bottom', 'left']:
                 ax.spines[spine].set_visible(False)
 
-            # Tilføj kolonne-overskrifter øverst
+            # Kolonne-overskrifter
             ax.text(-42, -0.8, "Statistic", fontweight='bold', fontsize=9.5, ha='left', color='#222222')
             ax.text(-8, -0.8, "Per 90", fontweight='bold', fontsize=9.5, ha='right', color='#222222')
             ax.text(50, -0.8, "Percentile", fontweight='bold', fontsize=9.5, ha='center', color='#222222')
             ax.axhline(-0.4, color='#333333', linewidth=1)
 
-            for i, (val, pct) in enumerate(zip(values_p90, percentiles)):
-                # Farvekode på percentil-søjle (Grøn, Grå, Rødbrun)
+            for i, (label, val, pct) in enumerate(zip(labels, values_p90, percentiles)):
+                # 1. Tegn en baggrunds-/skyggebar fra 0 til 100 for at skabe rammen
+                ax.barh(i, 100, left=0, height=0.6, color='#e9ecef', alpha=0.6)
+
+                # 2. Vælg farve til den faktiske percentil-bar
                 if pct >= 75:
-                    bar_color = '#55a868'
+                    bar_color = '#55a868'  # Grøn
                 elif pct >= 40:
-                    bar_color = '#999999'
+                    bar_color = '#999999'  # Grå
                 else:
-                    bar_color = '#c44e52'
+                    bar_color = '#c44e52'  # Rødbrun
 
-                # Tegn percentil-søjle fra 0 til pct
-                ax.barh(i, pct, left=0, height=0.6, color=bar_color, alpha=0.85)
+                # 3. Tegn den faktiske percentil-bar ovenpå skyggebaren
+                ax.barh(i, pct, left=0, height=0.6, color=bar_color, alpha=0.9)
 
-                # Indsæt Per 90 værdi i kolonnen til venstre for søjlerne
+                # Indsæt statistikkens navn og Per 90 værdi i venstre side
+                ax.text(-42, i, label, va='center', ha='left', fontsize=9.5, color='#222222')
+                
                 val_str = f"{val:.2f}" if isinstance(val, float) else str(val)
-                if "%" in labels[i] and isinstance(val, float):
+                if "%" in label and isinstance(val, float):
                     val_str = f"{val:.1f}%"
-                ax.text(-12, i, val_str, va='center', ha='right', fontsize=9, fontweight='semibold', color='#222222')
+                ax.text(-8, i, val_str, va='center', ha='right', fontsize=9.5, fontweight='semibold', color='#222222')
 
-                # Indsæt selve percentil-tallet på/ved søjlen
+                # Indsæt selve percentil-tallet (vises nu altid tydeligt på alle barer)
                 pct_x = pct + 2 if pct < 85 else pct - 5
                 text_color = 'white' if (pct >= 40 and pct < 85) or pct >= 85 else 'black'
                 ax.text(pct_x, i, f"{int(pct)}", va='center', ha='left' if pct < 85 else 'right', fontsize=9, fontweight='bold', color=text_color)
 
-                # Diskret horisontal skilleglinie mellem rækker
-                ax.axhline(i + 0.5, color='#eeeeee', linewidth=0.5)
+                ax.axhline(i + 0.5, color='#f1f3f5', linewidth=0.5)
 
             # Top boks over det hele
             ax.set_title("vs. Ligaen / Spillere", fontsize=11, fontweight='bold', color='white', backgroundcolor='#1b4d3e', pad=15, loc='left')
