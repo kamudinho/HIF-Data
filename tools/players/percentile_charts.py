@@ -27,7 +27,7 @@ def vis_side():
         return
 
     # Opret tabs til navigation
-    tab_overview, tab_profile = st.tabs(["🏆 Oversigt & Top 10", "📊 Generér Spillerprofil"])
+    tab_overview, tab_profile = st.tabs(["Oversigt & Top 10", "Spillerprofil"])
 
     with tab_overview:
         st.subheader("Top 10 Spillere per Kategori")
@@ -44,7 +44,7 @@ def vis_side():
         st.dataframe(df, use_container_width=True)
 
     with tab_profile:
-        st.subheader("Visuel Spillerprofil Generator (Opta-stil)")
+        st.subheader("Visuel Spillerprofil")
         
         teams = sorted(df['HOLD_NAVN'].unique())
         selected_team = st.selectbox("Vælg hold:", teams, key="profile_team")
@@ -134,7 +134,7 @@ def vis_side():
                 ax.axhline(i + 0.5, color='#eeeeee', linewidth=0.5)
 
             # Top boks over det hele
-            ax.set_title("vs. Forwards / Spillere", fontsize=11, fontweight='bold', color='white', backgroundcolor='#1b4d3e', pad=15, loc='left')
+            ax.set_title("vs. Ligaen / Spillere", fontsize=11, fontweight='bold', color='white', backgroundcolor='#1b4d3e', pad=15, loc='left')
 
             # Fodnote
             minutter = player_row['MINUTTER']
