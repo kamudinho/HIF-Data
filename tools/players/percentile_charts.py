@@ -83,49 +83,47 @@ def vis_side():
                     values_p90.append(player_row[p90_col])
                     percentiles.append(player_row[pct_col])
 
-            # Byg matplotlib-figur med plads til kolonner til venstre
+            # Byg matplotlib-figur
             fig, ax = plt.subplots(figsize=(9, len(labels) * 0.45 + 1.8))
             
             y_pos = np.arange(len(labels))
 
-            # Sæt x-grænser så vi har plads til tekst i venstre side og søjler op til 100 i højre
-            ax.set_xlim(-50, 115)
-            ax.set_ylim(-1.5, len(labels))
+            # Sæt x-grænser: -18 til 105 (negativ del til Per 90 værdier, 0-100 til percentil søjler)
+            ax.set_xlim(-18, 105)
+            ax.set_ylim(-1, len(labels))
             ax.invert_yaxis()
-            ax.set_yticks([])
-            ax.xaxis.set_visible(False)
 
+            # Brug indbyggede y-ticks til kategorinavnene i venstre side
+            ax.set_yticks(y_pos)
+            ax.set_yticklabels(labels, fontsize=10, fontweight='medium', color='#111111')
+            
+            # Skjul x-akse og kanter
+            ax.xaxis.set_visible(False)
             for spine in ['top', 'right', 'bottom', 'left']:
                 ax.spines[spine].set_visible(False)
 
             # Tilføj kolonne-overskrifter øverst
-            ax.text(-50, -1.0, "Statistic", fontweight='bold', fontsize=10, ha='left', color='#111111')
-            ax.text(-8, -1.0, "Per 90", fontweight='bold', fontsize=10, ha='right', color='#111111')
-            ax.text(50, -1.0, "Percentile", fontweight='bold', fontsize=10, ha='center', color='#111111')
-            
-            # Linje under overskrift
-            ax.axhline(-0.5, color='#333333', linewidth=1)
+            ax.text(-12, -0.8, "Per 90", fontweight='bold', fontsize=9.5, ha='right', color='#333333')
+            ax.text(50, -0.8, "Percentile", fontweight='bold', fontsize=9.5, ha='center', color='#333333')
+            ax.axhline(-0.4, color='#cccccc', linewidth=1)
 
-            for i, (label, val, pct) in enumerate(zip(labels, values_p90, percentiles)):
-                # Farvekode på percentil-søjle
+            for i, (val, pct) in enumerate(zip(values_p90, percentiles)):
+                # Farvekode på percentil-søjle (Grøn, Grå, Rødbrun)
                 if pct >= 75:
-                    bar_color = '#55a868' # Grøn
+                    bar_color = '#55a868'
                 elif pct >= 40:
-                    bar_color = '#999999' # Grå
+                    bar_color = '#999999'
                 else:
-                    bar_color = '#c44e52' # Rødbrun
+                    bar_color = '#c44e52'
 
                 # Tegn percentil-søjle fra 0 til pct
                 ax.barh(i, pct, left=0, height=0.6, color=bar_color, alpha=0.85)
 
-                # Indsæt statistikkens navn (venstre kolonne)
-                ax.text(-50, i, label, va='center', ha='left', fontsize=9.5, color='#222222')
-
-                # Indsæt Per 90 værdi (midterste kolonne)
-                val_str = f"{val:.1f}" if isinstance(val, float) else str(val)
-                if "%" in label and isinstance(val, float):
+                # Indsæt Per 90 værdi i kolonnen til venstre for søjlerne
+                val_str = f"{val:.2f}" if isinstance(val, float) else str(val)
+                if "%" in labels[i] and isinstance(val, float):
                     val_str = f"{val:.1f}%"
-                ax.text(-8, i, val_str, va='center', ha='right', fontsize=9.5, fontweight='semibold', color='#222222')
+                ax.text(-12, i, val_str, va='center', ha='right', fontsize=9, fontweight='semibold', color='#222222')
 
                 # Indsæt selve percentil-tallet på/ved søjlen
                 pct_x = pct + 2 if pct < 85 else pct - 5
@@ -135,13 +133,13 @@ def vis_side():
                 # Diskret horisontal skilleglinie mellem rækker
                 ax.axhline(i + 0.5, color='#eeeeee', linewidth=0.5)
 
-            # Top boks over det hele (f.eks. vs. Forwards)
-            ax.set_title("vs. Forwards / Spillere", fontsize=11, fontweight='bold', color='white', backgroundcolor='#1b4d3e', pad=18, loc='left')
+            # Top boks over det hele
+            ax.set_title("vs. Forwards / Spillere", fontsize=11, fontweight='bold', color='white', backgroundcolor='#1b4d3e', pad=15, loc='left')
 
             # Fodnote
             minutter = player_row['MINUTTER']
             kampe = player_row['KAMPE']
-            fig.text(0.05, 0.01, f"Spiller sammenlignet med ligastandarder. Baseret på {minutter} minutter fordelt på {kampe} kampe.", fontsize=8.5, fontstyle='italic', color='#555555')
+            fig.text(0.05, 0.02, f"Spiller sammenlignet med ligastandarder. Baseret på {minutter} minutter fordelt på {kampe} kampe.", fontsize=8.5, fontstyle='italic', color='#555555')
 
             plt.tight_layout()
             st.pyplot(fig)
