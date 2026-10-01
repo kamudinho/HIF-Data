@@ -12,7 +12,7 @@ def vis_side():
     Hovedfunktion der kaldes af appen uden argumenter.
     Henter data via fetch_player_percentiles().
     """
-    st.title("####Spillerprofiler & Percentiler")
+    st.title("Spillerprofiler & Percentiler")
     st.markdown("Her kan du se rangeringer, top 10-spillere og generere visuelle spillerprofiler i Opta/FBref-stil.")
 
     # Hent data
@@ -27,10 +27,10 @@ def vis_side():
         return
 
     # Opret tabs til navigation
-    tab_overview, tab_profile = st.tabs(["Oversigt & Top 10", "Spillerprofil"])
+    tab_overview, tab_profile = st.tabs(["🏆 Oversigt & Top 10", "📊 Generér Spillerprofil"])
 
     with tab_overview:
-        st.subheader("###Top 10 Spillere per Kategori")
+        st.subheader("Top 10 Spillere per Kategori")
         
         metric_cols = [col for col in df.columns if col not in ['HOLD_NAVN', 'SPILLER_NAVN', 'MINUTTER', 'KAMPE']]
         selected_metric = st.selectbox("Vælg metrik / kategori for Top 10:", metric_cols)
@@ -56,7 +56,6 @@ def vis_side():
             player_row = df[df['SPILLER_NAVN'] == selected_player].iloc[0]
 
             # Opsætning af data til grafen
-            # Vi definerer de metrikker der skal vises, deres p90-kolonne og pctile-kolonne
             metrics_config = [
                 ("Non-Penalty Goals", "NP_GOALS_P90", "NP_GOALS_PCTILE"),
                 ("npxG", "NP_XG_P90", "NP_XG_PCTILE"),
@@ -85,12 +84,11 @@ def vis_side():
                     values_p90.append(player_row[p90_col])
                     percentiles.append(player_row[pct_col])
 
-            # Bygmatplotlib-figur der ligner Opta-kortet
+            # Byg matplotlib-figur
             fig, ax = plt.subplots(figsize=(8, len(labels) * 0.45 + 1.5))
             
             y_pos = np.arange(len(labels))
 
-            # Farvekoder baseret på percentil (Grøn til høje, grå/brun til lave ligesom i eksemplet)
             bar_colors = []
             for p in percentiles:
                 if p >= 75:
@@ -100,39 +98,29 @@ def vis_side():
                 else:
                     bar_colors.append('#c44e52') # Rødbrun
 
-            # Tegn søjler for percentiler (skaleret 0-100)
             ax.barh(y_pos, percentiles, height=0.6, color=bar_colors, alpha=0.85)
 
             ax.set_yticks(y_pos)
             ax.set_yticklabels(labels, fontsize=10)
-            ax.invert_yaxis()  # Top-down rekkefølge
+            ax.invert_yaxis()
             ax.set_xlim(0, 100)
-            ax.xaxis.set_visible(False) # Skjul x-akse tal, da det vises som procentbar
+            ax.xaxis.set_visible(False)
             
-            # Fjern kanter (spines) for et rent tabellignende look
             for spine in ['top', 'right', 'bottom', 'left']:
                 ax.spines[spine].set_visible(False)
 
-            # Tilføj tekstfelter for Statistic, Per 90 og Percentile i tabellen
             ax.axvline(0, color='black', linewidth=1)
             
-            # Indsæt værdier for Per 90 og Percentil som tekst i figuren
             for i, (val, pct) in enumerate(zip(values_p90, percentiles)):
-                # Per 90 værdi (til venstre for søjlen)
                 ax.text(-5, i, f"{val:.2f}" if isinstance(val, float) else str(val), 
                         va='center', ha='right', fontsize=9, fontweight='semibold')
-                # Percentil-tal (inde i eller lige ved søjlen)
-                pct_text_x = max(pct + 2, 5) if pct < 90 else pct - 6
-                text_color = 'white' if pct >= 40 and pct < 90 else 'black'
-                if pct >= 90: text_color = 'white'
                 
-                ax.text(pct_text_x, i, f"{int(pct)}", va='center', ha='center', fontsize=9, fontweight='bold', color='black')
+                pct_text_x = max(pct + 2, 5) if pct < 90 else pct - 6
+                ax.text(pct_text_x, i, f"{int(pct)}", va='center', ha='center', fontsize=9, fontweight='bold', color='white' if pct >= 40 else 'black')
 
-            # Top boks (f.eks. "vs. Forwards")
             ax.set_title("vs. Forwards / Spillere", fontsize=12, fontweight='bold', color='white', backgroundcolor='#1b4d3e', pad=15, loc='left')
 
-            # Fodnotetekst
-minutter = player_row['MINUTTER']
+            minutter = player_row['MINUTTER']
             kampe = player_row['KAMPE']
             fig.text(0.1, 0.02, f"Spiller sammenlignet med ligastandarder. Baseret på {minutter} minutter fordelt på {kampe} kampe.", fontsize=9, fontstyle='italic')
 
