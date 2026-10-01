@@ -103,9 +103,10 @@ def vis_side():
                 ax.spines[spine].set_visible(False)
 
             # Tilføj kolonne-overskrifter øverst
-            ax.text(-12, -0.8, "Per 90", fontweight='bold', fontsize=9.5, ha='right', color='#333333')
-            ax.text(50, -0.8, "Percentile", fontweight='bold', fontsize=9.5, ha='center', color='#333333')
-            ax.axhline(-0.4, color='#cccccc', linewidth=1)
+            ax.text(-42, -0.8, "Statistic", fontweight='bold', fontsize=9.5, ha='left', color='#222222')
+            ax.text(-8, -0.8, "Per 90", fontweight='bold', fontsize=9.5, ha='right', color='#222222')
+            ax.text(50, -0.8, "Percentile", fontweight='bold', fontsize=9.5, ha='center', color='#222222')
+            ax.axhline(-0.4, color='#333333', linewidth=1)
 
             for i, (val, pct) in enumerate(zip(values_p90, percentiles)):
                 # Farvekode på percentil-søjle (Grøn, Grå, Rødbrun)
