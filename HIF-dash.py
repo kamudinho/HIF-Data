@@ -447,7 +447,7 @@ try:
             xg.vis_side()
         elif s == "Spiller-charts":
             import tools.players.percentile_charts as spiller_charts
-            spiller_charts.vis_side()
+            spiller_charts.vis_side(connection)
         elif s == "Transfers":
             import tools.scouting.transfer_input as t_input
             t_input.vis_side()
