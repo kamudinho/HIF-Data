@@ -446,8 +446,8 @@ try:
             import tools.ligaen.model as xg
             xg.vis_side()
         elif s == "Spiller-charts":
-            import tools.players.percentile_charts as spiller_charts
-            spiller_charts.vis_side()
+            import tools.players.percentile_charts as percentile_charts
+            percentile_charts.vis_side()
         elif s == "Transfers":
             import tools.scouting.transfer_input as t_input
             t_input.vis_side()
