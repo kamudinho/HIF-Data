@@ -157,5 +157,6 @@ def fetch_player_percentiles(connection=None) -> pd.DataFrame:
         AERIAL_DUELS_WON_P90, ROUND(PERCENT_RANK() OVER (ORDER BY AERIAL_DUELS_WON_P90 ASC) * 100, 1) AS AERIAL_DUELS_WON_PCTILE
     FROM BaseCalculations
     ORDER BY HOLD_NAVN, SPILLER_NAVN;
-    
+    """  # <--- Sørg for at denne lukker sql_query strengen korrekt!
+
     return connection.query(sql_query, ttl=0)
