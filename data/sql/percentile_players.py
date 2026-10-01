@@ -1,11 +1,16 @@
 # data/sql/percentile_players.py
-import pandas as pd
 
-def fetch_player_percentiles(connection) -> pd.DataFrame:
+import pandas as pd
+from data.data_load import _get_snowflake_conn
+
+def fetch_player_percentiles(connection=None) -> pd.DataFrame:
     """
-    Udfører SQL-forespørgslen for at hente spillerstatistik og percentiler
-    til Hvidovre-appen.
+    Henter spillerstatistik og percentiler. Henter automatisk forbindelse,
+    hvis den ikke er angivet.
     """
+    if connection is None:
+        connection = _get_snowflake_conn()
+
     sql_query = """
     WITH MatchBaseAll AS (
         SELECT 
@@ -152,8 +157,5 @@ def fetch_player_percentiles(connection) -> pd.DataFrame:
         AERIAL_DUELS_WON_P90, ROUND(PERCENT_RANK() OVER (ORDER BY AERIAL_DUELS_WON_P90 ASC) * 100, 1) AS AERIAL_DUELS_WON_PCTILE
     FROM BaseCalculations
     ORDER BY HOLD_NAVN, SPILLER_NAVN;
-    """
     
-    # Læser direkte ind i en Pandas DataFrame ved brug af den medsendte forbindelse
-    df = pd.read_sql(sql_query, connection)
-    return df
+    return connection.query(sql_query, ttl=0)
