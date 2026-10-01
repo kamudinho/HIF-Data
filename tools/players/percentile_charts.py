@@ -1,8 +1,9 @@
-# tools.players.percentile_charts.py
+# tools/players/percentile_charts.py
 
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
+import numpy as np
 
 from data.sql.percentile_players import fetch_player_percentiles
 
@@ -11,8 +12,8 @@ def vis_side():
     Hovedfunktion der kaldes af appen uden argumenter.
     Henter data via fetch_player_percentiles().
     """
-    st.title("Spillerprofiler & Percentiler")
-    st.markdown("Her kan du se rangeringer, top 10-spillere på tværs af kategorier og generere visuelle spillerprofiler.")
+    st.title("####Spillerprofiler & Percentiler")
+    st.markdown("Her kan du se rangeringer, top 10-spillere og generere visuelle spillerprofiler i Opta/FBref-stil.")
 
     # Hent data
     try:
@@ -26,19 +27,15 @@ def vis_side():
         return
 
     # Opret tabs til navigation
-    tab_overview, tab_profile = st.tabs(["🏆 Oversigt & Top 10", "📊 Generér Spillerprofil"])
+    tab_overview, tab_profile = st.tabs(["Oversigt & Top 10", "Spillerprofil"])
 
     with tab_overview:
-        st.subheader("Top 10 Spillere per Kategori")
+        st.subheader("###Top 10 Spillere per Kategori")
         
-        # Identificer numeriske percentil- og P90-kolonner
         metric_cols = [col for col in df.columns if col not in ['HOLD_NAVN', 'SPILLER_NAVN', 'MINUTTER', 'KAMPE']]
-        
-        # Brugeren kan vælge en metrik at sortere efter
         selected_metric = st.selectbox("Vælg metrik / kategori for Top 10:", metric_cols)
 
         if selected_metric:
-            # Sorter og vis top 10
             top_10 = df[['SPILLER_NAVN', 'HOLD_NAVN', 'MINUTTER', selected_metric]].sort_values(by=selected_metric, ascending=False).head(10)
             st.dataframe(top_10.reset_index(drop=True), use_container_width=True)
 
@@ -47,9 +44,8 @@ def vis_side():
         st.dataframe(df, use_container_width=True)
 
     with tab_profile:
-        st.subheader("Visuel Spillerprofil Generator")
+        st.subheader("Visuel Spillerprofil Generator (Opta-stil)")
         
-        # Vælg hold og spiller
         teams = sorted(df['HOLD_NAVN'].unique())
         selected_team = st.selectbox("Vælg hold:", teams, key="profile_team")
         
@@ -57,32 +53,88 @@ def vis_side():
         selected_player = st.selectbox("Vælg spiller:", team_players, key="profile_player")
 
         if selected_player:
-            player_data = df[df['SPILLER_NAVN'] == selected_player].iloc[0]
+            player_row = df[df['SPILLER_NAVN'] == selected_player].iloc[0]
 
-            col1, col2 = st.columns([1, 2])
-            with col1:
-                st.markdown(f"### {player_data['SPILLER_NAVN']}")
-                st.write(f"**Hold:** {player_data['HOLD_NAVN']}")
-                st.write(f"**Kampe:** {player_data['KAMPE']}")
-                st.write(f"**Minutter:** {player_data['MINUTTER']}")
+            # Opsætning af data til grafen
+            # Vi definerer de metrikker der skal vises, deres p90-kolonne og pctile-kolonne
+            metrics_config = [
+                ("Non-Penalty Goals", "NP_GOALS_P90", "NP_GOALS_PCTILE"),
+                ("npxG", "NP_XG_P90", "NP_XG_PCTILE"),
+                ("Shots Total", "SHOTS_P90", "SHOTS_PCTILE"),
+                ("Assists", "ASSISTS_P90", "ASSISTS_PCTILE"),
+                ("xA", "XA_P90", "XA_PCTILE"),
+                ("Key Passes", "KEY_PASSES_P90", "KEY_PASSES_PCTILE"),
+                ("Passes Attempted", "PASSES_ATTEMPTED_P90", "PASSES_ATTEMPTED_PCTILE"),
+                ("Pass Completion %", "PASS_COMPLETION_PCT", "PASS_COMPLETION_PCTILE"),
+                ("Touches (Att Pen)", "TOUCHES_IN_BOX_P90", "TOUCHES_IN_BOX_PCTILE"),
+                ("Tackles Won", "TACKLES_WON_P90", "TACKLES_WON_PCTILE"),
+                ("Interceptions", "INTERCEPTIONS_P90", "INTERCEPTIONS_PCTILE"),
+                ("Clearances", "CLEARANCES_P90", "CLEARANCES_PCTILE"),
+                ("Ball Recoveries", "BALL_RECOVERIES_P90", "BALL_RECOVERIES_PCTILE"),
+                ("Dribbles Succ.", "DRIBBLES_SUCC_P90", "DRIBBLES_SUCC_PCTILE"),
+                ("Aerial Duels Won", "AERIAL_DUELS_WON_P90", "AERIAL_DUELS_WON_PCTILE")
+            ]
+
+            labels = []
+            values_p90 = []
+            percentiles = []
+
+            for label, p90_col, pct_col in metrics_config:
+                if p90_col in player_row and pct_col in player_row:
+                    labels.append(label)
+                    values_p90.append(player_row[p90_col])
+                    percentiles.append(player_row[pct_col])
+
+            # Bygmatplotlib-figur der ligner Opta-kortet
+            fig, ax = plt.subplots(figsize=(8, len(labels) * 0.45 + 1.5))
             
-            with col2:
-                st.info("Her ses spillerens nøgletal og percentiler klar til eksport eller visning.")
+            y_pos = np.arange(len(labels))
 
-            # Udtræk percentiler til visualisering (kolonner der slutter på PCTILE)
-            pctile_cols = [c for c in df.columns if c.endswith('_PCTILE')]
+            # Farvekoder baseret på percentil (Grøn til høje, grå/brun til lave ligesom i eksemplet)
+            bar_colors = []
+            for p in percentiles:
+                if p >= 75:
+                    bar_colors.append('#55a868') # Grøn
+                elif p >= 40:
+                    bar_colors.append('#999999') # Grå
+                else:
+                    bar_colors.append('#c44e52') # Rødbrun
+
+            # Tegn søjler for percentiler (skaleret 0-100)
+            ax.barh(y_pos, percentiles, height=0.6, color=bar_colors, alpha=0.85)
+
+            ax.set_yticks(y_pos)
+            ax.set_yticklabels(labels, fontsize=10)
+            ax.invert_yaxis()  # Top-down rekkefølge
+            ax.set_xlim(0, 100)
+            ax.xaxis.set_visible(False) # Skjul x-akse tal, da det vises som procentbar
             
-            if pctile_cols:
-                chart_data = player_data[pctile_cols].reset_index()
-                chart_data.columns = ['Metrik', 'Percentil']
-                chart_data['Metrik'] = chart_data['Metrik'].str.replace('_PCTILE', '')
+            # Fjern kanter (spines) for et rent tabellignende look
+            for spine in ['top', 'right', 'bottom', 'left']:
+                ax.spines[spine].set_visible(False)
 
-                # Generer et simpelt søjlediagram over percentilerne
-                fig, ax = plt.subplots(figsize=(10, 6))
-                ax.barh(chart_data['Metrik'], chart_data['Percentil'], color='skyblue')
-                ax.set_xlim(0, 100)
-                ax.set_xlabel("Percentil (0-100)")
-                ax.set_title(f"Percentil-profil for {selected_player}")
-                ax.axvline(50, color='gray', linestyle='--', alpha=0.7)
+            # Tilføj tekstfelter for Statistic, Per 90 og Percentile i tabellen
+            ax.axvline(0, color='black', linewidth=1)
+            
+            # Indsæt værdier for Per 90 og Percentil som tekst i figuren
+            for i, (val, pct) in enumerate(zip(values_p90, percentiles)):
+                # Per 90 værdi (til venstre for søjlen)
+                ax.text(-5, i, f"{val:.2f}" if isinstance(val, float) else str(val), 
+                        va='center', ha='right', fontsize=9, fontweight='semibold')
+                # Percentil-tal (inde i eller lige ved søjlen)
+                pct_text_x = max(pct + 2, 5) if pct < 90 else pct - 6
+                text_color = 'white' if pct >= 40 and pct < 90 else 'black'
+                if pct >= 90: text_color = 'white'
                 
-                st.pyplot(fig)
+                ax.text(pct_text_x, i, f"{int(pct)}", va='center', ha='center', fontsize=9, fontweight='bold', color='black')
+
+            # Top boks (f.eks. "vs. Forwards")
+            ax.set_title("vs. Forwards / Spillere", fontsize=12, fontweight='bold', color='white', backgroundcolor='#1b4d3e', pad=15, loc='left')
+
+            # Fodnotetekst
+minutter = player_row['MINUTTER']
+            kampe = player_row['KAMPE']
+            fig.text(0.1, 0.02, f"Spiller sammenlignet med ligastandarder. Baseret på {minutter} minutter fordelt på {kampe} kampe.", fontsize=9, fontstyle='italic')
+
+            plt.tight_layout()
+            st.pyplot(fig)
