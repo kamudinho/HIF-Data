@@ -23,7 +23,7 @@ def vis_side():
         return
 
     if df.empty:
-        st.warning("Ingen data fundet med de aktuelle filtre.")
+        st.warning("Inden data fundet med de aktuelle filtre.")
         return
 
     # Opret tabs til navigation
@@ -88,7 +88,7 @@ def vis_side():
             
             y_pos = np.arange(len(labels))
 
-            ax.set_xlim(-45, 105)
+            ax.set_xlim(-45, 110)
             ax.set_ylim(-1, len(labels))
             ax.invert_yaxis()
 
@@ -104,7 +104,7 @@ def vis_side():
             ax.axhline(-0.4, color='#333333', linewidth=1)
 
             for i, (label, val, pct) in enumerate(zip(labels, values_p90, percentiles)):
-                # 1. Tegn en baggrunds-/skyggebar fra 0 til 100 for at skabe rammen
+                # 1. Skyggebar (0 til 100)
                 ax.barh(i, 100, left=0, height=0.6, color='#e9ecef', alpha=0.6)
 
                 # 2. Vælg farve til den faktiske percentil-bar
@@ -115,7 +115,7 @@ def vis_side():
                 else:
                     bar_color = '#c44e52'  # Rødbrun
 
-                # 3. Tegn den faktiske percentil-bar ovenpå skyggebaren
+                # 3. Den faktiske percentil-bar
                 ax.barh(i, pct, left=0, height=0.6, color=bar_color, alpha=0.9)
 
                 # Indsæt statistikkens navn og Per 90 værdi i venstre side
@@ -126,10 +126,18 @@ def vis_side():
                     val_str = f"{val:.1f}%"
                 ax.text(-8, i, val_str, va='center', ha='right', fontsize=9.5, fontweight='semibold', color='#222222')
 
-                # Indsæt selve percentil-tallet (vises nu altid tydeligt på alle barer)
-                pct_x = pct + 2 if pct < 85 else pct - 5
-                text_color = 'white' if (pct >= 40 and pct < 85) or pct >= 85 else 'black'
-                ax.text(pct_x, i, f"{int(pct)}", va='center', ha='left' if pct < 85 else 'right', fontsize=9, fontweight='bold', color=text_color)
+                # 4. Placer percentil-tallet: Hvis baren er bred nok (> 12), sættes den inde i baren (højrejusteret). 
+                # Hvis baren er for kort, placeres den lige uden for baren, så den altid kan ses.
+                if pct >= 12:
+                    pct_x = pct - 2
+                    text_align = 'right'
+                    text_color = 'white'
+                else:
+                    pct_x = pct + 2
+                    text_align = 'left'
+                    text_color = '#333333'
+
+                ax.text(pct_x, i, f"{int(pct)}", va='center', ha=text_align, fontsize=9, fontweight='bold', color=text_color)
 
                 ax.axhline(i + 0.5, color='#f1f3f5', linewidth=0.5)
 
