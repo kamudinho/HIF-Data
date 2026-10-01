@@ -4,20 +4,19 @@ import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 
-# Importer funktionen fra dit sql-script
 from data.sql.percentile_players import fetch_player_percentiles
 
-def vis_side(connection):
+def vis_side():
     """
-    Hovedfunktion der kaldes af appen for at vise percentil-oversigter,
-    top 10 spillere og generere spillerprofiler.
+    Hovedfunktion der kaldes af appen uden argumenter.
+    Henter data via fetch_player_percentiles().
     """
     st.title("Spillerprofiler & Percentiler")
     st.markdown("Her kan du se rangeringer, top 10-spillere på tværs af kategorier og generere visuelle spillerprofiler.")
 
-    # Hent data via forbindelsen
+    # Hent data
     try:
-        df = fetch_player_percentiles(connection)
+        df = fetch_player_percentiles()
     except Exception as e:
         st.error(f"Fejl ved hentning af data: {e}")
         return
