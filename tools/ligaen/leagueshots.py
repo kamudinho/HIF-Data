@@ -230,15 +230,25 @@ def vis_side(dp=None):
             match_options = {"Alle kampe": None}
             if "MATCH_OPTAUUID" in df_team.columns:
                 team_uuid = TEAMS.get(t_sel, {}).get("opta_uuid", "").upper()
+                
+                # Udled kampe og find tidligste timestamp pr kamp til sortering
+                kamp_tider = []
                 for m_id in df_team["MATCH_OPTAUUID"].unique():
+                    match_rows = df_all[df_all["MATCH_OPTAUUID"] == m_id]
+                    min_tid = match_rows["EVENT_TIMESTAMP"].min() if "EVENT_TIMESTAMP" in match_rows.columns else ""
+                    kamp_tider.append((m_id, min_tid))
+                
+                # Sorter kampe kronologisk efter dato/timestamp
+                kamp_tider.sort(key=lambda x: str(x[1]))
+
+                for m_id, _ in kamp_tider:
                     match_rows = df_all[df_all["MATCH_OPTAUUID"] == m_id]
                     sub_df = match_rows[match_rows["KLUB_NAVN"] != t_sel]
                     opp_name = sub_df["KLUB_NAVN"].iloc[0] if not sub_df.empty and sub_df["KLUB_NAVN"].notna().any() else "Modstander"
                     
-                    # Tjek om holdet er hjemmehold ved at sammenligne med HOME_CONTESTANT_OPTAUUID
                     is_home = True
-                    if "HOME_CONTESTANT_OPTAUUID" in match_rows.columns and not match_rows.empty:
-                        home_val = str(match_rows["HOME_CONTESTANT_OPTAUUID"].iloc[0]).upper()
+                    if "CONTESTANTHOME_OPTAUUID" in match_rows.columns and not match_rows.empty:
+                        home_val = str(match_rows["CONTESTANTHOME_OPTAUUID"].iloc[0]).upper()
                         is_home = (home_val == team_uuid)
                     
                     hu = "H" if is_home else "U"
