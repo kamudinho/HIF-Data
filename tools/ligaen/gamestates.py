@@ -10,7 +10,7 @@ from data.sql.teams import hent_hold_gamestate_tid
 def vis_side():
     """
     Hovedfunktion der kaldes af appen. Viser gamestate-oversigten som et 
-    statisk Matplotlib-billede med korrekte bytes til visning og download.
+    statisk Matplotlib-billede med korrekt placerede legende-elementer.
     """
     st.markdown("#### Holdenes Gamestates (Førende / Uafgjort / Bagud)")
     st.caption("Oversigt over andelen af spilletiden holdene tilbringer i henholdsvis Winning, Drawing og Losing.")
@@ -78,12 +78,15 @@ def vis_side():
                     ha='center', va='center', color='white', fontweight='bold', fontsize=9)
 
     # Titel boks i top-venstre stil
-    ax.text(0, 1.02, "  GAME STATES: SPILLETID FORDELT (%)  ", transform=ax.transAxes,
+    ax.text(0, 1.03, "  GAME STATES: SPILLETID FORDELT (%)  ", transform=ax.transAxes,
             fontsize=12, fontweight='bold', color='white',
             bbox=dict(facecolor='#1b4332', alpha=0.9, edgecolor='none', pad=6),
             ha='left', va='bottom')
 
     ax.set_xlim(0, 100)
+    # Giver lidt ekstra plads i toppen, så legenden sidder pænt uden at røre toppen/søjlerne
+    ax.set_ylim(-0.8, len(df) - 0.2)
+
     ax.set_xlabel('Procent af spilletid (%)', fontsize=10, fontweight='bold', color='#333333')
     ax.xaxis.grid(True, linestyle='--', alpha=0.5, color='#cccccc')
     ax.set_axisbelow(True)
@@ -93,11 +96,15 @@ def vis_side():
     ax.spines['left'].set_color('#888888')
     ax.spines['bottom'].set_color('#888888')
 
-    ax.legend(loc='upper right', frameon=True, facecolor='white', edgecolor='none')
+    # Eksplisit rækkefølge af legende: Winning, Drawing, Losing
+    handles = [bars_w[0], bars_d[0], bars_l[0]]
+    labels = ['Winning', 'Drawing', 'Losing']
+    ax.legend(handles, labels, loc='upper right', bbox_to_anchor=(0.99, 0.99), 
+              frameon=True, facecolor='white', edgecolor='#dddddd', fontsize=9)
 
     plt.tight_layout()
 
-    # Gem figuren til bytes, så vi kan bruge dem uafhængigt til både visning og download
+    # Gem figuren til bytes
     buf = io.BytesIO()
     plt.savefig(buf, format="png", dpi=300, bbox_inches='tight')
     plt.close(fig)
