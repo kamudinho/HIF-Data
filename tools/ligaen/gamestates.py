@@ -9,7 +9,7 @@ from data.sql.teams import hent_hold_gamestate_tid
 def vis_side():
     """
     Hovedfunktion der kaldes af appen. Viser holdenes spilletid fordelt på
-    Winning, Drawing og Losing baseret på den rigtige minut-for-minut SQL-logik.
+    Winning, Drawing og Losing præcis som ønsket.
     """
     st.markdown("#### Holdenes Gamestates (Førende / Uafgjort / Bagud)")
     st.caption("Oversigt over andelen af spilletiden holdene tilbringer i henholdsvis Winning, Drawing og Losing.")
@@ -19,10 +19,8 @@ def vis_side():
         st.error("Kunne ikke oprette forbindelse til Snowflake.")
         return
 
-    # Standard kalender-UUID for turneringen
     calendar_uuid = "2mb332vncy4450vu14paj8844"
 
-    # Hent data ved at kalde funktionen fra teams.py
     with st.spinner("Henter gamestate-data fra Snowflake..."):
         try:
             df = hent_hold_gamestate_tid(conn, calendar_uuid)
@@ -40,10 +38,10 @@ def vis_side():
         st.info("Ingen gamestate-data fundet for denne kalender.")
         return
 
-    # Sørg for at data er sorteret efter mest tid i føring (Winning %)
+    # Sorter efter mest tid i føring
     df_grouped = df.sort_values(by='WINNING_PCT', ascending=False)
 
-    # Plotly stabeldiagram (Stacked bar chart) ligesom Opta Analyst
+    # Plotly stabeldiagram med de korrekte kolonnenavne fra SQL'en
     fig = px.bar(
         df_grouped,
         x=['LOSING_PCT', 'DRAWING_PCT', 'WINNING_PCT'],
@@ -58,7 +56,6 @@ def vis_side():
         }
     )
     
-    # Tilpas kolonnenavne i legenden til pænere tekst
     names = {'LOSING_PCT': 'Losing', 'DRAWING_PCT': 'Drawing', 'WINNING_PCT': 'Winning'}
     fig.for_each_trace(lambda t: t.update(name = names.get(t.name, t.name)))
 
