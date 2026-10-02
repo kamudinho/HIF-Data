@@ -12,7 +12,7 @@ def vis_side():
     Hovedfunktion der kaldes af appen uden argumenter.
     Henter data via fetch_player_percentiles().
     """
-    st.title("####Spillerprofiler & Percentiler")
+    st.markdown("####Spillerprofiler & Percentiler")
     st.caption("Her kan du se rangeringer, top 10-spillere og spillerprofiler")
 
     # Hent data
