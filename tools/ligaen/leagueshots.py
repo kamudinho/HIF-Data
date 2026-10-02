@@ -239,7 +239,7 @@ def vis_side(dp=None):
                     kamp_tider.append((m_id, min_tid))
                 
                 # Sorter kampe kronologisk efter dato/timestamp
-                kamp_tider.sort(key=lambda x: str(x[1]))
+                kamp_tider.sort(key=lambda x: str(x[1]), reverse=True)
 
                 for m_id, _ in kamp_tider:
                     match_rows = df_all[df_all["MATCH_OPTAUUID"] == m_id]
