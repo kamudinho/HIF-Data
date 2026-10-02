@@ -4,75 +4,44 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 from data.data_load import _get_snowflake_conn
-
-def hent_gamestate_data(connection=None):
-    """
-    Henter og beregner spilletid (og procenter) fordelt på Winning, Drawing og Losing 
-    for holdene i den aktuelle kalender.
-    """
-    if connection is None:
-        connection = _get_snowflake_conn()
-
-    # Eksempel på SQL-forespørgsel til at hente gamestate data (tilpas tabeller/kolonner efter behov)
-    sql_query = """
-    WITH MatchBase AS (
-        SELECT 
-            MATCH_OPTAUUID,
-            CONTESTANTHOME_OPTAUUID,
-            CONTESTANTAWAY_OPTAUUID,
-            CONTESTANTHOME_NAME,
-            CONTESTANTAWAY_NAME
-        FROM KLUB_HVIDOVREIF.AXIS.OPTA_MATCHINFO
-        WHERE TOURNAMENTCALENDAR_OPTAUUID = '2mb332vncy4450vu14paj8844'
-          AND MATCH_STATUS = 'Played'
-    )
-    -- Her kan du erstatte med jeres faktiske gamestate aggregering, f.eks. fra en tabel der gemmer minutter pr state.
-    -- Som udgangspunkt opretter vi et sikkert fallback/struktur, hvis tabellen mangler specifikke kolonner endnu:
-    SELECT 
-        CONTESTANTHOME_NAME AS TEAM_NAME,
-        90 AS TOTAL_MINS,
-        30 AS WINNING_MINS,
-        30 AS DRAWING_MINS,
-        30 AS LOSING_MINS
-    FROM MatchBase
-    """
-    
-    try:
-        return connection.query(sql_query, ttl=0)
-    except Exception as e:
-        if "390111" in str(e) or "Session no longer exists" in str(e):
-            st.warning("Sessionen udløbet. Genopretter forbindelse...")
-            st.cache_data.clear()
-            new_conn = _get_snowflake_conn()
-            return new_conn.query(sql_query, ttl=0)
-        else:
-            # Returner tomt DataFrame hvis tabellen ikke findes endnu, så appen ikke crasher
-            return pd.DataFrame()
+from data.sql.teams import hent_hold_gamestate_tid
 
 def vis_side():
     """
-    Hovedfunktion der kaldes af appen. Sikrer at 'vis_side' er til stede.
+    Hovedfunktion der kaldes af appen. Viser holdenes spilletid fordelt på
+    Winning, Drawing og Losing baseret på den rigtige minut-for-minut SQL-logik.
     """
     st.markdown("#### Holdenes Gamestates (Førende / Uafgjort / Bagud)")
     st.caption("Oversigt over andelen af spilletiden holdene tilbringer i henholdsvis Winning, Drawing og Losing.")
 
-    # Hent data
-    with st.spinner("Henter gamestate-data..."):
-        df = hent_gamestate_data()
-
-    if df.empty:
-        st.info("Gamestate-data er endnu ikke tilgængelig i databasen for denne kalender.")
+    conn = _get_snowflake_conn()
+    if not conn:
+        st.error("Kunne ikke oprette forbindelse til Snowflake.")
         return
 
-    # Beregn procenter hvis de ikke findes direkte
-    if 'WINNING_PCT' not in df.columns and 'TOTAL_MINS' in df.columns:
-        df['WINNING_PCT'] = (df['WINNING_MINS'] / df['TOTAL_MINS']) * 100
-        df['DRAWING_PCT'] = (df['DRAWING_MINS'] / df['TOTAL_MINS']) * 100
-        df['LOSING_PCT'] = (df['LOSING_MINS'] / df['TOTAL_MINS']) * 100
+    # Standard kalender-UUID for turneringen
+    calendar_uuid = "2mb332vncy4450vu14paj8844"
 
-    # Aggreger pr hold hvis der er flere rækker pr hold
-    df_grouped = df.groupby('TEAM_NAME')[['WINNING_PCT', 'DRAWING_PCT', 'LOSING_PCT']].mean().reset_index()
-    df_grouped = df_grouped.sort_values(by='WINNING_PCT', ascending=False)
+    # Hent data ved at kalde funktionen fra teams.py
+    with st.spinner("Henter gamestate-data fra Snowflake..."):
+        try:
+            df = hent_hold_gamestate_tid(conn, calendar_uuid)
+        except Exception as e:
+            if "390111" in str(e) or "Session no longer exists" in str(e):
+                st.warning("Sessionen udløbet. Genopretter forbindelse...")
+                st.cache_data.clear()
+                new_conn = _get_snowflake_conn()
+                df = hent_hold_gamestate_tid(new_conn, calendar_uuid)
+            else:
+                st.error(f"Fejl ved hentning af data: {e}")
+                return
+
+    if df.empty:
+        st.info("Ingen gamestate-data fundet for denne kalender.")
+        return
+
+    # Sørg for at data er sorteret efter mest tid i føring (Winning %)
+    df_grouped = df.sort_values(by='WINNING_PCT', ascending=False)
 
     # Plotly stabeldiagram (Stacked bar chart) ligesom Opta Analyst
     fig = px.bar(
@@ -101,3 +70,6 @@ def vis_side():
     )
 
     st.plotly_chart(fig, use_container_width=True)
+
+if __name__ == "__main__":
+    vis_side()
