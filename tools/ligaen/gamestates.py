@@ -10,7 +10,7 @@ from data.sql.teams import hent_hold_gamestate_tid
 def vis_side():
     """
     Hovedfunktion der kaldes af appen. Viser gamestate-oversigten opdelt 
-    i tre kolonner (Losing, Drawing, Winning) i Opta Analyst-stil.
+    i tre kolonner (Losing, Drawing, Winning) i Opta Analyst-stil uden gridlines.
     """
     st.markdown("#### Holdenes Gamestates (Førende / Uafgjort / Bagud)")
     st.caption("Oversigt over andelen af spilletiden holdene tilbringer i henholdsvis Losing, Drawing og Winning.")
@@ -44,6 +44,12 @@ def vis_side():
         if col in df.columns:
             df[col] = df[col].astype(float)
 
+    # Sørg for at procenterne for hvert hold samlet udgør præcis 100% (forhindrer afrundingsfejl over 100%)
+    df['TOTAL_SUM'] = df['WINNING_PCT'] + df['DRAWING_PCT'] + df['LOSING_PCT']
+    df['WINNING_PCT'] = (df['WINNING_PCT'] / df['TOTAL_SUM']) * 100
+    df['DRAWING_PCT'] = (df['DRAWING_PCT'] / df['TOTAL_SUM']) * 100
+    df['LOSING_PCT'] = (df['LOSING_PCT'] / df['TOTAL_SUM']) * 100
+
     # Sorter efter WINNING_PCT faldende, så holdet med flest procent i føring er øverst
     df = df.sort_values(by='WINNING_PCT', ascending=False).reset_index(drop=True)
 
@@ -55,36 +61,30 @@ def vis_side():
     # Opsæt figur med 3 subplots ved siden af hinanden
     fig, (ax_losing, ax_drawing, ax_winning) = plt.subplots(
         1, 3, 
-        figsize=(14, max(8, len(df) * 0.4)), 
+        figsize=(13, max(8, len(df) * 0.4)), 
         sharey=True
     )
 
-    # Opta-inspirerede farver (eller dine foretrukne)
+    # Farver i Opta-stil
     c_losing = '#e57373'
     c_drawing = '#90a4ae'
     c_winning = '#81c784'
 
-    # 1. LOSING barer (vises fra højre mod venstre eller standard venstre mod højre - her standard med værdi)
-    bars_l = ax_losing.barh(teams, losing, color=c_losing)
-    ax_losing.set_title("LOSING", fontsize=12, fontweight='bold', color='#555555', pad=10)
+    # 1. LOSING barer
+    ax_losing.barh(teams, losing, color=c_losing)
+    ax_losing.set_title("LOSING", fontsize=11, fontweight='bold', color='#666666', pad=15)
     ax_losing.invert_yaxis() # Sørg for at topholdet er øverst
     ax_losing.set_xlim(0, 100)
-    ax_losing.xaxis.grid(True, linestyle='--', alpha=0.3, color='#cccccc')
-    ax_losing.set_axisbelow(True)
 
     # 2. DRAWING barer
-    bars_d = ax_drawing.barh(teams, drawing, color=c_drawing)
-    ax_drawing.set_title("DRAWING", fontsize=12, fontweight='bold', color='#555555', pad=10)
+    ax_drawing.barh(teams, drawing, color=c_drawing)
+    ax_drawing.set_title("DRAWING", fontsize=11, fontweight='bold', color='#666666', pad=15)
     ax_drawing.set_xlim(0, 100)
-    ax_drawing.xaxis.grid(True, linestyle='--', alpha=0.3, color='#cccccc')
-    ax_drawing.set_axisbelow(True)
 
     # 3. WINNING barer
-    bars_w = ax_winning.barh(teams, winning, color=c_winning)
-    ax_winning.set_title("WINNING", fontsize=12, fontweight='bold', color='#555555', pad=10)
+    ax_winning.barh(teams, winning, color=c_winning)
+    ax_winning.set_title("WINNING", fontsize=11, fontweight='bold', color='#666666', pad=15)
     ax_winning.set_xlim(0, 100)
-    ax_winning.xaxis.grid(True, linestyle='--', alpha=0.3, color='#cccccc')
-    ax_winning.set_axisbelow(True)
 
     # Tilføj procenter på højre side af hver søjle
     for i in range(len(teams)):
@@ -92,24 +92,28 @@ def vis_side():
         d_val = drawing.iloc[i]
         w_val = winning.iloc[i]
 
-        if l_val > 2:
-            ax_losing.text(l_val + 1, i, f"{int(round(l_val))}%", va='center', fontsize=9, color='#333333', fontweight='bold')
-        if d_val > 2:
-            ax_drawing.text(d_val + 1, i, f"{int(round(d_val))}%", va='center', fontsize=9, color='#333333', fontweight='bold')
-        if w_val > 2:
-            ax_winning.text(w_val + 1, i, f"{int(round(w_val))}%", va='center', fontsize=9, color='#333333', fontweight='bold')
+        if l_val > 1:
+            ax_losing.text(l_val + 1.5, i, f"{int(round(l_val))}%", va='center', fontsize=9, color='#333333', fontweight='bold')
+        if d_val > 1:
+            ax_drawing.text(d_val + 1.5, i, f"{int(round(d_val))}%", va='center', fontsize=9, color='#333333', fontweight='bold')
+        if w_val > 1:
+            ax_winning.text(w_val + 1.5, i, f"{int(round(w_val))}%", va='center', fontsize=9, color='#333333', fontweight='bold')
 
-    # Fjern overflødige kanter (spines) for et rent Opta-look
+    # Fjern alle rammer, gridlines og x-akser helt (Opta minimalistisk stil)
     for ax in [ax_losing, ax_drawing, ax_winning]:
+        ax.set_xticks([])
+        ax.set_xticklabels([])
+        ax.xaxis.grid(False)
         ax.spines['top'].set_visible(False)
         ax.spines['right'].set_visible(False)
-        ax.spines['left'].set_color('#cccccc')
-        ax.spines['bottom'].set_color('#cccccc')
+        ax.spines['bottom'].set_visible(False)
+        ax.spines['left'].set_visible(False)
 
-    # Fælles x-akse label under graferne
-    fig.text(0.5, 0.02, '% of time in each game state', ha='center', fontsize=11, fontweight='bold', color='#222222')
+    # Tilføj hovedtitel og undertekst (lige som Opta Analyst eksemplet)
+    fig.suptitle("How much time has each team spent in each game state?", fontsize=15, fontweight='bold', x=0.08, y=0.98, ha='left', color='#111111')
+    fig.text(0.08, 0.93, "Betinia Ligaen 2026-2027", fontsize=11, fontweight='bold', color='#555555', ha='left')
 
-    plt.tight_layout(rect=[0, 0.03, 1, 1])
+    plt.tight_layout(rect=[0, 0, 1, 0.90])
 
     # Gem figuren til bytes
     buf = io.BytesIO()
@@ -124,7 +128,7 @@ def vis_side():
     st.download_button(
         label="📸 Download gamestate-oversigt som billede",
         data=img_bytes,
-        file_name="hvidovre_gamestates_opta.png",
+        file_name="betinia_ligaen_gamestates.png",
         mime="image/png"
     )
 
