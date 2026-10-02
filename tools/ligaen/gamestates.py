@@ -10,7 +10,7 @@ from data.sql.teams import hent_hold_gamestate_tid
 def vis_side():
     """
     Hovedfunktion der kaldes af appen. Viser gamestate-oversigten opdelt 
-    i tre kolonner (Losing, Drawing, Winning) med de korrekte ufiltrerede procenter.
+    i tre kolonner (Losing, Drawing, Winning) hvor procenterne summer til 100%.
     """
     st.markdown("#### Holdenes Gamestates (Førende / Uafgjort / Bagud)")
     st.caption("Oversigt over andelen af spilletiden holdene tilbringer i henholdsvis Losing, Drawing og Winning.")
@@ -80,18 +80,19 @@ def vis_side():
     ax_winning.set_title("WINNING", fontsize=11, fontweight='bold', color='#666666', pad=15)
     ax_winning.set_xlim(0, 100)
 
-    # Tilføj procenter på højre side af hver søjle
+    # Tilføj afrundede procenter, hvor vi sikrer at summen for visning altid er 100%
     for i in range(len(teams)):
-        l_val = losing.iloc[i]
-        d_val = drawing.iloc[i]
-        w_val = winning.iloc[i]
+        l_round = int(round(losing.iloc[i]))
+        d_round = int(round(drawing.iloc[i]))
+        # Lad winning opsluge resten, så det altid går op med 100
+        w_round = 100 - (l_round + d_round)
 
-        if l_val > 1:
-            ax_losing.text(l_val + 1.5, i, f"{int(round(l_val))}%", va='center', fontsize=9, color='#333333', fontweight='bold')
-        if d_val > 1:
-            ax_drawing.text(d_val + 1.5, i, f"{int(round(d_val))}%", va='center', fontsize=9, color='#333333', fontweight='bold')
-        if w_val > 1:
-            ax_winning.text(w_val + 1.5, i, f"{int(round(w_val))}%", va='center', fontsize=9, color='#333333', fontweight='bold')
+        if l_round > 1:
+            ax_losing.text(losing.iloc[i] + 1.5, i, f"{l_round}%", va='center', fontsize=9, color='#333333', fontweight='bold')
+        if d_round > 1:
+            ax_drawing.text(drawing.iloc[i] + 1.5, i, f"{d_round}%", va='center', fontsize=9, color='#333333', fontweight='bold')
+        if w_round > 1:
+            ax_winning.text(winning.iloc[i] + 1.5, i, f"{w_round}%", va='center', fontsize=9, color='#333333', fontweight='bold')
 
     # Fjern alle rammer, gridlines og x-akser helt (Opta minimalistisk stil)
     for ax in [ax_losing, ax_drawing, ax_winning]:
