@@ -6,7 +6,7 @@ from data.data_load import _get_snowflake_conn
 def fetch_player_percentiles(connection=None) -> pd.DataFrame:
     """
     Henter spillerstatistik og percentiler. Henter automatisk forbindelse,
-    hvis den ikke er angivet. Spilletidsfilteret er dynamisk (15% af max mulige minutter indtil nu).
+    hvis den ikke er angivet. Indeholder automatisk genforsøg, hvis sessionen udløber.
     """
     if connection is None:
         connection = _get_snowflake_conn()
@@ -26,7 +26,6 @@ def fetch_player_percentiles(connection=None) -> pd.DataFrame:
           AND MATCH_DATE_FULL <= CURRENT_DATE()
     ),
     MaxTeamMatches AS (
-        -- Tæller hvor mange kampe holdene i gennemsnit/maks har spillet for at finde dynamisk spilletid
         SELECT MAX(MATCH_COUNT) AS MAX_KAMP_ANTAL
         FROM (
             SELECT CONTESTANT_OPTAUUID, COUNT(DISTINCT MATCH_ID) AS MATCH_COUNT
@@ -138,14 +137,13 @@ def fetch_player_percentiles(connection=None) -> pd.DataFrame:
             -- Dueller & Driblinger P90
             ROUND(COALESCE(e.DRIBBLES_SUCC, 0) / NULLIF(p.MINUTES_PLAYED, 0) * 90, 2) AS DRIBBLES_SUCC_P90,
             ROUND(COALESCE(e.AERIAL_DUELS_WON, 0) / NULLIF(p.MINUTES_PLAYED, 0) * 90, 2) AS AERIAL_DUELS_WON_P90,
-            ROUND(COALESCE(e.AERIAL_DUELS_TOTAL, 0) * 100.0 / NULLIF(e.AERIAL_DUELS_TOTAL, 0), 1) AS AERIAL_WIN_PCT
+            ROUND(COALESCE(e.AERIAL_DUELS_WON, 0) * 100.0 / NULLIF(e.AERIAL_DUELS_TOTAL, 0), 1) AS AERIAL_WIN_PCT
 
         FROM PlayerStatsAgg p
         LEFT JOIN PlayerEventsAgg e ON p.PLAYER_OPTAUUID = e.PLAYER_OPTAUUID AND p.CONTESTANT_OPTAUUID = e.CONTESTANT_OPTAUUID
         LEFT JOIN PlayerNames pn ON p.PLAYER_OPTAUUID = pn.PLAYER_OPTAUUID
         LEFT JOIN TeamMapping tm ON p.CONTESTANT_OPTAUUID = tm.CONTESTANT_OPTAUUID
         CROSS JOIN MaxTeamMatches m
-        -- Dynamisk filter: Kræver at spilleren har spillet mindst 15% af de mulige minutter indtil nu (fx 9 kampe * 90 min * 0.15 = 121.5 minutter)
         WHERE p.MINUTES_PLAYED >= (m.MAX_KAMP_ANTAL * 90 * 0.15)
     )
     SELECT 
@@ -154,7 +152,6 @@ def fetch_player_percentiles(connection=None) -> pd.DataFrame:
         MINUTTER,
         KAMPE,
         
-        -- Værdier + tilhørende Percentiler (0-100)
         NP_GOALS_P90, ROUND(PERCENT_RANK() OVER (ORDER BY NP_GOALS_P90 ASC) * 100, 1) AS NP_GOALS_PCTILE,
         NP_XG_P90, ROUND(PERCENT_RANK() OVER (ORDER BY NP_XG_P90 ASC) * 100, 1) AS NP_XG_PCTILE,
         SHOTS_P90, ROUND(PERCENT_RANK() OVER (ORDER BY SHOTS_P90 ASC) * 100, 1) AS SHOTS_PCTILE,
@@ -174,4 +171,14 @@ def fetch_player_percentiles(connection=None) -> pd.DataFrame:
     ORDER BY HOLD_NAVN, SPILLER_NAVN;
     """
 
-    return connection.query(sql_query, ttl=0)
+    try:
+        return connection.query(sql_query, ttl=0)
+    except Exception as e:
+        # Hvis sessionen er udløbet (Fejl 390111), tvinger vi en genopfriskning af forbindelsen
+        if "390111" in str(e) or "Session no longer exists" in str(e):
+            st.warning("Snowflake-sessionen er udløbet. Genopretter forbindelse automatisk...")
+            st.cache_data.clear()
+            new_conn = _get_snowflake_conn()
+            return new_conn.query(sql_query, ttl=0)
+        else:
+            raise e
