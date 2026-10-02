@@ -10,7 +10,7 @@ from data.sql.teams import hent_hold_gamestate_tid
 def vis_side():
     """
     Hovedfunktion der kaldes af appen. Viser gamestate-oversigten opdelt 
-    i tre kolonner (Losing, Drawing, Winning) i Opta Analyst-stil uden gridlines.
+    i tre kolonner (Losing, Drawing, Winning) med de korrekte ufiltrerede procenter.
     """
     st.markdown("#### Holdenes Gamestates (Førende / Uafgjort / Bagud)")
     st.caption("Oversigt over andelen af spilletiden holdene tilbringer i henholdsvis Losing, Drawing og Winning.")
@@ -43,12 +43,6 @@ def vis_side():
     for col in ['WINNING_PCT', 'DRAWING_PCT', 'LOSING_PCT']:
         if col in df.columns:
             df[col] = df[col].astype(float)
-
-    # Sørg for at procenterne for hvert hold samlet udgør præcis 100% (forhindrer afrundingsfejl over 100%)
-    df['TOTAL_SUM'] = df['WINNING_PCT'] + df['DRAWING_PCT'] + df['LOSING_PCT']
-    df['WINNING_PCT'] = (df['WINNING_PCT'] / df['TOTAL_SUM']) * 100
-    df['DRAWING_PCT'] = (df['DRAWING_PCT'] / df['TOTAL_SUM']) * 100
-    df['LOSING_PCT'] = (df['LOSING_PCT'] / df['TOTAL_SUM']) * 100
 
     # Sorter efter WINNING_PCT faldende, så holdet med flest procent i føring er øverst
     df = df.sort_values(by='WINNING_PCT', ascending=False).reset_index(drop=True)
