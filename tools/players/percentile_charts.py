@@ -185,13 +185,16 @@ def vis_side():
                         current_y += 1
 
             team_name = selected_team
-            ax.set_title(f"{selected_player}: Percentile Ranks among {team_name} (2025/26 Season)", 
+            ax.set_title(f"{selected_player} ({team_name}): Percentile Ranks", 
                          fontsize=11, fontweight='bold', color='white', backgroundcolor='#1b4d3e', pad=15, loc='left')
 
             minutter = player_row['MINUTTER']
             kampe = player_row['KAMPE']
-            fig.text(0.05, 0.01, f"Spiller sammenlignet med hold/ligastandarder. Baseret på {minutter} minutter fordelt på {kampe} kampe.", 
+            fig.text(0.05, 0.01, f"Sammenlignet med ligastandarder (per 90 min.). Baseret på {minutter} minutter fordelt på {kampe} kampe.", 
                      fontsize=8.5, fontstyle='italic', color='#555555')
+
+            plt.tight_layout()
+            st.pyplot(fig)
 
             plt.tight_layout()
             st.pyplot(fig)
