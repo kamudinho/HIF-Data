@@ -8,8 +8,8 @@ from data.sql.teams import hent_hold_gamestate_tid
 
 def vis_side():
     """
-    Hovedfunktion der kaldes af appen. Viser stabeldiagram med Winning -> Drawing -> Losing
-    og procenterne inde i søjlerne.
+    Hovedfunktion der kaldes af appen. Viser stabeldiagram med hvid, fed tekst 
+    og giver mulighed for at gemme som billede.
     """
     st.markdown("#### Holdenes Gamestates (Førende / Uafgjort / Bagud)")
     st.caption("Oversigt over andelen af spilletiden holdene tilbringer i henholdsvis Winning, Drawing og Losing.")
@@ -58,14 +58,14 @@ def vis_side():
     }
     df_melted['GAME_STATE'] = df_melted['GAME_STATE'].map(state_mapping)
 
-    # Tving en specifik rækkefølge (Winning først, Drawing i midten, Losing sidst)
+    # Tving en specifik rækkefølge (Winning, Drawing, Losing)
     df_melted['GAME_STATE'] = pd.Categorical(
         df_melted['GAME_STATE'], 
         categories=['Winning', 'Drawing', 'Losing'], 
         ordered=True
     )
 
-    # Formatér procenterne pænt (fx "45%" eller to decimaler hvis ønsket, her heltal med "%")
+    # Vis kun procenttallet, hvis sektionen er stor nok (fx over 4%)
     df_melted['TEXT_LABEL'] = df_melted['PERCENTAGE'].apply(lambda x: f"{int(round(x))}%" if x > 4 else "")
 
     # Plotly stabeldiagram
@@ -79,16 +79,15 @@ def vis_side():
         title="Procent af spilletid i hver Game State",
         labels={'PERCENTAGE': 'Procent (%)', 'TEAM_NAME': 'Hold', 'GAME_STATE': 'Game State'},
         color_discrete_map={
-            'Winning': '#4ade80',  # Grøn
-            'Drawing': '#cbd5e1',  # Grå
-            'Losing': '#f87171'    # Rød
+            'Winning': '#2e7d32',  # Dyb grøn så hvid tekst fremstår tydeligt
+            'Drawing': '#78909c',  # Mørkere grå
+            'Losing': '#c62828'    # Dyb rød
         }
     )
 
-    # Sørg for at teksten placeres i midten af søjlerne og er læsevenlig
+    # Sørg for hvid, fed tekst midt i søjlerne
     fig.update_traces(
-        textfont_size=11,
-        textfont_color='#111111',
+        textfont=dict(color='white', size=11, family='sans-serif'),
         textangle=0,
         textposition='inside',
         insidetextanchor='middle'
@@ -102,6 +101,8 @@ def vis_side():
         yaxis={'categoryorder': 'array', 'categoryarray': df['TEAM_NAME'].tolist()}
     )
 
+    # Vis chart i Streamlit (Plotly viser automatisk et kameraknap-ikon i højre hjørne af grafen, 
+    # hvor man kan klikke for at gemme som et PNG-billede)
     st.plotly_chart(fig, use_container_width=True)
 
 if __name__ == "__main__":
