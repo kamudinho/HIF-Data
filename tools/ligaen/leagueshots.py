@@ -174,6 +174,7 @@ def vis_side(dp=None):
         "DZ-ANALYSE",
         "SKUDZONER",
         "MÅLZONER",
+        "THRESHOLD (xG > 0.25)",
         "AFSLUTNINGER MOD",
     ])
 
@@ -395,8 +396,105 @@ def vis_side(dp=None):
                 draw_logo_on_pitch(ax, t_logo)
                 st.pyplot(fig)
 
-    # TAB 5: AFSLUTNINGER MOD
+    # TAB: THRESHOLD (xG > 0.25)
     with tabs[5]:
+        st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
+        c1, c2 = st.columns([2, 1])
+        t_color = TEAM_COLORS.get(t_sel, {}).get("primary", HIF_RED)
+        t_logo = get_logo_img(TEAMS.get(t_sel, {}).get("logo"))
+
+        # Filtrerer kun skud over 0.25 i xG fra holdets data
+        df_thresh = df_team[df_team["XG"] > 0.25]
+
+        with c2:
+            st.markdown("##### Filtre (xG > 0.25)")
+            match_options_th = {"Alle kampe": None}
+            if "MATCH_OPTAUUID" in df_team.columns:
+                team_uuid = TEAMS.get(t_sel, {}).get("opta_uuid", "").upper()
+                
+                kamp_tider_th = []
+                for m_id in df_team["MATCH_OPTAUUID"].unique():
+                    match_rows = df_all[df_all["MATCH_OPTAUUID"] == m_id]
+                    min_tid = match_rows["EVENT_TIMESTAMP"].min() if "EVENT_TIMESTAMP" in match_rows.columns else ""
+                    kamp_tider_th.append((m_id, min_tid))
+                
+                kamp_tider_th.sort(key=lambda x: str(x[1]), reverse=True)
+
+                for m_id, _ in kamp_tider_th:
+                    match_rows = df_all[df_all["MATCH_OPTAUUID"] == m_id]
+                    sub_df = match_rows[match_rows["KLUB_NAVN"] != t_sel]
+                    opp_name = sub_df["KLUB_NAVN"].iloc[0] if not sub_df.empty and sub_df["KLUB_NAVN"].notna().any() else "Modstander"
+                    
+                    is_home = True
+                    if "CONTESTANTHOME_OPTAUUID" in match_rows.columns and not match_rows.empty:
+                        home_val = str(match_rows["CONTESTANTHOME_OPTAUUID"].iloc[0]).upper()
+                        is_home = (home_val == team_uuid)
+                    
+                    hu = "H" if is_home else "U"
+                    match_options_th[f"vs. {opp_name} ({hu})"] = m_id
+
+            sub_th1, sub_th2 = st.columns(2)
+            with sub_th1:
+                kamp_sel_th_label = st.selectbox("Vælg kamp", list(match_options_th.keys()), key="th_kamp")
+            valgt_kamp_th_uuid = match_options_th[kamp_sel_th_label]
+
+            d_filtered_th = df_thresh if valgt_kamp_th_uuid is None else df_thresh[df_thresh["MATCH_OPTAUUID"] == valgt_kamp_th_uuid]
+            spiller_liste_th = ["Alle spillere"] + sorted(d_filtered_th["PLAYER_NAME"].unique()) if not d_filtered_th.empty else ["Alle spillere"]
+            
+            with sub_th2:
+                p_sel_th = st.selectbox("Filtrer spiller", spiller_liste_th, key="th_spiller")
+            
+            d_v_th = d_filtered_th if p_sel_th == "Alle spillere" else d_filtered_th[d_filtered_th["PLAYER_NAME"] == p_sel_th]
+            vis_mode_th = st.radio("Vælg visning:", ["Antal", "xG"], index=0, key="th_mode", horizontal=True)
+
+            s_th, m_th = len(d_v_th), len(d_v_th[d_v_th["EVENT_TYPEID"] == 16])
+            tot_xg_th = d_v_th["XG"].sum() if not d_v_th.empty else 0.0
+
+            st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
+            
+            row1_col1, row1_col2 = st.columns(2)
+            with row1_col1:
+                render_stat_box(st, "Store Skud (>0.25)", s_th)
+            with row1_col2:
+                render_stat_box(st, "Mål herfra", m_th)
+
+            row2_col1, row2_col2 = st.columns(2)
+            with row2_col1:
+                render_stat_box(st, "Total xG", f"{tot_xg_th:.2f}")
+            with row2_col2:
+                render_stat_box(st, "Konvertering", f"{(m_th/s_th*100 if s_th>0 else 0):.1f}%")
+
+            if vis_mode_th == "xG":
+                st.markdown("---")
+                st.markdown("**Farveforklaring (xG):**")
+                st.markdown(
+                    "Grøn = **0,25 - 0,35** (Medium-høj kvalitet)<br>Rød = **>= 0,35** (Høj kvalitet)",
+                    unsafe_allow_html=True,
+                )
+
+        with c1:
+            pitch, fig, ax = get_pitch("halv", t_color=t_color)
+            if not d_v_th.empty:
+                colors_th = (
+                    (d_v_th["EVENT_TYPEID"] == 16).map({True: t_color, False: "white"})
+                    if vis_mode_th == "Antal"
+                    else d_v_th["XG"].apply(get_xg_color)
+                )
+                pitch.scatter(
+                    d_v_th["X_M"],
+                    d_v_th["Y_M"],
+                    s=140 if vis_mode_th == "Antal" else 160,
+                    c=colors_th,
+                    edgecolors=t_color if vis_mode_th == "Antal" else "black",
+                    ax=ax,
+                    zorder=3,
+                    alpha=0.9 if vis_mode_th == "Antal" else 0.85,
+                )
+            draw_logo_on_pitch(ax, t_logo)
+            st.pyplot(fig)
+            
+    # TAB 5: AFSLUTNINGER MOD
+    with tabs[6]:
         st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
         c1, c2 = st.columns([2, 1])
         t_logo = get_logo_img(TEAMS.get(t_sel, {}).get("logo"))
