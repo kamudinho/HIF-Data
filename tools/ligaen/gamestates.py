@@ -10,7 +10,7 @@ from data.sql.teams import hent_hold_gamestate_tid
 def vis_side():
     """
     Hovedfunktion der kaldes af appen. Viser gamestate-oversigten som et 
-    statisk Matplotlib-billede med legenden indbygget i en top-bar.
+    statisk Matplotlib-billede med legende-bar øverst.
     """
     st.markdown("#### Holdenes Gamestates (Førende / Uafgjort / Bagud)")
     st.caption("Oversigt over andelen af spilletiden holdene tilbringer i henholdsvis Winning, Drawing og Losing.")
@@ -47,14 +47,14 @@ def vis_side():
     drawing = df['DRAWING_PCT']
     losing = df['LOSING_PCT']
 
-    # Tilføj en "fake" række øverst til legende-bar (fordelt 33.3% til hver)
+    # Tilføj en "fake" række øverst til legende-bar (fordelt præcist med heltal, der giver 100 totalt)
     teams_with_legend = ['LEGEND_BAR'] + teams
-    winning_data = [33.33] + list(winning)
-    drawing_data = [33.33] + list(drawing)
-    losing_data = [33.33] + list(losing)
+    winning_data = [33] + list(winning)
+    drawing_data = [34] + list(drawing)
+    losing_data = [33] + list(losing)
 
-    # Opsæt Matplotlib figur (lidt højere for at give plads til legende-baren)
-    fig, ax = plt.subplots(figsize=(10, max(8.5, (len(df) + 1) * 0.45)))
+    # Opsæt Matplotlib figur
+    fig, ax = plt.subplots(figsize=(10, max(8.5, int((len(df) + 1) * 0.45))))
 
     c_winning = '#2e7d32'
     c_drawing = '#78909c'
@@ -73,11 +73,11 @@ def vis_side():
 
         if team_name == 'LEGEND_BAR':
             # Skriv legende-tekst ind i de 3 sektioner af top-baren
-            ax.text(16.66, bw.get_y() + bw.get_height()/2, "Winning",
+            ax.text(16.5, bw.get_y() + bw.get_height()/2, "Winning",
                     ha='center', va='center', color='white', fontweight='bold', fontsize=10)
             ax.text(50.0, bd.get_y() + bd.get_height()/2, "Drawing",
                     ha='center', va='center', color='white', fontweight='bold', fontsize=10)
-            ax.text(83.33, bl.get_y() + bl.get_height()/2, "Losing",
+            ax.text(83.5, bl.get_y() + bl.get_height()/2, "Losing",
                     ha='center', va='center', color='white', fontweight='bold', fontsize=10)
         else:
             # Almindelige hold-procenter
