@@ -12,7 +12,7 @@ def vis_side():
     Hovedfunktion der kaldes af appen uden argumenter.
     Henter data via fetch_player_percentiles().
     """
-    st.markdown("####Spillerprofiler & Percentiler")
+    st.markdown("#### Spillerprofiler & Percentiler")
     st.caption("Her kan du se rangeringer, top 10-spillere og spillerprofiler")
 
     # Hent data
@@ -23,7 +23,7 @@ def vis_side():
         return
 
     if df.empty:
-        st.warning("Inden data fundet med de aktuelle filtre.")
+        st.warning("Ingen data fundet med de aktuelle filtre.")
         return
 
     # Omdøb systemkolonner til pænere visning ("Navn", "Hold" osv.)
@@ -35,11 +35,11 @@ def vis_side():
     }
     df_display = df.rename(columns=rename_dict)
 
-    # Opret tabs til navigation
+    # Opret tabs til navigation (med dine foretrukne navne)
     tab_overview, tab_profile = st.tabs(["Top 10", "Spillerprofil"])
 
     with tab_overview:
-        st.subheader("Top 10 Spillere per Kategori")
+        st.subheader("Top 20 Spillere per Kategori")
         
         metric_cols = [col for col in df.columns if col not in ['HOLD_NAVN', 'SPILLER_NAVN', 'MINUTTER', 'KAMPE']]
         selected_metric = st.selectbox("Vælg kategori for Top 20:", metric_cols)
@@ -47,8 +47,6 @@ def vis_side():
         if selected_metric:
             top_20 = df[['SPILLER_NAVN', 'HOLD_NAVN', 'MINUTTER', selected_metric]].sort_values(by=selected_metric, ascending=False).head(20)
             st.dataframe(top_20.reset_index(drop=True), use_container_width=True)
-
-        
 
     with tab_profile:
         st.subheader("Visuel spillerprofil")
@@ -111,7 +109,7 @@ def vis_side():
             ax.axhline(-0.4, color='#333333', linewidth=1)
 
             for i, (label, val, pct) in enumerate(zip(labels, values_p90, percentiles)):
-                # 1. Skyggebar (0 til 100)
+                # 1. Skyggebar (0 til 100 baggrund)
                 ax.barh(i, 100, left=0, height=0.6, color='#e9ecef', alpha=0.6)
 
                 # 2. Vælg farve til den faktiske percentil-bar
@@ -122,7 +120,7 @@ def vis_side():
                 else:
                     bar_color = '#c44e52'  # Rødbrun
 
-                # 3. Den faktiske percentil-bar
+                # 3. Den faktiske percentil-bar ovenpå skyggebaren
                 ax.barh(i, pct, left=0, height=0.6, color=bar_color, alpha=0.9)
 
                 # Indsæt statistikkens navn og Per 90 værdi i venstre side
@@ -133,8 +131,7 @@ def vis_side():
                     val_str = f"{val:.1f}%"
                 ax.text(-8, i, val_str, va='center', ha='right', fontsize=9.5, fontweight='semibold', color='#222222')
 
-                # 4. Placer percentil-tallet: Hvis baren er bred nok (> 12), sættes den inde i baren (højrejusteret). 
-                # Hvis baren er for kort, placeres den lige uden for baren, så den altid kan ses.
+                # 4. Placer percentil-tallet: Hvis baren er bred nok (>= 12), sættes den inde i baren. Ellers udenfor.
                 if pct >= 12:
                     pct_x = pct - 2
                     text_align = 'right'
