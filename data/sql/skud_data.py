@@ -19,14 +19,14 @@ def load_league_data(liga_uuid):
             FROM {db}.OPTA_QUALIFIERS
             WHERE QUALIFIER_QID = 321
             GROUP BY EVENT_OPTAUUID
-        },
+        ),
         OwnGoals AS (
             -- Selvmål (qualifier 28) - udelukkes fra skudkortet, da de ikke
             -- er et reelt skudforsøg fra spilleren og aldrig har en xG-værdi.
             SELECT DISTINCT EVENT_OPTAUUID
             FROM {db}.OPTA_QUALIFIERS
             WHERE QUALIFIER_QID = 28
-        },
+        ),
         PlayerNames AS (
             SELECT
                 PLAYER_OPTAUUID,
