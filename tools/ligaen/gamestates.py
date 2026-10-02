@@ -66,18 +66,18 @@ def vis_side():
 
     # 1. LOSING barer
     ax_losing.barh(teams, losing, color=c_losing)
-    ax_losing.set_title("LOSING", fontsize=11, fontweight='bold', color='#666666', pad=15)
+    ax_losing.set_title("BAGUD", fontsize=11, fontweight='bold', color='#666666', pad=15)
     ax_losing.invert_yaxis() # Sørg for at topholdet er øverst
     ax_losing.set_xlim(0, 100)
 
     # 2. DRAWING barer
     ax_drawing.barh(teams, drawing, color=c_drawing)
-    ax_drawing.set_title("DRAWING", fontsize=11, fontweight='bold', color='#666666', pad=15)
+    ax_drawing.set_title("UAFGJORT", fontsize=11, fontweight='bold', color='#666666', pad=15)
     ax_drawing.set_xlim(0, 100)
 
     # 3. WINNING barer
     ax_winning.barh(teams, winning, color=c_winning)
-    ax_winning.set_title("WINNING", fontsize=11, fontweight='bold', color='#666666', pad=15)
+    ax_winning.set_title("FØRING", fontsize=11, fontweight='bold', color='#666666', pad=15)
     ax_winning.set_xlim(0, 100)
 
     # Tilføj afrundede procenter, hvor vi sikrer at summen for visning altid er 100%
@@ -105,7 +105,7 @@ def vis_side():
         ax.spines['left'].set_visible(False)
 
     # Tilføj hovedtitel og undertekst (lige som Opta Analyst eksemplet)
-    fig.suptitle("How much time has each team spent in each game state?", fontsize=15, fontweight='bold', x=0.08, y=0.98, ha='left', color='#111111')
+    fig.suptitle("Kampperformance - Hvor længe holdet har været i hver periode ", fontsize=15, fontweight='bold', x=0.08, y=0.98, ha='left', color='#111111')
     fig.text(0.08, 0.93, "Betinia Ligaen 2026-2027", fontsize=11, fontweight='bold', color='#555555', ha='left')
 
     plt.tight_layout(rect=[0, 0, 1, 0.90])
