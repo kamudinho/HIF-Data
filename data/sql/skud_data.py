@@ -43,7 +43,7 @@ def load_league_data(liga_uuid):
             e.MATCH_OPTAUUID as match_optauuid,
             e.PLAYER_OPTAUUID as player_optauuid,
             e.EVENT_CONTESTANT_OPTAUUID as event_contestant_optauuid,
-            m.CONTESTANTHOME_OPTAUUID as home_contestant_optauuid,
+            m.CONTESTANTHOME_OPTAUUID as contestanthome_optauuid,
             e.EVENT_TYPEID as event_typeid,
             e.EVENT_X as event_x,
             e.EVENT_Y as event_y,
@@ -72,7 +72,6 @@ def load_league_data(liga_uuid):
         df = conn.query(sql) if hasattr(conn, "query") else pd.read_sql(sql, conn)
         if df is not None and not df.empty:
             df.columns = [c.upper() for c in df.columns]
-            # Fjern evt. dubletter på selve event-uuid'et for en sikkerheds skyld
             df = df.drop_duplicates(subset=["EVENT_OPTAUUID"])
             df = resolve_player_names(df, conn)
             return df
