@@ -182,7 +182,7 @@ def vis_side():
 
             # Titel over det hele
             team_name = selected_team
-            ax.set_title(f"{selected_player}: Percentile Ranks among {team_name} (2025/26 Season)", 
+            ax.set_title(f"{selected_player}: Percentile Bar Charts {team_name} (2026/2027)", 
                          fontsize=11, fontweight='bold', color='white', backgroundcolor='#1b4d3e', pad=15, loc='left')
 
             # Fodnote
