@@ -1,17 +1,4 @@
 #HIF-Data/data/sql/skud_data.py
-"""
-Skud-/xG-data til leagueshots.py. Optimeret til at matche
-officielle Opta-matchstats og undgå divergens.
-
-RETTET: EVENT_TYPEID = 16 (Goal) udelukkede tidligere ikke selvmål
-(qualifier 28) - se den samme fejl i liga_spillere.py for forklaring.
-Et selvmål har ingen reel skudposition eller xG i Optas data (derfor
-faldt den altid tilbage til xg_raw = 0.05), saa den udelukkes nu helt
-fra skudkortet i stedet for at staa som spillerens eget skud/maal.
-Mønsteret (LEFT JOIN paa qualifier 28, WHERE ... IS NULL) er det samme
-som allerede brugt korrekt i kampe.py's CalculatedSubGoals.
-"""
-
 import streamlit as st
 import pandas as pd
 from data.data_load import _get_snowflake_conn
