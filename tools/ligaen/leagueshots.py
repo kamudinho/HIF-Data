@@ -232,7 +232,23 @@ def vis_side(dp=None):
                 for m_id in df_team["MATCH_OPTAUUID"].unique():
                     sub_df = df_all[(df_all["MATCH_OPTAUUID"] == m_id) & (df_all["KLUB_NAVN"] != t_sel)]
                     opp_name = sub_df["KLUB_NAVN"].iloc[0] if not sub_df.empty and sub_df["KLUB_NAVN"].notna().any() else "Modstander"
-                    match_options[f"Kamp mod {opp_name} ({m_id[:6]}...)"] = m_id
+                    
+                    # Bestem Hjemme (H) eller Ude (U)
+                    match_rows = df_all[df_all["MATCH_OPTAUUID"] == m_id]
+                    team_uuid = TEAMS.get(t_sel, {}).get("opta_uuid", "").upper()
+                    home_col = next((c for c in ["HOME_CONTESTANT_OPTAUUID", "HOME_TEAM_OPTAUUID", "HOME_OPTAUUID"] if c in match_rows.columns), None)
+                    if home_col and not match_rows.empty:
+                        is_home = str(match_rows[home_col].iloc[0]).upper() == team_uuid
+                    else:
+                        venue_col = next((c for c in ["VENUE", "MATCH_VENUE", "SIDE"] if c in match_rows.columns), None)
+                        if venue_col and not match_rows.empty:
+                            val = str(match_rows[venue_col].iloc[0]).lower()
+                            is_home = "home" in val or val == "h"
+                        else:
+                            is_home = True
+                    
+                    hu = "H" if is_home else "U"
+                    match_options[f"vs. {opp_name} ({hu})"] = m_id
 
             kamp_sel_label = st.selectbox("Vælg kamp", list(match_options.keys()))
             valgt_kamp_uuid = match_options[kamp_sel_label]
@@ -242,7 +258,7 @@ def vis_side(dp=None):
             p_sel = st.selectbox("Filtrer spiller", spiller_liste)
             
             d_v = d_filtered if p_sel == "Alle spillere" else d_filtered[d_filtered["PLAYER_NAME"] == p_sel]
-            vis_mode_afsl = st.radio("Vælg visning:", ["Antal", "xG"], index=0, key="afsl_mode")
+            vis_mode_afsl = st.radio("Vælg visning:", ["Antal", "xG"], index=0, key="afsl_mode", horizontal=True)
 
             s, m = len(d_v), len(d_v[d_v["EVENT_TYPEID"] == 16])
             tot_xg_afsl = d_v["XG"].sum() if not d_v.empty else 0.0
@@ -381,7 +397,7 @@ def vis_side(dp=None):
 
         with c2:
             st.markdown("##### Visningstype")
-            vis_mode = st.radio("Vælg visning for skud imod:", ["Antal", "xG"], index=0, key="mod_mode")
+            vis_mode = st.radio("Vælg visning for skud imod:", ["Antal", "xG"], index=0, key="mod_mode", horizontal=True)
 
             s_mod = len(df_modstander)
             m_mod = len(df_modstander[df_modstander["EVENT_TYPEID"] == 16]) if not df_modstander.empty else 0
