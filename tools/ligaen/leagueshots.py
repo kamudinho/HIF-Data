@@ -235,23 +235,15 @@ def vis_side(dp=None):
                     sub_df = match_rows[match_rows["KLUB_NAVN"] != t_sel]
                     opp_name = sub_df["KLUB_NAVN"].iloc[0] if not sub_df.empty and sub_df["KLUB_NAVN"].notna().any() else "Modstander"
                     
-                    # Tjek om holdet er hjemmehold via Opta-kolonner eller holdnavn
+                    # Tjek om holdet er hjemmehold ved at sammenligne med HOME_CONTESTANT_OPTAUUID
                     is_home = True
-                    home_col = next((c for c in ["HOME_CONTESTANT_OPTAUUID", "HOME_TEAM_OPTAUUID", "HOME_OPTAUUID", "HOME_CONTESTANT_ID"] if c in match_rows.columns), None)
-                    if home_col and not match_rows.empty:
-                        val_home = str(match_rows[home_col].iloc[0]).upper()
-                        is_home = (val_home == team_uuid) or (t_sel.lower() in val_home.lower())
-                    else:
-                        # Fallback til generelle venue-kolonner
-                        venue_col = next((c for c in ["VENUE", "MATCH_VENUE", "SIDE", "GROUND"] if c in match_rows.columns), None)
-                        if venue_col and not match_rows.empty:
-                            val = str(match_rows[venue_col].iloc[0]).lower()
-                            if "away" in val or val == "u" or val == "awayteam":
-                                is_home = False
+                    if "HOME_CONTESTANT_OPTAUUID" in match_rows.columns and not match_rows.empty:
+                        home_val = str(match_rows["HOME_CONTESTANT_OPTAUUID"].iloc[0]).upper()
+                        is_home = (home_val == team_uuid)
                     
                     hu = "H" if is_home else "U"
                     match_options[f"vs. {opp_name} ({hu})"] = m_id
-
+                    
             sub_f1, sub_f2 = st.columns(2)
             with sub_f1:
                 kamp_sel_label = st.selectbox("Vælg kamp", list(match_options.keys()))
