@@ -229,27 +229,29 @@ def vis_side(dp=None):
             st.markdown("##### Filtre")
             match_options = {"Alle kampe": None}
             if "MATCH_OPTAUUID" in df_team.columns:
+                team_uuid = TEAMS.get(t_sel, {}).get("opta_uuid", "").upper()
                 for m_id in df_team["MATCH_OPTAUUID"].unique():
-                    sub_df = df_all[(df_all["MATCH_OPTAUUID"] == m_id) & (df_all["KLUB_NAVN"] != t_sel)]
+                    match_rows = df_all[df_all["MATCH_OPTAUUID"] == m_id]
+                    sub_df = match_rows[match_rows["KLUB_NAVN"] != t_sel]
                     opp_name = sub_df["KLUB_NAVN"].iloc[0] if not sub_df.empty and sub_df["KLUB_NAVN"].notna().any() else "Modstander"
                     
-                    match_rows = df_all[df_all["MATCH_OPTAUUID"] == m_id]
-                    team_uuid = TEAMS.get(t_sel, {}).get("opta_uuid", "").upper()
-                    home_col = next((c for c in ["HOME_CONTESTANT_OPTAUUID", "HOME_TEAM_OPTAUUID", "HOME_OPTAUUID"] if c in match_rows.columns), None)
+                    # Tjek om holdet er hjemmehold via Opta-kolonner eller holdnavn
+                    is_home = True
+                    home_col = next((c for c in ["HOME_CONTESTANT_OPTAUUID", "HOME_TEAM_OPTAUUID", "HOME_OPTAUUID", "HOME_CONTESTANT_ID"] if c in match_rows.columns), None)
                     if home_col and not match_rows.empty:
-                        is_home = str(match_rows[home_col].iloc[0]).upper() == team_uuid
+                        val_home = str(match_rows[home_col].iloc[0]).upper()
+                        is_home = (val_home == team_uuid) or (t_sel.lower() in val_home.lower())
                     else:
-                        venue_col = next((c for c in ["VENUE", "MATCH_VENUE", "SIDE"] if c in match_rows.columns), None)
+                        # Fallback til generelle venue-kolonner
+                        venue_col = next((c for c in ["VENUE", "MATCH_VENUE", "SIDE", "GROUND"] if c in match_rows.columns), None)
                         if venue_col and not match_rows.empty:
                             val = str(match_rows[venue_col].iloc[0]).lower()
-                            is_home = "home" in val or val == "h"
-                        else:
-                            is_home = True
+                            if "away" in val or val == "u" or val == "awayteam":
+                                is_home = False
                     
                     hu = "H" if is_home else "U"
                     match_options[f"vs. {opp_name} ({hu})"] = m_id
 
-            # Sæt kampvalg og spillerfilter på samme linje
             sub_f1, sub_f2 = st.columns(2)
             with sub_f1:
                 kamp_sel_label = st.selectbox("Vælg kamp", list(match_options.keys()))
