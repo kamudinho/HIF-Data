@@ -35,8 +35,6 @@ def vis_side():
     }
     df_display = df.rename(columns=rename_dict)
 
-    st.markdown("---")
-
     # Layout over indholdslinjen: Segmented control til venstre, dropdowns til højre
     col_nav, col_filters = st.columns([1, 1], vertical_alignment="center")
 
