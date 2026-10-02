@@ -6,7 +6,7 @@ from data.data_load import _get_snowflake_conn
 def fetch_player_percentiles(connection=None) -> pd.DataFrame:
     """
     Henter spillerstatistik og percentiler. Henter automatisk forbindelse,
-    hvis den ikke er angivet.
+    hvis den ikke er angivet. Spilletidsfilteret er dynamisk (15% af max mulige minutter indtil nu).
     """
     if connection is None:
         connection = _get_snowflake_conn()
@@ -24,6 +24,19 @@ def fetch_player_percentiles(connection=None) -> pd.DataFrame:
         WHERE TOURNAMENTCALENDAR_OPTAUUID = '2mb332vncy4450vu14paj8844'
           AND MATCH_STATUS = 'Played'
           AND MATCH_DATE_FULL <= CURRENT_DATE()
+    ),
+    MaxTeamMatches AS (
+        -- Tæller hvor mange kampe holdene i gennemsnit/maks har spillet for at finde dynamisk spilletid
+        SELECT MAX(MATCH_COUNT) AS MAX_KAMP_ANTAL
+        FROM (
+            SELECT CONTESTANT_OPTAUUID, COUNT(DISTINCT MATCH_ID) AS MATCH_COUNT
+            FROM (
+                SELECT CONTESTANTHOME_OPTAUUID AS CONTESTANT_OPTAUUID, MATCH_OPTAUUID AS MATCH_ID FROM MatchBaseAll
+                UNION ALL
+                SELECT CONTESTANTAWAY_OPTAUUID AS CONTESTANT_OPTAUUID, MATCH_OPTAUUID AS MATCH_ID FROM MatchBaseAll
+            )
+            GROUP BY CONTESTANT_OPTAUUID
+        )
     ),
     PlayerStatsAgg AS (
         SELECT 
@@ -131,7 +144,9 @@ def fetch_player_percentiles(connection=None) -> pd.DataFrame:
         LEFT JOIN PlayerEventsAgg e ON p.PLAYER_OPTAUUID = e.PLAYER_OPTAUUID AND p.CONTESTANT_OPTAUUID = e.CONTESTANT_OPTAUUID
         LEFT JOIN PlayerNames pn ON p.PLAYER_OPTAUUID = pn.PLAYER_OPTAUUID
         LEFT JOIN TeamMapping tm ON p.CONTESTANT_OPTAUUID = tm.CONTESTANT_OPTAUUID
-        WHERE p.MINUTES_PLAYED >= 200
+        CROSS JOIN MaxTeamMatches m
+        -- Dynamisk filter: Kræver at spilleren har spillet mindst 15% af de mulige minutter indtil nu (fx 9 kampe * 90 min * 0.15 = 121.5 minutter)
+        WHERE p.MINUTES_PLAYED >= (m.MAX_KAMP_ANTAL * 90 * 0.15)
     )
     SELECT 
         HOLD_NAVN,
@@ -157,6 +172,6 @@ def fetch_player_percentiles(connection=None) -> pd.DataFrame:
         AERIAL_DUELS_WON_P90, ROUND(PERCENT_RANK() OVER (ORDER BY AERIAL_DUELS_WON_P90 ASC) * 100, 1) AS AERIAL_DUELS_WON_PCTILE
     FROM BaseCalculations
     ORDER BY HOLD_NAVN, SPILLER_NAVN;
-    """  # <--- Sørg for at denne lukker sql_query strengen korrekt!
+    """
 
     return connection.query(sql_query, ttl=0)
