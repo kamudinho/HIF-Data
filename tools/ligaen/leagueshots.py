@@ -233,7 +233,6 @@ def vis_side(dp=None):
                     sub_df = df_all[(df_all["MATCH_OPTAUUID"] == m_id) & (df_all["KLUB_NAVN"] != t_sel)]
                     opp_name = sub_df["KLUB_NAVN"].iloc[0] if not sub_df.empty and sub_df["KLUB_NAVN"].notna().any() else "Modstander"
                     
-                    # Bestem Hjemme (H) eller Ude (U)
                     match_rows = df_all[df_all["MATCH_OPTAUUID"] == m_id]
                     team_uuid = TEAMS.get(t_sel, {}).get("opta_uuid", "").upper()
                     home_col = next((c for c in ["HOME_CONTESTANT_OPTAUUID", "HOME_TEAM_OPTAUUID", "HOME_OPTAUUID"] if c in match_rows.columns), None)
@@ -250,12 +249,17 @@ def vis_side(dp=None):
                     hu = "H" if is_home else "U"
                     match_options[f"vs. {opp_name} ({hu})"] = m_id
 
-            kamp_sel_label = st.selectbox("Vælg kamp", list(match_options.keys()))
+            # Sæt kampvalg og spillerfilter på samme linje
+            sub_f1, sub_f2 = st.columns(2)
+            with sub_f1:
+                kamp_sel_label = st.selectbox("Vælg kamp", list(match_options.keys()))
             valgt_kamp_uuid = match_options[kamp_sel_label]
 
             d_filtered = df_team if valgt_kamp_uuid is None else df_team[df_team["MATCH_OPTAUUID"] == valgt_kamp_uuid]
             spiller_liste = ["Alle spillere"] + sorted(d_filtered["PLAYER_NAME"].unique()) if not d_filtered.empty else ["Alle spillere"]
-            p_sel = st.selectbox("Filtrer spiller", spiller_liste)
+            
+            with sub_f2:
+                p_sel = st.selectbox("Filtrer spiller", spiller_liste)
             
             d_v = d_filtered if p_sel == "Alle spillere" else d_filtered[d_filtered["PLAYER_NAME"] == p_sel]
             vis_mode_afsl = st.radio("Vælg visning:", ["Antal", "xG"], index=0, key="afsl_mode", horizontal=True)
@@ -265,14 +269,12 @@ def vis_side(dp=None):
 
             st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
             
-            # Række 1: Skud og Mål side om side
             row1_col1, row1_col2 = st.columns(2)
             with row1_col1:
                 render_stat_box(st, "Skud", s)
             with row1_col2:
                 render_stat_box(st, "Mål", m)
 
-            # Række 2: Total xG og Konvertering side om side
             row2_col1, row2_col2 = st.columns(2)
             with row2_col1:
                 render_stat_box(st, "Total xG", f"{tot_xg_afsl:.2f}")
@@ -402,6 +404,7 @@ def vis_side(dp=None):
             s_mod = len(df_modstander)
             m_mod = len(df_modstander[df_modstander["EVENT_TYPEID"] == 16]) if not df_modstander.empty else 0
             tot_xg = df_modstander["XG"].sum() if not df_modstander.empty else 0.0
+            konv_mod = (m_mod / s_mod * 100) if s_mod > 0 else 0.0
 
             st.markdown("<div style='margin-top: 20px;'></div>", unsafe_allow_html=True)
             
@@ -411,9 +414,11 @@ def vis_side(dp=None):
             with row1_col2:
                 render_stat_box(st, "Mål Imod", m_mod)
 
-            row2_col1, _ = st.columns(2)
+            row2_col1, row2_col2 = st.columns(2)
             with row2_col1:
                 render_stat_box(st, "Total xG Imod", f"{tot_xg:.2f}")
+            with row2_col2:
+                render_stat_box(st, "Konv. Imod", f"{konv_mod:.1f}%")
 
             if vis_mode == "xG":
                 st.markdown("---")
