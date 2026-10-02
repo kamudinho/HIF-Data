@@ -37,14 +37,15 @@ def vis_side():
 
     st.markdown("---")
 
-    # Layout over indholdslinjen: Navigation til venstre, dropdowns til højre
+    # Layout over indholdslinjen: Segmented control til venstre, dropdowns til højre
     col_nav, col_filters = st.columns([1, 1], vertical_alignment="center")
 
     with col_nav:
-        tab_choice = st.radio(
+        tab_choice = st.segmented_control(
             "Visning", 
             ["Top 20 Oversigt", "Spillerprofil"], 
-            horizontal=True, 
+            default="Top 20 Oversigt",
+            selection_mode="single",
             label_visibility="collapsed"
         )
 
