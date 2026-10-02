@@ -8,8 +8,7 @@ from data.sql.teams import hent_hold_gamestate_tid
 
 def vis_side():
     """
-    Hovedfunktion der kaldes af appen. Viser holdenes spilletid fordelt på
-    Winning, Drawing og Losing præcis som ønsket.
+    Hovedfunktion der kaldes af appen. Viser det korrekte stabeldiagram for holdenes gamestates.
     """
     st.markdown("#### Holdenes Gamestates (Førende / Uafgjort / Bagud)")
     st.caption("Oversigt over andelen af spilletiden holdene tilbringer i henholdsvis Winning, Drawing og Losing.")
@@ -38,32 +37,48 @@ def vis_side():
         st.info("Ingen gamestate-data fundet for denne kalender.")
         return
 
-    # Sorter efter mest tid i føring
-    df_grouped = df.sort_values(by='WINNING_PCT', ascending=False)
+    # Sorter holdene efter mest tid i føring (Winning %)
+    df = df.sort_values(by='WINNING_PCT', ascending=True)
 
-    # Plotly stabeldiagram med de korrekte kolonnenavne fra SQL'en
+    # Omstrukturer data til 'long'-format, så Plotly kan lave et ægte stabeldiagram
+    df_melted = pd.melt(
+        df,
+        id_vars=['TEAM_NAME'],
+        value_vars=['LOSING_PCT', 'DRAWING_PCT', 'WINNING_PCT'],
+        var_name='GAME_STATE',
+        value_name='PERCENTAGE'
+    )
+
+    # Pænere navne til legenden
+    state_mapping = {
+        'LOSING_PCT': 'Losing',
+        'DRAWING_PCT': 'Drawing',
+        'WINNING_PCT': 'Winning'
+    }
+    df_melted['GAME_STATE'] = df_melted['GAME_STATE'].map(state_mapping)
+
+    # Plotly stabeldiagram
     fig = px.bar(
-        df_grouped,
-        x=['LOSING_PCT', 'DRAWING_PCT', 'WINNING_PCT'],
+        df_melted,
+        x='PERCENTAGE',
         y='TEAM_NAME',
+        color='GAME_STATE',
         orientation='h',
         title="Procent af spilletid i hver Game State",
-        labels={'value': 'Procent (%)', 'variable': 'Game State', 'TEAM_NAME': 'Hold'},
+        labels={'PERCENTAGE': 'Procent (%)', 'TEAM_NAME': 'Hold', 'GAME_STATE': 'Game State'},
         color_discrete_map={
-            'LOSING_PCT': '#f87171',   # Rød
-            'DRAWING_PCT': '#cbd5e1',  # Grå
-            'WINNING_PCT': '#4ade80'   # Grøn
+            'Losing': '#f87171',   # Rød
+            'Drawing': '#cbd5e1',  # Grå
+            'Winning': '#4ade80'   # Grøn
         }
     )
-    
-    names = {'LOSING_PCT': 'Losing', 'DRAWING_PCT': 'Drawing', 'WINNING_PCT': 'Winning'}
-    fig.for_each_trace(lambda t: t.update(name = names.get(t.name, t.name)))
 
     fig.update_layout(
         barmode='stack', 
         xaxis_range=[0, 100],
         legend_title_text='Game State',
-        height=600
+        height=600,
+        yaxis={'categoryorder': 'array', 'categoryarray': df['TEAM_NAME'].tolist()}
     )
 
     st.plotly_chart(fig, use_container_width=True)
