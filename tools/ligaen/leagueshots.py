@@ -103,7 +103,7 @@ def vis_side(dp=None):
             border-left: 5px solid #cc0000; 
             margin-bottom: 15px !important; 
             display: block !important;
-            width: 100% !important;
+            width: 50% !important;
             clear: both !important;
         }
         .stat-label { font-size: 0.75rem; text-transform: uppercase; color: #666; font-weight: bold; }
