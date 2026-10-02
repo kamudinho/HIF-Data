@@ -60,8 +60,8 @@ def get_xg_color(xg_val):
         return "#e74c3c"  # Rød
 
 
-def render_stat_box(label, value):
-    st.markdown(
+def render_stat_box(container, label, value):
+    container.markdown(
         f'<div class="stat-box"><div class="stat-label">{label}</div><div class="stat-value">{value}</div></div>',
         unsafe_allow_html=True,
     )
@@ -101,9 +101,9 @@ def vis_side(dp=None):
             padding: 10px !important; 
             border-radius: 5px; 
             border-left: 5px solid #cc0000; 
-            margin-bottom: 15px !important; 
+            margin-bottom: 10px !important; 
             display: block !important;
-            width: 50% !important;
+            width: 100% !important;
             clear: both !important;
         }
         .stat-label { font-size: 0.75rem; text-transform: uppercase; color: #666; font-weight: bold; }
@@ -154,7 +154,6 @@ def vis_side(dp=None):
         st.warning("Ingen data at vise for den valgte sæson/turnering.")
         return
 
-    # Behandl hold- og modstanderdata via fælles funktion
     df_team = process_shot_data(df_all[df_all["KLUB_NAVN"] == t_sel])
 
     if df_team.empty:
@@ -249,10 +248,20 @@ def vis_side(dp=None):
             tot_xg_afsl = d_v["XG"].sum() if not d_v.empty else 0.0
 
             st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
-            render_stat_box("Skud", s)
-            render_stat_box("Mål", m)
-            render_stat_box("Total xG", f"{tot_xg_afsl:.2f}")
-            render_stat_box("Konvertering", f"{(m/s*100 if s>0 else 0):.1f}%")
+            
+            # Række 1: Skud og Mål side om side
+            row1_col1, row1_col2 = st.columns(2)
+            with row1_col1:
+                render_stat_box(st, "Skud", s)
+            with row1_col2:
+                render_stat_box(st, "Mål", m)
+
+            # Række 2: Total xG og Konvertering side om side
+            row2_col1, row2_col2 = st.columns(2)
+            with row2_col1:
+                render_stat_box(st, "Total xG", f"{tot_xg_afsl:.2f}")
+            with row2_col2:
+                render_stat_box(st, "Konvertering", f"{(m/s*100 if s>0 else 0):.1f}%")
 
             if vis_mode_afsl == "xG":
                 st.markdown("---")
@@ -293,9 +302,16 @@ def vis_side(dp=None):
 
         with c2:
             s_dz, m_dz = len(dz_d), len(dz_d[dz_d["EVENT_TYPEID"] == 16])
-            render_stat_box("DZ Skud", s_dz)
-            render_stat_box("DZ Mål", m_dz)
-            render_stat_box("DZ Konv.", f"{(m_dz/s_dz*100 if s_dz>0 else 0):.1f}%")
+            
+            row1_col1, row1_col2 = st.columns(2)
+            with row1_col1:
+                render_stat_box(st, "DZ Skud", s_dz)
+            with row1_col2:
+                render_stat_box(st, "DZ Mål", m_dz)
+
+            row2_col1, _ = st.columns(2)
+            with row2_col1:
+                render_stat_box(st, "DZ Konv.", f"{(m_dz/s_dz*100 if s_dz>0 else 0):.1f}%")
 
         with c1:
             pitch, fig, ax = get_pitch("halv", t_color=t_color)
@@ -372,9 +388,16 @@ def vis_side(dp=None):
             tot_xg = df_modstander["XG"].sum() if not df_modstander.empty else 0.0
 
             st.markdown("<div style='margin-top: 20px;'></div>", unsafe_allow_html=True)
-            render_stat_box("Skud Imod", s_mod)
-            render_stat_box("Mål Imod", m_mod)
-            render_stat_box("Total xG Imod", f"{tot_xg:.2f}")
+            
+            row1_col1, row1_col2 = st.columns(2)
+            with row1_col1:
+                render_stat_box(st, "Skud Imod", s_mod)
+            with row1_col2:
+                render_stat_box(st, "Mål Imod", m_mod)
+
+            row2_col1, _ = st.columns(2)
+            with row2_col1:
+                render_stat_box(st, "Total xG Imod", f"{tot_xg:.2f}")
 
             if vis_mode == "xG":
                 st.markdown("---")
