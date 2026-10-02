@@ -1,4 +1,4 @@
-#HIF-Data/data/sql/skud_data.py
+# tools/ligaen/hif-data/data/sql/skud_data.py
 import streamlit as st
 import pandas as pd
 from data.data_load import _get_snowflake_conn
@@ -14,26 +14,23 @@ def load_league_data(liga_uuid):
 
     sql = f"""
         WITH CleanQualifiers AS (
-            -- Henter xG (QID 321) og sikrer én værdi pr event uden duplikering
             SELECT EVENT_OPTAUUID, MAX(TRY_CAST(QUALIFIER_VALUE AS FLOAT)) as XG_VAL
             FROM {DB}.OPTA_QUALIFIERS
             WHERE QUALIFIER_QID = 321
             GROUP BY EVENT_OPTAUUID
-        ),
+        },
         OwnGoals AS (
-            -- Selvmål (qualifier 28) - udelukkes fra skudkortet, da de ikke
-            -- er et reelt skudforsøg fra spilleren og aldrig har en xG-værdi.
             SELECT DISTINCT EVENT_OPTAUUID
             FROM {DB}.OPTA_QUALIFIERS
             WHERE QUALIFIER_QID = 28
-        ),
+        },
         PlayerNames AS (
             SELECT
                 PLAYER_OPTAUUID,
-                MAX(FIRST_NAME)      AS FIRST_NAME,
-                MAX(LAST_NAME)       AS LAST_NAME,
+                MAX(FIRST_NAME)     AS FIRST_NAME,
+                MAX(LAST_NAME)      AS LAST_NAME,
                 MAX(SHORT_LAST_NAME) AS SHORT_LAST_NAME,
-                MAX(MATCH_NAME)      AS MATCH_NAME
+                MAX(MATCH_NAME)     AS MATCH_NAME
             FROM {DB}.OPTA_MATCH_LINEUPS
             WHERE FIRST_NAME IS NOT NULL
             GROUP BY PLAYER_OPTAUUID
@@ -43,6 +40,7 @@ def load_league_data(liga_uuid):
             e.MATCH_OPTAUUID as match_optauuid,
             e.PLAYER_OPTAUUID as player_optauuid,
             e.EVENT_CONTESTANT_OPTAUUID as event_contestant_optauuid,
+            m.HOME_CONTESTANT_OPTAUUID as home_contestant_optauuid,
             e.EVENT_TYPEID as event_typeid,
             e.EVENT_X as event_x,
             e.EVENT_Y as event_y,
@@ -60,8 +58,6 @@ def load_league_data(liga_uuid):
         LEFT JOIN OwnGoals og ON e.EVENT_OPTAUUID = og.EVENT_OPTAUUID
         LEFT JOIN PlayerNames pn ON e.PLAYER_OPTAUUID = pn.PLAYER_OPTAUUID
         WHERE m.TOURNAMENTCALENDAR_OPTAUUID = '{liga_uuid}'
-          -- Præcis afgrænsning af skud (13=Miss, 14=Post, 15=Saved, 16=Goal)
-          -- og frasortering af eventuelle duplikerede hændelses-id'er
           AND e.EVENT_TYPEID IN (13, 14, 15, 16)
           AND e.EVENT_OPTAUUID IS NOT NULL
           AND og.EVENT_OPTAUUID IS NULL
@@ -71,7 +67,6 @@ def load_league_data(liga_uuid):
         df = conn.query(sql) if hasattr(conn, "query") else pd.read_sql(sql, conn)
         if df is not None and not df.empty:
             df.columns = [c.upper() for c in df.columns]
-            # Fjern evt. dubletter på selve event-uuid'et for en sikkerheds skyld
             df = df.drop_duplicates(subset=["EVENT_OPTAUUID"])
             df = resolve_player_names(df, conn)
             return df
