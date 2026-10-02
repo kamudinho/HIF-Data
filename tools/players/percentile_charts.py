@@ -35,23 +35,44 @@ def vis_side():
     }
     df_display = df.rename(columns=rename_dict)
 
-    # Opret tabs til navigation
-    tab_overview, tab_profile = st.tabs(["Top 20 Oversigt", "Spillerprofil"])
+    st.markdown("---")
 
-    with tab_overview:
-        st.subheader("Top 20 Spillere per Kategori")
-        
-        metric_cols = [col for col in df.columns if col not in ['HOLD_NAVN', 'SPILLER_NAVN', 'MINUTTER', 'KAMPE'] and not col.endswith('_PCTILE')]
-        selected_metric = st.selectbox("Vælg kategori for Top 20:", metric_cols)
+    # Layout over indholdslinjen: Navigation til venstre, dropdowns til højre
+    col_nav, col_filters = st.columns([1, 1], vertical_alignment="center")
 
+    with col_nav:
+        tab_choice = st.radio(
+            "Visning", 
+            ["Top 20 Oversigt", "Spillerprofil"], 
+            horizontal=True, 
+            label_visibility="collapsed"
+        )
+
+    with col_filters:
+        if tab_choice == "Top 20 Oversigt":
+            metric_cols = [col for col in df.columns if col not in ['HOLD_NAVN', 'SPILLER_NAVN', 'MINUTTER', 'KAMPE'] and not col.endswith('_PCTILE')]
+            selected_metric = st.selectbox("Vælg kategori:", metric_cols, key="top20_metric_select")
+        else:
+            teams = sorted(df['HOLD_NAVN'].unique())
+            sub_col1, sub_col2 = st.columns(2)
+            with sub_col1:
+                selected_team = st.selectbox("Vælg hold:", teams, key="profile_team")
+            with sub_col2:
+                team_players = sorted(df[df['HOLD_NAVN'] == selected_team]['SPILLER_NAVN'].unique())
+                selected_player = st.selectbox("Vælg spiller:", team_players, key="profile_player")
+
+    st.markdown("---")
+
+    # Indhold baseret på valgt visning
+    if tab_choice == "Top 20 Oversigt":
         if selected_metric:
             top_20 = df[['SPILLER_NAVN', 'HOLD_NAVN', selected_metric]].sort_values(by=selected_metric, ascending=True).tail(20)
             
             players = top_20['SPILLER_NAVN'].tolist()
-            teams = top_20['HOLD_NAVN'].tolist()
+            teams_list = top_20['HOLD_NAVN'].tolist()
             values = top_20[selected_metric].tolist()
             
-            labels = [f"{p} ({t})" for p, t in zip(players, teams)]
+            labels = [f"{p} ({t})" for p, t in zip(players, teams_list)]
 
             fig, ax = plt.subplots(figsize=(10, len(labels) * 0.4 + 1.5))
             
@@ -81,23 +102,14 @@ def vis_side():
             plt.tight_layout()
             st.pyplot(fig)
 
-    with tab_profile:
-        st.subheader("Visuel spillerprofil")
-        
-        teams = sorted(df['HOLD_NAVN'].unique())
-        selected_team = st.selectbox("Vælg hold:", teams, key="profile_team")
-        
-        team_players = sorted(df[df['HOLD_NAVN'] == selected_team]['SPILLER_NAVN'].unique())
-        selected_player = st.selectbox("Vælg spiller:", team_players, key="profile_player")
-
+    elif tab_choice == "Spillerprofil":
         if selected_player:
             player_row = df[df['SPILLER_NAVN'] == selected_player].iloc[0]
 
-            # Kategoriseret opsætning med farver i stil med billedet
             categories = [
                 {
-                    "title": "Afslutningsspil",
-                    "color": "#2ca02c",  # Grøn
+                    "title": "Shooting",
+                    "color": "#2ca02c",
                     "metrics": [
                         ("Non-Penalty Goals", "NP_GOALS_P90", "NP_GOALS_PCTILE"),
                         ("npxG", "NP_XG_P90", "NP_XG_PCTILE"),
@@ -105,8 +117,8 @@ def vis_side():
                     ]
                 },
                 {
-                    "title": "Boldbesiddelse",
-                    "color": "#d9822b",  # Orange / Gul
+                    "title": "Creation & Passing",
+                    "color": "#d9822b",
                     "metrics": [
                         ("Assists", "ASSISTS_P90", "ASSISTS_PCTILE"),
                         ("xA", "XA_P90", "XA_PCTILE"),
@@ -117,8 +129,8 @@ def vis_side():
                     ]
                 },
                 {
-                    "title": "Forsvarsspil",
-                    "color": "#c0392b",  # Rød / Brun
+                    "title": "Defense & Duels",
+                    "color": "#c0392b",
                     "metrics": [
                         ("Tackles Won", "TACKLES_WON_P90", "TACKLES_WON_PCTILE"),
                         ("Interceptions", "INTERCEPTIONS_P90", "INTERCEPTIONS_PCTILE"),
@@ -130,7 +142,6 @@ def vis_side():
                 }
             ]
 
-            # Beregn samlet højde baseret på antal rækker og overskrifter
             total_items = sum(len(cat["metrics"]) for cat in categories) + len(categories)
             fig, ax = plt.subplots(figsize=(10, total_items * 0.42 + 2.0))
 
@@ -146,7 +157,6 @@ def vis_side():
             current_y = 0
 
             for cat in categories:
-                # Tilføj kategorioverskrift
                 ax.text(-45, current_y, cat["title"], fontweight='bold', fontsize=10.5, color='#111111', ha='left')
                 ax.axhline(current_y + 0.35, color='#dddddd', linewidth=1)
                 current_y += 1
@@ -156,16 +166,11 @@ def vis_side():
                         val = player_row[p90_col]
                         pct = player_row[pct_col]
 
-                        # 1. Skyggebar (0 til 100 baggrund)
                         ax.barh(current_y, 100, left=0, height=0.55, color='#e9ecef', alpha=0.6)
-
-                        # 2. Den faktiske percentil-bar med kategoriens farve
                         ax.barh(current_y, pct, left=0, height=0.55, color=cat["color"], alpha=0.9)
 
-                        # 3. Metriknavn i venstre side
                         ax.text(-42, current_y, label, va='center', ha='left', fontsize=9.5, color='#222222')
 
-                        # 4. Placer percentil-tallet (altid inde i baren, eller udenfor hvis baren er for kort)
                         if pct >= 12:
                             pct_x = pct - 2
                             text_align = 'right'
@@ -180,12 +185,10 @@ def vis_side():
                         ax.axhline(current_y + 0.5, color='#f1f3f5', linewidth=0.5)
                         current_y += 1
 
-            # Titel over det hele
             team_name = selected_team
-            ax.set_title(f"{selected_player}: Percentile Bar Charts {team_name} (2026/2027)", 
+            ax.set_title(f"{selected_player}: Percentile Ranks among {team_name} (2025/26 Season)", 
                          fontsize=11, fontweight='bold', color='white', backgroundcolor='#1b4d3e', pad=15, loc='left')
 
-            # Fodnote
             minutter = player_row['MINUTTER']
             kampe = player_row['KAMPE']
             fig.text(0.05, 0.01, f"Spiller sammenlignet med hold/ligastandarder. Baseret på {minutter} minutter fordelt på {kampe} kampe.", 
