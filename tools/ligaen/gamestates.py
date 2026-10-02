@@ -2,14 +2,15 @@
 
 import streamlit as st
 import pandas as pd
-import plotly.express as px
+import matplotlib.pyplot as plt
+import io
 from data.data_load import _get_snowflake_conn
 from data.sql.teams import hent_hold_gamestate_tid
 
 def vis_side():
     """
-    Hovedfunktion der kaldes af appen. Viser stabeldiagram med hvid, fed tekst 
-    samt mulighed for at downloade som billede.
+    Hovedfunktion der kaldes af appen. Viser gamestate-oversigten som et 
+    statisk Matplotlib-billede i stil med dine øvrige visualiseringer.
     """
     st.markdown("#### Holdenes Gamestates (Førende / Uafgjort / Bagud)")
     st.caption("Oversigt over andelen af spilletiden holdene tilbringer i henholdsvis Winning, Drawing og Losing.")
@@ -38,84 +39,86 @@ def vis_side():
         st.info("Ingen gamestate-data fundet for denne kalender.")
         return
 
-    # Sorter holdene efter mest tid i føring (Winning %)
-    df = df.sort_values(by='WINNING_PCT', ascending=True)
+    # Sorter efter mest tid i føring (stigende, så det øverste hold kommer øverst på y-aksen)
+    df = df.sort_values(by='WINNING_PCT', ascending=True).reset_index(drop=True)
 
-    # Omstrukturer data til 'long'-format
-    df_melted = pd.melt(
-        df,
-        id_vars=['TEAM_NAME'],
-        value_vars=['WINNING_PCT', 'DRAWING_PCT', 'LOSING_PCT'],
-        var_name='GAME_STATE',
-        value_name='PERCENTAGE'
+    teams = df['TEAM_NAME']
+    winning = df['WINNING_PCT']
+    drawing = df['DRAWING_PCT']
+    losing = df['LOSING_PCT']
+
+    # Opsæt Matplotlib figur
+    fig, ax = plt.subplots(figsize=(10, max(8, len(df) * 0.4)))
+
+    # Farver (Grøn for Winning, Grå for Drawing, Rød for Losing)
+    c_winning = '#2e7d32'
+    c_drawing = '#90a4ae'
+    c_losing = '#c62828'
+
+    # Stablede vandrette søjler i rækkefølgen: Winning (venstre), Drawing (midt), Losing (højre)
+    bars_w = ax.barh(teams, winning, color=c_winning, label='Winning')
+    bars_d = ax.barh(teams, drawing, left=winning, color=c_drawing, label='Drawing')
+    bars_l = ax.barh(teams, losing, left=winning + drawing, color=c_losing, label='Losing')
+
+    # Tilføj procenter med hvid, fed skrift inde i søjlerne (hvis pladsen tillader det)
+    for bw, bd, bl, team in zip(bars_w, bars_d, bars_l, df.itertuples()):
+        w_val = team.WINNING_PCT
+        d_val = team.DRAWING_PCT
+        l_val = team.LOSING_PCT
+
+        # Winning tekst (hvis > 5%)
+        if w_val > 5:
+            ax.text(w_val / 2, bw.get_y() + bw.get_height()/2, f"{int(round(w_val))}%",
+                    ha='center', va='center', color='white', fontweight='bold', fontsize=9)
+
+        # Drawing tekst (hvis > 5%)
+        if d_val > 5:
+            ax.text(w_val + (d_val / 2), bd.get_y() + bd.get_height()/2, f"{int(round(d_val))}%",
+                    ha='center', va='center', color='white', fontweight='bold', fontsize=9)
+
+        # Losing tekst (hvis > 5%)
+        if l_val > 5:
+            ax.text(w_val + d_val + (l_val / 2), bl.get_y() + bl.get_height()/2, f"{int(round(l_val))}%",
+                    ha='center', va='center', color='white', fontweight='bold', fontsize=9)
+
+    # Titel boks i top-venstre stil (ligesom eksemplet)
+    ax.text(0, 1.02, "  GAME STATES: SPILLETID FORDELT (%)  ", transform=ax.transAxes,
+            fontsize=12, fontweight='bold', color='white',
+            bbox=dict(facecolor='#1b4332', alpha=0.9, edgecolor='none', pad=6),
+            ha='left', va='bottom')
+
+    # Styling af akser og baggrund
+    ax.set_xlim(0, 100)
+    ax.set_xlabel('Procent af spilletid (%)', fontsize=10, fontweight='bold', color='#333333')
+    ax.xaxis.grid(True, linestyle='--', alpha=0.5, color='#cccccc')
+    ax.set_axisbelow(True)
+
+    # Fjern unødvendige kanter (spines)
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.spines['left'].set_color('#888888')
+    ax.spines['bottom'].set_color('#888888')
+
+    # Legende øverst til højre
+    ax.legend(loc='upper right', frameon=True, facecolor='white', edgecolor='none')
+
+    plt.tight_layout()
+
+    # Gem som billede i hukommelsen og vis i Streamlit
+    buf = io.BytesIO()
+    plt.savefig(buf, format="png", dpi=300, bbox_inches='tight')
+    buf.seek(0)
+    plt.close(fig)
+
+    st.image(buf, use_container_width=True)
+
+    # Download knap til billedet
+    st.download_button(
+        label="📸 Download gamestate-oversigt som billede",
+        data=buf,
+        file_name="hvidovre_gamestates.png",
+        mime="image/png"
     )
-
-    # Pænere navne til legenden
-    state_mapping = {
-        'WINNING_PCT': 'Winning',
-        'DRAWING_PCT': 'Drawing',
-        'LOSING_PCT': 'Losing'
-    }
-    df_melted['GAME_STATE'] = df_melted['GAME_STATE'].map(state_mapping)
-
-    # Tving en specifik rækkefølge (Winning, Drawing, Losing)
-    df_melted['GAME_STATE'] = pd.Categorical(
-        df_melted['GAME_STATE'], 
-        categories=['Winning', 'Drawing', 'Losing'], 
-        ordered=True
-    )
-
-    # Vis kun procenttallet, hvis sektionen er stor nok (over 4%)
-    df_melted['TEXT_LABEL'] = df_melted['PERCENTAGE'].apply(lambda x: f"{int(round(x))}%" if x > 4 else "")
-
-    # Plotly stabeldiagram
-    fig = px.bar(
-        df_melted,
-        x='PERCENTAGE',
-        y='TEAM_NAME',
-        color='GAME_STATE',
-        orientation='h',
-        text='TEXT_LABEL',
-        title="Procent af spilletid i hver Game State",
-        labels={'PERCENTAGE': 'Procent (%)', 'TEAM_NAME': 'Hold', 'GAME_STATE': 'Game State'},
-        color_discrete_map={
-            'Winning': '#2e7d32',  # Dyb grøn
-            'Drawing': '#78909c',  # Mørkere grå
-            'Losing': '#c62828'    # Dyb rød
-        }
-    )
-
-    # Sørg for hvid, fed tekst midt i søjlerne
-    fig.update_traces(
-        textfont=dict(color='white', size=11, family='sans-serif', weight='bold'),
-        textangle=0,
-        textposition='inside',
-        insidetextanchor='middle'
-    )
-
-    fig.update_layout(
-        barmode='stack', 
-        xaxis_range=[0, 100],
-        legend_title_text='Game State',
-        height=600,
-        yaxis={'categoryorder': 'array', 'categoryarray': df['TEAM_NAME'].tolist()}
-    )
-
-    # Vis grafen i Streamlit
-    st.plotly_chart(fig, use_container_width=True)
-
-    # Mulighed for at downloade som billedfil via Streamlit download-knap (kræver kaleido)
-    try:
-        img_bytes = fig.to_image(format="png", width=1200, height=800, scale=2)
-        st.download_button(
-            label="📸 Download diagram som PNG-billede",
-            data=img_bytes,
-            file_name="hvidovre_gamestates.png",
-            mime="image/png"
-        )
-    except Exception:
-        # Fallback hvis kaleido ikke er installeret, minder brugeren om Plotlys indbyggede kamera-ikon
-        st.caption("Tip: Du kan også klikke på kamera-ikonet øverst til højre i grafen for at gemme den som et billede.")
 
 if __name__ == "__main__":
     vis_side()
