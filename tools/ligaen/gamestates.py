@@ -10,7 +10,7 @@ from data.sql.teams import hent_hold_gamestate_tid
 def vis_side():
     """
     Hovedfunktion der kaldes af appen. Viser gamestate-oversigten som et 
-    statisk Matplotlib-billede.
+    statisk Matplotlib-billede med korrekte bytes til visning og download.
     """
     st.markdown("#### Holdenes Gamestates (Førende / Uafgjort / Bagud)")
     st.caption("Oversigt over andelen af spilletiden holdene tilbringer i henholdsvis Winning, Drawing og Losing.")
@@ -97,20 +97,19 @@ def vis_side():
 
     plt.tight_layout()
 
-    # Gem som billede i hukommelsen
+    # Gem figuren til bytes, så vi kan bruge dem uafhængigt til både visning og download
     buf = io.BytesIO()
     plt.savefig(buf, format="png", dpi=300, bbox_inches='tight')
-    buf.seek(0)  # Nulstil pointeren her
     plt.close(fig)
+    img_bytes = buf.getvalue()
 
     # Vis billedet i Streamlit
-    st.image(buf, use_container_width=True)
+    st.image(img_bytes, use_container_width=True)
 
-    # Nulstil pointeren igen før download-knappen læser dataene
-    buf.seek(0)
+    # Download-knap med de lagrede bytes
     st.download_button(
         label="📸 Download gamestate-oversigt som billede",
-        data=buf,
+        data=img_bytes,
         file_name="hvidovre_gamestates.png",
         mime="image/png"
     )
