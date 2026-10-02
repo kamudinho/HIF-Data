@@ -33,11 +33,11 @@ def vis_side():
         st.subheader("Top 10 Spillere per Kategori")
         
         metric_cols = [col for col in df.columns if col not in ['HOLD_NAVN', 'SPILLER_NAVN', 'MINUTTER', 'KAMPE']]
-        selected_metric = st.selectbox("Vælg metrik / kategori for Top 10:", metric_cols)
+        selected_metric = st.selectbox("Vælg metrik / kategori for Top 20:", metric_cols)
 
         if selected_metric:
-            top_10 = df[['SPILLER_NAVN', 'HOLD_NAVN', 'MINUTTER', selected_metric]].sort_values(by=selected_metric, ascending=False).head(10)
-            st.dataframe(top_10.reset_index(drop=True), use_container_width=True)
+            top_20 = df[['SPILLER_NAVN', 'HOLD_NAVN', 'MINUTTER', selected_metric]].sort_values(by=selected_metric, ascending=False).head(20)
+            st.dataframe(top_20.reset_index(drop=True), use_container_width=True)
 
         st.markdown("---")
         st.subheader("Komplet Datatabel")
