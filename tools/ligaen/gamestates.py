@@ -39,6 +39,11 @@ def vis_side():
         st.info("Ingen gamestate-data fundet for denne kalender.")
         return
 
+    # Konverter procenter til rene floats for at undgå Decimal-fejl
+    for col in ['WINNING_PCT', 'DRAWING_PCT', 'LOSING_PCT']:
+        if col in df.columns:
+            df[col] = df[col].astype(float)
+
     # Sorter efter mest tid i føring
     df = df.sort_values(by='WINNING_PCT', ascending=True).reset_index(drop=True)
 
@@ -47,11 +52,11 @@ def vis_side():
     drawing = df['DRAWING_PCT']
     losing = df['LOSING_PCT']
 
-    # Tilføj en "fake" række øverst til legende-bar (fordelt præcist med heltal, der giver 100 totalt)
+    # Tilføj en "fake" række øverst til legende-bar
     teams_with_legend = ['LEGEND_BAR'] + teams
-    winning_data = [33] + list(winning)
-    drawing_data = [34] + list(drawing)
-    losing_data = [33] + list(losing)
+    winning_data = [33.0] + list(winning)
+    drawing_data = [34.0] + list(drawing)
+    losing_data = [33.0] + list(losing)
 
     # Opsæt Matplotlib figur
     fig, ax = plt.subplots(figsize=(10, max(8.5, int((len(df) + 1) * 0.45))))
