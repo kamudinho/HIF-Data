@@ -9,7 +9,7 @@ from data.sql.teams import hent_hold_gamestate_tid
 def vis_side():
     """
     Hovedfunktion der kaldes af appen. Viser stabeldiagram med hvid, fed tekst 
-    og giver mulighed for at gemme som billede.
+    samt mulighed for at downloade som billede.
     """
     st.markdown("#### Holdenes Gamestates (Førende / Uafgjort / Bagud)")
     st.caption("Oversigt over andelen af spilletiden holdene tilbringer i henholdsvis Winning, Drawing og Losing.")
@@ -65,7 +65,7 @@ def vis_side():
         ordered=True
     )
 
-    # Vis kun procenttallet, hvis sektionen er stor nok (fx over 4%)
+    # Vis kun procenttallet, hvis sektionen er stor nok (over 4%)
     df_melted['TEXT_LABEL'] = df_melted['PERCENTAGE'].apply(lambda x: f"{int(round(x))}%" if x > 4 else "")
 
     # Plotly stabeldiagram
@@ -79,7 +79,7 @@ def vis_side():
         title="Procent af spilletid i hver Game State",
         labels={'PERCENTAGE': 'Procent (%)', 'TEAM_NAME': 'Hold', 'GAME_STATE': 'Game State'},
         color_discrete_map={
-            'Winning': '#2e7d32',  # Dyb grøn så hvid tekst fremstår tydeligt
+            'Winning': '#2e7d32',  # Dyb grøn
             'Drawing': '#78909c',  # Mørkere grå
             'Losing': '#c62828'    # Dyb rød
         }
@@ -87,7 +87,7 @@ def vis_side():
 
     # Sørg for hvid, fed tekst midt i søjlerne
     fig.update_traces(
-        textfont=dict(color='white', size=11, family='sans-serif'),
+        textfont=dict(color='white', size=11, family='sans-serif', weight='bold'),
         textangle=0,
         textposition='inside',
         insidetextanchor='middle'
@@ -101,9 +101,21 @@ def vis_side():
         yaxis={'categoryorder': 'array', 'categoryarray': df['TEAM_NAME'].tolist()}
     )
 
-    # Vis chart i Streamlit (Plotly viser automatisk et kameraknap-ikon i højre hjørne af grafen, 
-    # hvor man kan klikke for at gemme som et PNG-billede)
+    # Vis grafen i Streamlit
     st.plotly_chart(fig, use_container_width=True)
+
+    # Mulighed for at downloade som billedfil via Streamlit download-knap (kræver kaleido)
+    try:
+        img_bytes = fig.to_image(format="png", width=1200, height=800, scale=2)
+        st.download_button(
+            label="📸 Download diagram som PNG-billede",
+            data=img_bytes,
+            file_name="hvidovre_gamestates.png",
+            mime="image/png"
+        )
+    except Exception:
+        # Fallback hvis kaleido ikke er installeret, minder brugeren om Plotlys indbyggede kamera-ikon
+        st.caption("Tip: Du kan også klikke på kamera-ikonet øverst til højre i grafen for at gemme den som et billede.")
 
 if __name__ == "__main__":
     vis_side()
