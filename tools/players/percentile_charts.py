@@ -13,7 +13,7 @@ def vis_side():
     Henter data via fetch_player_percentiles().
     """
     st.markdown("#### Spillerprofiler & Percentiler")
-    st.caption("Her kan du se rangeringer, top 10-spillere og spillerprofiler")
+    st.caption("Her kan du se rangeringer, top-spillere og spillerprofiler")
 
     # Hent data
     try:
@@ -35,18 +35,57 @@ def vis_side():
     }
     df_display = df.rename(columns=rename_dict)
 
-    # Opret tabs til navigation (med dine foretrukne navne)
-    tab_overview, tab_profile = st.tabs(["Top 10", "Spillerprofil"])
+    # Opret tabs til navigation
+    tab_overview, tab_profile = st.tabs(["Top 20 Oversigt", "Spillerprofil"])
 
     with tab_overview:
         st.subheader("Top 20 Spillere per Kategori")
         
-        metric_cols = [col for col in df.columns if col not in ['HOLD_NAVN', 'SPILLER_NAVN', 'MINUTTER', 'KAMPE']]
+        # Hent relevante metrikker (fjern ID/navne kolonner og percentil-kolonner fra listen over valgmuligheder)
+        metric_cols = [col for col in df.columns if col not in ['HOLD_NAVN', 'SPILLER_NAVN', 'MINUTTER', 'KAMPE'] and not col.endswith('_PCTILE')]
         selected_metric = st.selectbox("Vælg kategori for Top 20:", metric_cols)
 
         if selected_metric:
-            top_20 = df[['SPILLER_NAVN', 'HOLD_NAVN', 'MINUTTER', selected_metric]].sort_values(by=selected_metric, ascending=False).head(20)
-            st.dataframe(top_20.reset_index(drop=True), use_container_width=True)
+            # Hent top 20 sorteret efter den valgte metrik (og vend rækkefølgen så den højeste kommer øverst i matplotlib)
+            top_20 = df[['SPILLER_NAVN', 'HOLD_NAVN', selected_metric]].sort_values(by=selected_metric, ascending=True).tail(20)
+            
+            players = top_20['SPILLER_NAVN'].tolist()
+            teams = top_20['HOLD_NAVN'].tolist()
+            values = top_20[selected_metric].tolist()
+            
+            # Sæt labels op med både spiller og hold
+            labels = [f"{p} ({t})" for p, t in zip(players, teams)]
+
+            # Byg matplotlib-figur til Top 20
+            fig, ax = plt.subplots(figsize=(10, len(labels) * 0.4 + 1.5))
+            
+            y_pos = np.arange(len(labels))
+            max_val = max(values) if values else 1
+            ax.set_xlim(0, max_val * 1.25 if max_val > 0 else 10)
+            ax.set_ylim(-1, len(labels))
+
+            ax.set_yticks(y_pos)
+            ax.set_yticklabels(labels, fontsize=9, color='#222222')
+            ax.xaxis.set_visible(True)
+            ax.spines['top'].set_visible(False)
+            ax.spines['right'].set_visible(False)
+            ax.spines['left'].set_visible(False)
+            ax.xaxis.grid(True, linestyle='--', alpha=0.5, color='#cccccc')
+
+            # Tegn vandrette søjler for Top 20
+            bars = ax.barh(y_pos, values, height=0.6, color='#1b4d3e', alpha=0.9)
+
+            # Tilføj værdien på højre side af hver søjle
+            for bar, val in zip(bars, values):
+                width = bar.get_width()
+                val_str = f"{val:.2f}" if isinstance(val, float) else str(val)
+                ax.text(width + (max_val * 0.02), bar.get_y() + bar.get_height()/2, val_str,
+                        va='center', ha='left', fontsize=9, fontweight='bold', color='#222222')
+
+            ax.set_title(f"Top 20: {selected_metric}", fontsize=11, fontweight='bold', color='white', backgroundcolor='#1b4d3e', pad=15, loc='left')
+
+            plt.tight_layout()
+            st.pyplot(fig)
 
     with tab_profile:
         st.subheader("Visuel spillerprofil")
@@ -88,7 +127,7 @@ def vis_side():
                     values_p90.append(player_row[p90_col])
                     percentiles.append(player_row[pct_col])
 
-            # Byg matplotlib-figur
+            # Byg matplotlib-figur til spillerprofil
             fig, ax = plt.subplots(figsize=(10, len(labels) * 0.45 + 1.8))
             
             y_pos = np.arange(len(labels))
