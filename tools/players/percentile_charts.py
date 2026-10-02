@@ -96,7 +96,7 @@ def vis_side():
             # Kategoriseret opsætning med farver i stil med billedet
             categories = [
                 {
-                    "title": "Shooting",
+                    "title": "Afslutningsspil",
                     "color": "#2ca02c",  # Grøn
                     "metrics": [
                         ("Non-Penalty Goals", "NP_GOALS_P90", "NP_GOALS_PCTILE"),
@@ -105,7 +105,7 @@ def vis_side():
                     ]
                 },
                 {
-                    "title": "Creation & Passing",
+                    "title": "Boldbesiddelse",
                     "color": "#d9822b",  # Orange / Gul
                     "metrics": [
                         ("Assists", "ASSISTS_P90", "ASSISTS_PCTILE"),
@@ -117,7 +117,7 @@ def vis_side():
                     ]
                 },
                 {
-                    "title": "Defense & Duels",
+                    "title": "Forsvarsspil",
                     "color": "#c0392b",  # Rød / Brun
                     "metrics": [
                         ("Tackles Won", "TACKLES_WON_P90", "TACKLES_WON_PCTILE"),
