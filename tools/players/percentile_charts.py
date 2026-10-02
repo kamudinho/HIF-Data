@@ -26,6 +26,15 @@ def vis_side():
         st.warning("Inden data fundet med de aktuelle filtre.")
         return
 
+    # Omdøb systemkolonner til pænere visning ("Navn", "Hold" osv.)
+    rename_dict = {
+        'SPILLER_NAVN': 'Navn',
+        'HOLD_NAVN': 'Hold',
+        'MINUTTER': 'Minutter',
+        'KAMPE': 'Kampe'
+    }
+    df_display = df.rename(columns=rename_dict)
+
     # Opret tabs til navigation
     tab_overview, tab_profile = st.tabs(["Top 10", "Spillerprofil"])
 
