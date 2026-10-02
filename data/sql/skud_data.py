@@ -43,7 +43,7 @@ def load_league_data(liga_uuid):
             e.MATCH_OPTAUUID as match_optauuid,
             e.PLAYER_OPTAUUID as player_optauuid,
             e.EVENT_CONTESTANT_OPTAUUID as event_contestant_optauuid,
-            m.HOME_CONTESTANT_OPTAUUID as home_contestant_optauuid,
+            m.CONTESTANTHOME_OPTAUUID as home_contestant_optauuid,
             e.EVENT_TYPEID as event_typeid,
             e.EVENT_X as event_x,
             e.EVENT_Y as event_y,
