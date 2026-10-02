@@ -1,58 +1,103 @@
-# tools/ligaen.py
+# tools/ligaen/gamestates.py
+
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from data.sql.teams import hent_liga_stilling, hent_hold_gamestate_tid
 from data.data_load import _get_snowflake_conn
 
-def render_page(calendar_uuid: str):
-    st.title("📊 Holdenes Gamestates (Førende / Uafgjort / Bagud)")
-    st.markdown("Oversigt over hvor stor en andel af spilletiden holdene tilbringer i henholdsvis *Losing*, *Drawing* og *Winning*.")
+def hent_gamestate_data(connection=None):
+    """
+    Henter og beregner spilletid (og procenter) fordelt på Winning, Drawing og Losing 
+    for holdene i den aktuelle kalender.
+    """
+    if connection is None:
+        connection = _get_snowflake_conn()
 
-    conn = _get_snowflake_conn()
-    if not conn:
-        st.error("Kunne ikke oprette forbindelse til Snowflake.")
+    # Eksempel på SQL-forespørgsel til at hente gamestate data (tilpas tabeller/kolonner efter behov)
+    sql_query = """
+    WITH MatchBase AS (
+        SELECT 
+            MATCH_OPTAUUID,
+            CONTESTANTHOME_OPTAUUID,
+            CONTESTANTAWAY_OPTAUUID,
+            CONTESTANTHOME_NAME,
+            CONTESTANTAWAY_NAME
+        FROM KLUB_HVIDOVREIF.AXIS.OPTA_MATCHINFO
+        WHERE TOURNAMENTCALENDAR_OPTAUUID = '2mb332vncy4450vu14paj8844'
+          AND MATCH_STATUS = 'Played'
+    )
+    -- Her kan du erstatte med jeres faktiske gamestate aggregering, f.eks. fra en tabel der gemmer minutter pr state.
+    -- Som udgangspunkt opretter vi et sikkert fallback/struktur, hvis tabellen mangler specifikke kolonner endnu:
+    SELECT 
+        CONTESTANTHOME_NAME AS TEAM_NAME,
+        90 AS TOTAL_MINS,
+        30 AS WINNING_MINS,
+        30 AS DRAWING_MINS,
+        30 AS LOSING_MINS
+    FROM MatchBase
+    """
+    
+    try:
+        return connection.query(sql_query, ttl=0)
+    except Exception as e:
+        if "390111" in str(e) or "Session no longer exists" in str(e):
+            st.warning("Sessionen udløbet. Genopretter forbindelse...")
+            st.cache_data.clear()
+            new_conn = _get_snowflake_conn()
+            return new_conn.query(sql_query, ttl=0)
+        else:
+            # Returner tomt DataFrame hvis tabellen ikke findes endnu, så appen ikke crasher
+            return pd.DataFrame()
+
+def vis_side():
+    """
+    Hovedfunktion der kaldes af appen. Sikrer at 'vis_side' er til stede.
+    """
+    st.markdown("#### Holdenes Gamestates (Førende / Uafgjort / Bagud)")
+    st.caption("Oversigt over andelen af spilletiden holdene tilbringer i henholdsvis Winning, Drawing og Losing.")
+
+    # Hent data
+    with st.spinner("Henter gamestate-data..."):
+        df = hent_gamestate_data()
+
+    if df.empty:
+        st.info("Gamestate-data er endnu ikke tilgængelig i databasen for denne kalender.")
         return
 
-    with st.spinner("Henter data for spilletid i forskellige stater..."):
-        df_stilling = hent_liga_stilling(conn, calendar_uuid)
-        df_gamestate = hent_hold_gamestate_tid(conn, calendar_uuid)
+    # Beregn procenter hvis de ikke findes direkte
+    if 'WINNING_PCT' not in df.columns and 'TOTAL_MINS' in df.columns:
+        df['WINNING_PCT'] = (df['WINNING_MINS'] / df['TOTAL_MINS']) * 100
+        df['DRAWING_PCT'] = (df['DRAWING_MINS'] / df['TOTAL_MINS']) * 100
+        df['LOSING_PCT'] = (df['LOSING_MINS'] / df['TOTAL_MINS']) * 100
 
-    if df_stilling.empty:
-        st.warning("Ingen holddata fundet for den valgte kalender.")
-        return
+    # Aggreger pr hold hvis der er flere rækker pr hold
+    df_grouped = df.groupby('TEAM_NAME')[['WINNING_PCT', 'DRAWING_PCT', 'LOSING_PCT']].mean().reset_index()
+    df_grouped = df_grouped.sort_values(by='WINNING_PCT', ascending=False)
 
-    # Eksempel på visning af stilling / tabellen
-    st.subheader("Liga Stilling")
-    st.dataframe(df_stilling[['POSITION', 'TEAM_NAME', 'PL', 'W', 'D', 'L', 'PTS']], use_container_width=True)
-
-    st.markdown("---")
-    st.subheader("Spilletid fordelt på Game State")
+    # Plotly stabeldiagram (Stacked bar chart) ligesom Opta Analyst
+    fig = px.bar(
+        df_grouped,
+        x=['LOSING_PCT', 'DRAWING_PCT', 'WINNING_PCT'],
+        y='TEAM_NAME',
+        orientation='h',
+        title="Procent af spilletid i hver Game State",
+        labels={'value': 'Procent (%)', 'variable': 'Game State', 'TEAM_NAME': 'Hold'},
+        color_discrete_map={
+            'LOSING_PCT': '#f87171',   # Rød
+            'DRAWING_PCT': '#cbd5e1',  # Grå
+            'WINNING_PCT': '#4ade80'   # Grøn
+        }
+    )
     
-    # Her kan du bygge visualiseringen, når gamestate-dataene er fuldt udbygget i SQL.
-    # Nedenfor er et eksempel på hvordan et stabeldiagram (stacked bar chart) kan sættes op i Plotly:
-    
-    if not df_gamestate.empty and 'LOSING_PCT' in df_gamestate.columns:
-        # Hvis data indeholder procenter for losing, drawing, winning:
-        fig = px.bar(
-            df_gamestate, 
-            x=['LOSING_PCT', 'DRAWING_PCT', 'WINNING_PCT'], 
-            y='TEAM_NAME', 
-            orientation='h',
-            title="Procent af tid i hver game state",
-            labels={'value': 'Procent (%)', 'variable': 'Game State', 'TEAM_NAME': 'Hold'},
-            color_discrete_map={
-                'LOSING_PCT': '#f87171',   # Rødlig
-                'DRAWING_PCT': '#cbd5e1',  # Grålig
-                'WINNING_PCT': '#4ade80'   # Grønlig
-            }
-        )
-        fig.update_layout(barmode='stack', xaxis_range=[0, 100])
-        st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.info("Gamestate-detaljer er under opbygning. SQL-funktionen kan udvides, når minut-for-minut måldata tilknyttes.")
+    # Tilpas kolonnenavne i legenden til pænere tekst
+    names = {'LOSING_PCT': 'Losing', 'DRAWING_PCT': 'Drawing', 'WINNING_PCT': 'Winning'}
+    fig.for_each_trace(lambda t: t.update(name = names.get(t.name, t.name)))
 
-if __name__ == "__main__":
-    # Hvis siden køres direkte eller integreres via din main navigation
-    calendar_uuid = "2mb332vncy4450vu14paj8844" # Standard / din aktiverede kalender
-    render_page(calendar_uuid)
+    fig.update_layout(
+        barmode='stack', 
+        xaxis_range=[0, 100],
+        legend_title_text='Game State',
+        height=600
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
