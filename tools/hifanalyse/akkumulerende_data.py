@@ -11,7 +11,7 @@ from data.utils.team_mapping import SEASONS, SEASON_LEAGUE_MAPPER, TEAMS, TEAM_C
 
 def plot_accumulating_matches_timeline(df_all, team_name, category):
     """
-    Genererer en akkumulerende graf over kampe (runde for runde) for et givent hold og kategori i Opta-stil.
+    Genererer en akkumulerende graf over faktiske kampe spillet af holdet.
     """
     fig, ax = plt.subplots(figsize=(11, 5.5))
     
@@ -19,54 +19,53 @@ def plot_accumulating_matches_timeline(df_all, team_name, category):
     is_xg = "xG" in category
     is_goal = "Mål" in category
 
-    # Find holdets Opta UUID hvis muligt
     target_uuid = TEAMS.get(team_name, {}).get("opta_uuid")
 
-    # For at opdele per kamp skal vi gruppere hændelser pr. match (MATCH_OPTAUUID)
     if "MATCH_OPTAUUID" not in df_all.columns:
-        st.error("Data mangler MATCH_OPTAUUID kolonne.")
+        ax.text(0.5, 0.5, "Data mangler MATCH_OPTAUUID kolonne.", color="white", ha="center", va="center", transform=ax.transAxes)
         return fig
 
-    # Vi skal finde ud af hvilke kampe holdet har spillet, og om hændelsen er for eller imod holdet.
-    # Vi identificerer holdets kampe ved at se på om holdet deltager i kampen (eller har hændelser som hjemme/ude).
     match_data_list = []
     
-    # Gruppér per kamp
+    # Gruppér per kamp i ligaen
     for match_id, df_match in df_all.groupby("MATCH_OPTAUUID"):
-        # Tjek om holdet er involveret i denne kamp (enten via CONTESTANTHOME eller hændelser)
-        home_uuid = df_match["CONTESTANTHOME_OPTAUUID"].iloc[0] if "CONTESTANTHOME_OPTAUUID" in df_match.columns else None
-        
-        # Er target_uuid hjemmehold eller udehold, eller findes holdnavnet/uuid i hændelserne?
-        # Vi tjekker om holdets UUID findes i match-dataen
-        if target_uuid and target_uuid in df_match["EVENT_CONTESTANT_OPTAUUID"].values:
-            team_is_involved = True
-        else:
-            # Fallback tjek på navn hvis det findes
-            team_is_involved = True # Antager kampen er relevant, eller vi filtrerer på holdets events
-            
-        if not team_is_involved:
+        # Tjek om holdet deltager i denne kamp (enten via opta uuid eller klubnavn)
+        involveret_uuid = False
+        if target_uuid and "EVENT_CONTESTANT_OPTAUUID" in df_match.columns:
+            if target_uuid in df_match["EVENT_CONTESTANT_OPTAUUID"].values:
+                involveret_uuid = True
+                
+        involveret_navn = False
+        if "KLUB_NAVN" in df_match.columns:
+            if team_name in df_match["KLUB_NAVN"].values:
+                involveret_navn = True
+
+        # Hvis holdet ikke er med i denne kamp, springer vi den over
+        if not (involveret_uuid or involveret_navn):
             continue
 
-        # Filtrer for eller imod
-        if target_uuid:
+        # Filtrer for eller imod det valgte hold i denne kamp
+        if target_uuid and "EVENT_CONTESTANT_OPTAUUID" in df_match.columns:
             if is_against:
                 df_subset = df_match[df_match["EVENT_CONTESTANT_OPTAUUID"] != target_uuid]
             else:
                 df_subset = df_match[df_match["EVENT_CONTESTANT_OPTAUUID"] == target_uuid]
+        elif "KLUB_NAVN" in df_match.columns:
+            if is_against:
+                df_subset = df_match[df_match["KLUB_NAVN"] != team_name]
+            else:
+                df_subset = df_match[df_match["KLUB_NAVN"] == team_name]
         else:
             df_subset = df_match
 
         # Beregn værdien for denne kamp
         if is_xg:
-            val = df_subset["XG_RAW"].sum() if "XG_RAW" in df_subset.columns else 0.05 * len(df_subset)
+            val = df_subset["XG_RAW"].sum() if "XG_RAW" in df_subset.columns else 0.0
         elif is_goal:
-            # EVENT_TYPEID 16 = Mål
             val = int((df_subset["EVENT_TYPEID"] == 16).sum())
         else:
-            # Generelle skud / afslutninger
             val = len(df_subset)
 
-        # Forsøg at finde et tidsstempel eller kamp-sortering baseret på første hændelse i kampen
         timestamp = df_match["EVENT_TIMESTAMP"].min() if "EVENT_TIMESTAMP" in df_match.columns else 0
 
         match_data_list.append({
@@ -76,24 +75,21 @@ def plot_accumulating_matches_timeline(df_all, team_name, category):
         })
 
     if not match_data_list:
-        ax.text(0.5, 0.5, "Ingen kampdata fundet for dette hold", color="white", ha="center", va="center", transform=ax.transAxes)
+        ax.text(0.5, 0.5, f"Ingen kampe fundet for {team_name}", color="white", ha="center", va="center", transform=ax.transAxes)
         return fig
 
     df_matches = pd.DataFrame(match_data_list)
     
-    # Sorter kronologisk efter tidspunkt
-    df_matches = df_matches.sort_values("TIMESTAMP").reset_index(drop=True)
+    # Sorter kronologisk efter tidspunkt og fjern evt. dubletter af samme kamp
+    df_matches = df_matches.sort_values("TIMESTAMP").drop_duplicates(subset=["MATCH_OPTAUUID"]).reset_index(drop=True)
     
-    # Opret kamp-nummer akse (Kamp 1, Kamp 2, Kamp 3...)
+    # Opret kamp-nummer akse baseret på de rent faktisk spilte kampe (f.eks. 1 til 9)
     df_matches["KAMP_NR"] = range(1, len(df_matches) + 1)
-    
-    # Lav akkumuleret sum over kampene
     df_matches["ACC_VAL"] = df_matches["MATCH_VAL"].cumsum()
 
-    # Hent holdfarver
     primary_color = TEAM_COLORS.get(team_name, {}).get("primary", "#e57373" if is_against else "#81c784")
 
-    # Plot grafen med trin/linje
+    # Plot grafen
     ax.step(df_matches["KAMP_NR"], df_matches["ACC_VAL"], where="mid", linewidth=2.5, label=category, color=primary_color)
     ax.plot(df_matches["KAMP_NR"], df_matches["ACC_VAL"], marker="o", markersize=6, color=primary_color)
     ax.fill_between(df_matches["KAMP_NR"], df_matches["ACC_VAL"], step="mid", alpha=0.15, color=primary_color)
@@ -102,7 +98,7 @@ def plot_accumulating_matches_timeline(df_all, team_name, category):
     ax.set_xlabel("Kamp nr. i sæsonen", fontsize=11, color="white")
     ax.set_ylabel(f"Akkumuleret {category}", fontsize=11, color="white")
     
-    # Sæt x-aksen til at vise helttal (kampnumre)
+    # Sæt x-aksen til præcist at vise de kampe der er spillet (f.eks. 1 til 9 i stedet for 54)
     ax.set_xticks(df_matches["KAMP_NR"])
     
     # Mørkt tema / Opta-stil
