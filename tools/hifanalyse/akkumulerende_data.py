@@ -169,7 +169,7 @@ def plot_accumulating_matches_timeline(df_all, team_name, category):
             ax.text(x_pos, -0.05, f"K{x_pos}", transform=ax.get_xaxis_transform(),
                     ha='center', va='top', color='white', fontsize=9)
 
-    fig.patch.set_facecolor("#0e1117")
+    fig.patch.set_facecolor("#white")
     ax.set_facecolor("white")
     ax.tick_params(colors="#0e1117")
     ax.xaxis.label.set_color("#0e1117")
