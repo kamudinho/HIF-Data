@@ -71,10 +71,8 @@ def get_opponent_logo(match_df, team_name):
 
 def plot_accumulating_matches_timeline(df_all, team_name, category):
     """
-    Genererer en akkumulerende graf over faktiske kampe med modstander-logoer på x-aksen.
+    Genererer en akkumulerende graf med dynamisk bredde og logo-skalering baseret på antal kampe.
     """
-    fig, ax = plt.subplots(figsize=(11, 5.5))
-    
     is_against = "Imod" in category
     is_xg = "xG" in category
     is_goal = "Mål" in category
@@ -82,12 +80,16 @@ def plot_accumulating_matches_timeline(df_all, team_name, category):
     target_uuid = TEAMS.get(team_name, {}).get("opta_uuid")
 
     if "MATCH_OPTAUUID" not in df_all.columns:
-        ax.text(0.5, 0.5, "Data mangler MATCH_OPTAUUID kolonne.", color="#0e1117", ha="center", va="center", transform=ax.transAxes)
+        fig, ax = plt.subplots(figsize=(11, 5.5))
+        ax.text(0.5, 0.5, "Data mangler MATCH_OPTAUUID kolonne.", color="white", ha="center", va="center", transform=ax.transAxes)
         return fig
 
     match_data_list = []
     
     for match_id, df_match in df_all.groupby("MATCH_OPTAUUID"):
+        if df_match.empty or len(df_match) < 2:
+            continue
+
         involveret_uuid = False
         if target_uuid and "EVENT_CONTESTANT_OPTAUUID" in df_match.columns:
             if target_uuid in df_match["EVENT_CONTESTANT_OPTAUUID"].values:
@@ -101,7 +103,6 @@ def plot_accumulating_matches_timeline(df_all, team_name, category):
         if not (involveret_uuid or involveret_navn):
             continue
 
-        # Hent modstanderens logo ved hjælp af din funktion
         logo_img = get_opponent_logo(df_match, team_name)
 
         if target_uuid and "EVENT_CONTESTANT_OPTAUUID" in df_match.columns:
@@ -134,7 +135,8 @@ def plot_accumulating_matches_timeline(df_all, team_name, category):
         })
 
     if not match_data_list:
-        ax.text(0.5, 0.5, f"Ingen kampe fundet for {team_name}", color="#0e1117", ha="center", va="center", transform=ax.transAxes)
+        fig, ax = plt.subplots(figsize=(11, 5.5))
+        ax.text(0.5, 0.5, f"Ingen spillede kampe fundet for {team_name}", color="white", ha="center", va="center", transform=ax.transAxes)
         return fig
 
     df_matches = pd.DataFrame(match_data_list)
@@ -143,39 +145,49 @@ def plot_accumulating_matches_timeline(df_all, team_name, category):
     df_matches["KAMP_NR"] = range(1, len(df_matches) + 1)
     df_matches["ACC_VAL"] = df_matches["MATCH_VAL"].cumsum()
 
-    primary_color = TEAM_COLORS.get(team_name, {}).get("primary", "#0e1117" if is_against else "#81c784")
+    num_matches = len(df_matches)
+
+    # DYNAMISK BREDBEGYNDELSE: Udvid figurens bredde, jo flere kampe der er (f.eks. 32 kampe får mere plads)
+    fig_width = max(11, num_matches * 0.4)
+    fig, ax = plt.subplots(figsize=(fig_width, 5.5))
+
+    primary_color = TEAM_COLORS.get(team_name, {}).get("primary", "#e57373" if is_against else "#81c784")
 
     ax.step(df_matches["KAMP_NR"], df_matches["ACC_VAL"], where="mid", linewidth=2.5, label=category, color=primary_color)
-    ax.plot(df_matches["KAMP_NR"], df_matches["ACC_VAL"], marker="o", markersize=6, color=primary_color)
+    ax.plot(df_matches["KAMP_NR"], df_matches["ACC_VAL"], marker="o", markersize=5, color=primary_color)
     ax.fill_between(df_matches["KAMP_NR"], df_matches["ACC_VAL"], step="mid", alpha=0.15, color=primary_color)
 
-    ax.set_title(f"Akkumuleret {category} per kamp - {team_name}", fontsize=14, fontweight="bold", color="#0e1117", pad=25)
-    ax.set_ylabel(f"Akkumuleret {category}", fontsize=11, color="#0e1117")
+    ax.set_title(f"Akkumuleret {category} per kamp - {team_name}", fontsize=14, fontweight="bold", color="white", pad=25)
+    ax.set_xlabel("Modstander (Kamp for kamp)", fontsize=11, color="white", labelpad=15)
+    ax.set_ylabel(f"Akkumuleret {category}", fontsize=11, color="white")
     
     ax.set_xticks(df_matches["KAMP_NR"])
     ax.set_xticklabels([])
+
+    # DYNAMISK LOGO-ZOOM: Gør logoerne lidt mindre, hvis der er mange kampe, så de ikke lapper over
+    logo_zoom = max(0.25, min(0.6, 5.5 / num_matches))
 
     for idx, row in df_matches.iterrows():
         x_pos = row["KAMP_NR"]
         logo = row["LOGO_IMG"]
         
         if logo is not None:
-            imagebox = OffsetImage(logo, zoom=0.8)
-            ab = AnnotationBbox(imagebox, (x_pos, 0), xybox=(0, -25),
+            imagebox = OffsetImage(logo, zoom=logo_zoom)
+            ab = AnnotationBbox(imagebox, (x_pos, 0), xybox=(0, -28),
                                 xycoords=('data', 'axes fraction'),
                                 boxcoords="offset points", frameon=False, pad=0)
             ax.add_artist(ab)
         else:
             ax.text(x_pos, -0.05, f"K{x_pos}", transform=ax.get_xaxis_transform(),
-                    ha='center', va='top', color='#0e1117', fontsize=9)
+                    ha='center', va='top', color='white', fontsize=9)
 
-    fig.patch.set_facecolor("white")
-    ax.set_facecolor("white")
-    ax.tick_params(colors="#0e1117")
-    ax.xaxis.label.set_color("#0e1117")
-    ax.yaxis.label.set_color("#0e1117")
+    fig.patch.set_facecolor("#0e1117")
+    ax.set_facecolor("#0e1117")
+    ax.tick_params(colors="white")
+    ax.xaxis.label.set_color("white")
+    ax.yaxis.label.set_color("white")
     for spine in ax.spines.values():
-        spine.set_edgecolor("#0e1117")
+        spine.set_edgecolor("white")
 
     ax.grid(True, linestyle="--", alpha=0.3)
     ax.set_ylim(bottom=min(0, df_matches["ACC_VAL"].min() - 0.5))
