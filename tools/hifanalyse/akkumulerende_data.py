@@ -67,7 +67,7 @@ def get_opponent_logo(match_df, team_name):
 
 def plot_accumulating_matches_timeline(df_all, team_name, category):
     """
-    Genererer en akkumulerende graf med hvid baggrund, luft i siderne og modstander-logoer.
+    Genererer en akkumulerende graf med hvid baggrund, hvor linjen og fyldet når helt ud til kanterne.
     """
     is_against = "Imod" in category
     is_xg = "xG" in category
@@ -160,8 +160,8 @@ def plot_accumulating_matches_timeline(df_all, team_name, category):
     ax.set_xticks(df_matches["KAMP_NR"])
     ax.set_xticklabels([])
 
-    # Sæt x-aksens grænser med luft i start og slut
-    ax.set_xlim(0.5, num_matches + 0.5)
+    # Sæt x-aksen til at starte præcist ved 1 og slutte ved sidste kamp, så det når helt ud til kanterne
+    ax.set_xlim(1, num_matches)
 
     # Dynamisk logo-zoom
     logo_zoom = max(0.25, min(0.6, 5.5 / num_matches))
