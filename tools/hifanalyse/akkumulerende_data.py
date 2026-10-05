@@ -4,7 +4,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 import io
-import urllib.request
+import requests
 from PIL import Image
 
 # Importér fra dine eksisterende moduler
@@ -12,38 +12,61 @@ from data.sql.skud_data import load_league_data
 from data.utils.team_mapping import SEASONS, SEASON_LEAGUE_MAPPER, TEAMS, TEAM_COLORS
 
 
-def get_opponent_logo(match_df, team_name):
+def get_logo(url):
     """
-    Finder modstanderens logo-URL ud fra kampens data.
-    """
-    klubber_i_kamp = []
-    if "KLUB_NAVN" in match_df.columns:
-        klubber_i_kamp = match_df["KLUB_NAVN"].unique().tolist()
-    
-    modstandere = [k for k in klubber_i_kamp if k != team_name]
-    
-    if modstandere:
-        modstander_navn = modstandere[0]
-        if modstander_navn in TEAMS and "logo" in TEAMS[modstander_navn]:
-            return TEAMS[modstander_navn]["logo"]
-            
-    return None
-
-
-def download_logo_image(url):
-    """
-    Downloader et logo fra URL og returnerer et PIL Image, eller None ved fejl.
+    Henter og konverterer et logo fra URL vha. din foretrukne metode.
     """
     if not url:
         return None
     try:
-        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req, timeout=3) as response:
-            img = Image.open(io.BytesIO(response.read())).convert("RGBA")
-            img.thumbnail((30, 30))
-            return img
+        response = requests.get(url, timeout=5)
+        img = Image.open(io.BytesIO(response.content)).convert("RGBA")
+        # Skaler ned til miniature til x-aksen
+        img.thumbnail((30, 30))
+        return img
     except Exception:
         return None
+
+
+def get_opponent_logo(match_df, team_name):
+    """
+    Finder modstanderens logo-URL via Opta UUID eller klubnavn og henter billedet.
+    """
+    modstander_navn = None
+    target_uuid = TEAMS.get(team_name, {}).get("opta_uuid")
+    
+    # 1. Prøv via EVENT_CONTESTANT_OPTAUUID i kampen
+    if "EVENT_CONTESTANT_OPTAUUID" in match_df.columns:
+        opp_uuids = match_df["EVENT_CONTESTANT_OPTAUUID"].unique()
+        for u in opp_uuids:
+            if u and u != target_uuid:
+                for t_name, t_info in TEAMS.items():
+                    if t_info.get("opta_uuid") == u:
+                        modstander_navn = t_name
+                        break
+            if modstander_navn:
+                break
+
+    # 2. Fallback via KLUB_NAVN kolonnen
+    if not modstander_navn and "KLUB_NAVN" in match_df.columns:
+        klubber_i_kamp = match_df["KLUB_NAVN"].unique().tolist()
+        modstandere = [k for k in klubber_i_kamp if str(k).strip().lower() != str(team_name).strip().lower()]
+        if modstandere:
+            modstander_navn = modstandere[0]
+
+    # 3. Find logo URL i TEAMS og hent billedet
+    logo_url = None
+    if modstander_navn:
+        if modstander_navn in TEAMS and "logo" in TEAMS[modstander_navn]:
+            logo_url = TEAMS[modstander_navn]["logo"]
+        else:
+            for team_key, team_info in TEAMS.items():
+                if str(team_key).strip().lower() == str(modstander_navn).strip().lower():
+                    if "logo" in team_info:
+                        logo_url = team_info["logo"]
+                        break
+
+    return get_logo(logo_url)
 
 
 def plot_accumulating_matches_timeline(df_all, team_name, category):
@@ -78,8 +101,8 @@ def plot_accumulating_matches_timeline(df_all, team_name, category):
         if not (involveret_uuid or involveret_navn):
             continue
 
-        logo_url = get_opponent_logo(df_match, team_name)
-        logo_img = download_logo_image(logo_url)
+        # Hent modstanderens logo ved hjælp af din funktion
+        logo_img = get_opponent_logo(df_match, team_name)
 
         if target_uuid and "EVENT_CONTESTANT_OPTAUUID" in df_match.columns:
             if is_against:
