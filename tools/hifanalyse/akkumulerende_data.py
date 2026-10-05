@@ -154,7 +154,6 @@ def plot_accumulating_matches_timeline(df_all, team_name, category):
     ax.fill_between(df_matches["KAMP_NR"], df_matches["ACC_VAL"], step="mid", alpha=0.15, color=primary_color)
 
     ax.set_title(f"Akkumuleret {category} per kamp - {team_name}", fontsize=14, fontweight="bold", color="black", pad=25)
-    ax.set_xlabel("Modstander (Kamp for kamp)", fontsize=11, color="black", labelpad=15)
     ax.set_ylabel(f"Akkumuleret {category}", fontsize=11, color="black")
     
     ax.set_xticks(df_matches["KAMP_NR"])
@@ -164,7 +163,7 @@ def plot_accumulating_matches_timeline(df_all, team_name, category):
     ax.set_xlim(1, num_matches)
 
     # Dynamisk logo-zoom
-    logo_zoom = max(0.25, min(0.6, 5.5 / num_matches))
+    logo_zoom = max(0.55, min(0.6, 5.5 / num_matches))
 
     for idx, row in df_matches.iterrows():
         x_pos = row["KAMP_NR"]
