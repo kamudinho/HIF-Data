@@ -150,7 +150,6 @@ def plot_accumulating_matches_timeline(df_all, team_name, category):
     ax.fill_between(df_matches["KAMP_NR"], df_matches["ACC_VAL"], step="mid", alpha=0.15, color=primary_color)
 
     ax.set_title(f"Akkumuleret {category} per kamp - {team_name}", fontsize=14, fontweight="bold", color="white", pad=25)
-    ax.set_xlabel("Modstander (Kamp for kamp)", fontsize=11, color="white", labelpad=15)
     ax.set_ylabel(f"Akkumuleret {category}", fontsize=11, color="white")
     
     ax.set_xticks(df_matches["KAMP_NR"])
