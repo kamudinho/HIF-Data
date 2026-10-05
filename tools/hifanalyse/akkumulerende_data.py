@@ -71,7 +71,7 @@ def get_opponent_logo(match_df, team_name):
 
 def plot_accumulating_matches_timeline(df_all, team_name, category):
     """
-    Genererer en akkumulerende graf med dynamisk bredde og logo-skalering baseret på antal kampe.
+    Genererer en akkumulerende graf med ekstra luft i start og slut på x-aksen.
     """
     is_against = "Imod" in category
     is_xg = "xG" in category
@@ -147,7 +147,7 @@ def plot_accumulating_matches_timeline(df_all, team_name, category):
 
     num_matches = len(df_matches)
 
-    # DYNAMISK BREDBEGYNDELSE: Udvid figurens bredde, jo flere kampe der er (f.eks. 32 kampe får mere plads)
+    # Dynamisk bredde baseret på antal kampe
     fig_width = max(11, num_matches * 0.4)
     fig, ax = plt.subplots(figsize=(fig_width, 5.5))
 
@@ -164,7 +164,10 @@ def plot_accumulating_matches_timeline(df_all, team_name, category):
     ax.set_xticks(df_matches["KAMP_NR"])
     ax.set_xticklabels([])
 
-    # DYNAMISK LOGO-ZOOM: Gør logoerne lidt mindre, hvis der er mange kampe, så de ikke lapper over
+    # Sæt x-aksens grænser med luft i start og slut (f.eks. fra 0.5 til num_matches + 0.5)
+    ax.set_xlim(0.5, num_matches + 0.5)
+
+    # Dynamisk logo-zoom
     logo_zoom = max(0.25, min(0.6, 5.5 / num_matches))
 
     for idx, row in df_matches.iterrows():
@@ -193,7 +196,6 @@ def plot_accumulating_matches_timeline(df_all, team_name, category):
     ax.set_ylim(bottom=min(0, df_matches["ACC_VAL"].min() - 0.5))
     
     return fig
-
 
 def vis_side():
     st.markdown("### Akkumuleret Udvikling med Modstanderlogoer")
