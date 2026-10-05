@@ -231,7 +231,7 @@ with st.sidebar:
         "SPILLERANALYSE": ["SPILLERANALYSE", "Spiller-stats", "Spilleraktioner", "Spiller-profil", "Spilleroversigt", "Spillerprofil"],
         "SCOUTING": ["SCOUTING", "Scoutrapport", "Database", "Emnedatabase", "Sammenligning", "Top10-scouting", "Opgaver"],
         "TILPASNING": ["TILPASNING", "Spillerdata", "Spiller-score", "Standardsituationer"],
-        "TESTSIDE": ["TESTSIDE", "Spiller-charts", "Gamestates", "Data-overblik", "Performance", "Winning Performance", "1. Div-tilpasning", "Charts", "Oversigt", "Forecast", "Model", "Transfers"],
+        "TESTSIDE": ["TESTSIDE", "Spiller-charts", "Gamestates", "Akkumulerende data", "Data-overblik", "Performance", "Winning Performance", "1. Div-tilpasning", "Charts", "Oversigt", "Forecast", "Model", "Transfers"],
         "ADMIN": ["ADMIN", "System Log", "Profil", "Datakatalog", "Konklusion", "Teamradar", "Spillerradar", "Fysisk profil", "Hold: Fysisk profil", "Intern analyse", "Top 5: Spillere", "Ordbog"],
         "ADMIN_SCOUTING": ["ADMIN_SCOUTING", "Opgaver"],
         "PROFIL": ["PROFIL", "Profil"]
@@ -273,7 +273,7 @@ with st.sidebar:
             "SPILLERANALYSE": ["Spiller-stats", "Spilleraktioner", "Spiller-profil", "Spilleroversigt", "Spillerprofil"],
             "SCOUTING": ["Scoutrapport", "Database", "Emnedatabase", "Sammenligning", "Top10-scouting", "Opgaver"],
             "TILPASNING": ["Spillerdata", "Spiller-score", "Standardsituationer"],
-            "TESTSIDE": ["Spiller-charts", "Gamestates", "Data-overblik", "Performance", "Winning Performance", "1. Div-tilpasning", "Charts", "Oversigt", "Forecast", "Model", "Transfers"],
+            "TESTSIDE": ["Spiller-charts", "Gamestates", "Akkumulerende data", "Data-overblik", "Performance", "Winning Performance", "1. Div-tilpasning", "Charts", "Oversigt", "Forecast", "Model", "Transfers"],
             "ADMIN": ["System Log", "Profil", "Datakatalog", "Konklusion", "Teamradar", "Spillerradar", "Fysisk profil", "Hold: Fysisk profil", "Intern analyse", "Top 5: Spillere", "Ordbog"],
             "ADMIN_SCOUTING": ["Opgaver"]
         }
@@ -451,6 +451,9 @@ try:
         elif s == "Gamestates":
             import tools.ligaen.gamestates as gamestates
             gamestates.vis_side()
+        elif s == "Akkumulerende data":
+            import tools.hifanalyse.akkumulerende_data as akkumulerende
+            akkumulerende.vis_side()
         elif s == "Transfers":
             import tools.scouting.transfer_input as t_input
             t_input.vis_side()
