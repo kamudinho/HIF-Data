@@ -82,7 +82,7 @@ def plot_accumulating_matches_timeline(df_all, team_name, category):
     target_uuid = TEAMS.get(team_name, {}).get("opta_uuid")
 
     if "MATCH_OPTAUUID" not in df_all.columns:
-        ax.text(0.5, 0.5, "Data mangler MATCH_OPTAUUID kolonne.", color="white", ha="center", va="center", transform=ax.transAxes)
+        ax.text(0.5, 0.5, "Data mangler MATCH_OPTAUUID kolonne.", color="#0e1117", ha="center", va="center", transform=ax.transAxes)
         return fig
 
     match_data_list = []
@@ -134,7 +134,7 @@ def plot_accumulating_matches_timeline(df_all, team_name, category):
         })
 
     if not match_data_list:
-        ax.text(0.5, 0.5, f"Ingen kampe fundet for {team_name}", color="white", ha="center", va="center", transform=ax.transAxes)
+        ax.text(0.5, 0.5, f"Ingen kampe fundet for {team_name}", color="#0e1117", ha="center", va="center", transform=ax.transAxes)
         return fig
 
     df_matches = pd.DataFrame(match_data_list)
@@ -143,14 +143,14 @@ def plot_accumulating_matches_timeline(df_all, team_name, category):
     df_matches["KAMP_NR"] = range(1, len(df_matches) + 1)
     df_matches["ACC_VAL"] = df_matches["MATCH_VAL"].cumsum()
 
-    primary_color = TEAM_COLORS.get(team_name, {}).get("primary", "#e57373" if is_against else "#81c784")
+    primary_color = TEAM_COLORS.get(team_name, {}).get("primary", "#0e1117" if is_against else "#81c784")
 
     ax.step(df_matches["KAMP_NR"], df_matches["ACC_VAL"], where="mid", linewidth=2.5, label=category, color=primary_color)
     ax.plot(df_matches["KAMP_NR"], df_matches["ACC_VAL"], marker="o", markersize=6, color=primary_color)
     ax.fill_between(df_matches["KAMP_NR"], df_matches["ACC_VAL"], step="mid", alpha=0.15, color=primary_color)
 
-    ax.set_title(f"Akkumuleret {category} per kamp - {team_name}", fontsize=14, fontweight="bold", color="white", pad=25)
-    ax.set_ylabel(f"Akkumuleret {category}", fontsize=11, color="white")
+    ax.set_title(f"Akkumuleret {category} per kamp - {team_name}", fontsize=14, fontweight="bold", color="#0e1117", pad=25)
+    ax.set_ylabel(f"Akkumuleret {category}", fontsize=11, color="#0e1117")
     
     ax.set_xticks(df_matches["KAMP_NR"])
     ax.set_xticklabels([])
@@ -167,7 +167,7 @@ def plot_accumulating_matches_timeline(df_all, team_name, category):
             ax.add_artist(ab)
         else:
             ax.text(x_pos, -0.05, f"K{x_pos}", transform=ax.get_xaxis_transform(),
-                    ha='center', va='top', color='white', fontsize=9)
+                    ha='center', va='top', color='#0e1117', fontsize=9)
 
     fig.patch.set_facecolor("white")
     ax.set_facecolor("white")
