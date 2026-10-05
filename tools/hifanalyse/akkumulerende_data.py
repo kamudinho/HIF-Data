@@ -170,12 +170,12 @@ def plot_accumulating_matches_timeline(df_all, team_name, category):
                     ha='center', va='top', color='white', fontsize=9)
 
     fig.patch.set_facecolor("#0e1117")
-    ax.set_facecolor("#0e1117")
-    ax.tick_params(colors="white")
-    ax.xaxis.label.set_color("white")
-    ax.yaxis.label.set_color("white")
+    ax.set_facecolor("white")
+    ax.tick_params(colors="#0e1117")
+    ax.xaxis.label.set_color("#0e1117")
+    ax.yaxis.label.set_color("#0e1117")
     for spine in ax.spines.values():
-        spine.set_edgecolor("white")
+        spine.set_edgecolor("#0e1117")
 
     ax.grid(True, linestyle="--", alpha=0.3)
     ax.set_ylim(bottom=min(0, df_matches["ACC_VAL"].min() - 0.5))
