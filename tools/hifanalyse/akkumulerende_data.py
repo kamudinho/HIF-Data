@@ -2,7 +2,7 @@
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
-from matplotlib.offsetbox(import OffsetImage, AnnotationBbox) # Ændret til korrekt import nedenfor
+from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 import io
 import urllib.request
 from PIL import Image
@@ -16,17 +16,14 @@ def get_opponent_logo(match_df, team_name):
     """
     Finder modstanderens logo-URL ud fra kampens data.
     """
-    # Prøv at finde alle unikke hold i denne kamp
     klubber_i_kamp = []
     if "KLUB_NAVN" in match_df.columns:
         klubber_i_kamp = match_df["KLUB_NAVN"].unique().tolist()
     
-    # Fjern vores eget hold for at finde modstanderen
     modstandere = [k for k in klubber_i_kamp if k != team_name]
     
     if modstandere:
         modstander_navn = modstandere[0]
-        # Hent logo URL fra TEAMS hvis den findes
         if modstander_navn in TEAMS and "logo" in TEAMS[modstander_navn]:
             return TEAMS[modstander_navn]["logo"]
             
@@ -43,7 +40,6 @@ def download_logo_image(url):
         req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
         with urllib.request.urlopen(req, timeout=3) as response:
             img = Image.open(io.BytesIO(response.read())).convert("RGBA")
-            # Skaler logoet ned så det ikke fylder for meget på aksen
             img.thumbnail((30, 30))
             return img
     except Exception:
@@ -54,8 +50,6 @@ def plot_accumulating_matches_timeline(df_all, team_name, category):
     """
     Genererer en akkumulerende graf over faktiske kampe med modstander-logoer på x-aksen.
     """
-    from matplotlib.offsetbox import OffsetImage, AnnotationBbox
-    
     fig, ax = plt.subplots(figsize=(11, 5.5))
     
     is_against = "Imod" in category
@@ -70,7 +64,6 @@ def plot_accumulating_matches_timeline(df_all, team_name, category):
 
     match_data_list = []
     
-    # Gruppér per kamp i ligaen
     for match_id, df_match in df_all.groupby("MATCH_OPTAUUID"):
         involveret_uuid = False
         if target_uuid and "EVENT_CONTESTANT_OPTAUUID" in df_match.columns:
@@ -85,11 +78,9 @@ def plot_accumulating_matches_timeline(df_all, team_name, category):
         if not (involveret_uuid or involveret_navn):
             continue
 
-        # Find modstander logo URL for denne kamp
         logo_url = get_opponent_logo(df_match, team_name)
         logo_img = download_logo_image(logo_url)
 
-        # Filtrer for eller imod det valgte hold
         if target_uuid and "EVENT_CONTESTANT_OPTAUUID" in df_match.columns:
             if is_against:
                 df_subset = df_match[df_match["EVENT_CONTESTANT_OPTAUUID"] != target_uuid]
@@ -103,7 +94,6 @@ def plot_accumulating_matches_timeline(df_all, team_name, category):
         else:
             df_subset = df_match
 
-        # Beregn værdi
         if is_xg:
             val = df_subset["XG_RAW"].sum() if "XG_RAW" in df_subset.columns else 0.0
         elif is_goal:
@@ -132,7 +122,6 @@ def plot_accumulating_matches_timeline(df_all, team_name, category):
 
     primary_color = TEAM_COLORS.get(team_name, {}).get("primary", "#e57373" if is_against else "#81c784")
 
-    # Plot grafen
     ax.step(df_matches["KAMP_NR"], df_matches["ACC_VAL"], where="mid", linewidth=2.5, label=category, color=primary_color)
     ax.plot(df_matches["KAMP_NR"], df_matches["ACC_VAL"], marker="o", markersize=6, color=primary_color)
     ax.fill_between(df_matches["KAMP_NR"], df_matches["ACC_VAL"], step="mid", alpha=0.15, color=primary_color)
@@ -141,9 +130,8 @@ def plot_accumulating_matches_timeline(df_all, team_name, category):
     ax.set_xlabel("Modstander (Kamp for kamp)", fontsize=11, color="white", labelpad=15)
     ax.set_ylabel(f"Akkumuleret {category}", fontsize=11, color="white")
     
-    # Fjern standard x-ticks tal og indsæt logoer under aksen
     ax.set_xticks(df_matches["KAMP_NR"])
-    ax.set_xticklabels([])  # Skjul standardtal
+    ax.set_xticklabels([])
 
     for idx, row in df_matches.iterrows():
         x_pos = row["KAMP_NR"]
@@ -156,11 +144,9 @@ def plot_accumulating_matches_timeline(df_all, team_name, category):
                                 boxcoords="offset points", frameon=False, pad=0)
             ax.add_artist(ab)
         else:
-            # Fallback hvis logo ikke findes: skriv kampnummer eller "K{x}"
             ax.text(x_pos, -0.05, f"K{x_pos}", transform=ax.get_xaxis_transform(),
                     ha='center', va='top', color='white', fontsize=9)
 
-    # Mørkt tema / Opta-stil
     fig.patch.set_facecolor("#0e1117")
     ax.set_facecolor("#0e1117")
     ax.tick_params(colors="white")
@@ -170,17 +156,12 @@ def plot_accumulating_matches_timeline(df_all, team_name, category):
         spine.set_edgecolor("white")
 
     ax.grid(True, linestyle="--", alpha=0.3)
-    
-    # Giv lidt ekstra plads i bunden til logoerne
     ax.set_ylim(bottom=min(0, df_matches["ACC_VAL"].min() - 0.5))
     
     return fig
 
 
 def vis_side():
-    """
-    Hovedfunktion der kaldes af appen. Viser side med dropdowns i højre side og graf med modstanderlogoer.
-    """
     st.markdown("### Akkumuleret Udvikling med Modstanderlogoer")
     st.caption("Følg holdets udvikling runde for runde med modstandernes logoer på x-aksen.")
 
