@@ -217,6 +217,7 @@ with st.sidebar:
         "HOLDANALYSE",
         "SPILLERANALYSE",
         "SCOUTING",
+        "STATISTIK",  # <-- NY SEKTION
         "TILPASNING",
         "TESTSIDE",
         "ADMIN",
@@ -230,8 +231,9 @@ with st.sidebar:
         "HOLDANALYSE": ["HOLDANALYSE", "Kampoversigt", "Kampudvikling", "Afslutninger", "Målsekvenser", "Grafer"],
         "SPILLERANALYSE": ["SPILLERANALYSE", "Spiller-stats", "Spilleraktioner", "Spiller-profil", "Spilleroversigt", "Spillerprofil"],
         "SCOUTING": ["SCOUTING", "Scoutrapport", "Database", "Emnedatabase", "Sammenligning", "Top10-scouting", "Opgaver"],
+        "STATISTIK": ["STATISTIK", "Regression & Mål", "Varmekort (Zoner)", "Akkumulerende data"], # <-- NYE UNDERSIDER
         "TILPASNING": ["TILPASNING", "Spillerdata", "Spiller-score", "Standardsituationer"],
-        "TESTSIDE": ["TESTSIDE", "Spiller-charts", "Gamestates", "Akkumulerende data", "Data-overblik", "Performance", "Winning Performance", "1. Div-tilpasning", "Charts", "Oversigt", "Forecast", "Model", "Transfers"],
+        "TESTSIDE": ["TESTSIDE", "Spiller-charts", "Gamestates", "Data-overblik", "Performance", "Winning Performance", "1. Div-tilpasning", "Charts", "Oversigt", "Forecast", "Model", "Transfers"],
         "ADMIN": ["ADMIN", "System Log", "Profil", "Datakatalog", "Konklusion", "Teamradar", "Spillerradar", "Fysisk profil", "Hold: Fysisk profil", "Intern analyse", "Top 5: Spillere", "Ordbog"],
         "ADMIN_SCOUTING": ["ADMIN_SCOUTING", "Opgaver"],
         "PROFIL": ["PROFIL", "Profil"]
@@ -272,8 +274,9 @@ with st.sidebar:
             "HOLDANALYSE": ["Kampoversigt", "Kampudvikling", "Afslutninger", "Målsekvenser", "Grafer"],
             "SPILLERANALYSE": ["Spiller-stats", "Spilleraktioner", "Spiller-profil", "Spilleroversigt", "Spillerprofil"],
             "SCOUTING": ["Scoutrapport", "Database", "Emnedatabase", "Sammenligning", "Top10-scouting", "Opgaver"],
+            "STATISTIK": ["Regression & Mål", "Varmekort (Zoner)", "Akkumulerende data"], # <-- NYE UNDERSIDER
             "TILPASNING": ["Spillerdata", "Spiller-score", "Standardsituationer"],
-            "TESTSIDE": ["Spiller-charts", "Gamestates", "Akkumulerende data", "Data-overblik", "Performance", "Winning Performance", "1. Div-tilpasning", "Charts", "Oversigt", "Forecast", "Model", "Transfers"],
+            "TESTSIDE": ["Spiller-charts", "Gamestates", "Data-overblik", "Performance", "Winning Performance", "1. Div-tilpasning", "Charts", "Oversigt", "Forecast", "Model", "Transfers"],
             "ADMIN": ["System Log", "Profil", "Datakatalog", "Konklusion", "Teamradar", "Spillerradar", "Fysisk profil", "Hold: Fysisk profil", "Intern analyse", "Top 5: Spillere", "Ordbog"],
             "ADMIN_SCOUTING": ["Opgaver"]
         }
