@@ -61,7 +61,7 @@ def vis_side():
         # Vi laver en kolonne for 'er_maal' (1 hvis event_typeid er 16, ellers 0)
 
         if "EVENT_TYPEID" in df_hold.columns:
-            df_hold["er_maal"] = (df_hold["EVENT_TYPEID"] == 16).astype(int)
+            df_hold["er_maal"] = (df_hold["EVENT_TYPEID"] == 13, 14, 15, 16).astype(int)
         else:
             df_hold["er_maal"] = 0
         
