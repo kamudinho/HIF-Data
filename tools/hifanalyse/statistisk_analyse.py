@@ -55,29 +55,49 @@ def vis_side():
             st.info(f"Ingen kampdata fundet for {valgte_hold}.")
             return
 
-        # Rettet herunder med .isin() til at tjekke flere hændelsestyper for mål
+        # Sæt er_maal til kun at være deciderede mål (f.eks. typeid 16, tilpas evt. hvis 13, 14, 15 er brændte chancer/skud)
         if "EVENT_TYPEID" in df_hold.columns:
-            df_hold["er_maal"] = df_hold["EVENT_TYPEID"].isin([13, 14, 15, 16]).astype(int)
+            # Antager f.eks. at 16 er mål, og 13, 14, 15 er andre skudtyper (eller tilpas efter jeres Opta-setup)
+            df_hold["er_maal"] = (df_hold["EVENT_TYPEID"] == 16).astype(int)
+            df_hold["er_skud"] = df_hold["EVENT_TYPEID"].isin([13, 14, 15, 16]).astype(int)
         else:
             df_hold["er_maal"] = 0
+            df_hold["er_skud"] = 0
         
         # Aggregering per kamp
         df_reg = df_hold.groupby("MATCH_OPTAUUID").agg({
             "XG_RAW": "sum",       # Total xG
             "er_maal": "sum",      # Antal mål
-            "EVENT_TYPEID": "count" # Antal skud
+            "er_skud": "sum"       # Antal skud
         }).rename(columns={
             "XG_RAW": "xG", 
             "er_maal": "Maal", 
-            "EVENT_TYPEID": "Skud"
+            "er_skud": "Skud"
         }).reset_index()
 
         # --- 4. VISUALISERING ---
         fig, ax = plt.subplots(figsize=(8, 5.5))
         primary_color = TEAM_COLORS.get(valgte_hold, {}).get("primary", "#1f77b4")
 
-        # Scatter plot
-        ax.scatter(df_reg["xG"], df_reg["Maal"], color=primary_color, s=70, alpha=0.8, edgecolors="black", label="Mål")
+        # Vi kan evt. plotte kampe opdelt, eller lade scatter vise xG mod faktiske mål pr kamp,
+        # hvor vi bruger f.eks. antal skud eller om det er mål til at farve/skalere prikkerne.
+        # Her viser vi punkter pr. kamp: xG (total i kampen) vs Mål (total i kampen)
+        
+        # Hvis du vil vise alle skud som prikker, skal det gøres på skud-niveau i stedet for kamp-niveau.
+        # Hvis det er på kamp-niveau, kan vi lade prikkerne repræsentere kampene, hvor størrelsen eller farven afspejler antallet af skud (13, 14, 15):
+        
+        sc = ax.scatter(
+            df_reg["xG"], 
+            df_reg["Maal"], 
+            c=df_reg["Skud"], # Farv efter antal skud i kampen
+            cmap="Blues", 
+            s=80, 
+            alpha=0.9, 
+            edgecolors="black", 
+            label="Kampe (farvet efter skud)"
+        )
+        cbar = plt.colorbar(sc, ax=ax)
+        cbar.set_label("Antal skud i kampen")
 
         # Regressionslinje
         if len(df_reg) > 1:
@@ -87,8 +107,8 @@ def vis_side():
                     label=f"Trend (y={m:.2f}x+{b:.2f})")
 
         ax.set_title(f"xG vs. Faktiske Mål - {valgte_hold}", fontsize=13, fontweight="bold", pad=15)
-        ax.set_xlabel("Forventede Mål (xG)", fontsize=10)
-        ax.set_ylabel("Faktiske Mål", fontsize=10)
+        ax.set_xlabel("Forventede Mål (xG) pr. kamp", fontsize=10)
+        ax.set_ylabel("Faktiske Mål pr. kamp", fontsize=10)
 
         # Design
         fig.patch.set_facecolor("white")
