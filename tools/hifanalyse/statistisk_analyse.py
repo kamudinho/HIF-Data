@@ -43,8 +43,8 @@ def vis_side():
             st.warning("Data mangler MATCH_OPTAUUID kolonne.")
             return
 
-        # --- OPTIMERET DATA BEHANDLING (Væk med for-loopet!) ---
-        # Vi filtrerer først til det relevante hold
+        # --- DATA BEHANDLING ---
+        # 1. Filtrer til det relevante hold
         if target_uuid and "EVENT_CONTESTANT_OPTAUUID" in df_all.columns:
             df_hold = df_all[df_all["EVENT_CONTESTANT_OPTAUUID"] == target_uuid].copy()
         elif "KLUB_NAVN" in df_all.columns:
@@ -57,19 +57,25 @@ def vis_side():
             st.info(f"Ingen kampdata fundet for {valgte_hold}.")
             return
 
-        # Vi aggregerer nu lynhurtigt per kamp
-        # Vi laver en kolonne for 'er_maal' (1 hvis event_typeid er 16, ellers 0)
+        # 2. Sikr at xG er numerisk (vigtigt for sum-beregningen)
+        if "XG_RAW" in df_hold.columns:
+            df_hold["XG_RAW"] = pd.to_numeric(df_hold["XG_RAW"], errors="coerce").fillna(0)
+        else:
+            df_hold["XG_RAW"] = 0
 
+        # 3. Opret 'er_maal' kolonne (RETTET: Bruger .isin() til at tjekke flere ID'er)
         if "EVENT_TYPEID" in df_hold.columns:
-            df_hold["er_maal"] = (df_hold["EVENT_TYPEID"] == 13, 14, 15, 16).astype(int)
+            # Her definerer vi de ID'er, der tæller som mål (f.eks. 13, 14, 15, 16)
+            scoring_ids = [13, 14, 15, 16]
+            df_hold["er_maal"] = df_hold["EVENT_TYPEID"].isin(scoring_ids).astype(int)
         else:
             df_hold["er_maal"] = 0
         
-        # 2. Vi aggregerer med TRE forskellige instruktioner
+        # 4. Aggreger per kamp
         df_reg = df_hold.groupby("MATCH_OPTAUUID").agg({
-            "XG_RAW": "sum",       # Læg alle xG-værdier sammen -> Total xG
-            "er_maal": "sum",      # Læg alle 1-taller sammen -> Antal mål
-            "EVENT_TYPEID": "count" # Tæl hvor mange rækker (skud) der er -> Antal skud
+            "XG_RAW": "sum",       # Total xG pr. kamp
+            "er_maal": "sum",      # Antal mål pr. kamp
+            "EVENT_TYPEID": "count" # Antal skud pr. kamp
         }).rename(columns={
             "XG_RAW": "xG", 
             "er_maal": "Maal", 
@@ -81,12 +87,12 @@ def vis_side():
         fig, ax = plt.subplots(figsize=(8, 5.5))
         primary_color = TEAM_COLORS.get(valgte_hold, {}).get("primary", "#1f77b4")
 
-        # Scatter plot (Rettet stavefejl: edgecolors)
+        # Scatter plot
         ax.scatter(df_reg["xG"], df_reg["Maal"], color=primary_color, s=70, alpha=0.8, edgecolors="black", label="Kampe")
 
         # Regressionslinje
         if len(df_reg) > 1:
-            # Vi bruger numpy til at finde linjen
+            # Vi bruger numpy til at finde linjen (m = hældning, b = skæringspunkt)
             m, b = np.polyfit(df_reg["xG"], df_reg["Maal"], 1)
             # Lav x-værdier til linjen (fra minste til største xG)
             x_range = np.linspace(df_reg["xG"].min(), df_reg["xG"].max(), 100)
@@ -97,7 +103,7 @@ def vis_side():
         ax.set_xlabel("Forventede Mål (xG)", fontsize=10)
         ax.set_ylabel("Faktiske Mål", fontsize=10)
 
-        # Design
+        # Design & Styling
         fig.patch.set_facecolor("white")
         ax.set_facecolor("white")
         ax.grid(True, linestyle="--", alpha=0.3)
