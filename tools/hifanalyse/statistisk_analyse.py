@@ -7,7 +7,7 @@ from data.sql.skud_data import load_league_data
 from data.utils.team_mapping import SEASONS, SEASON_LEAGUE_MAPPER, TEAMS, TEAM_COLORS
 
 def vis_side():
-    st.markdown("### 📊 Regression & Statistisk Analyse")
+    st.markdown("### Statistisk Analyse")
     st.caption("Analyser sammenhængen mellem forventede mål (xG) og faktiske mål pr. kamp.")
     
     # --- 1. FILTRE ---
@@ -77,7 +77,7 @@ def vis_side():
         primary_color = TEAM_COLORS.get(valgte_hold, {}).get("primary", "#1f77b4")
 
         # Scatter plot
-        ax.scatter(df_reg["xG"], df_reg["Maal"], color=primary_color, s=70, alpha=0.8, edgecolors="black", label="Kampe")
+        ax.scatter(df_reg["xG"], df_reg["Maal"], color=primary_color, s=70, alpha=0.8, edgecolors="black", label="Mål")
 
         # Regressionslinje
         if len(df_reg) > 1:
