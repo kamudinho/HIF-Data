@@ -59,16 +59,23 @@ def vis_side():
 
         # Vi aggregerer nu lynhurtigt per kamp
         # Vi laver en kolonne for 'er_maal' (1 hvis event_typeid er 16, ellers 0)
+
         if "EVENT_TYPEID" in df_hold.columns:
             df_hold["er_maal"] = (df_hold["EVENT_TYPEID"] == 16).astype(int)
         else:
             df_hold["er_maal"] = 0
-
-        # Groupby er meget hurtigere end et for-loop
+        
+        # 2. Vi aggregerer med TRE forskellige instruktioner
         df_reg = df_hold.groupby("MATCH_OPTAUUID").agg({
-            "XG_RAW": "sum",
-            "er_maal": "sum"
-        }).rename(columns={"XG_RAW": "xG", "er_maal": "Maal"}).reset_index()
+            "XG_RAW": "sum",       # Læg alle xG-værdier sammen -> Total xG
+            "er_maal": "sum",      # Læg alle 1-taller sammen -> Antal mål
+            "EVENT_TYPEID": "count" # Tæl hvor mange rækker (skud) der er -> Antal skud
+        }).rename(columns={
+            "XG_RAW": "xG", 
+            "er_maal": "Maal", 
+            "EVENT_TYPEID": "Skud"
+        }).reset_index()
+
 
         # --- 4. VISUALISERING ---
         fig, ax = plt.subplots(figsize=(8, 5.5))
