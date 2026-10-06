@@ -418,6 +418,19 @@ try:
             import tools.ligaen.kampudvikling as ku
             ku.vis_side()
 
+    elif m == "STATISTIK":
+        if s == "Regression & Mål":
+            # Her kan du oprette en fil f.eks. tools/hifanalyse/statistisk_analyse.py
+            import tools.hifanalyse.statistisk_analyse as stat_modul
+            stat_modul.vis_side()
+        elif s == "Varmekort (Zoner)":
+            # Her kan du oprette en fil f.eks. tools/hifanalyse/zone_varmekort.py
+            import tools.hifanalyse.zone_varmekort as zone_modul
+            zone_modul.vis_side()
+        elif s == "Akkumulerende data":
+            import tools.hifanalyse.akkumulerende_data as akkumulerende
+            akkumulerende.vis_side()
+
     elif m == "TILPASNING":
         if s == "Spillerdata":
             import tools.tilpasning.spiller_tilpasning as tilpasning
