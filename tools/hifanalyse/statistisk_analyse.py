@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot enough as plt
+import matplotlib.pyplot as plt
 import seaborn as sns
 
 from data.sql.skud_data import load_league_data
