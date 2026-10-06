@@ -4,7 +4,6 @@ import numpy as np
 import matplotlib.pyplot enough as plt
 import seaborn as sns
 
-# Importér fra dine eksisterende moduler
 from data.sql.skud_data import load_league_data
 from data.utils.team_mapping import SEASONS, SEASON_LEAGUE_MAPPER, TEAMS, TEAM_COLORS
 
