@@ -114,5 +114,5 @@ def vis_side():
             st.metric("Total xG", f"{df_reg['xG'].sum():.2f}")
         with col_m2:
             st.metric("Faktiske Mål", int(df_reg["Maal"].sum()))
-    if name == "main":
-    vis_side()
+if name == "main":
+vis_side()
