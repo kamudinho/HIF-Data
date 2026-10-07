@@ -1,14 +1,14 @@
+#tools/hifanalyse/statistisk_analyse.py
 import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import seaborn as sns
 from data.sql.skud_data import load_league_data
 from data.utils.team_mapping import SEASONS, SEASON_LEAGUE_MAPPER, TEAMS, TEAM_COLORS
 
 def vis_side():
     st.markdown("### Statistisk Analyse")
-    st.caption("Analyser sammenhængen mellem forventede mål (xG) og faktiske mål pr. kamp.")
+    st.caption("Analyser effektivitet (mål og skud) i forhold til antallet af pasninger.")
     
     # --- 1. FILTRE ---
     col_top1, col_top2 = st.columns(2)
@@ -38,95 +38,88 @@ def vis_side():
     with col_graf:
         target_uuid = TEAMS.get(valgte_hold, {}).get("opta_uuid")
         
-        if "MATCH_OPTAUUID" not in df_all.columns:
-            st.warning("Data mangler MATCH_OPTAUUID kolonne.")
-            return
-
-        # --- OPTIMERET DATA BEHANDLING ---
         if target_uuid and "EVENT_CONTESTANT_OPTAUUID" in df_all.columns:
             df_hold = df_all[df_all["EVENT_CONTESTANT_OPTAUUID"] == target_uuid].copy()
-        elif "KLUB_NAVN" in df_all.columns:
-            df_hold = df_all[df_all["KLUB_NAVN"] == valgte_hold].copy()
         else:
-            st.error("Kunne ikke identificere holdet i datasættet.")
+            st.error("Kunne ikke identificere holdet.")
             return
 
         if df_hold.empty:
-            st.info(f"Ingen kampdata fundet for {valgte_hold}.")
+            st.info(f"Ingen data fundet for {valgte_hold}.")
             return
 
-        # Sæt er_maal til kun at være deciderede mål (f.eks. typeid 16, tilpas evt. hvis 13, 14, 15 er brændte chancer/skud)
-        if "EVENT_TYPEID" in df_hold.columns:
-            # Antager f.eks. at 16 er mål, og 13, 14, 15 er andre skudtyper (eller tilpas efter jeres Opta-setup)
-            df_hold["er_maal"] = (df_hold["EVENT_TYPEID"] == 16).astype(int)
-            df_hold["er_skud"] = df_hold["EVENT_TYPEID"].isin([13, 14, 15, 16]).astype(int)
-        else:
-            df_hold["er_maal"] = 0
-            df_hold["er_skud"] = 0
+        # --- DEFINER EFFEKTIVITET ---
+        # 1 = Pasning, 13-16 = Skud, 16 = Mål
+        df_hold["er_pasning"] = (df_hold["EVENT_TYPEID"] == 1).astype(int)
+        df_hold["er_skud"] = df_hold["EVENT_TYPEID"].isin([13, 14, 15, 16]).astype(int)
+        df_hold["er_maal"] = (df_hold["EVENT_TYPEID"] == 16).astype(int)
         
         # Aggregering per kamp
         df_reg = df_hold.groupby("MATCH_OPTAUUID").agg({
-            "XG_RAW": "sum",       # Total xG
-            "er_maal": "sum",      # Antal mål
-            "er_skud": "sum"       # Antal skud
+            "XG_RAW": "sum",
+            "er_maal": "sum",
+            "er_skud": "sum",
+            "er_pasning": "sum"
         }).rename(columns={
             "XG_RAW": "xG", 
             "er_maal": "Maal", 
-            "er_skud": "Skud"
+            "er_skud": "Skud",
+            "er_pasning": "Pasninger"
         }).reset_index()
 
-        # --- 4. VISUALISERING ---
-        fig, ax = plt.subplots(figsize=(8, 5.5))
-        primary_color = TEAM_COLORS.get(valgte_hold, {}).get("primary", "#1f77b4")
+        # Beregn effektivitet pr. 100 pasninger
+        # Vi bruger .replace(0, np.nan) for at undgå division med nul (giver NaN i stedet for inf)
+        df_reg["Maal_pr_100_pas"] = (df_reg["Maal"] / df_reg["Pasninger"].replace(0, np.nan) * 100)
+        df_reg["Skud_pr_100_pas"] = (df_reg["er_skud"] / df_reg["Pasninger"].replace(0, np.nan) * 100)
 
-        # Vi kan evt. plotte kampe opdelt, eller lade scatter vise xG mod faktiske mål pr kamp,
-        # hvor vi bruger f.eks. antal skud eller om det er mål til at farve/skalere prikkerne.
-        # Her viser vi punkter pr. kamp: xG (total i kampen) vs Mål (total i kampen)
-        
-        # Hvis du vil vise alle skud som prikker, skal det gøres på skud-niveau i stedet for kamp-niveau.
-        # Hvis det er på kamp-niveau, kan vi lade prikkerne repræsentere kampene, hvor størrelsen eller farven afspejler antallet af skud (13, 14, 15):
+        # --- 4. VISUALISERING ---
+        # Vi viser her: Pasninger (x-akse) vs Mål (y-akse) for at se volumen vs effektivitet
+        fig, ax = plt.subplots(figsize=(8, 5.5))
         
         sc = ax.scatter(
-            df_reg["xG"], 
+            df_reg["Pasninger"], 
             df_reg["Maal"], 
-            c=df_reg["Skud"], # Farv efter antal skud i kampen
-            cmap="Blues", 
-            s=80, 
-            alpha=0.9, 
-            edgecolors="black", 
-            label="Kampe (farvet efter skud)"
+            c=df_reg["xG"], # Farv efter xG for at se om de scorer mere/mindre end forventet
+            cmap="viridis", 
+            s=100, 
+            alpha=0.8, 
+            edgecolors="black"
         )
         cbar = plt.colorbar(sc, ax=ax)
-        cbar.set_label("Antal skud i kampen")
+        cbar.set_label("Total xG i kampen")
 
-        # Regressionslinje
         if len(df_reg) > 1:
-            m, b = np.polyfit(df_reg["xG"], df_reg["Maal"], 1)
-            x_range = np.linspace(df_reg["xG"].min(), df_reg["xG"].max(), 100)
-            ax.plot(x_range, m*x_range + b, color="red", linestyle="--", linewidth=2, 
-                    label=f"Trend (y={m:.2f}x+{b:.2f})")
+            m, b = np.polyfit(df_reg["Pasninger"], df_reg["Maal"], 1)
+            x_range = np.linspace(df_reg["Pasninger"].min(), df_reg["Pasninger"].max(), 100)
+            ax.plot(x_range, m*x_range + b, color="red", linestyle="--", alpha=0.5, label="Trendlinje")
 
-        ax.set_title(f"xG vs. Faktiske Mål - {valgte_hold}", fontsize=13, fontweight="bold", pad=15)
-        ax.set_xlabel("Forventede Mål (xG) pr. kamp", fontsize=10)
-        ax.set_ylabel("Faktiske Mål pr. kamp", fontsize=10)
-
-        # Design
-        fig.patch.set_facecolor("white")
-        ax.set_facecolor("white")
+        ax.set_title(f"Kamp-volumen: Pasninger vs. Mål ({valgte_hold})", fontsize=12, fontweight="bold")
+        ax.set_xlabel("Antal pasninger pr. kamp", fontsize=10)
+        ax.set_ylabel("Antal mål pr. kamp", fontsize=10)
         ax.grid(True, linestyle="--", alpha=0.3)
-        for spine in ax.spines.values():
-            spine.set_edgecolor("black")
-        ax.legend(loc="upper left")
+        ax.legend()
 
         st.pyplot(fig)
         plt.close(fig)
 
-        # --- 5. METRIKKER ---
-        col_m1, col_m2 = st.columns(2)
-        with col_m1:
-            st.metric("Total xG", f"{df_reg['xG'].sum():.2f}")
-        with col_m2:
-            st.metric("Faktiske Mål", int(df_reg["Maal"].sum()))
+        # --- 5. METRIKKER (EFFEKTIVITET) ---
+        st.markdown("---")
+        st.markdown(f"#### Effektivitets-gennemsnit for {valgte_hold}")
+        
+        m1, m2, m3 = st.columns(3)
+        
+        avg_maal_pas = df_reg["Maal_pr_100_pas"].mean()
+        avg_skud_pas = df_reg["Skud_pr_100_pas"].mean()
+        total_xg = df_reg["xG"].sum()
+        total_maal = df_reg["Maal"].sum()
+
+        m1.metric("Mål pr. 100 pasninger", f"{avg_maal_pas:.2f}")
+        m2.metric("Skud pr. 100 pasninger", f"{avg_skud_pas:.2f}")
+        m3.metric("Konvertering (xG/Mål)", f"{total_maal/total_xg:.2f}x")
+
+        # Tabel med rådata
+        with st.expander("Se detaljeret kamp-data"):
+            st.dataframe(df_reg[["Pasninger", "Skud", "Maal", "xG", "Maal_pr_100_pas"]].style.format(precision=2))
 
 if __name__ == "__main__":
     vis_side()
