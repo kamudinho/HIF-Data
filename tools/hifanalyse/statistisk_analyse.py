@@ -49,12 +49,11 @@ def vis_side():
             return
 
         # --- DEFINER EFFEKTIVITET ---
-        # 1 = Pasning, 13-16 = Skud, 16 = Mål
         df_hold["er_pasning"] = (df_hold["EVENT_TYPEID"] == 1).astype(int)
         df_hold["er_skud"] = df_hold["EVENT_TYPEID"].isin([13, 14, 15, 16]).astype(int)
         df_hold["er_maal"] = (df_hold["EVENT_TYPEID"] == 16).astype(int)
         
-        # Aggregering per kamp
+        # 1. Aggregering per kamp
         df_reg = df_hold.groupby("MATCH_OPTAUUID").agg({
             "XG_RAW": "sum",
             "er_maal": "sum",
@@ -67,10 +66,10 @@ def vis_side():
             "er_pasning": "Pasninger"
         }).reset_index()
 
-        # Beregn effektivitet pr. 100 pasninger
-        # Vi bruger .replace(0, np.nan) for at undgå division med nul (giver NaN i stedet for inf)
+        # 2. Beregn effektivitet pr. 100 pasninger 
         df_reg["Maal_pr_100_pas"] = (df_reg["Maal"] / df_reg["Pasninger"].replace(0, np.nan) * 100)
-        df_reg["Skud_pr_100_pas"] = (df_reg["er_skud"] / df_reg["Pasninger"].replace(0, np.nan) * 100)
+        df_reg["Skud_pr_100_pas"] = (df_reg["Skud"] / df_reg["Pasninger"].replace(0, np.nan) * 100)
+
 
         # --- 4. VISUALISERING ---
         # Vi viser her: Pasninger (x-akse) vs Mål (y-akse) for at se volumen vs effektivitet
