@@ -92,7 +92,7 @@ def vis_side():
             x_range = np.linspace(df_reg["Pasninger"].min(), df_reg["Pasninger"].max(), 100)
             ax.plot(x_range, m*x_range + b, color="red", linestyle="--", alpha=0.5, label="Trendlinje")
 
-        ax.set_title(f"Kamp-volumen: Pasninger vs. Mål ({valgte_hold})", fontsize=12, fontweight="bold")
+        ax.set_title(f"Volumen: Pasninger vs. Mål ({valgte_hold})", fontsize=12, fontweight="bold")
         ax.set_xlabel("Antal pasninger pr. kamp", fontsize=10)
         ax.set_ylabel("Antal mål pr. kamp", fontsize=10)
         ax.grid(True, linestyle="--", alpha=0.3)
