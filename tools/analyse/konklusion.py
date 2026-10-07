@@ -1,3 +1,4 @@
+#tools/analyse/konklusion.py
 import streamlit as st
 import pandas as pd
 from data.utils.team_mapping import (
@@ -222,42 +223,47 @@ def vis_enkelt_hold(df, hold_uuid, hold_navn):
     if row_match.empty:
         st.warning(f"Ingen data fundet for {hold_navn}.")
         return
+    
+    # Vi tager rækken som en Series. 
+    # VI HAR FJernet den fejlbehæftede linje: row = row.iloc[0]
     row = row_match.iloc[0]
 
-    # Her kan du flytte logik til at generere de HTML-bokse og data, du allerede har
-    # For enkelhedens skyld kan du genbruge den store blok fra din oprindelige kode
-    # (eller kalde en funktion for det - her er det blot struktur)
-    # ... (Din eksisterende kode for at vise data for et enkelt hold)
-    # Eks:
-    # st.columns, st.markdown med HTML, osv.
-    # Her kan du flytte den eksisterende HTML-generering ind i separate funktioner for genbrug
-
-    # Eksempel på at bruge samme HTML-blok som din oprindelige kode:
-    # (Her skal du indsætte din HTML-generering som du havde i din oprindelige funktion)
-
-    # For enkelhed:
-    row = row.iloc[0]
     goals_val = row.get('GOALS', 0)
     xg_val = row.get('XG', 0)
     diff = goals_val - xg_val
-    præstation_tekst = "overpræsterer markant" if diff > 2.0 else "overpræsterer" if diff > 0.5 else "underpræsterer markant" if diff < -2.0 else "underpræsterer" if diff < -0.5 else "præsterer normalt i forhold til xG"
+    
+    if diff > 2.0:
+        præstation_tekst = "overpræsterer markant"
+    elif diff > 0.5:
+        præstation_tekst = "overpræsterer"
+    elif diff < -2.0:
+        præstation_tekst = "underpræsterer markant"
+    elif diff < -0.5:
+        præstation_tekst = "underpræsterer"
+    else:
+        præstation_tekst = "præsterer normalt i forhold til xG"
 
     col1, col2 = st.columns(2)
+
+    # Vi definerer en lille hjælpefunktion internt for at gøre HTML-koden renere
+    # og undgå at vi skal skrive df og hold_uuid 20 gange.
+    def r(col_name, ascending=False):
+        return get_rank(df, hold_uuid, col_name, ascending=ascending)
 
     with col2:
         st.markdown(f"""
         <div class="analysis-card">
             <div class="section-title">Afslutningsspil</div>
-            <div class="stat-line">• {get_rank('GOALS')} flest mål scoret ({int(row.get('GOALS', 0))})</div>
-            <div class="stat-line">• {get_rank('XG')} højeste expected goals ({row.get('XG', 0):.1f} xG)</div>
+            <div class="stat-line">• {r('GOALS')} flest mål scoret ({int(row.get('GOALS', 0))})</div>
+            <div class="stat-line">• {r('XG')} højeste expected goals ({row.get('XG', 0):.1f} xG)</div>
             <div class="stat-line">• Forskel: {row.get('GOALS', 0) - row.get('XG', 0):.1f} mål vs xG</div>
-            <div class="stat-line">• {get_rank('SHOTS_TOTAL')} flest skud i alt ({int(row.get('SHOTS_TOTAL', 0))})</div>
-            <div class="stat-line">• Skudpræcision: {safe_val(row.get('SHOT_ACCURACY', 0), suffix='%')}</div>
-            <div class="stat-line">• {get_rank('BIG_CHANCES_CREATED')} flest store chancer skabt ({int(row.get('BIG_CHANCES_CREATED', 0))})</div>
+            <div class="stat-line">• {r('SHOTS_TOTAL')} flest skud i alt ({int(row.get('SHOTS_TOTAL', 0))})</div>
+            <div class="stat-line">Skudpræcision: {safe_val(row.get('SHOT_ACCURACY', 0), suffix='%')}</div>
+            <div class="stat-line">• {r('BIG_CHANCES_CREATED')} flest store chancer skabt ({int(row.get('BIG_CHANCES_CREATED', 0))})</div>
             <div class="stat-line">• Ramt stolpe/overligger: {int(row.get('WOODWORK', 0))}</div>
-            <div class="stat-line">• {get_rank('CORNERS_TAKEN')} flest hjørnespark taget ({int(row.get('CORNERS_TAKEN', 0))})</div>
-            <div class="stat-line">• {get_rank('ATT_CORNER')} flest afslutninger efter hjørnespark ({int(row.get('ATT_CORNER', 0))})</div>
-            <div class="conclusion-text">Konklusion – {valgt_navn} {præstation_tekst} med {goals_val:.0f} mål mod {xg_val:.1f} xG.</div>
+            <div class="stat-line">• {r('CORNERS_TAKEN')} flest hjørnespark taget ({int(row.get('CORNERS_TAKEN', 0))})</div>
+            <div class="stat-line">• {r('ATT_CORNER')} flest afslutninger efter hjørnespark ({int(row.get('ATT_CORNER', 0))})</div>
+            <div class="conclusion-text">Konklusion – {hold_navn} {præstation_tekst} med {goals_val:.0f} mål mod {xg_val:.1f} xG.</div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -265,11 +271,11 @@ def vis_enkelt_hold(df, hold_uuid, hold_navn):
         st.markdown(f"""
         <div class="analysis-card">
             <div class="section-title">Opbygningsspil</div>
-            <div class="stat-line">• {get_rank('POSS')} højeste boldbesiddelse ({row.get('POSS', 0):.1f}%)</div>
-            <div class="stat-line">• {get_rank('TOUCHES')} flest berøringer i alt ({int(row.get('TOUCHES', 0))})</div>
-            <div class="stat-line">• Afleveringspræcision: {safe_val(row.get('PASS_ACCURACY', 0), suffix='%')}</div>
-            <div class="stat-line">• {get_rank('XA', ascending=False)} højeste expected assists ({row.get('XA', 0):.2f} xA)</div>
-            <div class="stat-line">• {get_rank('BOX_TOUCHES')} flest berøringer i modstanderens felt ({int(row.get('BOX_TOUCHES', 0))})</div>
+            <div class="stat-line">• {r('POSS')} højeste boldbesiddelse ({row.get('POSS', 0):.1f}%)</div>
+            <div class="stat-line">• {r('TOUCHES')} flest berøringer i alt ({int(row.get('TOUCHES', 0))})</div>
+            <div class="stat-line">Afleveringspræcision: {safe_val(row.get('PASS_ACCURACY', 0), suffix='%')}</div>
+            <div class="stat-line">• {r('XA', ascending=True)} højeste expected assists ({row.get('XA', 0):.2f} xA)</div>
+            <div class="stat-line">• {r('BOX_TOUCHES')} flest berøringer i modstanderens felt ({int(row.get('BOX_TOUCHES', 0))})</div>
             <div class="conclusion-text">Konklusion – Opbygningsstatistikker indlæst.</div>
         </div>
         """, unsafe_allow_html=True)
@@ -280,11 +286,11 @@ def vis_enkelt_hold(df, hold_uuid, hold_navn):
         st.markdown(f"""
         <div class="analysis-card">
             <div class="section-title">Forsvarsspil</div>
-            <div class="stat-line">• Tackling, succes: {safe_val(row.get('TACKLE_SUCCESS', 0), suffix='%')} ({int(row.get('TACKLES_WON', 0))})</div>
-            <div class="stat-line">• {get_rank('CLEARANCES')} flest clearinger ({int(row.get('CLEARANCES', 0))})</div>
-            <div class="stat-line">• {get_rank('OFFSIDES_WON')} flest offsides ({int(row.get('OFFSIDES_WON', 0))})</div>
-            <div class="stat-line">• {get_rank('XG_AGAINST', ascending=True)} laveste xG imod ({safe_val(row.get('XG_AGAINST', 0), decimals=2)})</div>
-            <div class="stat-line">• {get_rank('OPP_BOX_TOUCHES', ascending=True)} færrest modstanderberøringer i felt ({int(row.get('OPP_BOX_TOUCHES', 0))})</div>
+            <div class="stat-line">Tackling, succes: {safe_val(row.get('TACKLE_SUCCESS', 0), suffix='%')} ({int(row.get('TACKLES_WON', 0))})</div>
+            <div class="stat-line">• {r('CLEARANCES')} flest clearinger ({int(row.get('CLEARANCES', 0))})</div>
+            <div class="stat-line">• {r('OFFSIDES_WON')} flest offsides fanget ({int(row.get('OFFSIDES_WON', 0))})</div>
+            <div class="stat-line">• {r('XG_AGAINST', ascending=True)} laveste xG imod ({safe_val(row.get('XG_AGAINST', 0), decimals=2)})</div>
+            <div class="stat-line">• {r('OPP_BOX_TOUCHES', ascending=True)} færrest modstanderberøringer i felt ({int(row.get('OPP_BOX_TOUCHES', 0))})</div>
             <div class="conclusion-text">Konklusion – Defensiv statistik indlæst.</div>
         </div>
         """, unsafe_allow_html=True)
@@ -293,11 +299,11 @@ def vis_enkelt_hold(df, hold_uuid, hold_navn):
         st.markdown(f"""
         <div class="analysis-card">
             <div class="section-title">Målmand & standarder</div>
-            <div class="stat-line">• {get_rank('SAVES')} flest redninger ({int(row.get('SAVES', 0))})</div>
-            <div class="stat-line">• {get_rank('CLEAN_SHEETS')} flest clean sheets ({int(row.get('CLEAN_SHEETS', 0))})</div>
-            <div class="stat-line">• {get_rank('GOALS_CONCEDED', ascending=True)} færrest mål imod ({int(row.get('GOALS_CONCEDED', 0))})</div>
-            <div class="stat-line">• {get_rank('OPP_CORNERS_TAKEN', ascending=True)} færrest modstander hjørnespark ({int(row.get('OPP_CORNERS_TAKEN', 0))})</div>
-            <div class="stat-line">• {get_rank('OPP_ATT_CORNER', ascending=True)} færrest modstander afslutninger efter hjørnespark ({int(row.get('OPP_ATT_CORNER', 0))})</div>
+            <div class="stat-line">• {r('SAVES')} flest redninger ({int(row.get('SAVES', 0))})</div>
+            <div class="stat-line">• {r('CLEAN_SHEETS')} flest clean sheets ({int(row.get('CLEAN_SHEETS', 0))})</div>
+            <div class="stat-line">• {r('GOALS_CONCEDED', ascending=True)} færrest mål imod ({int(row.get('GOALS_CONCEDED', 0))})</div>
+            <div class="stat-line">• {r('OPP_CORNERS_TAKEN', ascending=True)} færrest modstander hjørnespark ({int(row.get('OPP_CORNERS_TAKEN', 0))})</div>
+            <div class="stat-line">• {r('OPP_ATT_CORNER', ascending=True)} færrest modstander afslutninger efter hjørnespark ({int(row.get('OPP_ATT_CORNER', 0))})</div>
             <div class="conclusion-text">Konklusion – {int(row.get('CLEAN_SHEETS', 0))} clean sheets og {int(row.get('GOALS_CONCEDED', 0))} mål imod.</div>
         </div>
         """, unsafe_allow_html=True)
@@ -308,8 +314,8 @@ def vis_enkelt_hold(df, hold_uuid, hold_navn):
         st.markdown(f"""
         <div class="analysis-card">
             <div class="section-title">Disciplin</div>
-            <div class="stat-line">• {get_rank('YELLOW_CARDS', ascending=True)} færrest gule kort ({int(row.get('YELLOW_CARDS', 0))})</div>
-            <div class="stat-line">• Direkte røde kort: {int(row.get('RED_CARDS', 0))}</div>
+            <div class="stat-line">• {r('YELLOW_CARDS', ascending=True)} færrest gule kort ({int(row.get('YELLOW_CARDS', 0))})</div>
+            <div class="stat-line">Direkte røde kort: {int(row.get('RED_CARDS', 0))}</div>
             <div class="conclusion-text">Konklusion – {total_kort} kort i alt denne sæson.</div>
         </div>
         """, unsafe_allow_html=True)
