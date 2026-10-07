@@ -64,6 +64,7 @@ def load_league_data(liga_uuid):
           -- Præcis afgrænsning af skud (13=Miss, 14=Post, 15=Saved, 16=Goal)
           -- og frasortering af eventuelle duplikerede hændelses-id'er
           AND e.EVENT_TYPEID IN (13, 14, 15, 16)
+          AND e.EVENT_TYPEID IN (1)
           AND e.EVENT_OPTAUUID IS NOT NULL
           AND og.EVENT_OPTAUUID IS NULL
     """.format(db=DB, liga_uuid=liga_uuid)
