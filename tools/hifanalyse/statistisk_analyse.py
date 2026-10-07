@@ -78,14 +78,14 @@ def vis_side():
         sc = ax.scatter(
             df_reg["Pasninger"], 
             df_reg["Maal"], 
-            c=df_reg["xG"], # Farv efter xG for at se om de scorer mere/mindre end forventet
+            c=df_reg["Skud"], # Farv efter xG for at se om de scorer mere/mindre end forventet
             cmap="YlOrRd", 
             s=100, 
             alpha=0.8, 
             edgecolors="black"
         )
         cbar = plt.colorbar(sc, ax=ax)
-        cbar.set_label("Total xG i kampen")
+        cbar.set_label("Totale skud i kampen")
 
         if len(df_reg) > 1:
             m, b = np.polyfit(df_reg["Pasninger"], df_reg["Maal"], 1)
