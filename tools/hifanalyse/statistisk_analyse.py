@@ -79,7 +79,7 @@ def vis_side():
             df_reg["Pasninger"], 
             df_reg["Maal"], 
             c=df_reg["xG"], # Farv efter xG for at se om de scorer mere/mindre end forventet
-            cmap="viridis", 
+            cmap="YlOrRd", 
             s=100, 
             alpha=0.8, 
             edgecolors="black"
@@ -95,7 +95,7 @@ def vis_side():
         ax.set_title(f"Volumen: Pasninger vs. Mål ({valgte_hold})", fontsize=12, fontweight="bold")
         ax.set_xlabel("Antal pasninger pr. kamp", fontsize=10)
         ax.set_ylabel("Antal mål pr. kamp", fontsize=10)
-        ax.grid(True, linestyle="--", alpha=0.3)
+        ax.grid(True, linestyle="--", alpha=0.2)
         ax.legend()
 
         st.pyplot(fig)
@@ -117,7 +117,7 @@ def vis_side():
         m3.metric("Konvertering (xG/Mål)", f"{total_maal/total_xg:.2f}x")
 
         # Tabel med rådata
-        with st.expander("Se detaljeret kamp-data"):
+        with st.expander("Detaljeret kampdata"):
             st.dataframe(df_reg[["Pasninger", "Skud", "Maal", "xG", "Maal_pr_100_pas"]].style.format(precision=2))
 
 if __name__ == "__main__":
