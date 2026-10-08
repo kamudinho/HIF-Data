@@ -8,7 +8,7 @@ from data.utils.team_mapping import SEASONS, SEASON_LEAGUE_MAPPER, TEAMS, TEAM_C
 
 def vis_side():
     st.markdown("### Statistisk Analyse")
-    st.caption("Analyser sammenhængen mellem pasningsvolumen, skud, mål og forventede mål (xG) pr. kamp.")
+    st.caption("Analyser sammenhængen mellem pasningsvolumen, mål, skud og forventede mål (xG) pr. kamp.")
     
     # --- 1. FILTRE ---
     col_top1, col_top2 = st.columns(2)
@@ -105,29 +105,32 @@ def vis_side():
             st.info(f"Ingen matchende kampdata for {valgte_hold}.")
             return
 
-        # --- 4. VISUALISERING (Pasninger vs xG) ---
+        # --- 4. VISUALISERING (Pasninger vs Mål, farvet af Skud, størrelse efter xG) ---
         fig, ax = plt.subplots(figsize=(8, 5.5))
         
+        # Skaler størrelsen baseret på xG (f.eks. multipliceret med 80-100 for at prikkerne har en fin synlig størrelse)
+        sizes = df_reg["xG"] * 90 + 30
+
         sc = ax.scatter(
             df_reg["Pasninger"], 
-            df_reg["xG"], 
-            c=df_reg["Maal"], 
+            df_reg["Maal"], 
+            c=df_reg["Skud"], 
             cmap="YlOrRd", 
-            s=90, 
-            alpha=0.9, 
+            s=sizes, 
+            alpha=0.85, 
             edgecolors="black"
         )
         cbar = plt.colorbar(sc, ax=ax)
-        cbar.set_label("Faktiske mål i kampen")
+        cbar.set_label("Antal skud i kampen")
 
         if len(df_reg) > 1:
-            m, b = np.polyfit(df_reg["Pasninger"], df_reg["xG"], 1)
+            m, b = np.polyfit(df_reg["Pasninger"], df_reg["Maal"], 1)
             x_range = np.linspace(df_reg["Pasninger"].min(), df_reg["Pasninger"].max(), 100)
             ax.plot(x_range, m*x_range + b, color="red", linestyle="--", linewidth=2, label="Trendlinje")
 
-        ax.set_title(f"{pas_kolonne_navn} vs. Forventede Mål (xG) - {valgte_hold}", fontsize=12, fontweight="bold")
+        ax.set_title(f"{pas_kolonne_navn} vs. Mål - {valgte_hold}", fontsize=12, fontweight="bold")
         ax.set_xlabel(f"Antal {pas_kolonne_navn.lower()} pr. kamp", fontsize=10)
-        ax.set_ylabel("Forventede Mål (xG) pr. kamp", fontsize=10)
+        ax.set_ylabel("Antal mål i kampen", fontsize=10)
         ax.grid(True, linestyle="--", alpha=0.3)
         ax.legend()
 
