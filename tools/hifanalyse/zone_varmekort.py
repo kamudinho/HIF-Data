@@ -7,7 +7,7 @@ import pandas as pd
 import streamlit as st
 
 # Importér fra jeres mapping og SQL-lag
-from data.sql.teams.zone_heatmaps import hent_team_zone_passes
+from data.sql.teams.zone_heatmaps import get_team_zone_passes_query
 from data.utils.team_mapping import COMPETITIONS, SEASONS
 
 
