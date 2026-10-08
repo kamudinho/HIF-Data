@@ -80,6 +80,92 @@ def load_league_data(liga_uuid):
         st.error(f"Fejl ved indlæsning af data fra Snowflake: {e}")
         return pd.DataFrame()
 
+@st.cache_data(ttl=3600)
+def load_passing_data(liga_uuid):
+    """
+    Henter pasningsdata for en given liga/turnering, filtrerer for pasninger 
+    i de sidste 2/3 af banen (EVENT_X >= 33.3) og beregner om pasningen er 
+    fremadrettet med mindst 10 meters fremgang mod modstanderens mål.
+    """
+    conn = _get_snowflake_conn()
+    if not conn or not liga_uuid:
+        return pd.DataFrame()
+
+    sql = """
+        WITH PassEndX AS (
+            -- Henter afleveringens slut-X (QID 140)
+            SELECT EVENT_OPTAUUID, MAX(TRY_CAST(QUALIFIER_VALUE AS FLOAT)) as END_X
+            FROM {db}.OPTA_QUALIFIERS
+            WHERE QUALIFIER_QID = 140
+            GROUP BY EVENT_OPTAUUID
+        ),
+        PassEndY AS (
+            -- Henter afleveringens slut-Y (QID 141)
+            SELECT EVENT_OPTAUUID, MAX(TRY_CAST(QUALIFIER_VALUE AS FLOAT)) as END_Y
+            FROM {db}.OPTA_QUALIFIERS
+            WHERE QUALIFIER_QID = 141
+            GROUP BY EVENT_OPTAUUID
+        ),
+        PlayerNames AS (
+            SELECT
+                PLAYER_OPTAUUID,
+                MAX(FIRST_NAME)      AS FIRST_NAME,
+                MAX(LAST_NAME)       AS LAST_NAME,
+                MAX(SHORT_LAST_NAME) AS SHORT_LAST_NAME,
+                MAX(MATCH_NAME)      AS MATCH_NAME
+            FROM {db}.OPTA_MATCH_LINEUPS
+            WHERE FIRST_NAME IS NOT NULL
+            GROUP BY PLAYER_OPTAUUID
+        )
+        SELECT DISTINCT
+            e.EVENT_OPTAUUID as event_optauuid,
+            e.MATCH_OPTAUUID as match_optauuid,
+            e.PLAYER_OPTAUUID as player_optauuid,
+            e.EVENT_CONTESTANT_OPTAUUID as event_contestant_optauuid,
+            m.CONTESTANTHOME_OPTAUUID as contestanthome_optauuid,
+            e.EVENT_TYPEID as event_typeid,
+            e.EVENT_X as event_X,
+            e.EVENT_Y as event_Y,
+            px.END_X as end_x,
+            py.END_Y as end_y,
+            e.EVENT_OUTCOME as event_outcome,
+            e.EVENT_TIMESTAMP as event_timestamp,
+            pn.FIRST_NAME as first_name,
+            pn.LAST_NAME as last_name,
+            pn.MATCH_NAME as match_name,
+            TRIM(COALESCE(pn.FIRST_NAME, '')) || ' ' || TRIM(COALESCE(pn.LAST_NAME, '')) as full_player_name,
+            -- Beregning af fremgang i meter (1 Opta-enhed i X ≈ 1.05 meter på en 105m bane)
+            (COALESCE(px.END_X, e.EVENT_X) - e.EVENT_X) * 1.05 as forward_distance_meters,
+            -- Flag for om pasningen er fremadrettet med mindst 10 meter
+            CASE 
+                WHEN (COALESCE(px.END_X, e.EVENT_X) - e.EVENT_X) * 1.05 >= 10.0 THEN 1 
+                ELSE 0 
+            END as is_progressive_pass
+        FROM {db}.OPTA_EVENTS e
+        JOIN {db}.OPTA_MATCHINFO m ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
+        LEFT JOIN PassEndX px ON e.EVENT_OPTAUUID = px.EVENT_OPTAUUID
+        LEFT JOIN PassEndY py ON e.EVENT_OPTAUUID = py.EVENT_OPTAUUID
+        LEFT JOIN PlayerNames pn ON e.PLAYER_OPTAUUID = pn.PLAYER_OPTAUUID
+        WHERE m.TOURNAMENTCALENDAR_OPTAUUID = '{liga_uuid}'
+          -- 1 = Pasning i Opta
+          AND e.EVENT_TYPEID = 1
+          -- Sidste 2/3 af banen (fra X = 33.3 og frem mod modstanderens mål)
+          AND e.EVENT_X >= 33.3
+          AND e.EVENT_OPTAUUID IS NOT NULL
+    """.format(db=DB, liga_uuid=liga_uuid)
+
+    try:
+        df = conn.query(sql) if hasattr(conn, "query") else pd.read_sql(sql, conn)
+        if df is not None and not df.empty:
+            df.columns = [c.upper() for c in df.columns]
+            df = df.drop_duplicates(subset=["EVENT_OPTAUUID"])
+            df = resolve_player_names(df, conn)
+            return df
+        return pd.DataFrame()
+    except Exception as e:
+        st.error(f"Fejl ved indlæsning af pasningsdata fra Snowflake: {e}")
+        return pd.DataFrame()
+
 
 def resolve_player_names(df, conn=None):
     if df.empty or "PLAYER_OPTAUUID" not in df.columns:
