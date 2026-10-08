@@ -10,12 +10,11 @@ SEASONNAME = "2025/2026"
 TEAM_WYID = 7490
 
 def vis_side():
-    st.title("Varmekort (Zoner)")
+    st.title("🗺️ Varmekort (Zoner)")
     st.markdown(f"**Sæson:** {SEASONNAME} | **Hold ID:** {TEAM_WYID}")
     st.markdown("Visualisering af Hvidovre IFs aktioner opdelt i deciderede banenzoner på en fodboldbane.")
 
     # --- 1. DATA FOR ZONER (Opdelt i et 3x4 gitter over banens længde/bredde) ---
-    # Vi definerer zoner med koordinater (Xmin, Xmax, Ymin, Ymax) på en standard 105x68 bane
     zone_data = [
         {"zone": "Forsvar Venstre", "x_min": 0, "x_max": 26.25, "y_min": 0, "y_max": 22.6, "aktioner": 120},
         {"zone": "Forsvar Central", "x_min": 0, "x_max": 26.25, "y_min": 22.6, "y_max": 45.4, "aktioner": 210},
@@ -42,10 +41,13 @@ def vis_side():
         # --- 2. TEGN BANEN MED MPLSOCCER ---
         fig, ax = plt.subplots(figsize=(10, 6), constrained_layout=True)
         
-        # Opret en 'stats'-bane (vandret)
-        pitch = Pitch(pitch_type='custom', pitch_length=105, pitch_width=68, 
-                      line_color='black', turf_color='white', background_color='white')
+        # Opret en 'stats'-bane (vandret) uden forældede argumenter
+        pitch = Pitch(pitch_type='custom', pitch_length=105, pitch_width=68, line_color='black')
         pitch.draw(ax=ax)
+
+        # Sæt hvid baggrund på figuren/aksen
+        ax.set_facecolor('white')
+        fig.patch.set_facecolor('white')
 
         # Tilføj farvede zoner baseret på antal aktioner
         cmap = plt.cm.Reds
@@ -60,7 +62,7 @@ def vis_side():
                              linewidth=1, edgecolor='gray', facecolor=rect_color, alpha=0.7)
             ax.add_patch(rect)
             
-            # Skriv værdien eller zonens navn i midten af feltet
+            # Skriv værdien i midten af feltet
             ax.text(row["x_min"] + width / 2, row["y_min"] + height / 2, 
                     f"{int(row['aktioner'])}", 
                     color="black" if row["aktioner"] < 250 else "white", 
