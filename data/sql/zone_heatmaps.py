@@ -1,16 +1,16 @@
 # data/sql/teams/zone_heatmaps.py
-import streamlit as st
 import pandas as pd
+import streamlit as st
 from data.data_load import _get_snowflake_conn
-
-DB = "KLUB_HVIDOVREIF.AXIS"
+from data.sql.db_config import DB
 
 
 @st.cache_data(
     ttl=600, show_spinner="Henter pasningszoner pr. hold fra Snowflake..."
 )
-def hent_team_zone_passes(_conn, calendar_uuid: str) -> pd.DataFrame:
-  if not _conn or not calendar_uuid:
+def hent_team_zone_passes(calendar_uuid: str) -> pd.DataFrame:
+  conn = _get_snowflake_conn()
+  if not conn or not calendar_uuid:
     return pd.DataFrame()
 
   query = f"""
@@ -51,7 +51,7 @@ def hent_team_zone_passes(_conn, calendar_uuid: str) -> pd.DataFrame:
         SELECT 
             TEAM_ID,
             CASE 
-                WHEN TEAM_ID = '8gxd9ry2580pu1b1dd5ny9ymy' THEN 'Hvidovre'
+                WHEN TEAM_ID = '7490' THEN 'Hvidovre'  -- Tilpasset TEAM_WYID / Opta-id som du plejer
                 ELSE TEAM_ID 
             END AS TEAM_NAME,
             ZONE_1_1, ZONE_1_2, ZONE_1_3,
@@ -59,10 +59,14 @@ def hent_team_zone_passes(_conn, calendar_uuid: str) -> pd.DataFrame:
             ZONE_3_1, ZONE_3_2, ZONE_3_3,
             ZONE_4_1, ZONE_4_2, ZONE_4_3
         FROM TeamZonePasses
-        ORDER BY CASE WHEN TEAM_ID = '8gxd9ry2580pu1b1dd5ny9ymy' THEN 1 ELSE 2 END, TEAM_NAME;
+        ORDER BY CASE WHEN TEAM_ID = '7490' THEN 1 ELSE 2 END, TEAM_NAME;
     """
 
-  df = _conn.query(query)
-  if df is not None and not df.empty:
-    df.columns = [str(c).upper() for c in df.columns]
-  return df if df is not None else pd.DataFrame()
+  try:
+    df = conn.query(query) if hasattr(conn, "query") else pd.read_sql(query, conn)
+    if df is not None and not df.empty:
+      df.columns = [str(c).upper() for c in df.columns]
+    return df if df is not None else pd.DataFrame()
+  except Exception as e:
+    st.error(f"Fejl ved indlæsning af pasningszoner fra Snowflake: {e}")
+    return pd.DataFrame()
