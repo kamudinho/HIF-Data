@@ -1,6 +1,7 @@
 # data/sql/teams/zone_heatmaps.py
-import pandas as pd
 import streamlit as st
+import pandas as pd
+from data.data_load import _get_snowflake_conn
 
 DB = "KLUB_HVIDOVREIF.AXIS"
 
