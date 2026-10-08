@@ -17,8 +17,7 @@ def vis_side():
     # --- 1. DATA FOR ZONER (Opdelt i et 3x4 gitter over banens længde/bredde) ---
     zone_data = [
         {"zone": "Forsvar Venstre", "x_min": 0, "x_max": 26.25, "y_min": 0, "y_max": 22.6, "aktioner": 120},
-        {"zone": "Forsvar Central", "x_min": 0, "x_max": 26.25, "y_min": 11.35, "y_max": 45.4, "aktioner": 210},
-        {"zone": "Forsvar Højre", "x_min": 0, "x_max": 26.25, "y_min": 22.70, "y_max": 68, "aktioner": 95},
+        {"zone": "Forsvar Central", "x_min": 0, "x_max": 26.25, "y_min": 22.6, "y_max": 45.4, "aktioner": 210},
         {"zone": "Forsvar Højre", "x_min": 0, "x_max": 26.25, "y_min": 45.4, "y_max": 68, "aktioner": 95},
         
         {"zone": "Midt-Forsvar Venstre", "x_min": 26.25, "x_max": 52.5, "y_min": 0, "y_max": 22.6, "aktioner": 180},
