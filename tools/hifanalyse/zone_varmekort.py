@@ -9,7 +9,7 @@ import streamlit as st
 # Ret importen, så den henter _get_snowflake_conn korrekt
 from data.data_load import _get_snowflake_conn
 # Importér fra jeres mapping og SQL-lag
-from data.sql.zone_heatmaps import hent_team_zone_passes
+from data.sql.teams import hent_team_zone_passes
 from data.utils.team_mapping import COMPETITIONS, SEASONS
 
 
