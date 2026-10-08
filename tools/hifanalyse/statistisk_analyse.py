@@ -88,44 +88,46 @@ def vis_side():
         df_reg = pd.merge(df_reg_shots, df_reg_passes, on="MATCH_OPTAUUID", how="inner").fillna(0)
 
         if df_reg.empty:
-            st.info(f"Ingen matchende kampdata for {valgte_hold}.")
+            st.info(f"Ingen matchende kampdata for {valgt_hold}.")
             return
 
-        # --- 4. VISUALISERING ---
+        # --- 4. VISUALISERING MED JITTER ---
         fig, ax = plt.subplots(figsize=(8, 5.5))
         
-        # Tilpas størrelsen så prikkerne ikke er enorme (f.eks. xG * 40 + 20)
-        sizes = df_reg["xG"] * 40 + 20
+        # Tilpas størrelsen så prikkerne har en fornuftig størrelse baseret på xG
+        sizes = df_reg["xG"] * 35 + 25
+
+        # Tilføj en lille smule tilfældig støj (jitter) til Y-koordinaten, 
+        # så kampe med samme antal mål ikke dækker fuldstændigt for hinanden.
+        np.random.seed(42) # Gør det stabilt ved genindlæsning
+        y_jittered = df_reg["Maal"] + np.random.uniform(-0.06, 0.06, size=len(df_reg))
 
         sc = ax.scatter(
             df_reg["Pasninger"], 
-            df_reg["Maal"], 
+            y_jittered, 
             c=df_reg["Skud"], 
             cmap="YlOrRd", 
             s=sizes, 
-            alpha=0.85, 
+            alpha=0.8, 
             edgecolors="black",
             linewidths=0.8
         )
         cbar = plt.colorbar(sc, ax=ax)
         cbar.set_label("Antal skud i kampen")
 
+        # Trendlinjen beregnes ud fra de rigtige mål (ikke jittered)
         if len(df_reg) > 1:
             m, b = np.polyfit(df_reg["Pasninger"], df_reg["Maal"], 1)
             x_range = np.linspace(df_reg["Pasninger"].min(), df_reg["Pasninger"].max(), 100)
             ax.plot(x_range, m*x_range + b, color="red", linestyle="--", linewidth=2, label="Trendlinje")
 
-        # Tving Y-aksen til kun at vise heltal
+        # Lås Y-aksen fast på heltal fra -0.3 til max mål + 0.5
+        max_maal = int(df_reg["Maal"].max())
+        ax.set_ylim(-0.3, max_maal + 0.6)
         ax.yaxis.set_major_locator(MaxNLocator(integer=True))
 
-        # Tilføj lidt padding til akserne, så cirklerne ikke rammer kanten
-        y_max = max(df_reg["Maal"].max() + 0.8, 3)
-        y_min = -0.5
-        ax.set_ylim(y_min, y_max)
-
-        x_margin = (df_reg["Pasninger"].max() - df_reg["Pasninger"].min()) * 0.1
-        if x_margin == 0: 
-            x_margin = 20
+        # Giv X-aksen lidt luft i siderne
+        x_margin = max((df_reg["Pasninger"].max() - df_reg["Pasninger"].min()) * 0.1, 10)
         ax.set_xlim(df_reg["Pasninger"].min() - x_margin, df_reg["Pasninger"].max() + x_margin)
 
         ax.set_title(f"{pas_kolonne_navn} vs. Mål - {valgte_hold}", fontsize=12, fontweight="bold")
