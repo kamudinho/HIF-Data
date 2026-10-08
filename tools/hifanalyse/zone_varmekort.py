@@ -5,6 +5,7 @@ from mplsoccer import Pitch
 import numpy as np
 import pandas as pd
 import streamlit as st
+from data.data_load import _get_snowflake_conn
 
 # Importér fra jeres mapping og SQL-lag
 from data.sql.zone_heatmaps import hent_team_zone_passes
