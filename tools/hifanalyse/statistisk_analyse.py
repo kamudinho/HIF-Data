@@ -95,7 +95,7 @@ def vis_side():
         fig, ax = plt.subplots(figsize=(8, 5.5))
         
         # Tilpas størrelsen så prikkerne har en fornuftig størrelse baseret på xG
-        sizes = df_reg["xG"] * 35 + 25
+        sizes = df_reg["xG"] * 15 + 10
 
         # Tilføj en lille smule tilfældig støj (jitter) til Y-koordinaten, 
         # så kampe med samme antal mål ikke dækker fuldstændigt for hinanden.
