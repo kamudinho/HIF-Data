@@ -10,7 +10,6 @@ SEASONNAME = "2025/2026"
 TEAM_WYID = 7490
 
 def vis_side():
-    st.title("🗺️ Varmekort - Multi-grid")
     st.markdown(f"**Sæson:** {SEASONNAME} | **Hold ID:** {TEAM_WYID}")
     st.markdown("Visualisering af aktioner fordelt på et fuldt banegitter vha. `pitch.grid`.")
 
