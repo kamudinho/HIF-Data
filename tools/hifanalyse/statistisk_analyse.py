@@ -3,6 +3,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.ticker import MaxNLocator
 from data.sql.skud_data import load_league_data, load_passing_data
 from data.utils.team_mapping import SEASONS, SEASON_LEAGUE_MAPPER, TEAMS, TEAM_COLORS
 
@@ -20,7 +21,7 @@ def vis_side():
     liga_uuid = SEASONS[valgt_saeson][valgt_turnering]
     tilgængelige_hold = SEASON_LEAGUE_MAPPER.get(valgt_saeson, {}).get(valgt_turnering, ["Hvidovre"])
 
-    # --- 2. DATA INDLÆSNING (Både skud og pasninger) ---
+    # --- 2. DATA INDLÆSNING ---
     with st.spinner("Henter data fra Snowflake..."):
         df_shots_all = load_league_data(liga_uuid)
         df_passes_all = load_passing_data(liga_uuid)
@@ -49,31 +50,16 @@ def vis_side():
             st.error("Kunne ikke finde opta_uuid for holdet.")
             return
 
-        # Filtrer hold for skud-data
-        if "EVENT_CONTESTANT_OPTAUUID" in df_shots_all.columns:
-            df_hold_shots = df_shots_all[df_shots_all["EVENT_CONTESTANT_OPTAUUID"] == target_uuid].copy()
-        else:
-            st.error("Kunne ikke identificere holdet i skud-data.")
-            return
-
-        # Filtrer hold for pasnings-data
-        if "EVENT_CONTESTANT_OPTAUUID" in df_passes_all.columns:
-            df_hold_passes = df_passes_all[df_passes_all["EVENT_CONTESTANT_OPTAUUID"] == target_uuid].copy()
-        else:
-            st.error("Kunne ikke identificere holdet i pasnings-data.")
-            return
+        df_hold_shots = df_shots_all[df_shots_all["EVENT_CONTESTANT_OPTAUUID"] == target_uuid].copy()
+        df_hold_passes = df_passes_all[df_passes_all["EVENT_CONTESTANT_OPTAUUID"] == target_uuid].copy()
 
         if df_hold_shots.empty or df_hold_passes.empty:
             st.info(f"Ingen kampdata fundet for {valgte_hold}.")
             return
 
         # --- BEHANDLING AF SKUD & MÅL ---
-        if "EVENT_TYPEID" in df_hold_shots.columns:
-            df_hold_shots["er_maal"] = (df_hold_shots["EVENT_TYPEID"] == 16).astype(int)
-            df_hold_shots["er_skud"] = df_hold_shots["EVENT_TYPEID"].isin([13, 14, 15, 16]).astype(int)
-        else:
-            df_hold_shots["er_maal"] = 0
-            df_hold_shots["er_skud"] = 0
+        df_hold_shots["er_maal"] = (df_hold_shots["EVENT_TYPEID"] == 16).astype(int)
+        df_hold_shots["er_skud"] = df_hold_shots["EVENT_TYPEID"].isin([13, 14, 15, 16]).astype(int)
 
         df_reg_shots = df_hold_shots.groupby("MATCH_OPTAUUID").agg({
             "XG_RAW": "sum",
@@ -98,18 +84,18 @@ def vis_side():
             "EVENT_OPTAUUID": "Pasninger"
         }).reset_index()
 
-        # Merge de to tabeller på kamp-id (MATCH_OPTAUUID)
+        # Merge
         df_reg = pd.merge(df_reg_shots, df_reg_passes, on="MATCH_OPTAUUID", how="inner").fillna(0)
 
         if df_reg.empty:
             st.info(f"Ingen matchende kampdata for {valgte_hold}.")
             return
 
-        # --- 4. VISUALISERING (Pasninger vs Mål, farvet af Skud, størrelse efter xG) ---
+        # --- 4. VISUALISERING ---
         fig, ax = plt.subplots(figsize=(8, 5.5))
         
-        # Skaler størrelsen baseret på xG (f.eks. multipliceret med 80-100 for at prikkerne har en fin synlig størrelse)
-        sizes = df_reg["xG"] * 90 + 30
+        # Tilpas størrelsen så prikkerne ikke er enorme (f.eks. xG * 40 + 20)
+        sizes = df_reg["xG"] * 40 + 20
 
         sc = ax.scatter(
             df_reg["Pasninger"], 
@@ -118,7 +104,8 @@ def vis_side():
             cmap="YlOrRd", 
             s=sizes, 
             alpha=0.85, 
-            edgecolors="black"
+            edgecolors="black",
+            linewidths=0.8
         )
         cbar = plt.colorbar(sc, ax=ax)
         cbar.set_label("Antal skud i kampen")
@@ -128,11 +115,24 @@ def vis_side():
             x_range = np.linspace(df_reg["Pasninger"].min(), df_reg["Pasninger"].max(), 100)
             ax.plot(x_range, m*x_range + b, color="red", linestyle="--", linewidth=2, label="Trendlinje")
 
+        # Tving Y-aksen til kun at vise heltal
+        ax.yaxis.set_major_locator(MaxNLocator(integer=True))
+
+        # Tilføj lidt padding til akserne, så cirklerne ikke rammer kanten
+        y_max = max(df_reg["Maal"].max() + 0.8, 3)
+        y_min = -0.5
+        ax.set_ylim(y_min, y_max)
+
+        x_margin = (df_reg["Pasninger"].max() - df_reg["Pasninger"].min()) * 0.1
+        if x_margin == 0: 
+            x_margin = 20
+        ax.set_xlim(df_reg["Pasninger"].min() - x_margin, df_reg["Pasninger"].max() + x_margin)
+
         ax.set_title(f"{pas_kolonne_navn} vs. Mål - {valgte_hold}", fontsize=12, fontweight="bold")
         ax.set_xlabel(f"Antal {pas_kolonne_navn.lower()} pr. kamp", fontsize=10)
         ax.set_ylabel("Antal mål i kampen", fontsize=10)
         ax.grid(True, linestyle="--", alpha=0.3)
-        ax.legend()
+        ax.legend(loc="upper left")
 
         st.pyplot(fig)
         plt.close(fig)
