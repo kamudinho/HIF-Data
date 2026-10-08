@@ -3,7 +3,6 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.colors as colors
 from mplsoccer import Pitch
 
 SEASONNAME = "2025/2026"
@@ -15,7 +14,6 @@ def vis_side():
     st.markdown("Visualisering af holdets aktioner opdelt i præcise banenzoner ved hjælp af `mplsoccer` bin-statistik.")
 
     # --- 1. SIMULERER ELLER HENTER DATA ---
-    # Her simuleres X og Y koordinater (på en 0-100 skala som mplsoccer 'stats' eller standard bruger)
     np.random.seed(42)
     n_aktioner = 400
     df_aktioner = pd.DataFrame({
@@ -29,9 +27,13 @@ def vis_side():
         # --- 2. OPSETNING AF BANEN OG BIN-STATISTIK ---
         fig, ax = plt.subplots(figsize=(9, 6), constrained_layout=True)
         
-        # Initialiser banen
-        pitch = Pitch(line_zorder=2, line_color='black', pitch_type='stats', turf_color='white')
+        # Initialiser banen uden forældede argumenter
+        pitch = Pitch(line_zorder=2, line_color='black', pitch_type='stats')
         pitch.draw(ax=ax)
+
+        # Sæt hvid baggrund på aksen
+        ax.set_facecolor('white')
+        fig.patch.set_facecolor('white')
 
         # Beregn bin-statistik (f.eks. 6 kolonner og 4 rækker)
         bin_statistic = pitch.bin_statistic(
@@ -62,7 +64,7 @@ def vis_side():
     with col2:
         st.subheader("Om Zonerne")
         st.info(
-            "Dette kort opdele banen i et gitter vha. `mplsoccer`. "
+            "Dette kort opdeler banen i et gitter vha. `mplsoccer`. "
             "Hver boks opsamler mængden af hændelser, hvilket giver et præcist "
             "og overskueligt overblik over banefordelingen ligesom i professionel fodboldanalyse."
         )
