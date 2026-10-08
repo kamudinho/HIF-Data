@@ -88,18 +88,15 @@ def vis_side():
         df_reg = pd.merge(df_reg_shots, df_reg_passes, on="MATCH_OPTAUUID", how="inner").fillna(0)
 
         if df_reg.empty:
-            st.info(f"Ingen matchende kampdata for {valgt_hold}.")
+            st.info(f"Ingen matchende kampdata for {valgte_hold}.")
             return
 
-        # --- 4. VISUALISERING MED JITTER ---
+        # --- 4. VISUALISERING MED JITTER OG UDVIDET TRENDLINJE ---
         fig, ax = plt.subplots(figsize=(8, 5.5))
         
-        # Tilpas størrelsen så prikkerne har en fornuftig størrelse baseret på xG
-        sizes = df_reg["xG"] * 15 + 10
+        sizes = df_reg["xG"] * 15 + 5
 
-        # Tilføj en lille smule tilfældig støj (jitter) til Y-koordinaten, 
-        # så kampe med samme antal mål ikke dækker fuldstændigt for hinanden.
-        np.random.seed(42) # Gør det stabilt ved genindlæsning
+        np.random.seed(42)
         y_jittered = df_reg["Maal"] + np.random.uniform(-0.06, 0.06, size=len(df_reg))
 
         sc = ax.scatter(
@@ -115,20 +112,21 @@ def vis_side():
         cbar = plt.colorbar(sc, ax=ax)
         cbar.set_label("Antal skud i kampen")
 
-        # Trendlinjen beregnes ud fra de rigtige mål (ikke jittered)
-        if len(df_reg) > 1:
-            m, b = np.polyfit(df_reg["Pasninger"], df_reg["Maal"], 1)
-            x_range = np.linspace(df_reg["Pasninger"].min(), df_reg["Pasninger"].max(), 100)
-            ax.plot(x_range, m*x_range + b, color="red", linestyle="--", linewidth=2, label="Trendlinje")
-
-        # Lås Y-aksen fast på heltal fra -0.3 til max mål + 0.5
+        # Sæt akser først, så vi kender de præcise grænser
         max_maal = int(df_reg["Maal"].max())
         ax.set_ylim(-0.3, max_maal + 0.6)
         ax.yaxis.set_major_locator(MaxNLocator(integer=True))
 
-        # Giv X-aksen lidt luft i siderne
         x_margin = max((df_reg["Pasninger"].max() - df_reg["Pasninger"].min()) * 0.1, 10)
-        ax.set_xlim(df_reg["Pasninger"].min() - x_margin, df_reg["Pasninger"].max() + x_margin)
+        x_min_lim = df_reg["Pasninger"].min() - x_margin
+        x_max_lim = df_reg["Pasninger"].max() + x_margin
+        ax.set_xlim(x_min_lim, x_max_lim)
+
+        # Tegn trendlinjen ud fra aksernes fulde grænser i stedet for datapunkterne
+        if len(df_reg) > 1:
+            m, b = np.polyfit(df_reg["Pasninger"], df_reg["Maal"], 1)
+            x_range = np.linspace(x_min_lim, x_max_lim, 100)
+            ax.plot(x_range, m*x_range + b, color="red", linestyle="--", linewidth=2, label="Trendlinje")
 
         ax.set_title(f"{pas_kolonne_navn} vs. Mål - {valgte_hold}", fontsize=12, fontweight="bold")
         ax.set_xlabel(f"Antal {pas_kolonne_navn.lower()} pr. kamp", fontsize=10)
