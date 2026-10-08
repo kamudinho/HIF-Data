@@ -6,11 +6,11 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 from mplsoccer import Pitch
 
-SEASONNAME = "2025/2026"
+SEASONNAME = "2026/2027"
 TEAM_WYID = 7490
 
 def vis_side():
-    st.title("🗺️ Varmekort (Zoner)")
+    st.title("Heatmaps (Zoner)")
     st.markdown(f"**Sæson:** {SEASONNAME} | **Hold ID:** {TEAM_WYID}")
     st.markdown("Visualisering af Hvidovre IFs aktioner opdelt i deciderede banenzoner på en fodboldbane.")
 
