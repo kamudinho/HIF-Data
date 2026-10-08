@@ -51,7 +51,6 @@ def vis_side():
         return
 
     # --- 3. OPSÆTNING AF BANEN OG GITTERET (Opta 0-100 skala) ---
-    # Bruger pitch_type='opta', da SQL-aggregeringen bruger 0-100 for X og Y
     pitch = Pitch(pitch_type="opta", line_zorder=2, line_color="black")
     fig, axs = pitch.grid(
         ncols=4,
@@ -69,26 +68,18 @@ def vis_side():
 
     # --- 4. BYG ZONESTATISTIK FRA SQL DATA ---
     hist_dict = {}
-    
-    # Definér bin-kanter for 3x4 gitteret på 0-100 skala
-    x_edges = np.array([0, 25, 50, 75, 100])
-    y_edges = np.array([0, 33.33, 66.66, 100])
 
     for _, row in df_zones.iterrows():
         team_name = row["TEAM_NAME"]
 
+        # 3 rækker (Y: 0-33.3, 33.3-66.6, 66.6-100) og 4 kolonner (X: 0-25, 25-50, 50-75, 75-100)
         grid_matrix = np.zeros((3, 4))
-        for y in [1, 2, 3]:
-            for x in [1, 2, 3, 4]:
-                col_name = f"ZONE_{x}_{y}"
-                grid_matrix[y - 1, x - 1] = row.get(col_name, 0)
+        for y_idx, y_val in enumerate([1, 2, 3]):
+            for x_idx, x_val in enumerate([1, 2, 3, 4]):
+                col_name = f"ZONE_{x_val}_{y_val}"
+                grid_matrix[y_idx, x_idx] = row.get(col_name, 0)
 
-        # Inkluder x_edge og y_edge, som pitch.heatmap() kræver
-        hist_dict[team_name] = {
-            "statistic": grid_matrix,
-            "x_edge": x_edges,
-            "y_edge": y_edges
-        }
+        hist_dict[team_name] = grid_matrix
 
     active_teams = [t for t in teams if t in hist_dict]
     if not active_teams:
@@ -96,27 +87,32 @@ def vis_side():
         return
 
     # Beregner gennemsnit pr. zone på tværs af alle hold
-    all_stats = [v["statistic"] for k, v in hist_dict.items()]
+    all_stats = list(hist_dict.values())
     avg_hist = np.mean(np.array(all_stats), axis=0) if all_stats else np.zeros((3, 4))
 
     # Trækker gennemsnittet fra for at vise afvigelse over/under snit
     for team in active_teams:
-        hist_dict[team]["statistic"] = hist_dict[team]["statistic"] - avg_hist
+        hist_dict[team] = hist_dict[team] - avg_hist
 
     # Forbereder farveskala (colormap)
-    vmax = max([np.amax(v["statistic"]) for v in hist_dict.values()]) if hist_dict else 1
-    vmin = min([np.amin(v["statistic"]) for v in hist_dict.values()]) if hist_dict else -1
+    vmax = max([np.amax(v) for v in hist_dict.values()]) if hist_dict else 1
+    vmin = min([np.amin(v) for v in hist_dict.values()]) if hist_dict else -1
     if vmax == vmin:
         vmax = vmin + 1
 
     divnorm = colors.TwoSlopeNorm(vmin=vmin, vcenter=0, vmax=vmax)
+    cmap = plt.get_cmap("coolwarm")
+
+    # X- og Y-grænser for de 12 zoner i Opta (X: 0, 25, 50, 75, 100 | Y: 0, 33.33, 66.66, 100)
+    x_bins = [0, 25, 50, 75, 100]
+    y_bins = [0, 33.33, 66.66, 100]
 
     # --- 5. PLOTTING AF HVERT HOLD / AXE ---
     plot_teams = active_teams[:12]
 
     for team, ax in zip(plot_teams, axs["pitch"].flat):
         ax.text(
-            50,  # Midten af banen på Opta-skalaen (0-100)
+            50,
             -8,
             team,
             ha="center",
@@ -124,9 +120,42 @@ def vis_side():
             fontsize=11,
             fontweight="bold",
         )
-        pitch.heatmap(
-            hist_dict[team], ax=ax, cmap="coolwarm", norm=divnorm, edgecolor="grey"
-        )
+        
+        # Tegn 3x4 gitteret som rektangler med værdier
+        matrix = hist_dict[team]
+        for i in range(3):      # Y-akse rækker (0 til 2)
+            for j in range(4):  # X-akse kolonner (0 til 3)
+                val = matrix[i, j]
+                # Normaliser værdien til colormap (0 til 1)
+                norm_val = divnorm(val)
+                color = cmap(norm_val)
+                
+                xmin, xmax = x_bins[j], x_bins[j+1]
+                ymin, ymax = y_bins[i], y_bins[i+1]
+                
+                ax.fill_between(
+                    [xmin, xmax], 
+                    [ymin, ymin], 
+                    [ymax, ymax], 
+                    color=color, 
+                    edgecolor="grey", 
+                    linewidth=0.5
+                )
+                
+                # Valgfrit: Skriv selve afvigelsen ind i zonen hvis det ønskes, ellers klarer farven det
+                ax.text(
+                    (xmin + xmax) / 2,
+                    (ymin + ymax) / 2,
+                    f"{val:.0f}" if abs(val) >= 1 else "",
+                    ha="center",
+                    va="center",
+                    fontsize=8,
+                    color="black" if abs(val) < (vmax * 0.6) else "white",
+                    fontweight="bold"
+                )
+
+        # Tilføj banelinjer ovenpå
+        pitch.draw(ax=ax)
 
     # Skjul ubrugte subplots hvis der er færre end 12 hold
     for ax in axs["pitch"].flat[len(plot_teams) :]:
