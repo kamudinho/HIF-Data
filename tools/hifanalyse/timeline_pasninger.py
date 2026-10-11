@@ -22,12 +22,7 @@ def _get_team_name_from_uuid(uuid: str, fallback: str = "Ukendt") -> str:
 
 
 def vis_side():
-  st.markdown("### ⏱️ Tidsbaseret Pasningsanalyse (15-minutters intervaller)")
-  st.markdown(
-      "Analyser afleveringsfordeling fordelt over kampens 15-minutters"
-      " perioder – enten for en enkelt kamp eller som gennemsnit over hele"
-      " sæsonen."
-  )
+  st.markdown("### Timeline: Pasningsanalyse")
 
   # --- 1. FILTER KONTROL ---
   col1, col2 = st.columns(2)
@@ -105,7 +100,7 @@ def vis_side():
         axis=1,
     )
 
-    st.markdown(f"#### 📊 Pasningsfordeling: {home_team} vs {away_team}")
+    st.markdown(f"#### Pasningsfordeling: {home_team} vs {away_team}")
 
     pivot_df = (
         df_kamp_pas.pivot(
@@ -193,7 +188,7 @@ def vis_side():
     pivot_df["1st half"] = pivot_df[["1-15", "16-30", "31-45+"]].sum(axis=1)
     pivot_df["2nd half"] = pivot_df[["46-60", "61-75", "76-90+"]].sum(axis=1)
 
-    st.markdown("#### 📊 Sæson-gennemsnit pr. hold")
+    st.markdown("#### Sæson-gennemsnit pr. hold")
     st.caption("Viser gennemsnitligt antal afleveringer fordelt på kampens intervaller over hele sæsonen.")
 
     # Vis tabellen med alle hold
@@ -204,7 +199,7 @@ def vis_side():
 
     # 4. VISUALISERING (Vælg ét hold for at se trenden)
     st.markdown("---")
-    st.markdown("#### 📈 Tendenslinje for udvalgt hold")
+    st.markdown("#### Tendenslinje for udvalgt hold")
     
     hold_liste = pivot_df.index.tolist()
     valgt_hold_seson = st.selectbox("Vælg hold til detaljeret visning:", hold_liste)
