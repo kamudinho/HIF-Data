@@ -193,7 +193,7 @@ def vis_side():
 
     # Vis tabellen med alle hold
     st.dataframe(
-        pivot_df[["Total", "1st half", "2nd half"]].sort_values("Total", ascending=False).style.format("{:.0f}"),
+        pivot_df[["Total", "1st half", "2nd half"]].sort_values("Total", ascending=True).style.format("{:.0f}"),
         use_container_width=True,
     )
 
