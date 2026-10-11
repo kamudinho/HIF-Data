@@ -231,7 +231,7 @@ with st.sidebar:
         "HOLDANALYSE": ["HOLDANALYSE", "Kampoversigt", "Kampudvikling", "Afslutninger", "Målsekvenser", "Grafer"],
         "SPILLERANALYSE": ["SPILLERANALYSE", "Spiller-stats", "Spilleraktioner", "Spiller-profil", "Spilleroversigt", "Spillerprofil"],
         "SCOUTING": ["SCOUTING", "Scoutrapport", "Database", "Emnedatabase", "Sammenligning", "Top10-scouting", "Opgaver"],
-        "STATISTIK": ["STATISTIK", "Regression & Mål", "Varmekort (Zoner)", "Akkumulerende data"], # <-- NYE UNDERSIDER
+        "STATISTIK": ["STATISTIK", "Timeline", "Regression & Mål", "Varmekort (Zoner)", "Akkumulerende data"], # <-- NYE UNDERSIDER
         "TILPASNING": ["TILPASNING", "Spillerdata", "Spiller-score", "Standardsituationer"],
         "TESTSIDE": ["TESTSIDE", "Spiller-charts", "Gamestates", "Data-overblik", "Performance", "Winning Performance", "1. Div-tilpasning", "Charts", "Oversigt", "Forecast", "Model", "Transfers"],
         "ADMIN": ["ADMIN", "System Log", "Profil", "Datakatalog", "Konklusion", "Teamradar", "Spillerradar", "Fysisk profil", "Hold: Fysisk profil", "Intern analyse", "Top 5: Spillere", "Ordbog"],
@@ -274,7 +274,7 @@ with st.sidebar:
             "HOLDANALYSE": ["Kampoversigt", "Kampudvikling", "Afslutninger", "Målsekvenser", "Grafer"],
             "SPILLERANALYSE": ["Spiller-stats", "Spilleraktioner", "Spiller-profil", "Spilleroversigt", "Spillerprofil"],
             "SCOUTING": ["Scoutrapport", "Database", "Emnedatabase", "Sammenligning", "Top10-scouting", "Opgaver"],
-            "STATISTIK": ["Regression & Mål", "Varmekort (Zoner)", "Akkumulerende data"], # <-- NYE UNDERSIDER
+            "STATISTIK": ["Timeline", "Regression & Mål", "Varmekort (Zoner)", "Akkumulerende data"], # <-- NYE UNDERSIDER
             "TILPASNING": ["Spillerdata", "Spiller-score", "Standardsituationer"],
             "TESTSIDE": ["Spiller-charts", "Gamestates", "Data-overblik", "Performance", "Winning Performance", "1. Div-tilpasning", "Charts", "Oversigt", "Forecast", "Model", "Transfers"],
             "ADMIN": ["System Log", "Profil", "Datakatalog", "Konklusion", "Teamradar", "Spillerradar", "Fysisk profil", "Hold: Fysisk profil", "Intern analyse", "Top 5: Spillere", "Ordbog"],
@@ -430,6 +430,9 @@ try:
         elif s == "Akkumulerende data":
             import tools.hifanalyse.akkumulerende_data as akkumulerende
             akkumulerende.vis_side()
+        elif s == "Timeline":
+            import tools.hifanalyse.timeline_pasninger as timeline
+            timeline.vis_side()
 
     elif m == "TILPASNING":
         if s == "Spillerdata":
