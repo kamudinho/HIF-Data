@@ -94,7 +94,7 @@ def vis_side():
         # --- 4. VISUALISERING MED JITTER OG UDVIDET TRENDLINJE ---
         fig, ax = plt.subplots(figsize=(8, 5.5))
         
-        sizes = df_reg["xG"] * 15 + 5
+        sizes = df_reg["xG"] * 25 + 5
 
         np.random.seed(42)
         y_jittered = df_reg["Maal"] + np.random.uniform(-0.06, 0.06, size=len(df_reg))
