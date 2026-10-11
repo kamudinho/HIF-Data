@@ -168,11 +168,81 @@ def vis_side():
 
   else:
     # --- SÆSONOVERBLIK PR. HOLD ---
+        # --- SÆSONOVERBLIK PR. HOLD ---
     df_seson = hent_seson_tids_pasninger(conn, calendar_uuid)
     if df_seson.empty:
       st.warning("Ingen data fundet for denne sæson.")
       return
 
-    # Oversæt TEAM_ID til holdnavne i datasættet
-    df_seson["TEAM_NAME"] = df_seson["TEAM_ID"].apply()
-        lambda x: _get_team_name_from_uuid(
+    # 1. Oversæt TEAM_ID til holdnavne
+    df_seson["TEAM_NAME"] = df_seson["TEAM_ID"].apply(
+        lambda x: _get_team_name_from_uuid(x)
+    )
+
+    # 2. Pivotér data så vi har intervaller som kolonner og hold som rækker
+    pivot_df = (
+        df_seson.pivot(
+            index="TEAM_NAME", columns="TIME_INTERVAL", values="PASS_COUNT"
+        )
+        .reindex(columns=intervals_order)
+        .fillna(0)
+    )
+
+    # 3. Beregn totaler (ligesom i enkeltkamp)
+    pivot_df["Total"] = pivot_df[intervals_order].sum(axis=1)
+    pivot_df["1st half"] = pivot_df[["1-15", "16-30", "31-45+"]].sum(axis=1)
+    pivot_df["2nd half"] = pivot_df[["46-60", "61-75", "76-90+"]].sum(axis=1)
+
+    st.markdown("#### 📊 Sæson-gennemsnit pr. hold")
+    st.caption("Viser gennemsnitligt antal afleveringer fordelt på kampens intervaller over hele sæsonen.")
+
+    # Vis tabellen med alle hold
+    st.dataframe(
+        pivot_df[["Total", "1st half", "2nd half"]].sort_values("Total", ascending=False).style.format("{:.0f}"),
+        use_container_width=True,
+    )
+
+    # 4. VISUALISERING (Vælg ét hold for at se trenden)
+    st.markdown("---")
+    st.markdown("#### 📈 Tendenslinje for udvalgt hold")
+    
+    hold_liste = pivot_df.index.tolist()
+    valgt_hold_seson = st.selectbox("Vælg hold til detaljeret visning:", hold_liste)
+
+    if valgt_hold_seson:
+        fig, ax = plt.subplots(figsize=(9, 5))
+        
+        # Hent værdierne for det valgte hold
+        y_vals = [pivot_df.loc[valgt_hold_seson, col] for col in intervals_order]
+        
+        # Tegn linjen
+        ax.plot(
+            intervals_order, 
+            y_vals, 
+            marker="o", 
+            linewidth=4, 
+            color="royalblue", 
+            label=valgt_hold_seson
+        )
+
+        # Tilføj tekst-labels over punkterne (ligesom i din anden graf)
+        for x_pos, y_val in enumerate(y_vals):
+            ax.text(
+                x_pos, 
+                y_val + (max(y_vals) * 0.03), 
+                f"{int(y_val)}", 
+                ha="center", 
+                va="bottom", 
+                fontsize=11, 
+                fontweight="bold", 
+                color="royalblue"
+            )
+
+        ax.set_title(f"Sæson-tendens: {valgt_hold_seson} (Gns. afleveringer)", fontsize=12, fontweight="bold")
+        ax.set_xlabel("Kampens intervaller", fontsize=10)
+        ax.set_ylabel("Gns. antal afleveringer", fontsize=10)
+        ax.grid(True, linestyle="--", alpha=0.4)
+        ax.legend(loc="upper left")
+
+        st.pyplot(fig)
+        plt.close(fig)
