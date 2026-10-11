@@ -174,5 +174,5 @@ def vis_side():
       return
 
     # Oversæt TEAM_ID til holdnavne i datasættet
-    df_seson["TEAM_NAME"] = df_seson["TEAM_ID"].apply(
+    df_seson["TEAM_NAME"] = df_seson["TEAM_ID"].apply
         lambda x: _get_team_name_from_uuid(
