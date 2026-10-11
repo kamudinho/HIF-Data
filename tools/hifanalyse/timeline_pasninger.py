@@ -5,7 +5,7 @@ import pandas as pd
 import streamlit as st
 
 from data.data_load import _get_snowflake_conn
-from data.sql.temporal_passes import (
+from data.sql.timeline import (
     hent_kamp_tids_pasninger,
     hent_seson_tids_pasninger,
 )
