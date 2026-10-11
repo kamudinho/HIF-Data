@@ -135,10 +135,10 @@ def load_passing_data(liga_uuid):
             pn.MATCH_NAME as match_name,
             TRIM(COALESCE(pn.FIRST_NAME, '')) || ' ' || TRIM(COALESCE(pn.LAST_NAME, '')) as full_player_name,
             -- Beregning af fremgang i meter (1 Opta-enhed i X ≈ 1.05 meter på en 105m bane)
-            (COALESCE(px.END_X, e.EVENT_X) - e.EVENT_X) * 1.05 as forward_distance_meters,
+            (COALESCE(px.END_X, e.EVENT_X) - e.EVENT_X) * 1.00 as forward_distance_meters,
             -- Flag for om pasningen er fremadrettet med mindst 10 meter
             CASE 
-                WHEN (COALESCE(px.END_X, e.EVENT_X) - e.EVENT_X) * 1.05 >= 10.0 THEN 1 
+                WHEN (COALESCE(px.END_X, e.EVENT_X) - e.EVENT_X) * 1.00 >= 10.0 THEN 1 
                 ELSE 0 
             END as is_progressive_pass
         FROM {db}.OPTA_EVENTS e
