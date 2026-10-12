@@ -21,6 +21,9 @@ from data.players.player_mapping import player_mapping, PLAYER_MAPPING
 
 DB = "KLUB_HVIDOVREIF.AXIS"
 
+# Visningstyper til baneplots (bruges af st.segmented_control i siderne)
+VISNINGER = ["Hexbin", "Heatmap"]
+
 if not player_mapping.optauuid_to_name:
     player_mapping._load_data(PLAYER_MAPPING)
 
@@ -70,11 +73,49 @@ def draw_match_info_box(ax, scoring_team_logo, opp_team_logo, date_str, score_st
         ax_l2.imshow(opp_team_logo); ax_l2.axis('off')
     ax.text(0.03, 0.07, f"{date_str} | Stilling: {score_str} ({min_str}. min)", transform=ax.transAxes, fontsize=8, color='#444444', va='top')
 
-def plot_custom_pitch(df, event_ids, title, zone='full', cmap='magma', logo=None, flip_x=False):
+def _draw_smooth_heatmap(ax, plot_data, cmap, is_half):
+    """
+    Tegner et udglattet heatmap oven på banen.
+    Data er allerede filtreret/spejlet, så en halv bane altid er x 50-100.
+    Akserne i VerticalPitch er byttet om: vandret = EVENT_Y, lodret = EVENT_X.
+    """
+    from scipy.ndimage import gaussian_filter
+
+    x_lo, x_hi = (50, 100) if is_half else (0, 100)
+    bins_x = 20 if is_half else 40
+
+    H, _, _ = np.histogram2d(
+        plot_data['EVENT_X'].to_numpy(),
+        plot_data['EVENT_Y'].to_numpy(),
+        bins=[bins_x, 40],
+        range=[[x_lo, x_hi], [0, 100]],
+    )
+    H = gaussian_filter(H, sigma=1.3)
+    # Skjul næsten tomme felter, så banen er synlig (svarer til mincnt=1 i hexbin)
+    H = np.ma.masked_less(H, H.max() * 0.04)
+
+    xlim, ylim = ax.get_xlim(), ax.get_ylim()
+    ax.imshow(
+        H,
+        extent=[0, 100, x_lo, x_hi],
+        origin='lower',
+        cmap=cmap,
+        interpolation='bilinear',
+        aspect=ax.get_aspect(),
+        alpha=0.65,
+        zorder=1,
+    )
+    ax.set_xlim(xlim)
+    ax.set_ylim(ylim)
+
+def plot_custom_pitch(df, event_ids, title, zone='full', cmap='magma', logo=None, flip_x=False, mode='Hexbin'):
     """
     zone='up'   : egen halvdel, mål nederst, midterlinje øverst
     zone='down' : modstanderens halvdel, midterlinje nederst, mål øverst
     zone='full' : hel bane, eget mål nederst
+
+    mode='Hexbin'  : sekskantet binning
+    mode='Heatmap' : udglattet, kontinuerligt heatmap
     """
     type_num = pd.to_numeric(df['EVENT_TYPEID'], errors='coerce')
     plot_data = df[type_num.isin([int(i) for i in event_ids])].copy()
@@ -110,17 +151,20 @@ def plot_custom_pitch(df, event_ids, title, zone='full', cmap='magma', logo=None
         ax.invert_yaxis()   # egen halvdel: mål nederst, midterlinje øverst
 
     if not plot_data.empty:
-        pitch.hexbin(
-            plot_data['EVENT_X'].to_numpy(),
-            plot_data['EVENT_Y'].to_numpy(),
-            ax=ax,
-            cmap=cmap,
-            edgecolors='white',
-            linewidth=0.2,
-            gridsize=35,
-            mincnt=1,
-            alpha=0.55,
-        )
+        if mode == 'Heatmap':
+            _draw_smooth_heatmap(ax, plot_data, cmap, is_half)
+        else:
+            pitch.hexbin(
+                plot_data['EVENT_X'].to_numpy(),
+                plot_data['EVENT_Y'].to_numpy(),
+                ax=ax,
+                cmap=cmap,
+                edgecolors='white',
+                linewidth=0.2,
+                gridsize=35,
+                mincnt=1,
+                alpha=0.55,
+            )
 
     # Logo og titel øverst i billedet
     if logo:
