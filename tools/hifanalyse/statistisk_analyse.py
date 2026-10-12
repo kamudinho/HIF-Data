@@ -4,7 +4,7 @@ import pandas as pd
 import numpy as np
 from data.sql.skud_data import load_league_data, load_passing_data
 from data.utils.team_mapping import SEASONS, SEASON_LEAGUE_MAPPER, TEAMS, TEAM_COLORS
-from data.utils.chart_helper import (
+from utils.chart_helper import (
     new_figure, style_axes, style_colorbar, style_legend,
     add_trendline, pad_xlim, show_figure, PALETTE, SEQ_CMAP,
 )
