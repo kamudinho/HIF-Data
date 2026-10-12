@@ -8,6 +8,7 @@ from tools.hifanalyse.modstander_common import (
     fetch_full_match_history,
     fetch_event_data,
     plot_custom_pitch,
+    VISNINGER,
     DB
 )
 from data.players.player_mapping import player_mapping, PLAYER_MAPPING
@@ -45,6 +46,15 @@ def vis_side():
     n_matches = df_all_h['MATCH_OPTAUUID'].nunique()
     total_minutes = n_matches * 90
 
+    # Valg af visningstype (gælder begge faner). Hvis intet er valgt, bruges Hexbin.
+    visning = st.segmented_control(
+        "Visning",
+        VISNINGER,
+        selection_mode="single",
+        default=VISNINGER[0],
+        key="ms_visning",
+    ) or VISNINGER[0]
+
     t2, t3 = st.tabs(["MED BOLDEN", "UDEN BOLDEN"])
 
     with t2:
@@ -78,7 +88,7 @@ def vis_side():
 
         with c_left:
             target_ids = df_f['EVENT_TYPEID'].unique().tolist() if v_med == "Touches in Box" else ids
-            st.pyplot(plot_custom_pitch(df_f, target_ids, tit, zone=zn, cmap=cm, logo=hold_logo))
+            st.pyplot(plot_custom_pitch(df_f, target_ids, tit, zone=zn, cmap=cm, logo=hold_logo, mode=visning))
 
         with c_right:
             if v_med == "Touches in Box":
@@ -159,7 +169,7 @@ def vis_side():
         total_act = len(df_f)
 
         with c_left:
-            fig = plot_custom_pitch(df_f, ids, tit, zone=zn, cmap=cm, logo=hold_logo)
+            fig = plot_custom_pitch(df_f, ids, tit, zone=zn, cmap=cm, logo=hold_logo, mode=visning)
             st.pyplot(fig)
 
         with c_right:
