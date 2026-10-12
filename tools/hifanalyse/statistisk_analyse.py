@@ -2,10 +2,12 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib.ticker import MaxNLocator
 from data.sql.skud_data import load_league_data, load_passing_data
 from data.utils.team_mapping import SEASONS, SEASON_LEAGUE_MAPPER, TEAMS, TEAM_COLORS
+from data.utils.chart_helper import (
+    new_figure, style_axes, style_colorbar, style_legend,
+    add_trendline, pad_xlim, show_figure, PALETTE, SEQ_CMAP,
+)
 
 def vis_side():
     st.markdown("### Statistisk Analyse")
@@ -22,7 +24,7 @@ def vis_side():
     tilgængelige_hold = SEASON_LEAGUE_MAPPER.get(valgt_saeson, {}).get(valgt_turnering, ["Hvidovre"])
 
     # --- 2. DATA INDLÆSNING ---
-    with st.spinner("Henter data fra Snowflake..."):
+    with st.spinner("Vidste du at Hvidovre blev grundlagt i 17-grøn/hvidkål"):
         df_shots_all = load_league_data(liga_uuid)
         df_passes_all = load_passing_data(liga_uuid)
 
@@ -91,51 +93,46 @@ def vis_side():
             st.info(f"Ingen matchende kampdata for {valgte_hold}.")
             return
 
-        # --- 4. VISUALISERING MED JITTER OG UDVIDET TRENDLINJE ---
-        fig, ax = plt.subplots(figsize=(8, 5.5))
-        
-        sizes = df_reg["xG"] * 25 + 5
+        # --- 4. VISUALISERING (stil styres af chart_helper) ---
+        fig, ax = new_figure(
+            title=f"{pas_kolonne_navn} vs. mål – {valgte_hold}",
+            subtitle=f"{valgt_turnering} {valgt_saeson} · Størrelse = xG, farve = antal skud",
+        )
+
+        sizes = df_reg["xG"] * 40 + 25
 
         np.random.seed(42)
         y_jittered = df_reg["Maal"] + np.random.uniform(-0.06, 0.06, size=len(df_reg))
 
         sc = ax.scatter(
-            df_reg["Pasninger"], 
-            y_jittered, 
-            c=df_reg["Skud"], 
-            cmap="YlOrRd", 
-            s=sizes, 
-            alpha=0.8, 
-            edgecolors="black",
-            linewidths=0.8
+            df_reg["Pasninger"],
+            y_jittered,
+            c=df_reg["Skud"],
+            cmap=SEQ_CMAP,
+            s=sizes,
+            alpha=0.9,
+            edgecolors=PALETTE["bg"],
+            linewidths=1.2,
+            zorder=3,
         )
-        cbar = plt.colorbar(sc, ax=ax)
-        cbar.set_label("Antal skud i kampen")
+        style_colorbar(fig.colorbar(sc, ax=ax, pad=0.02), "Antal skud i kampen")
 
-        # Sæt akser først, så vi kender de præcise grænser
+        x_min_lim, x_max_lim = pad_xlim(ax, df_reg["Pasninger"])
         max_maal = int(df_reg["Maal"].max())
         ax.set_ylim(-0.3, max_maal + 0.6)
-        ax.yaxis.set_major_locator(MaxNLocator(integer=True))
 
-        x_margin = max((df_reg["Pasninger"].max() - df_reg["Pasninger"].min()) * 0.1, 10)
-        x_min_lim = df_reg["Pasninger"].min() - x_margin
-        x_max_lim = df_reg["Pasninger"].max() + x_margin
-        ax.set_xlim(x_min_lim, x_max_lim)
+        add_trendline(ax, df_reg["Pasninger"], df_reg["Maal"], xlim=(x_min_lim, x_max_lim))
 
-        # Tegn trendlinjen ud fra aksernes fulde grænser i stedet for datapunkterne
-        if len(df_reg) > 1:
-            m, b = np.polyfit(df_reg["Pasninger"], df_reg["Maal"], 1)
-            x_range = np.linspace(x_min_lim, x_max_lim, 100)
-            ax.plot(x_range, m*x_range + b, color="red", linestyle="--", linewidth=2, label="Trendlinje")
+        style_axes(
+            ax,
+            xlabel=f"Antal {pas_kolonne_navn.lower()} pr. kamp",
+            ylabel="Antal mål i kampen",
+            integer_y=True,
+            grid_axis="both",
+        )
+        style_legend(ax, loc="upper left")
 
-        ax.set_title(f"{pas_kolonne_navn} vs. Mål - {valgte_hold}", fontsize=12, fontweight="bold")
-        ax.set_xlabel(f"Antal {pas_kolonne_navn.lower()} pr. kamp", fontsize=10)
-        ax.set_ylabel("Antal mål i kampen", fontsize=10)
-        ax.grid(True, linestyle="--", alpha=0.3)
-        ax.legend(loc="upper left")
-
-        st.pyplot(fig)
-        plt.close(fig)
+        show_figure(fig)
 
         # --- 5. METRIKKER & TABEL ---
         st.markdown("---")
