@@ -5,7 +5,7 @@ def get_role_permissions():
         
         "Analytiker": [
             "HVIDOVRE IF", "Forside",
-            "HOLDANALYSE", "Modstanderanalyse", "Kampoversigt", "Kampudvikling", "Afslutninger", "Målsekvenser", "Grafer",
+            "HOLDANALYSE", "Modstanderanalyse", "Heatmaps", "Kampoversigt", "Kampudvikling", "Afslutninger", "Målsekvenser", "Grafer",
             "SPILLERANALYSE", "Spiller-stats", "Spilleraktioner", "Spiller-profil", "Spilleroversigt", "Spillerprofil",
             "SCOUTING", "Scoutrapport", "Database", "Emnedatabase", "Sammenligning", "Top10-scouting", "Opret emne",
             "TILPASNING", "Spillerdata", "Spiller-score", "Standardsituationer",
