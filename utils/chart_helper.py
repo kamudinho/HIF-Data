@@ -3,7 +3,7 @@
 Fælles stil og hjælpefunktioner til alle matplotlib-grafer i HIF-dataplatformen.
 
 Brug:
-    from data.utils.chart_helper import (
+    from utils.chart_helper import (
         new_figure, style_axes, add_trendline, style_colorbar, show_figure, PALETTE
     )
 
@@ -41,6 +41,9 @@ PALETTE = {
 SEQ_CMAP = LinearSegmentedColormap.from_list(
     "hif_seq", ["#FDE8E8", "#F4A6A6", "#E05A5A", "#D62828", "#7A0F0F"]
 )
+
+# Farver til sammenligning af flere serier (fx hjemme- vs. udehold)
+SERIES_COLORS = [PALETTE["secondary"], PALETTE["primary"], PALETTE["accent"]]
 
 DPI = 200
 DEFAULT_FIGSIZE = (8, 5.2)
@@ -163,6 +166,39 @@ def add_trendline(ax, x, y, xlim=None, show_r2: bool = True) -> None:
 
     ax.plot(xs, m * xs + b, color=PALETTE["trend"], linestyle="--",
             linewidth=1.8, alpha=0.85, label=label, zorder=2)
+
+
+def add_line(ax, x, y, color=None, label=None, labels: bool = True,
+             fmt: str = "{:.0f}", linewidth: float = 2.6, markersize: float = 7) -> None:
+    """Linje med markører og (valgfrit) værdi-labels over punkterne."""
+    color = color or PALETTE["primary"]
+    ax.plot(x, y, marker="o", markersize=markersize, linewidth=linewidth,
+            color=color, label=label, markerfacecolor=PALETTE["bg"],
+            markeredgewidth=2, zorder=3)
+    if labels:
+        for xi, yi in zip(x, y):
+            ax.annotate(fmt.format(yi), (xi, yi), textcoords="offset points",
+                        xytext=(0, 9), ha="center", fontsize=9,
+                        fontweight="bold", color=color)
+    ax.margins(y=0.15)
+
+
+def message_figure(text: str, figsize=DEFAULT_FIGSIZE):
+    """Tom figur med en besked (bruges når data mangler)."""
+    fig, ax = new_figure(figsize=figsize)
+    ax.axis("off")
+    ax.text(0.5, 0.5, text, ha="center", va="center",
+            transform=ax.transAxes, color=PALETTE["muted"], fontsize=11)
+    return fig
+
+
+def fig_to_png_bytes(fig, dpi: int = 300) -> bytes:
+    """Renderer figuren til PNG-bytes (til download) og lukker den."""
+    import io
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=dpi, bbox_inches="tight")
+    plt.close(fig)
+    return buf.getvalue()
 
 
 def pad_xlim(ax, values, min_margin: float = 10, pct: float = 0.1):
