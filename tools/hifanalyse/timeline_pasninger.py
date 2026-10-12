@@ -1,4 +1,4 @@
-# tools/hifanalyse/tids_pasninger.py
+# tools/hifanalyse/timeline_pasninger.py
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -11,6 +11,10 @@ from data.sql.timeline import (
 )
 from data.sql.teams import hent_hoved_stats
 from data.utils.team_mapping import SEASONS, TEAMS
+from utils.chart_helper import (
+    new_figure, style_axes, style_legend, add_line, show_figure,
+    SERIES_COLORS, PALETTE,
+)
 
 
 def _get_team_name_from_uuid(uuid: str, fallback: str = "Ukendt") -> str:
@@ -119,51 +123,36 @@ def vis_side():
         use_container_width=True,
     )
 
-    # --- PLOT GRAF ---
-    fig, ax = plt.subplots(figsize=(9, 5))
-    teams = pivot_df.index.tolist()
-    colors = ["black", "red"]
+    # --- PLOT GRAF (stil styres af chart_helper) ---
+    fig, ax = new_figure(
+        title="Afleveringer pr. 15 minutter",
+        subtitle=f"{home_team} vs {away_team}",
+        figsize=(9, 5),
+    )
 
-    for idx, team in enumerate(teams):
+    for idx, team in enumerate(pivot_df.index.tolist()):
       y_vals = [pivot_df.loc[team, col] for col in intervals_order]
-      color = colors[idx % len(colors)]
-      ax.plot(
+      add_line(
+          ax,
           intervals_order,
           y_vals,
-          marker="o",
-          linewidth=3,
-          color=color,
+          color=SERIES_COLORS[idx % len(SERIES_COLORS)],
           label=team,
       )
 
-      for x_pos, y_val in enumerate(y_vals):
-        ax.text(
-            x_pos,
-            y_val + max(y_vals) * 0.03,
-            f"{int(y_val)}",
-            ha="center",
-            va="bottom",
-            fontsize=10,
-            fontweight="bold",
-            color=color,
-        )
-
-    ax.set_title(
-        f"Afleveringer pr. 15 min - {home_team} vs {away_team}",
-        fontsize=12,
-        fontweight="bold",
+    style_axes(
+        ax,
+        xlabel="Kampens intervaller",
+        ylabel="Antal afleveringer",
+        integer_y=True,
+        grid_axis="y",
     )
-    ax.set_xlabel("Kampens intervaller", fontsize=10)
-    ax.set_ylabel("Antal afleveringer", fontsize=10)
-    ax.grid(True, linestyle="--", alpha=0.4)
-    ax.legend(loc="upper left")
+    style_legend(ax, loc="upper left")
 
-    st.pyplot(fig)
-    plt.close(fig)
+    show_figure(fig)
 
   else:
     # --- SÆSONOVERBLIK PR. HOLD ---
-        # --- SÆSONOVERBLIK PR. HOLD ---
     df_seson = hent_seson_tids_pasninger(conn, calendar_uuid)
     if df_seson.empty:
       st.warning("Ingen data fundet for denne sæson.")
@@ -200,44 +189,27 @@ def vis_side():
     # 4. VISUALISERING (Vælg ét hold for at se trenden)
     st.markdown("---")
     st.markdown("#### Tendenslinje for udvalgt hold")
-    
+
     hold_liste = pivot_df.index.tolist()
     valgt_hold_seson = st.selectbox("Vælg hold til detaljeret visning:", hold_liste)
 
     if valgt_hold_seson:
-        fig, ax = plt.subplots(figsize=(9, 5))
-        
-        # Hent værdierne for det valgte hold
-        y_vals = [pivot_df.loc[valgt_hold_seson, col] for col in intervals_order]
-        
-        # Tegn linjen
-        ax.plot(
-            intervals_order, 
-            y_vals, 
-            marker="o", 
-            linewidth=4, 
-            color="royalblue", 
-            label=valgt_hold_seson
+        fig, ax = new_figure(
+            title="Sæson-tendens: gns. afleveringer",
+            subtitle=f"{valgt_hold_seson} · {selected_comp} {selected_season}",
+            figsize=(9, 5),
         )
 
-        # Tilføj tekst-labels over punkterne (ligesom i din anden graf)
-        for x_pos, y_val in enumerate(y_vals):
-            ax.text(
-                x_pos, 
-                y_val + (max(y_vals) * 0.03), 
-                f"{int(y_val)}", 
-                ha="center", 
-                va="bottom", 
-                fontsize=11, 
-                fontweight="bold", 
-                color="royalblue"
-            )
+        y_vals = [pivot_df.loc[valgt_hold_seson, col] for col in intervals_order]
+        add_line(ax, intervals_order, y_vals, color=PALETTE["secondary"], label=valgt_hold_seson)
 
-        ax.set_title(f"Sæson-tendens: {valgt_hold_seson} (Gns. afleveringer)", fontsize=12, fontweight="bold")
-        ax.set_xlabel("Kampens intervaller", fontsize=10)
-        ax.set_ylabel("Gns. antal afleveringer", fontsize=10)
-        ax.grid(True, linestyle="--", alpha=0.4)
-        ax.legend(loc="upper left")
+        style_axes(
+            ax,
+            xlabel="Kampens intervaller",
+            ylabel="Gns. antal afleveringer",
+            integer_y=True,
+            grid_axis="y",
+        )
+        style_legend(ax, loc="upper left")
 
-        st.pyplot(fig)
-        plt.close(fig)
+        show_figure(fig)
