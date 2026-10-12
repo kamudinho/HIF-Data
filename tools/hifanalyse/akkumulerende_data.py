@@ -1,7 +1,6 @@
 # HIF-Data/tools/hifanalyse/akkumulerende_data.py
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 import io
 import requests
@@ -10,6 +9,9 @@ from PIL import Image
 # Importér fra dine eksisterende moduler
 from data.sql.skud_data import load_league_data
 from data.utils.team_mapping import SEASONS, SEASON_LEAGUE_MAPPER, TEAMS, TEAM_COLORS
+from utils.chart_helper import (
+    new_figure, style_axes, message_figure, fig_to_png_bytes, PALETTE,
+)
 
 
 def get_logo(url):
@@ -67,7 +69,8 @@ def get_opponent_logo(match_df, team_name):
 
 def plot_accumulating_matches_timeline(df_all, team_name, category):
     """
-    Genererer en akkumulerende graf med hvid baggrund, hvor linjen og fyldet når helt ud til kanterne.
+    Genererer en akkumulerende graf (stil styres af chart_helper), hvor linjen
+    og fyldet når helt ud til kanterne, og modstanderlogoer står på x-aksen.
     """
     is_against = "Imod" in category
     is_xg = "xG" in category
@@ -76,9 +79,7 @@ def plot_accumulating_matches_timeline(df_all, team_name, category):
     target_uuid = TEAMS.get(team_name, {}).get("opta_uuid")
 
     if "MATCH_OPTAUUID" not in df_all.columns:
-        fig, ax = plt.subplots(figsize=(11, 5.5))
-        ax.text(0.5, 0.5, "Data mangler MATCH_OPTAUUID kolonne.", color="black", ha="center", va="center", transform=ax.transAxes)
-        return fig
+        return message_figure("Data mangler MATCH_OPTAUUID kolonne.", figsize=(11, 5.5))
 
     match_data_list = []
     
@@ -131,9 +132,7 @@ def plot_accumulating_matches_timeline(df_all, team_name, category):
         })
 
     if not match_data_list:
-        fig, ax = plt.subplots(figsize=(11, 5.5))
-        ax.text(0.5, 0.5, f"Ingen spillede kampe fundet for {team_name}", color="black", ha="center", va="center", transform=ax.transAxes)
-        return fig
+        return message_figure(f"Ingen spillede kampe fundet for {team_name}", figsize=(11, 5.5))
 
     df_matches = pd.DataFrame(match_data_list)
     df_matches = df_matches.sort_values("TIMESTAMP").drop_duplicates(subset=["MATCH_OPTAUUID"]).reset_index(drop=True)
@@ -145,22 +144,28 @@ def plot_accumulating_matches_timeline(df_all, team_name, category):
 
     # Dynamisk bredde baseret på antal kampe
     fig_width = max(11, num_matches * 0.4)
-    fig, ax = plt.subplots(figsize=(fig_width, 5.5))
+    fig, ax = new_figure(
+        title=f"Akkumuleret {category} pr. kamp",
+        subtitle=team_name,
+        figsize=(fig_width, 5.5),
+    )
 
-    primary_color = TEAM_COLORS.get(team_name, {}).get("primary", "#e57373" if is_against else "#1f77b4")
+    fallback = PALETTE["secondary"] if is_against else PALETTE["primary"]
+    primary_color = TEAM_COLORS.get(team_name, {}).get("primary", fallback)
 
-    ax.step(df_matches["KAMP_NR"], df_matches["ACC_VAL"], where="mid", linewidth=2.5, label=category, color=primary_color)
-    ax.plot(df_matches["KAMP_NR"], df_matches["ACC_VAL"], marker="o", markersize=5, color=primary_color)
-    ax.fill_between(df_matches["KAMP_NR"], df_matches["ACC_VAL"], step="mid", alpha=0.15, color=primary_color)
+    ax.step(df_matches["KAMP_NR"], df_matches["ACC_VAL"], where="mid", linewidth=2.5, label=category, color=primary_color, zorder=3)
+    ax.plot(df_matches["KAMP_NR"], df_matches["ACC_VAL"], marker="o", markersize=6, linewidth=0,
+            color=primary_color, markerfacecolor=PALETTE["bg"], markeredgewidth=2, zorder=4)
+    ax.fill_between(df_matches["KAMP_NR"], df_matches["ACC_VAL"], step="mid", alpha=0.12, color=primary_color)
 
-    ax.set_title(f"Akkumuleret {category} per kamp - {team_name}", fontsize=14, fontweight="bold", color="black", pad=25)
-    ax.set_ylabel(f"Akkumuleret {category}", fontsize=11, color="black")
-    
     ax.set_xticks(df_matches["KAMP_NR"])
     ax.set_xticklabels([])
 
-    # Sæt x-aksen til at starte præcist ved 1 og slutte ved sidste kamp, så det når helt ud til kanterne
+    # Start præcist ved første kamp og slut ved sidste, så linjen når ud til kanterne
     ax.set_xlim(1, num_matches)
+    ax.set_ylim(bottom=min(0, df_matches["ACC_VAL"].min() - 0.5))
+
+    style_axes(ax, ylabel=f"Akkumuleret {category}", grid_axis="y")
 
     # Dynamisk logo-zoom
     logo_zoom = max(0.55, min(0.6, 5.5 / num_matches))
@@ -177,20 +182,8 @@ def plot_accumulating_matches_timeline(df_all, team_name, category):
             ax.add_artist(ab)
         else:
             ax.text(x_pos, -0.05, f"K{x_pos}", transform=ax.get_xaxis_transform(),
-                    ha='center', va='top', color='black', fontsize=9)
+                    ha='center', va='top', color=PALETTE["muted"], fontsize=9)
 
-    # Hvid baggrund og standard lyselementer
-    fig.patch.set_facecolor("white")
-    ax.set_facecolor("white")
-    ax.tick_params(colors="black")
-    ax.xaxis.label.set_color("black")
-    ax.yaxis.label.set_color("black")
-    for spine in ax.spines.values():
-        spine.set_edgecolor("black")
-
-    ax.grid(True, linestyle="--", alpha=0.3)
-    ax.set_ylim(bottom=min(0, df_matches["ACC_VAL"].min() - 0.5))
-    
     return fig
 
 
@@ -231,12 +224,7 @@ def vis_side():
     with col_graf:
         if not df_all.empty:
             fig = plot_accumulating_matches_timeline(df_all, valgte_hold, valgt_kategori)
-            
-            buf = io.BytesIO()
-            fig.savefig(buf, format="png", dpi=300, bbox_inches='tight')
-            buf.seek(0)
-            img_bytes = buf.getvalue()
-            plt.close(fig)
+            img_bytes = fig_to_png_bytes(fig, dpi=300)
 
             st.image(img_bytes, use_container_width=True)
 
