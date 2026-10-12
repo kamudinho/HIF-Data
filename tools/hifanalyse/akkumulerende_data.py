@@ -158,6 +158,45 @@ def plot_accumulating_matches_timeline(df_all, team_name, category):
             color=primary_color, markerfacecolor=PALETTE["bg"], markeredgewidth=2, zorder=4)
     ax.fill_between(df_matches["KAMP_NR"], df_matches["ACC_VAL"], step="mid", alpha=0.12, color=primary_color)
 
+    # --- Labels: kampens værdi under cirklen + udvikling ift. forrige kamp ved trinnet ---
+    val_fmt = "{:.2f}" if is_xg else "{:.0f}"
+    diff_fmt = "{:+.2f}" if is_xg else "{:+.0f}"
+    label_size = 9 if num_matches <= 20 else 7.5
+    farve_op, farve_ned = "#15803D", "#B91C1C"
+
+    match_vals = df_matches["MATCH_VAL"].tolist()
+    acc_vals = df_matches["ACC_VAL"].tolist()
+
+    for i in range(num_matches):
+        x = i + 1
+
+        # Kampens værdi, lige under cirklen (justeres ved kanterne så den ikke klippes)
+        if i == 0:
+            ha, dx = "left", 4
+        elif i == num_matches - 1:
+            ha, dx = "right", -4
+        else:
+            ha, dx = "center", 0
+        ax.annotate(
+            val_fmt.format(match_vals[i]), (x, acc_vals[i]),
+            textcoords="offset points", xytext=(dx, -9), ha=ha, va="top",
+            fontsize=label_size, fontweight="bold", color=primary_color, zorder=5,
+        )
+
+        # +/- ift. forrige kamp, til venstre for trinnets lodrette stykke
+        if i > 0:
+            diff = match_vals[i] - match_vals[i - 1]
+            if abs(diff) < 1e-9:
+                txt, farve = "±0", PALETTE["muted"]
+            else:
+                txt = diff_fmt.format(diff).replace("-", "−")
+                farve = farve_op if diff > 0 else farve_ned
+            ax.annotate(
+                txt, (x - 0.5, acc_vals[i]),
+                textcoords="offset points", xytext=(-4, 3), ha="right", va="bottom",
+                fontsize=label_size, fontweight="bold", color=farve, zorder=5,
+            )
+
     ax.set_xticks(df_matches["KAMP_NR"])
     ax.set_xticklabels([])
 
