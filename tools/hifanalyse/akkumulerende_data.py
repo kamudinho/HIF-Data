@@ -186,6 +186,9 @@ def plot_accumulating_matches_timeline(df_all, team_name, category):
         # +/- ift. forrige kamp, til venstre for trinnets lodrette stykke
         if i > 0:
             diff = match_vals[i] - match_vals[i - 1]
+            if is_against:
+                # Imod-kategorier: flere skud/xG imod er dårligt (minus), færre er godt (plus)
+                diff = -diff
             if abs(diff) < 1e-9:
                 txt, farve = "±0", PALETTE["muted"]
             else:
