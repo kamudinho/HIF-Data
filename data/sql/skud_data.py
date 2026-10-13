@@ -84,11 +84,11 @@ def load_league_data(liga_uuid):
 
 
 @st.cache_data(ttl=3600)
-def load_passing_data(liga_uuid):
+def load_passing_data(liga_uuid, min_distance=20.0):
   """Henter pasningsdata for en given liga/turnering, filtrerer for pasninger
 
   i de sidste 2/3 af banen (EVENT_X >= 33.3) og beregner om pasningen er
-  fremadrettet med mindst 10 meters fremgang mod modstanderens mål.
+  fremadrettet med mindst `min_distance` meters fremgang mod modstanderens mål.
   """
   conn = _get_snowflake_conn()
   if not conn or not liga_uuid:
@@ -139,9 +139,9 @@ def load_passing_data(liga_uuid):
             TRIM(COALESCE(pn.FIRST_NAME, '')) || ' ' || TRIM(COALESCE(pn.LAST_NAME, '')) as full_player_name,
             -- Beregning af fremgang i meter (1 Opta-enhed i X ≈ 1.05 meter på en 105m bane)
             (COALESCE(px.END_X, e.EVENT_X) - e.EVENT_X) * 1.00 as forward_distance_meters,
-            -- Flag for om pasningen er fremadrettet med mindst 10 meter
+            -- Flag for om pasningen er fremadrettet med mindst min_distance meter
             CASE 
-                WHEN (COALESCE(px.END_X, e.EVENT_X) - e.EVENT_X) * 1.00 >= 10.0 THEN 1 
+                WHEN (COALESCE(px.END_X, e.EVENT_X) - e.EVENT_X) * 1.00 >= {min_dist} THEN 1 
                 ELSE 0 
             END as is_progressive_pass
         FROM {db}.OPTA_EVENTS e
@@ -156,7 +156,7 @@ def load_passing_data(liga_uuid):
           AND e.EVENT_X >= 33.3
           AND e.EVENT_OPTAUUID IS NOT NULL
     """.format(
-      db=DB, liga_uuid=liga_uuid
+      db=DB, liga_uuid=liga_uuid, min_dist=min_distance
   )
 
   try:
