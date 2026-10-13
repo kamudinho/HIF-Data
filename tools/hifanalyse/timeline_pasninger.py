@@ -12,7 +12,7 @@ from utils.chart_helper import (
     new_figure, style_axes, style_legend, add_line, show_figure,
     SERIES_COLORS, PALETTE,
 )
-from utils.statistik_helper import render_statistik_filtre
+from utils.statistik_helper import render_statistik_filtre, graf_og_data_kolonner
 
 INTERVALS_ORDER = ["1-15", "16-30", "31-45+", "46-60", "61-75", "76-90+"]
 
@@ -36,6 +36,21 @@ def _lav_pivot(df):
   pivot_df["1st half"] = pivot_df[["1-15", "16-30", "31-45+"]].sum(axis=1)
   pivot_df["2nd half"] = pivot_df[["46-60", "61-75", "76-90+"]].sum(axis=1)
   return pivot_df
+
+
+def _vis_tabel(pivot_df, fremhaev=None, sorter=False):
+  """Kompakt datatabel til højre for grafen. Fremhæver evt. ét holds række."""
+  df = pivot_df[["Total", "1st half", "2nd half"]]
+  if sorter:
+    df = df.sort_values("Total", ascending=False)
+
+  styler = df.style.format("{:.0f}")
+  if fremhaev is not None:
+    styler = styler.apply(
+        lambda r: ["background-color: #FDE8E8; font-weight: 600" if r.name == fremhaev else "" for _ in r],
+        axis=1,
+    )
+  st.dataframe(styler, use_container_width=True, height=min(38 + 35 * len(df), 480))
 
 
 def vis_side():
@@ -92,39 +107,40 @@ def vis_side():
 
     pivot_df = _lav_pivot(df_kamp_pas)
 
-    st.markdown(f"#### Pasningsfordeling: {home_team} vs {away_team}")
-    st.dataframe(
-        pivot_df[["Total", "1st half", "2nd half"]].style.format("{:.0f}"),
-        use_container_width=True,
-    )
+    graf_col, data_col = graf_og_data_kolonner()
 
-    # --- PLOT GRAF (stil styres af chart_helper) ---
-    fig, ax = new_figure(
-        title="Afleveringer pr. 15 minutter",
-        subtitle=f"{home_team} vs {away_team}",
-        figsize=(9, 5),
-    )
-
-    for idx, team in enumerate(pivot_df.index.tolist()):
-      y_vals = [pivot_df.loc[team, col] for col in INTERVALS_ORDER]
-      add_line(
-          ax,
-          INTERVALS_ORDER,
-          y_vals,
-          color=SERIES_COLORS[idx % len(SERIES_COLORS)],
-          label=team,
+    with graf_col:
+      fig, ax = new_figure(
+          title="Afleveringer pr. 15 minutter",
+          subtitle=f"{home_team} vs {away_team}",
+          figsize=(9, 5),
       )
 
-    style_axes(
-        ax,
-        xlabel="Kampens intervaller",
-        ylabel="Antal afleveringer",
-        integer_y=True,
-        grid_axis="y",
-    )
-    style_legend(ax, loc="upper left")
+      for idx, team in enumerate(pivot_df.index.tolist()):
+        y_vals = [pivot_df.loc[team, col] for col in INTERVALS_ORDER]
+        add_line(
+            ax,
+            INTERVALS_ORDER,
+            y_vals,
+            color=SERIES_COLORS[idx % len(SERIES_COLORS)],
+            label=team,
+        )
 
-    show_figure(fig)
+      style_axes(
+          ax,
+          xlabel="Kampens intervaller",
+          ylabel="Antal afleveringer",
+          integer_y=True,
+          grid_axis="y",
+      )
+      style_legend(ax, loc="upper left")
+
+      show_figure(fig)
+
+    with data_col:
+      st.markdown("##### Pasningsfordeling")
+      st.caption(f"{home_team} vs {away_team}")
+      _vis_tabel(pivot_df)
 
   # =========================================================================
   # HOLDOVERSIGT
@@ -141,37 +157,34 @@ def vis_side():
     )
     pivot_df = _lav_pivot(df_seson)
 
-    st.markdown("#### Sæson-gennemsnit pr. hold")
-    st.caption("Viser gennemsnitligt antal afleveringer fordelt på kampens intervaller over hele sæsonen.")
-
-    st.dataframe(
-        pivot_df[["Total", "1st half", "2nd half"]].sort_values("Total", ascending=True).style.format("{:.0f}"),
-        use_container_width=True,
-    )
-
-    st.markdown("---")
-    st.markdown("#### Tendenslinje for udvalgt hold")
-
     if valg.hold not in pivot_df.index:
       st.info(f"Ingen pasningsdata fundet for {valg.hold}.")
       return
 
-    fig, ax = new_figure(
-        title="Sæson-tendens: gns. afleveringer",
-        subtitle=f"{valg.hold} · {valg.turnering} {valg.saeson}",
-        figsize=(9, 5),
-    )
+    graf_col, data_col = graf_og_data_kolonner()
 
-    y_vals = [pivot_df.loc[valg.hold, col] for col in INTERVALS_ORDER]
-    add_line(ax, INTERVALS_ORDER, y_vals, color=PALETTE["secondary"], label=valg.hold)
+    with graf_col:
+      fig, ax = new_figure(
+          title="Sæson-tendens: gns. afleveringer",
+          subtitle=f"{valg.hold} · {valg.turnering} {valg.saeson}",
+          figsize=(9, 5),
+      )
 
-    style_axes(
-        ax,
-        xlabel="Kampens intervaller",
-        ylabel="Gns. antal afleveringer",
-        integer_y=True,
-        grid_axis="y",
-    )
-    style_legend(ax, loc="upper left")
+      y_vals = [pivot_df.loc[valg.hold, col] for col in INTERVALS_ORDER]
+      add_line(ax, INTERVALS_ORDER, y_vals, color=PALETTE["secondary"], label=valg.hold)
 
-    show_figure(fig)
+      style_axes(
+          ax,
+          xlabel="Kampens intervaller",
+          ylabel="Gns. antal afleveringer",
+          integer_y=True,
+          grid_axis="y",
+      )
+      style_legend(ax, loc="upper left")
+
+      show_figure(fig)
+
+    with data_col:
+      st.markdown("##### Sæson-gennemsnit pr. hold")
+      st.caption("Gns. afleveringer pr. kamp. Valgt hold er fremhævet.")
+      _vis_tabel(pivot_df, fremhaev=valg.hold, sorter=True)
