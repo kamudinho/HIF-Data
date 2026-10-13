@@ -52,19 +52,7 @@ def vis_side():
       valgt_turnering, ["Hvidovre"]
   )
 
-  # --- 2. DATA INDLÆSNING ---
-  with st.spinner(
-      "Vidste du at Hvidovre blev grundlagt i 17-grøn/hvidkål"
-  ):
-    df_shots_all = load_league_data(liga_uuid)
-    df_passes_all = load_passing_data(liga_uuid)
-    df_final_third_all = load_final_third_data(liga_uuid)
-
-  if df_shots_all.empty or df_passes_all.empty:
-    st.warning("Ingen data fundet for denne turnering/sæson.")
-    return
-
-  # --- 3. HOLD-VALG & PASNINGSTYPE ---
+  # --- 2. HOLD-VALG & PASNINGSTYPE INDSTILLINGER ---
   col_graf, col_filter = st.columns([3, 1])
 
   with col_filter:
@@ -77,11 +65,56 @@ def vis_side():
         "Pasningstype",
         [
             "Alle pasninger",
-            "Fremadrettede pasninger (10+ m)",
+            "Fremadrettede pasninger",
             "Pasninger på sidste tredjedel",
         ],
         key="reg_pasningstype_sel",
     )
+
+    # Undervalg ud fra valgt pasningstype
+    valgt_dist = 10.0
+    fremadrettet_filter = False
+
+    if pasningstype == "Fremadrettede pasninger":
+      valgt_dist_str = st.radio(
+          "Min. fremgang:",
+          ["10 meter", "20 meter", "30 meter"],
+          index=1,  # Standard 20m
+          key="reg_dist_sel",
+      )
+      valgt_dist = float(valgt_dist_str.split()[0])
+      fremadrettet_filter = True
+
+    elif pasningstype == "Pasninger på sidste tredjedel":
+      f_type = st.radio(
+          "Type på 1/3:",
+          ["Alle pasninger", "Kun fremadrettede"],
+          key="reg_f3_type_sel",
+      )
+      if f_type == "Kun fremadrettede":
+        valgt_dist_str = st.radio(
+            "Min. fremgang:",
+            ["10 meter", "20 meter", "30 meter"],
+            index=0,
+            key="reg_f3_dist_sel",
+        )
+        valgt_dist = float(valgt_dist_str.split()[0])
+        fremadrettet_filter = True
+
+  # --- 3. DATA INDLÆSNING ---
+  with st.spinner("Henter data fra Snowflake..."):
+    df_shots_all = load_league_data(liga_uuid)
+
+    if pasningstype == "Pasninger på sidste tredjedel":
+      df_passes_all = load_final_third_data(
+          liga_uuid, min_distance=valgt_dist
+      )
+    else:
+      df_passes_all = load_passing_data(liga_uuid, min_distance=valgt_dist)
+
+  if df_shots_all.empty or df_passes_all.empty:
+    st.warning("Ingen data fundet for denne turnering/sæson.")
+    return
 
   with col_graf:
     target_uuid = TEAMS.get(valgte_hold, {}).get("opta_uuid")
@@ -93,20 +126,9 @@ def vis_side():
     df_hold_shots = df_shots_all[
         df_shots_all["EVENT_CONTESTANT_OPTAUUID"] == target_uuid
     ].copy()
-
-    # Vælg pasningsdatasæt ud fra den valgte pasningstype
-    if pasningstype == "Pasninger på sidste tredjedel":
-      df_hold_passes = (
-          df_final_third_all[
-              df_final_third_all["EVENT_CONTESTANT_OPTAUUID"] == target_uuid
-          ].copy()
-          if not df_final_third_all.empty
-          else pd.DataFrame()
-      )
-    else:
-      df_hold_passes = df_passes_all[
-          df_passes_all["EVENT_CONTESTANT_OPTAUUID"] == target_uuid
-      ].copy()
+    df_hold_passes = df_passes_all[
+        df_passes_all["EVENT_CONTESTANT_OPTAUUID"] == target_uuid
+    ].copy()
 
     if df_hold_shots.empty or df_hold_passes.empty:
       st.info(f"Ingen kampdata fundet for {valgte_hold}.")
@@ -128,13 +150,21 @@ def vis_side():
     )
 
     # --- BEHANDLING AF PASNINGER ---
-    if pasningstype == "Fremadrettede pasninger (10+ m)":
+    if fremadrettet_filter:
       df_hold_passes = df_hold_passes[
           df_hold_passes["IS_PROGRESSIVE_PASS"] == 1
       ]
-      pas_kolonne_navn = "Fremadrettede pasninger"
+
+    # Navngivning til graf-akser og overskrift
+    if pasningstype == "Fremadrettede pasninger":
+      pas_kolonne_navn = f"Fremadrettede pasninger ({int(valgt_dist)}+ m)"
     elif pasningstype == "Pasninger på sidste tredjedel":
-      pas_kolonne_navn = "Pasninger (Sidste 1/3)"
+      if fremadrettet_filter:
+        pas_kolonne_navn = (
+            f"Fremadrettede pasninger på 1/3 ({int(valgt_dist)}+ m)"
+        )
+      else:
+        pas_kolonne_navn = "Pasninger på sidste 1/3"
     else:
       pas_kolonne_navn = "Pasninger"
 
