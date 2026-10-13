@@ -104,25 +104,6 @@ def vis_side():
         axis=1,
     )
 
-    st.markdown(f"#### Pasningsfordeling: {home_team} vs {away_team}")
-
-    pivot_df = (
-        df_kamp_pas.pivot(
-            index="TEAM_NAME", columns="TIME_INTERVAL", values="PASS_COUNT"
-        )
-        .reindex(columns=intervals_order)
-        .fillna(0)
-    )
-
-    pivot_df["Total"] = pivot_df[intervals_order].sum(axis=1)
-    pivot_df["1st half"] = pivot_df[["1-15", "16-30", "31-45+"]].sum(axis=1)
-    pivot_df["2nd half"] = pivot_df[["46-60", "61-75", "76-90+"]].sum(axis=1)
-
-    st.dataframe(
-        pivot_df[["Total", "1st half", "2nd half"]].style.format("{:.0f}"),
-        use_container_width=True,
-    )
-
     # --- PLOT GRAF (stil styres af chart_helper) ---
     fig, ax = new_figure(
         title="Afleveringer pr. 15 minutter",
@@ -213,3 +194,25 @@ def vis_side():
         style_legend(ax, loc="upper left")
 
         show_figure(fig)
+
+
+    st.markdown(f"#### Pasningsfordeling: {home_team} vs {away_team}")
+
+    pivot_df = (
+        df_kamp_pas.pivot(
+            index="TEAM_NAME", columns="TIME_INTERVAL", values="PASS_COUNT"
+        )
+        .reindex(columns=intervals_order)
+        .fillna(0)
+    )
+
+    pivot_df["Total"] = pivot_df[intervals_order].sum(axis=1)
+    pivot_df["1st half"] = pivot_df[["1-15", "16-30", "31-45+"]].sum(axis=1)
+    pivot_df["2nd half"] = pivot_df[["46-60", "61-75", "76-90+"]].sum(axis=1)
+
+    st.dataframe(
+        pivot_df[["Total", "1st half", "2nd half"]].style.format("{:.0f}"),
+        use_container_width=True,
+    )
+
+    
