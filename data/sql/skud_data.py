@@ -83,12 +83,15 @@ def load_league_data(liga_uuid):
     return pd.DataFrame()
 
 
+# I data/sql/skud_data.py
+
+
 @st.cache_data(ttl=3600)
-def load_passing_data(liga_uuid, min_distance=20.0):
+def load_passing_data(liga_uuid, min_distance=10.0):
   """Henter pasningsdata for en given liga/turnering, filtrerer for pasninger
 
   i de sidste 2/3 af banen (EVENT_X >= 33.3) og beregner om pasningen er
-  fremadrettet med mindst `min_distance` meters fremgang mod modstanderens mål.
+  fremadrettet med mindst min_distance meters fremgang mod modstanderens mål.
   """
   conn = _get_snowflake_conn()
   if not conn or not liga_uuid:
@@ -96,14 +99,12 @@ def load_passing_data(liga_uuid, min_distance=20.0):
 
   sql = """
         WITH PassEndX AS (
-            -- Henter afleveringens slut-X (QID 140)
             SELECT EVENT_OPTAUUID, MAX(TRY_CAST(QUALIFIER_VALUE AS FLOAT)) as END_X
             FROM {db}.OPTA_QUALIFIERS
             WHERE QUALIFIER_QID = 140
             GROUP BY EVENT_OPTAUUID
         ),
         PassEndY AS (
-            -- Henter afleveringens slut-Y (QID 141)
             SELECT EVENT_OPTAUUID, MAX(TRY_CAST(QUALIFIER_VALUE AS FLOAT)) as END_Y
             FROM {db}.OPTA_QUALIFIERS
             WHERE QUALIFIER_QID = 141
@@ -137,9 +138,7 @@ def load_passing_data(liga_uuid, min_distance=20.0):
             pn.LAST_NAME as last_name,
             pn.MATCH_NAME as match_name,
             TRIM(COALESCE(pn.FIRST_NAME, '')) || ' ' || TRIM(COALESCE(pn.LAST_NAME, '')) as full_player_name,
-            -- Beregning af fremgang i meter (1 Opta-enhed i X ≈ 1.05 meter på en 105m bane)
             (COALESCE(px.END_X, e.EVENT_X) - e.EVENT_X) * 1.00 as forward_distance_meters,
-            -- Flag for om pasningen er fremadrettet med mindst min_distance meter
             CASE 
                 WHEN (COALESCE(px.END_X, e.EVENT_X) - e.EVENT_X) * 1.00 >= {min_dist} THEN 1 
                 ELSE 0 
@@ -150,9 +149,7 @@ def load_passing_data(liga_uuid, min_distance=20.0):
         LEFT JOIN PassEndY py ON e.EVENT_OPTAUUID = py.EVENT_OPTAUUID
         LEFT JOIN PlayerNames pn ON e.PLAYER_OPTAUUID = pn.PLAYER_OPTAUUID
         WHERE m.TOURNAMENTCALENDAR_OPTAUUID = '{liga_uuid}'
-          -- 1 = Pasning i Opta
           AND e.EVENT_TYPEID = 1
-          -- Sidste 2/3 af banen (fra X = 33.3 og frem mod modstanderens mål)
           AND e.EVENT_X >= 33.3
           AND e.EVENT_OPTAUUID IS NOT NULL
     """.format(
@@ -173,12 +170,8 @@ def load_passing_data(liga_uuid, min_distance=20.0):
 
 
 @st.cache_data(ttl=3600)
-def load_final_third_data(liga_uuid):
-  """Henter afleveringer orienteret mod/i den sidste tredjedel (EVENT_X >= 66.7
-
-  eller Slut-X >= 66.7) og beregner afstandsreduktion direkte i forhold til
-  modstanderens mål (X=100, Y=50).
-  """
+def load_final_third_data(liga_uuid, min_distance=10.0):
+  """Henter pasninger på sidste tredjedel og beregner om pasningen er fremadrettet."""
   conn = _get_snowflake_conn()
   if not conn or not liga_uuid:
     return pd.DataFrame()
@@ -224,43 +217,26 @@ def load_final_third_data(liga_uuid):
             pn.LAST_NAME as last_name,
             pn.MATCH_NAME as match_name,
             TRIM(COALESCE(pn.FIRST_NAME, '')) || ' ' || TRIM(COALESCE(pn.LAST_NAME, '')) as full_player_name,
-
-            -- Start-afstand til mål i meter (Målet ligger på X=100, Y=50)
-            SQRT(POWER((100 - e.EVENT_X) * 1.05, 2) + POWER((50 - e.EVENT_Y) * 0.68, 2)) as dist_start_to_goal_meters,
-
-            -- Slut-afstand til mål i meter
-            SQRT(POWER((100 - COALESCE(px.END_X, e.EVENT_X)) * 1.05, 2) + POWER((50 - COALESCE(py.END_Y, e.EVENT_Y)) * 0.68, 2)) as dist_end_to_goal_meters,
-
-            -- Hvor mange meter tættere på mål pasningen bringer bolden
-            (
-                SQRT(POWER((100 - e.EVENT_X) * 1.05, 2) + POWER((50 - e.EVENT_Y) * 0.68, 2)) -
-                SQRT(POWER((100 - COALESCE(px.END_X, e.EVENT_X)) * 1.05, 2) + POWER((50 - COALESCE(py.END_Y, e.EVENT_Y)) * 0.68, 2))
-            ) as distance_closer_to_goal_meters,
-
-            -- Flag: Slutter pasningen direkte inde i feltet (X >= 83 og Y indenfor feltets bredde ~21.1-78.9)
+            (COALESCE(px.END_X, e.EVENT_X) - e.EVENT_X) * 1.00 as forward_distance_meters,
+            CASE 
+                WHEN (COALESCE(px.END_X, e.EVENT_X) - e.EVENT_X) * 1.00 >= {min_dist} THEN 1 
+                ELSE 0 
+            END as is_progressive_pass,
             CASE 
                 WHEN COALESCE(px.END_X, 0) >= 83.0 AND COALESCE(py.END_Y, 0) BETWEEN 21.1 AND 78.9 THEN 1 
                 ELSE 0 
-            END as is_pass_into_box,
-
-            -- Flag: Pasning ind i den sidste tredjedel udefra (Entry)
-            CASE 
-                WHEN e.EVENT_X < 66.7 AND COALESCE(px.END_X, 0) >= 66.7 THEN 1 
-                ELSE 0 
-            END as is_final_third_entry
-
+            END as is_pass_into_box
         FROM {db}.OPTA_EVENTS e
         JOIN {db}.OPTA_MATCHINFO m ON e.MATCH_OPTAUUID = m.MATCH_OPTAUUID
         LEFT JOIN PassEndX px ON e.EVENT_OPTAUUID = px.EVENT_OPTAUUID
         LEFT JOIN PassEndY py ON e.EVENT_OPTAUUID = py.EVENT_OPTAUUID
         LEFT JOIN PlayerNames pn ON e.PLAYER_OPTAUUID = pn.PLAYER_OPTAUUID
         WHERE m.TOURNAMENTCALENDAR_OPTAUUID = '{liga_uuid}'
-          AND e.EVENT_TYPEID = 1 -- Aflevering
-          -- Tager alle pasninger, der enten starter eller slutter på den sidste tredjedel (X >= 66.7)
+          AND e.EVENT_TYPEID = 1
           AND (e.EVENT_X >= 66.7 OR px.END_X >= 66.7)
           AND e.EVENT_OPTAUUID IS NOT NULL
     """.format(
-      db=DB, liga_uuid=liga_uuid
+      db=DB, liga_uuid=liga_uuid, min_dist=min_distance
   )
 
   try:
