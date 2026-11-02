@@ -271,7 +271,7 @@ PLAYER_MAPPING = [
     {"player_wyid": "679432", "klub": "Hvidovre IF", "navn": "Roberto Risnæs", "position": "Midfielder", "pos": "10", "pos_prioritet": "B - Trupspiller", "kontrakt": "2027-12-31", "player_optauuid": "dummy1", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
     {"player_wyid": "680719", "klub": "Hvidovre IF", "navn": "Anders Ravn Olsen", "position": "Goalkeeper", "pos": "1", "pos_prioritet": "B - Trupspiller", "kontrakt": "2027-12-31", "player_optauuid": "", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
     {"player_wyid": "619520", "klub": "Hvidovre IF", "navn": "Haki Bedzeti", "position": "Defender", "pos": "3", "pos_prioritet": "B - Trupspiller", "kontrakt": "2027-12-31", "player_optauuid": "4h35dzyugo35y8h99m3cx0wlw", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
-    {"player_wyid": "269701", "klub": "Hvidovre IF", "navn": "Marvin Egho", "position": "Forward", "pos": "9", "pos_prioritet": "B - Trupspiller", "kontrakt": "2027-12-31", "player_optauuid": "v87m159inpxjitngzthj9x", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
+    {"player_wyid": "269701", "klub": "Hvidovre IF", "navn": "Roberto Riisnæs", "position": "Forward", "pos": "9", "pos_prioritet": "B - Trupspiller", "kontrakt": "2027-12-31", "player_optauuid": "v87m159inpxjitngzthj9x", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
     
     # Kolding
     {"klub": "#Kolding IF", "navn": "Nicolai Bossen", "position": "Midfielder", "player_optauuid": "dvnd5025v01tme7xzayw6jhn8", "competition_optauuid": "6ifaeunfdelecgticvxanikzu"},
