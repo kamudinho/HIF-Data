@@ -23,9 +23,7 @@ ROD_ADVARSEL = "#ffcccc"
 # Initialiser PlayerMapping for Hvidovre IF
 player_mapper = PlayerMapping(PLAYER_MAPPING)
 
-# --- NYT: Autoritativt sæt af Hvidovre IF-spillere ---
-# "Hvidovre IF" skal ALTID og KUN bestå af spillere der har et player_wyid i PLAYER_MAPPING.
-# Dette er den eneste kilde til sandhed for hvem der regnes som HIF-spiller i appen.
+# --- Autoritativt sæt af Hvidovre IF-spillere ---
 HIF_WYIDS = {
     str(p['player_wyid']).replace('.0', '').strip()
     for p in PLAYER_MAPPING
@@ -71,7 +69,7 @@ def save_to_github(df):
             'AGGRESIVITET', 'ATTITUDE', 'UDHOLDENHED', 'LEDEREGENSKABER', 'TEKNIK',
             'SPILINTELLIGENS', 'SCOUT', 'KONTRAKT', 'PRIORITET', 'FORVENTNING',
             'POS_PRIORITET', 'POS', 'LON', 'SKYGGEHOLD', 'KOMMENTAR', 'ER_EMNE',
-            'TRANSFER_VINDUE', 'POS_343', 'POS_433', 'POS_352',
+            'TRANSFER_VINDUE', 'POS_541', 'POS_433', 'POS_352',
             'BIRTHDATE', 'START_11_26_27'
         ]
         _, sha = get_github_file(SCOUT_DB_PATH)
@@ -87,7 +85,7 @@ def save_to_github(df):
         export_df['PLAYER_WYID'] = export_df['PLAYER_WYID'].astype(str).str.replace(r'\.0$', '', regex=True)
         csv_content = export_df[original_cols].to_csv(index=False)
         payload = {
-            "message": "Auto-update scouting data (Fixed column ordering)",
+            "message": "Auto-update scouting data (5-4-1 update)",
             "content": base64.b64encode(csv_content.encode('utf-8')).decode('utf-8'),
             "sha": sha
         }
@@ -96,7 +94,7 @@ def save_to_github(df):
         r = requests.put(f"https://api.github.com/repos/{REPO}/contents/{SCOUT_DB_PATH}", headers=headers, json=payload)
 
         if r.status_code in [200, 201]:
-            st.toast("Databasen er gemt i den korrekte rækkefølge på GitHub!", icon="✅")
+            st.toast("Databasen er gemt på GitHub!", icon="✅")
         else:
             st.error(f"Fejl ved gem (Status {r.status_code}): {r.text}")
     except Exception as e:
@@ -184,7 +182,7 @@ def prepare_df(content):
     if not content: return pd.DataFrame()
     df = pd.read_csv(StringIO(content))
     df.columns = [str(c).upper().strip() for c in df.columns]
-    needed = ['POS_343', 'POS_433', 'POS_352', 'START_11_26_27', 'SKYGGEHOLD', 'ER_EMNE', 'PLAYER_WYID', 'DATO', 'POS_PRIORITET']
+    needed = ['POS_541', 'POS_433', 'POS_352', 'START_11_26_27', 'SKYGGEHOLD', 'ER_EMNE', 'PLAYER_WYID', 'DATO', 'POS_PRIORITET']
     for col in needed:
         if col not in df.columns: df[col] = ""
     df['DATO_DT'] = pd.to_datetime(df['DATO'], errors='coerce')
@@ -193,13 +191,11 @@ def prepare_df(content):
     return process_display_df(df)
 
 def process_display_df(df):
-    # 1. Standardiser PLAYER_WYID konsekvent
     df['PLAYER_WYID'] = df['PLAYER_WYID'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
     df.loc[df['PLAYER_WYID'].isin(['nan', 'None', '', 'NaT', 'nat']), 'PLAYER_WYID'] = ""
 
     df_display = df.drop_duplicates(subset=['PLAYER_WYID'], keep='first').copy()
     
-    # Håndter rækker hvor WYID er tomt
     if "" in df_display['PLAYER_WYID'].values:
         valid_names = set(df_display[df_display['PLAYER_WYID'] != '']['NAVN'].dropna().str.lower().str.strip())
         df_display = df_display[
@@ -208,10 +204,11 @@ def process_display_df(df):
 
     df_display['POS_PRIORITET'] = df_display['POS_PRIORITET'].astype(str).replace('nan', 'Z')
 
-    for c in ['POS', 'POS_343', 'POS_433', 'POS_352']:
-        df_display[c] = df_display[c].apply(clean_pos_val)
-        if c != 'POS':
-            df_display[c] = df_display.apply(lambda r: r['POS'] if r[c] == "" else r[c], axis=1)
+    for c in ['POS', 'POS_541', 'POS_433', 'POS_352']:
+        if c in df_display.columns:
+            df_display[c] = df_display[c].apply(clean_pos_val)
+            if c != 'POS':
+                df_display[c] = df_display.apply(lambda r: r['POS'] if r[c] == "" else r[c], axis=1)
 
     if 'KONTRAKT' in df_display.columns:
         df_display['KONTRAKT_DT'] = df_display['KONTRAKT'].apply(robust_date_parser)
@@ -266,17 +263,16 @@ def process_display_df(df):
     if 'KONTRAKT' in df_display.columns:
         df_display['KONTRAKT_DT'] = df_display['KONTRAKT'].apply(robust_date_parser)
 
-    # --- NY SIKKERHED: Fjern dubletter baseret på navn, og prioriter IS_HIF ---
     if 'DATO_DT' not in df_display.columns:
         df_display['DATO_DT'] = pd.to_datetime(df_display.get('DATO', ''), errors='coerce')
         
     df_display['NAVN_CLEAN'] = df_display['NAVN'].astype(str).str.lower().str.strip()
-    # Sorter så Hvidovre-spillere og nyeste datoer kommer øverst, og fjern navnedubletter
     df_display = df_display.sort_values(by=['IS_HIF', 'DATO_DT'], ascending=[False, False])
     df_display = df_display.drop_duplicates(subset=['NAVN_CLEAN'], keep='first')
     df_display = df_display.drop(columns=['NAVN_CLEAN'])
 
     return df_display
+
 # --- 4. UI ---
 def vis_side():
     current_user = st.session_state.get("user", "default")
@@ -284,7 +280,7 @@ def vis_side():
     user_data = user_db.get(current_user, {})
     res = [r.lower().strip() for r in user_data.get("restricted", [])]
 
-    if 'form_skygge' not in st.session_state: st.session_state.form_skygge = "3-4-3"
+    if 'form_skygge' not in st.session_state: st.session_state.form_skygge = "5-4-1"
 
     if 'full_db' not in st.session_state:
         content, _ = get_github_file(SCOUT_DB_PATH)
@@ -310,7 +306,7 @@ def vis_side():
         "SKYGGEHOLD": st.column_config.CheckboxColumn("Skygge"),
         "START_11_26_27": st.column_config.CheckboxColumn("Start 11 (26/27)"),
         "POS_PRIORITET": st.column_config.SelectboxColumn("Prioritet", options=["A - Start-11", "B - Trupspiller", "C - Udviklingsspiller"]),
-        "POS_343": st.column_config.SelectboxColumn("3-4-3", options=POS_OPTS),
+        "POS_541": st.column_config.SelectboxColumn("5-4-1", options=POS_OPTS),
         "POS_433": st.column_config.SelectboxColumn("4-3-3", options=POS_OPTS),
         "POS_352": st.column_config.SelectboxColumn("3-5-2", options=POS_OPTS)
     }
@@ -338,7 +334,7 @@ def vis_side():
         with tabs_obj[tab_map["Skyggeliste"]]:
             source_t3 = df_display[df_display['SKYGGEHOLD'] == True].copy().reset_index(drop=True)
             st.data_editor(
-                source_t3[['NAVN', 'KLUB', 'POS', 'POS_343', 'POS_433', 'POS_352', 'POS_PRIORITET', 'START_11_26_27', 'PLAYER_WYID']],
+                source_t3[['NAVN', 'KLUB', 'POS', 'POS_541', 'POS_433', 'POS_352', 'POS_PRIORITET', 'START_11_26_27', 'PLAYER_WYID']],
                 column_config=cfg, use_container_width=True, height=600, key="editable_t3", on_change=handle_auto_save, args=("t3", df_display, source_t3)
             )
 
@@ -348,7 +344,7 @@ def vis_side():
             with c_ctrl:
                 display_opts = ["Nuværende trup", "Startopstilling (26/27)"] + [k for k in VINDUE_DATOER.keys() if k != "Nuværende trup"]
                 sel_v = st.selectbox("Visning", display_opts)
-                for form in ["3-4-3", "4-3-3", "3-5-2"]:
+                for form in ["5-4-1", "4-3-3", "3-5-2"]:
                     if st.button(form, use_container_width=True, type="primary" if st.session_state.form_skygge == form else "secondary"):
                         st.session_state.form_skygge = form; st.rerun()
 
@@ -383,7 +379,7 @@ def vis_side():
                 ax.text(118, 3, f"Vindue: {sel_v}", size=8, weight='bold', ha='right', bbox=dict(facecolor='white', edgecolor=HIF_ROD, boxstyle='round,pad=0.5'))
 
                 m = {
-                    "3-4-3": {"1":(10,40,'MM'), "4":(33,22,'VCB'), "3.5":(33,40,'CB'), "3":(33,58,'HCB'), "5":(58,10,'VWB'), "6":(58,32,'DM'), "8":(58,48,'DM'), "2":(58,70,'HWB'), "11":(82,15,'VW'), "9":(100,40,'ANG'), "7":(82,65,'HW')},
+                    "5-4-1": {"1":(10,40,'MM'), "5":(33,10,'VWB'), "4":(33,28,'VCB'), "3.5":(33,40,'CB'), "3":(33,52,'HCB'), "2":(33,70,'HWB'), "6":(60,18,'LM'), "8":(60,38,'CM'), "10":(60,52,'CM'), "7":(60,68,'RM'), "9":(102,40,'ANG')},
                     "4-3-3": {"1":(10,40,'MM'), "5":(35,12,'VB'), "4":(30,28,'VCB'), "3":(30,52,'HCB'), "2":(35,68,'HB'), "6":(55,40,'DM'), "8":(72,25,'VCM'), "10":(72,55,'HCM'), "11":(85,15,'VW'), "9":(105,40,'ANG'), "7":(85,65,'HW')},
                     "3-5-2": {"1":(10,40,'MM'), "4":(33,22,'VCB'), "3.5":(33,40,'CB'), "3":(33,58,'HCB'), "5":(55,10,'VWB'), "6":(55,32,'DM'), "2":(55,70,'HWB'), "8":(55,48,'DM'), "10":(75,40,'CM'), "9":(102,32,'ANG'), "7":(102,48,'ANG')}
                 }[st.session_state.form_skygge]
